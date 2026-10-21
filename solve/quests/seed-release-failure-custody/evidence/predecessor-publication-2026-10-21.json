@@ -1,0 +1,47 @@
+{
+  "schema": "evidence-publication-map/1",
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "publicationKind": "Exact same-host predecessor measurement evidence preservation; not product publication",
+  "assets": [
+    {
+      "restoreUnderEvidence": "predecessor-847c36a31/prepare.mjs",
+      "sha256": "34a1e24565eaf29463de7c8708b7440687052e6f0240f3c33c3d2e9b4d0a0bd9",
+      "bytes": 4962,
+      "asset": "seed-release-failure-custody--quests__evidence__predecessor-847c36a31__prepare.mjs",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__predecessor-847c36a31__prepare.mjs",
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T07:06:49.423Z"
+    },
+    {
+      "restoreUnderEvidence": "predecessor-847c36a31/run-host.mjs",
+      "sha256": "006c34feeb2ca91d76ee44fabf6fbad9b06f0d3602dd40d21dc5914736d34012",
+      "bytes": 3130,
+      "asset": "seed-release-failure-custody--quests__evidence__predecessor-847c36a31__run-host.mjs",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__predecessor-847c36a31__run-host.mjs",
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T07:06:54.339Z"
+    },
+    {
+      "restoreUnderEvidence": "predecessor-847c36a31/run-supplemented-host.mjs",
+      "sha256": "5c0f24566ab6769c04ab870585376821af16dd033930528a5afc54c86d040f0c",
+      "bytes": 3143,
+      "asset": "seed-release-failure-custody--quests__evidence__predecessor-847c36a31__run-supplemented-host.mjs",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__predecessor-847c36a31__run-supplemented-host.mjs",
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T07:06:59.119Z"
+    },
+    {
+      "restoreUnderEvidence": "predecessor-847c36a31/tv-dator/controller.log",
+      "sha256": "a4bb49c87349fb976f455719a16288d265b94f49596429e48a2f22e7ba0aa4d4",
+      "bytes": 1020974,
+      "asset": "seed-release-failure-custody--quests__evidence__predecessor-847c36a31__tv-dator__controller.log",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__predecessor-847c36a31__tv-dator__controller.log",
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T07:07:04.367Z"
+    }
+  ],
+  "packetManifestSha256": "a721689a8676e46ee545fc345745a918149cb2f2fec67317d8f1d7b1c16c6239",
+  "originalPayloadCount": 64,
+  "restoration": "Download the immutable named solve-evidence assets; verify byte counts and SHA256; restore under evidence at restoreUnderEvidence before checking the unchanged packet-manifest.json and per-host manifests. The remaining original packet payloads are committed as data. Rehydration does not execute tests or grant acceptance."
+}

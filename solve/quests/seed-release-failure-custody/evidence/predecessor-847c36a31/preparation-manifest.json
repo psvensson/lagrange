@@ -1,0 +1,47 @@
+{
+  "preparedAt": "2026-10-21T06:29:03.855963+00:00",
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "reportedRed": 99,
+  "identicalTestBlobs": 99,
+  "missingOrChangedTests": 0,
+  "unreportedExcluded": 3,
+  "firstFourLaunched": [
+    "adam-laptop",
+    "adams-gamla",
+    "carinas-windows",
+    "tv-dator"
+  ],
+  "lenovo": "HELD for root candidate supplements",
+  "runnerOwners": {
+    "scripts/lab/probe.js": {
+      "393f411ca09449898465cc3cb7320c03fba2aba8": "f336847122d8e9f37f0e05cf3b8a7b4056367978",
+      "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb": "f336847122d8e9f37f0e05cf3b8a7b4056367978"
+    },
+    "scripts/run-classified-test-files.js": {
+      "393f411ca09449898465cc3cb7320c03fba2aba8": "677f3f511176028057ccf6d2bdbbf39a4aefd964",
+      "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb": "677f3f511176028057ccf6d2bdbbf39a4aefd964"
+    },
+    "scripts/run-test-files.js": {
+      "393f411ca09449898465cc3cb7320c03fba2aba8": "e40cda7cb2f2f206f37e6ace1fbb5c5937096e76",
+      "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb": "e40cda7cb2f2f206f37e6ace1fbb5c5937096e76"
+    }
+  },
+  "inputHashes": {
+    "adam-laptop.input.json": "f0ad7fe4cec8070617ebfab91b9aa12697ba46d2fac9c799c193d515c6f2c210",
+    "carinas-windows.input.json": "be23b057b57163483151fa134733fff3f20063c33897795201d305d95164590a",
+    "adam-laptop.candidate-verdicts.ndjson": "563ba0b603797b5b15cb50d3375538482517b46c792f433d9b71f5cc8c56adb1",
+    "adams-gamla.candidate-verdicts.ndjson": "dd8a7f72f562f095f806cdbd3a64537a9d9d21de6ae3286ba454302094ab16fe",
+    "lenovo-laptop.input.json": "47f4623b5a0c029d82c6bd98a46c88c1c66e2d92ec4c0bb1df8c95295888327c",
+    "run-host.mjs": "006c34feeb2ca91d76ee44fabf6fbad9b06f0d3602dd40d21dc5914736d34012",
+    "README.md": "8c1bf50af7aab1f0d829e380523195f8f97eca3043f34e61bb402ff66b56a652",
+    "carinas-windows.candidate-verdicts.ndjson": "8c2d205bbfcb20b919b0fabf7a53f5f97c380ab5b959c533cbc4142038d7fd54",
+    "tv-dator.candidate-verdicts.ndjson": "2fdf5a5417e4454dd69afb6f72b09e489e155f458c33b2ace9afef7a8114958c",
+    "final-ledger-input.json": "7d23c404f494a229fa14f79ffbfc6a0ea23364bbe84bc5addcd525fcd2167d85",
+    "selection.json": "f631228a9fc42bb2e1588c70464c3328f96e161aa47401d48a539c80fb71e887",
+    "tv-dator.input.json": "7327cfec41afe943c54b31dc354dddb288daeba1826bb7aee8bd533377c35ecf",
+    "prepare.mjs": "34a1e24565eaf29463de7c8708b7440687052e6f0240f3c33c3d2e9b4d0a0bd9",
+    "adams-gamla.input.json": "65e1f0e5c69d3ab6d049e3de286bc533e6d5de812e8ad1630fc4a70879adb0ca",
+    "lenovo-laptop.candidate-verdicts.ndjson": "c6dd8181cddc6f93c15a743099fc8732bfbf2a33dfce5d2c04e866d010449d70"
+  }
+}

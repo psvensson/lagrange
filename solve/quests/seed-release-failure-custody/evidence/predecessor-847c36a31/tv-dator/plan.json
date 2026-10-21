@@ -1,0 +1,300 @@
+{
+  "sha": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "tv-dator",
+  "files": [
+    "test/node/message-group-service-handler-membership.test.js",
+    "test/partition/participant-release-prepare-identity-native.test.js",
+    "test/partition/partition-consensus-hold-log.test.js",
+    "test/partition/partition-transaction-replay-cursor-v4.test.js",
+    "test/query/partition-transaction-seam-falsifiers.test.js",
+    "test/raft/leadership-transfer-single-path.test.js",
+    "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+    "test/query/write-exactly-once-schedules.test.js",
+    "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+    "test/query/unknown-outcome-redelivery-budget.test.js",
+    "test/convergence/membership-publication-owner-driver-host.test.js",
+    "test/partition/table-partition-structure.property.test.js",
+    "test/scripts/proof-cone-cli-output-completeness.test.js",
+    "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+    "test/node/replica-handler.test.js",
+    "test/scripts/push-gate-change-proof.test.js",
+    "test/partition/partition-service-size-split-transport.test.js",
+    "test/scripts/solve-footprint-accounting.test.js",
+    "test/query/sql-query-engine.test.js",
+    "test/query/sql-query-engine-execution.test.js",
+    "test/query/distributed-transaction-coordinator.property.test.js",
+    "test/partition/cdc-generation.property.test.js",
+    "test/query/distributed-transaction-coordinator.test.js",
+    "test/partition/partition-service-raft-propose-metrics.test.js",
+    "test/query/sql-query-engine-managed-split.test.js",
+    "test/query/write-path-internal-pacing.test.js",
+    "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+    "test/query/transaction-owned-commit-mode-guard.test.js",
+    "test/bootstrap/bootstrap-sequence.test.js",
+    "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+    "test/bootstrap/node-bootstrap-consistency.property.test.js",
+    "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+    "test/integration/services-p1-self-referential-write.integration.test.js",
+    "test/integration/seed-node-bootstrap.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/node/message-group-service-handler-membership.test.js",
+        "test/partition/participant-release-prepare-identity-native.test.js",
+        "test/partition/partition-transaction-replay-cursor-v4.test.js",
+        "test/query/partition-transaction-seam-falsifiers.test.js",
+        "test/query/unknown-outcome-redelivery-budget.test.js",
+        "test/query/write-exactly-once-schedules.test.js",
+        "test/scripts/solve-footprint-accounting.test.js",
+        "test/partition/table-partition-structure.property.test.js",
+        "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+        "test/partition/partition-consensus-hold-log.test.js",
+        "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+        "test/scripts/proof-cone-cli-output-completeness.test.js",
+        "test/convergence/membership-publication-owner-driver-host.test.js",
+        "test/node/replica-handler.test.js",
+        "test/scripts/push-gate-change-proof.test.js",
+        "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "test/query/sql-query-engine.test.js",
+        "test/query/sql-query-engine-execution.test.js",
+        "test/partition/partition-service-size-split-transport.test.js",
+        "test/query/distributed-transaction-coordinator.property.test.js",
+        "test/raft/leadership-transfer-single-path.test.js",
+        "test/query/distributed-transaction-coordinator.test.js",
+        "test/partition/cdc-generation.property.test.js",
+        "test/partition/partition-service-raft-propose-metrics.test.js",
+        "test/query/sql-query-engine-managed-split.test.js",
+        "test/query/write-path-internal-pacing.test.js",
+        "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+        "test/query/transaction-owned-commit-mode-guard.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/node-bootstrap-consistency.property.test.js",
+        "test/bootstrap/bootstrap-sequence.test.js",
+        "test/bootstrap/dynamic-partition-cdc-subscription.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+        "test/integration/services-p1-self-referential-write.integration.test.js",
+        "test/integration/seed-node-bootstrap.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/participant-release-prepare-identity-native.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/solve-footprint-accounting.test.js",
+      "jobs": 4,
+      "ms": 84275,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/table-partition-structure.property.test.js",
+      "jobs": 4,
+      "ms": 15193,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "jobs": 4,
+      "ms": 6353,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-consensus-hold-log.test.js",
+      "jobs": 4,
+      "ms": 4878,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+      "jobs": 4,
+      "ms": 3490,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/proof-cone-cli-output-completeness.test.js",
+      "jobs": 4,
+      "ms": 3390,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/convergence/membership-publication-owner-driver-host.test.js",
+      "jobs": 4,
+      "ms": 2787,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler.test.js",
+      "jobs": 4,
+      "ms": 1673,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/push-gate-change-proof.test.js",
+      "jobs": 4,
+      "ms": 1443,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "jobs": 4,
+      "ms": 1185,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine.test.js",
+      "jobs": 4,
+      "ms": 1093,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-execution.test.js",
+      "jobs": 4,
+      "ms": 1051,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-size-split-transport.test.js",
+      "jobs": 4,
+      "ms": 885,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/distributed-transaction-coordinator.property.test.js",
+      "jobs": 4,
+      "ms": 811,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/leadership-transfer-single-path.test.js",
+      "jobs": 4,
+      "ms": 557,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/distributed-transaction-coordinator.test.js",
+      "jobs": 4,
+      "ms": 299,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/cdc-generation.property.test.js",
+      "jobs": 4,
+      "ms": 205,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-raft-propose-metrics.test.js",
+      "jobs": 4,
+      "ms": 137,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/sql-query-engine-managed-split.test.js",
+      "jobs": 4,
+      "ms": 93,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-path-internal-pacing.test.js",
+      "jobs": 4,
+      "ms": 88,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "jobs": 4,
+      "ms": 60,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/transaction-owned-commit-mode-guard.test.js",
+      "jobs": 4,
+      "ms": 34,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "jobs": 2,
+      "ms": 20018,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/bootstrap-sequence.test.js",
+      "jobs": 2,
+      "ms": 14440,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+      "jobs": 2,
+      "ms": 165,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "jobs": 1,
+      "ms": 109217,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/services-p1-self-referential-write.integration.test.js",
+      "jobs": 1,
+      "ms": 23834,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/seed-node-bootstrap.integration.test.js",
+      "jobs": 1,
+      "ms": 109217,
+      "lane": "exclusive"
+    }
+  ]
+}

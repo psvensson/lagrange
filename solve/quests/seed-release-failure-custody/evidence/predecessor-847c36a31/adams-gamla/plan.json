@@ -1,0 +1,156 @@
+{
+  "sha": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "adams-gamla",
+  "files": [
+    "test/message-group/message-group-native-custody-handoff.test.js",
+    "test/node/replica-create-admission-recovery.test.js",
+    "test/partition/partition-admission-redrive-wakes.test.js",
+    "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+    "test/partition/partition-service-stale-topology-write-guard.test.js",
+    "test/partition/partition-write-leadership-transfer-committed.test.js",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+    "test/bootstrap/phase-event-ordering-characterization.test.js",
+    "test/integration/critical-partition-learner-safety.integration.test.js",
+    "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+    "test/integration/leader-metadata-validation.integration.test.js",
+    "test/integration/node-join-replica-activation.integration.test.js",
+    "test/integration/raft-leader-election.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/node/replica-create-admission-recovery.test.js",
+        "test/query/write-identity-instance.test.js",
+        "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+        "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+        "test/partition/partition-write-leadership-transfer-committed.test.js",
+        "test/partition/partition-admission-redrive-wakes.test.js",
+        "test/partition/partition-service-stale-topology-write-guard.test.js",
+        "test/partition/partition-service-raft-noop-cdc-placement.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/phase-event-ordering-characterization.test.js",
+        "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+        "test/integration/critical-partition-learner-safety.integration.test.js",
+        "test/integration/leader-metadata-validation.integration.test.js",
+        "test/integration/raft-leader-election.integration.test.js",
+        "test/integration/node-join-replica-activation.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/message-group/message-group-native-custody-handoff.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-create-admission-recovery.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/write-identity-instance.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "jobs": 4,
+      "ms": 12249,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "jobs": 4,
+      "ms": 4805,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-admission-redrive-wakes.test.js",
+      "jobs": 4,
+      "ms": 245,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "jobs": 4,
+      "ms": 175,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "jobs": 4,
+      "ms": 72,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "jobs": 2,
+      "ms": 277,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+      "jobs": 2,
+      "ms": 180,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+      "jobs": 1,
+      "ms": 8065,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "jobs": 1,
+      "ms": 12898,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/leader-metadata-validation.integration.test.js",
+      "jobs": 1,
+      "ms": 19728,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/raft-leader-election.integration.test.js",
+      "jobs": 1,
+      "ms": 22377,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/node-join-replica-activation.integration.test.js",
+      "jobs": 1,
+      "ms": 63310,
+      "lane": "exclusive"
+    }
+  ]
+}

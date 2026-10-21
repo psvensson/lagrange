@@ -1,0 +1,29 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "carinas-windows",
+  "retry": 0,
+  "files": [
+    "test/node/replica-handler-cache-state.test.js",
+    "test/partition/participant-release-first-prepare-native.test.js",
+    "test/partition/partition-service.test.js",
+    "test/partition/settled-replay-preserves-result.test.js",
+    "test/partition/partition-statement-admission.test.js",
+    "test/query/transaction-recovery-poison-row-attribution.test.js",
+    "test/raft/raft-rs-backend/committed-membership-census.test.js",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+    "test/scripts/change-selection-taxonomy.test.js",
+    "test/scripts/closed-quest-shape.test.js",
+    "test/bootstrap/partition-activation-handler-boundary.test.js",
+    "test/integration/membership-consistency.integration.test.js"
+  ],
+  "changedTests": [],
+  "missingTests": [],
+  "candidateLedger": {
+    "host": "carinas-windows",
+    "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/carinas-windows.candidate-verdicts.ndjson",
+    "sha256": "8c2d205bbfcb20b919b0fabf7a53f5f97c380ab5b959c533cbc4142038d7fd54",
+    "count": 205,
+    "kind": "root-preserved-log-derived"
+  }
+}

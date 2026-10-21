@@ -1,0 +1,2261 @@
+placement-shell=2130120
+placement-head=847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry:0 timeout: lanecap:7
+placement-pid=2130995
+# test-files planned=16
+classified lane ordinary: 13 file(s), jobs=4
+thermal: hold cpu 79C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 79C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 42C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+not ok test/config/code-path-uniqueness.property.test.js (12 assertions, 1564ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 14: Code Path Uniqueness
+    # Subtest: each class has exactly one implementation
+        ok 1 - No unexpected duplicate class implementations should exist. Found: []
+        1..1
+    ok 1 - each class has exactly one implementation # time=14.125ms
+    
+    # Subtest: no feature flags for core functionality
+        not ok 1 - No files should have core feature flags. Found: [{"file":"node/replica-handler-participant-release.js","coreFlags":["ENABLE_REFUSED"],"observabilityFlags":[],"hasCoreFlags":true},{"file":"partition/partition-participant-transaction-cutover-constants.js","coreFlags":["ENABLE_REFUSED","enable_refused"],"observabilityFlags":[],"hasCoreFlags":true},{"file":"wasm-service/wasm-creation-opening.js","coreFlags":["ENABLE_PHASES","ENABLE_PHASES"],"observabilityFlags":[],"hasCoreFlags":true},{"file":"wasm-service/wasm-creation-publication.js","coreFlags":["ENABLE_FAILED"],"observabilityFlags":[],"hasCoreFlags":true},{"file":"wasm-service/wasm-service-constants.js","coreFlags":["ENABLE_FAILED","enable_failed"],"observabilityFlags":[],"hasCoreFlags":true}]
+          ---
+          compare: ===
+          at:
+            fileName: test/config/code-path-uniqueness.property.test.js
+            lineNumber: 259
+            columnNumber: 7
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/config/code-path-uniqueness.property.test.js:259:7)
+          source: |2
+                  .filter((r) => r.hasCoreFlags);
+          
+                t.equal(filesWithFlags.length, 0,
+            ------^
+                  `No files should have core feature flags. Found: ${
+                    JSON.stringify(filesWithFlags)}`);
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -0
+            +5
+          ...
+        
+        1..1
+    not ok 2 - no feature flags for core functionality # time=312.414ms
+      ---
+      at:
+        fileName: test/config/code-path-uniqueness.property.test.js
+        lineNumber: 240
+        columnNumber: 5
+        typeName: Test
+      source: |2
+           * for core functionality (only observability flags allowed).
+           */
+          t.test('no feature flags for core functionality', async (t) => {
+        ----^
+            fc.assert(
+              fc.property(
+      ...
+    
+    # Subtest: no conditional compilation patterns
+        ok 1 - No files should have conditional compilation. Found: []
+        1..1
+    ok 3 - no conditional compilation patterns # time=177.786ms
+    
+    # Subtest: consistent service implementation patterns
+        ok 1 - all service classes have consistent implementation patterns
+        1..1
+    ok 4 - consistent service implementation patterns # time=2.387ms
+    
+    # Subtest: transport implementations serve distinct purposes
+        ok 1 - every transport file must belong to transport/routing responsibilities; off-pattern file(s): []
+        ok 2 - core transport entry points are present
+        1..2
+    ok 5 - transport implementations serve distinct purposes # time=2.885ms
+    
+    1..5
+not ok 1 - Property 14: Code Path Uniqueness # time=530.39ms
+  ---
+  at:
+    fileName: test/config/code-path-uniqueness.property.test.js
+    lineNumber: 179
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    const CLASS_NAMES = Array.from(CLASS_REGISTRY.keys());
+  
+    test('Property 14: Code Path Uniqueness', async (t) => {
+    ^
+      /**
+       * Property: For any class in the system, there should be exactly one
+  ...
+
+1..1
+# { total: 6, pass: 5, fail: 1 }
+# time=659.224ms
+not ok test/index-management/index-maintenance-consistency.property.test.js (10 assertions, 3098ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Property 15: Index consistency after INSERT operations
+    not ok 1 - Property failed after 1 tests { seed: -638982614, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["partition-0","tbl_A00",{"id":1,"col_data":" ","col_num":0}] Shrunk 21 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..1
+not ok 1 - Property 15: Index consistency after INSERT operations # time=248.204ms
+  ---
+  at:
+    fileName: test/index-management/index-maintenance-consistency.property.test.js
+    lineNumber: 141
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirement 13.3
+     */
+    test('Property 15: Index consistency after INSERT operations', async (t) => {
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
+
+# Subtest: Property 15: Index consistency after UPDATE operations
+    not ok 1 - Property failed after 1 tests { seed: 2128337109, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["partition-0","tbl_A00",{"id":1,"col_data":" ","col_num":0},1] Shrunk 22 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..1
+not ok 2 - Property 15: Index consistency after UPDATE operations # time=140.342ms
+  ---
+  at:
+    fileName: test/index-management/index-maintenance-consistency.property.test.js
+    lineNumber: 194
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirement 13.3
+     */
+    test('Property 15: Index consistency after UPDATE operations', async (t) => {
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
+
+# Subtest: Property 15: Index consistency after DELETE operations
+    not ok 1 - Property failed after 1 tests { seed: -1068953530, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["partition-A","tbl_A00",{"id":1,"col_data":" ","col_num":0}] Shrunk 18 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..1
+not ok 3 - Property 15: Index consistency after DELETE operations # time=103.072ms
+  ---
+  at:
+    fileName: test/index-management/index-maintenance-consistency.property.test.js
+    lineNumber: 262
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirement 13.3
+     */
+    test('Property 15: Index consistency after DELETE operations', async (t) => {
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
+
+# Subtest: Property 15: Multiple indices remain consistent
+    not ok 1 - Property failed after 1 tests { seed: 1433362363, path: "0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0", endOnFailure: true } Counterexample: ["partition-0","tbl_A00",{"id":1,"col_data":" ","col_num":0}] Shrunk 21 time(s) Got error: Property failed by returning false  Hint: Enable verbose mode in order to have the list of all failing values encountered during the run
+      ---
+      stack: |
+        buildError (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:126:15)
+        asyncThrowIfFailed (../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js:143:11)
+      at:
+        fileName: ../../../node_modules/fast-check/lib/esm/check/runner/utils/RunDetailsFormatter.js
+        lineNumber: 126
+        columnNumber: 15
+        functionName: buildError
+      tapCaught: returnedPromiseRejection
+      source: |
+        function buildError(errorMessage, out) {
+            if (!out.runConfiguration.errorWithCause) {
+                throw new Error(errorMessage);
+        --------------^
+            }
+            const ErrorWithCause = Error;
+      ...
+    
+    1..1
+not ok 4 - Property 15: Multiple indices remain consistent # time=107.07ms
+  ---
+  at:
+    fileName: test/index-management/index-maintenance-consistency.property.test.js
+    lineNumber: 315
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+     * Validates: Requirements 13.3, 13.5
+     */
+    test('Property 15: Multiple indices remain consistent', async (t) => {
+    ^
+      await fc.assert(
+        fc.asyncProperty(
+  ...
+
+# Subtest: Property 15: Index metadata tracking
+    ok 1 - Index metadata is properly tracked
+    1..1
+ok 5 - Property 15: Index metadata tracking # time=5.645ms
+
+1..5
+# { total: 5, pass: 1, fail: 4 }
+# time=982.699ms
+not ok test/index-management/index-service.test.js (57 assertions, 3103ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: IndexService - initialization
+    ok 1 - Service should be initialized
+    ok 2 - Should have no indices initially
+    1..2
+ok 1 - IndexService - initialization # time=23.07ms
+
+# Subtest: IndexService - loads indices from cache on init
+    ok 1 - Should load 2 indices from cache
+    ok 2 - idx_name should exist
+    ok 3 - idx_value should exist
+    1..3
+ok 2 - IndexService - loads indices from cache on init # time=2.946ms
+
+# Subtest: IndexService - createIndex stores metadata
+    ok 1 - Should return index ID
+    ok 2 - Should have correct table ID
+    ok 3 - Should have correct index name
+    ok 4 - Should have correct column names
+    ok 5 - Should have correct index type
+    ok 6 - Should insert one row
+    ok 7 - Should insert into indices table
+    ok 8 - Should have correct index name in data
+    1..8
+ok 3 - IndexService - createIndex stores metadata # time=9.923ms
+
+# Subtest: IndexService - createIndex with multiple columns
+    ok 1 - Should have multiple columns
+    ok 2 - Should store columns as JSON array
+    1..2
+ok 4 - IndexService - createIndex with multiple columns # time=2.855ms
+
+# Subtest: IndexService - createIndex prevents duplicates
+    ok 1 - Should indicate index already exists
+    1..1
+ok 5 - IndexService - createIndex prevents duplicates # time=4.044ms
+
+# Subtest: IndexService - createIndex validates required params
+    ok 1 - Should indicate tableId is required
+    ok 2 - Should indicate indexName is required
+    ok 3 - Should indicate columnNames is required
+    1..3
+ok 6 - IndexService - createIndex validates required params # time=2.75ms
+
+# Subtest: IndexService - dropIndex removes index metadata
+    ok 1 - Index should exist
+    ok 2 - Should return true on successful drop
+    ok 3 - Index should not exist
+    ok 4 - Should delete one row
+    ok 5 - Should delete from indices table
+    1..5
+ok 7 - IndexService - dropIndex removes index metadata # time=5.922ms
+
+# Subtest: IndexService - dropIndex throws for non-existent
+    ok 1 - Should indicate index not found
+    1..1
+ok 8 - IndexService - dropIndex throws for non-existent # time=1.136ms
+
+# Subtest: IndexService - getIndicesForTable returns all
+    ok 1 - Should have 2 indices for users table
+    ok 2 - Should have 1 index for orders table
+    1..2
+ok 9 - IndexService - getIndicesForTable returns all # time=4.981ms
+
+# Subtest: IndexService - getAllIndices returns all indices
+    ok 1 - Should have 2 total indices
+    1..1
+ok 10 - IndexService - getAllIndices returns all indices # time=4.815ms
+
+# Subtest: IndexService - handleCDCEvent updates on INSERT
+    ok 1 - Index should exist after CDC event
+    1..1
+ok 11 - IndexService - handleCDCEvent updates on INSERT # time=1.711ms
+
+# Subtest: IndexService - handleCDCEvent updates on DELETE
+    ok 1 - Index should exist
+    ok 2 - Index should not exist
+    1..2
+ok 12 - IndexService - handleCDCEvent updates on DELETE # time=2.292ms
+
+# Subtest: IndexService - creates SQLite index on partitions
+    not ok 1 - SQLite index should be created
+      ---
+      compare: ===
+      at:
+        fileName: test/index-management/index-service.test.js
+        lineNumber: 556
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/index-management/index-service.test.js:556:5)
+      source: |2
+          );
+      
+          t.equal(result.rows.length, 1, 'SQLite index should be created');
+        ----^
+          t.equal(
+            result.rows[0].name, 'idx_users_email',
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 2 - Cannot read properties of undefined (reading 'name')
+      ---
+      stack: |
+        Test.<anonymous> (test/index-management/index-service.test.js:558:20)
+      at:
+        fileName: test/index-management/index-service.test.js
+        lineNumber: 558
+        columnNumber: 20
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          t.equal(result.rows.length, 1, 'SQLite index should be created');
+          t.equal(
+            result.rows[0].name, 'idx_users_email',
+        -------------------^
+            'Index name should match',
+          );
+      ...
+    
+    1..2
+not ok 13 - IndexService - creates SQLite index on partitions # time=104.854ms
+  ---
+  at:
+    fileName: test/index-management/index-service.test.js
+    lineNumber: 511
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('IndexService - creates SQLite index on partitions', async (t) => {
+    ^
+      const partition = new PartitionService(withFoundingStamp({
+        partitionId: 'test-partition',
+  ...
+
+# Subtest: IndexService - creates indices on new partition via CDC
+    not ok 1 - Index should be created on new partition
+      ---
+      compare: ===
+      at:
+        fileName: test/index-management/index-service.test.js
+        lineNumber: 625
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/index-management/index-service.test.js:625:5)
+      source: |2
+          );
+      
+          t.equal(
+        ----^
+            result.rows.length, 1,
+            'Index should be created on new partition',
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..1
+not ok 14 - IndexService - creates indices on new partition via CDC # time=17.347ms
+  ---
+  at:
+    fileName: test/index-management/index-service.test.js
+    lineNumber: 567
+    columnNumber: 1
+    isToplevel: true
+  source: |
+  
+  
+    test('IndexService - creates indices on new partition via CDC', async (t) => {
+    ^
+      const cdcService = createMockCDCService();
+  ...
+
+# Subtest: IndexService - ensureIndicesOnPartition creates all
+    ok 1 - Should create 2 indices
+    not ok 2 - Both indices should exist in SQLite
+      ---
+      compare: ===
+      at:
+        fileName: test/index-management/index-service.test.js
+        lineNumber: 700
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/index-management/index-service.test.js:700:5)
+      source: |2
+          );
+      
+          t.equal(
+        ----^
+            result.rows.length, 2, 'Both indices should exist in SQLite',
+          );
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +0
+      ...
+    
+    1..2
+not ok 15 - IndexService - ensureIndicesOnPartition creates all # time=13.026ms
+  ---
+  at:
+    fileName: test/index-management/index-service.test.js
+    lineNumber: 634
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
+    ^
+      const cdcService = createMockCDCService();
+  ...
+
+# Subtest: IndexService - rebuildIndex recreates on partitions
+    ok 1 - Should rebuild on 1 partition
+    ok 2 - Should have no failures
+    not ok 3 - Index should exist after rebuild
+      ---
+      compare: ===
+      at:
+        fileName: test/index-management/index-service.test.js
+        lineNumber: 762
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/index-management/index-service.test.js:762:5)
+      source: |2
+          );
+      
+          t.equal(
+        ----^
+            sqlResult.rows.length, 1, 'Index should exist after rebuild',
+          );
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..3
+not ok 16 - IndexService - rebuildIndex recreates on partitions # time=19.088ms
+  ---
+  at:
+    fileName: test/index-management/index-service.test.js
+    lineNumber: 708
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('IndexService - rebuildIndex recreates on partitions', async (t) => {
+    ^
+      const cdcService = createMockCDCService();
+  ...
+
+# Subtest: IndexService - ignores non-INSERT partition CDC
+    ok 1 - Non-INSERT partition CDC events handled gracefully
+    1..1
+ok 17 - IndexService - ignores non-INSERT partition CDC # time=1.133ms
+
+1..17
+# { total: 40, pass: 35, fail: 5 }
+# time=1203.215ms
+not ok test/partition/partition-service-sqlite-metrics.test.js (17 assertions, 2171ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: executeQuery emits metrics.partition.sqlite on SELECT
+    ok 1 - metrics.partition.sqlite log emitted
+    ok 2 - should be equal
+    ok 3 - should be equal
+    ok 4 - should be equal
+    ok 5 - durationMs non-negative
+    not ok 6 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/partition/partition-service-sqlite-metrics.test.js
+        lineNumber: 76
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous> (test/partition/partition-service-sqlite-metrics.test.js:76:7)
+      source: |2
+            t.equal(typeof metric.data.durationMs, 'number');
+            t.ok(metric.data.durationMs >= 0, 'durationMs non-negative');
+            t.equal(metric.data.rowCount, 2);
+        ------^
+      
+            await partition.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -2
+        +0
+      ...
+    
+    1..6
+not ok 1 - executeQuery emits metrics.partition.sqlite on SELECT # time=94.501ms
+  ---
+  at:
+    fileName: test/partition/partition-service-sqlite-metrics.test.js
+    lineNumber: 55
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('executeQuery emits metrics.partition.sqlite on SELECT',
+    ^
+      async (t) => {
+        const partition = createPartition('sqlite-metrics-1');
+  ...
+
+# Subtest: executeQuery emits correct rowCount for empty result
+    ok 1 - metric emitted for empty result
+    ok 2 - should be equal
+    ok 3 - should be equal
+    1..3
+ok 2 - executeQuery emits correct rowCount for empty result # time=9.519ms
+
+# Subtest: executeQuery sqlite metric uses info level, not debug
+    ok 1 - no sqlite metric at debug level
+    1..1
+ok 3 - executeQuery sqlite metric uses info level, not debug # time=9.525ms
+
+# Subtest: executeQuery sqlite metric does not break query on logger failure
+    ok 1 - should be equal
+    not ok 2 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/partition/partition-service-sqlite-metrics.test.js
+        lineNumber: 146
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/partition/partition-service-sqlite-metrics.test.js:146:7)
+      source: |2
+      
+            t.equal(result.success, true);
+            t.equal(result.count, 1);
+        ------^
+            t.equal(result.rows.length, 1);
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    not ok 3 - should be equal
+      ---
+      compare: ===
+      at:
+        fileName: test/partition/partition-service-sqlite-metrics.test.js
+        lineNumber: 147
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/partition/partition-service-sqlite-metrics.test.js:147:7)
+      source: |2
+            t.equal(result.success, true);
+            t.equal(result.count, 1);
+            t.equal(result.rows.length, 1);
+        ------^
+      
+            await partition.shutdown();
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -1
+        +0
+      ...
+    
+    1..3
+not ok 4 - executeQuery sqlite metric does not break query on logger failure # time=19.592ms
+  ---
+  at:
+    fileName: test/partition/partition-service-sqlite-metrics.test.js
+    lineNumber: 124
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('executeQuery sqlite metric does not break query on logger failure',
+    ^
+      async (t) => {
+        const partition = createPartition('sqlite-metrics-4');
+  ...
+
+1..4
+# { total: 13, pass: 10, fail: 3 }
+# time=420.31ms
+not ok test/partition/partition-write-leadership-transfer.test.js (2 assertions, 2153ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused
+not ok 1 - a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused
+  ---
+  duration_ms: 289.064048
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:143:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    withTransferRunning (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:114:12)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:146:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: a membership admission during a leadership transfer is DEFERRED, never REFUSED
+not ok 2 - a membership admission during a leadership transfer is DEFERRED, never REFUSED
+  ---
+  duration_ms: 157.496611
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:163:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    withTransferRunning (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:114:12)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/partition/partition-write-leadership-transfer.test.js:165:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 454.204466
+# time=2153ms
+not ok test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js (3 assertions, 2306ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: partition replica: the persist path syncs, the application does not
+not ok 1 - partition replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 136.636702
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:127:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"success":false,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","failureCode":"partition_write_cutover_paused","deferRetry":true,"retryAfterMs":100,"partitionId":"durable-kinds-partition"}
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:155:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: message-group replica: the persist path syncs, the application does not
+not ok 2 - message-group replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 81.32059
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:174:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    message group: application transactions keep NORMAL
+    + actual - expected
+    
+      [
+        1,
+    +   2
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 1
+  actual:
+    0: 1
+    1: 2
+  operator: 'deepStrictEqual'
+  stack: |-
+    assertKindDurability (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:122:10)
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:206:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: WASM-service replica: the persist path syncs, the application does not
+not ok 3 - WASM-service replica: the persist path syncs, the application does not
+  ---
+  duration_ms: 290.715914
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:216:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    {"status":"REFUSED","reason":"INVALID_WRITER_COMMAND","identity":null}
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js:247:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 516.458603
+# time=2306ms
+not ok test/node/replica-handler-owner-path-bypass.test.js (4 assertions, 6176ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: ReplicaHandler owner-path bypass regressions
+    # Subtest: create flow emits outcomes through ExecutorOutcomeEmitter, not direct replica_operations writes (uses executorOutcomeEmitter.emitOutcome)
+        ok 1 - create should be initiated
+Executor outcome emitted {
+  outcomeType: 'REPLICA_CREATE_SYNCING',
+  operationId: 'op-bypass-1',
+  workflowStep: 'SYNCING',
+  replicaId: 'replica-1'
+}
+        not ok 2 - test unfinished
+          ---
+          at:
+            fileName: test/node/replica-handler-owner-path-bypass.test.js
+            lineNumber: 182
+            columnNumber: 11
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:182:11)
+            test/node/replica-handler-owner-path-bypass.test.js:169:1
+          test: create flow emits outcomes through ExecutorOutcomeEmitter, not direct
+            replica_operations writes (uses executorOutcomeEmitter.emitOutcome)
+          source: |2
+              });
+          
+              await t.test(
+            ----------^
+                'create flow emits outcomes through ExecutorOutcomeEmitter, ' +
+                'not direct replica_operations writes ' +
+          ...
+        
+        1..2
+    not ok 1 - create flow emits outcomes through ExecutorOutcomeEmitter, not direct replica_operations writes (uses executorOutcomeEmitter.emitOutcome) # time=4090.96ms
+      ---
+      at:
+        fileName: test/node/replica-handler-owner-path-bypass.test.js
+        lineNumber: 182
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+      
+          await t.test(
+        ----------^
+            'create flow emits outcomes through ExecutorOutcomeEmitter, ' +
+            'not direct replica_operations writes ' +
+      ...
+    
+    1..1
+not ok 1 - ReplicaHandler owner-path bypass regressions # time=4203.242ms
+  ---
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 169
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('ReplicaHandler owner-path bypass regressions', async (t) => {
+    ^
+      t.beforeEach(() => {
+        ConfigurationManager.resetInstance();
+  ...
+
+1..1
+# { total: 2, pass: 1, fail: 1 }
+# time=4220.372ms
+not ok test/scripts/change-proof-collection-safety.test.js (3 assertions, 5263ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: collection pollution cannot remove release-packaging proof
+not ok 1 - collection pollution cannot remove release-packaging proof
+  ---
+  duration_ms: 4091.854485
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/scripts/change-proof-collection-safety.test.js:48:1'
+  failureType: 'testCodeFailure'
+  error: 'test/helm/lagrange-node-admin-default-deny.test.js must survive collection pollution'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/scripts/change-proof-collection-safety.test.js:66:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: post-import intrinsic replacement cannot hide semantic deltas
+ok 2 - post-import intrinsic replacement cannot hide semantic deltas
+  ---
+  duration_ms: 384.566269
+  type: 'test'
+  ...
+# Subtest: mutable Map methods cannot empty an admitted execution plan
+ok 3 - mutable Map methods cannot empty an admitted execution plan
+  ---
+  duration_ms: 31.620801
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4531.046202
+# time=5263ms
+not ok test/raft/raft-rs-backend/operation-port-boundary.test.js (7 assertions, 9329ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the partition receives only a frozen operation port and immutable snapshots
+ok 1 - the partition receives only a frozen operation port and immutable snapshots
+  ---
+  duration_ms: 45.930988
+  type: 'test'
+  ...
+# Subtest: one private binding owner loads native bytes and only the runtime owner imports it
+not ok 2 - one private binding owner loads native bytes and only the runtime owner imports it
+  ---
+  duration_ms: 8603.087363
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/operation-port-boundary.test.js:156:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'lifecycle-write-outside-owner',
+    +     detail: 'retireReplica',
+    +     file: 'src/runtime/wasm-component-driver-consensus.js'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      file: 'src/runtime/wasm-component-driver-consensus.js'
+      code: 'lifecycle-write-outside-owner'
+      detail: 'retireReplica'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/operation-port-boundary.test.js:173:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: retirement has one production writer and no provider control accessor
+ok 3 - retirement has one production writer and no provider control accessor
+  ---
+  duration_ms: 110.519151
+  type: 'test'
+  ...
+# Subtest: the private owner instruments actual core entry rather than gate checks
+ok 4 - the private owner instruments actual core entry rather than gate checks
+  ---
+  duration_ms: 0.563917
+  type: 'test'
+  ...
+# Subtest: the operation boundary removes public capability instead of renaming it
+ok 5 - the operation boundary removes public capability instead of renaming it
+  ---
+  duration_ms: 19.783474
+  type: 'test'
+  ...
+# Subtest: the ownership census catches import and lifecycle-writer bypass modules
+ok 6 - the ownership census catches import and lifecycle-writer bypass modules
+  ---
+  duration_ms: 0.80876
+  type: 'test'
+  ...
+# Subtest: the real ownership audit rejects core, facade and lifecycle mutants
+ok 7 - the real ownership audit rejects core, facade and lifecycle mutants
+  ---
+  duration_ms: 4.747634
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 8801.411351
+# time=9329ms
+not ok test/wasm-service/wasm-writer-recreation-origin-v1.test.js (3 assertions, 542ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: WasmWriterState refuses revival of an old writer after same-service recreation
+not ok 1 - WasmWriterState refuses revival of an old writer after same-service recreation
+  ---
+  duration_ms: 38.187878
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/wasm-service/wasm-writer-recreation-origin-v1.test.js:77:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    OLD_WRITER_REVIVED_AFTER_RECREATION
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/wasm-service/wasm-writer-recreation-origin-v1.test.js:104:12)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# {"scope":"conditional deterministic application counterexample","condition":"same serviceId recreated in a fresh database before intended INIT J applies","originalDatabaseSha256":"da940384d1e12690fc656b17157e8a73090a404b5681660e7d8e992ab4fe6b7e","original":{"events":[{"position":{"index":1,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"commandDigest":"85d479ca4d9fe60fb57598fd8c56b84d9c4dcc4ad7ffee0aa64cbf40eb36f65e","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111"}},"index":1,"term":1}}},{"position":{"index":2,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"ENROLL","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"expectedGeneration":0,"expectedCompletedSequence":0,"expectedReceiptDigest":null,"newGeneration":1,"nonce":"5555555555555555555555555555555555555555555555555555555555555555"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"commandDigest":"092fd6247d91c1032ce6fb93d141190bd2889c2759cceef7cd7f1a472b897ec3","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1}},"index":2,"term":1}}},{"position":{"index":3,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"WRITE","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"ack":null,"sessionId":"session","key":"key","value":"b2xkLXdyaXRlci12YWx1ZQ==","valueEncoding":"base64"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"commandDigest":"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b","outcome":{"accepted":true,"error":null},"index":3,"term":1}}}],"state":{"meta":{"format":"wasm-writer-v1/1","serviceId":"recreated-service","initialization":{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"receipt":{"version":1,"commandDigest":"85d479ca4d9fe60fb57598fd8c56b84d9c4dcc4ad7ffee0aa64cbf40eb36f65e","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111"}},"index":1,"term":1}}},"slots":[{"slot":0,"record":"{\\"slot\\":0,\\"generation\\":1,\\"completed\\":1,\\"write\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"WRITE\\",\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"ack\\":null,\\"sessionId\\":\\"session\\",\\"key\\":\\"key\\",\\"value\\":\\"b2xkLXdyaXRlci12YWx1ZQ==\\",\\"valueEncoding\\":\\"base64\\"},\\"receipt\\":{\\"version\\":1,\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"commandDigest\\":\\"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b\\",\\"outcome\\":{\\"accepted\\":true,\\"error\\":null},\\"index\\":3,\\"term\\":1}},\\"admin\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"ENROLL\\",\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"expectedGeneration\\":0,\\"expectedCompletedSequence\\":0,\\"expectedReceiptDigest\\":null,\\"newGeneration\\":1,\\"nonce\\":\\"5555555555555555555555555555555555555555555555555555555555555555\\"},\\"receipt\\":{\\"version\\":1,\\"commandDigest\\":\\"092fd6247d91c1032ce6fb93d141190bd2889c2759cceef7cd7f1a472b897ec3\\",\\"outcome\\":{\\"accepted\\":true,\\"token\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1}},\\"index\\":2,\\"term\\":1}}}"},{"slot":1,"record":"{\\"slot\\":1,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":2,"record":"{\\"slot\\":2,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":3,"record":"{\\"slot\\":3,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":4,"record":"{\\"slot\\":4,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":5,"record":"{\\"slot\\":5,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":6,"record":"{\\"slot\\":6,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":7,"record":"{\\"slot\\":7,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":8,"record":"{\\"slot\\":8,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":9,"record":"{\\"slot\\":9,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":10,"record":"{\\"slot\\":10,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":11,"record":"{\\"slot\\":11,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":12,"record":"{\\"slot\\":12,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":13,"record":"{\\"slot\\":13,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":14,"record":"{\\"slot\\":14,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":15,"record":"{\\"slot\\":15,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":16,"record":"{\\"slot\\":16,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":17,"record":"{\\"slot\\":17,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":18,"record":"{\\"slot\\":18,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":19,"record":"{\\"slot\\":19,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":20,"record":"{\\"slot\\":20,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":21,"record":"{\\"slot\\":21,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":22,"record":"{\\"slot\\":22,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":23,"record":"{\\"slot\\":23,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":24,"record":"{\\"slot\\":24,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":25,"record":"{\\"slot\\":25,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":26,"record":"{\\"slot\\":26,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":27,"record":"{\\"slot\\":27,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":28,"record":"{\\"slot\\":28,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":29,"record":"{\\"slot\\":29,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":30,"record":"{\\"slot\\":30,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":31,"record":"{\\"slot\\":31,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":32,"record":"{\\"slot\\":32,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":33,"record":"{\\"slot\\":33,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":34,"record":"{\\"slot\\":34,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":35,"record":"{\\"slot\\":35,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":36,"record":"{\\"slot\\":36,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":37,"record":"{\\"slot\\":37,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":38,"record":"{\\"slot\\":38,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":39,"record":"{\\"slot\\":39,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":40,"record":"{\\"slot\\":40,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":41,"record":"{\\"slot\\":41,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":42,"record":"{\\"slot\\":42,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":43,"record":"{\\"slot\\":43,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":44,"record":"{\\"slot\\":44,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":45,"record":"{\\"slot\\":45,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":46,"record":"{\\"slot\\":46,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":47,"record":"{\\"slot\\":47,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":48,"record":"{\\"slot\\":48,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":49,"record":"{\\"slot\\":49,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":50,"record":"{\\"slot\\":50,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":51,"record":"{\\"slot\\":51,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":52,"record":"{\\"slot\\":52,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":53,"record":"{\\"slot\\":53,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":54,"record":"{\\"slot\\":54,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":55,"record":"{\\"slot\\":55,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":56,"record":"{\\"slot\\":56,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":57,"record":"{\\"slot\\":57,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":58,"record":"{\\"slot\\":58,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":59,"record":"{\\"slot\\":59,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":60,"record":"{\\"slot\\":60,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":61,"record":"{\\"slot\\":61,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":62,"record":"{\\"slot\\":62,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":63,"record":"{\\"slot\\":63,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"}],"kv":[{"session_id":"session","key":"key","value_hex":"6F6C642D7772697465722D76616C7565","updated_at":1792564193418}]}},"before":{"meta":{"format":"wasm-writer-v1/1","serviceId":"recreated-service","initialization":null},"slots":[],"kv":[]},"intendedFreshInit":{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"2222222222222222222222222222222222222222222222222222222222222222","nonce":"4444444444444444444444444444444444444444444444444444444444444444"},"ordered":false},"events":[{"position":{"index":1,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"commandDigest":"85d479ca4d9fe60fb57598fd8c56b84d9c4dcc4ad7ffee0aa64cbf40eb36f65e","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111"}},"index":1,"term":1}}},{"position":{"index":2,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"ENROLL","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"expectedGeneration":0,"expectedCompletedSequence":0,"expectedReceiptDigest":null,"newGeneration":1,"nonce":"5555555555555555555555555555555555555555555555555555555555555555"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"commandDigest":"092fd6247d91c1032ce6fb93d141190bd2889c2759cceef7cd7f1a472b897ec3","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1}},"index":2,"term":1}}},{"position":{"index":3,"term":1},"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"WRITE","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"ack":null,"sessionId":"session","key":"key","value":"b2xkLXdyaXRlci12YWx1ZQ==","valueEncoding":"base64"},"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"commandDigest":"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b","outcome":{"accepted":true,"error":null},"index":3,"term":1}}}],"after":{"meta":{"format":"wasm-writer-v1/1","serviceId":"recreated-service","initialization":{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"receipt":{"version":1,"commandDigest":"85d479ca4d9fe60fb57598fd8c56b84d9c4dcc4ad7ffee0aa64cbf40eb36f65e","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111"}},"index":1,"term":1}}},"slots":[{"slot":0,"record":"{\\"slot\\":0,\\"generation\\":1,\\"completed\\":1,\\"write\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"WRITE\\",\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"ack\\":null,\\"sessionId\\":\\"session\\",\\"key\\":\\"key\\",\\"value\\":\\"b2xkLXdyaXRlci12YWx1ZQ==\\",\\"valueEncoding\\":\\"base64\\"},\\"receipt\\":{\\"version\\":1,\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"commandDigest\\":\\"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b\\",\\"outcome\\":{\\"accepted\\":true,\\"error\\":null},\\"index\\":3,\\"term\\":1}},\\"admin\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"ENROLL\\",\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"expectedGeneration\\":0,\\"expectedCompletedSequence\\":0,\\"expectedReceiptDigest\\":null,\\"newGeneration\\":1,\\"nonce\\":\\"5555555555555555555555555555555555555555555555555555555555555555\\"},\\"receipt\\":{\\"version\\":1,\\"commandDigest\\":\\"092fd6247d91c1032ce6fb93d141190bd2889c2759cceef7cd7f1a472b897ec3\\",\\"outcome\\":{\\"accepted\\":true,\\"token\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1}},\\"index\\":2,\\"term\\":1}}}"},{"slot":1,"record":"{\\"slot\\":1,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":2,"record":"{\\"slot\\":2,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":3,"record":"{\\"slot\\":3,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":4,"record":"{\\"slot\\":4,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":5,"record":"{\\"slot\\":5,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":6,"record":"{\\"slot\\":6,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":7,"record":"{\\"slot\\":7,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":8,"record":"{\\"slot\\":8,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":9,"record":"{\\"slot\\":9,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":10,"record":"{\\"slot\\":10,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":11,"record":"{\\"slot\\":11,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":12,"record":"{\\"slot\\":12,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":13,"record":"{\\"slot\\":13,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":14,"record":"{\\"slot\\":14,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":15,"record":"{\\"slot\\":15,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":16,"record":"{\\"slot\\":16,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":17,"record":"{\\"slot\\":17,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":18,"record":"{\\"slot\\":18,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":19,"record":"{\\"slot\\":19,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":20,"record":"{\\"slot\\":20,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":21,"record":"{\\"slot\\":21,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":22,"record":"{\\"slot\\":22,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":23,"record":"{\\"slot\\":23,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":24,"record":"{\\"slot\\":24,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":25,"record":"{\\"slot\\":25,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":26,"record":"{\\"slot\\":26,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":27,"record":"{\\"slot\\":27,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":28,"record":"{\\"slot\\":28,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":29,"record":"{\\"slot\\":29,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":30,"record":"{\\"slot\\":30,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":31,"record":"{\\"slot\\":31,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":32,"record":"{\\"slot\\":32,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":33,"record":"{\\"slot\\":33,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":34,"record":"{\\"slot\\":34,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":35,"record":"{\\"slot\\":35,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":36,"record":"{\\"slot\\":36,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":37,"record":"{\\"slot\\":37,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":38,"record":"{\\"slot\\":38,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":39,"record":"{\\"slot\\":39,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":40,"record":"{\\"slot\\":40,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":41,"record":"{\\"slot\\":41,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":42,"record":"{\\"slot\\":42,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":43,"record":"{\\"slot\\":43,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":44,"record":"{\\"slot\\":44,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":45,"record":"{\\"slot\\":45,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":46,"record":"{\\"slot\\":46,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":47,"record":"{\\"slot\\":47,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":48,"record":"{\\"slot\\":48,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":49,"record":"{\\"slot\\":49,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":50,"record":"{\\"slot\\":50,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":51,"record":"{\\"slot\\":51,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":52,"record":"{\\"slot\\":52,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":53,"record":"{\\"slot\\":53,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":54,"record":"{\\"slot\\":54,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":55,"record":"{\\"slot\\":55,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":56,"record":"{\\"slot\\":56,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":57,"record":"{\\"slot\\":57,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":58,"record":"{\\"slot\\":58,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":59,"record":"{\\"slot\\":59,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":60,"record":"{\\"slot\\":60,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":61,"record":"{\\"slot\\":61,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":62,"record":"{\\"slot\\":62,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":63,"record":"{\\"slot\\":63,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"}],"kv":[{"session_id":"session","key":"key","value_hex":"6F6C642D7772697465722D76616C7565","updated_at":1792564193433}]},"revived":true}
+# Subtest: WasmWriterState same-file restart retains exact old outcome without reexecution
+ok 2 - WasmWriterState same-file restart retains exact old outcome without reexecution
+  ---
+  duration_ms: 16.394856
+  type: 'test'
+  ...
+# {"scope":"clean same-file reopen, not process-loss durability","command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"WRITE","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"ack":null,"sessionId":"session","key":"key","value":"b2xkLXdyaXRlci12YWx1ZQ==","valueEncoding":"base64"},"replayPosition":4,"result":{"status":"RECORDED","accepted":true,"async":false,"receipt":{"version":1,"identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"commandDigest":"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b","outcome":{"accepted":true,"error":null},"index":3,"term":1}},"state":{"meta":{"format":"wasm-writer-v1/1","serviceId":"recreated-service","initialization":{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"receipt":{"version":1,"commandDigest":"85d479ca4d9fe60fb57598fd8c56b84d9c4dcc4ad7ffee0aa64cbf40eb36f65e","outcome":{"accepted":true,"token":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111"}},"index":1,"term":1}}},"slots":[{"slot":0,"record":"{\\"slot\\":0,\\"generation\\":1,\\"completed\\":1,\\"write\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"WRITE\\",\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"ack\\":null,\\"sessionId\\":\\"session\\",\\"key\\":\\"key\\",\\"value\\":\\"b2xkLXdyaXRlci12YWx1ZQ==\\",\\"valueEncoding\\":\\"base64\\"},\\"receipt\\":{\\"version\\":1,\\"identity\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1,\\"sequence\\":1},\\"commandDigest\\":\\"aa4e5d94621ab4943dde51ab35edeae1e227749ac57d0ce1723d0e45f6156a7b\\",\\"outcome\\":{\\"accepted\\":true,\\"error\\":null},\\"index\\":3,\\"term\\":1}},\\"admin\\":{\\"command\\":{\\"type\\":\\"WASM_WRITER_V1\\",\\"profile\\":\\"wasm-writer-v1/1\\",\\"action\\":\\"ENROLL\\",\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"expectedGeneration\\":0,\\"expectedCompletedSequence\\":0,\\"expectedReceiptDigest\\":null,\\"newGeneration\\":1,\\"nonce\\":\\"5555555555555555555555555555555555555555555555555555555555555555\\"},\\"receipt\\":{\\"version\\":1,\\"commandDigest\\":\\"092fd6247d91c1032ce6fb93d141190bd2889c2759cceef7cd7f1a472b897ec3\\",\\"outcome\\":{\\"accepted\\":true,\\"token\\":{\\"serviceId\\":\\"recreated-service\\",\\"incarnation\\":\\"1111111111111111111111111111111111111111111111111111111111111111\\",\\"slot\\":0,\\"generation\\":1}},\\"index\\":2,\\"term\\":1}}}"},{"slot":1,"record":"{\\"slot\\":1,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":2,"record":"{\\"slot\\":2,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":3,"record":"{\\"slot\\":3,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":4,"record":"{\\"slot\\":4,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":5,"record":"{\\"slot\\":5,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":6,"record":"{\\"slot\\":6,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":7,"record":"{\\"slot\\":7,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":8,"record":"{\\"slot\\":8,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":9,"record":"{\\"slot\\":9,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":10,"record":"{\\"slot\\":10,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":11,"record":"{\\"slot\\":11,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":12,"record":"{\\"slot\\":12,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":13,"record":"{\\"slot\\":13,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":14,"record":"{\\"slot\\":14,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":15,"record":"{\\"slot\\":15,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":16,"record":"{\\"slot\\":16,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":17,"record":"{\\"slot\\":17,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":18,"record":"{\\"slot\\":18,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":19,"record":"{\\"slot\\":19,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":20,"record":"{\\"slot\\":20,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":21,"record":"{\\"slot\\":21,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":22,"record":"{\\"slot\\":22,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":23,"record":"{\\"slot\\":23,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":24,"record":"{\\"slot\\":24,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":25,"record":"{\\"slot\\":25,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":26,"record":"{\\"slot\\":26,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":27,"record":"{\\"slot\\":27,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":28,"record":"{\\"slot\\":28,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":29,"record":"{\\"slot\\":29,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":30,"record":"{\\"slot\\":30,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":31,"record":"{\\"slot\\":31,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":32,"record":"{\\"slot\\":32,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":33,"record":"{\\"slot\\":33,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":34,"record":"{\\"slot\\":34,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":35,"record":"{\\"slot\\":35,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":36,"record":"{\\"slot\\":36,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":37,"record":"{\\"slot\\":37,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":38,"record":"{\\"slot\\":38,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":39,"record":"{\\"slot\\":39,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":40,"record":"{\\"slot\\":40,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":41,"record":"{\\"slot\\":41,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":42,"record":"{\\"slot\\":42,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":43,"record":"{\\"slot\\":43,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":44,"record":"{\\"slot\\":44,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":45,"record":"{\\"slot\\":45,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":46,"record":"{\\"slot\\":46,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":47,"record":"{\\"slot\\":47,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":48,"record":"{\\"slot\\":48,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":49,"record":"{\\"slot\\":49,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":50,"record":"{\\"slot\\":50,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":51,"record":"{\\"slot\\":51,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":52,"record":"{\\"slot\\":52,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":53,"record":"{\\"slot\\":53,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":54,"record":"{\\"slot\\":54,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":55,"record":"{\\"slot\\":55,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":56,"record":"{\\"slot\\":56,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":57,"record":"{\\"slot\\":57,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":58,"record":"{\\"slot\\":58,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":59,"record":"{\\"slot\\":59,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":60,"record":"{\\"slot\\":60,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":61,"record":"{\\"slot\\":61,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":62,"record":"{\\"slot\\":62,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"},{"slot":63,"record":"{\\"slot\\":63,\\"generation\\":0,\\"completed\\":0,\\"write\\":null,\\"admin\\":null}"}],"kv":[{"session_id":"session","key":"key","value_hex":"6F6C642D7772697465722D76616C7565","updated_at":1792564193450}]}}
+# Subtest: WasmWriterState different service identity rejects the original initialization and writer
+ok 3 - WasmWriterState different service identity rejects the original initialization and writer
+  ---
+  duration_ms: 5.43521
+  type: 'test'
+  ...
+# {"scope":"different service identity control","events":[{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"INIT","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","nonce":"3333333333333333333333333333333333333333333333333333333333333333"},"result":{"status":"REFUSED","reason":"WRITER_INCARNATION_MISMATCH","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","action":"INIT","nonce":"3333333333333333333333333333333333333333333333333333333333333333"}}},{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"ENROLL","serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"expectedGeneration":0,"expectedCompletedSequence":0,"expectedReceiptDigest":null,"newGeneration":1,"nonce":"5555555555555555555555555555555555555555555555555555555555555555"},"result":{"status":"REFUSED","reason":"WRITER_INCARNATION_MISMATCH","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","action":"ENROLL","nonce":"5555555555555555555555555555555555555555555555555555555555555555"}}},{"command":{"type":"WASM_WRITER_V1","profile":"wasm-writer-v1/1","action":"WRITE","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1},"ack":null,"sessionId":"session","key":"key","value":"b2xkLXdyaXRlci12YWx1ZQ==","valueEncoding":"base64"},"result":{"status":"REFUSED","reason":"WRITER_INCARNATION_MISMATCH","identity":{"serviceId":"recreated-service","incarnation":"1111111111111111111111111111111111111111111111111111111111111111","slot":0,"generation":1,"sequence":1}}}],"state":{"meta":{"format":"wasm-writer-v1/1","serviceId":"different-service","initialization":null},"slots":[],"kv":[]}}
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 79.803567
+# time=542ms
+not ok test/scripts/check-subsystem.test.js (6 assertions, 4905ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an unknown subsystem fails and names the valid ids
+ok 1 - an unknown subsystem fails and names the valid ids
+  ---
+  duration_ms: 56.19717
+  type: 'test'
+  ...
+# Subtest: a missing subsystem argument fails with usage
+ok 2 - a missing subsystem argument fails with usage
+  ---
+  duration_ms: 47.191997
+  type: 'test'
+  ...
+# Subtest: the CLI and the library select identically
+not ok 3 - the CLI and the library select identically
+  ---
+  duration_ms: 4145.356142
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/scripts/check-subsystem.test.js:49:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + []
+    - [
+    -   'test/integration/transaction-coordinator-restart.integration.test.js',
+    -   'test/transaction/cross-partition-rejection.property.test.js',
+    -   'test/transaction/session-transaction-isolation.test.js',
+    -   'test/transaction/transaction-support.test.js',
+    -   'test/workflow/durable-workflow-coordinator.test.js',
+    -   'test/workflow/durable-workflow-recovery-identity.test.js',
+    -   'test/workflow/durable-workflow-storage-ownership.test.js',
+    -   'test/workflow/fence-token-claim-transition.test.js',
+    -   'test/workflow/instant-closure-owner-participation.test.js',
+    -   'test/workflow/monotonic-workflow-regression.test.js',
+    -   'test/workflow/operation-lane.test.js',
+    -   'test/workflow/owner-key-reconcile-queue-current-work.test.js',
+    -   'test/workflow/owner-key-reconcile-queue-failure-atomicity.test.js',
+    -   'test/workflow/owner-key-reconcile-queue.test.js',
+    -   'test/workflow/reconcile-queue-retry-wait-bound-spent.test.js',
+    -   'test/workflow/workflow-step-runner.test.js'
+    - ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'test/integration/transaction-coordinator-restart.integration.test.js'
+    1: 'test/transaction/cross-partition-rejection.property.test.js'
+    2: 'test/transaction/session-transaction-isolation.test.js'
+    3: 'test/transaction/transaction-support.test.js'
+    4: 'test/workflow/durable-workflow-coordinator.test.js'
+    5: 'test/workflow/durable-workflow-recovery-identity.test.js'
+    6: 'test/workflow/durable-workflow-storage-ownership.test.js'
+    7: 'test/workflow/fence-token-claim-transition.test.js'
+    8: 'test/workflow/instant-closure-owner-participation.test.js'
+    9: 'test/workflow/monotonic-workflow-regression.test.js'
+    10: 'test/workflow/operation-lane.test.js'
+    11: 'test/workflow/owner-key-reconcile-queue-current-work.test.js'
+    12: 'test/workflow/owner-key-reconcile-queue-failure-atomicity.test.js'
+    13: 'test/workflow/owner-key-reconcile-queue.test.js'
+    14: 'test/workflow/reconcile-queue-retry-wait-bound-spent.test.js'
+    15: 'test/workflow/workflow-step-runner.test.js'
+  actual:
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/scripts/check-subsystem.test.js:56:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: every declared subsystem selects at least one test
+ok 4 - every declared subsystem selects at least one test
+  ---
+  duration_ms: 102.328028
+  type: 'test'
+  ...
+# Subtest: selection matches the committed classification exactly
+ok 5 - selection matches the committed classification exactly
+  ---
+  duration_ms: 110.747293
+  type: 'test'
+  ...
+# Subtest: every live test is reachable through exactly one subsystem
+ok 6 - every live test is reachable through exactly one subsystem
+  ---
+  duration_ms: 98.054966
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4576.98361
+# time=4905ms
+not ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 11709ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: worker consensus path and its replica base are deleted
+ok 1 - worker consensus path and its replica base are deleted
+  ---
+  duration_ms: 1.366747
+  type: 'test'
+  ...
+# Subtest: wasm service replica requires its own durable file
+ok 2 - wasm service replica requires its own durable file
+  ---
+  duration_ms: 67.125386
+  type: 'test'
+  ...
+# Subtest: wasm service group commits and applies kv writes through raft-rs
+not ok 3 - wasm service group commits and applies kv writes through raft-rs
+  ---
+  duration_ms: 432.365405
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:218:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:238:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: wasm service replica restart preserves kv and consensus state
+not ok 4 - wasm service replica restart preserves kv and consensus state
+  ---
+  duration_ms: 10356.848484
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:260:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:270:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10868.662204
+# time=11709ms
+not ok test/query/unknown-outcome-same-entry.test.js (11 assertions, 172278ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never "not confirmed"
+not ok 1 - W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never "not confirmed"
+  ---
+  duration_ms: 30209.422621
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:140:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the engine serves a write
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:145:12
+    runNextTicks (node:internal/process/task_queues:64:5)
+    process.processTimers (node:internal/timers:518:9)
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:143:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: W1/W5/W6: the joiner's registration re-driven (the same row) after its unknown outcome resolves the first entry - ACCEPTED with one row, never "not confirmed" (real gateway, nodes table)
+not ok 2 - W1/W5/W6: the joiner's registration re-driven (the same row) after its unknown outcome resolves the first entry - ACCEPTED with one row, never "not confirmed" (real gateway, nodes table)
+  ---
+  duration_ms: 696.602288
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:191:3'
+  failureType: 'testCodeFailure'
+  error: 'setup: the core trapped the write'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:211:14
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:195:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W1/W5/W6: the joiner's registration re-driven (a rebuilt row) after its unknown outcome resolves the first entry - ACCEPTED with one row, never "not confirmed" (real gateway, nodes table)
+not ok 3 - W1/W5/W6: the joiner's registration re-driven (a rebuilt row) after its unknown outcome resolves the first entry - ACCEPTED with one row, never "not confirmed" (real gateway, nodes table)
+  ---
+  duration_ms: 683.575933
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:191:3'
+  failureType: 'testCodeFailure'
+  error: 'setup: the core trapped the write'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:211:14
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:195:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W3/W4: the typed unknown outcome and its entryId survive every hop; re-delivery is under the same entryId and bounded; the spent budget reports once
+not ok 4 - W3/W4: the typed unknown outcome and its entryId survive every hop; re-delivery is under the same entryId and bounded; the spent budget reports once
+  ---
+  duration_ms: 30084.859985
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:258:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:264:12
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:261:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W5/W6: a control-plane owner write retried by its retry loop after an unknown outcome is the same entry (one identity per call)
+not ok 5 - W5/W6: a control-plane owner write retried by its retry loop after an unknown outcome is the same entry (one identity per call)
+  ---
+  duration_ms: 30302.835733
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:362:1'
+  failureType: 'testCodeFailure'
+  error: 'Distributed operation failed due to participant failures'
+  code: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  stack: |-
+    buildSystemMetadataMutationError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/control-plane/owners/system-metadata-owner-base.js:157:7)
+    NodeEndpointsOwner.executeMutation (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/control-plane/owners/system-metadata-owner-base.js:442:15)
+    runNextTicks (node:internal/process/task_queues:64:5)
+    process.processTimers (node:internal/timers:518:9)
+    async withMutedConsoleError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:169:12)
+    async file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:390:16
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:365:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W3: the control-plane gateway hop carries the typed unknown outcome
+not ok 6 - W3: the control-plane gateway hop carries the typed unknown outcome
+  ---
+  duration_ms: 693.40001
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:406:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    gateway result: typed code ({"partitionId":"nodes-p1","participantNodeId":"uo-node","participantAddress":"uo-node/partition/nodes-p1-r1","errorCode":null,"failureCode":"partition_write_cutover_paused","committed":false,"outcome":null,"disposition":null,"logIndex":null,"entryId":null,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":"nodes"})
+    + actual - expected
+    
+    + 'partition_write_cutover_paused'
+    - 'partition_write_outcome_unknown'
+                       ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'partition_write_outcome_unknown'
+  actual: 'partition_write_cutover_paused'
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:416:14
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:408:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W5/W6: an endpoint birth re-driven after its unknown outcome is the same entry - applied once, never UNIQUE
+not ok 7 - W5/W6: an endpoint birth re-driven after its unknown outcome is the same entry - applied once, never UNIQUE
+  ---
+  duration_ms: 8703.08933
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:431:1'
+  failureType: 'testCodeFailure'
+  error: 'setup: it commits later (authority_unavailable)'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:453:12
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:434:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W5/W6: a reservation birth ensured again after its lost answer is the same entry (the named write identity held while unknown)
+not ok 8 - W5/W6: a reservation birth ensured again after its lost answer is the same entry (the named write identity held while unknown)
+  ---
+  duration_ms: 13106.33371
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:467:1'
+  failureType: 'testCodeFailure'
+  error: 'setup: it commits'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:486:12
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:470:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W5/W6: the rebalancer's reservation birth (its own method) created again after its unknown outcome resolves the first entry and is answered by the authority - ALREADY_ACTIVE, one row
+not ok 9 - W5/W6: the rebalancer's reservation birth (its own method) created again after its unknown outcome resolves the first entry and is answered by the authority - ALREADY_ACTIVE, one row
+  ---
+  duration_ms: 16394.31732
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:503:1'
+  failureType: 'testCodeFailure'
+  error: 'Distributed operation failed due to participant failures'
+  code: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  stack: |-
+    ReplicaOperationRepository.buildOperationPersistError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/rebalancer/replica-operation-repository-mutation-gateway-methods.js:438:21)
+    recoverNewOperationInsertFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js:252:39)
+  ...
+# Subtest: W5/W6: the CDC service's routed write retries every engine attempt under one entry, and a call that ends unknown re-driven under its key is that entry
+not ok 10 - W5/W6: the CDC service's routed write retries every engine attempt under one entry, and a call that ends unknown re-driven under its key is that entry
+  ---
+  duration_ms: 9108.937179
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:558:1'
+  failureType: 'testCodeFailure'
+  error: 'setup: it commits'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:589:12
+    async withSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:283:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:561:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: W2: an INSERT whose proposer loses leadership mid-write commits under the new leader, and the caller ends with the original result, exactly once
+not ok 11 - W2: an INSERT whose proposer loses leadership mid-write commits under the new leader, and the caller ends with the original result, exactly once
+  ---
+  duration_ms: 30173.928001
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:608:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: the group serves a write ("Distributed operation failed due to participant failures" [{"partitionId":"uo-lc","participantNodeId":"node-3","participantAddress":"node-1/partition/uo-lc-r1","errorCode":null,"failureCode":"partition_write_cutover_paused","committed":false,"outcome":null,"disposition":null,"logIndex":null,"entryId":null,"error":"The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried","durationMs":null,"retryAfterMs":null,"deferRetry":false,"backpressured":false,"failedTable":"uo_rows"}])
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:615:12
+    async withGroupSurface (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-surface-fixture.js:505:5)
+    async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/query/unknown-outcome-same-entry.test.js:611:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 0
+# fail 11
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 170172.028899
+# time=172278ms
+# test-files total=13 pass=0 fail=13 assertions=139
+classified lane exclusive: 3 file(s), jobs=1
+thermal: ok cpu 47C (coretemp/Package id 0) nvme 21C (nvme/Composite)
+not ok test/integration/multi-node-raft-replication.integration.test.js (17 assertions, 45307ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: Multi-node Raft replication
+{"level":50,"time":"2026-10-21T06:32:49.249Z","nodeId":"test-node","pid":2131185,"subsystem":"bootstrap","nodeId":"test-node","phase":"partitions","duration":13336,"error":"Seed participant release failed: {\"partitionId\":\"storage_reservations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"storage_reservations-p1\",\"phase\":\"inspect\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-900000000000\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3012,\"remainingMs\":0,\"ordinal\":44,\"total\":46,\"completed\":43,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"storage_reservations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"storage_reservations-p1\",\"phase\":\"inspect\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-900000000000\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3012,\"remainingMs\":0,\"ordinal\":44,\"total\":46,\"completed\":43,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\n    at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/multi-node-raft-replication.integration.test.js:223:25)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-900000000000","msg":"Bootstrap failed"}
+    # Subtest: data written on seed replicates to joining node via Raft
+        not ok 1 - seed node bootstrap should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 224
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:224:9)
+          source: >2
+                  // =========================================================================
+                  bootstrapResult = await bootstrapService.bootstrap();
+                  t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
+            --------^
+                  t.ok(bootstrapResult.partitionServices.size > 0, 'seed should have partitions');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 2 - Cannot read properties of undefined (reading 'size')
+          ---
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:225:46)
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 225
+            columnNumber: 46
+            typeName: Test
+            methodName: <anonymous>
+            functionName: Test.<anonymous>
+          type: TypeError
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  bootstrapResult = await bootstrapService.bootstrap();
+                  t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
+                  t.ok(bootstrapResult.partitionServices.size > 0, 'seed should have partitions');
+            ---------------------------------------------^
+          
+                  // Wait for nodes-p1 partition to elect a leader
+          ...
+        
+        1..2
+    not ok 1 - data written on seed replicates to joining node via Raft # time=14173.204ms
+      ---
+      at:
+        fileName: test/integration/multi-node-raft-replication.integration.test.js
+        lineNumber: 181
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('data written on seed replicates to joining node via Raft', async (t) => {
+        ----------^
+            // =========================================================================
+            // This test verifies end-to-end Raft replication:
+      ...
+    
+{"level":50,"time":"2026-10-21T06:32:55.567Z","nodeId":"test-node","pid":2131185,"subsystem":"bootstrap","nodeId":"test-node","phase":"partitions","duration":5400,"error":"Seed participant release failed: {\"partitionId\":\"schema_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"schema_operations-p1\",\"phase\":\"inspect\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-900000000001\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3005,\"remainingMs\":0,\"ordinal\":30,\"total\":46,\"completed\":29,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"schema_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"schema_operations-p1\",\"phase\":\"inspect\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-900000000001\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3005,\"remainingMs\":0,\"ordinal\":30,\"total\":46,\"completed\":29,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\n    at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/multi-node-raft-replication.integration.test.js:498:25)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-900000000001","msg":"Bootstrap failed"}
+    # Subtest: Raft append ack messages are handled without warnings
+        not ok 1 - seed bootstrap should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 499
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:499:9)
+          source: >2
+                  // =========================================================================
+                  bootstrapResult = await bootstrapService.bootstrap();
+                  t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+            --------^
+          
+                  // Wait for leader election to trigger Raft messages
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+{"level":50,"time":"2026-10-21T06:33:01.824Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","state":"connecting","phase":"contacting_seed","subPhase":null,"duration":531,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","joinReadiness":null,"seedContactFailureKind":"bootstrap_not_ready","bootstrapResponseCode":"BOOTSTRAP_NOT_READY","bootstrapResponsePhase":"failed","bootstrapResponseState":"bootstrapping","bootstrapResponseReasons":["BOOTSTRAP_PHASE_INCOMPLETE","BOOTSTRAP_NOT_READY","priority_control_plane_recovery_diagnostics_unavailable"],"bootstrapResponseRetryAfterMs":500,"seedContact":{"phase":"contacting_seed","candidateSet":["http://localhost:0"],"currentCandidate":"http://localhost:0","attempt":2,"lastOutcome":"retryable_seed_response","remainingBudgetMs":9469,"authoritySource":null},"contextNodeId":"550e8400-e29b-41d4-a716-900000000002","msg":"Joining phase failed"}
+        not ok 2 - join should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 554
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:554:9)
+          source: >2
+          
+                  const joinResult = await joiningService.join();
+                  t.equal(joinResult.success, true, 'join should succeed');
+            --------^
+          
+                  // =========================================================================
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+{"level":50,"time":"2026-10-21T06:33:01.825Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":541,"preserveForResume":false,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","contextNodeId":"550e8400-e29b-41d4-a716-900000000002","msg":"Node joining failed"}
+{"level":50,"time":"2026-10-21T06:33:06.833Z","nodeId":"test-node","pid":2131185,"subsystem":"cdc-confirmation","event":"wait_bound_spent","wait":"CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS","awaited":"CDC event applied to the local SystemTableCache","boundMs":5000,"elapsedMs":5004,"lastObserved":{"confirmed":false,"pendingConfirmations":0},"scope":{"tableName":"nodes","primaryKey":"550e8400-e29b-41d4-a716-900000000001"},"repeats":0,"nodeId":"test-node","msg":"Wait bound spent"}
+        not ok 3 - CDCConfirmationTimeoutError: table=nodes key=550e8400-e29b-41d4-a716-900000000001 timeout=5000ms
+          ---
+          stack: |
+            Timeout._onTimeout (src/cdc/cdc-confirmation-tracker.js:85:23)
+          at:
+            fileName: src/cdc/cdc-confirmation-tracker.js
+            lineNumber: 85
+            columnNumber: 23
+            typeName: Timeout
+            methodName: _onTimeout
+            functionName: Timeout._onTimeout
+          type: CDCConfirmationTimeoutError
+          tableName: nodes
+          primaryKey: 550e8400-e29b-41d4-a716-900000000001
+          timeoutMs: 5000
+          tapCaught: returnedPromiseRejection
+          source: |2
+                  const timer = setTimeout(() => {
+                    this.pending.delete(key);
+                    const error = new Error(
+            ----------------------^
+                      `${CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT}: ` +
+                      `table=${tableName} key=${primaryKey} ` +
+          ...
+        
+        1..3
+    not ok 2 - Raft append ack messages are handled without warnings # time=16815.254ms
+      ---
+      at:
+        fileName: test/integration/multi-node-raft-replication.integration.test.js
+        lineNumber: 439
+        columnNumber: 11
+        typeName: Test
+      source: >2
+      
+      
+          await t.test('Raft append ack messages are handled without warnings', async (t) => {
+        ----------^
+            // =========================================================================
+            // This test specifically verifies that all Raft packet types are handled
+      ...
+    
+{"level":50,"time":"2026-10-21T06:33:12.243Z","nodeId":"test-node","pid":2131185,"subsystem":"bootstrap","nodeId":"test-node","phase":"partitions","duration":5198,"error":"Seed participant release failed: {\"partitionId\":\"schema_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"schema_operations-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"550e8400-e29b-41d4-a716-900000000003\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"inspect\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3001,\"remainingMs\":0,\"ordinal\":30,\"total\":46,\"completed\":29,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"schema_operations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"schema_operations-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"550e8400-e29b-41d4-a716-900000000003\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"inspect\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3001,\"remainingMs\":0,\"ordinal\":30,\"total\":46,\"completed\":29,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:348:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async Object.run (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:413:13)\n    at async StartupPipelineRunner.runWorkflow (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/pipeline/startup-pipeline-runner.js:169:9)\n    at async BootstrapService.bootstrap (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/bootstrap-service-seed-workflow.js:527:9)\n    at async Test.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/multi-node-raft-replication.integration.test.js:667:25)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-900000000003","msg":"Bootstrap failed"}
+    # Subtest: three-node cluster maintains Raft consensus
+        not ok 1 - seed bootstrap should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 668
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:668:9)
+          source: >2
+                  // =========================================================================
+                  bootstrapResult = await bootstrapService.bootstrap();
+                  t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+            --------^
+          
+                  const systemTableCache = NodeService.getInstance().getSystemTableCache();
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+{"level":50,"time":"2026-10-21T06:33:13.375Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","state":"connecting","phase":"contacting_seed","subPhase":null,"duration":509,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","joinReadiness":null,"seedContactFailureKind":"bootstrap_not_ready","bootstrapResponseCode":"BOOTSTRAP_NOT_READY","bootstrapResponsePhase":"failed","bootstrapResponseState":"bootstrapping","bootstrapResponseReasons":["BOOTSTRAP_PHASE_INCOMPLETE","BOOTSTRAP_NOT_READY","priority_control_plane_recovery_diagnostics_unavailable"],"bootstrapResponseRetryAfterMs":500,"seedContact":{"phase":"contacting_seed","candidateSet":["http://localhost:0"],"currentCandidate":"http://localhost:0","attempt":2,"lastOutcome":"retryable_seed_response","remainingBudgetMs":9491,"authoritySource":null},"contextNodeId":"550e8400-e29b-41d4-a716-900000000004","msg":"Joining phase failed"}
+        not ok 2 - second node join should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 709
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:709:9)
+          source: >2
+          
+                  const joinResult2 = await joiningService2.join();
+                  t.equal(joinResult2.success, true, 'second node join should succeed');
+            --------^
+          
+                  // =========================================================================
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+{"level":50,"time":"2026-10-21T06:33:13.375Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":510,"preserveForResume":false,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","contextNodeId":"550e8400-e29b-41d4-a716-900000000004","msg":"Node joining failed"}
+{"level":50,"time":"2026-10-21T06:33:13.959Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","state":"connecting","phase":"contacting_seed","subPhase":null,"duration":508,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","joinReadiness":null,"seedContactFailureKind":"bootstrap_not_ready","bootstrapResponseCode":"BOOTSTRAP_NOT_READY","bootstrapResponsePhase":"failed","bootstrapResponseState":"bootstrapping","bootstrapResponseReasons":["BOOTSTRAP_PHASE_INCOMPLETE","BOOTSTRAP_NOT_READY","priority_control_plane_recovery_diagnostics_unavailable"],"bootstrapResponseRetryAfterMs":500,"seedContact":{"phase":"contacting_seed","candidateSet":["http://localhost:0"],"currentCandidate":"http://localhost:0","attempt":2,"lastOutcome":"retryable_seed_response","remainingBudgetMs":9492,"authoritySource":null},"contextNodeId":"550e8400-e29b-41d4-a716-900000000005","msg":"Joining phase failed"}
+        not ok 3 - third node join should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 725
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:725:9)
+          source: >2
+          
+                  const joinResult3 = await joiningService3.join();
+                  t.equal(joinResult3.success, true, 'third node join should succeed');
+            --------^
+          
+                  // =========================================================================
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+{"level":50,"time":"2026-10-21T06:33:13.962Z","nodeId":"test-node","pid":2131185,"subsystem":"node-joining","nodeId":"test-node","phase":"contacting_seed","duration":511,"preserveForResume":false,"error":"Seed bootstrap not ready (phase: failed)","stack":"Error: Seed bootstrap not ready (phase: failed)\n    at SeedContactFailureOwner.buildRetryableError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:233:28)\n    at SeedContactFailureOwner.buildBootstrapNotReadyError (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:290:17)\n    at SeedContactFailureOwner.throwSurfacedFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:70:18)\n    at SeedContactFailureOwner.throwFailure (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/seed-contact-failure-owner.js:38:12)\n    at ContactSeedPhase.phaseContactSeed (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/phases/contact-seed-phase.js:145:27)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/bootstrap/node-joining-admission-readiness.js:809:9)","contextNodeId":"550e8400-e29b-41d4-a716-900000000005","msg":"Node joining failed"}
+        not ok 4 - nodes query should succeed
+          ---
+          compare: ===
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 738
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:738:9)
+          source: >2
+                  );
+          
+                  t.equal(nodesResult.success !== false, true, 'nodes query should succeed');
+            --------^
+                  t.ok(nodesResult.rows?.length >= 3, 'should have at least 3 nodes');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -true
+            +false
+          ...
+        
+        not ok 5 - should have at least 3 nodes
+          ---
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 739
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:739:9)
+          source: >2
+          
+                  t.equal(nodesResult.success !== false, true, 'nodes query should succeed');
+                  t.ok(nodesResult.rows?.length >= 3, 'should have at least 3 nodes');
+            --------^
+          
+                  const nodeIds = nodesResult.rows?.map((n) => n.node_id) || [];
+          ...
+        
+        not ok 6 - seed node in cluster
+          ---
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 742
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:742:9)
+          source: |2
+          
+                  const nodeIds = nodesResult.rows?.map((n) => n.node_id) || [];
+                  t.ok(nodeIds.includes(seedNodeId), 'seed node in cluster');
+            --------^
+                  t.ok(nodeIds.includes(joiningNodeId2), 'second node in cluster');
+                  t.ok(nodeIds.includes(joiningNodeId3), 'third node in cluster');
+          ...
+        
+        not ok 7 - second node in cluster
+          ---
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 743
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:743:9)
+          source: |2
+                  const nodeIds = nodesResult.rows?.map((n) => n.node_id) || [];
+                  t.ok(nodeIds.includes(seedNodeId), 'seed node in cluster');
+                  t.ok(nodeIds.includes(joiningNodeId2), 'second node in cluster');
+            --------^
+                  t.ok(nodeIds.includes(joiningNodeId3), 'third node in cluster');
+          ...
+        
+        not ok 8 - third node in cluster
+          ---
+          at:
+            fileName: test/integration/multi-node-raft-replication.integration.test.js
+            lineNumber: 744
+            columnNumber: 9
+            typeName: Test
+          stack: >
+            Test.<anonymous>
+            (test/integration/multi-node-raft-replication.integration.test.js:744:9)
+          source: >2
+                  t.ok(nodeIds.includes(seedNodeId), 'seed node in cluster');
+                  t.ok(nodeIds.includes(joiningNodeId2), 'second node in cluster');
+                  t.ok(nodeIds.includes(joiningNodeId3), 'third node in cluster');
+            --------^
+          
+                  // =========================================================================
+          ...
+        
+        1..8
+    not ok 3 - three-node cluster maintains Raft consensus # time=12130.173ms
+      ---
+      at:
+        fileName: test/integration/multi-node-raft-replication.integration.test.js
+        lineNumber: 639
+        columnNumber: 11
+        typeName: Test
+      source: >2
+          });
+      
+          await t.test('three-node cluster maintains Raft consensus', async (t) => {
+        ----------^
+            // =========================================================================
+            // This test creates a 3-node cluster to verify proper Raft consensus
+      ...
+    
+    1..3
+not ok 1 - Multi-node Raft replication # time=43362.651ms
+  ---
+  at:
+    fileName: test/integration/multi-node-raft-replication.integration.test.js
+    lineNumber: 164
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('Multi-node Raft replication', {timeout: 180000}, async (t) => {
+    ^
+      t.beforeEach(() => {
+        // This suite validates Raft packet handling and cluster join consensus.
+  ...
+
+1..1
+# { total: 13, pass: 0, fail: 13 }
+# time=43373.708ms
+not ok test/integration/public-binding-cell-invocation-seam.integration.test.js (2 assertions, 253176ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input
+    # runtime start event-loop delay ms: max=16257 p99=248
+{"level":50,"time":"2026-10-21T06:35:08.529Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"rebalance-coordinator","operationId":"e27717f2-3ce4-459b-b56a-36a531ca2a61","type":"ADD","partitionId":"sys-postgres-wire","targetNodeId":"public-binding-seam-node","errorMessage":"Message not acknowledged","nodeId":"public-binding-seam-node","msg":"Operation failed"}
+LogsTableService initialized
+metrics.logging.logs_table_connect.start {
+  bufferedEntries: 1,
+  flushMode: 'background',
+  chunkSize: 20,
+  yieldMs: 5
+}
+Connected to LoggingService, flushed 1 buffered entries
+{"level":50,"time":"2026-10-21T06:35:43.691Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"sql-query-engine","event":"wait_bound_spent","wait":"partition_routing_wait","awaited":"Timed out waiting for routable partition service for partition tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left","boundMs":27710,"elapsedMs":27724,"lastObserved":{"predicateSatisfied":false,"polls":456,"classification":"publication_wait_timeout","requiredCount":1,"routableCount":0,"routingReadinessDimension":"controlPlaneRecoveryEligible"},"scope":{"partitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left"},"repeats":0,"nodeId":"public-binding-seam-node","msg":"Wait bound spent"}
+{"level":50,"time":"2026-10-21T06:36:15.559Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"replica-handler","operationId":"20ad6055-14a5-45dd-8fd9-591221c946db","replicaId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left-r1","partitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left","error":"Fresh replica participant release failed: {\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"public-binding-seam-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlPhase\":\"release\",\"controlReason\":null}}","stack":"Error: Fresh replica participant release failed: {\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"public-binding-seam-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlPhase\":\"release\",\"controlReason\":null}}\n    at Object.releaseFreshCreate (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-release-recovery.js:287:13)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async ReplicaHandler.createReplicaAsync (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-create-methods.js:410:9)\n    at async start (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-create-methods.js:167:15)","nodeId":"public-binding-seam-node","msg":"Replica creation failed"}
+{"level":50,"time":"2026-10-21T06:36:15.837Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"replica-handler","operationId":"20ad6055-14a5-45dd-8fd9-591221c946db","replicaId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left-r1","error":"Fresh replica participant release failed: {\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"public-binding-seam-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlPhase\":\"release\",\"controlReason\":null}}","stack":"Error: Fresh replica participant release failed: {\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"public-binding-seam-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlPhase\":\"release\",\"controlReason\":null}}\n    at Object.releaseFreshCreate (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-release-recovery.js:287:13)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async ReplicaHandler.createReplicaAsync (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-create-methods.js:410:9)\n    at async start (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/src/node/replica-handler-create-methods.js:167:15)","nodeId":"public-binding-seam-node","msg":"Async replica creation failed"}
+{"level":50,"time":"2026-10-21T06:36:16.192Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"rebalance-coordinator","operationId":"20ad6055-14a5-45dd-8fd9-591221c946db","type":"ADD","partitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left","targetNodeId":"public-binding-seam-node","errorMessage":"Fresh replica participant release failed: {\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"public-binding-seam-node\",\"controlOutcome\":\"query_transaction_drain_pending\",\"controlMissingFact\":null,\"controlPhase\":\"release\",\"controlReason\":null}}","nodeId":"public-binding-seam-node","msg":"Operation failed"}
+{"level":50,"time":"2026-10-21T06:36:19.760Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"sql-query-engine","event":"wait_bound_spent","wait":"partition_routing_wait","awaited":"Timed out waiting for routable partition service for partition tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left","boundMs":29576,"elapsedMs":29581,"lastObserved":{"predicateSatisfied":false,"polls":474,"classification":"publication_wait_timeout","requiredCount":1,"routableCount":0,"routingReadinessDimension":"controlPlaneRecoveryEligible"},"scope":{"partitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left"},"repeats":0,"nodeId":"public-binding-seam-node","msg":"Wait bound spent"}
+{"level":50,"time":"2026-10-21T06:37:00.782Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"sql-query-engine","event":"wait_bound_spent","wait":"partition_routing_wait","awaited":"Timed out waiting for routable partition service for partition tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left","boundMs":28591,"elapsedMs":28596,"lastObserved":{"predicateSatisfied":false,"polls":494,"classification":"publication_wait_timeout","requiredCount":1,"routableCount":0,"routingReadinessDimension":"controlPlaneRecoveryEligible"},"scope":{"partitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_15381b85_left"},"repeats":0,"nodeId":"public-binding-seam-node","msg":"Wait bound spent"}
+    not ok 1 - undefined: managed split did not produce two routable partitions (undefined)
+      ---
+      stack: |
+        readable (test/integration/public-binding-cell-invocation-seam.integration.test.js:277:11)
+        async Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:356:23)
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 277
+        columnNumber: 11
+        functionName: readable
+      tapCaught: returnedPromiseRejection
+      source: |2
+            return await operation();
+          } catch (error) {
+            throw new Error(
+        ----------^
+              `${error?.code}: ${error?.message} (${error?.cause?.message})`);
+          }
+      ...
+    
+    1..1
+LogsTableService shutdown
+{"level":50,"time":"2026-10-21T06:37:20.936Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"cdc-integration","tableName":"tables","id":"tbl-422c2f07b585250cc157e557759e04f7","error":"CDCIntegrationService is shut down: this write was not routed and was not applied, and no retry through the service can succeed","nodeId":"public-binding-seam-node","causeId":null,"operation":"UPDATE","primaryKey":{"table_id":"tbl-422c2f07b585250cc157e557759e04f7"},"code":"CDC_INTEGRATION_SERVICE_SHUT_DOWN","retryAfterMs":0,"writeMode":"sql-routed","bootstrapMode":false,"attempt":null,"cacheWaitTimedOut":false,"msg":"Failed to update system table row"}
+{"level":50,"time":"2026-10-21T06:37:20.939Z","nodeId":"public-binding-seam-node","pid":2131719,"subsystem":"partition-split-merge","partitionId":"tbl-422c2f07b585250cc157e557759e04f7-p1","error":"Managed split execution failed","state":null,"workflowId":"split-tbl-422c2f07b585250cc157e557759e04f7-tbl-422c2f07b585250cc157e557759e04f7-p1-v2","nodeId":"public-binding-seam-node","msg":"Managed split execution failed"}
+# teardown: harness-stopped pgwire replicas=["sys-postgres-wire-r1"]; stop ms=12586; rest accepting after stop=false; pgwire accepting after stop=false
+not ok 1 - public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input # time=250803.88ms
+  ---
+  at:
+    fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+    ^
+      'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
+    {timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=250816.079ms
+not ok test/integration/service-install-lifecycle-cli-pgwire.integration.test.js (5 assertions, 1901ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+PG wire startup message received { user: 'service_cli', database: 'service_cli' }
+pgwire.auth {
+  timestamp: 1792564653272,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196',
+  tenantId: 'service_cli'
+}
+PG wire authentication successful { sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196' }
+PG wire parse message received {
+  sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1792564653318,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196',
+  tenantId: 'service_cli',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196' }
+PG wire terminate received { sessionId: 'pgwire-19ac6f75-a723-4d65-8889-100c1d8e6196' }
+# Subtest: shipped service lifecycle CLI over production PG-wire
+    # Subtest: submits exact lifecycle SQL envelopes and prints server rows
+    not ok 1 - submits exact lifecycle SQL envelopes and prints server rows
+      ---
+      duration_ms: 233.620051
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:256:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        lagrange service install failed: PostgreSQL lifecycle query rejected (XX000)
+        
+        
+        1 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 1
+      operator: 'strictEqual'
+      stack: |-
+        parsedOutput (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:196:10)
+        TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:257:21)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Promise.all (index 0)
+        async Suite.run (node:internal/test_runner/test:1442:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+PG wire startup message received { user: 'service_cli', database: 'service_cli' }
+pgwire.auth {
+  timestamp: 1792564653523,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96',
+  tenantId: 'service_cli'
+}
+PG wire authentication successful { sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96' }
+PG wire parse message received {
+  sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1792564653567,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.read'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96',
+  tenantId: 'service_cli',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96' }
+PG wire terminate received { sessionId: 'pgwire-c6548f90-e355-4f39-954e-a74093194a96' }
+PG wire startup message received { user: 'service_cli', database: 'service_cli' }
+pgwire.auth {
+  timestamp: 1792564653761,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e',
+  tenantId: 'service_cli'
+}
+PG wire authentication successful { sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e' }
+PG wire parse message received {
+  sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1792564653805,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.read'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e',
+  tenantId: 'service_cli',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e' }
+PG wire terminate received { sessionId: 'pgwire-9271233c-80fd-4906-903a-f7124ee0449e' }
+    # Subtest: fails empty status and typed server rejection without invented output
+    ok 2 - fails empty status and typed server rejection without invented output
+      ---
+      duration_ms: 482.921753
+      type: 'test'
+      ...
+PG wire startup message received { user: 'service_cli', database: 'service_cli' }
+pgwire.auth {
+  timestamp: 1792564653996,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-47a462e5-2299-4463-a041-faf2fb297534',
+  tenantId: 'service_cli'
+}
+PG wire authentication successful { sessionId: 'pgwire-47a462e5-2299-4463-a041-faf2fb297534' }
+PG wire simple query received { sessionId: 'pgwire-47a462e5-2299-4463-a041-faf2fb297534' }
+pgwire.auth {
+  timestamp: 1792564654039,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.read'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-47a462e5-2299-4463-a041-faf2fb297534',
+  tenantId: 'service_cli',
+  executionMode: 'sql_statement'
+}
+PG wire terminate received { sessionId: 'pgwire-47a462e5-2299-4463-a041-faf2fb297534' }
+    # Subtest: flushes a large authenticated list response before exiting
+    not ok 3 - flushes a large authenticated list response before exiting
+      ---
+      duration_ms: 332.900484
+      type: 'test'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:318:3'
+      failureType: 'testCodeFailure'
+      error: |-
+        lagrange service list failed: PostgreSQL lifecycle query rejected (XX000)
+        
+        
+        1 !== 0
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected: 0
+      actual: 1
+      operator: 'strictEqual'
+      stack: |-
+        parsedOutput (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:196:10)
+        TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:326:22)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+PG wire startup message received { user: 'service_cli', database: 'service_cli' }
+pgwire.auth {
+  timestamp: 1792564654326,
+  message: 'PG wire authentication failed',
+  decision: 'denied',
+  securityContext: {
+    tenantId: 'service_cli',
+    principal: 'service_cli',
+    roles: undefined
+  },
+  action: 'pgwire.connect',
+  error: 'Authentication failed'
+}
+PG wire connection closed
+    # Subtest: rejects bad credentials before creating a SQL request
+    ok 4 - rejects bad credentials before creating a SQL request
+      ---
+      duration_ms: 145.114614
+      type: 'test'
+      ...
+    1..4
+not ok 1 - shipped service lifecycle CLI over production PG-wire
+  ---
+  duration_ms: 1215.3326
+  type: 'suite'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/847c36a31ea3-mvhqe484-1591022/test/integration/service-install-lifecycle-cli-pgwire.integration.test.js:202:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 4
+# suites 1
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1221.14608
+# time=1901ms
+# test-files total=3 pass=0 fail=3 assertions=24
+placement-results={"file":"test/config/code-path-uniqueness.property.test.js","attempt":1,"ok":false,"assertions":12,"durationMs":1564,"retriedOnce":false,"firstFailureLine":"not ok 1 - No files should have core feature flags. Found: [{\"file\":\"node/replica-handler-participant-release.js\",\"coreFlags\":[\"ENABLE_REFUSED\"],\"observabilityFlags\":[],\"hasCoreFlags\":true},{\"file\":\"partition/partition-participant-transaction-cutov"}
+placement-results={"file":"test/index-management/index-maintenance-consistency.property.test.js","attempt":1,"ok":false,"assertions":10,"durationMs":3098,"retriedOnce":false,"firstFailureLine":"not ok 1 - Property failed after 1 tests { seed: -638982614, path: \"0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0\", endOnFailure: true } Counterexample: [\"partition-0\",\"tbl_A00\",{\"id\":1,\"col_data\":\" \",\"col_num\":0}] Shrunk 21 time(s) Got error: Property f"}
+placement-results={"file":"test/index-management/index-service.test.js","attempt":1,"ok":false,"assertions":57,"durationMs":3103,"retriedOnce":false,"firstFailureLine":"not ok 1 - SQLite index should be created"}
+placement-results={"file":"test/partition/partition-service-sqlite-metrics.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":2171,"retriedOnce":false,"firstFailureLine":"not ok 6 - should be equal"}
+placement-results={"file":"test/partition/partition-write-leadership-transfer.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":2153,"retriedOnce":false,"firstFailureLine":"not ok 1 - a partition write during a leadership transfer is retried and served once the leader takes writes again, never refused"}
+placement-results={"file":"test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":2306,"retriedOnce":false,"firstFailureLine":"not ok 1 - partition replica: the persist path syncs, the application does not"}
+placement-results={"file":"test/node/replica-handler-owner-path-bypass.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":6176,"retriedOnce":false,"firstFailureLine":"not ok 2 - test unfinished"}
+placement-results={"file":"test/scripts/change-proof-collection-safety.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":5263,"retriedOnce":false,"firstFailureLine":"not ok 1 - collection pollution cannot remove release-packaging proof"}
+placement-results={"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":false,"assertions":7,"durationMs":9329,"retriedOnce":false,"firstFailureLine":"not ok 2 - one private binding owner loads native bytes and only the runtime owner imports it"}
+placement-results={"file":"test/wasm-service/wasm-writer-recreation-origin-v1.test.js","attempt":1,"ok":false,"assertions":3,"durationMs":542,"retriedOnce":false,"firstFailureLine":"not ok 1 - WasmWriterState refuses revival of an old writer after same-service recreation"}
+placement-results={"file":"test/scripts/check-subsystem.test.js","attempt":1,"ok":false,"assertions":6,"durationMs":4905,"retriedOnce":false,"firstFailureLine":"not ok 3 - the CLI and the library select identically"}
+placement-results={"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":11709,"retriedOnce":false,"firstFailureLine":"not ok 3 - wasm service group commits and applies kv writes through raft-rs"}
+placement-results={"file":"test/query/unknown-outcome-same-entry.test.js","attempt":1,"ok":false,"assertions":11,"durationMs":172278,"retriedOnce":false,"firstFailureLine":"not ok 1 - W1 (R6-B): a registration INSERT cut by a runtime replacement, with no authoritative read, ends ACCEPTED - one row, no UNIQUE error, never \"not confirmed\""}
+placement-results={"file":"test/integration/multi-node-raft-replication.integration.test.js","attempt":1,"ok":false,"assertions":17,"durationMs":45307,"retriedOnce":false,"firstFailureLine":"not ok 1 - seed node bootstrap should succeed"}
+placement-results={"file":"test/integration/public-binding-cell-invocation-seam.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":253176,"retriedOnce":false,"firstFailureLine":"not ok 1 - undefined: managed split did not produce two routable partitions (undefined)"}
+placement-results={"file":"test/integration/service-install-lifecycle-cli-pgwire.integration.test.js","attempt":1,"ok":false,"assertions":5,"durationMs":1901,"retriedOnce":false,"firstFailureLine":"not ok 1 - submits exact lifecycle SQL envelopes and prints server rows"}

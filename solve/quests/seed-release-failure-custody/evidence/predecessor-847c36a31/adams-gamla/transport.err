@@ -1,0 +1,59 @@
+Startup removed-replica cleanup-debt sweep skipped: partitions directory unreadable {
+  partitionsDir: '/tmp/create-recovery-hZoHVc/partitions',
+  nodeId: 'node-1'
+}
+Startup removed-replica cleanup-debt sweep skipped: partitions directory unreadable {
+  partitionsDir: '/tmp/create-recovery-ZkKMQy/partitions',
+  nodeId: 'node-1'
+}
+{"schema":"participant-release-trace-file/1","file":"/tmp/lagrange-control-trace-VWr3lY/trace.json","sha256":"39a757dec1680301db7dd1a8fa199f94d540ea04d5911fa41e99ae3e3f25055e","bytes":3733308,"recordedCount":1383,"droppedCount":0,"captureErrorCount":0,"incompleteCount":0}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+DIAG publications write-leader resolution (seed-driven membership) {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  helperSaysWriteLeader: true,
+  tier1PartitionsLeaderNodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  liveRebalancerIsLeader: true
+}
+Repaired readiness cache from authoritative node/service/partition rows {
+  nodeId: '660e8400-e29b-41d4-a716-a00000000000',
+  repairIntent: 'refresh_evidence',
+  repairedRowCount: 46,
+  repairedNodeRowCount: 1,
+  repairedServiceRowCount: 141,
+  repairedPartitionRowCount: 46,
+  nodeEvidenceState: 'observed_rows',
+  serviceEvidenceState: 'observed_rows',
+  partitionEvidenceState: 'observed_rows'
+}
+No partitions available for table { tableName: 'replica_operations' }
+No partitions available for table { tableName: 'replica_operations' }
+No partitions available for table { tableName: 'replica_operations' }

@@ -1,0 +1,124 @@
+{
+  "sha": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "carinas-windows",
+  "files": [
+    "test/node/replica-handler-cache-state.test.js",
+    "test/partition/participant-release-first-prepare-native.test.js",
+    "test/partition/partition-service.test.js",
+    "test/partition/settled-replay-preserves-result.test.js",
+    "test/partition/partition-statement-admission.test.js",
+    "test/query/transaction-recovery-poison-row-attribution.test.js",
+    "test/raft/raft-rs-backend/committed-membership-census.test.js",
+    "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+    "test/scripts/change-selection-taxonomy.test.js",
+    "test/scripts/closed-quest-shape.test.js",
+    "test/bootstrap/partition-activation-handler-boundary.test.js",
+    "test/integration/membership-consistency.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/partition/participant-release-first-prepare-native.test.js",
+        "test/partition/partition-statement-admission.test.js",
+        "test/partition/settled-replay-preserves-result.test.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+        "test/scripts/closed-quest-shape.test.js",
+        "test/scripts/change-selection-taxonomy.test.js",
+        "test/partition/partition-service.test.js",
+        "test/raft/raft-rs-backend/committed-membership-census.test.js",
+        "test/node/replica-handler-cache-state.test.js",
+        "test/query/transaction-recovery-poison-row-attribution.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/bootstrap/partition-activation-handler-boundary.test.js"
+      ],
+      "jobs": 2,
+      "resourceClass": "bootstrap"
+    },
+    {
+      "files": [
+        "test/integration/membership-consistency.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/partition/participant-release-first-prepare-native.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-statement-admission.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/closed-quest-shape.test.js",
+      "jobs": 4,
+      "ms": 84046,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/change-selection-taxonomy.test.js",
+      "jobs": 4,
+      "ms": 3477,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service.test.js",
+      "jobs": 4,
+      "ms": 570,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "jobs": 4,
+      "ms": 329,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-cache-state.test.js",
+      "jobs": 4,
+      "ms": 173,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "jobs": 4,
+      "ms": 20,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/bootstrap/partition-activation-handler-boundary.test.js",
+      "jobs": 2,
+      "ms": 193,
+      "lane": "bootstrap"
+    },
+    {
+      "file": "test/integration/membership-consistency.integration.test.js",
+      "jobs": 1,
+      "ms": 10000,
+      "lane": "exclusive"
+    }
+  ]
+}

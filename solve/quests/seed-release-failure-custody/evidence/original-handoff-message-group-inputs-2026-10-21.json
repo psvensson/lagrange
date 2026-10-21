@@ -1,0 +1,127 @@
+{
+  "schema": 1,
+  "runtimeCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "scope": "source correspondence only; no executed lost-response or production approval",
+  "files": [
+    {
+      "path": "src/bootstrap/phases/seed-registration-phase.js",
+      "gitBlob": "d29ed78b1d95cc7111e914ca1aa698b13fe68d43",
+      "sha256": "ea726696d17f4611e3b46f57f054bcc37cb8ab3233b0c42db58dbf2d532784f0",
+      "bytes": 22411
+    },
+    {
+      "path": "src/message-group/message-group-service-row-owner.js",
+      "gitBlob": "faffd8a7259481136d6260935ff08b2297a9483b",
+      "sha256": "86009d61bb1dc03fcbb5111bbaa895399f95454adeda59b6d84064153d0c8b69",
+      "bytes": 19660
+    },
+    {
+      "path": "src/node/service-row-incarnation.js",
+      "gitBlob": "7c31c13b60cb2e91b0c30c946ecc0bf31cba5b69",
+      "sha256": "a635339e8e3cb654119d4b243c6d47f393e339346453ffd746ed80821cfc4fcb",
+      "bytes": 1548
+    },
+    {
+      "path": "src/bootstrap/system-table-writer.js",
+      "gitBlob": "e8318f1499ded3bbb3e00a48b3bd00da0c05593b",
+      "sha256": "7219a56da49fe2b828a23a3f64906ff43a6bd469a6566ed596bb045c8d079642",
+      "bytes": 2643
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "gitBlob": "61d6eee658ae89c9f7373548b02fa5bf868ac597",
+      "sha256": "b8c5ef4919632b3c2c8745cd8069bca1de2841ecb1c4eb3f857df0d8f32c0088",
+      "bytes": 20963
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway.js",
+      "gitBlob": "87fe0b1f0e279e6256fc2e042c73996b21d8a4c9",
+      "sha256": "6343b65af66e4a188de807af4103ea844eecf969a2a92fbd839f3500100c322b",
+      "bytes": 9379
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-read-delegates.js",
+      "gitBlob": "4228bd7617d32cf5e0caee415202248e4de312df",
+      "sha256": "0755bb7fe2312e2f4d8e37f3f9b24d029e0deb2357fbfd08dd2809c7e3215235",
+      "bytes": 11168
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-read-flow.js",
+      "gitBlob": "b203ea67115cac3881861a74168ddb99a78d4d8a",
+      "sha256": "bf12ffafa7c16852fa324bdb119eae1056cbfaad79ec7bff0d27cad8f721f0be",
+      "bytes": 18714
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
+      "gitBlob": "16dccf9e3a332b0a30ff9473edba008d98237958",
+      "sha256": "1be167fbc9df2e51169e4351f2e79acfcd078ff3ad3308e0b9f61d3ed5c90f2b",
+      "bytes": 8263
+    },
+    {
+      "path": "src/node/replica-state-machine-serialization.js",
+      "gitBlob": "1bf1d4f31066feec0b0779c43cccd6fec4e0e95b",
+      "sha256": "14f94009eef0a0cd8c2528b81f763ec030322d71ea54f46ab407bf405c94612b",
+      "bytes": 9447
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "gitBlob": "0652eb442f10c67600b7f84dac7d5434f29cd40f",
+      "sha256": "b1c59e19d615ea176e76a65cd42dff5355e5b44265da78ae73c4c4fa9af4b507",
+      "bytes": 23414
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-runtime-methods.js",
+      "gitBlob": "09ee59d6b052af1b42147a01860b9f422c41feac",
+      "sha256": "d1fe96117414f9049e3247dff6820e817030024482efcc507c541d3e160feb69",
+      "bytes": 14344
+    },
+    {
+      "path": "src/bootstrap/shared/message-group-service-activation.js",
+      "gitBlob": "cb98895fc33c0540443e45b518bebe9559aeb449",
+      "sha256": "f290f8b2612ddeaba389a158c0744bfc63ba4a03ec85ea226592bbe49253d706",
+      "bytes": 5503
+    },
+    {
+      "path": "src/bootstrap/pipeline/seed-startup-plan.js",
+      "gitBlob": "0c26847c9539289be5d24714b2ca2ddd1f13c028",
+      "sha256": "f4a18a1fce24d98c64fa3366be19fc2a5620eb08be836a33b135a4f30b02d947",
+      "bytes": 1698
+    },
+    {
+      "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+      "gitBlob": "21ed5486039e23c9dc9814b6c0a77f188e7ae3d7",
+      "sha256": "48e322311703f199bc050d1c9d7de9cfe536077720984f7a4847f7fa92966844",
+      "bytes": 7505
+    },
+    {
+      "path": "src/query/sql-query-engine-instance-initializer.js",
+      "gitBlob": "2fa13275c729d25ad3cd55d97ce45077ccb334f5",
+      "sha256": "fe0a3747a984b46dac07f65382fa6a84a4e5a5a96976d9d5729ec99a8bcd8a1e",
+      "bytes": 14728
+    },
+    {
+      "path": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
+      "gitBlob": "a482d8f7ce3cdd9253965f7b4da07ee6c6f18563",
+      "sha256": "dc37055accd2a25e4c92d93c8c630f387aeac21146704065151da73b664e8df5",
+      "bytes": 27845
+    },
+    {
+      "path": "src/control-plane/control-plane-runtime-bundle.js",
+      "gitBlob": "2954a25b325cb44e0f3005720f3a1cf801bdd3ac",
+      "sha256": "5353305b9e88bf3ae7eb5d4d64d0abfd9d76f776be2826b38b1989a8fb483c0a",
+      "bytes": 2031
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-read-strategies.js",
+      "gitBlob": "2362e9e50b01c3ffd91c8ea8276e433af06034f2",
+      "sha256": "5a890b10d0c46fcd5d2bd6d90a600c47a2a9f997de3f2dd53c0fc4a139891a17",
+      "bytes": 16193
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-owner-rpc-read-execution.js",
+      "gitBlob": "b5ec7d7501370b919708519cf42305da8ab32799",
+      "sha256": "bf6faf588b8828f040bd434173893a6b5e900e2e8464d82ef35b71f097836377",
+      "bytes": 14063
+    }
+  ]
+}

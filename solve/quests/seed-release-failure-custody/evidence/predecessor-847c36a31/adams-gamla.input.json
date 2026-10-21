@@ -1,0 +1,33 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "adams-gamla",
+  "retry": 0,
+  "files": [
+    "test/message-group/message-group-native-custody-handoff.test.js",
+    "test/node/replica-create-admission-recovery.test.js",
+    "test/partition/partition-admission-redrive-wakes.test.js",
+    "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+    "test/partition/partition-service-stale-topology-write-guard.test.js",
+    "test/partition/partition-write-leadership-transfer-committed.test.js",
+    "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+    "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+    "test/query/write-identity-instance.test.js",
+    "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+    "test/bootstrap/phase-event-ordering-characterization.test.js",
+    "test/integration/critical-partition-learner-safety.integration.test.js",
+    "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+    "test/integration/leader-metadata-validation.integration.test.js",
+    "test/integration/node-join-replica-activation.integration.test.js",
+    "test/integration/raft-leader-election.integration.test.js"
+  ],
+  "changedTests": [],
+  "missingTests": [],
+  "candidateLedger": {
+    "host": "adams-gamla",
+    "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/adams-gamla.candidate-verdicts.ndjson",
+    "sha256": "dd8a7f72f562f095f806cdbd3a64537a9d9d21de6ae3286ba454302094ab16fe",
+    "count": 206,
+    "kind": "root-preserved-log-derived"
+  }
+}

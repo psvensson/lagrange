@@ -1,0 +1,29 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "final": true,
+  "sourceVerdicts": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/solve/quests/seed-release-failure-custody/evidence/changed-candidate-393f411ca/reported-verdicts.json",
+  "sourceVerdictsSha256": "a845a90a7312827509181645e56653cf53e703ac9ea1314e0c641ec1ef9e7995",
+  "derivation": "Exact JSON objects filtered by host and emitted as NDJSON; no raw-ledger extras or invented attempt fields.",
+  "ledgers": {
+    "adam-laptop": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/adam-laptop.candidate-verdicts.ndjson",
+    "adams-gamla": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/adams-gamla.candidate-verdicts.ndjson",
+    "carinas-windows": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/carinas-windows.candidate-verdicts.ndjson",
+    "lenovo-laptop": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/lenovo-laptop.candidate-verdicts.ndjson",
+    "tv-dator": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/tv-dator.candidate-verdicts.ndjson"
+  },
+  "ledgerKinds": {
+    "adam-laptop": "root-preserved-log-derived",
+    "adams-gamla": "root-preserved-log-derived",
+    "carinas-windows": "root-preserved-log-derived",
+    "lenovo-laptop": "root-preserved-log-derived",
+    "tv-dator": "root-preserved-log-derived"
+  },
+  "unreported": {
+    "lenovo-laptop": [
+      "test/integration/create-table-partition-provisioning.integration.test.js",
+      "test/integration/managed-split-admission-reliability.integration.test.js",
+      "test/integration/sql-engine-system-writes-contract.integration.test.js"
+    ]
+  }
+}

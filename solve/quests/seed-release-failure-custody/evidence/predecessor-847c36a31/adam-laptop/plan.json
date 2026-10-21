@@ -1,0 +1,150 @@
+{
+  "sha": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "adam-laptop",
+  "files": [
+    "test/config/code-path-uniqueness.property.test.js",
+    "test/index-management/index-maintenance-consistency.property.test.js",
+    "test/index-management/index-service.test.js",
+    "test/node/replica-handler-owner-path-bypass.test.js",
+    "test/partition/partition-service-sqlite-metrics.test.js",
+    "test/partition/partition-write-leadership-transfer.test.js",
+    "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+    "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+    "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+    "test/scripts/change-proof-collection-safety.test.js",
+    "test/scripts/check-subsystem.test.js",
+    "test/query/unknown-outcome-same-entry.test.js",
+    "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+    "test/integration/multi-node-raft-replication.integration.test.js",
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+    "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js"
+  ],
+  "plan": [
+    {
+      "files": [
+        "test/query/unknown-outcome-same-entry.test.js",
+        "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+        "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+        "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "test/scripts/change-proof-collection-safety.test.js",
+        "test/scripts/check-subsystem.test.js",
+        "test/partition/partition-write-leadership-transfer.test.js",
+        "test/index-management/index-service.test.js",
+        "test/node/replica-handler-owner-path-bypass.test.js",
+        "test/index-management/index-maintenance-consistency.property.test.js",
+        "test/config/code-path-uniqueness.property.test.js",
+        "test/partition/partition-service-sqlite-metrics.test.js"
+      ],
+      "jobs": 4,
+      "resourceClass": "ordinary"
+    },
+    {
+      "files": [
+        "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+        "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+        "test/integration/multi-node-raft-replication.integration.test.js"
+      ],
+      "jobs": 1,
+      "resourceClass": "exclusive"
+    }
+  ],
+  "costs": [
+    {
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "jobs": 4,
+      "ms": 401,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "jobs": 4,
+      "ms": 401,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "jobs": 4,
+      "ms": 401,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+      "jobs": 4,
+      "ms": 401,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "jobs": 4,
+      "ms": 3248,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/change-proof-collection-safety.test.js",
+      "jobs": 4,
+      "ms": 1672,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/scripts/check-subsystem.test.js",
+      "jobs": 4,
+      "ms": 1500,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "jobs": 4,
+      "ms": 997,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/index-management/index-service.test.js",
+      "jobs": 4,
+      "ms": 401,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/node/replica-handler-owner-path-bypass.test.js",
+      "jobs": 4,
+      "ms": 371,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/index-management/index-maintenance-consistency.property.test.js",
+      "jobs": 4,
+      "ms": 261,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/config/code-path-uniqueness.property.test.js",
+      "jobs": 4,
+      "ms": 235,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/partition/partition-service-sqlite-metrics.test.js",
+      "jobs": 4,
+      "ms": 128,
+      "lane": "ordinary"
+    },
+    {
+      "file": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "jobs": 1,
+      "ms": 73999,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+      "jobs": 1,
+      "ms": 2806,
+      "lane": "exclusive"
+    },
+    {
+      "file": "test/integration/multi-node-raft-replication.integration.test.js",
+      "jobs": 1,
+      "ms": 73999,
+      "lane": "exclusive"
+    }
+  ]
+}

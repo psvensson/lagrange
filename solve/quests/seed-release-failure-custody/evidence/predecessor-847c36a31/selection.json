@@ -1,0 +1,1452 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "input": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/final-ledger-input.json",
+  "inputSha256": "7d23c404f494a229fa14f79ffbfc6a0ea23364bbe84bc5addcd525fcd2167d85",
+  "candidateSelectionSha256": "e77082a5fbd4054515680941b7261226b88ced1ced505734b4ed319bfbee550e",
+  "provenance": [
+    {
+      "host": "adam-laptop",
+      "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/adam-laptop.candidate-verdicts.ndjson",
+      "sha256": "563ba0b603797b5b15cb50d3375538482517b46c792f433d9b71f5cc8c56adb1",
+      "count": 254,
+      "kind": "root-preserved-log-derived"
+    },
+    {
+      "host": "adams-gamla",
+      "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/adams-gamla.candidate-verdicts.ndjson",
+      "sha256": "dd8a7f72f562f095f806cdbd3a64537a9d9d21de6ae3286ba454302094ab16fe",
+      "count": 206,
+      "kind": "root-preserved-log-derived"
+    },
+    {
+      "host": "carinas-windows",
+      "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/carinas-windows.candidate-verdicts.ndjson",
+      "sha256": "8c2d205bbfcb20b919b0fabf7a53f5f97c380ab5b959c533cbc4142038d7fd54",
+      "count": 205,
+      "kind": "root-preserved-log-derived"
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/lenovo-laptop.candidate-verdicts.ndjson",
+      "sha256": "c6dd8181cddc6f93c15a743099fc8732bfbf2a33dfce5d2c04e866d010449d70",
+      "count": 228,
+      "kind": "root-preserved-log-derived"
+    },
+    {
+      "host": "tv-dator",
+      "file": "/mnt/data/peter/projects/.worktrees/seed-origin-recovery-handoff-20261020/test-output/seed-release-custody/predecessor-847c36a31/tv-dator.candidate-verdicts.ndjson",
+      "sha256": "2fdf5a5417e4454dd69afb6f72b09e489e155f458c33b2ace9afef7a8114958c",
+      "count": 365,
+      "kind": "root-preserved-log-derived"
+    }
+  ],
+  "candidateTotal": 1261,
+  "measuredTotal": 1258,
+  "unreported": [
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/create-table-partition-provisioning.integration.test.js",
+      "verdict": "unreported-not-measured-red"
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/managed-split-admission-reliability.integration.test.js",
+      "verdict": "unreported-not-measured-red"
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "verdict": "unreported-not-measured-red"
+    }
+  ],
+  "failures": [
+    {
+      "host": "adam-laptop",
+      "file": "test/config/code-path-uniqueness.property.test.js",
+      "candidateBlob": "8d59c5a36a4de8ee887245292ff764a5a0b91abb",
+      "predecessorBlob": "8d59c5a36a4de8ee887245292ff764a5a0b91abb",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/config/code-path-uniqueness.property.test.js",
+        "assertions": 12,
+        "durationMs": 1497
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/index-management/index-maintenance-consistency.property.test.js",
+      "candidateBlob": "7197ffa23e36e6881233d229508d7ae2a4804074",
+      "predecessorBlob": "7197ffa23e36e6881233d229508d7ae2a4804074",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/index-management/index-maintenance-consistency.property.test.js",
+        "assertions": 10,
+        "durationMs": 4012
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/index-management/index-service.test.js",
+      "candidateBlob": "d65a9935355089b6ac03a29d0e32b244ea738aae",
+      "predecessorBlob": "d65a9935355089b6ac03a29d0e32b244ea738aae",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/index-management/index-service.test.js",
+        "assertions": 57,
+        "durationMs": 4108
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/node/replica-handler-owner-path-bypass.test.js",
+      "candidateBlob": "7e271541e4a4b3ae59eb0a43284d6a1120a14413",
+      "predecessorBlob": "7e271541e4a4b3ae59eb0a43284d6a1120a14413",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/node/replica-handler-owner-path-bypass.test.js",
+        "assertions": 4,
+        "durationMs": 9043
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-service-sqlite-metrics.test.js",
+      "candidateBlob": "220f5ccd71ea424a5ff7b060076c52f480fc36d4",
+      "predecessorBlob": "220f5ccd71ea424a5ff7b060076c52f480fc36d4",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/partition/partition-service-sqlite-metrics.test.js",
+        "assertions": 17,
+        "durationMs": 3067
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/partition/partition-write-leadership-transfer.test.js",
+      "candidateBlob": "0bc096631c07574a905d47bc1e21761e2e71b183",
+      "predecessorBlob": "0bc096631c07574a905d47bc1e21761e2e71b183",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/partition/partition-write-leadership-transfer.test.js",
+        "assertions": 2,
+        "durationMs": 2636
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "candidateBlob": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8",
+      "predecessorBlob": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+        "assertions": 3,
+        "durationMs": 3355
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "candidateBlob": "e7469d5ce945f60f3f36c23adc935f81ea4af046",
+      "predecessorBlob": "e7469d5ce945f60f3f36c23adc935f81ea4af046",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+        "assertions": 7,
+        "durationMs": 11132
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "candidateBlob": "d442559ff933c00993841f8ccc170de6871cdd4d",
+      "predecessorBlob": "d442559ff933c00993841f8ccc170de6871cdd4d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+        "assertions": 4,
+        "durationMs": 12019
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/scripts/change-proof-collection-safety.test.js",
+      "candidateBlob": "4f8a6643450e4aa97682c213cda22d700fced15f",
+      "predecessorBlob": "4f8a6643450e4aa97682c213cda22d700fced15f",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/scripts/change-proof-collection-safety.test.js",
+        "assertions": 3,
+        "durationMs": 6643
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/scripts/check-subsystem.test.js",
+      "candidateBlob": "54d72fb7a076a9401e84b59b7131d52bdbc78b1d",
+      "predecessorBlob": "54d72fb7a076a9401e84b59b7131d52bdbc78b1d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/scripts/check-subsystem.test.js",
+        "assertions": 6,
+        "durationMs": 6504
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/query/unknown-outcome-same-entry.test.js",
+      "candidateBlob": "a0fb7026a5a53558d67bc3b77684efe126cf420d",
+      "predecessorBlob": "a0fb7026a5a53558d67bc3b77684efe126cf420d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/query/unknown-outcome-same-entry.test.js",
+        "assertions": 11,
+        "durationMs": 173107
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+      "candidateBlob": "d9c116f6493da4a8b6a7c462e3a39ae3cd9f5ca4",
+      "predecessorBlob": "d9c116f6493da4a8b6a7c462e3a39ae3cd9f5ca4",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+        "assertions": 3,
+        "durationMs": 488
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/multi-node-raft-replication.integration.test.js",
+      "candidateBlob": "53e10878ab4c483c7dbe1ddfcac7eec1d6096a51",
+      "predecessorBlob": "53e10878ab4c483c7dbe1ddfcac7eec1d6096a51",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/integration/multi-node-raft-replication.integration.test.js",
+        "assertions": 17,
+        "durationMs": 46149
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "candidateBlob": "4a671243ee792df07d5b63da7452b8465d853c1b",
+      "predecessorBlob": "4a671243ee792df07d5b63da7452b8465d853c1b",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+        "assertions": 2,
+        "durationMs": 254580
+      }
+    },
+    {
+      "host": "adam-laptop",
+      "file": "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+      "candidateBlob": "13eef132597ff7bf6eefc6a077ca6f51202671e6",
+      "predecessorBlob": "13eef132597ff7bf6eefc6a077ca6f51202671e6",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adam-laptop",
+        "ok": false,
+        "file": "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+        "assertions": 5,
+        "durationMs": 1890
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/message-group/message-group-native-custody-handoff.test.js",
+      "candidateBlob": "42309a81432a22a04e453c0cc600fea5983095e6",
+      "predecessorBlob": "42309a81432a22a04e453c0cc600fea5983095e6",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/message-group/message-group-native-custody-handoff.test.js",
+        "assertions": 1,
+        "durationMs": 6291
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/node/replica-create-admission-recovery.test.js",
+      "candidateBlob": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662",
+      "predecessorBlob": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/node/replica-create-admission-recovery.test.js",
+        "assertions": 10,
+        "durationMs": 5463
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-admission-redrive-wakes.test.js",
+      "candidateBlob": "566c5b1d3543c8330d41e0764a385b3b44853ba9",
+      "predecessorBlob": "566c5b1d3543c8330d41e0764a385b3b44853ba9",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/partition/partition-admission-redrive-wakes.test.js",
+        "assertions": 38,
+        "durationMs": 2393
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "candidateBlob": "1dd2b6218201c44280f49773d12edde63d95c6e0",
+      "predecessorBlob": "1dd2b6218201c44280f49773d12edde63d95c6e0",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+        "assertions": 12,
+        "durationMs": 2070
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "candidateBlob": "106a8ee183e9572cc039a0e66870b32f51cbf02e",
+      "predecessorBlob": "106a8ee183e9572cc039a0e66870b32f51cbf02e",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/partition/partition-service-stale-topology-write-guard.test.js",
+        "assertions": 22,
+        "durationMs": 2200
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "candidateBlob": "75afea99d2c55f20b95dd9034632cbd2f488e061",
+      "predecessorBlob": "75afea99d2c55f20b95dd9034632cbd2f488e061",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/partition/partition-write-leadership-transfer-committed.test.js",
+        "assertions": 2,
+        "durationMs": 1779
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "candidateBlob": "072ffdfac2ce929339f55e5e50bfc238e576f03c",
+      "predecessorBlob": "072ffdfac2ce929339f55e5e50bfc238e576f03c",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+        "assertions": 3,
+        "durationMs": 939
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "candidateBlob": "d0a3f05d9d42cefbc2f1692fae6b6f7e048e6be5",
+      "predecessorBlob": "d0a3f05d9d42cefbc2f1692fae6b6f7e048e6be5",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+        "assertions": 5,
+        "durationMs": 19860
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/query/write-identity-instance.test.js",
+      "candidateBlob": "961a285cd9747a24d29821564039c9b07d1a2151",
+      "predecessorBlob": "961a285cd9747a24d29821564039c9b07d1a2151",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/query/write-identity-instance.test.js",
+        "assertions": 17,
+        "durationMs": 447909
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+      "candidateBlob": "5bd0c1cdd9539aed96a408b0504ad4363c9f9a26",
+      "predecessorBlob": "5bd0c1cdd9539aed96a408b0504ad4363c9f9a26",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+        "assertions": 85,
+        "durationMs": 2620
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "candidateBlob": "2df19e086b0cf697c760491c3af8bf8e0d01cf68",
+      "predecessorBlob": "2df19e086b0cf697c760491c3af8bf8e0d01cf68",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/bootstrap/phase-event-ordering-characterization.test.js",
+        "assertions": 233,
+        "durationMs": 2916
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "candidateBlob": "51c71c2eda5642329de3c829b7f6d0256d12d7b0",
+      "predecessorBlob": "51c71c2eda5642329de3c829b7f6d0256d12d7b0",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/integration/critical-partition-learner-safety.integration.test.js",
+        "assertions": 10,
+        "durationMs": 38337
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+      "candidateBlob": "3082a5c49ff9fa47abb8684e5a76a5aa2cb1718a",
+      "predecessorBlob": "3082a5c49ff9fa47abb8684e5a76a5aa2cb1718a",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+        "assertions": 3,
+        "durationMs": 41447
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/leader-metadata-validation.integration.test.js",
+      "candidateBlob": "d1c6379657fc0cea2a686ba864fb2ae7820cf0cb",
+      "predecessorBlob": "d1c6379657fc0cea2a686ba864fb2ae7820cf0cb",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/integration/leader-metadata-validation.integration.test.js",
+        "assertions": 13,
+        "durationMs": 23888
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/node-join-replica-activation.integration.test.js",
+      "candidateBlob": "2912e4bff5d2f2ed257836e98146b5ec734edace",
+      "predecessorBlob": "2912e4bff5d2f2ed257836e98146b5ec734edace",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/integration/node-join-replica-activation.integration.test.js",
+        "assertions": 30,
+        "durationMs": 65812
+      }
+    },
+    {
+      "host": "adams-gamla",
+      "file": "test/integration/raft-leader-election.integration.test.js",
+      "candidateBlob": "fbac0ff449325a4fb237dd73da5d466fe0c89a85",
+      "predecessorBlob": "fbac0ff449325a4fb237dd73da5d466fe0c89a85",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "adams-gamla",
+        "ok": false,
+        "file": "test/integration/raft-leader-election.integration.test.js",
+        "assertions": 48,
+        "durationMs": 106540
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/node/replica-handler-cache-state.test.js",
+      "candidateBlob": "80d7f55ad8c5d90e03972b3f1bf3490a20dc1b30",
+      "predecessorBlob": "80d7f55ad8c5d90e03972b3f1bf3490a20dc1b30",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/node/replica-handler-cache-state.test.js",
+        "assertions": 19,
+        "durationMs": 12266
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/participant-release-first-prepare-native.test.js",
+      "candidateBlob": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51",
+      "predecessorBlob": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/partition/participant-release-first-prepare-native.test.js",
+        "assertions": 1,
+        "durationMs": 8545
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/partition-service.test.js",
+      "candidateBlob": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2",
+      "predecessorBlob": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/partition/partition-service.test.js",
+        "assertions": 126,
+        "durationMs": 5291
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/settled-replay-preserves-result.test.js",
+      "candidateBlob": "eb03e7091314584eb310100b5acc2012fea0bd33",
+      "predecessorBlob": "eb03e7091314584eb310100b5acc2012fea0bd33",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/partition/settled-replay-preserves-result.test.js",
+        "assertions": 6,
+        "durationMs": 2607
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/partition/partition-statement-admission.test.js",
+      "candidateBlob": "ad488c5052dd490479594c28c60e5841c285b0f5",
+      "predecessorBlob": "ad488c5052dd490479594c28c60e5841c285b0f5",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/partition/partition-statement-admission.test.js",
+        "assertions": 11,
+        "durationMs": 10298
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "candidateBlob": "48d6547c500d8ed5cf20d50f1283857951876a7c",
+      "predecessorBlob": "48d6547c500d8ed5cf20d50f1283857951876a7c",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/query/transaction-recovery-poison-row-attribution.test.js",
+        "assertions": 14,
+        "durationMs": 1154
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "candidateBlob": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+      "predecessorBlob": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+        "assertions": 8,
+        "durationMs": 998
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+      "candidateBlob": "16004b138c6d8edccfcaaf9cae0abd62dda12f3d",
+      "predecessorBlob": "16004b138c6d8edccfcaaf9cae0abd62dda12f3d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+        "assertions": 3,
+        "durationMs": 6981
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/scripts/change-selection-taxonomy.test.js",
+      "candidateBlob": "07cce010ea9ef612da1e4da361809097357de8f3",
+      "predecessorBlob": "07cce010ea9ef612da1e4da361809097357de8f3",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/scripts/change-selection-taxonomy.test.js",
+        "assertions": 8,
+        "durationMs": 12818
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/scripts/closed-quest-shape.test.js",
+      "candidateBlob": "4ca6fe91ced99a339015732ad6fe9081e054fcc6",
+      "predecessorBlob": "4ca6fe91ced99a339015732ad6fe9081e054fcc6",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/scripts/closed-quest-shape.test.js",
+        "assertions": 9,
+        "durationMs": 527199
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/bootstrap/partition-activation-handler-boundary.test.js",
+      "candidateBlob": "1538797f3ad2bc81b3325d0bbc29261e2c7e8289",
+      "predecessorBlob": "1538797f3ad2bc81b3325d0bbc29261e2c7e8289",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/bootstrap/partition-activation-handler-boundary.test.js",
+        "assertions": 45,
+        "durationMs": 1400
+      }
+    },
+    {
+      "host": "carinas-windows",
+      "file": "test/integration/membership-consistency.integration.test.js",
+      "candidateBlob": "4059d025ae1b8e554bb715244cf3463d1cf3e38e",
+      "predecessorBlob": "4059d025ae1b8e554bb715244cf3463d1cf3e38e",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "carinas-windows",
+        "ok": false,
+        "file": "test/integration/membership-consistency.integration.test.js",
+        "assertions": 67,
+        "durationMs": 43389
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "candidateBlob": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6",
+      "predecessorBlob": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+        "assertions": 108,
+        "durationMs": 2499
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/partition-write-answer-consumers.test.js",
+      "candidateBlob": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+      "predecessorBlob": "2dff46fda527f87b8a0aed252a9e054dc292e39f",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/query/partition-write-answer-consumers.test.js",
+        "assertions": 2,
+        "durationMs": 2679
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "candidateBlob": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+      "predecessorBlob": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+        "assertions": 8,
+        "durationMs": 951
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "candidateBlob": "32bc78324927187134ea2e2e59de63467dbebed9",
+      "predecessorBlob": "32bc78324927187134ea2e2e59de63467dbebed9",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+        "assertions": 2,
+        "durationMs": 2852
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/scripts/selection-golden-corpus.test.js",
+      "candidateBlob": "383d30920b7970bb74e5ba7c3d987f61ee5f625a",
+      "predecessorBlob": "383d30920b7970bb74e5ba7c3d987f61ee5f625a",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/scripts/selection-golden-corpus.test.js",
+        "assertions": 4,
+        "durationMs": 37417
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/settled-replay-sql-surface.test.js",
+      "candidateBlob": "e0790d1acf58abb96f72b6e9ff51780d0464435b",
+      "predecessorBlob": "e0790d1acf58abb96f72b6e9ff51780d0464435b",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/query/settled-replay-sql-surface.test.js",
+        "assertions": 4,
+        "durationMs": 122166
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/scripts/select-change-tests.test.js",
+      "candidateBlob": "06f41259495ef5f806ce005c84df6bf16af4790c",
+      "predecessorBlob": "06f41259495ef5f806ce005c84df6bf16af4790c",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/scripts/select-change-tests.test.js",
+        "assertions": 31,
+        "durationMs": 71802
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/scripts/change-proof-subsystem-participant-safety.test.js",
+      "candidateBlob": "5f4e0c28ed396dc477292512ccfdbc615090d883",
+      "predecessorBlob": "5f4e0c28ed396dc477292512ccfdbc615090d883",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/scripts/change-proof-subsystem-participant-safety.test.js",
+        "assertions": 1,
+        "durationMs": 13470
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/control-plane/core-system-logic-runtime-witness.test.js",
+      "candidateBlob": "35f206b6fc34306d5e03a18c26fe030d46d998a4",
+      "predecessorBlob": "35f206b6fc34306d5e03a18c26fe030d46d998a4",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/control-plane/core-system-logic-runtime-witness.test.js",
+        "assertions": 3,
+        "durationMs": 2867
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+      "candidateBlob": "3b5ff91666bd52f41792c9c8a62a273152923944",
+      "predecessorBlob": "3b5ff91666bd52f41792c9c8a62a273152923944",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+        "assertions": 109,
+        "durationMs": 2656
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/write-exactly-once-property.test.js",
+      "candidateBlob": "4cee4e5d197ba972b4ae60b84ef30ac2b9eeb4a2",
+      "predecessorBlob": "4cee4e5d197ba972b4ae60b84ef30ac2b9eeb4a2",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/query/write-exactly-once-property.test.js",
+        "assertions": 1,
+        "durationMs": 600043
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/split-backfill-internal-pacing.test.js",
+      "candidateBlob": "1752fe9c741722cf209f94c477bcee6cb7e25298",
+      "predecessorBlob": "1752fe9c741722cf209f94c477bcee6cb7e25298",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/partition/split-backfill-internal-pacing.test.js",
+        "assertions": 6,
+        "durationMs": 2283
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+      "candidateBlob": "264f510ff6f90196ef1dd23e1b11afccf365f8f0",
+      "predecessorBlob": "264f510ff6f90196ef1dd23e1b11afccf365f8f0",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+        "assertions": 19,
+        "durationMs": 2118
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/query/deferred-hash.test.js",
+      "candidateBlob": "8503c478d55f0f16b38725b93fb5fa37a5d79100",
+      "predecessorBlob": "8503c478d55f0f16b38725b93fb5fa37a5d79100",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/query/deferred-hash.test.js",
+        "assertions": 21,
+        "durationMs": 2083
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/partition/partition-write-kernel.test.js",
+      "candidateBlob": "4bdacd78562dcaad624cd180b0b51baafb03dcd0",
+      "predecessorBlob": "4bdacd78562dcaad624cd180b0b51baafb03dcd0",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/partition/partition-write-kernel.test.js",
+        "assertions": 104,
+        "durationMs": 797
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "candidateBlob": "1b9a9b08eca638e6a261ea898db367d1de5b71ee",
+      "predecessorBlob": "1b9a9b08eca638e6a261ea898db367d1de5b71ee",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+        "assertions": 1,
+        "durationMs": 1794
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "candidateBlob": "bb2169a74bd638526c5e9dc798bdf06970bbadea",
+      "predecessorBlob": "bb2169a74bd638526c5e9dc798bdf06970bbadea",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+        "assertions": 4,
+        "durationMs": 28468
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "candidateBlob": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0",
+      "predecessorBlob": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+        "assertions": 11,
+        "durationMs": 30975
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/bootstrap-websocket-server-reentry.test.js",
+      "candidateBlob": "b94837d46514d81f735492f164bb03b78576eb00",
+      "predecessorBlob": "b94837d46514d81f735492f164bb03b78576eb00",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/bootstrap/bootstrap-websocket-server-reentry.test.js",
+        "assertions": 3,
+        "durationMs": 37373
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/bootstrap/phase-failure-handling.property.test.js",
+      "candidateBlob": "912342d755f636fef19b1a4352452f18a095a4e5",
+      "predecessorBlob": "912342d755f636fef19b1a4352452f18a095a4e5",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/bootstrap/phase-failure-handling.property.test.js",
+        "assertions": 14,
+        "durationMs": 600045
+      }
+    },
+    {
+      "host": "lenovo-laptop",
+      "file": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+      "candidateBlob": "4cbe4afbda45c6d9de01080ef848114057bd40ec",
+      "predecessorBlob": "4cbe4afbda45c6d9de01080ef848114057bd40ec",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "lenovo-laptop",
+        "ok": false,
+        "file": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+        "assertions": 4,
+        "durationMs": 252650
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/node/message-group-service-handler-membership.test.js",
+      "candidateBlob": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+      "predecessorBlob": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/node/message-group-service-handler-membership.test.js",
+        "assertions": 1,
+        "durationMs": 726
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/participant-release-prepare-identity-native.test.js",
+      "candidateBlob": "e8f53a90689d4dcef44f5734dde57e5623cd1464",
+      "predecessorBlob": "e8f53a90689d4dcef44f5734dde57e5623cd1464",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/participant-release-prepare-identity-native.test.js",
+        "assertions": 1,
+        "durationMs": 3007
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-consensus-hold-log.test.js",
+      "candidateBlob": "a6667f71181d59bda6ff23a76aac51d40e708b80",
+      "predecessorBlob": "a6667f71181d59bda6ff23a76aac51d40e708b80",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/partition-consensus-hold-log.test.js",
+        "assertions": 1,
+        "durationMs": 951
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "candidateBlob": "70f1bb95955f30072985d0b44d811f93d9247535",
+      "predecessorBlob": "70f1bb95955f30072985d0b44d811f93d9247535",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+        "assertions": 11,
+        "durationMs": 4651
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "candidateBlob": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3",
+      "predecessorBlob": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/partition-transaction-seam-falsifiers.test.js",
+        "assertions": 14,
+        "durationMs": 2415
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/leadership-transfer-single-path.test.js",
+      "candidateBlob": "685f6841bc015d41e599d589e5c22d6a6eddf209",
+      "predecessorBlob": "685f6841bc015d41e599d589e5c22d6a6eddf209",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/raft/leadership-transfer-single-path.test.js",
+        "assertions": 3,
+        "durationMs": 1533
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "candidateBlob": "ec8465225a7c13b0ce926ec4fd89c55f90087963",
+      "predecessorBlob": "ec8465225a7c13b0ce926ec4fd89c55f90087963",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+        "assertions": 6,
+        "durationMs": 466
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/write-exactly-once-schedules.test.js",
+      "candidateBlob": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5",
+      "predecessorBlob": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/write-exactly-once-schedules.test.js",
+        "assertions": 2,
+        "durationMs": 62300
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "candidateBlob": "e19ae663954033dc0398c286f6d85e4060def4da",
+      "predecessorBlob": "e19ae663954033dc0398c286f6d85e4060def4da",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+        "assertions": 155,
+        "durationMs": 30105
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "candidateBlob": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e",
+      "predecessorBlob": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/unknown-outcome-redelivery-budget.test.js",
+        "assertions": 3,
+        "durationMs": 74707
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/convergence/membership-publication-owner-driver-host.test.js",
+      "candidateBlob": "5b3a449462dc80b303ae4ac21b63b6d63c1a9f9d",
+      "predecessorBlob": "5b3a449462dc80b303ae4ac21b63b6d63c1a9f9d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/convergence/membership-publication-owner-driver-host.test.js",
+        "assertions": 3,
+        "durationMs": 3192
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/table-partition-structure.property.test.js",
+      "candidateBlob": "b731f86f4d63c996c107662771de39486f2309bb",
+      "predecessorBlob": "b731f86f4d63c996c107662771de39486f2309bb",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/table-partition-structure.property.test.js",
+        "assertions": 6,
+        "durationMs": 17319
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/scripts/proof-cone-cli-output-completeness.test.js",
+      "candidateBlob": "ed390c91936ca54a9e0f609f91b8c4e58dfbef8d",
+      "predecessorBlob": "ed390c91936ca54a9e0f609f91b8c4e58dfbef8d",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/scripts/proof-cone-cli-output-completeness.test.js",
+        "assertions": 3,
+        "durationMs": 6978
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+      "candidateBlob": "2d6dbe6c558b981bbaa0eebaf8f1db063b132ba7",
+      "predecessorBlob": "2d6dbe6c558b981bbaa0eebaf8f1db063b132ba7",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+        "assertions": 4,
+        "durationMs": 4691
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/node/replica-handler.test.js",
+      "candidateBlob": "4370348d6187602e3cdee04d978d5f3d3ce68dbc",
+      "predecessorBlob": "4370348d6187602e3cdee04d978d5f3d3ce68dbc",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/node/replica-handler.test.js",
+        "assertions": 105,
+        "durationMs": 3765
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/scripts/push-gate-change-proof.test.js",
+      "candidateBlob": "b5c0e59170878373a3dc999e35f4d4769ef34abe",
+      "predecessorBlob": "b5c0e59170878373a3dc999e35f4d4769ef34abe",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/scripts/push-gate-change-proof.test.js",
+        "assertions": 18,
+        "durationMs": 23115
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-service-size-split-transport.test.js",
+      "candidateBlob": "ad864c112498bc188f3083d52c8ef16816e6bffa",
+      "predecessorBlob": "ad864c112498bc188f3083d52c8ef16816e6bffa",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/partition-service-size-split-transport.test.js",
+        "assertions": 107,
+        "durationMs": 5046
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/scripts/solve-footprint-accounting.test.js",
+      "candidateBlob": "45d77d81ea159562e4d8e3547b5e1e401a6ca68c",
+      "predecessorBlob": "45d77d81ea159562e4d8e3547b5e1e401a6ca68c",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/scripts/solve-footprint-accounting.test.js",
+        "assertions": 4,
+        "durationMs": 364544
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/sql-query-engine.test.js",
+      "candidateBlob": "c3ead353d74c840e1e2c7e00aa7f655f48e0a592",
+      "predecessorBlob": "c3ead353d74c840e1e2c7e00aa7f655f48e0a592",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/sql-query-engine.test.js",
+        "assertions": 132,
+        "durationMs": 2245
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/sql-query-engine-execution.test.js",
+      "candidateBlob": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c",
+      "predecessorBlob": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/sql-query-engine-execution.test.js",
+        "assertions": 130,
+        "durationMs": 1982
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/distributed-transaction-coordinator.property.test.js",
+      "candidateBlob": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02",
+      "predecessorBlob": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/distributed-transaction-coordinator.property.test.js",
+        "assertions": 23,
+        "durationMs": 2075
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/cdc-generation.property.test.js",
+      "candidateBlob": "fd20c4d61655737131f041380845ab521f63e696",
+      "predecessorBlob": "fd20c4d61655737131f041380845ab521f63e696",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/cdc-generation.property.test.js",
+        "assertions": 8,
+        "durationMs": 2637
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/distributed-transaction-coordinator.test.js",
+      "candidateBlob": "a1b847de2e77647bc2c26f79f3937642de65156a",
+      "predecessorBlob": "a1b847de2e77647bc2c26f79f3937642de65156a",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/distributed-transaction-coordinator.test.js",
+        "assertions": 86,
+        "durationMs": 1352
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/partition/partition-service-raft-propose-metrics.test.js",
+      "candidateBlob": "ed1e61ab04c90caba9828cf4cdc80097bbf0ab54",
+      "predecessorBlob": "ed1e61ab04c90caba9828cf4cdc80097bbf0ab54",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/partition/partition-service-raft-propose-metrics.test.js",
+        "assertions": 34,
+        "durationMs": 1909
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/sql-query-engine-managed-split.test.js",
+      "candidateBlob": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc",
+      "predecessorBlob": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/sql-query-engine-managed-split.test.js",
+        "assertions": 39,
+        "durationMs": 1875
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/write-path-internal-pacing.test.js",
+      "candidateBlob": "858bded5efbd54562b80138325e20b6ad2e6389e",
+      "predecessorBlob": "858bded5efbd54562b80138325e20b6ad2e6389e",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/write-path-internal-pacing.test.js",
+        "assertions": 37,
+        "durationMs": 2837
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "candidateBlob": "e8d44160f4c15f6475a3991c27acd2343c944623",
+      "predecessorBlob": "e8d44160f4c15f6475a3991c27acd2343c944623",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+        "assertions": 2,
+        "durationMs": 1949
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/query/transaction-owned-commit-mode-guard.test.js",
+      "candidateBlob": "71ddf37ca840d8ea7267176f27d91632c734a357",
+      "predecessorBlob": "71ddf37ca840d8ea7267176f27d91632c734a357",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/query/transaction-owned-commit-mode-guard.test.js",
+        "assertions": 12,
+        "durationMs": 773
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/bootstrap/bootstrap-sequence.test.js",
+      "candidateBlob": "e945a70892df63aacb5dae776d9c99d3d760666e",
+      "predecessorBlob": "e945a70892df63aacb5dae776d9c99d3d760666e",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/bootstrap/bootstrap-sequence.test.js",
+        "assertions": 58,
+        "durationMs": 15780
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+      "candidateBlob": "923fef0cf69374a0ad33ecfa2caa999872baaf8f",
+      "predecessorBlob": "923fef0cf69374a0ad33ecfa2caa999872baaf8f",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+        "assertions": 30,
+        "durationMs": 1449
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "candidateBlob": "942088a7fa819dbb56ab4b3c9a77acdb9ae2fd05",
+      "predecessorBlob": "942088a7fa819dbb56ab4b3c9a77acdb9ae2fd05",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+        "assertions": 62,
+        "durationMs": 102240
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "candidateBlob": "877e0b30225fa9b8f8555b9b43283482c5a608aa",
+      "predecessorBlob": "877e0b30225fa9b8f8555b9b43283482c5a608aa",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+        "assertions": 52,
+        "durationMs": 303135
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/integration/services-p1-self-referential-write.integration.test.js",
+      "candidateBlob": "584425c92a9ee27176217c0bd092f9c30baf300a",
+      "predecessorBlob": "584425c92a9ee27176217c0bd092f9c30baf300a",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/integration/services-p1-self-referential-write.integration.test.js",
+        "assertions": 10,
+        "durationMs": 16426
+      }
+    },
+    {
+      "host": "tv-dator",
+      "file": "test/integration/seed-node-bootstrap.integration.test.js",
+      "candidateBlob": "fb23d06d0b4279bfd80a29770172159f3c651597",
+      "predecessorBlob": "fb23d06d0b4279bfd80a29770172159f3c651597",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "host": "tv-dator",
+        "ok": false,
+        "file": "test/integration/seed-node-bootstrap.integration.test.js",
+        "assertions": 38,
+        "durationMs": 28394
+      }
+    }
+  ],
+  "ceiling": "Same-host predecessor observation only; changed tests compare distinct witnesses; missing tests remain unmeasured. Every failure remains an obligation."
+}

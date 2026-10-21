@@ -1,0 +1,233 @@
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:260:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 260
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: >2
+      );
+
+      await t.test(
+    ----------^
+        'voter-ready create publishes provisional ACTIVE while durable lifecycle ' +
+          'persistence remains deferred',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:388:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 388
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'definitive ACTIVE persistence failure follows provisional executor ' +
+          'evidence with a FAILED outcome',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:480:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 480
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'remove flow emits outcomes through ExecutorOutcomeEmitter, ' +
+        'not direct replica_operations writes ' +
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:594:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 594
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'remove completion waits for service row delete before emitter ' +
+        'signals completion (uses control-plane gateway owner path)',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:704:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 704
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: >2
+      );
+
+      await t.test(
+    ----------^
+        'remove acceptance fences transaction admission synchronously and waits ' +
+        'for the partition-owned drain before deleting its service row',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:911:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 911
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'CREATE failure fences a started learner before publishing failure',
+        async (t) => {
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:1096:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 1096
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'create failure emits REPLICA_CREATE_FAILED through emitter, ' +
+        'not direct replica_operations writes ' +
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:1183:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 1183
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'non-priority retryable CREATE replays from durable FAILED state',
+        async (t) => {
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:1290:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 1290
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'without executorOutcomeEmitter, outcomes are silently ' +
+        'dropped with no fallback replica_operations write',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:1340:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 1340
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'emitted outcomes carry operationId so coordinator can ' +
+        'route through owner-key reconcile queue',
+  ...
+
+Error: cannot create subtest after parent test ends
+  ---
+  stack: |
+    Test.<anonymous> (test/node/replica-handler-owner-path-bypass.test.js:1400:11)
+  at:
+    fileName: test/node/replica-handler-owner-path-bypass.test.js
+    lineNumber: 1400
+    columnNumber: 11
+    typeName: Test
+    methodName: <anonymous>
+    functionName: Test.<anonymous>
+  test: ReplicaHandler owner-path bypass regressions
+  source: |2
+      );
+
+      await t.test(
+    ----------^
+        'ReplicaHandler CDC operations only touch services table, ' +
+        'never owner-owned replica_operations fields',
+  ...
+
+(node:2131719) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-21T06:28:36.761Z",
+  "candidate": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "carinas-windows",
+  "controllerPid": 1592770,
+  "inputSha256": "be23b057b57163483151fa134733fff3f20063c33897795201d305d95164590a",
+  "retry": 0,
+  "budgets": "Canonical unchanged host factors, lane caps, thermal gate and file timeouts; no overrides."
+}

@@ -1,0 +1,60 @@
+{
+  "recordedAt": "2026-10-21T06:33:00.416512+00:00",
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "predecessor": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "sourceAttempt": "test-output/seed-release-custody/unreported-candidate-393f411ca",
+  "sourceResultsSha256": "81474a9fce1576589c4a2a0fe00f4feb385a8b5237a80471b24ff5a75e74887d",
+  "originalSelectionSha256": "f631228a9fc42bb2e1588c70464c3328f96e161aa47401d48a539c80fb71e887",
+  "original99Unchanged": true,
+  "additions": [
+    {
+      "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "host": "lenovo-laptop",
+      "candidateBlob": "b93fe1d9e92eeb3b51e8ef15ce3a762888bfd3e3",
+      "predecessorBlob": "b93fe1d9e92eeb3b51e8ef15ce3a762888bfd3e3",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "file": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 4,
+        "durationMs": 70665,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - [real] an empty system table reads as success with no rows"
+      }
+    },
+    {
+      "file": "test/integration/managed-split-admission-reliability.integration.test.js",
+      "host": "lenovo-laptop",
+      "candidateBlob": "de22f5ec935b984624fc41bdaf90550d468044dc",
+      "predecessorBlob": "de22f5ec935b984624fc41bdaf90550d468044dc",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "file": "test/integration/managed-split-admission-reliability.integration.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 16,
+        "durationMs": 55623,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - Cannot read properties of null (reading 'storageAccountingService')"
+      }
+    },
+    {
+      "file": "test/integration/create-table-partition-provisioning.integration.test.js",
+      "host": "lenovo-laptop",
+      "candidateBlob": "b4b3e06eeb09849e844cc82da7e82c6c38b4d14b",
+      "predecessorBlob": "b4b3e06eeb09849e844cc82da7e82c6c38b4d14b",
+      "comparison": "identical-test",
+      "candidateResult": {
+        "file": "test/integration/create-table-partition-provisioning.integration.test.js",
+        "attempt": 1,
+        "ok": false,
+        "assertions": 4,
+        "durationMs": 39716,
+        "retriedOnce": false,
+        "firstFailureLine": "not ok 1 - seed bootstrap should succeed  false !== true"
+      }
+    }
+  ],
+  "ceiling": "Original run retains99reds+3unreported. Separate samehost393 supplementary attempt measured these3red. All102 remain obligations."
+}

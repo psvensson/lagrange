@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-21T06:28:34.442Z",
+  "candidate": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "adam-laptop",
+  "controllerPid": 1591022,
+  "inputSha256": "f0ad7fe4cec8070617ebfab91b9aa12697ba46d2fac9c799c193d515c6f2c210",
+  "retry": 0,
+  "budgets": "Canonical unchanged host factors, lane caps, thermal gate and file timeouts; no overrides."
+}

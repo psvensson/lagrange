@@ -1,0 +1,1177 @@
+CREATE_REPLICA refused: message-group membership change unsupported until the fresh-identity ADD path exists {
+  operationId: 'replace-mg-1-r1-with-r4',
+  groupId: 'mg-1',
+  replicaId: 'mg-1-r4',
+  nodeId: 'node-target',
+  reason: 'message_group_membership_change_unsupported'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 1,
+    attempts: 2,
+    lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+    lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  },
+  scope: {
+    transactionId: '7edc2c2364861172f3e232a5fd15200a',
+    partitionId: 'p1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 1,
+    attempts: 2,
+    lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+    lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  },
+  scope: {
+    transactionId: '7edc2c2364861172f3e232a5fd15200a',
+    partitionId: 'p2'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 0,
+    attempts: 1,
+    lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+    lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  },
+  scope: {
+    transactionId: '40fa48b6be4fa5a2b17aed29221be4fa',
+    partitionId: 'p1'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 0,
+    attempts: 1,
+    lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+    lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  },
+  scope: {
+    transactionId: '40fa48b6be4fa5a2b17aed29221be4fa',
+    partitionId: 'p2'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 73,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'Participant answered without the typed outcome the transaction protocol requires',
+    lastErrorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE'
+  },
+  scope: {
+    transactionId: '089696f6ad2ad6602b75897ba28cfcc4',
+    partitionId: 'p1'
+  },
+  repeats: 0
+}
+No active service found for partition {
+  partitionId: 'nodes-p1',
+  routingSnapshot: {
+    reasonCode: 'no_service_rows',
+    routingReadinessDimension: 'serveEligible',
+    serviceRowCount: 0,
+    activeAddressedServiceCount: 0,
+    routableServiceCount: 0,
+    canonicalLeaderServiceCount: 0,
+    leaderKnown: true,
+    canonicalLeaderNodeId: 'new-owner',
+    deniedByNodeId: {}
+  }
+}
+Canonical partition leader metadata missing {
+  partitionId: 'nodes-p1',
+  routableNodeIds: [ 'seed-node', 'node-b', 'node-c' ],
+  staleLeaderNodeIds: [],
+  routingSnapshot: {
+    reasonCode: 'ok',
+    routingReadinessDimension: 'serveEligible',
+    serviceRowCount: 3,
+    activeAddressedServiceCount: 3,
+    routableServiceCount: 3,
+    canonicalLeaderServiceCount: 0,
+    leaderKnown: false,
+    canonicalLeaderNodeId: null,
+    deniedByNodeId: {}
+  }
+}
+Group retirement resume failed; waiting for the next record change { error: 'getRuntimeView(...)?.getAll is not a function' }
+No handler registered for partition service {
+  partitionId: 'replica_operations-p1',
+  address: 'old-owner/partition/replica_operations-p1-r1'
+}
+Group retirement resume failed; waiting for the next record change { error: 'getRuntimeView(...)?.getAll is not a function' }
+No handler registered for partition service {
+  partitionId: 'replica_operations-p1',
+  address: 'old-owner/partition/replica_operations-p1-r1'
+}
+Query admission deferred {
+  statementType: 'SELECT',
+  pressureAction: 'defer',
+  pressureReason: 'transport_backpressure',
+  retryAfterMs: 100,
+  workClass: 'background'
+}
+Query admission deferred {
+  statementType: 'SELECT',
+  pressureAction: 'defer',
+  pressureReason: 'transport_backpressure',
+  retryAfterMs: 100,
+  workClass: 'background'
+}
+System cache not available for partition lookup { partitionId: 'schema_operations-p1' }
+Distributed write failed due to participant failures {
+  operation: 'UPDATE',
+  operationId: 'dwrite-2f382518-8cd0-4554-ab29-69f1543f75dc',
+  idempotencyKey: 'dwrite-2f382518-8cd0-4554-ab29-69f1543f75dc',
+  failedParticipantCount: 1,
+  failedPartitions: [ 'p2' ],
+  participantFailures: [
+    {
+      partitionId: 'p2',
+      participantNodeId: 'test-node',
+      participantAddress: 'test-node/partition/p2',
+      errorCode: null,
+      failureCode: null,
+      committed: false,
+      outcome: null,
+      disposition: null,
+      error: 'partition unavailable',
+      failedTable: 'users'
+    }
+  ]
+}
+No partitions available for table { tableName: 'nonexistent' }
+SQL Parse Error: Expected "#", "--", "/*", ":=", "=", or [ \t\n\r] but "S" found. { sql: 'INVALID SQL STATEMENT' }
+Query execution failed {
+  sql: 'INVALID SQL STATEMENT',
+  error: 'SQL Parse Error: Expected "#", "--", "/*", ":=", "=", or [ \\t\\n\\r] but "S" found.'
+}
+Query execution failed {
+  sql: 'SELECT * FROM users',
+  error: 'query_admission_deferred',
+  errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+  retryAfterMs: 321,
+  deferRetry: true,
+  stack: null
+}
+System cache not available for partition lookup { partitionId: 'schema_operations-p1' }
+Query execution failed {
+  sql: 'SELECT * FROM users',
+  error: 'System cache not available for table: users',
+  errorCode: 'INTERNAL_ERROR',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+No partitions available for table { tableName: 'users' }
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 1,
+  lastObserved: {
+    stage: 'ROLLING_BACK',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'rollback-retry',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '6654e2e2b0b03dcf42961c6aa5b7988f',
+    partitionId: 'p--3'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'COMMITTING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'commit-retry',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'f06d56c0d6b68a0f5c1cfdce2f489462',
+    partitionId: 'p--k8g-'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 1,
+  lastObserved: {
+    stage: 'ROLLING_BACK',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'rollback-retry',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'b5839e2b5011fc08b0fa0e11b0d79ce4',
+    partitionId: 'p-8'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'ROLLING_BACK',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'rollback-retry',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '3642cacd1f6266cca95d31a5cb211af8',
+    partitionId: 'p--g-'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'ROLLING_BACK',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'rollback-retry',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'd149dc191d46a81ab14f0fa476d9648e',
+    partitionId: 'p--8ag--0-gc1r'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 71,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '0ae79226a0076bc9cd52d2dc9a499246',
+    partitionId: 'p-9e0pw-j'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 72,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '97345eeed8398057db845b5d495bca6d',
+    partitionId: 'p-ah3'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 72,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '4d0208b82371b077d1a13e3763cb844d',
+    partitionId: 'p-d-bind'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 72,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '881dfbca53efde32f7b3ab05c210eaef',
+    partitionId: 'p--'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 70,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '71e8d3f40973b159ddb4d0c869dc1a7e',
+    partitionId: 'p-ctobapplyekc'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 71,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'a4773d884138ca4662f2ba16704d62be',
+    partitionId: 'p--'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 71,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '62390c76c88629edcb7fdc6aca0763f3',
+    partitionId: 'p-jd--393f-wa'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 70,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'e35b1ff8048066537af991e3c30ca0b7',
+    partitionId: 'p-44-p-39-7'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 71,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'a732a052b07536a331c5c468fd45320b',
+    partitionId: 'p---1-9z13--n'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 72,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare-failure',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'be33fd68cf5dcaca24c66230928bad06',
+    partitionId: 'p-1--'
+  },
+  repeats: 0
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '-z--ry96-e3--83',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: 'qd5--3--l-rv-',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '4-0--f938-t-',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: '-mg--0',
+  partitionId: 'p-1-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000003',
+  sessionId: '4-n-0r1--8-16',
+  partitionId: 'p-2-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '7---ab2-o--',
+  partitionId: 'p-0-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: 'l61--7-c-h',
+  partitionId: 'p-1-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '78l2--zi8----4',
+  partitionId: 'p-0-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: 'i-v498873w3-7',
+  partitionId: 'p-1-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '----',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: '-7--8',
+  partitionId: 'p-1-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000003',
+  sessionId: 't3--',
+  partitionId: 'p-2-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: 'key',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: 'ref',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: 'qc-99--076-3',
+  partitionId: 'p-1-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000003',
+  sessionId: '-3e6-e',
+  partitionId: 'p-2-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000004',
+  sessionId: '3-6',
+  partitionId: 'p-3-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '-g-7i-hb3',
+  partitionId: 'p-0-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: '1-mbi',
+  partitionId: 'p-1-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000001',
+  sessionId: '2v-4',
+  partitionId: 'p-0-0',
+  stage: 'ROLLING_BACK',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000002',
+  sessionId: '--1-45--4oj---',
+  partitionId: 'p-1-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000003',
+  sessionId: 'o--p-',
+  partitionId: 'p-2-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Distributed transaction participant retry {
+  transactionId: '00000000000000000000000000000004',
+  sessionId: 'z-k',
+  partitionId: 'p-3-0',
+  stage: 'COMMITTING',
+  duringRecovery: true,
+  attempt: 1,
+  retryDelayMs: 1,
+  error: 'participant-unreachable'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 3,
+  elapsedMs: 4,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 1 }
+  },
+  scope: {
+    transactionId: '77dda0dfbb507ea99cce575fe7b8ab77',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 6,
+  elapsedMs: 7,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 4 }
+  },
+  scope: {
+    transactionId: '5dcb49f67b75215ebdda75f9c1e3dc21',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 4,
+  elapsedMs: 5,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 3 }
+  },
+  scope: {
+    transactionId: 'd8661239b5b893ac0530a00d69c86f09',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 37,
+  elapsedMs: 38,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 4 }
+  },
+  scope: {
+    transactionId: '7a9efe822218407c45b4039864907858',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 2,
+  elapsedMs: 3,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 2 }
+  },
+  scope: {
+    transactionId: '3bc50ebe1a8c0dee4d4ea88d6f84a5c5',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 4,
+  elapsedMs: 5,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 4 }
+  },
+  scope: {
+    transactionId: '1b14b0da4f86c2a65f723c590a81af3f',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 3,
+  elapsedMs: 4,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 3 }
+  },
+  scope: {
+    transactionId: '28989061ef587330a6c49c2eea251909',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 42,
+  elapsedMs: 43,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 2 }
+  },
+  scope: {
+    transactionId: 'ccfde4062113a9852a854ae26e7436e5',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 6,
+  elapsedMs: 7,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 2 }
+  },
+  scope: {
+    transactionId: '320aae419cafea6f0ff4dcebcff7a059',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 46,
+  elapsedMs: 47,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 4 }
+  },
+  scope: {
+    transactionId: 'dca66bb30867ed7b59ae826d1b2bed28',
+    sessionId: 'property-14-session'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 72,
+  lastObserved: {
+    stage: 'COMMITTING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'commit failed',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: '38e15568be8e344a7a167661415f1c05',
+    partitionId: 'p2'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 73,
+  lastObserved: {
+    stage: 'ROLLING_BACK',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'rollback failed',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'd82c1b0334a5161f80287bab628a11d2',
+    partitionId: 'p2'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 71,
+  lastObserved: {
+    stage: 'PREPARING',
+    maxRetries: 3,
+    attempts: 4,
+    lastError: 'prepare failed',
+    lastErrorCode: null
+  },
+  scope: {
+    transactionId: 'f5e909391eb481ea78b02c26db9e1af5',
+    partitionId: 'p2'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+  boundMs: null,
+  elapsedMs: 0,
+  lastObserved: {
+    stage: 'COMMITTING',
+    maxRetries: 0,
+    attempts: 1,
+    lastError: 'No active transaction to commit',
+    lastErrorCode: 'NO_TRANSACTION'
+  },
+  scope: {
+    transactionId: '64b51e432022d0619ef7785f55869961',
+    partitionId: 'p1'
+  },
+  repeats: 0
+}
+Group retirement resume failed; waiting for the next record change { error: 'getRuntimeView(...)?.getAll is not a function' }
+Group retirement resume failed; waiting for the next record change { error: 'getRuntimeView(...)?.getAll is not a function' }
+System cache not available for partition lookup { partitionId: 'schema_operations-p1' }
+System cache does not support filter { partitionId: 'schema_operations-p1' }
+System cache does not support filter { partitionId: 'schema_operations-p1' }
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'partition_execution_deadline',
+  awaited: 'successful partition delivery before the execution deadline',
+  boundMs: 249,
+  elapsedMs: 250,
+  lastObserved: {
+    attempts: 83,
+    lastError: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'node-current',
+    awaitedRoutingRepair: false,
+    site: 'budget_spent_before_retry'
+  },
+  scope: {
+    partitionId: 'ratings-p1',
+    forRead: false,
+    nodeId: 'query-executor'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'partition_execution_deadline',
+  awaited: 'successful partition delivery before the execution deadline',
+  boundMs: 20,
+  elapsedMs: 20,
+  lastObserved: {
+    attempts: 14,
+    lastError: 'No leader available for write operation',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'node-stuck',
+    awaitedRoutingRepair: false,
+    site: 'budget_spent_before_delivery'
+  },
+  scope: {
+    partitionId: 'ratings-p1',
+    forRead: false,
+    nodeId: 'query-executor'
+  },
+  repeats: 0
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'partition_execution_deadline',
+  awaited: 'successful partition delivery before the execution deadline',
+  boundMs: 248,
+  elapsedMs: 248,
+  lastObserved: {
+    attempts: 136,
+    lastError: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'node-leader',
+    awaitedRoutingRepair: false,
+    site: 'budget_spent_before_retry'
+  },
+  scope: {
+    partitionId: 'counters-p1',
+    forRead: false,
+    nodeId: 'query-executor'
+  },
+  repeats: 0
+}
+Distributed write failed due to participant failures {
+  operation: 'UPDATE',
+  operationId: 'dwrite-4c68425c-c3fb-4e88-99bc-249b5f1035b2',
+  idempotencyKey: 'dwrite-4c68425c-c3fb-4e88-99bc-249b5f1035b2',
+  failedParticipantCount: 1,
+  failedPartitions: [ 'counters-p1' ],
+  participantFailures: [
+    {
+      partitionId: 'counters-p1',
+      participantNodeId: 'node-leader',
+      participantAddress: 'node-leader/partition/counters-r1',
+      errorCode: null,
+      failureCode: 'partition_write_cutover_paused',
+      committed: false,
+      outcome: null,
+      disposition: null,
+      error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',
+      failedTable: 'counters'
+    }
+  ]
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'partition_execution_deadline',
+  awaited: 'successful partition delivery before the execution deadline',
+  boundMs: 250,
+  elapsedMs: 250,
+  lastObserved: {
+    attempts: 152,
+    lastError: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',
+    lastErrorCode: null,
+    lastParticipantNodeId: 'node-leader',
+    awaitedRoutingRepair: false,
+    site: 'budget_spent_before_retry'
+  },
+  scope: {
+    partitionId: 'counters-p1',
+    forRead: false,
+    nodeId: 'query-executor'
+  },
+  repeats: 0
+}
+Distributed write failed due to participant failures {
+  operation: 'UPDATE',
+  operationId: 'dwrite-2025297b-291a-4d54-bde6-6f4676578830',
+  idempotencyKey: 'dwrite-2025297b-291a-4d54-bde6-6f4676578830',
+  failedParticipantCount: 1,
+  failedPartitions: [ 'counters-p1' ],
+  participantFailures: [
+    {
+      partitionId: 'counters-p1',
+      participantNodeId: 'node-leader',
+      participantAddress: 'node-leader/partition/counters-r1',
+      errorCode: null,
+      failureCode: 'partition_write_cutover_paused',
+      committed: false,
+      outcome: null,
+      disposition: null,
+      error: 'The partition paused mutation admission for its participant transaction cutover; the write was not proposed and may be retried',
+      failedTable: 'counters'
+    }
+  ]
+}
+No partitions available for table { tableName: 'replica_operations' }
+(node:1264669) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 1500,
+  elapsedMs: 85000,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 1 }
+  },
+  scope: {
+    transactionId: '6dada8d2a1791530d818f5db8a0d6ec7',
+    sessionId: 'pgwire-712f65f9-df35-47ab-8150-690fe6f2c284'
+  },
+  repeats: 0
+}
+Distributed transaction followed the decision recorded first {
+  transactionId: '6dada8d2a1791530d818f5db8a0d6ec7',
+  attempted: 'ROLLBACK',
+  recorded: 'ROLLBACK',
+  cause: 'Distributed transaction decision is already recorded'
+}
+Wait bound spent {
+  event: 'wait_bound_spent',
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+  boundMs: 1500,
+  elapsedMs: 84546,
+  lastObserved: {
+    stage: 'ACTIVE',
+    status: 'ACTIVE',
+    commitMode: 'TWO_PHASE_COMMIT',
+    remainingBudgetMs: 0,
+    participantStatuses: { ACTIVE: 1 }
+  },
+  scope: {
+    transactionId: '2437419d0944784da26aa7683167263b',
+    sessionId: 'pgwire-712f65f9-df35-47ab-8150-690fe6f2c284'
+  },
+  repeats: 0
+}
+Distributed transaction followed the decision recorded first {
+  transactionId: '2437419d0944784da26aa7683167263b',
+  attempted: 'ROLLBACK',
+  recorded: 'ROLLBACK',
+  cause: 'Distributed transaction decision is already recorded'
+}
+Distributed transaction followed the decision recorded first {
+  transactionId: 'f6e66a3bf9fc0edf2959328923358e95',
+  attempted: 'ROLLBACK',
+  recorded: 'ROLLBACK',
+  cause: 'Distributed transaction decision is already recorded'
+}
+Rollback of a closed protocol session's open transaction failed (the transaction budget sweep remains the backstop) {
+  sessionId: 'pgwire-712f65f9-df35-47ab-8150-690fe6f2c284',
+  error: 'CDCIntegrationService is shut down: this write was not routed and was not applied, and no retry through the service can succeed'
+}

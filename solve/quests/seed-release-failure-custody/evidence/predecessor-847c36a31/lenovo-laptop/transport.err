@@ -1,0 +1,50 @@
+Query execution failed {
+  sql: "INSERT INTO users (id, name) VALUES ('alice', 'Alice')",
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+Query execution failed {
+  sql: 'ROLLBACK',
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+Query execution failed {
+  sql: "UPDATE users SET name = 'Bob' WHERE id = 'alice'",
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+Query execution failed {
+  sql: 'ROLLBACK',
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+Query execution failed {
+  sql: "DELETE FROM users WHERE id = 'alice'",
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+Query execution failed {
+  sql: 'ROLLBACK',
+  error: 'Transaction recovery state is incomplete or incompatible',
+  errorCode: 'TRANSACTION_RECOVERY_INCOMPLETE',
+  retryAfterMs: null,
+  deferRetry: false,
+  stack: null
+}
+(node:1969448) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)

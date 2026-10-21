@@ -1,0 +1,258 @@
+{
+  "README.md": {
+    "sha256": "8c1bf50af7aab1f0d829e380523195f8f97eca3043f34e61bb402ff66b56a652",
+    "bytes": 3317
+  },
+  "adam-laptop/controller.log": {
+    "sha256": "ffc943b35e887825fc10754955b50bd79751657008ce26f46ab04f487294fe44",
+    "bytes": 196958
+  },
+  "adam-laptop/execution-end.json": {
+    "sha256": "2a3f8901070072324e1ff98b1cf5b3e6266e19b4f5fd73feb73a53b6a6f6dfca",
+    "bytes": 104
+  },
+  "adam-laptop/execution-start.json": {
+    "sha256": "00f538d6242aa41b923d0d30e47d7636ced4a67e4613a0025fed19fd6b7471df",
+    "bytes": 364
+  },
+  "adam-laptop/plan.json": {
+    "sha256": "723f7bbd99f168b999135d94d27bdce3ffdc28eadfcb1776d6255ab7d8a53341",
+    "bytes": 4796
+  },
+  "adam-laptop/sha256.json": {
+    "sha256": "06a832a9b12802c86d86f3e2a93f9d7dee2cb789f653f5769ad168516f902710",
+    "bytes": 659
+  },
+  "adam-laptop/test-output/reports/test-results-adam-laptop.ndjson": {
+    "sha256": "1cdb94acc52c62f16c6f362312dabfabdeb695255740df3d88edcada896407eb",
+    "bytes": 4254
+  },
+  "adam-laptop/transport.err": {
+    "sha256": "d8b47d1bd4fbd14236a4ccfebe7abcf01beab5029ca4baf3ebc6d76b924d7299",
+    "bytes": 6780
+  },
+  "adam-laptop/transport.log": {
+    "sha256": "73a8e4b8c3d2bc68b4540a6ed36a98534b80dd9c84c823f91bdd14e79b55350a",
+    "bytes": 159722
+  },
+  "adam-laptop.candidate-verdicts.ndjson": {
+    "sha256": "563ba0b603797b5b15cb50d3375538482517b46c792f433d9b71f5cc8c56adb1",
+    "bytes": 32793
+  },
+  "adam-laptop.input.json": {
+    "sha256": "f0ad7fe4cec8070617ebfab91b9aa12697ba46d2fac9c799c193d515c6f2c210",
+    "bytes": 1634
+  },
+  "adams-gamla/controller.log": {
+    "sha256": "f8aaf332c67bdb1f2e14d55e156f817eee586c9576b2041cbc364a703d2d0927",
+    "bytes": 431612
+  },
+  "adams-gamla/execution-end.json": {
+    "sha256": "390f840f1704917d1f6d5747481fed4d59f276b5be6422ed3da7e470641580ea",
+    "bytes": 104
+  },
+  "adams-gamla/execution-start.json": {
+    "sha256": "ef4e0896d05e2aff47bebac608f0028d59c4149505f5f8c9385f03d2f50a73f3",
+    "bytes": 364
+  },
+  "adams-gamla/plan.json": {
+    "sha256": "a71acd8067d648b878ca21b4c44b02365e969e4d959db0f3c242181e579d952a",
+    "bytes": 5121
+  },
+  "adams-gamla/sha256.json": {
+    "sha256": "dc04d2bbb54fca0d63191b38e11f0cc544a78db49138462c119163342a55491f",
+    "bytes": 659
+  },
+  "adams-gamla/test-output/reports/test-results-adams-gamla.ndjson": {
+    "sha256": "8741659db87d61335ba14b25b498128488a1ace7bfe3c40114aff00e9bf1272c",
+    "bytes": 3794
+  },
+  "adams-gamla/transport.err": {
+    "sha256": "4cec70d29ed128f303826238a2372ff8c1ba31c76589194024db718931bb059a",
+    "bytes": 2738
+  },
+  "adams-gamla/transport.log": {
+    "sha256": "4a92c34b51962ed3f3ba77d9d2429190169c67c81d378069b4a35bf385967cec",
+    "bytes": 344215
+  },
+  "adams-gamla.candidate-verdicts.ndjson": {
+    "sha256": "dd8a7f72f562f095f806cdbd3a64537a9d9d21de6ae3286ba454302094ab16fe",
+    "bytes": 26805
+  },
+  "adams-gamla.input.json": {
+    "sha256": "65e1f0e5c69d3ab6d049e3de286bc533e6d5de812e8ad1630fc4a70879adb0ca",
+    "bytes": 1710
+  },
+  "carinas-windows/controller.log": {
+    "sha256": "73090e0514d24da841428f0888308789c829b21bc2f09bfddd4b9f20a099fb26",
+    "bytes": 335601
+  },
+  "carinas-windows/execution-end.json": {
+    "sha256": "4379db46787d18fd61616683730f2d353fe62d838279137eab6a58d16ed7b5c8",
+    "bytes": 104
+  },
+  "carinas-windows/execution-start.json": {
+    "sha256": "7f438d354cb52120ae2c6f8d41b123e2523397d52d56a458c67a4bd2fa23bd4f",
+    "bytes": 368
+  },
+  "carinas-windows/plan.json": {
+    "sha256": "9777b79308a5084ef3cc39efdec4b2fb0b57ceba0d67788a9e05014bbd1a95d8",
+    "bytes": 3689
+  },
+  "carinas-windows/sha256.json": {
+    "sha256": "ce30256f29586138ed8199e27b19f915248a58232f0d3498f98932ab8dda863f",
+    "bytes": 663
+  },
+  "carinas-windows/test-output/reports/test-results-carinas-windows.ndjson": {
+    "sha256": "ba0edc0042bd50276d8a2f11e6390fba754fc568abef00e4bde7844f5a84fb26",
+    "bytes": 3221
+  },
+  "carinas-windows/transport.err": {
+    "sha256": "b72ab8a1c0915621ad7805ce729bda103bbb9d0ed36600a4d8d163a6967e52f4",
+    "bytes": 344
+  },
+  "carinas-windows/transport.log": {
+    "sha256": "0e1c85217d3735c6f5032fc6caddc8a02ccf2d9b45c03bfd176002f4c0cff61b",
+    "bytes": 271941
+  },
+  "carinas-windows.candidate-verdicts.ndjson": {
+    "sha256": "8c2d205bbfcb20b919b0fabf7a53f5f97c380ab5b959c533cbc4142038d7fd54",
+    "bytes": 27206
+  },
+  "carinas-windows.input.json": {
+    "sha256": "be23b057b57163483151fa134733fff3f20063c33897795201d305d95164590a",
+    "bytes": 1362
+  },
+  "compare-results.py": {
+    "sha256": "1e00ea192a30c6a577ca85fbc3937b5b3e954e86d1e4ea31e8b70daeece0d858",
+    "bytes": 6783
+  },
+  "comparison-report.md": {
+    "sha256": "8a2ec6cde8fc54e74284009a2c5d21f4c2de679106c3ed7bcd6bdeea978965a7",
+    "bytes": 7316
+  },
+  "comparison.json": {
+    "sha256": "c99e67d38d82e1e711b4b2a5cb3d658a365cbcaf6160c31e002eb936d149d6f4",
+    "bytes": 283610
+  },
+  "final-ledger-input.json": {
+    "sha256": "7d23c404f494a229fa14f79ffbfc6a0ea23364bbe84bc5addcd525fcd2167d85",
+    "bytes": 2096
+  },
+  "issuance-serialization-feasibility-2026-10-21.md": {
+    "sha256": "4b1acd75cc13bfa2c6824d0ee90acf158d5b454fc23261d4cfe13e935942c963",
+    "bytes": 8537
+  },
+  "lenovo-laptop/controller.log": {
+    "sha256": "b476e7773e5650fe30acd89e0fb7c138550052f9a3244a6b6d1fe102e5c98cbc",
+    "bytes": 395048
+  },
+  "lenovo-laptop/execution-end.json": {
+    "sha256": "216122e5ba99620e8d6627c4d6b9a7420dbda58b492b1fca62cc8f21468a37dc",
+    "bytes": 104
+  },
+  "lenovo-laptop/execution-start.json": {
+    "sha256": "bb133fd30d2660d5b7bf96172afea4bc3d22095392edeec73503338315eaf455",
+    "bytes": 366
+  },
+  "lenovo-laptop/plan.json": {
+    "sha256": "70668b5679e9839159549b8829ec95719a27477b5a133a00a11b87357c28cacd",
+    "bytes": 7217
+  },
+  "lenovo-laptop/sha256.json": {
+    "sha256": "8fb9869e4930f71e7da2f9878db64e92ef8a99ef25a2eb71306808b6723a559f",
+    "bytes": 661
+  },
+  "lenovo-laptop/test-output/reports/test-results-lenovo-laptop.ndjson": {
+    "sha256": "1ff393d8a7450eda2ce115a1f53f7af9a5a132038b633e5f8cb9f706ca408406",
+    "bytes": 6359
+  },
+  "lenovo-laptop/transport.err": {
+    "sha256": "fb866940ed72ef2cd16d3e7b1ba3aa0f3666b6311b7530bef9b022a8f325405f",
+    "bytes": 1722
+  },
+  "lenovo-laptop/transport.log": {
+    "sha256": "7508b9c2f2e82c5447a0c290e7755995613c4deff8b64d26805b1476cf865bf3",
+    "bytes": 344128
+  },
+  "lenovo-laptop.candidate-verdicts.ndjson": {
+    "sha256": "c6dd8181cddc6f93c15a743099fc8732bfbf2a33dfce5d2c04e866d010449d70",
+    "bytes": 29793
+  },
+  "lenovo-laptop.input.json": {
+    "sha256": "47f4623b5a0c029d82c6bd98a46c88c1c66e2d92ec4c0bb1df8c95295888327c",
+    "bytes": 1945
+  },
+  "lenovo-laptop.supplemented.input.json": {
+    "sha256": "0986b7d3e38fea1cf89b2d2b6a19ea4a7b51e9f90aacdedc0de02633f81b3df6",
+    "bytes": 2241
+  },
+  "preparation-manifest.json": {
+    "sha256": "c8a5a646f2240031debfb661b4f5e7ecd8e31e8bbca8ef673c26f5cced5425bd",
+    "bytes": 2688
+  },
+  "prepare.mjs": {
+    "sha256": "34a1e24565eaf29463de7c8708b7440687052e6f0240f3c33c3d2e9b4d0a0bd9",
+    "bytes": 4962
+  },
+  "publication-candidates.json": {
+    "sha256": "fa0ca4fe774f65330eccdf50c520c484744b9a38bf1b86fe075385ee1fd94584",
+    "bytes": 1833
+  },
+  "run-host.mjs": {
+    "sha256": "006c34feeb2ca91d76ee44fabf6fbad9b06f0d3602dd40d21dc5914736d34012",
+    "bytes": 3130
+  },
+  "run-supplemented-host.mjs": {
+    "sha256": "5c0f24566ab6769c04ab870585376821af16dd033930528a5afc54c86d040f0c",
+    "bytes": 3143
+  },
+  "selection.json": {
+    "sha256": "f631228a9fc42bb2e1588c70464c3328f96e161aa47401d48a539c80fb71e887",
+    "bytes": 53333
+  },
+  "supplemental-selection.json": {
+    "sha256": "7c1c5281aaf90a363bae0c7591f2b36d332c347ff3f3184a724b1c3314835144",
+    "bytes": 2628
+  },
+  "tv-dator/controller.log": {
+    "sha256": "a4bb49c87349fb976f455719a16288d265b94f49596429e48a2f22e7ba0aa4d4",
+    "bytes": 1020974
+  },
+  "tv-dator/execution-end.json": {
+    "sha256": "f7f19adc061909305ada191db934f2f914c9f75110443aa12ab2c302c1302b82",
+    "bytes": 104
+  },
+  "tv-dator/execution-start.json": {
+    "sha256": "aa5851f70210dc4037abc18c8a2593b9137dedf223602130797cd1bbdfb74cf0",
+    "bytes": 361
+  },
+  "tv-dator/plan.json": {
+    "sha256": "ff10bffb4794e8fadbcfde814d27b94786c36fa53667a7b2fc2b7f9ca733e04e",
+    "bytes": 9814
+  },
+  "tv-dator/sha256.json": {
+    "sha256": "4a9c58d49dd6be611101d418c52a4346c292106e56b545f1bc46aa6f2ca916f3",
+    "bytes": 656
+  },
+  "tv-dator/test-output/reports/test-results-tv-dator.ndjson": {
+    "sha256": "e8111b44a1af5b7e5710aa536fd4b074b3aee966c2705329f1616f9e7504d916",
+    "bytes": 8928
+  },
+  "tv-dator/transport.err": {
+    "sha256": "2e843a25b0b610a97e86a8675020da5e9c9bf75d9838f4870bc1efb48756d9b7",
+    "bytes": 32352
+  },
+  "tv-dator/transport.log": {
+    "sha256": "3d2a523b203e21a75e589b2a5960ca03832d1bcfcd6400a2b514c9930e71c454",
+    "bytes": 801449
+  },
+  "tv-dator.candidate-verdicts.ndjson": {
+    "sha256": "2fdf5a5417e4454dd69afb6f72b09e489e155f458c33b2ace9afef7a8114958c",
+    "bytes": 45773
+  },
+  "tv-dator.input.json": {
+    "sha256": "7327cfec41afe943c54b31dc354dddb288daeba1826bb7aee8bd533377c35ecf",
+    "bytes": 2745
+  }
+}

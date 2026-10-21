@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-21T06:33:00.552Z",
+  "candidate": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "lenovo-laptop",
+  "controllerPid": 1601164,
+  "inputSha256": "0986b7d3e38fea1cf89b2d2b6a19ea4a7b51e9f90aacdedc0de02633f81b3df6",
+  "retry": 0,
+  "budgets": "Canonical unchanged host factors, lane caps, thermal gate and file timeouts; no overrides."
+}

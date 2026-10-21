@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-21T06:28:35.631Z",
+  "candidate": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "adams-gamla",
+  "controllerPid": 1591882,
+  "inputSha256": "65e1f0e5c69d3ab6d049e3de286bc533e6d5de812e8ad1630fc4a70879adb0ca",
+  "retry": 0,
+  "budgets": "Canonical unchanged host factors, lane caps, thermal gate and file timeouts; no overrides."
+}

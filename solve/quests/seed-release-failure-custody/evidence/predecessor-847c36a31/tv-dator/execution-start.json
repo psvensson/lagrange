@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-10-21T06:28:37.932Z",
+  "candidate": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "host": "tv-dator",
+  "controllerPid": 1593676,
+  "inputSha256": "7327cfec41afe943c54b31dc354dddb288daeba1826bb7aee8bd533377c35ecf",
+  "retry": 0,
+  "budgets": "Canonical unchanged host factors, lane caps, thermal gate and file timeouts; no overrides."
+}

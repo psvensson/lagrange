@@ -1,0 +1,34 @@
+[
+  {
+    "source": "test-output/seed-release-custody/predecessor-847c36a31/prepare.mjs",
+    "restorePath": "solve/quests/seed-release-failure-custody/evidence/predecessor-847c36a31/prepare.mjs",
+    "bytes": 4962,
+    "sha256": "34a1e24565eaf29463de7c8708b7440687052e6f0240f3c33c3d2e9b4d0a0bd9",
+    "reason": "exact executed evidence script; preserve as asset rather than lint as implementation",
+    "publicationStatus": "pending-root-evidence-owner"
+  },
+  {
+    "source": "test-output/seed-release-custody/predecessor-847c36a31/run-host.mjs",
+    "restorePath": "solve/quests/seed-release-failure-custody/evidence/predecessor-847c36a31/run-host.mjs",
+    "bytes": 3130,
+    "sha256": "006c34feeb2ca91d76ee44fabf6fbad9b06f0d3602dd40d21dc5914736d34012",
+    "reason": "exact executed evidence script; preserve as asset rather than lint as implementation",
+    "publicationStatus": "pending-root-evidence-owner"
+  },
+  {
+    "source": "test-output/seed-release-custody/predecessor-847c36a31/run-supplemented-host.mjs",
+    "restorePath": "solve/quests/seed-release-failure-custody/evidence/predecessor-847c36a31/run-supplemented-host.mjs",
+    "bytes": 3143,
+    "sha256": "5c0f24566ab6769c04ab870585376821af16dd033930528a5afc54c86d040f0c",
+    "reason": "exact executed evidence script; preserve as asset rather than lint as implementation",
+    "publicationStatus": "pending-root-evidence-owner"
+  },
+  {
+    "source": "test-output/seed-release-custody/predecessor-847c36a31/tv-dator/controller.log",
+    "restorePath": "solve/quests/seed-release-failure-custody/evidence/predecessor-847c36a31/tv-dator/controller.log",
+    "bytes": 1020974,
+    "sha256": "a4bb49c87349fb976f455719a16288d265b94f49596429e48a2f22e7ba0aa4d4",
+    "reason": "raw artifact exceeds 1 MB",
+    "publicationStatus": "pending-root-evidence-owner"
+  }
+]

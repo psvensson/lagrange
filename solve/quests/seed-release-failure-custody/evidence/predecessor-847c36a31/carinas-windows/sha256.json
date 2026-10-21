@@ -1,0 +1,9 @@
+{
+  "controller.log": "73090e0514d24da841428f0888308789c829b21bc2f09bfddd4b9f20a099fb26",
+  "execution-end.json": "4379db46787d18fd61616683730f2d353fe62d838279137eab6a58d16ed7b5c8",
+  "execution-start.json": "7f438d354cb52120ae2c6f8d41b123e2523397d52d56a458c67a4bd2fa23bd4f",
+  "plan.json": "9777b79308a5084ef3cc39efdec4b2fb0b57ceba0d67788a9e05014bbd1a95d8",
+  "test-output/reports/test-results-carinas-windows.ndjson": "ba0edc0042bd50276d8a2f11e6390fba754fc568abef00e4bde7844f5a84fb26",
+  "transport.err": "b72ab8a1c0915621ad7805ce729bda103bbb9d0ed36600a4d8d163a6967e52f4",
+  "transport.log": "0e1c85217d3735c6f5032fc6caddc8a02ccf2d9b45c03bfd176002f4c0cff61b"
+}
