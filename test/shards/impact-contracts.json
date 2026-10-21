@@ -681,6 +681,7 @@
         "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
         "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
         "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/retained-seed-original-handoff.integration.test.js",
         "test/bootstrap/seed-message-group-cleanup-custody.test.js",
         "test/bootstrap/message-group-activation-handler-boundary.test.js"
       ]
@@ -848,7 +849,8 @@
         "test/entrypoint/application-database-runtime-composition.test.js",
         "test/entrypoint/creation-recovery-process-custody.test.js",
         "test/entrypoint/startup-failed-cleanup-process-custody.test.js",
-        "test/entrypoint/process-custody-review.integration.test.js"
+        "test/entrypoint/process-custody-review.integration.test.js",
+        "test/bootstrap/retained-seed-original-handoff.integration.test.js"
       ]
     },
     "test-listener-port-block": {
@@ -1857,6 +1859,7 @@
         "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
         "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
         "test/bootstrap/seed-release-failure-custody.test.js",
+        "test/bootstrap/retained-seed-original-handoff.integration.test.js",
         "test/bootstrap/seed-message-group-cleanup-custody.test.js",
         "test/bootstrap/message-group-activation-handler-boundary.test.js"
       ]

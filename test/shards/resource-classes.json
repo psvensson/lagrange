@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2404,
+    "ordinary": 2405,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2421,
-  "digest": "fnv1a32-cebd45df",
+  "censusSize": 2422,
+  "digest": "fnv1a32-7bbc1937",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -248,6 +248,7 @@
     "test/bootstrap/required-dependency-validation.property.test.js": "ordinary",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "ordinary",
     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "ordinary",
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "ordinary",
     "test/bootstrap/return-value-completeness.property.test.js": "ordinary",
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "ordinary",
     "test/bootstrap/schema-operations-table-schema.test.js": "ordinary",

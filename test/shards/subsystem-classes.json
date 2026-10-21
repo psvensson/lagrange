@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 19,
-    "bootstrap-membership": 324,
+    "bootstrap-membership": 325,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -25,10 +25,10 @@
     "transport-messaging": 96,
     "wasm-toolchain": 74
   },
-  "censusSize": 2421,
-  "digest": "fnv1a32-0e0ed05b",
+  "censusSize": 2422,
+  "digest": "fnv1a32-7fb67396",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9fae8ea1",
+  "observationDigest": "fnv1a32-265101c3",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -268,6 +268,7 @@
     "test/bootstrap/required-dependency-validation.property.test.js": "bootstrap-membership",
     "test/bootstrap/restart-cdc-recovery-diagnostics.test.js": "bootstrap-membership",
     "test/bootstrap/restart-cdc-subscription-hardening.test.js": "bootstrap-membership",
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "bootstrap-membership",
     "test/bootstrap/return-value-completeness.property.test.js": "bootstrap-membership",
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap-membership",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap-membership",
@@ -3257,6 +3258,15 @@
         "src/bootstrap/node-joining-service.js",
         "src/cache/cache-constants.js",
         "src/config/configuration-manager.js"
+      ]
+    },
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/retained-seed-public-child.js"
       ]
     },
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": {
