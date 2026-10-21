@@ -19,6 +19,7 @@ import {
   unregisterRuntimeLifecycle,
 } from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {inspectLifecycleRetirements} from './lifecycle-retirement-census.js';
 
 const GROUP_ID = 'registry-generation-group';
 const REPLICA_ID = 'registry-generation-replica';
@@ -185,14 +186,11 @@ test('registry operation census: exact-generation only, no logical lookup',
       }
     };
     walk(join(root, 'src'));
-    const retireCalls = files.flatMap((path) => {
-      const source = readFileSync(path, 'utf8');
-      return [...source.matchAll(
-        /\.retireReplica\(([\s\S]*?)\);/gu)].map((match) => match[1]);
-    });
-    assert.ok(retireCalls.length > 0, 'the removal path retires a runtime');
-    for (const call of retireCalls) {
-      assert.match(call, /runtime:/u,
-        'every retirement names the exact runtime it targets');
-    }
+    const ownerFile = join(root, 'src/raft/raft-rs-lifecycle-administration.js');
+    const census = files.map((file) => inspectLifecycleRetirements(
+      readFileSync(file, 'utf8'), {file, ownerFile}));
+    assert.ok(census.flatMap(({calls}) => calls).length > 0,
+      'the removal path retires a runtime');
+    assert.deepEqual(census.flatMap(({violations}) => violations), [],
+      'every native retirement names its exact runtime; unsupported aliases fail closed');
   });
