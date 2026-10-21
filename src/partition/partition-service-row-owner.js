@@ -133,8 +133,12 @@ function rowsMatchPartitionRegistration(observed, expected) {
     COLUMN.REPLICA_ID,
     COLUMN.ADDRESS,
     COLUMN.STATUS,
+    COLUMN.CREATED_AT,
   ];
+  // An uncertain INSERT may acknowledge only its exact birth, not another
+  // generation under the same service ID. Mutable role/stamps are not identity.
   return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
+    observed?.create_attempt_token === expected.create_attempt_token &&
     fields.every((field) => observed?.[field] === expected[field]);
 }
 
