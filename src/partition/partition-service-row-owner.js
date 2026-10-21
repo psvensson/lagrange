@@ -129,12 +129,17 @@ function rowsMatchPartitionRegistration(observed, expected) {
     COLUMN.SERVICE_ID,
     COLUMN.SERVICE_TYPE,
     COLUMN.PARTITION_ID,
+    COLUMN.GROUP_ID,
     COLUMN.NODE_ID,
     COLUMN.REPLICA_ID,
     COLUMN.ADDRESS,
     COLUMN.STATUS,
+    COLUMN.CREATED_AT,
   ];
+  // A lost INSERT answer is resolved only by its exact birth, never another
+  // lifetime under the same name. Role and update stamps are not birth identity.
   return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
+    observed?.create_attempt_token === expected.create_attempt_token &&
     fields.every((field) => observed?.[field] === expected[field]);
 }
 
