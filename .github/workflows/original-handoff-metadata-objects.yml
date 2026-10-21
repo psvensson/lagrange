@@ -1,63 +1,184 @@
-# Verify a committed candidate without modifying repository refs or publishing.
+# Bounded source-attempt producer; never updates a ref or merges.
 name: original-handoff-metadata-objects
 on:
   push:
     branches: [verify/original-metadata-generation-20261021]
     paths: [.github/workflows/original-handoff-metadata-objects.yml]
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: original-handoff-metadata-objects-20261021
   cancel-in-progress: false
 jobs:
-  verify-committed:
+  qualify-census-correction:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
-      SOURCE_SHA: 3f74319a7b754b7540a8bafe1ffaecb4ac42d3a0
+      SOURCE_SHA: b5d3512b5f66783e8a86f60ca5b04a2f9b3ef840
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          ref: 3f74319a7b754b7540a8bafe1ffaecb4ac42d3a0
+          ref: b5d3512b5f66783e8a86f60ca5b04a2f9b3ef840
           persist-credentials: false
           fetch-depth: 1
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Pin committed source and metadata before installation
-        shell: bash
+      - name: Pin source and install locked dependencies
         run: |
           set -euo pipefail
-          OUT="$RUNNER_TEMP/original-metadata-committed"
+          OUT="$RUNNER_TEMP/census-correction"
           mkdir -p "$OUT"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          git rev-parse HEAD > "$OUT/source-sha.txt"
-          sha256sum test/shards/{primary,resource,subsystem}-classes.json test/shards/impact-graph-seal.json > "$OUT/committed-sha256.txt"
+          git rev-parse HEAD > "$OUT/base-sha.txt"
           npm ci > "$OUT/npm-ci.log" 2>&1
           test -z "$(git status --porcelain --untracked-files=no)"
-      - name: Prove canonical regeneration changes no committed bytes
+          sha256sum test/scripts/test-subsystem-repository-index.test.js > "$OUT/witness-sha256.txt"
+      - name: Measure the unchanged producer against the frozen new witness
+        shell: bash
+        run: |
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/census-correction"
+          npm run -s test:file -- test/scripts/test-subsystem-repository-index.test.js > "$OUT/predecessor-red.log" 2>&1
+          result=$?
+          printf '%s\n' "$result" > "$OUT/predecessor-red.status"
+          cat "$OUT/predecessor-red.log"
+          test "$result" -ne 0
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          text=(Path(os.environ['RUNNER_TEMP'])/'census-correction/predecessor-red.log').read_text()
+          expected={
+            'a repository index larger than one MiB never broadens to ignored physical files',
+            'an unreadable Git index refuses instead of adopting the physical filesystem',
+            'inherited Git repository pointers cannot redirect the observation census'}
+          failed=set(re.findall(r'^\s*not ok \d+ - (.+)$',text,re.M))
+          assert failed==expected, failed
+          for name in ['repository census includes tracked and pending files but excludes ignored files',
+                       'a genuinely non-Git scratch tree retains filesystem observation semantics']:
+              assert re.search(r'^\s*ok \d+ - '+re.escape(name)+r'$',text,re.M), name
+          PY
+      - name: Correct only the existing repository census owner
         shell: bash
         run: |
           set -euo pipefail
-          OUT="$RUNNER_TEMP/original-metadata-committed"
-          npm run -s test:metadata:refresh > "$OUT/regenerate.log" 2>&1
-          sha256sum --check "$OUT/committed-sha256.txt"
-          git diff --exit-code > "$OUT/regenerated-diff.txt"
-          node scripts/generate-global-owner-debt-inventory.js --verify-import-graph > "$OUT/import-graph-verification.log" 2>&1
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          file=Path('scripts/checks/test-subsystem-classification.js')
+          data=file.read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()=='0feb6a8b61b63544cf1cb6ea54acf5186467d4f4'
+          source=data.decode()
+          def replace_once(before,after):
+              global source
+              assert source.count(before)==1, before
+              source=source.replace(before,after)
+          replace_once("import path from 'node:path';", "import path from 'node:path';\nimport {gitProcessEnvironment} from './git-process-environment.js';")
+          replace_once("const GIT_BINARY = 'git';", "const GIT_BINARY = 'git';\nconst GIT_WORKTREE_ARGUMENTS = Object.freeze(['rev-parse', '--is-inside-work-tree']);\nconst GIT_CENSUS_MAX_BUFFER_BYTES = 8 * 1024 * 1024;\nconst GIT_NOT_REPOSITORY_PREFIX = 'fatal: not a git repository';")
+          before='''  let listed;
+            try {
+              listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS],
+                {cwd: root, encoding: UTF8}) +
+                execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS],
+                  {cwd: root, encoding: UTF8});
+            } catch {
+              return null;
+            }
+          '''
+          # Keep the replacement text independent of YAML block indentation.
+          before='\n'.join(line[10:] if line.startswith('          ') else line for line in before.split('\n'))
+          after='''  const options = {cwd: root, encoding: UTF8,
+            env: {...gitProcessEnvironment(), LC_ALL: 'C'},
+            maxBuffer: GIT_CENSUS_MAX_BUFFER_BYTES};
+          // Only a genuinely non-Git scratch tree may use physical observations.
+          // An unreadable/oversized index must never broaden repository authority.
+          try {
+            execFileSync(GIT_BINARY, [...GIT_WORKTREE_ARGUMENTS], options);
+          } catch (error) {
+            if (error.status === 128 &&
+                String(error.stderr).startsWith(GIT_NOT_REPOSITORY_PREFIX) &&
+                !fs.existsSync(path.join(root, '.git'))) return null;
+            throw error;
+          }
+          const listed = execFileSync(GIT_BINARY, [...GIT_TRACKED_ARGUMENTS], options) +
+            execFileSync(GIT_BINARY, [...GIT_UNTRACKED_ARGUMENTS], options);
+          '''
+          after='\n'.join(line[10:] if line.startswith('          ') else line for line in after.split('\n'))
+          replace_once(before,after)
+          file.write_text(source)
+          PY
+          node --check scripts/checks/test-subsystem-classification.js
+          sha256sum --check "$RUNNER_TEMP/census-correction/witness-sha256.txt"
+          git diff --check
+          git diff -- scripts/checks/test-subsystem-classification.js > "$RUNNER_TEMP/census-correction/source-correction.patch"
+      - name: Verify the unchanged witness and regenerate canonical metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/census-correction"
+          npm run -s test:file -- test/scripts/test-subsystem-repository-index.test.js > "$OUT/candidate-witness.log" 2>&1
+          ./node_modules/.bin/eslint scripts/checks/test-subsystem-classification.js test/scripts/test-subsystem-repository-index.test.js > "$OUT/scoped-eslint.log" 2>&1
+          npm run -s test:metadata:refresh > "$OUT/generate.log" 2>&1
+          sha256sum test/shards/{primary,resource,subsystem}-classes.json test/shards/impact-graph-seal.json > "$OUT/metadata-sha256.txt"
+          npm run -s test:metadata:refresh > "$OUT/generate-again.log" 2>&1
+          sha256sum --check "$OUT/metadata-sha256.txt"
+          sha256sum --check "$OUT/witness-sha256.txt"
+          cat "$OUT/candidate-witness.log" "$OUT/generate.log"
+      - name: Relevant owner regressions and unchanged canonical static gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/census-correction"
+          for f in test/scripts/observation-census.test.js test/scripts/test-subsystem-classification.test.js test/scripts/proof-authority-falsifiers.test.js; do
+            npm run -s test:file -- "$f" > "$OUT/${f##*/}.log" 2>&1
+            cat "$OUT/${f##*/}.log"
+          done
           npm run -s audit:impact-contracts > "$OUT/impact-contracts.log" 2>&1
           npm run -s audit:shards > "$OUT/shards.log" 2>&1
           npm run -s test:deps > "$OUT/dependencies.log" 2>&1
-          sha256sum --check "$OUT/committed-sha256.txt"
-          git diff --exit-code > "$OUT/final-diff.txt"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          cat "$OUT/regenerate.log" "$OUT/import-graph-verification.log" "$OUT/impact-contracts.log" "$OUT/shards.log" "$OUT/dependencies.log"
-          printf 'COMMITTED_METADATA_PASS source=%s tracked_mutation=false\n' "$SOURCE_SHA"
+          git diff --check
+          cat "$OUT/impact-contracts.log" "$OUT/shards.log" "$OUT/dependencies.log"
+      - name: Preserve bounded generated/source objects and verify remote bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64,hashlib,json,os,subprocess,urllib.request
+          from pathlib import Path
+          out=Path(os.environ['RUNNER_TEMP'])/'census-correction'
+          paths=['scripts/checks/test-subsystem-classification.js','test/shards/primary-classes.json',
+                 'test/shards/resource-classes.json','test/shards/subsystem-classes.json','test/shards/impact-graph-seal.json']
+          changed=subprocess.check_output(['git','diff','--name-only'],text=True).splitlines()
+          assert sorted(changed)==sorted(paths), changed
+          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'}
+          api='https://api.github.com/repos/psvensson/lagrange/git/blobs'
+          entries=[]
+          for path in paths:
+              data=Path(path).read_bytes()
+              expected=hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()
+              payload=json.dumps({'encoding':'base64','content':base64.b64encode(data).decode()}).encode()
+              with urllib.request.urlopen(urllib.request.Request(api,data=payload,headers=headers,method='POST'),timeout=60) as response:
+                  uploaded=json.load(response)
+              assert uploaded['sha']==expected
+              with urllib.request.urlopen(urllib.request.Request(api+'/'+expected,headers=headers),timeout=60) as response:
+                  observed=json.load(response)
+              assert base64.b64decode(observed['content'])==data
+              entries.append({'path':path,'sha':expected,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)})
+              destination=out/path; destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(data)
+          (out/'candidate.patch').write_bytes(subprocess.check_output(['git','diff','--binary']))
+          result={'base_sha':os.environ['SOURCE_SHA'],'entries':entries,'witness_unchanged':True,'canonical_gates_passed':True,'refs_updated':False,'independent_approval':False}
+          (out/'objects.json').write_text(json.dumps(result,indent=2)+'\n')
+          print('CENSUS_CORRECTION_OBJECTS='+json.dumps(result,sort_keys=True))
+          PY
       - name: Retain every available outcome
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: original-metadata-committed-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/original-metadata-committed/
+          name: census-correction-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/census-correction/
           if-no-files-found: error
           retention-days: 30
