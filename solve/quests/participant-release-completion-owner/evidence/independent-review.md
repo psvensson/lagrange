@@ -72,3 +72,38 @@ Re-read the corrected support and adversarial tests after the preceding REVISE. 
 All six-category conclusions above remain applicable, with the two audit blockers now resolved by source correspondence. The adversarial file has twelve declared cases; their execution is still pending. **Approve these exact bytes for normal WIP checkpoint and the first seven-file repaired measurement on the proposed locked host with retries disabled.** This is code/design and measurement approval only. A normal-hook failure must be retained and honestly handled by its existing owner, never represented as a passed gate.
 
 Remaining acceptance evidence includes exact committed source/test identities, executed positive and structural-negative results, unchanged native protocol/recovery composition, complete audit identity-delta disposition and applicable Quest/change-proof gates. The original-source getter ledger is a baseline, not repaired evidence. A static source mutation refused by the checked-body guard remains static evidence; no native semantic-mutant execution is claimed. No current receipt or terminal status is approved by this measurement authorization.
+
+## Exact checkpoint result and full raw identity disposition
+
+Independently inspected checkpoint `90fb37194121ea793197d26e845c2d38a9c9efc0`, the completed controller output and input/result/ledger in `evidence/repaired-90fb37194` (original local copies under `test-output/participant-release-completion-owner/repaired-90fb37194`). The controller identifies that exact placement head on adams-gamla with retry0; its final result is seven files passed, zero failed, 164 runner-reported assertions/cases. Each expected file occurs exactly once in the ledger with attempt1, ok=true and retriedOnce=false:
+
+| Witness | Runner count |
+| --- | --- |
+| fresh-create completion | 7 |
+| seed failure projection/completion | 7 |
+| seed once-per-cohort | 1 |
+| completion-owner adversarial audit | 12 |
+| existing decision-boundary audit | 96 |
+| existing handler release recovery | 25 |
+| existing participant-release protocol | 16 |
+
+The supplied plan lists ordinary jobs4; controller execution honestly records ordinary jobs3 after its lane cap, and bootstrap jobs2. This is not a serial/native-cross-host claim. The controller and ledger support the same seven-file outcome, not 164 independently enumerated JavaScript assert calls.
+
+The eight source/test entries in `revised-source-manifest-2.json` were compared against actual Git blobs at90fb and all SHA256 values matched the approved review bytes. The four existing regression files (cohort, recovery, protocol and decision-boundary tests) are byte-identical to original-source getter checkpoint5691a034adcd8b982fbf9c1e9ac1272e06546bdb. The fresh getter witness remains unchanged from its measured original-source baseline. No evidence was inferred from later documentation heads.
+
+Independently recomputed every identity/count from the two full raw violation arrays, using the canonical identity tuple defined by `buildDecisionBoundaryViolationIdentity` (filePath, functionName, kind; absent array fields encode null). The stored count maps matched those recomputations. Baseline:2260 scanned files,791 raw findings,664 identities. Candidate:2261 files,789 findings,662 identities. Exactly two identities decrease1 to0: seed createBootstrapServiceSeedWorkflowMethods/local_retry_loop and fresh createParticipantReleaseRecovery/local_retry_loop. There are no added or increased identities, and no other count changes. Total local_retry_loop findings41 to39; mixed_cache_and_sql_decision302 to302. This is evidence of the intended bounded consolidation and checked-loop classification, not a clean repository audit. Other findings and the separately owned SQL audit remain distinct obligations.
+
+Verified raw artifact hashes:
+
+| Artifact | SHA256 |
+| --- | --- |
+| before-full-decision.json | d7a8cba7bc7e664d0859182800b91eacf661df8b298c06c496756561c4ba5cc5 |
+| after-full-decision.json | 99b666e521da131dba1e868744a41f29c32f9a4c75c19764a18682aed3d36fda |
+| repaired input.json | f4c09d31db5f28cddd65770212af3afa58d644a8e12036a4aa21ba66f8682d33 |
+| repaired result.json | cbf3b02afff1dd04604e1233c0bf2fde9565dec98283dd0ac2e8d1e394e32715 |
+| repaired results.jsonl | 5e9ebe2fd3be13e9411f042cc1c2818c08e5d32a3cf6de7a010ae8735f1387b8 |
+| repaired controller.log | dbf5dcdc63e17d06dc4aea756a2e204dc162bd7fc8742ea929fa8c709b86c081 |
+
+**Bounded result verdict: approve the measured behavior-preserving completion consolidation and its structural audit controls at90fb for integration into the next reviewed candidate.** The original outcome-getter, deadline-order, authority-identity, seed projection and existing native protocol/recovery controls pass together on that head. This is not proof of original fresh-seed startup progress or automatic retained-store admission. The twelve source-mutating audit cases execute static rejection controls; they are not native semantic-mutant runs. In particular, the separate native A retry-suppression obligation is neither implemented nor discharged by this lane.
+
+No receipt was edited by the reviewer. Final combined root candidate composition, canonical change-proof, applicable independent/Quest gates and any broader corpus/physical evidence remain pending under their owners. The historical 789 remaining raw findings are retained obligations, without a claim that all must be repaired by this bounded unit or a waiver of any applicable gate. A later evidence-only containing commit may preserve these exact measurements; it must not be named as a newly measured runtime head.
