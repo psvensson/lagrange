@@ -300,6 +300,8 @@ async function retireReplica(replica, handler, starting, activityFailure, shutdo
       throw activityFailure;
     }
   } catch (error) {
+    // DIAGNOSTIC ONLY: deliberately violate retained native cleanup custody.
+    await releaseWasmServiceReplicaConsensus(replica);
     replica.lifecycleState = STATE.CLEANUP_REQUIRED;
     throw error === activityFailure ? error : joinFailure(activityFailure, error);
   }
