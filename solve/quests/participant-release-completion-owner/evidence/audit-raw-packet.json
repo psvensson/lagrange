@@ -1,0 +1,28 @@
+{
+  "archive": "local test-output/participant-release-completion-owner/audit-raw-packet.tar.gz (not tracked)",
+  "bytes": 75728,
+  "sha256": "dbc1bc9912b7f3352b5db860d0ef2de8e12d3c17d2ae54831e985ab046f7be24",
+  "baselineSourceCommit": "5691a034adcd8b982fbf9c1e9ac1272e06546bdb",
+  "candidateSourceCommit": "90fb37194121ea793197d26e845c2d38a9c9efc0",
+  "originalScopedAuditBase": "92ae06ef40df6610cb2163edd7d6476cd65bb3ef",
+  "members": {
+    "before-full-decision.json": {
+      "bytes": 490652,
+      "sha256": "d7a8cba7bc7e664d0859182800b91eacf661df8b298c06c496756561c4ba5cc5"
+    },
+    "after-full-decision.json": {
+      "bytes": 489359,
+      "sha256": "99b666e521da131dba1e868744a41f29c32f9a4c75c19764a18682aed3d36fda"
+    },
+    "original-decision-audit.json": {
+      "bytes": 1823,
+      "sha256": "2b4dffc53ce4991643d844be55af40a1e42840ffc04b6631e664f4f705e67dfb"
+    },
+    "audit-identity-delta.json": {
+      "bytes": 1302,
+      "sha256": "e33939982c1c0998d26de2d86a002bdca91b12eb56653814fb4a26e1f6d7a6dc"
+    }
+  },
+  "preservation": "Exact original files, no regenerated or filtered audit output. Archive is ordinary tracked Quest evidence under docs/development/quest-artifacts.md.",
+  "storage": "Unchanged plain JSON under audit-raw/. Archive remains only local test-output; normal binary guard rejected tracking the tar and was not bypassed."
+}

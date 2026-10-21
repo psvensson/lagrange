@@ -1,0 +1,8 @@
+Normal pre-commit preservation attempt on 2026-10-21, exit 1.
+Exact material output:
+solve binary guard: refusing solve/quests/participant-release-completion-owner/evidence/audit-raw-packet.tar.gz: archive (upload with `node scripts/solve.js evidence add <path> --id <id>` and reference it from the log)
+pre-commit: FAIL - solve binary guard
+pre-commit: 1 staged check(s) failed - fix and re-commit
+
+Correction: preserve the same complete raw JSON as ordinary tracked Quest evidence.
+No binary guard bypass, baseline change or external publication.
