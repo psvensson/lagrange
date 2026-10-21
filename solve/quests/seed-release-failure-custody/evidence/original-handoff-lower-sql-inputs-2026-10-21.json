@@ -1,0 +1,116 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "note": {
+    "path": "original-handoff-lower-sql-correspondence-2026-10-21.md",
+    "sha256": "d5d1e17c99fcde9a3800a7b7f3ed9c2a7938446bb672a1e88990ca746c9be6d7"
+  },
+  "files": [
+    {
+      "path": "src/bootstrap/pipeline/seed-startup-plan.js",
+      "blob": "0c26847c9539289be5d24714b2ca2ddd1f13c028",
+      "sha256": "f4a18a1fce24d98c64fa3366be19fc2a5620eb08be836a33b135a4f30b02d947"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-workflow.js",
+      "blob": "0652eb442f10c67600b7f84dac7d5434f29cd40f",
+      "sha256": "b1c59e19d615ea176e76a65cd42dff5355e5b44265da78ae73c4c4fa9af4b507"
+    },
+    {
+      "path": "src/partition/partition-service-row-owner.js",
+      "blob": "e7cb1298699843dee409cac1fb6fae209f9cdda1",
+      "sha256": "5097f714b3498a458f92ff71493a5d819a215dd96aa9a4b0845defaffbc798f6"
+    },
+    {
+      "path": "src/message-group/message-group-service-row-owner.js",
+      "blob": "faffd8a7259481136d6260935ff08b2297a9483b",
+      "sha256": "86009d61bb1dc03fcbb5111bbaa895399f95454adeda59b6d84064153d0c8b69"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "blob": "61d6eee658ae89c9f7373548b02fa5bf868ac597",
+      "sha256": "b8c5ef4919632b3c2c8745cd8069bca1de2841ecb1c4eb3f857df0d8f32c0088"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-lifecycle.js",
+      "blob": "9bc091aa40d3f3947ae2cd257b92b917e048cf2d",
+      "sha256": "f7afebb8798a3653d8875a0c9adf572c29cb3b1ea86bb660074cde02b8665322"
+    },
+    {
+      "path": "src/cdc/write-router/index.js",
+      "blob": "3351d6d67ffb914190fd71753625c6c5f51bdd86",
+      "sha256": "503f8ba6474ffc598331fae01fceb90a48021b15ac23519c03b9bdb45f092b8c"
+    },
+    {
+      "path": "src/cdc/cdc-routed-mutation-readiness.js",
+      "blob": "126787b32054e29f6b09bb3bdba8b36f9f47e9a8",
+      "sha256": "237d9b99f9eca713d8684d3e674b2f94be461f6655a98056eb121baa673a056f"
+    },
+    {
+      "path": "src/cdc/cdc-bootstrap-direct-sql.js",
+      "blob": "4531efca7028dea713c56bb02884c8d9ecaa8439",
+      "sha256": "8d12fa9592ef0ab479f4a386e0f38b92b987d385a84dc01a0dfe59ecb45c3e2a"
+    },
+    {
+      "path": "src/cdc/cdc-terminal-gate.js",
+      "blob": "3eb727ae603a62f6c35c632cded271695a03f587",
+      "sha256": "22254ef1c371e663f87d3ed189c15315dd7897943bf8b60d5e648d1a86d9ca79"
+    },
+    {
+      "path": "src/partition/partition-service-write-metrics-base.js",
+      "blob": "f232a789a616847c64ad0c5a7d0fa08545778dd3",
+      "sha256": "b3f950c18f65133f14d1a475cb9476792929b393cb26709a4af2c208d363df8e"
+    },
+    {
+      "path": "src/partition/partition-write-kernel.js",
+      "blob": "e3e44d7e83f6eca0b35e4cd47b001b4e6b278add",
+      "sha256": "4541661a341e923466abe9132c3276455b31787266f0a58b5c6dbe74a1dc65f9"
+    },
+    {
+      "path": "src/partition/partition-service-raft-write-commit.js",
+      "blob": "83e791e70ce8b897c523eff5558142911b8ac2f8",
+      "sha256": "d990d746c4d204a2a0f6f77d0eb3a99dd0f1997ac5dabf4cd5b0f377bb9e9291"
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "blob": "ee3c3f8a52fd579fc1995811b6d137c82c46d4e9",
+      "sha256": "3878b8011849c336f36e4848c15d58b09bb84b1218a2856b865c46bf73fda7cb"
+    },
+    {
+      "path": "src/raft/raft-rs-application-transaction-owner.js",
+      "blob": "4481d2f0c9967ed17181620abddf89cb5414dc07",
+      "sha256": "f12ff39650a0c221212168129f24ff070b563bd3c65cb1498572af7e3642f6aa"
+    },
+    {
+      "path": "src/raft/raft-rs-durable-store.js",
+      "blob": "8095d03fc20c3ff5025606bc8bdac79aa519202c",
+      "sha256": "88af05c5bcdf3d8f1209615a2d3f6c6427ab9ebf8951a1f66835402074c75d5f"
+    },
+    {
+      "path": "src/partition/partition-local-mutation-admission.js",
+      "blob": "bc4d18bb8c3a9ce5a31e205cadc167864533ed6e",
+      "sha256": "c1d2d2a657f2ef6c08bd7b464cd50cfcb6ce8322daa12bd44b50af527343c3ba"
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-store.js",
+      "blob": "b5703035394194f6c536d140d8605dfdfc202543",
+      "sha256": "e0d007ddb3532c8e8838b5b5965f1c5eee6ac44490355c5df3a02c05bfdb6623"
+    },
+    {
+      "path": "src/partition/partition-participant-release-contract.js",
+      "blob": "f188e1cacac674ae79e5057ae6fcfb956c41c90e",
+      "sha256": "926bbcecf5d323e4b6cab708dac823a4c123c44f28a8ea0b2efd7747fa986fa6"
+    },
+    {
+      "path": "test/partition/partition-participant-release-admission.test.js",
+      "blob": "c967d6716e745d811137402438563f6fc68284c8",
+      "sha256": "3877132c602dce33807c4021e3b705c24d312ebb616dcb42117cb747e60ba029"
+    },
+    {
+      "path": "test/test-helpers/participant-transaction-fixture.js",
+      "blob": "3c7beac8d0bbf3faa63f9f22f0906ac7dcb5f39d",
+      "sha256": "48c385ffd2ac0df93214af165feb608e679c566faa09b41f473f4a688e5a3e53"
+    }
+  ],
+  "scope": "Read-only source correspondence. No new native execution or production approval."
+}

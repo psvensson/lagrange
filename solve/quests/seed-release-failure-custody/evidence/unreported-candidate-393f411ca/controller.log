@@ -1,0 +1,361 @@
+lab test: lenovo-laptop: exclusive (3 files) cores=8 mem=15.5GiB speed x2.25
+[lenovo-laptop] placement-shell=1965311
+[lenovo-laptop] placement-head=393f411ca09449898465cc3cb7320c03fba2aba8
+[lenovo-laptop] placement-link=node_modules
+[lenovo-laptop] placement-link=data/examples
+[lenovo-laptop] placement-link=data/partitions
+[lenovo-laptop] placement-link=tools/alloy-6.2.0
+[lenovo-laptop] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[lenovo-laptop] placement-link=tools/tla2tools.jar
+[lenovo-laptop] placement-prepared=import-graph
+[lenovo-laptop] placement-env=factor:2.3 mode:local retry:0 timeout: lanecap:7
+[lenovo-laptop] placement-pid=1967340
+[lenovo-laptop] # test-files planned=3
+[lenovo-laptop] classified lane exclusive: 3 file(s), jobs=1
+[lenovo-laptop] thermal: ok cpu 54C (coretemp/Package id 0) nvme unmeasured
+[lenovo-laptop] not ok test/integration/sql-engine-system-writes-contract.integration.test.js (4 assertions, 70665ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 13
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:11.687Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":18163,"error":"Seed participant release failed: {\"partitionId\":\"contexts-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"contexts-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"contract-seed\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"pause\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1001,\"remainingMs\":0,\"ordinal\":9,\"total\":46,\"completed\":8,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"contexts-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"contexts-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"contract-seed\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"pause\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1001,\"remainingMs\":0,\"ordinal\":9,\"total\":46,\"completed\":8,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:11.721Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","phase":"registration","duration":26179,"error":"Seed participant release failed: {\"partitionId\":\"contexts-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"contexts-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"contract-seed\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"pause\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1001,\"remainingMs\":0,\"ordinal\":9,\"total\":46,\"completed\":8,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"contexts-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":null,\"partitionId\":\"contexts-p1\",\"phase\":\"release\",\"retryAfterMs\":100,\"missingFact\":\"current_control_owner_fact\",\"controlPartitionId\":\"sql_transactions-p1\",\"controlNodeId\":\"contract-seed\",\"controlOutcome\":\"release_fact_unavailable\",\"controlMissingFact\":\"release_deadline\",\"controlPhase\":\"pause\",\"controlReason\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1001,\"remainingMs\":0,\"ordinal\":9,\"total\":46,\"completed\":8,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: [real] an empty system table reads as success with no rows
+[lenovo-laptop] not ok 1 - [real] an empty system table reads as success with no rows
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 29019.31146
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:45:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: 'seed bootstrap failed: "Seed participant release failed: {\\"partitionId\\":\\"contexts-p1\\",\\"answer\\":{\\"outcome\\":\\"release_fact_unavailable\\",\\"releaseId\\":null,\\"partitionId\\":\\"contexts-p1\\",\\"phase\\":\\"release\\",\\"retryAfterMs\\":100,\\"missingFact\\":\\"current_control_owner_fact\\",\\"controlPartitionId\\":\\"sql_transactions-p1\\",\\"controlNodeId\\":\\"contract-seed\\",\\"controlOutcome\\":\\"release_fact_unavailable\\",\\"controlMissingFact\\":\\"release_deadline\\",\\"controlPhase\\":\\"pause\\",\\"controlReason\\":null},\\"seedRelease\\":{\\"clockState\\":\\"measured\\",\\"budgetMs\\":1000,\\"elapsedMs\\":1001,\\"remainingMs\\":0,\\"ordinal\\":9,\\"total\\":46,\\"completed\\":8,\\"attemptCount\\":1,\\"firstBlockedDrain\\":null,\\"firstJoinedAttempt\\":null}}"'
+[lenovo-laptop]   code: 'ERR_TEST_FAILURE'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     Object.open (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/integration/sql-engine-system-writes-contract.integration.test.js:37:13)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:46:29)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[lenovo-laptop]   ...
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:23.301Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":1361,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1354,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1354,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processTimers (node:internal/timers:518:9)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:25.001Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","phase":"registration","duration":10380,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1354,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1354,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processTimers (node:internal/timers:518:9)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: [real] a row written through the CDC owner is read back through the engine
+[lenovo-laptop] not ok 2 - [real] a row written through the CDC owner is read back through the engine
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 13098.286883
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:57:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: 'seed bootstrap failed: "Seed participant release failed: {\\"partitionId\\":\\"sql_transactions-p1\\",\\"answer\\":{\\"outcome\\":\\"not_leader\\",\\"releaseId\\":null,\\"partitionId\\":\\"sql_transactions-p1\\",\\"phase\\":\\"release\\",\\"leaderAddress\\":null,\\"leaderReplicaId\\":null},\\"seedRelease\\":{\\"clockState\\":\\"measured\\",\\"budgetMs\\":1000,\\"elapsedMs\\":1354,\\"remainingMs\\":0,\\"ordinal\\":1,\\"total\\":46,\\"completed\\":0,\\"attemptCount\\":3,\\"firstBlockedDrain\\":null,\\"firstJoinedAttempt\\":null}}"'
+[lenovo-laptop]   code: 'ERR_TEST_FAILURE'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     Object.open (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/integration/sql-engine-system-writes-contract.integration.test.js:37:13)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:58:36)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:36.698Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":1271,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1268,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":2,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1268,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":2,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:38.006Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","phase":"registration","duration":10332,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1268,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":2,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":1268,\"remainingMs\":0,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":2,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: [real] a publication upserted twice under one id reads back once, latest wins
+[lenovo-laptop] not ok 3 - [real] a publication upserted twice under one id reads back once, latest wins
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 13188.39109
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:82:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: 'seed bootstrap failed: "Seed participant release failed: {\\"partitionId\\":\\"sql_transactions-p1\\",\\"answer\\":{\\"outcome\\":\\"not_leader\\",\\"releaseId\\":null,\\"partitionId\\":\\"sql_transactions-p1\\",\\"phase\\":\\"release\\",\\"leaderAddress\\":null,\\"leaderReplicaId\\":null},\\"seedRelease\\":{\\"clockState\\":\\"measured\\",\\"budgetMs\\":1000,\\"elapsedMs\\":1268,\\"remainingMs\\":0,\\"ordinal\\":1,\\"total\\":46,\\"completed\\":0,\\"attemptCount\\":2,\\"firstBlockedDrain\\":null,\\"firstJoinedAttempt\\":null}}"'
+[lenovo-laptop]   code: 'ERR_TEST_FAILURE'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     Object.open (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/integration/sql-engine-system-writes-contract.integration.test.js:37:13)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:87:36)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:49.495Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":908,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":901,\"remainingMs\":99,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":901,\"remainingMs\":99,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:29:51.452Z","nodeId":"contract-seed","pid":1967355,"subsystem":"bootstrap","nodeId":"contract-seed","phase":"registration","duration":10605,"error":"Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":901,\"remainingMs\":99,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"sql_transactions-p1\",\"answer\":{\"outcome\":\"not_leader\",\"releaseId\":null,\"partitionId\":\"sql_transactions-p1\",\"phase\":\"release\",\"leaderAddress\":null,\"leaderReplicaId\":null},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":1000,\"elapsedMs\":901,\"remainingMs\":99,\"ordinal\":1,\"total\":46,\"completed\":0,\"attemptCount\":3,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: [real] a malformed statement is a typed failure, never a throw
+[lenovo-laptop] not ok 4 - [real] a malformed statement is a typed failure, never a throw
+[lenovo-laptop]   ---
+[lenovo-laptop]   duration_ms: 13253.997416
+[lenovo-laptop]   type: 'test'
+[lenovo-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:111:3'
+[lenovo-laptop]   failureType: 'testCodeFailure'
+[lenovo-laptop]   error: 'seed bootstrap failed: "Seed participant release failed: {\\"partitionId\\":\\"sql_transactions-p1\\",\\"answer\\":{\\"outcome\\":\\"not_leader\\",\\"releaseId\\":null,\\"partitionId\\":\\"sql_transactions-p1\\",\\"phase\\":\\"release\\",\\"leaderAddress\\":null,\\"leaderReplicaId\\":null},\\"seedRelease\\":{\\"clockState\\":\\"measured\\",\\"budgetMs\\":1000,\\"elapsedMs\\":901,\\"remainingMs\\":99,\\"ordinal\\":1,\\"total\\":46,\\"completed\\":0,\\"attemptCount\\":3,\\"firstBlockedDrain\\":null,\\"firstJoinedAttempt\\":null}}"'
+[lenovo-laptop]   code: 'ERR_TEST_FAILURE'
+[lenovo-laptop]   stack: |-
+[lenovo-laptop]     Object.open (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/integration/sql-engine-system-writes-contract.integration.test.js:37:13)
+[lenovo-laptop]     process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[lenovo-laptop]     async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/test/query/sql-engine-system-table-contract-cases.js:112:29)
+[lenovo-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[lenovo-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[lenovo-laptop]   ...
+[lenovo-laptop] 1..4
+[lenovo-laptop] # tests 4
+[lenovo-laptop] # suites 0
+[lenovo-laptop] # pass 0
+[lenovo-laptop] # fail 4
+[lenovo-laptop] # cancelled 0
+[lenovo-laptop] # skipped 0
+[lenovo-laptop] # todo 0
+[lenovo-laptop] # duration_ms 68569.915396
+[lenovo-laptop] # time=70665ms
+[lenovo-laptop] not ok test/integration/managed-split-admission-reliability.integration.test.js (16 assertions, 55623ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 14
+[lenovo-laptop] # Subtest: managed split seed fixture refuses cleanup-owned and conflicting durable identities
+[lenovo-laptop]     ok 1 - cleanup ownership remains fail closed
+[lenovo-laptop]     ok 2 - cleanup ownership preserves its typed refusal
+[lenovo-laptop]     ok 3 - cleanup ownership refuses before partition storage access
+[lenovo-laptop]     ok 4 - conflicting identity remains fail closed
+[lenovo-laptop]     ok 5 - conflicting identity preserves its typed refusal
+[lenovo-laptop]     ok 6 - conflicting identity refuses before partition storage access
+[lenovo-laptop]     ok 7 - missing authoritative admission remains fail closed
+[lenovo-laptop]     ok 8 - missing authoritative admission preserves its typed refusal
+[lenovo-laptop]     ok 9 - missing authoritative admission refuses before partition storage access
+[lenovo-laptop]     1..9
+[lenovo-laptop] ok 1 - managed split seed fixture refuses cleanup-owned and conflicting durable identities # time=18.311ms
+[lenovo-laptop] 
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:20.205Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":15649,"error":"Seed participant release failed: {\"partitionId\":\"service_bindings-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b9bdad2b66e2814f321b3784807614e2040fb5d78248a4db7e75bfd6ac4cd2a9\",\"partitionId\":\"service_bindings-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3024,\"remainingMs\":0,\"ordinal\":31,\"total\":46,\"completed\":30,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"service_bindings-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b9bdad2b66e2814f321b3784807614e2040fb5d78248a4db7e75bfd6ac4cd2a9\",\"partitionId\":\"service_bindings-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3024,\"remainingMs\":0,\"ordinal\":31,\"total\":46,\"completed\":30,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:20.243Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","phase":"registration","duration":23689,"error":"Seed participant release failed: {\"partitionId\":\"service_bindings-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b9bdad2b66e2814f321b3784807614e2040fb5d78248a4db7e75bfd6ac4cd2a9\",\"partitionId\":\"service_bindings-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3024,\"remainingMs\":0,\"ordinal\":31,\"total\":46,\"completed\":30,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"service_bindings-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b9bdad2b66e2814f321b3784807614e2040fb5d78248a4db7e75bfd6ac4cd2a9\",\"partitionId\":\"service_bindings-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3024,\"remainingMs\":0,\"ordinal\":31,\"total\":46,\"completed\":30,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: managed split persists blocked split admission instead of generic failure
+[lenovo-laptop]     not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+[lenovo-laptop]       ---
+[lenovo-laptop]       stack: |
+[lenovo-laptop]         resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:106:43)
+[lenovo-laptop]         bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:154:28)
+[lenovo-laptop]         async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:467:21)
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]         lineNumber: 106
+[lenovo-laptop]         columnNumber: 43
+[lenovo-laptop]         functionName: resolveCanonicalAdmissionOwner
+[lenovo-laptop]       type: TypeError
+[lenovo-laptop]       tapCaught: returnedPromiseRejection
+[lenovo-laptop]       source: |2
+[lenovo-laptop]           const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+[lenovo-laptop]           return {
+[lenovo-laptop]             storageAccountingService: coordinator.storageAccountingService,
+[lenovo-laptop]         ------------------------------------------^
+[lenovo-laptop]             controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+[lenovo-laptop]             storageAdmissionService: coordinator.storageAdmissionService,
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 2 - managed split persists blocked split admission instead of generic failure # time=26551.966ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]     lineNumber: 464
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >
+[lenovo-laptop]     });
+[lenovo-laptop]   
+[lenovo-laptop]   
+[lenovo-laptop]     test('managed split persists blocked split admission instead of generic
+[lenovo-laptop]     failure',
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[lenovo-laptop]         const tableName = 'managed_split_blocked_events';
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:34.082Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":3156,"error":"Seed participant release failed: {\"partitionId\":\"call_cell_reduce_slots-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"261a28692d9538326d78e73bb6b19fcf2838f46f7438a27830f81b66a9d3ad2e\",\"partitionId\":\"call_cell_reduce_slots-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3151,\"remainingMs\":0,\"ordinal\":6,\"total\":46,\"completed\":5,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_cell_reduce_slots-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"261a28692d9538326d78e73bb6b19fcf2838f46f7438a27830f81b66a9d3ad2e\",\"partitionId\":\"call_cell_reduce_slots-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3151,\"remainingMs\":0,\"ordinal\":6,\"total\":46,\"completed\":5,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:34.139Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","phase":"registration","duration":11008,"error":"Seed participant release failed: {\"partitionId\":\"call_cell_reduce_slots-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"261a28692d9538326d78e73bb6b19fcf2838f46f7438a27830f81b66a9d3ad2e\",\"partitionId\":\"call_cell_reduce_slots-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3151,\"remainingMs\":0,\"ordinal\":6,\"total\":46,\"completed\":5,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_cell_reduce_slots-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"261a28692d9538326d78e73bb6b19fcf2838f46f7438a27830f81b66a9d3ad2e\",\"partitionId\":\"call_cell_reduce_slots-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3151,\"remainingMs\":0,\"ordinal\":6,\"total\":46,\"completed\":5,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: managed split defers on degraded publication mode and admin diagnostics expose the canonical mode
+[lenovo-laptop]     not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+[lenovo-laptop]       ---
+[lenovo-laptop]       stack: |
+[lenovo-laptop]         resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:106:43)
+[lenovo-laptop]         bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:154:28)
+[lenovo-laptop]         async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:551:19)
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]         lineNumber: 106
+[lenovo-laptop]         columnNumber: 43
+[lenovo-laptop]         functionName: resolveCanonicalAdmissionOwner
+[lenovo-laptop]       type: TypeError
+[lenovo-laptop]       tapCaught: returnedPromiseRejection
+[lenovo-laptop]       source: |2
+[lenovo-laptop]           const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+[lenovo-laptop]           return {
+[lenovo-laptop]             storageAccountingService: coordinator.storageAccountingService,
+[lenovo-laptop]         ------------------------------------------^
+[lenovo-laptop]             controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+[lenovo-laptop]             storageAdmissionService: coordinator.storageAdmissionService,
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 3 - managed split defers on degraded publication mode and admin diagnostics expose the canonical mode # time=13818.242ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]     lineNumber: 547
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >2
+[lenovo-laptop]       });
+[lenovo-laptop]   
+[lenovo-laptop]     test('managed split defers on degraded publication mode and admin diagnostics
+[lenovo-laptop]     ' +
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       'expose the canonical mode',
+[lenovo-laptop]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:46.885Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":3033,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3026,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3026,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:30:46.909Z","nodeId":"test-node","pid":1967412,"subsystem":"bootstrap","nodeId":"test-node","phase":"registration","duration":9950,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3026,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3026,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: managed split admission repairs stale connected node readiness from authoritative local rows before denying provisioning
+[lenovo-laptop]     not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+[lenovo-laptop]       ---
+[lenovo-laptop]       stack: |
+[lenovo-laptop]         resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:106:43)
+[lenovo-laptop]         bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:154:28)
+[lenovo-laptop]         async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:738:19)
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]         lineNumber: 106
+[lenovo-laptop]         columnNumber: 43
+[lenovo-laptop]         functionName: resolveCanonicalAdmissionOwner
+[lenovo-laptop]       type: TypeError
+[lenovo-laptop]       tapCaught: returnedPromiseRejection
+[lenovo-laptop]       source: |2
+[lenovo-laptop]           const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+[lenovo-laptop]           return {
+[lenovo-laptop]             storageAccountingService: coordinator.storageAccountingService,
+[lenovo-laptop]         ------------------------------------------^
+[lenovo-laptop]             controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+[lenovo-laptop]             storageAdmissionService: coordinator.storageAdmissionService,
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 4 - managed split admission repairs stale connected node readiness from authoritative local rows before denying provisioning # time=12898.637ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/integration/managed-split-admission-reliability.integration.test.js
+[lenovo-laptop]     lineNumber: 734
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: |
+[lenovo-laptop]     });
+[lenovo-laptop]   
+[lenovo-laptop]     test('managed split admission repairs stale connected node readiness from ' +
+[lenovo-laptop]     ^
+[lenovo-laptop]       'authoritative local rows before denying provisioning',
+[lenovo-laptop]     {timeout: TEST_TIMEOUT_MS}, async (t) => {
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] 1..4
+[lenovo-laptop] # { total: 12, pass: 9, fail: 3 }
+[lenovo-laptop] # time=53309.496ms
+[lenovo-laptop] not ok test/integration/create-table-partition-provisioning.integration.test.js (4 assertions, 39716ms)
+[lenovo-laptop] # TAP assertions failed; test process exited 1
+[lenovo-laptop] TAP version 14
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:31:13.124Z","nodeId":"test-node","pid":1967461,"subsystem":"bootstrap","nodeId":"test-node","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":13575,"error":"Seed participant release failed: {\"partitionId\":\"schema_migrations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b4be8b28b306e39699ac3aa99bdfee538f7976d0b0c9b2d6e635de8f0a864d0d\",\"partitionId\":\"schema_migrations-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449901\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3042,\"remainingMs\":0,\"ordinal\":29,\"total\":46,\"completed\":28,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"schema_migrations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b4be8b28b306e39699ac3aa99bdfee538f7976d0b0c9b2d6e635de8f0a864d0d\",\"partitionId\":\"schema_migrations-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449901\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3042,\"remainingMs\":0,\"ordinal\":29,\"total\":46,\"completed\":28,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","contextNodeId":"550e8400-e29b-41d4-a716-446655449901","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:31:13.130Z","nodeId":"test-node","pid":1967461,"subsystem":"bootstrap","nodeId":"test-node","phase":"registration","duration":21006,"error":"Seed participant release failed: {\"partitionId\":\"schema_migrations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b4be8b28b306e39699ac3aa99bdfee538f7976d0b0c9b2d6e635de8f0a864d0d\",\"partitionId\":\"schema_migrations-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449901\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3042,\"remainingMs\":0,\"ordinal\":29,\"total\":46,\"completed\":28,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"schema_migrations-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"b4be8b28b306e39699ac3aa99bdfee538f7976d0b0c9b2d6e635de8f0a864d0d\",\"partitionId\":\"schema_migrations-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449901\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3042,\"remainingMs\":0,\"ordinal\":29,\"total\":46,\"completed\":28,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449901","msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: Create table provisions routable partition replica
+[lenovo-laptop]     not ok 1 - seed bootstrap should succeed  false !== true
+[lenovo-laptop]       ---
+[lenovo-laptop]       stack: |
+[lenovo-laptop]         composeSeedWithTableProvisioningEngine (test/integration/create-table-partition-provisioning.integration.test.js:83:10)
+[lenovo-laptop]         async Test.<anonymous> (test/integration/create-table-partition-provisioning.integration.test.js:130:11)
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/integration/create-table-partition-provisioning.integration.test.js
+[lenovo-laptop]         lineNumber: 83
+[lenovo-laptop]         columnNumber: 10
+[lenovo-laptop]         functionName: composeSeedWithTableProvisioningEngine
+[lenovo-laptop]       type: AssertionError
+[lenovo-laptop]       generatedMessage: false
+[lenovo-laptop]       code: ERR_ASSERTION
+[lenovo-laptop]       actual: false
+[lenovo-laptop]       expected: true
+[lenovo-laptop]       operator: strictEqual
+[lenovo-laptop]       diff: simple
+[lenovo-laptop]       tapCaught: returnedPromiseRejection
+[lenovo-laptop]       source: >2
+[lenovo-laptop]           });
+[lenovo-laptop]           const bootstrapResult = await bootstrapService.bootstrap();
+[lenovo-laptop]           assert.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+[lenovo-laptop]         ---------^
+[lenovo-laptop]           const systemTableCache = NodeService.getInstance().getSystemTableCache();
+[lenovo-laptop]           const sqlQueryEngine = new SQLQueryEngine({
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 1 - Create table provisions routable partition replica # time=24039.965ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/integration/create-table-partition-provisioning.integration.test.js
+[lenovo-laptop]     lineNumber: 108
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >
+[lenovo-laptop]     }
+[lenovo-laptop]   
+[lenovo-laptop]   
+[lenovo-laptop]     test('Create table provisions routable partition replica', {timeout:
+[lenovo-laptop]     TEST_TIMEOUT_MS},
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       async (t) => {
+[lenovo-laptop]         initializeTestEnvironment({
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:31:26.807Z","nodeId":"test-node","pid":1967461,"subsystem":"bootstrap","nodeId":"test-node","state":"starting","phase":"registration","subPhase":"REGISTRATION","duration":3024,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3006,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3006,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap phase failed"}
+[lenovo-laptop] {"level":50,"time":"2026-10-21T06:31:26.898Z","nodeId":"test-node","pid":1967461,"subsystem":"bootstrap","nodeId":"test-node","phase":"registration","duration":10714,"error":"Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3006,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}","stack":"Error: Seed participant release failed: {\"partitionId\":\"call_activation_leases-p1\",\"answer\":{\"outcome\":\"release_fact_unavailable\",\"releaseId\":\"ee76314373d88c4dd17ccb9f67b7f1da33e901ff0ba7d2dbc8c5b519825a6460\",\"partitionId\":\"call_activation_leases-p1\",\"phase\":\"observe_applied_position\",\"missingFact\":\"release_deadline\",\"owner\":\"550e8400-e29b-41d4-a716-446655449902\"},\"seedRelease\":{\"clockState\":\"measured\",\"budgetMs\":3000,\"elapsedMs\":3006,\"remainingMs\":0,\"ordinal\":4,\"total\":46,\"completed\":3,\"attemptCount\":1,\"firstBlockedDrain\":null,\"firstJoinedAttempt\":null}}\n    at BootstrapService.releaseSeedParticipantCohorts (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:327:17)\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at listOnTimeout (node:internal/timers:547:9)\n    at process.processTimers (node:internal/timers:521:7)\n    at async file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/pipeline/seed-startup-plan.js:44:13\n    at async Object.task (file:///home/peter/projects/lagrange/test-output/placement-worktrees/393f411ca094-mvhqdcyb-1589075/src/bootstrap/bootstrap-service-seed-workflow.js:554:11)","servicesCreated":141,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+[lenovo-laptop] # Subtest: Second table creation admits the sole node under bookkeeping churn
+[lenovo-laptop]     not ok 1 - seed bootstrap should succeed  false !== true
+[lenovo-laptop]       ---
+[lenovo-laptop]       stack: |
+[lenovo-laptop]         composeSeedWithTableProvisioningEngine (test/integration/create-table-partition-provisioning.integration.test.js:83:10)
+[lenovo-laptop]         async Test.<anonymous> (test/integration/create-table-partition-provisioning.integration.test.js:206:11)
+[lenovo-laptop]       at:
+[lenovo-laptop]         fileName: test/integration/create-table-partition-provisioning.integration.test.js
+[lenovo-laptop]         lineNumber: 83
+[lenovo-laptop]         columnNumber: 10
+[lenovo-laptop]         functionName: composeSeedWithTableProvisioningEngine
+[lenovo-laptop]       type: AssertionError
+[lenovo-laptop]       generatedMessage: false
+[lenovo-laptop]       code: ERR_ASSERTION
+[lenovo-laptop]       actual: false
+[lenovo-laptop]       expected: true
+[lenovo-laptop]       operator: strictEqual
+[lenovo-laptop]       diff: simple
+[lenovo-laptop]       tapCaught: returnedPromiseRejection
+[lenovo-laptop]       source: >2
+[lenovo-laptop]           });
+[lenovo-laptop]           const bootstrapResult = await bootstrapService.bootstrap();
+[lenovo-laptop]           assert.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+[lenovo-laptop]         ---------^
+[lenovo-laptop]           const systemTableCache = NodeService.getInstance().getSystemTableCache();
+[lenovo-laptop]           const sqlQueryEngine = new SQLQueryEngine({
+[lenovo-laptop]       ...
+[lenovo-laptop]     
+[lenovo-laptop]     1..1
+[lenovo-laptop] not ok 2 - Second table creation admits the sole node under bookkeeping churn # time=13428.019ms
+[lenovo-laptop]   ---
+[lenovo-laptop]   at:
+[lenovo-laptop]     fileName: test/integration/create-table-partition-provisioning.integration.test.js
+[lenovo-laptop]     lineNumber: 184
+[lenovo-laptop]     columnNumber: 1
+[lenovo-laptop]     isToplevel: true
+[lenovo-laptop]   source: >
+[lenovo-laptop]     // with `readiness_planning_identity_unavailable` or an empty
+[lenovo-laptop]   
+[lenovo-laptop]     // candidateTargetNodeIds.
+[lenovo-laptop]   
+[lenovo-laptop]     test('Second table creation admits the sole node under bookkeeping churn',
+[lenovo-laptop]     {timeout: TEST_TIMEOUT_MS},
+[lenovo-laptop]   
+[lenovo-laptop]     ^
+[lenovo-laptop]       async (t) => {
+[lenovo-laptop]         initializeTestEnvironment({
+[lenovo-laptop]   ...
+[lenovo-laptop] 
+[lenovo-laptop] 1..2
+[lenovo-laptop] # { total: 2, pass: 0, fail: 2 }
+[lenovo-laptop] # time=37489.714ms
+[lenovo-laptop] # test-files total=3 pass=0 fail=3 assertions=24
+lab test: lenovo-laptop: # test-files total=3 pass=0 fail=3 assertions=24
+lab test: lenovo-laptop: results copied to test-output/reports/test-results-lenovo-laptop.ndjson
+# test-files total=3 pass=0 fail=3 assertions=24

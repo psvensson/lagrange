@@ -1,0 +1,22 @@
+{
+  "README.md": "478949578c4a9dbab07546998e8682fb651f00201eb5162f9011d9c0cff18cc3",
+  "controller.log": "a0297ae15ccb99fb130669ccbb86418b04de6cb14113adfcc2bed87ea29087ff",
+  "execution.json": "2d5d5704ace1d15b28811ead6cae5808239ada30b7247aa8c51d818de0cddd5a",
+  "exit.json": "1e63156646812eacd61f140880f5bad451d228ed3d2cf5df00652f5132d9b525",
+  "explanation.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "explanation.txt": "bb659e56c78065ebbfd42247817ac9d03834d12c672240aea9b1d765c2c13d29",
+  "files.txt": "e77082a5fbd4054515680941b7261226b88ced1ced505734b4ed319bfbee550e",
+  "input.json": "1eeffbccd47b33c666d8746055c232b2c30d8995f3ea4f9739520b4059588e56",
+  "ledger-reconciliation.json": "2c594d0a8e8a91f90c684987b87eb505021c64c73ff982ee4a139d3153ee49b0",
+  "ledgers/test-results-adam-laptop.ndjson": "09f9fa952c68565effd722452e8b7ca9cd51d2f2acae478947abd6a8008f4282",
+  "ledgers/test-results-adams-gamla.ndjson": "2236f7d187ab64571f85d16bbc8d7abe9b1c7a6c18130f235828a67a42edb19e",
+  "ledgers/test-results-carinas-windows.ndjson": "f927a19a049a08bcbe87fbecc0f76ef2412a1da06514a09785886b7e1b0c0fa1",
+  "ledgers/test-results-tv-dator.ndjson": "ed4904b74ed25276f87474215141eaafeab0ced940cc90ed169989564adeab42",
+  "operation-witness-correspondence.json": "3606d81cd94aa1352c24059a63cfb638dca3ad1d9349515c188e6f40cb0dd5bb",
+  "preservation-summary.json": "1c25f416eb932e22b79f8d44f715ca67816da3307335ec652ec82bdb2d98c333",
+  "reported-verdicts.json": "a845a90a7312827509181645e56653cf53e703ac9ea1314e0c641ec1ef9e7995",
+  "selected-test-blobs.json": "eef0e482f712aa04cbd8ddbb9e62e69cb479deaef11f0f3ef9f72fd429fa148e",
+  "selector.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source-bindings.json": "5ffd40675b2ca076bc79d04276e1babcecdb818c1d000a42e0a5ba762c51a9eb",
+  "summary.json": "03603c5fb2e1763ba6db1903f705f00569156944112892e4b0c259f3af3d6c2e"
+}

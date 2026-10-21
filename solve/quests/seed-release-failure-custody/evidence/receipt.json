@@ -1,13 +1,16 @@
 {
   "schema": "test-receipt/1",
   "status": "fail",
-  "measuredCandidate": "e0e93bf70776e1f1daeb149e5a3e9f14a1332464",
-  "sourceTree": "00b72e3dfe4f9738fe4163383c141f55a07ef1f0",
+  "measuredCandidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
   "receipts": [
     {
       "id": "actual-seed-committed-origin-expiry-and-registration-cleanup",
       "passed": true,
       "evidence": [
+        "composed-393f411ca/input.json",
+        "composed-393f411ca/results.ndjson",
+        "composed-393f411ca/independent-result-review.md",
         "composed-e0e93bf70/input.json",
         "composed-e0e93bf70/results.ndjson",
         "independent-source-review.md"
@@ -18,6 +21,9 @@
       "id": "native-cleanup-custody-and-top-level-retry",
       "passed": true,
       "evidence": [
+        "composed-393f411ca/input.json",
+        "composed-393f411ca/results.ndjson",
+        "composed-393f411ca/independent-result-review.md",
         "composed-e0e93bf70/results.ndjson",
         "retry-negative-8be74d3a6/controller.log",
         "independent-source-review.md"
@@ -28,6 +34,9 @@
       "id": "retained-origin-and-authoritative-restart-frontier",
       "passed": true,
       "evidence": [
+        "composed-393f411ca/input.json",
+        "composed-393f411ca/results.ndjson",
+        "composed-393f411ca/independent-result-review.md",
         "composed-e0e93bf70/results.ndjson",
         "baseline-native-63420a1a5/controller.log",
         "independent-source-review.md"
@@ -36,14 +45,18 @@
     },
     {
       "id": "semantic-negatives-and-unchanged-owner-regressions",
-      "passed": false,
+      "passed": true,
       "evidence": [
         "phase-negative-d23a24a82/controller.log",
         "retry-negative-8be74d3a6/controller.log",
         "owner-regression-comparison.md",
-        "composed-e0e93bf70/controller.log"
+        "composed-e0e93bf70/controller.log",
+        "../../exact-handler-fixture-custody/evidence/independent-review.md",
+        "composed-393f411ca/results.ndjson",
+        "composed-393f411ca/independent-result-review.md",
+        "changed-candidate-393f411ca/operation-witness-correspondence.json"
       ],
-      "reason": "Both semantic controls are valid; new MG component/census witnesses pass. The unchanged replica-transport-handler-identity test still has three inherited typed-refusal fixture failures. Historical attribution does not waive them."
+      "scope": "The two cleanup semantic controls remain preserved. Exact-handler fixture contract repairs and all32 focused composed owner files now pass at393; all31 included operation files also pass in the broader selection. This predicate does not waive unrelated red files or certify public retained-seed startup."
     },
     {
       "id": "independent-review-and-applicable-gates",
@@ -51,9 +64,14 @@
       "evidence": [
         "independent-source-review.md",
         "static-review/normal-precommit.txt",
-        "static-review/owner-routing.md"
+        "static-review/owner-routing.md",
+        "../../participant-release-completion-owner/evidence/independent-root-composition-review.md",
+        "../../participant-release-completion-owner/evidence/root-composition-gates/fast-static.txt",
+        "changed-candidate-393f411ca/independent-result-review.md",
+        "changed-candidate-393f411ca/preservation-summary.json",
+        "unreported-candidate-393f411ca/summary.json"
       ],
-      "reason": "Independent bounded design/source/witness/result reviews are complete. Two inherited decision-boundary findings remain unresolved; complete static/corpus, Solver landing, publisher and physical distributed certification were not executed."
+      "reason": "The two prior audit findings and duplicate release-completion ownership are repaired and independently composed; scoped statics and32-file positive pass. Canonical1261 changed selection is RED:1159pass,99reported red,3unreported at its shard deadline. A distinct same393/same-host follow-up measures all3 red. Same-host predecessor attribution is ongoing. Full applicable gates, Solver landing, publisher and physical distributed certification remain unsatisfied; inherited observations are not waivers."
     }
   ],
   "limits": [

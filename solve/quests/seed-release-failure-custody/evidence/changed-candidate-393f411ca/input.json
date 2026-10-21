@@ -1,0 +1,29 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "base": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "commitTree": "5c3d3203d1aaa2e66ac19090f609e874dfc07bdc",
+  "srcTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "scriptsTree": "f9a8c3bd375965168152673ec1afe06f53216e5e",
+  "testTree": "45f645584c35fcca24d40955ca108ed1a967a387",
+  "command": [
+    "node",
+    "scripts/lab.js",
+    "test",
+    "changed",
+    "--lane",
+    "all",
+    "--base-sha",
+    "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+    "--sha",
+    "393f411ca09449898465cc3cb7320c03fba2aba8",
+    "--split"
+  ],
+  "environment": {
+    "LAGRANGE_RETRY_FAILED_ONCE": "0",
+    "LAGRANGE_LAB_AGENT": "codex:seed-origin-recovery-20261021"
+  },
+  "selectedCount": 1261,
+  "filesSha256": "e77082a5fbd4054515680941b7261226b88ced1ced505734b4ed319bfbee550e",
+  "preparedAt": "2026-10-21T05:54:05.587574+00:00",
+  "scope": "Canonical changed selection from cleanup seal; not entire corpus, publication, distributed certification or release."
+}

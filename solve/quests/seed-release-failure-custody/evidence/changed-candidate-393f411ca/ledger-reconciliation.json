@@ -1,0 +1,127 @@
+{
+  "policy": "Match each selected file to canonical stdout by file, verdict, assertion count and duration. Preserve all raw rows. Extras are nested runner exercises, not additional selected-file results.",
+  "hosts": [
+    {
+      "host": "adam-laptop",
+      "rawRecords": 254,
+      "selectedExactStdoutMatches": 254,
+      "selectedPass": 238,
+      "selectedFail": 16,
+      "allSelectedAttempt1NoRetry": true,
+      "extraRawRecords": []
+    },
+    {
+      "host": "adams-gamla",
+      "rawRecords": 212,
+      "selectedExactStdoutMatches": 206,
+      "selectedPass": 190,
+      "selectedFail": 16,
+      "allSelectedAttempt1NoRetry": true,
+      "extraRawRecords": [
+        {
+          "file": "test-output/tap-timeout-fixtures/run-7Cyr8w/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 521,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test-output/tap-timeout-fixtures/run-qx7BhE/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 524,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test-output/tap-timeout-fixtures/run-LX9aD2/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 2,
+          "durationMs": 557,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 1 - should be equal"
+        },
+        {
+          "file": "test-output/tap-timeout-fixtures/run-0UHe75/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 511,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test-output/tap-timeout-fixtures/run-3o5xPV/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 2,
+          "durationMs": 480,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        },
+        {
+          "file": "test-output/tap-timeout-fixtures/run-3NQzCF/echo-timeout.test.js",
+          "attempt": 1,
+          "ok": false,
+          "assertions": 2,
+          "durationMs": 548,
+          "retriedOnce": false,
+          "firstFailureLine": "not ok 1 - should be equal"
+        }
+      ]
+    },
+    {
+      "host": "carinas-windows",
+      "rawRecords": 206,
+      "selectedExactStdoutMatches": 205,
+      "selectedPass": 193,
+      "selectedFail": 12,
+      "allSelectedAttempt1NoRetry": true,
+      "extraRawRecords": [
+        {
+          "file": "test/query/budget-limit-error.test.js",
+          "attempt": 1,
+          "ok": true,
+          "assertions": 10,
+          "durationMs": 345,
+          "retriedOnce": false,
+          "firstFailureLine": null
+        }
+      ]
+    },
+    {
+      "host": "tv-dator",
+      "rawRecords": 365,
+      "selectedExactStdoutMatches": 365,
+      "selectedPass": 331,
+      "selectedFail": 34,
+      "allSelectedAttempt1NoRetry": true,
+      "extraRawRecords": []
+    }
+  ],
+  "lenovo": "No result ledger emitted before canonical deadline;228 stdout file verdicts only. Their retry0 policy is bound in input, not fabricated into missing attempt fields.",
+  "extraRowSources": [
+    {
+      "path": "test/scripts/test-timeout-declarations.test.js",
+      "blob": "bee9230c868cf69fe4ff8aef1e8edfb6c5ccf006",
+      "lines": [
+        180,
+        245
+      ],
+      "effect": "Six nested generated timeout fixture runs, including expected assertion failures."
+    },
+    {
+      "path": "test/scripts/local-corpus.test.js",
+      "blob": "238d12cfcbbfb2ff2b5f94118ace67e8c2beb1d5",
+      "lines": [
+        298,
+        329
+      ],
+      "effect": "One nested budget-limit-error file run; distinct duration from selected outer run."
+    }
+  ]
+}

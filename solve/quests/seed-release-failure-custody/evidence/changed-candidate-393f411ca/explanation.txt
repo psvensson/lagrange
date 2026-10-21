@@ -1,0 +1,632 @@
+changed:
+  scripts/check-guideline-decision-boundaries.js
+  scripts/checks/decision-boundary-construction.js
+  scripts/checks/decision-boundary-exception-collection.js
+  scripts/participant-release-completion-audit.js
+  solve/changes/global-owner-debt-inventory/inventory.json
+  solve/quests/cleanup-exception-audit-correspondence/design.md
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/delta.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/inputs.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/raw.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/report.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/bindings.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/controller.log
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/exit.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/input.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/results.ndjson
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/fast-static.txt
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/owner-statics.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/delta.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/inputs.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/raw.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/report.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/fast-static.txt
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/owner-statics.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/strict-metrics.txt
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/input.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/raw.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/report.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/controller.log
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/exit.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/input.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/results.ndjson
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/controller.log
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/exit.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/input.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/results.ndjson
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/README.md
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/bindings.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/controller.log
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/exit.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/input.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/results.ndjson
+  solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/sha256.json
+  solve/quests/cleanup-exception-audit-correspondence/evidence/independent-composition-review-2026-10-21.md
+  solve/quests/cleanup-exception-audit-correspondence/evidence/independent-implementation-review.md
+  solve/quests/cleanup-exception-audit-correspondence/evidence/independent-review.md
+  solve/quests/cleanup-exception-audit-correspondence/evidence/receipt.json
+  solve/quests/cleanup-exception-audit-correspondence/log.ndjson
+  solve/quests/cleanup-exception-audit-correspondence/quest.json
+  solve/quests/decision-audit-dependency-construction/design.md
+  solve/quests/decision-audit-dependency-construction/evidence/SHA256SUMS
+  solve/quests/decision-audit-dependency-construction/evidence/SHA256SUMS.gate-scope
+  solve/quests/decision-audit-dependency-construction/evidence/after-final/canonical-report.json
+  solve/quests/decision-audit-dependency-construction/evidence/after-final/delta.json
+  solve/quests/decision-audit-dependency-construction/evidence/after-final/raw-census.json
+  solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/canonical-report.json
+  solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/delta.json
+  solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/raw-census.json
+  solve/quests/decision-audit-dependency-construction/evidence/after/canonical-report.json
+  solve/quests/decision-audit-dependency-construction/evidence/after/delta.json
+  solve/quests/decision-audit-dependency-construction/evidence/after/occurrences.json
+  solve/quests/decision-audit-dependency-construction/evidence/after/raw-census.json
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/controller.txt
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/input.json
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/ledger.ndjson
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/result.json
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/controller.txt
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/input.json
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/ledger.ndjson
+  solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/result.json
+  solve/quests/decision-audit-dependency-construction/evidence/before/canonical-raw.json
+  solve/quests/decision-audit-dependency-construction/evidence/before/canonical-report.json
+  solve/quests/decision-audit-dependency-construction/evidence/before/input.json
+  solve/quests/decision-audit-dependency-construction/evidence/before/normal-precommit.txt
+  solve/quests/decision-audit-dependency-construction/evidence/before/raw-census.json
+  solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/controller.txt
+  solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/input.json
+  solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/ledger.ndjson
+  solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/result.json
+  solve/quests/decision-audit-dependency-construction/evidence/draft-census-observations.md
+  solve/quests/decision-audit-dependency-construction/evidence/gate-scope-clarification.md
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/ambient-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/catch-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/decision-full.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/decision-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/helper-test-strict-metrics.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/hot-path.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/lint.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/literals-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/results.json
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/ambient-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/catch-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/decision-full.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/decision-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/documentation-current-full.json
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/documentation-current-scope.json
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/helper-test-strict-metrics.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/impact-contracts.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/lint.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/literals-scoped.txt
+  solve/quests/decision-audit-dependency-construction/evidence/gates-final/results.json
+  solve/quests/decision-audit-dependency-construction/evidence/independent-review.md
+  solve/quests/decision-audit-dependency-construction/evidence/measurement.md
+  solve/quests/decision-audit-dependency-construction/evidence/quest-probe-after-candidate.txt
+  solve/quests/decision-audit-dependency-construction/evidence/receipt.json
+  solve/quests/decision-audit-dependency-construction/log.ndjson
+  solve/quests/decision-audit-dependency-construction/quest.json
+  solve/quests/exact-handler-fixture-custody/design.md
+  solve/quests/exact-handler-fixture-custody/evidence/candidate-bindings.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/controller.log
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/exit.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/input.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/results.ndjson
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/sha256.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/controller.log
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/exit.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/input.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/results.ndjson
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/sha256.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/controller-setup-error.log
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/controller.log
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/exit.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/input.json
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/results.ndjson
+  solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/sha256.json
+  solve/quests/exact-handler-fixture-custody/evidence/gates-a0dc88427/fast-static.txt
+  solve/quests/exact-handler-fixture-custody/evidence/gates-a0dc88427/owner-statics.json
+  solve/quests/exact-handler-fixture-custody/evidence/independent-review.md
+  solve/quests/exact-handler-fixture-custody/evidence/receipt.json
+  solve/quests/exact-handler-fixture-custody/log.ndjson
+  solve/quests/exact-handler-fixture-custody/quest.json
+  solve/quests/participant-release-completion-owner/design.md
+  solve/quests/participant-release-completion-owner/evidence/audit-identity-delta.json
+  solve/quests/participant-release-completion-owner/evidence/audit-preservation-correction.md
+  solve/quests/participant-release-completion-owner/evidence/audit-raw-packet.json
+  solve/quests/participant-release-completion-owner/evidence/audit-raw/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/audit-raw/after-full-decision.json
+  solve/quests/participant-release-completion-owner/evidence/audit-raw/audit-identity-delta.json
+  solve/quests/participant-release-completion-owner/evidence/audit-raw/before-full-decision.json
+  solve/quests/participant-release-completion-owner/evidence/audit-raw/original-decision-audit.json
+  solve/quests/participant-release-completion-owner/evidence/baseline/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/baseline/controller.log
+  solve/quests/participant-release-completion-owner/evidence/baseline/first-positive-without-ledger.log
+  solve/quests/participant-release-completion-owner/evidence/baseline/fresh-named-cases.tap
+  solve/quests/participant-release-completion-owner/evidence/baseline/input.json
+  solve/quests/participant-release-completion-owner/evidence/baseline/preflight-refusal.txt
+  solve/quests/participant-release-completion-owner/evidence/baseline/result.json
+  solve/quests/participant-release-completion-owner/evidence/baseline/results.jsonl
+  solve/quests/participant-release-completion-owner/evidence/behavior-baseline.md
+  solve/quests/participant-release-completion-owner/evidence/binary-guard-refusal.txt
+  solve/quests/participant-release-completion-owner/evidence/getter-baseline/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/getter-baseline/controller.log
+  solve/quests/participant-release-completion-owner/evidence/getter-baseline/input.json
+  solve/quests/participant-release-completion-owner/evidence/getter-baseline/result.json
+  solve/quests/participant-release-completion-owner/evidence/getter-baseline/results.jsonl
+  solve/quests/participant-release-completion-owner/evidence/implementation-result.md
+  solve/quests/participant-release-completion-owner/evidence/independent-review.md
+  solve/quests/participant-release-completion-owner/evidence/independent-root-composition-review.md
+  solve/quests/participant-release-completion-owner/evidence/receipt.json
+  solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/controller.log
+  solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/input.json
+  solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/result.json
+  solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/results.jsonl
+  solve/quests/participant-release-completion-owner/evidence/review-refinement-2/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/review-refinement-2/participant-release-completion-audit.js.txt
+  solve/quests/participant-release-completion-owner/evidence/review-refinement-2/participant-release-completion-owner.test.js.txt
+  solve/quests/participant-release-completion-owner/evidence/review-refinement-2/source.patch
+  solve/quests/participant-release-completion-owner/evidence/review-revise/README.md
+  solve/quests/participant-release-completion-owner/evidence/review-revise/SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/review-revise/SOURCE-SHA256SUMS
+  solve/quests/participant-release-completion-owner/evidence/review-revise/initial-audit-test.txt
+  solve/quests/participant-release-completion-owner/evidence/review-revise/source.patch
+  solve/quests/participant-release-completion-owner/evidence/revised-source-manifest-2.json
+  solve/quests/participant-release-completion-owner/evidence/revised-source-manifest.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/delta.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/inputs.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/raw.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/report.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/sha256.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-gates/changed-path-statics.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-gates/fast-static.txt
+  solve/quests/participant-release-completion-owner/evidence/root-composition-gates/impact-contracts.txt
+  solve/quests/participant-release-completion-owner/evidence/root-composition-gates/planned-operation-selection.json
+  solve/quests/participant-release-completion-owner/evidence/root-composition-gates/sha256.json
+  solve/quests/participant-release-completion-owner/log.ndjson
+  solve/quests/participant-release-completion-owner/quest.json
+  solve/quests/participant-release-deadline-recovery-witness/evidence/retry-suppression-preparation-2026-10-21.md
+  solve/quests/seed-release-failure-custody/HANDOVER-2026-10-20.md
+  solve/quests/seed-release-failure-custody/design.md
+  solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/controller.log
+  solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/exit.json
+  solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/input.json
+  solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/controller.log
+  solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/exit.json
+  solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/input.json
+  solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/candidate-identities.json
+  solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/controller.log
+  solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/exit.json
+  solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/input.json
+  solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/fixture-reuse-assessment-2026-10-21.md
+  solve/quests/seed-release-failure-custody/evidence/independent-source-review.md
+  solve/quests/seed-release-failure-custody/evidence/independent-witness-review.md
+  solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/controller.log
+  solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/exit.json
+  solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/input.json
+  solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/owner-regression-comparison.md
+  solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/controller.log
+  solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/exit.json
+  solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/input.json
+  solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/controller.log
+  solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/exit.json
+  solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/input.json
+  solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/probe-after-composed.json
+  solve/quests/seed-release-failure-custody/evidence/receipt.json
+  solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/controller.log
+  solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/exit.json
+  solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/input.json
+  solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/retained-partial-seed-recovery-charter-2026-10-21.md
+  solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/controller.log
+  solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/exit.json
+  solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/input.json
+  solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/results.ndjson
+  solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/sha256.json
+  solve/quests/seed-release-failure-custody/evidence/static-review/baseline-cleanup-complexity.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/inherited-decision-findings.json
+  solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-after-metadata.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-before-metadata.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-metadata-refresh.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/mg-witness-normal-precommit.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/normal-precommit.txt
+  solve/quests/seed-release-failure-custody/evidence/static-review/owner-routing.md
+  solve/quests/seed-release-failure-custody/evidence/static-review/phase-negative-precommit.txt
+  solve/quests/seed-release-failure-custody/log.ndjson
+  solve/quests/seed-release-failure-custody/quest.json
+  src/bootstrap/bootstrap-service-runtime-methods.js
+  src/bootstrap/bootstrap-service-seed-delegates.js
+  src/bootstrap/bootstrap-service-seed-workflow.js
+  src/bootstrap/owners/seed-runtime-bridge-owner.js
+  src/bootstrap/phases/seed-cleanup-handler.js
+  src/bootstrap/pipeline/seed-startup-plan.js
+  src/bootstrap/shared/message-group-transport-handler.js
+  src/node/participant-release-client.js
+  src/node/replica-handler-release-recovery.js
+  src/wasm-service/wasm-service-replica-lifecycle.js
+  test/address/address-manager-peer-location-authority.test.js
+  test/bootstrap/bootstrap-failure-cleanup.test.js
+  test/bootstrap/bootstrap-shutdown-quiesce.test.js
+  test/bootstrap/message-group-activation-handler-boundary.test.js
+  test/bootstrap/pipeline/seed-registration-phase-custody.test.js
+  test/bootstrap/seed-message-group-cleanup-custody.test.js
+  test/bootstrap/seed-participant-release-failure-projection.test.js
+  test/bootstrap/seed-release-failure-custody.test.js
+  test/node/participant-release-fresh-create-completion.test.js
+  test/node/replica-transport-handler-identity.test.js
+  test/partition/raft-rs-transport-demux.test.js
+  test/scripts/check-guideline-decision-boundaries.test.js
+  test/scripts/participant-release-completion-owner.test.js
+  test/shards/impact-contracts.json
+  test/shards/impact-graph-seal.json
+  test/shards/primary-classes.json
+  test/shards/resource-classes.json
+  test/shards/subsystem-classes.json
+  test/test-helpers/seed-release-failure-custody-fixture.js
+
+subsystems:
+  bootstrap-membership
+  query-sql
+  services-runtime
+  storage-partition
+  storage-raft
+  test-infrastructure
+  wasm-toolchain
+
+selected by:
+  changed-test: 13 test(s)
+  coupled-pair-witness: participant-release-bounded-completion:completion: 467 test(s)
+  coupled-pair-witness: participant-release-bounded-completion:initiators: 323 test(s)
+  coupled-pair-witness: raft-rs-runtime-application-transaction:application-and-progress-transaction: 647 test(s)
+  coupled-pair-witness: raft-rs-runtime-application-transaction:ready-persistence-and-reconstruction: 647 test(s)
+  coupled-pair-witness: raft-rs-runtime-lifecycle-entry:runtime-core-entry: 134 test(s)
+  coupled-pair-witness: replica-host-cleanup-custody:host-object-custody: 397 test(s)
+  coupled-pair-witness: seed-registration-election-scheduling:registration-dependency-authority: 323 test(s)
+  coupled-pair-witness: service-consensus-retained-native-bootstrap:original-operation-and-runtime-dispatch: 731 test(s)
+  coupled-pair-witness: wasm-writer-v1-application-completion:application-result-and-transaction: 208 test(s)
+  helper-importer: test/test-helpers/seed-release-failure-custody-fixture.js: 1 test(s)
+  impact-witness: bootstrap-contract: 208 test(s)
+  impact-witness: core-system-logic: 1 test(s)
+  impact-witness: participant-release-bounded-completion: 6 test(s)
+  impact-witness: raft-rs-runtime-application-transaction: 36 test(s)
+  impact-witness: raft-rs-runtime-lifecycle-entry: 9 test(s)
+  impact-witness: replica-host-cleanup-custody: 3 test(s)
+  impact-witness: seed-registration-election-scheduling: 1 test(s)
+  impact-witness: service-consensus-retained-native-bootstrap: 16 test(s)
+  impact-witness: wasm-writer-v1-application-completion: 5 test(s)
+  observer: directories: scripts/check-guideline-decision-boundaries.js: 43 test(s)
+  observer: directories: scripts/checks/decision-boundary-construction.js: 65 test(s)
+  observer: directories: scripts/checks/decision-boundary-exception-collection.js: 65 test(s)
+  observer: directories: scripts/participant-release-completion-audit.js: 45 test(s)
+  observer: directories: solve/changes/global-owner-debt-inventory/inventory.json: 17 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/design.md: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/delta.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/inputs.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/raw.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/report.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-2026-10-21/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/bindings.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/controller.log: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/exit.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/input.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-bc5a7e995/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/fast-static.txt: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/owner-statics.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/audit-composition-gates/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/delta.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/inputs.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/raw.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/report.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-census/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/fast-static.txt: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/owner-statics.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-candidate-gates/strict-metrics.txt: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/input.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/raw.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/report.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-audit-old-census/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/controller.log: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/exit.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/input.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-0e003dc89/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/controller.log: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/exit.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/input.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-baseline-1246200cd/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/README.md: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/bindings.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/controller.log: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/exit.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/input.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/exception-candidate-5af0cc7f6/sha256.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/independent-composition-review-2026-10-21.md: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/independent-implementation-review.md: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/independent-review.md: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/cleanup-exception-audit-correspondence/quest.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/design.md: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/SHA256SUMS.gate-scope: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-final/canonical-report.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-final/delta.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-final/raw-census.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/canonical-report.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/delta.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after-narrowed/raw-census.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after/canonical-report.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after/delta.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after/occurrences.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/after/raw-census.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/controller.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/input.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/ledger.ndjson: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-96741ee01/result.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/controller.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/input.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/ledger.ndjson: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/baseline-f0084d02a/result.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/before/canonical-raw.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/before/canonical-report.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/before/input.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/before/normal-precommit.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/before/raw-census.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/controller.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/input.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/ledger.ndjson: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/candidate-575138446/result.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/draft-census-observations.md: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gate-scope-clarification.md: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/ambient-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/catch-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/decision-full.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/decision-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/helper-test-strict-metrics.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/hot-path.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/lint.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/literals-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-candidate/results.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/ambient-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/catch-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/decision-full.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/decision-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/documentation-current-full.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/documentation-current-scope.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/helper-test-strict-metrics.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/impact-contracts.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/lint.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/literals-scoped.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/gates-final/results.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/independent-review.md: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/measurement.md: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/quest-probe-after-candidate.txt: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/decision-audit-dependency-construction/quest.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/design.md: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/candidate-bindings.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/controller.log: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/exit.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/input.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-baseline-2016726f/sha256.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/controller.log: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/exit.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/input.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-candidate-a0dc88427/sha256.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/controller-setup-error.log: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/controller.log: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/exit.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/input.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/fixture-negative-92cb2d72b/sha256.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/gates-a0dc88427/fast-static.txt: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/gates-a0dc88427/owner-statics.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/independent-review.md: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/exact-handler-fixture-custody/quest.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/design.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-identity-delta.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-preservation-correction.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw-packet.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw/after-full-decision.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw/audit-identity-delta.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw/before-full-decision.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/audit-raw/original-decision-audit.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/controller.log: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/first-positive-without-ledger.log: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/fresh-named-cases.tap: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/input.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/preflight-refusal.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/result.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/baseline/results.jsonl: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/behavior-baseline.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/binary-guard-refusal.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/getter-baseline/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/getter-baseline/controller.log: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/getter-baseline/input.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/getter-baseline/result.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/getter-baseline/results.jsonl: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/implementation-result.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/independent-review.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/independent-root-composition-review.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/controller.log: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/input.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/result.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/repaired-90fb37194/results.jsonl: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-refinement-2/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-refinement-2/participant-release-completion-audit.js.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-refinement-2/participant-release-completion-owner.test.js.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-refinement-2/source.patch: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-revise/README.md: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-revise/SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-revise/SOURCE-SHA256SUMS: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-revise/initial-audit-test.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/review-revise/source.patch: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/revised-source-manifest-2.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/revised-source-manifest.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/delta.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/inputs.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/raw.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/report.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-2026-10-21/sha256.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-gates/changed-path-statics.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-gates/fast-static.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-gates/impact-contracts.txt: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-gates/planned-operation-selection.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/evidence/root-composition-gates/sha256.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/participant-release-completion-owner/quest.json: 53 test(s)
+  observer: directories: solve/quests/participant-release-deadline-recovery-witness/evidence/retry-suppression-preparation-2026-10-21.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/HANDOVER-2026-10-20.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/design.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-focused-f7a3bf122/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/baseline-native-63420a1a5/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/candidate-identities.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/composed-e0e93bf70/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/fixture-reuse-assessment-2026-10-21.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/independent-source-review.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/independent-witness-review.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-baseline-63420a1a5/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-regression-comparison.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/owner-repaired-e29e46abf/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/phase-negative-d23a24a82/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/probe-after-composed.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/receipt.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/repaired-e29e46abf/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retained-partial-seed-recovery-charter-2026-10-21.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/controller.log: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/exit.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/input.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/results.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/retry-negative-8be74d3a6/sha256.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/baseline-cleanup-complexity.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/inherited-decision-findings.json: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-after-metadata.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-before-metadata.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/mg-test-metadata-refresh.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/mg-witness-normal-precommit.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/normal-precommit.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/owner-routing.md: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/evidence/static-review/phase-negative-precommit.txt: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/log.ndjson: 53 test(s)
+  observer: directories: solve/quests/seed-release-failure-custody/quest.json: 53 test(s)
+  observer: directories: src/bootstrap/bootstrap-service-runtime-methods.js: 88 test(s)
+  observer: directories: src/bootstrap/bootstrap-service-seed-delegates.js: 89 test(s)
+  observer: directories: src/bootstrap/bootstrap-service-seed-workflow.js: 86 test(s)
+  observer: directories: src/bootstrap/owners/seed-runtime-bridge-owner.js: 88 test(s)
+  observer: directories: src/bootstrap/phases/seed-cleanup-handler.js: 88 test(s)
+  observer: directories: src/bootstrap/pipeline/seed-startup-plan.js: 89 test(s)
+  observer: directories: src/bootstrap/shared/message-group-transport-handler.js: 87 test(s)
+  observer: directories: src/node/participant-release-client.js: 86 test(s)
+  observer: directories: src/node/replica-handler-release-recovery.js: 86 test(s)
+  observer: directories: src/wasm-service/wasm-service-replica-lifecycle.js: 88 test(s)
+  observer: directories: test/address/address-manager-peer-location-authority.test.js: 73 test(s)
+  observer: directories: test/bootstrap/bootstrap-failure-cleanup.test.js: 73 test(s)
+  observer: directories: test/bootstrap/bootstrap-shutdown-quiesce.test.js: 73 test(s)
+  observer: directories: test/bootstrap/message-group-activation-handler-boundary.test.js: 73 test(s)
+  observer: directories: test/bootstrap/pipeline/seed-registration-phase-custody.test.js: 73 test(s)
+  observer: directories: test/bootstrap/seed-message-group-cleanup-custody.test.js: 73 test(s)
+  observer: directories: test/bootstrap/seed-participant-release-failure-projection.test.js: 73 test(s)
+  observer: directories: test/bootstrap/seed-release-failure-custody.test.js: 73 test(s)
+  observer: directories: test/node/participant-release-fresh-create-completion.test.js: 73 test(s)
+  observer: directories: test/node/replica-transport-handler-identity.test.js: 73 test(s)
+  observer: directories: test/partition/raft-rs-transport-demux.test.js: 73 test(s)
+  observer: directories: test/scripts/check-guideline-decision-boundaries.test.js: 73 test(s)
+  observer: directories: test/scripts/participant-release-completion-owner.test.js: 73 test(s)
+  observer: directories: test/shards/impact-contracts.json: 60 test(s)
+  observer: directories: test/shards/impact-graph-seal.json: 68 test(s)
+  observer: directories: test/shards/primary-classes.json: 39 test(s)
+  observer: directories: test/shards/resource-classes.json: 69 test(s)
+  observer: directories: test/shards/subsystem-classes.json: 69 test(s)
+  observer: directories: test/test-helpers/seed-release-failure-custody-fixture.js: 73 test(s)
+  observer: files: scripts/check-guideline-decision-boundaries.js: 5 test(s)
+  observer: files: scripts/participant-release-completion-audit.js: 3 test(s)
+  observer: files: solve/changes/global-owner-debt-inventory/inventory.json: 13 test(s)
+  observer: files: src/bootstrap/bootstrap-service-runtime-methods.js: 1 test(s)
+  observer: files: src/bootstrap/bootstrap-service-seed-workflow.js: 6 test(s)
+  observer: files: src/bootstrap/owners/seed-runtime-bridge-owner.js: 2 test(s)
+  observer: files: src/bootstrap/phases/seed-cleanup-handler.js: 3 test(s)
+  observer: files: src/bootstrap/pipeline/seed-startup-plan.js: 1 test(s)
+  observer: files: src/bootstrap/shared/message-group-transport-handler.js: 10 test(s)
+  observer: files: src/node/participant-release-client.js: 3 test(s)
+  observer: files: src/node/replica-handler-release-recovery.js: 4 test(s)
+  observer: files: test/shards/impact-contracts.json: 14 test(s)
+  observer: files: test/shards/impact-graph-seal.json: 7 test(s)
+  observer: files: test/shards/primary-classes.json: 35 test(s)
+  observer: files: test/shards/resource-classes.json: 5 test(s)
+  observer: files: test/shards/subsystem-classes.json: 6 test(s)
+  observer: files: test/test-helpers/seed-release-failure-custody-fixture.js: 1 test(s)
+  safety-spine: 32 test(s)
+  subsystem-widening: bootstrap-membership: 323 test(s)
+  subsystem-widening: query-sql: 184 test(s)
+  subsystem-widening: services-runtime: 150 test(s)
+  subsystem-widening: storage-partition: 190 test(s)
+  subsystem-widening: storage-raft: 134 test(s)
+  subsystem-widening: test-infrastructure: 144 test(s)
+  subsystem-widening: wasm-toolchain: 74 test(s)
+
+observed elsewhere (convergence-probe, the canary's non-gating step):
+  test/integration/node-join-convergence-slo.integration.test.js
+
+selection:
+  WIDENED
+
+total:
+  1261 unique test(s)

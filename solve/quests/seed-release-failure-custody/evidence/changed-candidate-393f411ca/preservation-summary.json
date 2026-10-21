@@ -1,0 +1,79 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "base": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "selected": 1261,
+  "reported": 1258,
+  "passed": 1159,
+  "reportedFailed": 99,
+  "unreported": [
+    "test/integration/create-table-partition-provisioning.integration.test.js",
+    "test/integration/managed-split-admission-reliability.integration.test.js",
+    "test/integration/sql-engine-system-writes-contract.integration.test.js"
+  ],
+  "canonicalFailureCountIncludingUnreported": 102,
+  "ledgers": [
+    {
+      "host": "tv-dator",
+      "path": "ledgers/test-results-tv-dator.ndjson",
+      "rows": 365,
+      "passed": 331,
+      "failed": 34,
+      "sha256": "ed4904b74ed25276f87474215141eaafeab0ced940cc90ed169989564adeab42"
+    },
+    {
+      "host": "lenovo-laptop",
+      "missing": true
+    },
+    {
+      "host": "adam-laptop",
+      "path": "ledgers/test-results-adam-laptop.ndjson",
+      "rows": 254,
+      "passed": 238,
+      "failed": 16,
+      "sha256": "09f9fa952c68565effd722452e8b7ca9cd51d2f2acae478947abd6a8008f4282"
+    },
+    {
+      "host": "adams-gamla",
+      "path": "ledgers/test-results-adams-gamla.ndjson",
+      "rows": 212,
+      "passed": 194,
+      "failed": 18,
+      "sha256": "2236f7d187ab64571f85d16bbc8d7abe9b1c7a6c18130f235828a67a42edb19e"
+    },
+    {
+      "host": "carinas-windows",
+      "path": "ledgers/test-results-carinas-windows.ndjson",
+      "rows": 206,
+      "passed": 194,
+      "failed": 12,
+      "sha256": "f927a19a049a08bcbe87fbecc0f76ef2412a1da06514a09785886b7e1b0c0fa1"
+    }
+  ],
+  "canonicalSummaries": [
+    "lab test: tv-dator: ordinary, external-toolchain, bootstrap, exclusive (365 files) cores=12 mem=15.4GiB speed x1.36 ~10.5 min",
+    "lab test: lenovo-laptop: ordinary, external-toolchain, bootstrap, exclusive (231 files) cores=8 mem=15.5GiB speed x2.18 ~10.5 min",
+    "lab test: adam-laptop: ordinary, external-toolchain, bootstrap, exclusive (254 files) cores=8 mem=15.5GiB speed x1.97 ~10.5 min",
+    "lab test: adams-gamla: ordinary, external-toolchain, bootstrap, exclusive (206 files) cores=4 mem=15.6GiB speed x2.01 ~10.5 min",
+    "lab test: carinas-windows: ordinary, external-toolchain, bootstrap, exclusive (205 files) cores=12 mem=7.5GiB speed x2.46 ~10.5 min",
+    "lab test: controller: the controller runs its lanes in this tree, which is not exactly 393f411ca09449898465cc3cb7320c03fba2aba8; takes 0 file(s), only what no lab host fits",
+    "lab test: skipped (controller): the controller runs its lanes in this tree, which is not exactly 393f411ca09449898465cc3cb7320c03fba2aba8",
+    "lab test: skipped main-linux: same machine as (controller)",
+    "lab test: tv-dator: # test-files total=365 pass=331 fail=34 assertions=10341",
+    "lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson",
+    "lab test: lenovo-laptop: # test-files total=231 pass=207 fail=24 assertions=6681",
+    "lab test: lenovo-laptop: 3 file(s) reported no result: deadline",
+    "lab test: adam-laptop: # test-files total=254 pass=238 fail=16 assertions=7490",
+    "lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson",
+    "lab test: adams-gamla: # test-files total=206 pass=190 fail=16 assertions=5957",
+    "lab test: adams-gamla: results copied to test-output/reports/test-results-adams-gamla.ndjson",
+    "lab test: carinas-windows: # test-files total=205 pass=193 fail=12 assertions=5588",
+    "lab test: carinas-windows: results copied to test-output/reports/test-results-carinas-windows.ndjson",
+    "# test-files total=1261 pass=1159 fail=102 assertions=36057"
+  ],
+  "preservedAt": "2026-10-21T06:26:42.354624+00:00",
+  "limits": [
+    "Unreported files are not measured passes or semantic failures.",
+    "Reported red files are observations, not independently proven bugs or current regressions.",
+    "No retry, budget increase, baseline waiver or product source change in this packet."
+  ]
+}

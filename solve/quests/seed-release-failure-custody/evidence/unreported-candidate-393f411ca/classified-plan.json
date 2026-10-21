@@ -1,0 +1,11 @@
+[
+  {
+    "files": [
+      "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "test/integration/managed-split-admission-reliability.integration.test.js",
+      "test/integration/create-table-partition-provisioning.integration.test.js"
+    ],
+    "jobs": 1,
+    "resourceClass": "exclusive"
+  }
+]

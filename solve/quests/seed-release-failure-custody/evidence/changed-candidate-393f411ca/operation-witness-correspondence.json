@@ -1,0 +1,228 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "focusedCount": 32,
+  "includedInBroadSelection": [
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/node/replica-handler-release-recovery.test.js",
+      "assertions": 25,
+      "durationMs": 3434
+    },
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/partition/participant-release-delivery-recorder.test.js",
+      "assertions": 4,
+      "durationMs": 264
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/node/participant-release-control-refusal-observation.test.js",
+      "assertions": 5,
+      "durationMs": 300
+    },
+    {
+      "host": "carinas-windows",
+      "ok": true,
+      "file": "test/node/message-group-executor-activation-handler-boundary.test.js",
+      "assertions": 43,
+      "durationMs": 2176
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/node/replica-transport-handler-identity.test.js",
+      "assertions": 42,
+      "durationMs": 2008
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/partition/participant-release-deadline-recovery.test.js",
+      "assertions": 2,
+      "durationMs": 7962
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/partition/participant-release-protocol.test.js",
+      "assertions": 16,
+      "durationMs": 10050
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/partition/participant-release-native-application-order.test.js",
+      "assertions": 1,
+      "durationMs": 5872
+    },
+    {
+      "host": "adam-laptop",
+      "ok": true,
+      "file": "test/node/participant-release-fresh-create-completion.test.js",
+      "assertions": 7,
+      "durationMs": 7933
+    },
+    {
+      "host": "adam-laptop",
+      "ok": true,
+      "file": "test/partition/participant-release-control-three-member.test.js",
+      "assertions": 1,
+      "durationMs": 9145
+    },
+    {
+      "host": "adam-laptop",
+      "ok": true,
+      "file": "test/partition/raft-rs-transport-demux.test.js",
+      "assertions": 15,
+      "durationMs": 2429
+    },
+    {
+      "host": "adam-laptop",
+      "ok": true,
+      "file": "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+      "assertions": 17,
+      "durationMs": 555
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/scripts/participant-release-completion-owner.test.js",
+      "assertions": 12,
+      "durationMs": 2200
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/bootstrap/bootstrap-failure-cleanup.test.js",
+      "assertions": 67,
+      "durationMs": 2331
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
+      "assertions": 33,
+      "durationMs": 2175
+    },
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+      "assertions": 6,
+      "durationMs": 1141
+    },
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+      "assertions": 7,
+      "durationMs": 1697
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/bootstrap/message-group-activation-handler-boundary.test.js",
+      "assertions": 75,
+      "durationMs": 1322
+    },
+    {
+      "host": "adams-gamla",
+      "ok": true,
+      "file": "test/bootstrap/seed-release-failure-custody.test.js",
+      "assertions": 4,
+      "durationMs": 17026
+    },
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+      "assertions": 124,
+      "durationMs": 1447
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/address/address-manager-peer-location-authority.test.js",
+      "assertions": 26,
+      "durationMs": 2863
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "assertions": 183,
+      "durationMs": 4440
+    },
+    {
+      "host": "carinas-windows",
+      "ok": true,
+      "file": "test/bootstrap/seed-release-once-per-cohort.test.js",
+      "assertions": 1,
+      "durationMs": 4573
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+      "assertions": 1,
+      "durationMs": 875
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/bootstrap/bootstrap-cleanup.property.test.js",
+      "assertions": 17,
+      "durationMs": 2369
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/bootstrap/seed-startup-session-store.test.js",
+      "assertions": 9,
+      "durationMs": 466
+    },
+    {
+      "host": "adam-laptop",
+      "ok": true,
+      "file": "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+      "assertions": 2,
+      "durationMs": 2441
+    },
+    {
+      "host": "carinas-windows",
+      "ok": true,
+      "file": "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+      "assertions": 3,
+      "durationMs": 2205
+    },
+    {
+      "host": "tv-dator",
+      "ok": true,
+      "file": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+      "assertions": 16,
+      "durationMs": 1574
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/node/replica-runtime-cleanup-custody.integration.test.js",
+      "assertions": 8,
+      "durationMs": 4036
+    },
+    {
+      "host": "lenovo-laptop",
+      "ok": true,
+      "file": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+      "assertions": 30,
+      "durationMs": 9627
+    }
+  ],
+  "notSelected": [
+    "test/transport/exact-handler-identity-api.test.js"
+  ],
+  "supplementaryPriorPacket": "../composed-393f411ca/",
+  "scope": "All31 selected operation files passed. The remaining exact-handler API file passed in prior exact39332-file run. This does not override other red or unreported files."
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "evidence-publication-map/1",
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "publicationKind": "Exact non-main measurement evidence preservation; not product publication",
+  "assets": [
+    {
+      "restoreUnderEvidence": "changed-candidate-393f411ca/controller.log",
+      "asset": "seed-release-failure-custody--quests__evidence__changed-candidate-393f411ca__controller.log",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__changed-candidate-393f411ca__controller.log",
+      "sha256": "a0297ae15ccb99fb130669ccbb86418b04de6cb14113adfcc2bed87ea29087ff",
+      "bytes": 2500095,
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T06:44:14.332Z"
+    },
+    {
+      "restoreUnderEvidence": "unreported-candidate-393f411ca/runner.mjs",
+      "asset": "seed-release-failure-custody--quests__evidence__unreported-candidate-393f411ca__runner.mjs",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--quests__evidence__unreported-candidate-393f411ca__runner.mjs",
+      "sha256": "3dc64a3706fbbdb52bf0598d27034aa7f5cd0f975b9595539d86552ceaa125db",
+      "bytes": 830,
+      "verifiedBy": "canonical solve evidence add re-download and SHA256 comparison",
+      "recordedAt": "2026-10-21T06:44:44.872Z"
+    }
+  ],
+  "packetManifestSha256": {
+    "changed-candidate-393f411ca": "8cc75ed832926c2353cd062f6ba546799bf4f06b8205ccabbf36060469e07418",
+    "unreported-candidate-393f411ca": "606c8c370ba221b9406eea847e33053b18d75ec876ab7966401ada80273aa6c6"
+  },
+  "independentMeasurementReviewSha256": "5d8d57cb661b236198a3876adc96dcc8c6ba3ed23e874fcc69abcc6773d6af32",
+  "normalCommitRefusal": {
+    "exitStatus": 1,
+    "rawLogBytes": 2500095,
+    "rawLogGuard": "solve binary guard: larger than1MB; canonical evidence upload required",
+    "frozenMeasurementScript": "ESLint22 style errors when staged as source. Executed script is retained byte-for-byte as externally stored measurement data, not reformatted or made a repository implementation script.",
+    "rawTranscript": "Material refusal details retained here from observed hook output; this object is not a full hook transcript."
+  },
+  "restoration": "Download each immutable named solve-evidence asset, verify byte count and SHA256, then place under evidence at restoreUnderEvidence to reconstruct the original packet and check its unchanged sha256.json. Rehydration is not an execution or gate pass."
+}

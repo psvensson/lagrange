@@ -1,0 +1,10 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "base": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb",
+  "selected": 1261,
+  "unique": 1261,
+  "operationWitnesses": 32,
+  "operationWitnessesNotSelected": [
+    "test/transport/exact-handler-identity-api.test.js"
+  ]
+}

@@ -1,0 +1,5049 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "files": [
+    {
+      "path": "test/active-gate/active-gate-authoritative-repair-convergence.test.js",
+      "blob": "2d6dbe6c558b981bbaa0eebaf8f1db063b132ba7"
+    },
+    {
+      "path": "test/address/address-manager-peer-location-authority.test.js",
+      "blob": "58b02ebd4fc29d9034692861bc6b77cf3e740232"
+    },
+    {
+      "path": "test/admin/admin-control-snapshot-priority-recovery-dormant-context-retirement.test.js",
+      "blob": "a9b274b205345fc6b8a3ee8fea90e3862834ac53"
+    },
+    {
+      "path": "test/boot/load-env.test.js",
+      "blob": "acddad4c0642c16ec9d2f846155a829efbd418db"
+    },
+    {
+      "path": "test/bootstrap/_min-test.test.js",
+      "blob": "1a93a04bde5d632636d7bc041be88affacc98031"
+    },
+    {
+      "path": "test/bootstrap/address-takeover-live-ab.test.js",
+      "blob": "36cff515b7245f55bc3294b146a75702f3cb36ac"
+    },
+    {
+      "path": "test/bootstrap/address-takeover-workflow.test.js",
+      "blob": "2c2c56f768607d9258bf5c6c47d5fa5d88bb7f75"
+    },
+    {
+      "path": "test/bootstrap/artifact-payload-table-schemas.test.js",
+      "blob": "24f8816c464376a8257ae350a88b24465e376d25"
+    },
+    {
+      "path": "test/bootstrap/behaviour-changing-consumer-convergence.test.js",
+      "blob": "ae587759ad19f4cc4e87e31792369cced5810e9f"
+    },
+    {
+      "path": "test/bootstrap/boot-incarnation-owner-concurrency.test.js",
+      "blob": "76b612f9c057c3cbe9435a2c22de819b7f07cc94"
+    },
+    {
+      "path": "test/bootstrap/boot-incarnation-owner.test.js",
+      "blob": "315016a9c75fb72bc27108e5443d545b72ff44f3"
+    },
+    {
+      "path": "test/bootstrap/boot-incarnation-reservation-census.test.js",
+      "blob": "7aa522b6d5cbaf90990a5fe6b91f0f5565bae174"
+    },
+    {
+      "path": "test/bootstrap/boot-incarnation-superseded-floor.test.js",
+      "blob": "392328d7920a896182a453587296faeff24bf11d"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-admission-snapshots.test.js",
+      "blob": "cc55f56ebfeb0074e71d5d90f8bd12c325276856"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-readiness-gating.test.js",
+      "blob": "203570e4ab2570f286dea5c7f7be8bd6208e5f29"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-readiness-publication.test.js",
+      "blob": "592c1ea02bc47244244e4c98c3256bd17f97e949"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-ready-nodes.test.js",
+      "blob": "b5c0b3b1366e1002646c63bcadf67234a29a81c2"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-rejoin.test.js",
+      "blob": "1ff421740d841e2e912c7663b3b12482a28d6059"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-replica-owner-conflict.test.js",
+      "blob": "bcdd58277b28e48483c298666fa3349b8f76e1be"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js",
+      "blob": "49345cac17e87533bf63689032ceaa5d865d782d"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-api.test.js",
+      "blob": "82dfe4f1fea33516fc8f526b3b97c78b2ee37c01"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-cdc-readiness-gate.test.js",
+      "blob": "c2d9d36e5118757af95b1d61dbae9add1f59914d"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-cleanup.property.test.js",
+      "blob": "ca0b1984deba5df18e5d9890bf3f7463db62ca7f"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-control-plane-query-error-contract.test.js",
+      "blob": "8bb7bcf859d54d214c176bd6d83b829befe07e8b"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-endpoint-table.property.test.js",
+      "blob": "f7bd4c07b647769315cc1143af7e4456c4fd30b7"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-epoch-manager-lifecycle.test.js",
+      "blob": "1726d031f2ac5b323a085e303cfd2a724a2319ad"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-errors.property.test.js",
+      "blob": "6d96064861dce819cea5a8b377d6c96183237aa6"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-failure-cleanup.test.js",
+      "blob": "3a6f8bfdb5d975443a78e2a3a4086def9a4ca437"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-membership-owner-outcome-consumers.test.js",
+      "blob": "bdb2fc8efcf78affe4b9fe1bda1ff3d57909ead3"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-mode.test.js",
+      "blob": "8596c02fc6244e1d39fdbc887e8ecc7f009219cc"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-phase-state-machine-integration.test.js",
+      "blob": "3a435459bd649c8fdc6d71ea46743c9552d7d68b"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-readiness-ladder.test.js",
+      "blob": "9e9a66d9df29eee8d91dcd0a944ebccd9937fdf8"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-readiness-state.test.js",
+      "blob": "0226dd77d8b00e685aae6509cc4749a4e62f4c3f"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-replica-registration-trace.test.js",
+      "blob": "fe7bd4134a306dce93343b6512f1f4b66732823c"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-request-admission-precheck.test.js",
+      "blob": "2bee1efd417763b27605f74ce9bcc445b4d9b764"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-request-deferral-wait-bound-spent.test.js",
+      "blob": "6618f05f8ff474736261c1f9d675aa1101d707aa"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-request-execution-timeout.test.js",
+      "blob": "028d86b793bd2ff88c23a41a0cb2118bb476c233"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-request-shut-down-writer-not-ready.test.js",
+      "blob": "df7ca619820b1520fc954e41ce05dfce0d4f270f"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-response-completeness.property.test.js",
+      "blob": "5c617716dfd09df93e396d91371223e98d337707"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-response-performance.test.js",
+      "blob": "fa9123f4903b5aa79f73eb444531e840e803c79d"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-sequence.test.js",
+      "blob": "e945a70892df63aacb5dae776d9c99d3d760666e"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-service-ready-signal.test.js",
+      "blob": "a9d4ef06d2145b96f48ce817166fdd96c2749ab3"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-shutdown-quiesce.test.js",
+      "blob": "707ad717999c55728e5846afe00d5c6452bb9921"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-state-tracker.test.js",
+      "blob": "7ecf590cb3cd4c7211aec788c079884e66f9b6ad"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-system-table-invariant.property.test.js",
+      "blob": "21df31b66f19fd89949ab1cc65f624f8f15cd809"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-topology-snapshot-owner.test.js",
+      "blob": "87fae23244fb6404e8613a3f7d981f21deee0d4c"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-topology-snapshot.test.js",
+      "blob": "d1f95322a1aafacd2ed5ea7e367173b651ee59d7"
+    },
+    {
+      "path": "test/bootstrap/bootstrap-websocket-server-reentry.test.js",
+      "blob": "b94837d46514d81f735492f164bb03b78576eb00"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-correctness.property.test.js",
+      "blob": "3426899f8835502a5d05392cac8e6df0a3217da9"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-gate.property.test.js",
+      "blob": "7c6dc5edfffbe931af08fbe44bf636e70f3ed961"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-gate.test.js",
+      "blob": "206f252e678141ab0acd44549ecad1e949d5e42a"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-performance.test.js",
+      "blob": "5f28c3b6c5635bfa94a633ab358faeb397a50d99"
+    },
+    {
+      "path": "test/bootstrap/cache-hydration-strictness.test.js",
+      "blob": "f7c05665b83c24949e3e76cb217166334ac915fa"
+    },
+    {
+      "path": "test/bootstrap/call-cell-invocation-setup.test.js",
+      "blob": "186b502433950a62afea0b1f90689e5c522f488c"
+    },
+    {
+      "path": "test/bootstrap/cdc-initial-subscription-leader-fallback.test.js",
+      "blob": "905c242eecf028c2fe91a1b2f337614138459217"
+    },
+    {
+      "path": "test/bootstrap/cdc-leader-only-replication.test.js",
+      "blob": "2fd99a892b20ae1fa15854a9257118a486d059f0"
+    },
+    {
+      "path": "test/bootstrap/cdc-propagation-message-group-selection.test.js",
+      "blob": "3d97bcceb8e2ebf4d87e31392d59bca6f317bd66"
+    },
+    {
+      "path": "test/bootstrap/cdc-subscription-consistency.property.test.js",
+      "blob": "a87e7735788e16a4b697633abd9124db87688d6b"
+    },
+    {
+      "path": "test/bootstrap/cleanup-ownership-order-characterization.test.js",
+      "blob": "2a3d0bc395afea2f2cc4639bed8bbcd800f24098"
+    },
+    {
+      "path": "test/bootstrap/cluster-identity-join-gate.test.js",
+      "blob": "e1390fe44d2216467c04d156e41b9c5f8382ccb6"
+    },
+    {
+      "path": "test/bootstrap/cluster-identity-mint.test.js",
+      "blob": "057644163b8f14f20ae66850482bef3b272f866f"
+    },
+    {
+      "path": "test/bootstrap/cluster-identity.test.js",
+      "blob": "92727b763427c1be75c71878a463c0a474473078"
+    },
+    {
+      "path": "test/bootstrap/cluster-mesh-connectivity.property.test.js",
+      "blob": "27610d7566a30c7f4b9251231b5e2edefa2c1cd1"
+    },
+    {
+      "path": "test/bootstrap/cold-node-authority-reacquisition-pressure.test.js",
+      "blob": "6324c5138e2920c9ce4c5bead63e4aa57f98749c"
+    },
+    {
+      "path": "test/bootstrap/connect-websocket-phase.test.js",
+      "blob": "a9e42c9bf15ee377913fb2e35d8753cc84a3064c"
+    },
+    {
+      "path": "test/bootstrap/control-plane-rollout-controls.test.js",
+      "blob": "de8b2d95673c1516bd28984441a10ce9cafe150b"
+    },
+    {
+      "path": "test/bootstrap/control-plane-write-health-owner.test.js",
+      "blob": "8656b04d1f1ec88816de68348fb1a38356e854e2"
+    },
+    {
+      "path": "test/bootstrap/create-message-group-phase.test.js",
+      "blob": "2fd8cfbb496217655db903b52efdfa8cf150f298"
+    },
+    {
+      "path": "test/bootstrap/create-self-hosted-registration.test.js",
+      "blob": "0d44d3e787bd80faed8f25959de161b6f30628a3"
+    },
+    {
+      "path": "test/bootstrap/critical-placement-authoritative-evidence.test.js",
+      "blob": "d7da6c3c6118a8ef3109de1c184cca84fb1e82f3"
+    },
+    {
+      "path": "test/bootstrap/critical-placement-classification-control.test.js",
+      "blob": "938d486a2a4b8dc51ebe8e478dd792ae8ce82890"
+    },
+    {
+      "path": "test/bootstrap/critical-placement-convergence.test.js",
+      "blob": "56674e23ee017b75e3537e97b9da9503c8df11bd"
+    },
+    {
+      "path": "test/bootstrap/critical-placement-trace-classifier.test.js",
+      "blob": "22b57eab00b24eb8465a5269381c916d0c8be171"
+    },
+    {
+      "path": "test/bootstrap/debug-meta-table-schemas.test.js",
+      "blob": "bdf1bd7b17a396a29ed8420d4557024155fd46bc"
+    },
+    {
+      "path": "test/bootstrap/duplicate-replica-assignment.test.js",
+      "blob": "87236492d753408f112bf633929192036e223a61"
+    },
+    {
+      "path": "test/bootstrap/durable-rejoin-incarnation-advance.test.js",
+      "blob": "57d31b47bb93414a12511b5a01d548e1e8f73037"
+    },
+    {
+      "path": "test/bootstrap/durable-rejoin-partition-restore-planner.test.js",
+      "blob": "afe5036c16ca63fa16126e8c7e67f5c914c480ca"
+    },
+    {
+      "path": "test/bootstrap/dynamic-partition-cdc-subscription.test.js",
+      "blob": "923fef0cf69374a0ad33ecfa2caa999872baaf8f"
+    },
+    {
+      "path": "test/bootstrap/formation-readiness-owner-single-form.test.js",
+      "blob": "ff19d573b09ab17931731b99a605bcba1d13f900"
+    },
+    {
+      "path": "test/bootstrap/fresh-join-multi-peer-contact.test.js",
+      "blob": "2dae8ddca000e572242be6028cf968fd8ee0c4af"
+    },
+    {
+      "path": "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js",
+      "blob": "bb2169a74bd638526c5e9dc798bdf06970bbadea"
+    },
+    {
+      "path": "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js",
+      "blob": "ea56e05bcd8267b9ed01c6ea418afc5d08a1e5d0"
+    },
+    {
+      "path": "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js",
+      "blob": "90ad0a7a1beb1564200ae7f2293ca204d3d10067"
+    },
+    {
+      "path": "test/bootstrap/join-checkpoint-progression-characterization.test.js",
+      "blob": "a87e450f8be685dfa7d21dfbf13a3fff8491631f"
+    },
+    {
+      "path": "test/bootstrap/join-cleanup.property.test.js",
+      "blob": "667505268492e1f2504877b9f43b7c8c5bab3bae"
+    },
+    {
+      "path": "test/bootstrap/join-coordinator.test.js",
+      "blob": "1ded89e0773730aba8d6160d301a84b79023114d"
+    },
+    {
+      "path": "test/bootstrap/join-delegate-bundles.test.js",
+      "blob": "f26d439793a5b28c9063c22540b8163c0225af2c"
+    },
+    {
+      "path": "test/bootstrap/join-formation-discovery-window-budget.test.js",
+      "blob": "0b38d08d37ea0fa70e3c25b603b108fd08ec6899"
+    },
+    {
+      "path": "test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js",
+      "blob": "5bd0c1cdd9539aed96a408b0504ad4363c9f9a26"
+    },
+    {
+      "path": "test/bootstrap/join-message-group-identity-record.test.js",
+      "blob": "795b8a50b26d2535a1602c61475bd0cc33973bc3"
+    },
+    {
+      "path": "test/bootstrap/join-message-group-phase.test.js",
+      "blob": "0b2eca2ce51b19183e7034cc6473c2ec66152278"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-evaluator.test.js",
+      "blob": "5afdb18368e29d440913b79ccdbc8fb019d3e79f"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js",
+      "blob": "8f02b129ed458aeeb1abc88e990d891c53b2fdb3"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js",
+      "blob": "62e08e12571aace48edfacd5c404bbc300e68c4e"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-self-targeted-exclusion.property.test.js",
+      "blob": "5d221cd75fa3e3322b49470c836f175372694090"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-startup-authority.test.js",
+      "blob": "b0319fafddab0e118a0a3bdb6fb19737ec336aa1"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-warming-node-exclusion.property.test.js",
+      "blob": "ee2000324b79c44e7401ab89c7acc9408b56df77"
+    },
+    {
+      "path": "test/bootstrap/join-readiness-warming-node-preservation.property.test.js",
+      "blob": "be5d7cce0b55dd2356166f84dd93a03234192e50"
+    },
+    {
+      "path": "test/bootstrap/join-resume-replica-lifecycle-owner.test.js",
+      "blob": "01eea08893192ce6438e834fc313e94b6d0edd48"
+    },
+    {
+      "path": "test/bootstrap/join-retry-patience-selectable.test.js",
+      "blob": "47429e9a031e6991f54dc200d0ad7cfd65f68c26"
+    },
+    {
+      "path": "test/bootstrap/join-session-store.test.js",
+      "blob": "552c05ab98f6471a28a3f8c231ee5ff604866e07"
+    },
+    {
+      "path": "test/bootstrap/join-startup-owner-routing.test.js",
+      "blob": "f6473412dc1fe1e66921e0d65924d5f2c42e9829"
+    },
+    {
+      "path": "test/bootstrap/joining-cdc-gate.test.js",
+      "blob": "27e58e3d7957d82ae12c3bfb47b6b1a8478a3ede"
+    },
+    {
+      "path": "test/bootstrap/latency-topology-owner-delegation.test.js",
+      "blob": "109ae5a87a8ae530162f7d3e02b2ceedaad69904"
+    },
+    {
+      "path": "test/bootstrap/latency-topology-table-schemas.test.js",
+      "blob": "0a71763ca5944fc89ebe2ad552a322da0ea89af7"
+    },
+    {
+      "path": "test/bootstrap/lifecycle-controller.test.js",
+      "blob": "ed078ab75c572fa7386847ddb7cbe79cdb843301"
+    },
+    {
+      "path": "test/bootstrap/lifecycle-handler-address-format.property.test.js",
+      "blob": "0bd970fe62d356201d64f6e2bb0931bff53ffe15"
+    },
+    {
+      "path": "test/bootstrap/lifecycle-message-delegation.property.test.js",
+      "blob": "83a60663230a47c548fa1c8f8e4f9e7593e4c7a0"
+    },
+    {
+      "path": "test/bootstrap/lifecycle-owner-replica-routing.test.js",
+      "blob": "7c5275beb71872baf28ba084fc69e8afa3136d87"
+    },
+    {
+      "path": "test/bootstrap/lifecycle-unification.test.js",
+      "blob": "00a6e90d9e81c774b4523d16bcd5f1d96867891b"
+    },
+    {
+      "path": "test/bootstrap/mesh-reconcile-terminal-revive.test.js",
+      "blob": "2a6a583a828f9918bcfe186333e46657f983de0d"
+    },
+    {
+      "path": "test/bootstrap/message-group-activation-handler-boundary.test.js",
+      "blob": "ca042cb784411f4c22ad8edc5cde64a863cc32c3"
+    },
+    {
+      "path": "test/bootstrap/message-group-assignment-centralization.test.js",
+      "blob": "3bb7b4c6de15fcf86d814dbf23390f84433a647c"
+    },
+    {
+      "path": "test/bootstrap/message-group-assignment.test.js",
+      "blob": "183117e5c3a32e6b4c8072253b0d2746b87af0e4"
+    },
+    {
+      "path": "test/bootstrap/message-group-service-activation.test.js",
+      "blob": "2cdaa14c3692aaf5a0692d5dd93aca43b55f9071"
+    },
+    {
+      "path": "test/bootstrap/message-group-single-owner-invariant.test.js",
+      "blob": "4df8650d27a3bb98be969a86d11ee2ef9a592796"
+    },
+    {
+      "path": "test/bootstrap/message-groups-first-bootstrap-order.property.test.js",
+      "blob": "796e316890ed854b7dd8d562e27d942f4b19ffc1"
+    },
+    {
+      "path": "test/bootstrap/meta-service-endpoint-registration.test.js",
+      "blob": "6871dfca6a149046475df13b436ba4041925e567"
+    },
+    {
+      "path": "test/bootstrap/move-replica-assignment-token.test.js",
+      "blob": "e05603d227f751b634665329a822d6ea33e94019"
+    },
+    {
+      "path": "test/bootstrap/no-eslint-disable.test.js",
+      "blob": "0a5b7b75fc0f9c0838d172459c32b55475280c08"
+    },
+    {
+      "path": "test/bootstrap/node-bootstrap-consistency.property.test.js",
+      "blob": "942088a7fa819dbb56ab4b3c9a77acdb9ae2fd05"
+    },
+    {
+      "path": "test/bootstrap/node-incarnation.test.js",
+      "blob": "d27f0d987e48e9fdba06d4789f1a9251f6cf7616"
+    },
+    {
+      "path": "test/bootstrap/node-joining-cdc-catchup-wiring.test.js",
+      "blob": "68e2e00f67659f7992f70706110a0d297ff60492"
+    },
+    {
+      "path": "test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js",
+      "blob": "7d91745a76d2265c3bdc56f5c2ddf709d628d457"
+    },
+    {
+      "path": "test/bootstrap/node-joining-cdc-readiness-gate.test.js",
+      "blob": "aec5c85655c675a8a77c324052205f692b8f89d4"
+    },
+    {
+      "path": "test/bootstrap/node-joining-cdc-subscription.test.js",
+      "blob": "8f1095b5764c1b2081397755df46a1d2c400fbea"
+    },
+    {
+      "path": "test/bootstrap/node-joining-control-plane-heartbeat.test.js",
+      "blob": "f16021a8fdc6fed19f984b017f9d00e9a246d14a"
+    },
+    {
+      "path": "test/bootstrap/node-joining-formation-barrier-waiting-liveness-log.test.js",
+      "blob": "dd8fa0aa8497c7d91b202c2a175f3d127c13219a"
+    },
+    {
+      "path": "test/bootstrap/node-joining-http-post-timeout.test.js",
+      "blob": "d66a00a65ee84618db0a9baa0ae2d36147563537"
+    },
+    {
+      "path": "test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js",
+      "blob": "13410f819f41436d90e962c46cc696eb6e2a2ce5"
+    },
+    {
+      "path": "test/bootstrap/node-joining-lease-registration.test.js",
+      "blob": "772d4aafdee3564e440774d9fdd45974557078c7"
+    },
+    {
+      "path": "test/bootstrap/node-joining-ready-signal-retry.test.js",
+      "blob": "b43449661ae994a227ff0f7f3a209dd43c7871eb"
+    },
+    {
+      "path": "test/bootstrap/node-joining-retryable-resume-preserves-state.test.js",
+      "blob": "a3cffad16e861fc92065bb7693803d06ea65971a"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-bootstrap-resume-budget.test.js",
+      "blob": "5fc871c8c36e039d4c2f98c02b9970b4cf71b81d"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-canonical-readiness.test.js",
+      "blob": "d765f37201f352196394b3af10cc70d07033712b"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-final-sql-runtime-handoff.test.js",
+      "blob": "f792c453e5fc48bc59fc2d139b4d0fd7c55588ae"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-join-lifecycle-resume.test.js",
+      "blob": "4e5953d24ad9952e49ee64d30fe2db3e0dd9efe4"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js",
+      "blob": "82258a416de8e695d6e9911d624ff368cea72e6e"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-mesh-reconciliation.test.js",
+      "blob": "17ee79f45b08965b4fa28520241622ff6d6c7d53"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-message-group-activation.test.js",
+      "blob": "4d60c411284ed84238a90998ec82bb86c5dd1748"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-node-state-update-ingress.test.js",
+      "blob": "3fc4d1393bc7f1486c848d22dc08ec5852450e06"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service-register-service-retries.test.js",
+      "blob": "9bbca2e9b8635196cb2391a90cc4f7e5512b2d9a"
+    },
+    {
+      "path": "test/bootstrap/node-joining-service.test.js",
+      "blob": "267093e277e1c6a8b4ffa16ec915bd84bba3d0df"
+    },
+    {
+      "path": "test/bootstrap/node-ready-rebalance-trigger.test.js",
+      "blob": "d4625bc05120932b624226fa0c40ca8870d61405"
+    },
+    {
+      "path": "test/bootstrap/node-registration-idempotency.test.js",
+      "blob": "9abdb2ea28ae9b7c74b00844c46c2ea58cfbcdbd"
+    },
+    {
+      "path": "test/bootstrap/node-registration-owner.test.js",
+      "blob": "34b88f8c166e97df4b89185b72024e4b0af9c7f5"
+    },
+    {
+      "path": "test/bootstrap/node-state-gating.property.test.js",
+      "blob": "9b7fd842c88faabe4c42cae3638260a3dfd0771c"
+    },
+    {
+      "path": "test/bootstrap/odd-replica-count-invariant.property.test.js",
+      "blob": "6019b41b0a61acd196a0ea275ed705ff1025b92c"
+    },
+    {
+      "path": "test/bootstrap/owners/bootstrap-readiness-owner.test.js",
+      "blob": "9cd55e89880520ce87fe5fe517ecc2fd6aa294a5"
+    },
+    {
+      "path": "test/bootstrap/owners/bootstrap-readiness-probe-async-fallback.test.js",
+      "blob": "a7c6ede85432c4233749710545a3495a965fabe7"
+    },
+    {
+      "path": "test/bootstrap/partition-activation-handler-boundary.test.js",
+      "blob": "1538797f3ad2bc81b3325d0bbc29261e2c7e8289"
+    },
+    {
+      "path": "test/bootstrap/partition-cdc-propagation-subscriber.test.js",
+      "blob": "234cda520895ab115d13a465780a95fb0e474024"
+    },
+    {
+      "path": "test/bootstrap/partition-service-activation.test.js",
+      "blob": "c7d8bfbd37516cfdee676e02a145e49988a0be85"
+    },
+    {
+      "path": "test/bootstrap/pgwire-startup-safety-gate.test.js",
+      "blob": "cd134caa21675bc047f33c379a33b65c322d881d"
+    },
+    {
+      "path": "test/bootstrap/phase-adapter-removal.test.js",
+      "blob": "ee16a223adc4ec4fda30b3751219b95cd3a2ab04"
+    },
+    {
+      "path": "test/bootstrap/phase-event-ordering-characterization.test.js",
+      "blob": "2df19e086b0cf697c760491c3af8bf8e0d01cf68"
+    },
+    {
+      "path": "test/bootstrap/phase-failure-handling.property.test.js",
+      "blob": "912342d755f636fef19b1a4352452f18a095a4e5"
+    },
+    {
+      "path": "test/bootstrap/phases/join-resume-iteration-not-spent-wait.test.js",
+      "blob": "8a7e1a01e1e34c08960e3e2f74c6e998335e6a6d"
+    },
+    {
+      "path": "test/bootstrap/phases/wait-for-leadership-phase-retryable-timeout.test.js",
+      "blob": "6061264dd93018751021b1356997d08e8e75794d"
+    },
+    {
+      "path": "test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js",
+      "blob": "930701ff537ecff47c54552ed24ab2e81f1a06c2"
+    },
+    {
+      "path": "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+      "blob": "f8ce69ff827bfb4300cca4f29001a8a073b08d03"
+    },
+    {
+      "path": "test/bootstrap/pipeline/startup-pipeline-runner.test.js",
+      "blob": "2a0f4b603c48a006e9934206ef9533f64277c7a6"
+    },
+    {
+      "path": "test/bootstrap/production-scheduling-defaults.test.js",
+      "blob": "0f9ab6c05df17bc300f84387fe55e3a953a58c96"
+    },
+    {
+      "path": "test/bootstrap/query-state-single-owner.test.js",
+      "blob": "35322cbc328db57789ba774762ecd361c87fa2fd"
+    },
+    {
+      "path": "test/bootstrap/readiness-handoff-liveness-witness.test.js",
+      "blob": "bd919cebd3819bdbff147be0313fed272003d0fe"
+    },
+    {
+      "path": "test/bootstrap/register-node-in-cluster.test.js",
+      "blob": "8db78e5a575334c32288427583a5aaa252526850"
+    },
+    {
+      "path": "test/bootstrap/register-service-move-handoff-refused.test.js",
+      "blob": "1f37b0afa2d633c943916182e7c258ab26758194"
+    },
+    {
+      "path": "test/bootstrap/rejoin-hints.test.js",
+      "blob": "b8fe9ffebcc9a95cbda396a962328e843668ae61"
+    },
+    {
+      "path": "test/bootstrap/replica-evidence-conflict.test.js",
+      "blob": "3e883cd47146677c1def408d6133585610a70281"
+    },
+    {
+      "path": "test/bootstrap/replica-runtime-attachment-authority.test.js",
+      "blob": "92615e33974dc3bba392773633ccf9de721cae8e"
+    },
+    {
+      "path": "test/bootstrap/replication-target-authority.test.js",
+      "blob": "cc3ff64084426f81694dc3571da2f8db9927753b"
+    },
+    {
+      "path": "test/bootstrap/required-dependency-validation.property.test.js",
+      "blob": "01255798511da7f8a81396b5f5092d15968698a0"
+    },
+    {
+      "path": "test/bootstrap/restart-cdc-recovery-diagnostics.test.js",
+      "blob": "96f7c3ae033c06f25e2d9832aac102e7e645891f"
+    },
+    {
+      "path": "test/bootstrap/restart-cdc-subscription-hardening.test.js",
+      "blob": "310e47173bf63311fd465beb8ebd91926c5727bb"
+    },
+    {
+      "path": "test/bootstrap/return-value-completeness.property.test.js",
+      "blob": "cf24d1a09e768d87f08fa92cae84f35b0f7bcb80"
+    },
+    {
+      "path": "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+      "blob": "b39472ad479261f40e44b7d905c1f3734ab299ca"
+    },
+    {
+      "path": "test/bootstrap/schema-operations-table-schema.test.js",
+      "blob": "807e5f72abd775118d7f32738f9e7e67d42c8448"
+    },
+    {
+      "path": "test/bootstrap/seed-delegate-bundles.test.js",
+      "blob": "fbb6c176a90325bf20e729321d2b83c484ef2b5f"
+    },
+    {
+      "path": "test/bootstrap/seed-infrastructure-phase.test.js",
+      "blob": "8c2158c32bf495f5b51d939d72947191cfc1e677"
+    },
+    {
+      "path": "test/bootstrap/seed-infrastructure-runtime-identity.test.js",
+      "blob": "10030b528d86e8629799302ebce1c657fe21af01"
+    },
+    {
+      "path": "test/bootstrap/seed-message-group-cleanup-custody.test.js",
+      "blob": "75fe8542fa11a37fd2b5660407b02b5d08bbfdcb"
+    },
+    {
+      "path": "test/bootstrap/seed-message-group-founder-open-refusal.test.js",
+      "blob": "3224a980b0a063ba71097187b7a3ade5e893957f"
+    },
+    {
+      "path": "test/bootstrap/seed-participant-release-failure-projection.test.js",
+      "blob": "43b612bf97d7e7e5679040e59ea2a293648527c7"
+    },
+    {
+      "path": "test/bootstrap/seed-registration-election-scheduling.test.js",
+      "blob": "953420c780236b4480aae4709029ccc80197a8f9"
+    },
+    {
+      "path": "test/bootstrap/seed-registration-phase.test.js",
+      "blob": "2c9a85fd37dc39415ec7f8247c92fbc9ee8c353a"
+    },
+    {
+      "path": "test/bootstrap/seed-release-failure-custody.test.js",
+      "blob": "e445f65df1c0fdd0450c63ee684cf1fe881aecee"
+    },
+    {
+      "path": "test/bootstrap/seed-release-once-per-cohort.test.js",
+      "blob": "6bb4b3ccf244ba872d267341ab2c05dabae23647"
+    },
+    {
+      "path": "test/bootstrap/seed-restart-recovery-gate.test.js",
+      "blob": "93a795c13b17879de0c06c5af88ade7b7de36be0"
+    },
+    {
+      "path": "test/bootstrap/seed-startup-session-store.test.js",
+      "blob": "b2687e68f1952c3450ab90cc6408cfb5e302364a"
+    },
+    {
+      "path": "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js",
+      "blob": "1b9a9b08eca638e6a261ea898db367d1de5b71ee"
+    },
+    {
+      "path": "test/bootstrap/service-instance-table-schema.test.js",
+      "blob": "622cef425ec7a0631b37faa5e25781f9d288e3fd"
+    },
+    {
+      "path": "test/bootstrap/shared/cdc-integration-setup.test.js",
+      "blob": "0ca9ade288c0ade262fe2bd616eb8555457adfc0"
+    },
+    {
+      "path": "test/bootstrap/shared/control-plane-setup.test.js",
+      "blob": "8c7fd64d23ab6f3569da3aafee1268ffa03bcb52"
+    },
+    {
+      "path": "test/bootstrap/shared/message-router-setup.test.js",
+      "blob": "98cd746ec61605ab666dacd54567c3a8f9dad6e6"
+    },
+    {
+      "path": "test/bootstrap/shared/meta-service-definition-registration.test.js",
+      "blob": "b002880bc88746e589d44f343a04fe400534677f"
+    },
+    {
+      "path": "test/bootstrap/shared/replica-handler-setup.test.js",
+      "blob": "5ef4130d35fe65003bbf6ddee3b53f06fe01962b"
+    },
+    {
+      "path": "test/bootstrap/shared/service-installation-reconciler-setup.test.js",
+      "blob": "3f67e222f36dce071f26216820fb0b1b7c944a6b"
+    },
+    {
+      "path": "test/bootstrap/shared/startup-sql-runtime-handoff.test.js",
+      "blob": "ca6677cc0ac5798f3d2a1e9c16623fe53374ec1e"
+    },
+    {
+      "path": "test/bootstrap/startup-authority-consumption.test.js",
+      "blob": "716c56cf3dcd76ab3c6a343823fcce651dc72746"
+    },
+    {
+      "path": "test/bootstrap/startup-convergence-gate.test.js",
+      "blob": "e2b5385054f487a89abf34ebef886cf5eaeb272f"
+    },
+    {
+      "path": "test/bootstrap/startup-convergence-wait-bound-spent.test.js",
+      "blob": "59ae40df28068c892acbd68d5e7696345f22f3ec"
+    },
+    {
+      "path": "test/bootstrap/startup-recovery-coordinator.test.js",
+      "blob": "621ccf742db675210b3c9a3001258672b6338f1a"
+    },
+    {
+      "path": "test/bootstrap/startup-runtime-handoff-owner.test.js",
+      "blob": "6a4292c64e20d53ea5bdef9361a98253745650a8"
+    },
+    {
+      "path": "test/bootstrap/startup-runtime-surface-owner.test.js",
+      "blob": "52e018fa296387a81671d367ddc6ccf79a5d028b"
+    },
+    {
+      "path": "test/bootstrap/storage-budget-bootstrap.test.js",
+      "blob": "1bfb1086dca910f8a856ed164ab858a3145d9893"
+    },
+    {
+      "path": "test/bootstrap/system-leader-readiness-address-gate.test.js",
+      "blob": "503d5613b8783ef6fd2a759c5a274de8bca43857"
+    },
+    {
+      "path": "test/bootstrap/system-partition-classification-owner.test.js",
+      "blob": "9e1aa765ca5bc40055639a4fa2648c7f1247737c"
+    },
+    {
+      "path": "test/bootstrap/traffic-readiness-utils.test.js",
+      "blob": "0ab716c17e46f6aa5479b1109776f993a5903cad"
+    },
+    {
+      "path": "test/bootstrap/transaction-recovery-handoff-outcome.test.js",
+      "blob": "68314b3f1fba27e78ca5fd66904eb724da792f4b"
+    },
+    {
+      "path": "test/bootstrap/unified-service-lifecycle-cutover-guards.test.js",
+      "blob": "a7c57b555b68fcc2cd1c580851fe289d6f88da17"
+    },
+    {
+      "path": "test/bootstrap/universal-partition-implementation.property.test.js",
+      "blob": "54c3ffac6dbe9bad3331d8422dd97925d6c254bb"
+    },
+    {
+      "path": "test/bootstrap/wasm-meta-table-schemas.test.js",
+      "blob": "ccd1ad1c6ddc78a3df82602fd49d5dcec5c404f1"
+    },
+    {
+      "path": "test/cache/cache-epoch-rejection.property.test.js",
+      "blob": "f48f20881f2f181abf2be22094d5ed4f524193b5"
+    },
+    {
+      "path": "test/cache/cache-hydration-completeness.property.test.js",
+      "blob": "7de79064caeab0d4334a68071bc3b5e13dc14254"
+    },
+    {
+      "path": "test/cache/cache-hydration-metrics.test.js",
+      "blob": "3556322f1e3e79355d5899d154bac10275ed9607"
+    },
+    {
+      "path": "test/cache/cache-state-filtering.property.test.js",
+      "blob": "74f2d567f1a527f24243eb6cf70253f81274d4ca"
+    },
+    {
+      "path": "test/cache/cdc-cache-delete-resurrection.test.js",
+      "blob": "2d1b8a3eef676cbe40f2f7041580504efc908fa4"
+    },
+    {
+      "path": "test/cache/cdc-event-broadcast-completeness.property.test.js",
+      "blob": "5fd8807e3929af2a9a960c3ada5f74469d634496"
+    },
+    {
+      "path": "test/cache/concurrent-services-table-writes.property.test.js",
+      "blob": "32e6cd8e41797c4f587a385e97b7f49ceef62da5"
+    },
+    {
+      "path": "test/cache/default-cache-sync-table-selection.test.js",
+      "blob": "4e90800b4f1d8d0ce1b298faf41d8174abbf94c3"
+    },
+    {
+      "path": "test/cache/hydration-no-cdc-generation.property.test.js",
+      "blob": "0f39892dff274d7c4000ef1e5ab5048528731a3b"
+    },
+    {
+      "path": "test/cache/leader-readiness-gate.property.test.js",
+      "blob": "a2791fbb05137e86c9dfca700c25abff6c71cb80"
+    },
+    {
+      "path": "test/cache/leader-readiness-gate.test.js",
+      "blob": "37b6067efa638d18ce984b9c16f2bf6c8e2913f3"
+    },
+    {
+      "path": "test/cache/partial-hydration-resilience.property.test.js",
+      "blob": "fa8da2c0e0e27ca9f7e822723d9bcc5379d0f2ca"
+    },
+    {
+      "path": "test/cache/read-only-system-table-cache.test.js",
+      "blob": "21e94718a7e9d41d02cc965fbe4da88854c3d18a"
+    },
+    {
+      "path": "test/cache/shared-row-read.test.js",
+      "blob": "78e3415b9b32bb9bb639b16ae71b00fffd951e95"
+    },
+    {
+      "path": "test/cache/system-cache-client.test.js",
+      "blob": "a58f8028503442622f9c85272b0684e1169db222"
+    },
+    {
+      "path": "test/cache/system-cache-endpoint-query.property.test.js",
+      "blob": "4ae5128569d4165a333a4b81a3cbff6048d6a59d"
+    },
+    {
+      "path": "test/cache/system-table-cache-anti-entropy-sweep.test.js",
+      "blob": "9324f305295cbfe6f755d8f2b8cd5736dca55fc2"
+    },
+    {
+      "path": "test/cache/system-table-cache-cdc-provenance.test.js",
+      "blob": "2bf120c24fde16d6988c62b5afe7fbf0acf6b96d"
+    },
+    {
+      "path": "test/cache/system-table-cache-consistency.property.test.js",
+      "blob": "b3621cedeb67e0e16dde8ba1f6f8d68bd658593a"
+    },
+    {
+      "path": "test/cache/system-table-cache-lifecycle-delete-ordering.test.js",
+      "blob": "baa37f97cb4f4279ba7b7644c75eb8b67db3b2bc"
+    },
+    {
+      "path": "test/cache/system-table-cache-services-lifecycle-merge.test.js",
+      "blob": "99d718efeebbf9b6fd9592ddc1337b26f1d23cbd"
+    },
+    {
+      "path": "test/cache/system-table-cache-time-authority.test.js",
+      "blob": "a4db128ac5d069d771a0243096bade21ec1ea7a0"
+    },
+    {
+      "path": "test/cache/system-table-cache-tombstone-time-authority.test.js",
+      "blob": "6c7d6f10c0ce9ad00167f91ed58cd4ded106758a"
+    },
+    {
+      "path": "test/cache/system-table-cache.test.js",
+      "blob": "020337ab7c45453fe82b6f84f6376d972d6c405a"
+    },
+    {
+      "path": "test/cdc/cdc-shutdown-terminal-owner-write.test.js",
+      "blob": "e563d033d7aecb8cb682f39c390190649b814cf2"
+    },
+    {
+      "path": "test/cli/core/base-view-model.test.js",
+      "blob": "45f57580d7f27a1767aabd0244ee391b889f04fe"
+    },
+    {
+      "path": "test/cli/service-init-scaffold.test.js",
+      "blob": "3149b98fe64281435261f84b2550b688f68b377a"
+    },
+    {
+      "path": "test/cli/sql/query-input.test.js",
+      "blob": "7cc4958876f074beaae5e4227e29a8c0d5699d2a"
+    },
+    {
+      "path": "test/cli/views/config-view.test.js",
+      "blob": "cde80f4b29f336e5d2f9fd3589b9427161108cb8"
+    },
+    {
+      "path": "test/config/architecture-ownership-guardrails.test.js",
+      "blob": "d7f6c81b6e8467aacd8d0dba1ebf75eae9ee2a17"
+    },
+    {
+      "path": "test/config/code-path-uniqueness.property.test.js",
+      "blob": "8d59c5a36a4de8ee887245292ff764a5a0b91abb"
+    },
+    {
+      "path": "test/config/control-plane-gateway-mutation-guardrails.test.js",
+      "blob": "4d80898c268c143da3cc6436cd45acd4b7755faa"
+    },
+    {
+      "path": "test/config/control-plane-gateway-registry-guardrails.test.js",
+      "blob": "d71dfd759d77a7e146e4ba455e4c761b520bc000"
+    },
+    {
+      "path": "test/config/dynamic-config-service.test.js",
+      "blob": "5acbd5e6d7f250fabd115c11097ffaac0d64f2a9"
+    },
+    {
+      "path": "test/config/latency-topology-ownership-guardrails.test.js",
+      "blob": "481a863a9bfff8443b92b664dcc491f560e8a6fa"
+    },
+    {
+      "path": "test/config/system-cache-write-callsite-guardrails.test.js",
+      "blob": "cc7b120b4927eebd559e807903deedf307983531"
+    },
+    {
+      "path": "test/config/test-configuration-compliance.property.test.js",
+      "blob": "67a30c9e9bfb8213716bfb96581f84f31ea80325"
+    },
+    {
+      "path": "test/contract/callback-axis-accretion.test.js",
+      "blob": "7d0332a31309fafdf8c7947b4d3c46541a920723"
+    },
+    {
+      "path": "test/contract/message-router-contract.test.js",
+      "blob": "3eb56256031ddb24443a486836edd59edd8e094a"
+    },
+    {
+      "path": "test/control-plane/core-system-logic-runtime-witness.test.js",
+      "blob": "35f206b6fc34306d5e03a18c26fe030d46d998a4"
+    },
+    {
+      "path": "test/control-plane/current-membership-epoch-null-unreadable.test.js",
+      "blob": "e2e42a58b83bdd133d62e131f45f933fdc4b3370"
+    },
+    {
+      "path": "test/control-plane/endpoint-reader-currentness.test.js",
+      "blob": "83cf727bed02cb6176c6a4fb50b5ec8353348ec8"
+    },
+    {
+      "path": "test/control-plane/endpoint-writer-census.test.js",
+      "blob": "1f831769f2328ad74135f50e2e2a50c8c52d0edf"
+    },
+    {
+      "path": "test/control-plane/failure-class-registry.test.js",
+      "blob": "e02995fdea6eb2dccaf0caeba5d70d1311920661"
+    },
+    {
+      "path": "test/control-plane/formation-release-handoff-interaction-registry.test.js",
+      "blob": "28c9b965fd3fad0d561cd768eb91c3e06f341e34"
+    },
+    {
+      "path": "test/control-plane/membership-layer-boundary.guard.test.js",
+      "blob": "1843f39a5d4da9716671909b5c4dd76961058fcc"
+    },
+    {
+      "path": "test/control-plane/membership-publication-first-epoch-members.test.js",
+      "blob": "4c6ab9714e732544bb8abfbb9f5fe76b7a432016"
+    },
+    {
+      "path": "test/control-plane/readiness-single-contract-build.test.js",
+      "blob": "ad3e83da9edf083225b67f91a575a41228908fe0"
+    },
+    {
+      "path": "test/control-plane/service-instance-creation-cas.test.js",
+      "blob": "84cb3bb5f697b42a6811986fb9b1f2b31637dc08"
+    },
+    {
+      "path": "test/convergence/membership-publication-owner-driver-host.test.js",
+      "blob": "5b3a449462dc80b303ae4ac21b63b6d63c1a9f9d"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/certification-image-identity.test.js",
+      "blob": "2db091e44d5e83dc91da9b5481cfb714a3f9e63b"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/owner-interaction-model.test.js",
+      "blob": "eba2d3fbb4d8877fd05ce3b08e21c4f95db8cd29"
+    },
+    {
+      "path": "test/distributed/harness/__tests__/run.test.js",
+      "blob": "aeae22b3f4b4ca11bbd4bd90a38ad10e953be153"
+    },
+    {
+      "path": "test/entrypoint-runtime-helpers-join-decision.test.js",
+      "blob": "13ae3f3b86a49fd9cb05b2cc72611cc286194624"
+    },
+    {
+      "path": "test/entrypoint/application-database-runtime-composition.test.js",
+      "blob": "519333f8253a2032f3f23a70d387a168f08e113e"
+    },
+    {
+      "path": "test/entrypoint/creation-recovery-process-custody.test.js",
+      "blob": "980fe4ce9d7a5a09c689ec780a8aae8ad8a94443"
+    },
+    {
+      "path": "test/entrypoint/early-admin-sql-engine.test.js",
+      "blob": "30ca85871ac50ee9f7bf8838a3bdce06c5a2b424"
+    },
+    {
+      "path": "test/entrypoint/embedded-lagrange-input.test.js",
+      "blob": "9b03b6f716efdb6e60e8f42efd5e1f3a60a1a17e"
+    },
+    {
+      "path": "test/entrypoint/entrypoint-admin-runtime-cleanup.test.js",
+      "blob": "0e95660a984a8aa9dffe78b3a38a7795bee0d891"
+    },
+    {
+      "path": "test/entrypoint/entrypoint-startup-shutdown-parity-characterization.test.js",
+      "blob": "be777e6f8feebc225f58c85f286eafc1de8970bf"
+    },
+    {
+      "path": "test/entrypoint/join-reattempt-wait-bound-spent.test.js",
+      "blob": "7af13232840c8bbb2c1abd6f6bb703b77875285c"
+    },
+    {
+      "path": "test/entrypoint/process-custody-review.integration.test.js",
+      "blob": "fa737b7d22ae991ce39ce7245e4d42270ff26079"
+    },
+    {
+      "path": "test/entrypoint/shutdown-best-effort-step-timebox.test.js",
+      "blob": "f077a099811d02c58549bc1a7603649e3dfac06b"
+    },
+    {
+      "path": "test/entrypoint/startup-failed-cleanup-process-custody.test.js",
+      "blob": "0edcf28b11ea7ac6978f0e207422d621fb6cf3ad"
+    },
+    {
+      "path": "test/function/change-binding-compilation.test.js",
+      "blob": "25563703d74041269e06493947c4e4d3cafb7c8b"
+    },
+    {
+      "path": "test/function/context-cdc-consistency.property.test.js",
+      "blob": "e997978ea5a3fcd8a62129df06574e7b79ab6525"
+    },
+    {
+      "path": "test/function/context-manager.test.js",
+      "blob": "073efef7eda30b0ed3afb3362da9d441b08ca3d3"
+    },
+    {
+      "path": "test/function/function-query-executor-wait-bound-spent.test.js",
+      "blob": "b059d0600ecc396ad8d71484751ae8ab7680b9a3"
+    },
+    {
+      "path": "test/function/function-query-executor.test.js",
+      "blob": "5d91a0efa16e271bc188d3bd87b7d6e17036a7ff"
+    },
+    {
+      "path": "test/function/function-registry-no-executor.property.test.js",
+      "blob": "5b1fb75e24e0e89c6ed3dac7c274a57bb0494b18"
+    },
+    {
+      "path": "test/function/function-registry.test.js",
+      "blob": "61342e187890205a2a5c34d262f2173f9aec6ba7"
+    },
+    {
+      "path": "test/function/query-then-invoke-continuation.property.test.js",
+      "blob": "c882007bc2102a0a0cc03160a916a5815277b898"
+    },
+    {
+      "path": "test/index-management/index-maintenance-consistency.property.test.js",
+      "blob": "7197ffa23e36e6881233d229508d7ae2a4804074"
+    },
+    {
+      "path": "test/index-management/index-service.test.js",
+      "blob": "d65a9935355089b6ac03a29d0e32b244ea738aae"
+    },
+    {
+      "path": "test/index-management/query-optimizer.test.js",
+      "blob": "bae535617605b914362fd83a352c4216d180e66c"
+    },
+    {
+      "path": "test/integration/artifact-payload-durability.integration.test.js",
+      "blob": "1f242ad06e88ae07f6010c3d09441f1cb0c9bebf"
+    },
+    {
+      "path": "test/integration/authoritative-discovery-repair-pressure.integration.test.js",
+      "blob": "9a935a29200a2b6bebbe88c9a37d6df279a860c3"
+    },
+    {
+      "path": "test/integration/benchmark-system-table-read-path.integration.test.js",
+      "blob": "e49011f48749550c3af330e557d4125836e698bd"
+    },
+    {
+      "path": "test/integration/call-cell-public-outcome-adversarial.integration.test.js",
+      "blob": "c669650e66abdaf6b6690330ebb0b78b1ced7e16"
+    },
+    {
+      "path": "test/integration/create-table-partition-provisioning.integration.test.js",
+      "blob": "b4b3e06eeb09849e844cc82da7e82c6c38b4d14b"
+    },
+    {
+      "path": "test/integration/critical-partition-learner-safety.integration.test.js",
+      "blob": "51c71c2eda5642329de3c829b7f6d0256d12d7b0"
+    },
+    {
+      "path": "test/integration/data-local-call-missing-cell-activation.integration.test.js",
+      "blob": "76616db1e837a6ed2bb2867aff03da3b4b7a17c5"
+    },
+    {
+      "path": "test/integration/http-to-call-composition.integration.test.js",
+      "blob": "2ebf597c88c94ff631805c2adfc58f831bb4ad64"
+    },
+    {
+      "path": "test/integration/insert-or-ignore-raft-replay.integration.test.js",
+      "blob": "3082a5c49ff9fa47abb8684e5a76a5aa2cb1718a"
+    },
+    {
+      "path": "test/integration/lagrange-server-npm-package.integration.test.js",
+      "blob": "7fca2be762d866d616b880defdfc134cc7ae5c5d"
+    },
+    {
+      "path": "test/integration/leader-metadata-validation.integration.test.js",
+      "blob": "d1c6379657fc0cea2a686ba864fb2ae7820cf0cb"
+    },
+    {
+      "path": "test/integration/leader-routable-system-writes.integration.test.js",
+      "blob": "43ba49106a271fed351e66cecf4a827aa14fd418"
+    },
+    {
+      "path": "test/integration/managed-split-admission-reliability.integration.test.js",
+      "blob": "de22f5ec935b984624fc41bdaf90550d468044dc"
+    },
+    {
+      "path": "test/integration/managed-split-writes-after-cutover.integration.test.js",
+      "blob": "4cbe4afbda45c6d9de01080ef848114057bd40ec"
+    },
+    {
+      "path": "test/integration/membership-consistency.integration.test.js",
+      "blob": "4059d025ae1b8e554bb715244cf3463d1cf3e38e"
+    },
+    {
+      "path": "test/integration/message-group-learner-process-loss.integration.test.js",
+      "blob": "84b885d9ad0e5f27f18cf1f044f608408e6b210a"
+    },
+    {
+      "path": "test/integration/message-group-learner-runtime-authorization.integration.test.js",
+      "blob": "ef809442da34c69c52fdee5c831902585ef06e6b"
+    },
+    {
+      "path": "test/integration/message-group-service-handler-services-row.integration.test.js",
+      "blob": "41208f9408fdd1540742f6e4cab27db3a1bd3376"
+    },
+    {
+      "path": "test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js",
+      "blob": "9fda5e0e80e9f13f863c9948993dd8575a6ae4f6"
+    },
+    {
+      "path": "test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js",
+      "blob": "f9cee472f5bf9d8f83c786dff43c41ce102b4f6e"
+    },
+    {
+      "path": "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js",
+      "blob": "6047dad1321b4ec5358df4dfc4afd637d32a5efa"
+    },
+    {
+      "path": "test/integration/multi-node-raft-replication.integration.test.js",
+      "blob": "53e10878ab4c483c7dbe1ddfcac7eec1d6096a51"
+    },
+    {
+      "path": "test/integration/node-join-replica-activation.integration.test.js",
+      "blob": "2912e4bff5d2f2ed257836e98146b5ec734edace"
+    },
+    {
+      "path": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "blob": "877e0b30225fa9b8f8555b9b43283482c5a608aa"
+    },
+    {
+      "path": "test/integration/public-application-database-multinode.integration.test.js",
+      "blob": "c85c1f8745384a0499316d6d7bd1dbe84ac33135"
+    },
+    {
+      "path": "test/integration/public-application-database-transaction-facade.integration.test.js",
+      "blob": "ad696635eba10cd56c152f3310aaafab78f3a549"
+    },
+    {
+      "path": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "blob": "4a671243ee792df07d5b63da7452b8465d853c1b"
+    },
+    {
+      "path": "test/integration/public-consumer-contract-ratchet.integration.test.js",
+      "blob": "e1dee15d9f80624fd2933670e42a0580c6d0cc59"
+    },
+    {
+      "path": "test/integration/raft-leader-election.integration.test.js",
+      "blob": "fbac0ff449325a4fb237dd73da5d466fe0c89a85"
+    },
+    {
+      "path": "test/integration/seed-migration-cutover-persisted.integration.test.js",
+      "blob": "36202b47649ebb197ddec1d16712bbc353d4bff4"
+    },
+    {
+      "path": "test/integration/seed-migration-interrupted-decision.integration.test.js",
+      "blob": "a344232421d667197b5d537e3bd34fd654574a17"
+    },
+    {
+      "path": "test/integration/seed-migration-process-loss.integration.test.js",
+      "blob": "8996c0e4d63c1ee10bf9b244f48fe4bce61e1bca"
+    },
+    {
+      "path": "test/integration/seed-node-bootstrap.integration.test.js",
+      "blob": "fb23d06d0b4279bfd80a29770172159f3c651597"
+    },
+    {
+      "path": "test/integration/seed-owner-read-diagnosis.integration.test.js",
+      "blob": "4a8a7c02991f9f0936fe1842022ccc9e6266dfc4"
+    },
+    {
+      "path": "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js",
+      "blob": "13eef132597ff7bf6eefc6a077ca6f51202671e6"
+    },
+    {
+      "path": "test/integration/services-p1-self-referential-write.integration.test.js",
+      "blob": "584425c92a9ee27176217c0bd092f9c30baf300a"
+    },
+    {
+      "path": "test/integration/sql-engine-system-writes-contract.integration.test.js",
+      "blob": "b93fe1d9e92eeb3b51e8ef15ce3a762888bfd3e3"
+    },
+    {
+      "path": "test/integration/sql-workflow.integration.test.js",
+      "blob": "224de09aae9ffe83e1873d478758523558981497"
+    },
+    {
+      "path": "test/invariants/invariant-catalog.test.js",
+      "blob": "3fff4305330aaece67bee6f3d834400afdf31f5a"
+    },
+    {
+      "path": "test/live-query/live-query-manager.test.js",
+      "blob": "434b5331f699caba22ef9b357f79dddb64a417e5"
+    },
+    {
+      "path": "test/live-query/live-query-service.test.js",
+      "blob": "45da84903e2d019c09104ff5a14d22d5a1c194c7"
+    },
+    {
+      "path": "test/live-query/live-query-startup-wiring.test.js",
+      "blob": "6b03f0e7c60572df59d584cb3151e194c446b498"
+    },
+    {
+      "path": "test/live-query/partition-aware-subscription.property.test.js",
+      "blob": "d73150686effbdcea3b1bcb5c2555a0bb64f7804"
+    },
+    {
+      "path": "test/message-group/message-group-fresh-learner-snapshot.test.js",
+      "blob": "4230cacd36be1f3d5ff595d79788dfb915e59796"
+    },
+    {
+      "path": "test/message-group/message-group-native-custody-handoff.test.js",
+      "blob": "42309a81432a22a04e453c0cc600fea5983095e6"
+    },
+    {
+      "path": "test/message-group/metadata-cache-removal.test.js",
+      "blob": "0153a4f4a10c8b4bf7c4cd7074fe22de9a6b401b"
+    },
+    {
+      "path": "test/node/call-cell-partition-fence.test.js",
+      "blob": "60c3c4a588a20187a9879cdb0db4ce476497d221"
+    },
+    {
+      "path": "test/node/concurrent-operation-limits.property.test.js",
+      "blob": "fbfbf03ce57b328fde3d3dd46c90e4a7e7d213d8"
+    },
+    {
+      "path": "test/node/entry-time-tracking.property.test.js",
+      "blob": "1ee198d3f0bd10e534cb876473dae05a6e391638"
+    },
+    {
+      "path": "test/node/event-emission-completeness.property.test.js",
+      "blob": "411294c9fcf90d82039c725eae18f500f8c0815b"
+    },
+    {
+      "path": "test/node/failed-replica-removal-transition-tolerance.test.js",
+      "blob": "7503ad7ff3e2a1ef28c07f1d3ef506a1b9dd10d6"
+    },
+    {
+      "path": "test/node/failure-detection-delegation.property.test.js",
+      "blob": "41205b2923b5fb2824c421052788e1c8fd01bf87"
+    },
+    {
+      "path": "test/node/failure-detector-adaptive-threshold.property.test.js",
+      "blob": "89d8b56b09f74683c032765695827503f664455b"
+    },
+    {
+      "path": "test/node/failure-detector-cdc-writes.property.test.js",
+      "blob": "fbd9223e872ec6ce1e5e97523cbbc0b946ee0a84"
+    },
+    {
+      "path": "test/node/failure-detector-recovery.property.test.js",
+      "blob": "b82fe93d0682194bf08d52be664e7058c6a9c431"
+    },
+    {
+      "path": "test/node/failure-detector-sql-upgrade.property.test.js",
+      "blob": "5ff6ae2f08cbc33aaf30bd89494f3da49b3a3254"
+    },
+    {
+      "path": "test/node/failure-detector-sql-upgrade.test.js",
+      "blob": "9e4884590db5fd3ef90d91ad4d5b47839050c609"
+    },
+    {
+      "path": "test/node/failure-detector.test.js",
+      "blob": "eb6e9bf2dfb552737bb932628a492e4acd3e417b"
+    },
+    {
+      "path": "test/node/failure-repair-intent-contract.test.js",
+      "blob": "1a31d383f264954fe73d2f8be1bfa78090623a6a"
+    },
+    {
+      "path": "test/node/fault-recovery-behavior.property.test.js",
+      "blob": "bfc63ec70db1cdc0ea3dc66611d20ed8e005d640"
+    },
+    {
+      "path": "test/node/group-retired-tombstone-incarnation.test.js",
+      "blob": "860e191b15d0b0c2c1a3fdad53daf91b0172f47e"
+    },
+    {
+      "path": "test/node/group-retired-tombstone.test.js",
+      "blob": "b6947c949cb7052fbc9359074bcbe9669137b7b4"
+    },
+    {
+      "path": "test/node/group-retirement-as-a-unit.test.js",
+      "blob": "f276503705cea9b5e99af4dd2eeb97157f9b255e"
+    },
+    {
+      "path": "test/node/group-retirement-fail-closed.test.js",
+      "blob": "e3e13315ac6f535e59989dd38b88bf7f2d7f8d92"
+    },
+    {
+      "path": "test/node/group-retirement-fences.test.js",
+      "blob": "0bb6e6fb95cc8f976f9ef0caba292654e460ad4c"
+    },
+    {
+      "path": "test/node/group-retirement-liveness.test.js",
+      "blob": "bf6bd5d72a1b31fa430262b2b61afdfb5d53653b"
+    },
+    {
+      "path": "test/node/group-retirement-redrive.test.js",
+      "blob": "34ca2347622f148dea8a4a571312519453c9b53e"
+    },
+    {
+      "path": "test/node/group-retirement-reseed-held.test.js",
+      "blob": "ae6a05dcd353b50a438bdf577e33f9fb784af479"
+    },
+    {
+      "path": "test/node/idempotent-operations.property.test.js",
+      "blob": "89aff7643a017f57f942248f59470e1fb97c4418"
+    },
+    {
+      "path": "test/node/lifecycle-readiness.test.js",
+      "blob": "163c1d70144eb66f2c9b15224fef1ef963a748e4"
+    },
+    {
+      "path": "test/node/local-only-reconcile-activation-boundary.test.js",
+      "blob": "89d5ef40e9c83dac853465023ec75c6013ff4887"
+    },
+    {
+      "path": "test/node/message-group-executor-activation-handler-boundary.test.js",
+      "blob": "1126ac33723af442acf2f901fea634e3d2b0f3da"
+    },
+    {
+      "path": "test/node/message-group-registration-redrive-owner.test.js",
+      "blob": "ccd089d52821f84e9be77971e701f672e3c266ac"
+    },
+    {
+      "path": "test/node/message-group-service-handler-membership.test.js",
+      "blob": "752ba6706c041b9bdc7d0d1bcfd2bb9c25de0760"
+    },
+    {
+      "path": "test/node/message-group-service-handler.test.js",
+      "blob": "23aa5dbc435b3f3edc4c192f53026c7fe0580872"
+    },
+    {
+      "path": "test/node/metrics-accuracy.property.test.js",
+      "blob": "2fc394c02c0851d6f1b091005bd7f80c8db958e0"
+    },
+    {
+      "path": "test/node/node-lifecycle-service.test.js",
+      "blob": "31fe28356a9582dca5f83659a9060751ba093e5c"
+    },
+    {
+      "path": "test/node/node-lifecycle-state-machine.test.js",
+      "blob": "569fe03b36355957f4ef2be8508bb924173b5cc7"
+    },
+    {
+      "path": "test/node/node-recovery-orphan-cleanup.property.test.js",
+      "blob": "1eb661b1531e37c4d95b2c916fcce90b648a58e9"
+    },
+    {
+      "path": "test/node/node-reintegration-service.test.js",
+      "blob": "7a56ee4817a4015a8eb6e2ef54f1294a565b22b3"
+    },
+    {
+      "path": "test/node/node-service-cache-delegation.property.test.js",
+      "blob": "bccbfc0d37da0f6c378f3b8b8a9ea3421aa101c7"
+    },
+    {
+      "path": "test/node/node-service-presence.property.test.js",
+      "blob": "ce0bc56dd3a77692ccf44a839ad1a1bae7e9550b"
+    },
+    {
+      "path": "test/node/node-service-runtime-isolation.test.js",
+      "blob": "5dbac1ee558f356dd2d7edb7dec6f5919e520926"
+    },
+    {
+      "path": "test/node/node-service.test.js",
+      "blob": "c9c1c97bada92e7ac68e150ff0fc5b65f812e7e5"
+    },
+    {
+      "path": "test/node/participant-release-control-refusal-observation.test.js",
+      "blob": "afa763c4576fcc423236daef907f33ec053308e8"
+    },
+    {
+      "path": "test/node/participant-release-fresh-create-completion.test.js",
+      "blob": "53b796ffdfeb546846c62b9abe814fea0dbe89d8"
+    },
+    {
+      "path": "test/node/partition-registration-invariant.property.test.js",
+      "blob": "d5b4a3af9e2b7c75603221c6e830a93d877abe85"
+    },
+    {
+      "path": "test/node/registered-partition-removal.property.test.js",
+      "blob": "488643c51dcead705e81b946f7cd28b195840f82"
+    },
+    {
+      "path": "test/node/replica-cleanup-token-authority.test.js",
+      "blob": "5fdb458fee7b6a48d36244daff5660d3756ecd06"
+    },
+    {
+      "path": "test/node/replica-create-admission-owner.test.js",
+      "blob": "160cdb7eedda60ae4fa0d8399d8677da87f781e8"
+    },
+    {
+      "path": "test/node/replica-create-admission-recovery.test.js",
+      "blob": "a03596fb1d44a8f7c6b68ae37ba4ed190f99e662"
+    },
+    {
+      "path": "test/node/replica-creation-idempotency.property.test.js",
+      "blob": "5acb545e5a1de222410b94a7de01ddd42f2cf6a1"
+    },
+    {
+      "path": "test/node/replica-executor-activation-handler-boundary.test.js",
+      "blob": "e1ee12646aecab3aa2aaf984c8f2cb77ae9842b3"
+    },
+    {
+      "path": "test/node/replica-failed-create-cleanup-generation.test.js",
+      "blob": "84b134eaeb0d32bf01bb93b74deed062b8270a90"
+    },
+    {
+      "path": "test/node/replica-handler-cache-state.test.js",
+      "blob": "80d7f55ad8c5d90e03972b3f1bf3490a20dc1b30"
+    },
+    {
+      "path": "test/node/replica-handler-idempotency.property.test.js",
+      "blob": "a59e53e2623c6fb33b0257cd3b5a6b335bb736d2"
+    },
+    {
+      "path": "test/node/replica-handler-leadership-transfer.test.js",
+      "blob": "50620822d3e93e0a7e7809592d98f69d8d3350ba"
+    },
+    {
+      "path": "test/node/replica-handler-membership-relay.test.js",
+      "blob": "52a17ef895a0f88545449ef856edee9f69eb7390"
+    },
+    {
+      "path": "test/node/replica-handler-owner-path-bypass.test.js",
+      "blob": "7e271541e4a4b3ae59eb0a43284d6a1120a14413"
+    },
+    {
+      "path": "test/node/replica-handler-release-recovery.test.js",
+      "blob": "2add6d83f6ffe89d2271c1158311d3ecc29ea0f0"
+    },
+    {
+      "path": "test/node/replica-handler-replacement-election-already-leader.test.js",
+      "blob": "dac2b7c616f47aa3610a210ce59c161caf7d6811"
+    },
+    {
+      "path": "test/node/replica-handler-replica-membership.test.js",
+      "blob": "6f9865fc507e641f99df760cf299699040d12c3d"
+    },
+    {
+      "path": "test/node/replica-handler-voter-ready-wait-bound-spent.test.js",
+      "blob": "75b6296095210182093ab0ab52b031f241aaee11"
+    },
+    {
+      "path": "test/node/replica-handler.test.js",
+      "blob": "4370348d6187602e3cdee04d978d5f3d3ce68dbc"
+    },
+    {
+      "path": "test/node/replica-lifecycle-durable-generation.test.js",
+      "blob": "d512d4e12ec7979d0a13d41716cc69d6ca5557b6"
+    },
+    {
+      "path": "test/node/replica-lifecycle-manager.test.js",
+      "blob": "a0d4b37e2a9add6cf935f7100ee511125d290fc9"
+    },
+    {
+      "path": "test/node/replica-lifecycle-message-delivery.property.test.js",
+      "blob": "992016ddf84136beea60190373b28cc5f21d558e"
+    },
+    {
+      "path": "test/node/replica-local-only-row-convergence.test.js",
+      "blob": "bb8c9cd78f7777e3d04c0ec21813d64c11c1ab5c"
+    },
+    {
+      "path": "test/node/replica-recovery-service.test.js",
+      "blob": "e4704743f6f953693a4991a9d55cb3fedacdcbae"
+    },
+    {
+      "path": "test/node/replica-removal-consensus-exit-decisions.test.js",
+      "blob": "57d23e3ddd5a476e77a3fe771a510a58ddaad026"
+    },
+    {
+      "path": "test/node/replica-removal-consensus-exit-reported-once.test.js",
+      "blob": "eb8afe35562e9c7e8523b052ae30979df923bef0"
+    },
+    {
+      "path": "test/node/replica-removal-consensus-exit.test.js",
+      "blob": "8dddc8ff772450fcc50b28282139c414776bef2c"
+    },
+    {
+      "path": "test/node/replica-removal-deferred-row-write.test.js",
+      "blob": "d568ee9fdc12599447ef2c28bb1da4183d3a70b4"
+    },
+    {
+      "path": "test/node/replica-removal-graceful-shutdown.property.test.js",
+      "blob": "12470706601531fce987b83a640d7fd01f864053"
+    },
+    {
+      "path": "test/node/replica-removal-leader-source.test.js",
+      "blob": "3597778dd7982eeaa550976fd094244f1baa401b"
+    },
+    {
+      "path": "test/node/replica-runtime-cleanup-custody.integration.test.js",
+      "blob": "cf92fc9206debfb310bffa8fb43509f22fcb9557"
+    },
+    {
+      "path": "test/node/replica-state-delegation.test.js",
+      "blob": "e31532b32ec7501b91f34a3f68d3aecdcb212fcc"
+    },
+    {
+      "path": "test/node/replica-state-machine-authoritative-transition.test.js",
+      "blob": "e51e31ade8f02a5a919f3ffdd5b075357609890f"
+    },
+    {
+      "path": "test/node/replica-state-machine-registered-activation.test.js",
+      "blob": "19591e46ace4331bc123f9ab02d8411247a10215"
+    },
+    {
+      "path": "test/node/replica-state-machine-time-source.test.js",
+      "blob": "24a82130e2024858267ed312ff4cc67688a8c40a"
+    },
+    {
+      "path": "test/node/replica-state-machine-transitions.property.test.js",
+      "blob": "92c9902beeb3d7d102b87403cb449cbafaf221b5"
+    },
+    {
+      "path": "test/node/replica-state-machine.test.js",
+      "blob": "324cc4b23ce69a43f9359c6e3fe0827d0b8a740b"
+    },
+    {
+      "path": "test/node/replica-status-state-machine.property.test.js",
+      "blob": "148bcd05765077866d1e285654fed5d7a7913067"
+    },
+    {
+      "path": "test/node/replica-status-write-retry-spent-owner.test.js",
+      "blob": "0790098446ad9f32bdbe557e0a99675e2ed86b4d"
+    },
+    {
+      "path": "test/node/replica-transport-handler-identity.test.js",
+      "blob": "1afe9dbab8d6012483ededa19530f215322494e2"
+    },
+    {
+      "path": "test/node/runtime-service-bound-route.test.js",
+      "blob": "f3468c4213b23ea11bc2977c41dbdfdb99119126"
+    },
+    {
+      "path": "test/node/runtime-service-call-cell-handler.test.js",
+      "blob": "cf97e1bfadebc85c63a68c7e6c334ce1d6c51853"
+    },
+    {
+      "path": "test/node/runtime-service-handler.test.js",
+      "blob": "50fe2c3f114edeafd416f73418b9e6b6103946b5"
+    },
+    {
+      "path": "test/node/runtime-service-remove-execution-custody.test.js",
+      "blob": "29e162fcbe03a333a9ed2c0e317ca223f19e53dc"
+    },
+    {
+      "path": "test/node/runtime-service-restart-inventory-custody.test.js",
+      "blob": "aee8be3aefc8425cfc4564db694475bc85619065"
+    },
+    {
+      "path": "test/node/services-p1-diagnostic-logger.test.js",
+      "blob": "907839f80713fb0d78e3067cbfca384bcf6ae088"
+    },
+    {
+      "path": "test/node/single-cdc-write-path.property.test.js",
+      "blob": "abcfc1255dff0f793f3dd1a547521fc0df59313d"
+    },
+    {
+      "path": "test/node/state-change-event-emission.property.test.js",
+      "blob": "c4438bf20fa91b729f5275c45e6b273dfb21f23a"
+    },
+    {
+      "path": "test/node/state-count-accuracy.property.test.js",
+      "blob": "d2811950ef618e35d8b8af8fc1252def787fc0c5"
+    },
+    {
+      "path": "test/node/state-machine-cdc-consistency.property.test.js",
+      "blob": "331253e16aa48c206073ef87ba57dbd1359e630c"
+    },
+    {
+      "path": "test/node/state-persistence-cdc.property.test.js",
+      "blob": "e5d0653891a82cb66be2c6f3d82366879c21f791"
+    },
+    {
+      "path": "test/node/state-transition-validity.property.test.js",
+      "blob": "67d92e81e6fea56aec565c680d1ef91d8927a2fc"
+    },
+    {
+      "path": "test/node/sub-phase-event-context.property.test.js",
+      "blob": "f2d04638e3f0d996fe6354e2236b4241e7b1ba12"
+    },
+    {
+      "path": "test/node/sub-phase-tracking.property.test.js",
+      "blob": "bff63bd755765a1a0d311446725a2064dcac6bd8"
+    },
+    {
+      "path": "test/node/sub-phase-transition-completeness.property.test.js",
+      "blob": "4deb5e40e561f9209c7ef623deb8f065da447e12"
+    },
+    {
+      "path": "test/node/terminal-sub-phase-auto-advance.property.test.js",
+      "blob": "76f23fc1eaa01b96acbe381de24ad260b895339d"
+    },
+    {
+      "path": "test/node/timeout-triggered-failures.property.test.js",
+      "blob": "432b5a40bdbb736dd43de466eac1845956df682c"
+    },
+    {
+      "path": "test/partition/ack-extraction-from-response.property.test.js",
+      "blob": "36bcf1600aa9a3e61feee8f8181300136fc6ae8a"
+    },
+    {
+      "path": "test/partition/adjacent-partition-merging.property.test.js",
+      "blob": "32de9d41295119132ef87297b08fa1f52ab240e5"
+    },
+    {
+      "path": "test/partition/cdc-buffer-replay-robustness.test.js",
+      "blob": "0f161f77fe61ddda8adf556f1dc2c5bdd13b590d"
+    },
+    {
+      "path": "test/partition/cdc-event-buffer.property.test.js",
+      "blob": "b25a81e18b9c47c1b7d7e52e6b079b999da64d34"
+    },
+    {
+      "path": "test/partition/cdc-event-buffer.test.js",
+      "blob": "553c8ae72265cf5d44fb3c8e36f57c7974752b61"
+    },
+    {
+      "path": "test/partition/cdc-generation.property.test.js",
+      "blob": "fd20c4d61655737131f041380845ab521f63e696"
+    },
+    {
+      "path": "test/partition/cdc-sliding-window-catchup.exploration.test.js",
+      "blob": "ef759a64af224ea747110cda2324aa2fa903dc68"
+    },
+    {
+      "path": "test/partition/cdc-sliding-window-catchup.preservation.test.js",
+      "blob": "2aa7e5a9ef3b8aca1e280db6e1675023b3e431a1"
+    },
+    {
+      "path": "test/partition/cdc-subscriber-registration-timing.test.js",
+      "blob": "fc078e5bd11cd2d3faf7ec96e8e646ce93acb871"
+    },
+    {
+      "path": "test/partition/child-partition-leader-propagation.test.js",
+      "blob": "13cc3d95ada691498ef828cf6f3e8d6a5b91525b"
+    },
+    {
+      "path": "test/partition/committed-statement-outcome.test.js",
+      "blob": "20e6415c1f98182b597e06dab26bdf3adec81f69"
+    },
+    {
+      "path": "test/partition/complete-peer-list.property.test.js",
+      "blob": "20d49ce6a219a9f71c218b83ed38a48fa9ee8ba9"
+    },
+    {
+      "path": "test/partition/contiguous-non-overlapping-ranges.property.test.js",
+      "blob": "2954e0f84b6dd1547354720ea0c651e63ee8e90f"
+    },
+    {
+      "path": "test/partition/default-replica-count.property.test.js",
+      "blob": "79e2d5e0be9ed4e9b170b8040617b182ccfd7dd6"
+    },
+    {
+      "path": "test/partition/durable-replay-cursor.test.js",
+      "blob": "65d69c00230a10e334a6bde6b351fc8ecfc9bbe0"
+    },
+    {
+      "path": "test/partition/durable-voter-visibility-role-write.test.js",
+      "blob": "dca37b18d54094e19b6208d8fdb6232d7d8983d4"
+    },
+    {
+      "path": "test/partition/extracted-module-api-equivalence.property.test.js",
+      "blob": "6659f012b1c4a80c6033d5494458e7814b3be2c1"
+    },
+    {
+      "path": "test/partition/group-retirement-epoch-decode.test.js",
+      "blob": "ec945514f5c88949d9ab6786c7b2d4221cb4fd06"
+    },
+    {
+      "path": "test/partition/group-retirement-provisioning-mark.test.js",
+      "blob": "d26a8320877eb3cbd40a76c449c8f5b2d05f0c80"
+    },
+    {
+      "path": "test/partition/group-retirement-resume-claim.test.js",
+      "blob": "436c3539e1e1aff7e7d4b49c80c660446282ac18"
+    },
+    {
+      "path": "test/partition/key-range-manager.test.js",
+      "blob": "d053e57a85d88037a09f2a751cbfe4b3867e66f3"
+    },
+    {
+      "path": "test/partition/learner-promotion-count-check-budget-walk.test.js",
+      "blob": "7787f1c5d390aeb4f9d683411170438b29bdcb15"
+    },
+    {
+      "path": "test/partition/learner-promotion-count-check-inputs.test.js",
+      "blob": "05e0f4dd4b3e28941c7625d59d677d0a9fe4332c"
+    },
+    {
+      "path": "test/partition/managed-merge-epoch-persistence-effects.test.js",
+      "blob": "ffde81fd36fad38e6126787eed105e297cb21e16"
+    },
+    {
+      "path": "test/partition/managed-merge-workflow.test.js",
+      "blob": "49a284e0f51f817548fa1d88bab829b1a3354225"
+    },
+    {
+      "path": "test/partition/managed-split-epoch-persistence-effects.test.js",
+      "blob": "71d2a18ee26fcba83a67908287fc8e979b6e2c28"
+    },
+    {
+      "path": "test/partition/managed-split-metrics-provider.test.js",
+      "blob": "1fb0be4edbba6afe23fe0ac7059d7a35f48f128f"
+    },
+    {
+      "path": "test/partition/managed-split-resume-under-write-load.test.js",
+      "blob": "53813cb01f286e9c934ba86b8c8ff0d7a755ad4f"
+    },
+    {
+      "path": "test/partition/managed-split-workflow-terminal-lifecycle.test.js",
+      "blob": "193f588ea93c580c6a8f3a602756f2ef2011225c"
+    },
+    {
+      "path": "test/partition/managed-split-workflow-transition-persistence.test.js",
+      "blob": "74892f916b2f14f1460036c629d672e87d81b8c6"
+    },
+    {
+      "path": "test/partition/managed-split-workflow.test.js",
+      "blob": "1c6b287a69f7551c6285a36d2d887b537e2a9494"
+    },
+    {
+      "path": "test/partition/median-split-point.property.test.js",
+      "blob": "4ee704b38ba25c7f410378197dce7b49e3cb0d1c"
+    },
+    {
+      "path": "test/partition/merge-auto-execution.test.js",
+      "blob": "3d68a0c79cb29a921b5a16d4a22e7ed0b05cb530"
+    },
+    {
+      "path": "test/partition/merge-backfill-batching.test.js",
+      "blob": "ae49a95863dffefd368acb938b8adc70da1506f3"
+    },
+    {
+      "path": "test/partition/merge-cutover-coordination.test.js",
+      "blob": "b99710afdaf773c3d0ea7e6025ae0d782c372da7"
+    },
+    {
+      "path": "test/partition/merge-source-replication.test.js",
+      "blob": "901a91dd6374bfda7ce9ad5d4de5dcf4f3c55fd7"
+    },
+    {
+      "path": "test/partition/message-handler-registry-routing.property.test.js",
+      "blob": "423271190fa5f2711d301ccc8b9cde186c869468"
+    },
+    {
+      "path": "test/partition/message-handler-registry.test.js",
+      "blob": "3cc0ea8d16d14bccceec8b5541cc057c79208530"
+    },
+    {
+      "path": "test/partition/participant-decision-canonical-record.test.js",
+      "blob": "53834e7617983d16e44265336a77ce5eeb5e4e2c"
+    },
+    {
+      "path": "test/partition/participant-envelope-admission.test.js",
+      "blob": "be3e8883957e1bba77b2c9ba8c10b3bb9f27b1c6"
+    },
+    {
+      "path": "test/partition/participant-release-applied-position.test.js",
+      "blob": "c8e63d871fb7a8329235bb0c1bd53f549c16f836"
+    },
+    {
+      "path": "test/partition/participant-release-build-provenance.test.js",
+      "blob": "4e5c03bc349c8645fb3b293f74b189ad03996bb5"
+    },
+    {
+      "path": "test/partition/participant-release-control-three-member.test.js",
+      "blob": "dfa2c5d9acce0466c21a5f6a5a78c7848cfae1f9"
+    },
+    {
+      "path": "test/partition/participant-release-deadline-recovery.test.js",
+      "blob": "83879696a05296d607e9a124bd38f4b0d1cc489f"
+    },
+    {
+      "path": "test/partition/participant-release-delivery-recorder.test.js",
+      "blob": "3217ba70b90c020739f6d7e8f7beb93da4f69649"
+    },
+    {
+      "path": "test/partition/participant-release-first-prepare-native.test.js",
+      "blob": "f31ae5ce64f0139c3f68bd4931b1577c44fdad51"
+    },
+    {
+      "path": "test/partition/participant-release-native-application-order.test.js",
+      "blob": "6a8b70a33561466f87d4d16b06be985044acce76"
+    },
+    {
+      "path": "test/partition/participant-release-prepare-identity-native.test.js",
+      "blob": "e8f53a90689d4dcef44f5734dde57e5623cd1464"
+    },
+    {
+      "path": "test/partition/participant-release-prepared-settlement-native.test.js",
+      "blob": "6ed8210a659c5cac63ffc2a31c58d50bb8994ae3"
+    },
+    {
+      "path": "test/partition/participant-release-protocol.test.js",
+      "blob": "d1bff2c6418effed55afb7dcc865cf2d579576d3"
+    },
+    {
+      "path": "test/partition/participant-release-retention-native.test.js",
+      "blob": "ee31c54b5c015ef624800496bbff2fcdaece7da1"
+    },
+    {
+      "path": "test/partition/partition-admission-redrive-wakes.test.js",
+      "blob": "566c5b1d3543c8330d41e0764a385b3b44853ba9"
+    },
+    {
+      "path": "test/partition/partition-cdc-generator.test.js",
+      "blob": "e31c3791ad0ab231b7b85a9b678f7de380068e9c"
+    },
+    {
+      "path": "test/partition/partition-cdc-obligation.test.js",
+      "blob": "03586d278fbed02e0911e54268e33718d9bec60f"
+    },
+    {
+      "path": "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js",
+      "blob": "f08800fdb88c343f0c13cd25ff1753fd721e7f9b"
+    },
+    {
+      "path": "test/partition/partition-commit-deadline-wait-bound-spent.test.js",
+      "blob": "1fea51fdf1354d84d0a46a2aa45ab1029be46dc8"
+    },
+    {
+      "path": "test/partition/partition-consensus-hold-log.test.js",
+      "blob": "a6667f71181d59bda6ff23a76aac51d40e708b80"
+    },
+    {
+      "path": "test/partition/partition-coordinator-settlement.test.js",
+      "blob": "526fc0b52f1ad6d238ad430d052b1179840d73b5"
+    },
+    {
+      "path": "test/partition/partition-deferred-evaluation-obligation-scheduler.test.js",
+      "blob": "d21c0f5a3976f1a85114abf84189f916a3efcbc1"
+    },
+    {
+      "path": "test/partition/partition-descriptor-epoch-contract.test.js",
+      "blob": "93ae67b7535ad71889c5c01a2cece89ebabd496d"
+    },
+    {
+      "path": "test/partition/partition-leader-row-publication-integrity.test.js",
+      "blob": "fc8fdcc6c31044e832e636e8a636f382cf6404e1"
+    },
+    {
+      "path": "test/partition/partition-legacy-consensus-state.test.js",
+      "blob": "11f2f03e82311cd28e83b5c97e21af0469c2557a"
+    },
+    {
+      "path": "test/partition/partition-participant-release-admission.test.js",
+      "blob": "c967d6716e745d811137402438563f6fc68284c8"
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-apply.test.js",
+      "blob": "73a768c690e4542f8e176f8bb75dbd9bc58fd366"
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-staging.test.js",
+      "blob": "7330b4ba93c61d5416b36a1a0f5ee57c91456a78"
+    },
+    {
+      "path": "test/partition/partition-participant-transaction-topology.test.js",
+      "blob": "f7fdc35b05d3b14127e539581cfabdc74ebb19b6"
+    },
+    {
+      "path": "test/partition/partition-peer-cache-identity-record.test.js",
+      "blob": "bdd55b2a72080712fd493c61fb131eb9c64fa318"
+    },
+    {
+      "path": "test/partition/partition-port-refusal-outcomes.test.js",
+      "blob": "2267e02e6c62922095b44e9af6389bea304b4d4e"
+    },
+    {
+      "path": "test/partition/partition-raft-storage.test.js",
+      "blob": "4195de9179d4eeba1feae2b31b01cbf6f58f6270"
+    },
+    {
+      "path": "test/partition/partition-rebalancer-dependency-wiring-characterization.test.js",
+      "blob": "c89addb8d5d62a6d444a45541f1920b1de8d730d"
+    },
+    {
+      "path": "test/partition/partition-rebalancer-leadership-readiness-hysteresis.test.js",
+      "blob": "2d5afd64b03e59e3dd3d3b1fbb1861e93b63e9f8"
+    },
+    {
+      "path": "test/partition/partition-rebalancer-readiness-edge-gate.test.js",
+      "blob": "d4259ecc0c8a32274b8710725549a9534c8772df"
+    },
+    {
+      "path": "test/partition/partition-replication-restart-attempt-handoff.test.js",
+      "blob": "328112dfb5ff4fbd46ad4b0580c709b5bfcd16d6"
+    },
+    {
+      "path": "test/partition/partition-retiring-row-peer-retirement.test.js",
+      "blob": "732d0639c1389e0d9f32f61fdd43de9a8b6bc56a"
+    },
+    {
+      "path": "test/partition/partition-runtime-reconstruction-leadership.test.js",
+      "blob": "d7ebcfa689be7bb0fe52802ae90e90d57165bb53"
+    },
+    {
+      "path": "test/partition/partition-service-cdc-log-suppression.test.js",
+      "blob": "871b2452dfb86fd2cc3d328953598a95bfa641c3"
+    },
+    {
+      "path": "test/partition/partition-service-cleanup-token-schema.test.js",
+      "blob": "37bf50e01e922775dae9983c51dcbf630fa06804"
+    },
+    {
+      "path": "test/partition/partition-service-hlc-monotonicity.test.js",
+      "blob": "d9f8d60685437421df31c857fb58d0ebe43a13df"
+    },
+    {
+      "path": "test/partition/partition-service-learner-promotion-wake.test.js",
+      "blob": "bca8706c5a6a29f54cfe1191ee59dde16c3dabb9"
+    },
+    {
+      "path": "test/partition/partition-service-learner-promotion.test.js",
+      "blob": "b099dd8a8b319eb4e9f93514093af4a25f3286f4"
+    },
+    {
+      "path": "test/partition/partition-service-qualified-table-name.test.js",
+      "blob": "c5957016ab148243e16b733210fac6733551f710"
+    },
+    {
+      "path": "test/partition/partition-service-raft-noop-cdc-placement.test.js",
+      "blob": "1dd2b6218201c44280f49773d12edde63d95c6e0"
+    },
+    {
+      "path": "test/partition/partition-service-raft-propose-metrics.test.js",
+      "blob": "ed1e61ab04c90caba9828cf4cdc80097bbf0ab54"
+    },
+    {
+      "path": "test/partition/partition-service-raft-transition-evidence.test.js",
+      "blob": "dfe1c269367dde2acc20bfbd02dbef313cde0fa5"
+    },
+    {
+      "path": "test/partition/partition-service-replay-dedupe.test.js",
+      "blob": "2c24278998d62effd68a5e0a0fa88cdded8b2a5f"
+    },
+    {
+      "path": "test/partition/partition-service-role-metadata-publication.test.js",
+      "blob": "55525614b2f4a36bd12efd11c7dd5abeaf3dc638"
+    },
+    {
+      "path": "test/partition/partition-service-row-absence-heal.test.js",
+      "blob": "ece99983970de8c1fd63b611921569ba20ddf283"
+    },
+    {
+      "path": "test/partition/partition-service-row-owner.test.js",
+      "blob": "10f25df6e74b32259c7bde59be20525a8ea0fc0e"
+    },
+    {
+      "path": "test/partition/partition-service-shutdown-timers.test.js",
+      "blob": "51c467962b29ea6e0e8790dec5509e460e8b49c5"
+    },
+    {
+      "path": "test/partition/partition-service-size-split-transport.test.js",
+      "blob": "ad864c112498bc188f3083d52c8ef16816e6bffa"
+    },
+    {
+      "path": "test/partition/partition-service-sqlite-metrics.test.js",
+      "blob": "220f5ccd71ea424a5ff7b060076c52f480fc36d4"
+    },
+    {
+      "path": "test/partition/partition-service-stale-topology-write-guard.test.js",
+      "blob": "106a8ee183e9572cc039a0e66870b32f51cbf02e"
+    },
+    {
+      "path": "test/partition/partition-service-transactions-query-routing.test.js",
+      "blob": "66d2e20671277c4d85e452646440d7c52a60d8e8"
+    },
+    {
+      "path": "test/partition/partition-service-write-commit.test.js",
+      "blob": "d991b8e4903d9c5e26262a11821ee7bee3821fb8"
+    },
+    {
+      "path": "test/partition/partition-service.test.js",
+      "blob": "52e4b5a368297b0128b489ed94fc95b9df9ab3a2"
+    },
+    {
+      "path": "test/partition/partition-size-write-retry-spent-owner.test.js",
+      "blob": "c67eb695905b257bbf208ce4c961141da5e5f7f1"
+    },
+    {
+      "path": "test/partition/partition-split-merge-manager.test.js",
+      "blob": "0b641662b29c2c35c8b339169f5f0c655bbeed80"
+    },
+    {
+      "path": "test/partition/partition-split-policy-precedence.test.js",
+      "blob": "0c90de57b4ba2c069da2a775fcf98e6a6d680e93"
+    },
+    {
+      "path": "test/partition/partition-split-routing.test.js",
+      "blob": "49a4e12a64ca8dd19ae7b849d94db0f9b7e80a76"
+    },
+    {
+      "path": "test/partition/partition-splitting-trigger.property.test.js",
+      "blob": "eb96197e2cfa938bd079a256fc8161aff2c361b3"
+    },
+    {
+      "path": "test/partition/partition-sql-parser.test.js",
+      "blob": "16e37e7987d347a2bc809df4f42a427592deec7d"
+    },
+    {
+      "path": "test/partition/partition-statement-admission.test.js",
+      "blob": "ad488c5052dd490479594c28c60e5841c285b0f5"
+    },
+    {
+      "path": "test/partition/partition-transaction-determinism.test.js",
+      "blob": "b04e856c7a7d72b3391030fb8e08d257249336db"
+    },
+    {
+      "path": "test/partition/partition-transaction-replay-cursor-v4.test.js",
+      "blob": "70f1bb95955f30072985d0b44d811f93d9247535"
+    },
+    {
+      "path": "test/partition/partition-transaction-replicated-apply-v3.test.js",
+      "blob": "1d3073935f44adca9e3adf84494449023d51768d"
+    },
+    {
+      "path": "test/partition/partition-transaction.property.test.js",
+      "blob": "441fd1c6b2c305e1e9eccbe5edff6250702d0a81"
+    },
+    {
+      "path": "test/partition/partition-transition-projection.test.js",
+      "blob": "f2f4f2cbd386f622cf2595381f97c7f76c2d3346"
+    },
+    {
+      "path": "test/partition/partition-tx1-single-path-alpha.test.js",
+      "blob": "f742d7746d70b879910843395a7315bf2789d2b8"
+    },
+    {
+      "path": "test/partition/partition-unreadable-durable-record.test.js",
+      "blob": "951b490835d0390be56b7775bd711ec8df3cb6f9"
+    },
+    {
+      "path": "test/partition/partition-write-kernel.test.js",
+      "blob": "4bdacd78562dcaad624cd180b0b51baafb03dcd0"
+    },
+    {
+      "path": "test/partition/partition-write-leadership-transfer-committed.test.js",
+      "blob": "75afea99d2c55f20b95dd9034632cbd2f488e061"
+    },
+    {
+      "path": "test/partition/partition-write-leadership-transfer.test.js",
+      "blob": "0bc096631c07574a905d47bc1e21761e2e71b183"
+    },
+    {
+      "path": "test/partition/partition-write-typed-releases.test.js",
+      "blob": "e6161f63a80e9adef081cd96772279d79c69b673"
+    },
+    {
+      "path": "test/partition/pending-request-round-trip.property.test.js",
+      "blob": "dddae6a03d40ed57d8930eb840c69a9484bfccd1"
+    },
+    {
+      "path": "test/partition/pending-request-tracker-wait-bound-spent.test.js",
+      "blob": "e2d2cd4703f9dfd579d0679c91f07c6b3154fd19"
+    },
+    {
+      "path": "test/partition/pending-request-tracker.test.js",
+      "blob": "2c27e5cb328934d321e50f67c7725035933775a4"
+    },
+    {
+      "path": "test/partition/proposal-queue-capacity.property.test.js",
+      "blob": "6c53472a9ea0680b62b635ff231460c95d6da2f2"
+    },
+    {
+      "path": "test/partition/proposal-queue-size-invariant.property.test.js",
+      "blob": "d01c3adfb45c7a6cf7f4ced0cdb68954a28bc577"
+    },
+    {
+      "path": "test/partition/proposal-queue.test.js",
+      "blob": "feba54b098c51f9237fb0ba7d47aa8a6f701664a"
+    },
+    {
+      "path": "test/partition/raft-leadership-stability.property.test.js",
+      "blob": "4565de641dabab1f4cea6f15d787347c867c05d6"
+    },
+    {
+      "path": "test/partition/raft-rs-transport-demux.test.js",
+      "blob": "054382db75021537315cbaaaf3eb30edb9776a26"
+    },
+    {
+      "path": "test/partition/range-integrity-validation.property.test.js",
+      "blob": "174131878c41b1e125a3cddc98275540f7c1fa42"
+    },
+    {
+      "path": "test/partition/replica-operations-schema-migration.test.js",
+      "blob": "2b611bab12c2b8bfbc91f85fc1f6ec67f010a8cc"
+    },
+    {
+      "path": "test/partition/retiring-source-resume-refusal.test.js",
+      "blob": "ba593977d6a29117a93787d94e601d7b338a1380"
+    },
+    {
+      "path": "test/partition/routing-key-comparator.test.js",
+      "blob": "69e170fe6b21518b04802a1f8f9c269de17fddce"
+    },
+    {
+      "path": "test/partition/settled-replay-preserves-result.test.js",
+      "blob": "eb03e7091314584eb310100b5acc2012fea0bd33"
+    },
+    {
+      "path": "test/partition/split-abort-fence-parity.test.js",
+      "blob": "b8a6b437f664cd58204d5e5c6d68b3bba43b2828"
+    },
+    {
+      "path": "test/partition/split-ack-constants.test.js",
+      "blob": "da8ff754a17a776c17fb0ea76cf5a1560b025153"
+    },
+    {
+      "path": "test/partition/split-backfill-internal-pacing.test.js",
+      "blob": "1752fe9c741722cf209f94c477bcee6cb7e25298"
+    },
+    {
+      "path": "test/partition/split-cutover-owner-delegation.test.js",
+      "blob": "192127acc901a066bc746488b02878fde58d932f"
+    },
+    {
+      "path": "test/partition/split-dissolution-durable-proof.test.js",
+      "blob": "6654f4da02e1cf6ec3776f864836e7fda10e2cf1"
+    },
+    {
+      "path": "test/partition/split-execution-state-reconstruction.test.js",
+      "blob": "cd478a331730dd414a5881d1d560c26ba5e414ae"
+    },
+    {
+      "path": "test/partition/split-key-comparator.test.js",
+      "blob": "f444bcb4871cdf66e60733496716027b9a8aa038"
+    },
+    {
+      "path": "test/partition/split-merge-capacity-preflight.test.js",
+      "blob": "505e20cad0c9b53be46850194953a4dfb5c2a239"
+    },
+    {
+      "path": "test/partition/split-merge-hysteresis.test.js",
+      "blob": "1b23fda6f0f864fd4a9067a9f8db93730a5004aa"
+    },
+    {
+      "path": "test/partition/split-merge-overlap-guard.test.js",
+      "blob": "820dd3ff79d16a2ceaee17ebe51efdf7bd354724"
+    },
+    {
+      "path": "test/partition/split-mirror-flush-ordering.test.js",
+      "blob": "21dfba903a36170aa0f04dd54dc5d01e73c719b3"
+    },
+    {
+      "path": "test/partition/split-mirror-write-identity.test.js",
+      "blob": "732abd64e59d2595121cd1f1053ec0450901faa8"
+    },
+    {
+      "path": "test/partition/split-progress-depends-on-process-local-state.test.js",
+      "blob": "4f3ce99b4762f4ecc265bdf115ec283f1523dfec"
+    },
+    {
+      "path": "test/partition/split-rebalance-trigger.test.js",
+      "blob": "79e0e4909824ebd774d54b6a7fdb71e0e6d4f8bb"
+    },
+    {
+      "path": "test/partition/split-recovery-after-restart.test.js",
+      "blob": "e86e942a1df7dc5b747eb907d9a7b112b1d1aa2a"
+    },
+    {
+      "path": "test/partition/split-source-participant-ack.test.js",
+      "blob": "12b8c3f7dc55c6a8119904d6402b831d76ec1481"
+    },
+    {
+      "path": "test/partition/sql-statement-parser-coverage-matrix.test.js",
+      "blob": "7812c894d2b20761219c621004b792727f0122d0"
+    },
+    {
+      "path": "test/partition/table-partition-structure.property.test.js",
+      "blob": "b731f86f4d63c996c107662771de39486f2309bb"
+    },
+    {
+      "path": "test/partition/timeout-cleanup.property.test.js",
+      "blob": "a61c83993f9ba2f70794c6df6a6a037c33866969"
+    },
+    {
+      "path": "test/partition/workflow-fencing-wiring.test.js",
+      "blob": "633af8312fcb1ee2d2311875dd11fed6ec2291cd"
+    },
+    {
+      "path": "test/partition/workflow-record-change-preconditions.test.js",
+      "blob": "d4c3025d4811fa8e11fdd09c6396aa9f233a4137"
+    },
+    {
+      "path": "test/partition/workflow-record-incarnation.test.js",
+      "blob": "7769a4378e9cb0794a15ffb41cb73234e344b683"
+    },
+    {
+      "path": "test/partition/workflow-record-interleaving.property.test.js",
+      "blob": "c07f551fc35a33e7cb847a3c67c0f611055a4e9c"
+    },
+    {
+      "path": "test/partition/workflow-record-lagging-view.test.js",
+      "blob": "4d7dcc9dd692e7ae6b83b4d9e4dfce76939ef5ff"
+    },
+    {
+      "path": "test/partition/workflow-record-projection-drop.test.js",
+      "blob": "c75ce277740e9eb91ad986a4b9ac7002f26b87ee"
+    },
+    {
+      "path": "test/partition/workflow-record-reconcile.test.js",
+      "blob": "ab7c08b037cde5977c69d6e9dd2af4b0a2d932f5"
+    },
+    {
+      "path": "test/partition/workflow-record-same-owner-race.test.js",
+      "blob": "e04b191196dc7156d80473d9868629a91f9ea756"
+    },
+    {
+      "path": "test/partition/workflow-record-stale-owner.test.js",
+      "blob": "136d5d4dadafe95f5bc67ca96a13d6154a2ee85a"
+    },
+    {
+      "path": "test/partition/workflow-record-two-owners.test.js",
+      "blob": "a2a53a195ec2c590e6fc61435ff246ada8aa53d3"
+    },
+    {
+      "path": "test/partition/write-path-epoch-fencing.test.js",
+      "blob": "b1eecd2ac0ff8be17fcffda02c604c2e44e29710"
+    },
+    {
+      "path": "test/query/aggregate-function-correctness.property.test.js",
+      "blob": "04749845475b0a10a470932f250918a01e801074"
+    },
+    {
+      "path": "test/query/application-database.test.js",
+      "blob": "9b5c1a1c1574cf3b87219d8d1dfcc5219624c253"
+    },
+    {
+      "path": "test/query/automatic-partition-key.property.test.js",
+      "blob": "69c7cacc7191799d65b948996d7a514eeef49bd4"
+    },
+    {
+      "path": "test/query/broadcast-primitive.test.js",
+      "blob": "294dc39cfd980d113dd358d1c3a7ba6e9f83a6c6"
+    },
+    {
+      "path": "test/query/budget-enforcer.test.js",
+      "blob": "fb252c3d74bbed1ce2f22a41dd20d2ad3a7d3e76"
+    },
+    {
+      "path": "test/query/budget-limit-error.test.js",
+      "blob": "22d30f7eee1630aa29696e1b2cef9a9b3aa70397"
+    },
+    {
+      "path": "test/query/budget-nested.test.js",
+      "blob": "725e319b116421c5a78f2a8afdb8e01821008da2"
+    },
+    {
+      "path": "test/query/cache-based-routing.property.test.js",
+      "blob": "30beca429fd1897bbafc20349a6fbbda68d40ff3"
+    },
+    {
+      "path": "test/query/cache-based-routing.test.js",
+      "blob": "7d120b017b3e4acffe0372b7aa548cde8d73a0ec"
+    },
+    {
+      "path": "test/query/call-iterator.test.js",
+      "blob": "42c7c9db39472a7447ccc9b70a06b7814dd67078"
+    },
+    {
+      "path": "test/query/call-plan.test.js",
+      "blob": "03adbc62e6fe41d77841480e21ded511720f754b"
+    },
+    {
+      "path": "test/query/call-stage.test.js",
+      "blob": "480210e52821efb810185149f9336f26e6c2220c"
+    },
+    {
+      "path": "test/query/callback-context.test.js",
+      "blob": "e6d5a5726387475d67ad5b208f33ba7784053831"
+    },
+    {
+      "path": "test/query/callback-execution-host-throughput-metrics.test.js",
+      "blob": "6063ec2aa4eec3273237c625bd09980868a9a499"
+    },
+    {
+      "path": "test/query/callback-execution-host.test.js",
+      "blob": "dac665fa34a1e85d218f8bd27a59bc5e64707a0b"
+    },
+    {
+      "path": "test/query/callback-module-artifact.test.js",
+      "blob": "6674e7d3a9f9e8d40ac1fba1c7e9cd0fbc1b3e86"
+    },
+    {
+      "path": "test/query/callback-runtime-driver-registry.test.js",
+      "blob": "491a151dfb931d7785a4a277ff8a6c799c49e58a"
+    },
+    {
+      "path": "test/query/callback-stage-executor.test.js",
+      "blob": "0d71b2f1eaa76d3bd82d5c0ada40571e5e206ffc"
+    },
+    {
+      "path": "test/query/callback-validator.test.js",
+      "blob": "140999730fd9e4df9f8263f0c66153327e13023e"
+    },
+    {
+      "path": "test/query/cancellation-token.test.js",
+      "blob": "7f068709b3074d37e46b80443e5419fe41057601"
+    },
+    {
+      "path": "test/query/coordinator-resource-limits.property.test.js",
+      "blob": "67cebdcf526b0f1334de9a93cdbb6fbe7160740c"
+    },
+    {
+      "path": "test/query/create-table-policy-option.test.js",
+      "blob": "765fe9ac638fccabea53ed3f40a93e90d0681781"
+    },
+    {
+      "path": "test/query/cross-partition-join-pushdown.test.js",
+      "blob": "c33e35179a11c710fcc4d6d82ce5ecc5ae12d608"
+    },
+    {
+      "path": "test/query/cross-partition-join.property.test.js",
+      "blob": "0ad304a27e1cd793f8a8924627af2d2d0ce9f89c"
+    },
+    {
+      "path": "test/query/dedupe-registry.test.js",
+      "blob": "cdf7deaf64bd6e11261dc1b2a0da321d8f7a3db7"
+    },
+    {
+      "path": "test/query/dedupe-retry.test.js",
+      "blob": "3652afcd56353a6e43903a8cb4f3b355ad93de5d"
+    },
+    {
+      "path": "test/query/deferred-hash.test.js",
+      "blob": "8503c478d55f0f16b38725b93fb5fa37a5d79100"
+    },
+    {
+      "path": "test/query/dialect-wiring.test.js",
+      "blob": "09fdfd4d2ad6053c2cd41395623f022a15ea5e14"
+    },
+    {
+      "path": "test/query/distributed-merge-engine.test.js",
+      "blob": "26a2101a7024f37b4c0f1ef92625dd3202a52078"
+    },
+    {
+      "path": "test/query/distributed-query-parallelism.property.test.js",
+      "blob": "cccaa4c8930d2f6790ba7af579bfa3870ceb719a"
+    },
+    {
+      "path": "test/query/distributed-query-planner-partition-key-update.test.js",
+      "blob": "1f18a2becc01f0ded5a99b22efe4f27218c6ddc0"
+    },
+    {
+      "path": "test/query/distributed-query-planner.property.test.js",
+      "blob": "cd1fd3e3aea0d424d16749bcfb42dc0c34706156"
+    },
+    {
+      "path": "test/query/distributed-query-planner.test.js",
+      "blob": "2ff96613f936732009e26884f8faaa81f7a6dd61"
+    },
+    {
+      "path": "test/query/distributed-query-straggler-hedging.test.js",
+      "blob": "5f2b690b2fe939f06e1f2251f733d3a6b7e0024d"
+    },
+    {
+      "path": "test/query/distributed-select-global-merge-correctness.test.js",
+      "blob": "e4878a966d28741325e07f8a1851384254b85a81"
+    },
+    {
+      "path": "test/query/distributed-sql-baseline-gaps.test.js",
+      "blob": "7057b2f661d1cc2a885f7b6893cf4e12b7a24568"
+    },
+    {
+      "path": "test/query/distributed-sql-hard-cutover.guard.test.js",
+      "blob": "a3924573d7c8853ba279b6d340ca0c1ec709aa85"
+    },
+    {
+      "path": "test/query/distributed-transaction-coordinator.property.test.js",
+      "blob": "f4c3cb6cb4b7ee66e60a9d2bcce824108d588b02"
+    },
+    {
+      "path": "test/query/distributed-transaction-coordinator.test.js",
+      "blob": "a1b847de2e77647bc2c26f79f3937642de65156a"
+    },
+    {
+      "path": "test/query/distributed-transaction-wait-bound-spent.test.js",
+      "blob": "b10f2deccb2be901b3692333b4b31417d3b0b8e1"
+    },
+    {
+      "path": "test/query/distributed-write-coordinator-participant-failure-log.test.js",
+      "blob": "5300cc56c965ad76c56eea2b7a78da8136a94f02"
+    },
+    {
+      "path": "test/query/distributed-write-coordinator.property.test.js",
+      "blob": "d30b4c2750725201cdab15a1427db5077e119e97"
+    },
+    {
+      "path": "test/query/distributed-write-coordinator.test.js",
+      "blob": "e93c184836410e118885bc3708931c5828eb6ea2"
+    },
+    {
+      "path": "test/query/durable-provisioning-job-owner-directed.test.js",
+      "blob": "899f51823cef7c963f479c6a3b5d3f3c158c1f26"
+    },
+    {
+      "path": "test/query/durable-provisioning-job-owner-guard.test.js",
+      "blob": "57f0f6de454e71e773899af68cc706e14ce40cdd"
+    },
+    {
+      "path": "test/query/emit-primitive.test.js",
+      "blob": "3a22e297fafb341bf70093bfc5e03814838ca25c"
+    },
+    {
+      "path": "test/query/exchange-manager.test.js",
+      "blob": "a5d95bdb289aae0c98a466fded80f02f2f970da1"
+    },
+    {
+      "path": "test/query/exchange-ordering.test.js",
+      "blob": "f08040d33b173f9b831df3459d8db54d2ce405d5"
+    },
+    {
+      "path": "test/query/exchange-reduce-integration.test.js",
+      "blob": "16ff4152ee7baa3d8adc0970088bd28840834c61"
+    },
+    {
+      "path": "test/query/execute-request.test.js",
+      "blob": "b298b7394638df3c41692d498a7298c0c4b42ce3"
+    },
+    {
+      "path": "test/query/execution-context.test.js",
+      "blob": "5fb9750baf35a925241318e852204a9f8b0c6111"
+    },
+    {
+      "path": "test/query/failure-path-integration.test.js",
+      "blob": "0bd9515ca68cada9ea8ce862e4e681ee492c804e"
+    },
+    {
+      "path": "test/query/initial-partition-full-range.property.test.js",
+      "blob": "75f07f18920d458f9c482613d9a6b61e84fecebc"
+    },
+    {
+      "path": "test/query/internal-sql-adapter.integration.test.js",
+      "blob": "2669135e941342f39227dcd47080d2a8b998305e"
+    },
+    {
+      "path": "test/query/internal-sql-adapter.test.js",
+      "blob": "d239d64cb2c5d5ec4cfbc2de0cfc4ff3840dd515"
+    },
+    {
+      "path": "test/query/lineage-integration.test.js",
+      "blob": "71fcc4c47b42750e9b04aeebf3fca54bb5cc479d"
+    },
+    {
+      "path": "test/query/lineage-tracker.test.js",
+      "blob": "35119c791d8a630673ea1addc890489003cfbad7"
+    },
+    {
+      "path": "test/query/lookup-primitive.test.js",
+      "blob": "e0ef44f4a2bfc9d7b102d61f0b720aa4daad8860"
+    },
+    {
+      "path": "test/query/nested-call-classifier.test.js",
+      "blob": "301caec293d8df475d8ae73ee9c699c5fe1c61d3"
+    },
+    {
+      "path": "test/query/nested-call-rejection-messages.test.js",
+      "blob": "30cd7c081c12fcb102940fa2877149419b361043"
+    },
+    {
+      "path": "test/query/nested-call-rejection.test.js",
+      "blob": "e4bf3d8426d00cda46224f93d36919adbe475c74"
+    },
+    {
+      "path": "test/query/parallel-query-coordinator.test.js",
+      "blob": "40c3c32fd3ceb3bca9dca06b0d366c901534305d"
+    },
+    {
+      "path": "test/query/parallel-query-execution.property.test.js",
+      "blob": "e9b7b819f0aaeaabef596aafbd5eb3e06730a498"
+    },
+    {
+      "path": "test/query/partition-callback-dispatcher.test.js",
+      "blob": "3b649380433f58d25b505abbe0efc04dca99243d"
+    },
+    {
+      "path": "test/query/partition-callback-integration.test.js",
+      "blob": "ca32b5ed18b89c9f4eb6687dcf83e5630e4c1e16"
+    },
+    {
+      "path": "test/query/partition-resolver.test.js",
+      "blob": "24dee9291caaaf19143242ecb85ede1c6c57eb3b"
+    },
+    {
+      "path": "test/query/partition-transaction-seam-falsifiers.test.js",
+      "blob": "e739c06aad32f34ad810cfd7019c8fa5ae5066a3"
+    },
+    {
+      "path": "test/query/partition-transparency.property.test.js",
+      "blob": "a9f8aaf2b0d09b2471423d5aa7bf6300c4da2fbe"
+    },
+    {
+      "path": "test/query/partition-write-answer-consumers.test.js",
+      "blob": "2dff46fda527f87b8a0aed252a9e054dc292e39f"
+    },
+    {
+      "path": "test/query/payload-hash-determinism.property.test.js",
+      "blob": "b217bbc2781cefc3f91896e65f80e08fba841e9c"
+    },
+    {
+      "path": "test/query/pg-function-registry.property.test.js",
+      "blob": "1ec7359690936bca99b3fed2e3cb54911e3ce25a"
+    },
+    {
+      "path": "test/query/pg-function-registry.test.js",
+      "blob": "4e124d951bc82d776b096b2cc65bba8963106b9f"
+    },
+    {
+      "path": "test/query/pg-translate.property.test.js",
+      "blob": "116d3b96bddc1fe38937c06b46912bfb623e9dc6"
+    },
+    {
+      "path": "test/query/pg-translate.test.js",
+      "blob": "3d0e3d6800a67f2043a28ecb792efc0d282e24b3"
+    },
+    {
+      "path": "test/query/pg-type-affinity.test.js",
+      "blob": "a335d4f683fc40e3d04220af8e6e1fd6e450819f"
+    },
+    {
+      "path": "test/query/plan-diagnostics-classification.test.js",
+      "blob": "8e1c4ee97cd7e09be466fde87bd85a7fc6ceeef9"
+    },
+    {
+      "path": "test/query/plan-diagnostics.test.js",
+      "blob": "fb5ebd7b0611929228a81a7336c795e43bca72a7"
+    },
+    {
+      "path": "test/query/postgres-wire-adapter.integration.test.js",
+      "blob": "1bcfa4f6605a1cf7e8c35cbe22b96030ce4ef7c5"
+    },
+    {
+      "path": "test/query/postgres-wire-adapter.test.js",
+      "blob": "34a6e370bab334ba7e232237b70a3ee88b8705dc"
+    },
+    {
+      "path": "test/query/primary-key-requirement.property.test.js",
+      "blob": "38e40e5d36fe1d23d69fcda518afef8bff8d9ceb"
+    },
+    {
+      "path": "test/query/primitive-telemetry.test.js",
+      "blob": "b3a9e7a530cbff253417b582ceaca4e78db02134"
+    },
+    {
+      "path": "test/query/provision-target-live-transport-rescue.test.js",
+      "blob": "afc6f4982ab3fd6befc912d5fb7a6be2d424047b"
+    },
+    {
+      "path": "test/query/provisioning-parent-deadline-dependency-guard.test.js",
+      "blob": "27e8a0c2c18595e4c5ad71e0762d520a7ee7f87c"
+    },
+    {
+      "path": "test/query/query-constants-vocabulary.test.js",
+      "blob": "914634795bd767a8837a17a09746a1250100e680"
+    },
+    {
+      "path": "test/query/query-executor-build-sql-and-routability.test.js",
+      "blob": "1f82cbc7f92c98045b1be467ba6e6b81cc63a85e"
+    },
+    {
+      "path": "test/query/query-executor-delay.test.js",
+      "blob": "1c1885390c5054577df52631eeb7657b9c71e3c9"
+    },
+    {
+      "path": "test/query/query-executor-distributed-metrics.test.js",
+      "blob": "a920d4bc34ca05fa4674351012c570fdf167757c"
+    },
+    {
+      "path": "test/query/query-executor-durable-commit-witness.test.js",
+      "blob": "1d761afddd46c04d1348d7f08c8716b83eab4672"
+    },
+    {
+      "path": "test/query/query-executor-executeonpartition-leader-resolution.test.js",
+      "blob": "b48220102dd7c25f2eee52e925e7190b956493b9"
+    },
+    {
+      "path": "test/query/query-executor-executeonpartition-no-handler-repair.test.js",
+      "blob": "4bd80c490966b83953fca2e7c4a4a409366c7f2a"
+    },
+    {
+      "path": "test/query/query-executor-recovery-owned-routing.test.js",
+      "blob": "3eb700dfb66bce1f6fb6c8cc271a438e1a42c660"
+    },
+    {
+      "path": "test/query/query-executor-routable-services-and-read-delivery.test.js",
+      "blob": "87e7f7efecfdbc585efb913f7511648f8e51880b"
+    },
+    {
+      "path": "test/query/query-executor-session-binding-and-build-sql.test.js",
+      "blob": "b0f5b04d1082aba5cce77893129bf99f135e25a7"
+    },
+    {
+      "path": "test/query/query-executor-session-pin-state.test.js",
+      "blob": "41e50c50ba9dca53bd7abf15f7ec8cb067c3f196"
+    },
+    {
+      "path": "test/query/query-executor-system-table-leader-fail-open.test.js",
+      "blob": "f7e6ab0232e26f3a3ffb16de0998af69be452356"
+    },
+    {
+      "path": "test/query/query-executor-warn-throttle.test.js",
+      "blob": "ef916b081e25cd941cf7db2b73f44062ce727f5f"
+    },
+    {
+      "path": "test/query/query-executor.test.js",
+      "blob": "97f4241965baf128a8c751f8aba824241f241418"
+    },
+    {
+      "path": "test/query/readiness-routing-denial-observability.test.js",
+      "blob": "7da55ae2a610d7f766dc89ca8c6c433c491c7935"
+    },
+    {
+      "path": "test/query/reduce-by-key.test.js",
+      "blob": "43e66f71e674ff3a8cd5df03159d8c72e7dadc33"
+    },
+    {
+      "path": "test/query/reduce-continuation.test.js",
+      "blob": "8f96efb32e3af73e313764ba6e9ee98d6315a7fa"
+    },
+    {
+      "path": "test/query/result-stream.test.js",
+      "blob": "16e16a7665211ee8e48c11348c1587201befcf95"
+    },
+    {
+      "path": "test/query/retry-continuation-flow.test.js",
+      "blob": "d05c3917d0875f3020a56ff7c535431dd841a9c8"
+    },
+    {
+      "path": "test/query/retry-idempotency.test.js",
+      "blob": "9a03a8360124c6ee835a4bbbdfd8b1ac77f433c0"
+    },
+    {
+      "path": "test/query/runtime-access-policy-enforcement.test.js",
+      "blob": "c744b8240f66855906e03dae2a9a40c2002eecff"
+    },
+    {
+      "path": "test/query/runtime-api-exports.test.js",
+      "blob": "b0ad1394ff2244ea3c4d8291d779eea6e0a54ae4"
+    },
+    {
+      "path": "test/query/runtime-integration.test.js",
+      "blob": "4dba299cd155a97b69cb92e38bc3f1713257063a"
+    },
+    {
+      "path": "test/query/runtime-runner.test.js",
+      "blob": "35f70a26c3f82ef5612b93f3ea16d13e4d7db923"
+    },
+    {
+      "path": "test/query/schema-provisioning-job-owner.test.js",
+      "blob": "23051c951dcd9e943b14d5d0d15f1a9beeb990cd"
+    },
+    {
+      "path": "test/query/schema-provisioning-transient-collision.test.js",
+      "blob": "cc9fda8b55641378fd97ca7ecef72bad80dfd8af"
+    },
+    {
+      "path": "test/query/select-no-from.test.js",
+      "blob": "4bad568e7d6462a41532703107d03310e3d1a8cc"
+    },
+    {
+      "path": "test/query/service-lifecycle-call-invocation.test.js",
+      "blob": "19ae3d41d4c3b1bf8114fe428894bdbe26d0aed9"
+    },
+    {
+      "path": "test/query/service-lifecycle-sql-control-surface.test.js",
+      "blob": "c7ae2940c0f6550710e2664ac55c44772a46a77d"
+    },
+    {
+      "path": "test/query/service-partition-access-attribution.test.js",
+      "blob": "6b5430bfc3da1da9a729335fa6f2abd7487f6e5c"
+    },
+    {
+      "path": "test/query/service-read-locality-routing.test.js",
+      "blob": "2ab8897fa30b8cb13fdd8f2fdbf4a054495b4193"
+    },
+    {
+      "path": "test/query/settled-replay-sql-surface.test.js",
+      "blob": "e0790d1acf58abb96f72b6e9ff51780d0464435b"
+    },
+    {
+      "path": "test/query/sql-execution-guard.test.js",
+      "blob": "cd9833419f7cd2da2eab0ac728089a86f6049044"
+    },
+    {
+      "path": "test/query/sql-parse-cache.property.test.js",
+      "blob": "1be50df7cdc8d8221815c19bc3a7b958dd78481e"
+    },
+    {
+      "path": "test/query/sql-parse-cache.test.js",
+      "blob": "2ab15ee65989bbc4c10766e16bb77c5df86fade1"
+    },
+    {
+      "path": "test/query/sql-parser-pg.property.test.js",
+      "blob": "65a9b47ea4479db165705267687ddc6916947df6"
+    },
+    {
+      "path": "test/query/sql-parser-pg.test.js",
+      "blob": "d6b697981bc355cabd7cb3f4a7235b894cbb6c55"
+    },
+    {
+      "path": "test/query/sql-parser.test.js",
+      "blob": "f667026e32c6a56b560b192f3853c4f5a2c43b60"
+    },
+    {
+      "path": "test/query/sql-query-engine-create-table-quorum.test.js",
+      "blob": "6822351cfd4d4489f2d35772c3c8be87f1f06c85"
+    },
+    {
+      "path": "test/query/sql-query-engine-dispatch-metrics.test.js",
+      "blob": "53fdfbafbe2df5c17b2d9e2193691e72bf8566f7"
+    },
+    {
+      "path": "test/query/sql-query-engine-distributed-transactions.test.js",
+      "blob": "5aea79fac762e7ee5df892018e4f7d92a97c62c5"
+    },
+    {
+      "path": "test/query/sql-query-engine-execution.test.js",
+      "blob": "f5e2ac7576d8d62527ce4fc4fb8c86412c39556c"
+    },
+    {
+      "path": "test/query/sql-query-engine-managed-split-children.test.js",
+      "blob": "1b0e7499bd5c610dfa3148ae83f1ef271b7b2c9c"
+    },
+    {
+      "path": "test/query/sql-query-engine-managed-split.test.js",
+      "blob": "97b9ef79d87258b6eb817c94ac5d13c06bed52fc"
+    },
+    {
+      "path": "test/query/sql-query-engine-metrics.test.js",
+      "blob": "e212f68977b92cf454525bda2b0b727bdf351177"
+    },
+    {
+      "path": "test/query/sql-query-engine-partition-readiness-waits.test.js",
+      "blob": "97ae5c1682b34864bd7e0be6451fa5d2a295245b"
+    },
+    {
+      "path": "test/query/sql-query-engine-provision-ledger-hold-transient-wait.test.js",
+      "blob": "84da37de5dd1dd75905f53a734f29480bf7090c1"
+    },
+    {
+      "path": "test/query/sql-query-engine-provision-partition-quorum.test.js",
+      "blob": "a2eb36040a202350817597c6b7dcf64a1f9a91c7"
+    },
+    {
+      "path": "test/query/sql-query-engine-provision-partition-waits.test.js",
+      "blob": "932fa18f6ba769c3d04e3e0288cf37a6a48528b7"
+    },
+    {
+      "path": "test/query/sql-query-engine-provision-progress-gated-rewait.test.js",
+      "blob": "65d67022d42a9db4f38b2ab2b91bde83dec303ba"
+    },
+    {
+      "path": "test/query/sql-query-engine-provisioning-parent-deadline.test.js",
+      "blob": "feede1e27f784e78728a1f31318f1bb5b0f04804"
+    },
+    {
+      "path": "test/query/sql-query-engine-routing-overlay-state.test.js",
+      "blob": "ca953433e51c8c083a1538b473ee05d97061dc5d"
+    },
+    {
+      "path": "test/query/sql-query-engine-split-ingress-adapter.test.js",
+      "blob": "1a6e899f3edaaaecbf504118b7c161352c6970fa"
+    },
+    {
+      "path": "test/query/sql-query-engine-system-table-local-read.test.js",
+      "blob": "51ec09a7ff4852abf43b869284b06acdbcf336e9"
+    },
+    {
+      "path": "test/query/sql-query-engine-transaction-owned-commit-mode.test.js",
+      "blob": "264f510ff6f90196ef1dd23e1b11afccf365f8f0"
+    },
+    {
+      "path": "test/query/sql-query-engine.test.js",
+      "blob": "c3ead353d74c840e1e2c7e00aa7f655f48e0a592"
+    },
+    {
+      "path": "test/query/sql-query-pbt.test.js",
+      "blob": "ecd8646d2b970f63bcfbba3fbd6aa89dd6d1756e"
+    },
+    {
+      "path": "test/query/sql-request.test.js",
+      "blob": "40952a41e830968956354ff6f05790fa21abad8f"
+    },
+    {
+      "path": "test/query/sql-statement-refusals.test.js",
+      "blob": "48d1a129fa6a9cf9d5c4c1411804078b0764ba36"
+    },
+    {
+      "path": "test/query/straggler-detection.property.test.js",
+      "blob": "e144533d71b98044b89d7b8821a11c7cb241bc91"
+    },
+    {
+      "path": "test/query/strategy-selector.test.js",
+      "blob": "4f937d6235d62ccee4deff82b16ae6d0e8b4c3a2"
+    },
+    {
+      "path": "test/query/streaming-aggregation.property.test.js",
+      "blob": "303aa4b3e81905ed127608a9182070bfd4cbe30f"
+    },
+    {
+      "path": "test/query/table-creation-service.test.js",
+      "blob": "45fc107e5e327d74ea5fad36b8df6063ea51324b"
+    },
+    {
+      "path": "test/query/transaction-begin-collision-production.test.js",
+      "blob": "df79769a61052cd5a113ac204649be13697d9597"
+    },
+    {
+      "path": "test/query/transaction-coordinator-participant-protocol.test.js",
+      "blob": "e73a3ed0ff32a1b8b69e6b60ee80f6fe9a77cc86"
+    },
+    {
+      "path": "test/query/transaction-coordinator-settlement.test.js",
+      "blob": "5f1ea88a4ea030a40ed6a87f4e010189dab87366"
+    },
+    {
+      "path": "test/query/transaction-evidence-binding-production.test.js",
+      "blob": "76b1aa80d7a0d7860d2d3a8d9746d27f80c591ef"
+    },
+    {
+      "path": "test/query/transaction-owned-commit-mode-guard.test.js",
+      "blob": "71ddf37ca840d8ea7267176f27d91632c734a357"
+    },
+    {
+      "path": "test/query/transaction-participant-set-authority.test.js",
+      "blob": "69589b246060af48a48d320263353e4713007690"
+    },
+    {
+      "path": "test/query/transaction-recovery-ownership.test.js",
+      "blob": "2a4ce5a7b90918512d6b29984bcb4804d6ddb5ff"
+    },
+    {
+      "path": "test/query/transaction-recovery-poison-row-attribution.test.js",
+      "blob": "48d6547c500d8ed5cf20d50f1283857951876a7c"
+    },
+    {
+      "path": "test/query/transaction-release-census.test.js",
+      "blob": "1e0470fbd6496668058c12acfa4b4646e5f1cf5b"
+    },
+    {
+      "path": "test/query/transaction-release-settlement.test.js",
+      "blob": "d0e917e104f40d39b2dc4c8e446aab7926fc5593"
+    },
+    {
+      "path": "test/query/transaction-review-adversarial.test.js",
+      "blob": "05a4cf87050d1faed0ab4302bb00c88c09495f9e"
+    },
+    {
+      "path": "test/query/transaction-schema-enforcement.test.js",
+      "blob": "10770e678ded043dfa3f2a2b639011aaa88648c9"
+    },
+    {
+      "path": "test/query/transaction-session-reads.test.js",
+      "blob": "364eee4b975ba96527c94e3fe1123682760744b6"
+    },
+    {
+      "path": "test/query/unknown-outcome-redelivery-budget.test.js",
+      "blob": "c584f6a85915b2adb7d91dcd0e9593edbdb00d9e"
+    },
+    {
+      "path": "test/query/unknown-outcome-same-entry.test.js",
+      "blob": "a0fb7026a5a53558d67bc3b77684efe126cf420d"
+    },
+    {
+      "path": "test/query/wasm-call-adapter.integration.test.js",
+      "blob": "a3f9e1b4fa3a2c5c1b930845112948e95087468e"
+    },
+    {
+      "path": "test/query/wasm-call-adapter.test.js",
+      "blob": "68b55cc046634d4ebd3d970ea7858b8f393b1e90"
+    },
+    {
+      "path": "test/query/write-exactly-once-property.test.js",
+      "blob": "4cee4e5d197ba972b4ae60b84ef30ac2b9eeb4a2"
+    },
+    {
+      "path": "test/query/write-exactly-once-schedules.test.js",
+      "blob": "a44032db0f07f0ed86f9d539aa9aa67b37082ea5"
+    },
+    {
+      "path": "test/query/write-identity-instance.test.js",
+      "blob": "961a285cd9747a24d29821564039c9b07d1a2151"
+    },
+    {
+      "path": "test/query/write-path-internal-pacing.test.js",
+      "blob": "858bded5efbd54562b80138325e20b6ad2e6389e"
+    },
+    {
+      "path": "test/query/write-tracking-recursion-guard.test.js",
+      "blob": "37911e19f52d9028400445dc521b8fbf6f83f4b0"
+    },
+    {
+      "path": "test/raft/authoritative-row-mutation-helper.test.js",
+      "blob": "0c3719d75714ef9095616238d12282c431de8293"
+    },
+    {
+      "path": "test/raft/authoritative-row-mutation-outcome-classifier.test.js",
+      "blob": "f40446bfced0e6520ecf66924c189b804627a12d"
+    },
+    {
+      "path": "test/raft/bulk-transfer-socket-adapter.test.js",
+      "blob": "e6f01349d8ea51b239e1f1d5fd9fa10a61466dea"
+    },
+    {
+      "path": "test/raft/leader-activation-gate.test.js",
+      "blob": "6f553de1a48610a4b881bb6a3efba88be2472d30"
+    },
+    {
+      "path": "test/raft/leader-activation-scheduler.test.js",
+      "blob": "26ee9a515fcd8c1984b918ad4cd00affc2653d3f"
+    },
+    {
+      "path": "test/raft/leadership-transfer-single-path.test.js",
+      "blob": "685f6841bc015d41e599d589e5c22d6a6eddf209"
+    },
+    {
+      "path": "test/raft/learner-promotion-progress-proof-contract.test.js",
+      "blob": "016f313f882927266a1f6b5355eab7a13db737cf"
+    },
+    {
+      "path": "test/raft/message-group-readiness-delivery-priority.test.js",
+      "blob": "9e9302d06d13a8cb92b574f7613573e49f22d307"
+    },
+    {
+      "path": "test/raft/peer-address-resolver.property.test.js",
+      "blob": "7f7586ef162a88f09904a17a751c031dfd33274e"
+    },
+    {
+      "path": "test/raft/peer-address-resolver.test.js",
+      "blob": "2a7285dd6ae7c01bf6c5b132c228a66b97af54bf"
+    },
+    {
+      "path": "test/raft/raft-cleanup-verification.test.js",
+      "blob": "099fa9bfbb1c1cec238684041dc9f8599cf047da"
+    },
+    {
+      "path": "test/raft/raft-id-mapper.test.js",
+      "blob": "d9264755f4f9e4c282e5acf6c0f25b442abd74c6"
+    },
+    {
+      "path": "test/raft/raft-log-write-owner.test.js",
+      "blob": "51f2e4dcfc70cf55272ad47962529fff8c5db80d"
+    },
+    {
+      "path": "test/raft/raft-opening-cleanup-error.test.js",
+      "blob": "6050846d7a687f8e84d41749a9029de9a4e6e560"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/admission-redrive-chain.test.js",
+      "blob": "98583e44ef9e5159b0d3808eba4f092445733662"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/admission-redrive.test.js",
+      "blob": "6541f71aa38b3ef0ba7bec6e3087cd0a34d2b687"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/backend-seam.test.js",
+      "blob": "064d72c7f7b956574ea67114d08c8cc2f4631183"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/bootstrap-committed-membership.test.js",
+      "blob": "3e692e77dbc1ccafe88b07b71567a413104350b9"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-adversarial-boundary.test.js",
+      "blob": "8c3ee6e58309141be763f0a98207a2d2bfa287c8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "blob": "1e6f738ea112e3d5bb25cee6e45bcf169ead9cc2"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-read.test.js",
+      "blob": "688adb71330b3552643ef11f779fa980db9b23a2"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-stamp.test.js",
+      "blob": "d1c9148f261ddce8dd80205651ad6fd29d69ee9c"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/committed-membership-target-validation.test.js",
+      "blob": "065f9c166c81369cfd9dbb45faa95cbcd56c1cf8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/conf-change-leader-only.test.js",
+      "blob": "275371a89a7396b09ca5b7918e9a753e4c5896d2"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/conf-change-pending-deferral.test.js",
+      "blob": "fa861538f32b018420e267708a482a0e9aeba221"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/conf-state-authority.test.js",
+      "blob": "670fb139d08c8b46eb3a300875b08b9574e1cf61"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-commit-power-loss.test.js",
+      "blob": "627e957b7259ffbb914a824f43638934f9d97252"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-commit-replica-kinds.test.js",
+      "blob": "0e007f9ae6ce7a45b05d4016149f1dc8f34437b8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-commit-sync.test.js",
+      "blob": "4daba33516a5ee0f7a866faedac9dea2fd998fce"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+      "blob": "81061f61b57392960724ce436c9c8d995a9e0dc8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js",
+      "blob": "cbdca1deb0cc23c60de5d20cbf2d56f551ff0861"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+      "blob": "afc4b68a025e106821525b38439c068080dcaada"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/election-safety.test.js",
+      "blob": "8ff125eccc6237492d2d402153b4a6b48308e8c0"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-admission-liveness.test.js",
+      "blob": "3d2b9045670ba52d2700e72c48045241b23ca282"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-anchors.test.js",
+      "blob": "0b6ad6848af2ad220e71733aaac88fe5331690a0"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-gate-histories.test.js",
+      "blob": "d4b5b83fb93ece37913790bb7ffd1c9c0fc44c98"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-proposal-ingress.test.js",
+      "blob": "dda70cbae091d7d7362330cbd3b1845f5e5c8bd4"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
+      "blob": "0f5c5d2bcc4cebdec9ab5dfe5fc727dcfed04e10"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-restart-equivalence.test.js",
+      "blob": "f7a06570fecc9d1a8831e943aa11f9db8db5d6f8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/evidence-o1-static.test.js",
+      "blob": "c7a53d343873ccc8e99d44bf8f8c3c5d0c04be5f"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/host-contract-citations.test.js",
+      "blob": "3f1587a1c48196a246bbb92b8ca3287d1f8ac508"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/identity-record-window.test.js",
+      "blob": "30e2c18e5ce4ab82087898c55ce34273a6bdca30"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/identity-reuse-reseed-hold.test.js",
+      "blob": "00aa647f5f3038167398f37a45ed1ad44bbe6a78"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js",
+      "blob": "429436c6144f7bfa80a6e2142488a0a692aed411"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/initialization-shutdown-serialization.integration.test.js",
+      "blob": "cec77cbb0833e6174a7a24fae8c8efc1b533d6a4"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js",
+      "blob": "8a078f492bb6fc069147f5c352aad1d963ed0ee3"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
+      "blob": "ec8465225a7c13b0ce926ec4fd89c55f90087963"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js",
+      "blob": "c6414a2fe9faf42303500b441b1eed7074c45226"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/local-log-guard-refusals.test.js",
+      "blob": "73119f281a0baab5d646152f6c27392015b5bae6"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js",
+      "blob": "a44db076a36c2c509616849747de191d3f47c5b1"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/membership-changed-event.test.js",
+      "blob": "e77f783ccf1006caddeaddd6cb2b2153182684d1"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/membership-generation-persistence.test.js",
+      "blob": "3cd614c9df056b5d66a65bf12d60cc44adef1e21"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js",
+      "blob": "e96fb40adc8e8fc44faefe8d0cc22a097efd818d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",
+      "blob": "b458146d9c5920420bde7944af215f05292909a2"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/multi-replica-runtime-prerequisites.test.js",
+      "blob": "785d67e355b40f13e1a2e251b15b1f125ebaa2e1"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/native-election-liveness.test.js",
+      "blob": "e899b346f3ed682030f73d283a9efd4bc088a00a"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/native-election-randomized.test.js",
+      "blob": "b9b83bd3624291462ab8e5493b8767c0bf559021"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/open-time-identity-refusal.test.js",
+      "blob": "b74a11e274db09b3ca01e089554fd2cd45cd752b"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-boundary.test.js",
+      "blob": "e7469d5ce945f60f3f36c23adc935f81ea4af046"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-lifecycle.test.js",
+      "blob": "a25a40ba1fa093a407bea68fd1a57312e617c0cd"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-provenance.test.js",
+      "blob": "69177d9bad904dd9be389e7b9a89af23f1d156ac"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+      "blob": "711382a5bde6a3132fa57a187a3422f0f19bc200"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-regression.test.js",
+      "blob": "0802d4e668479d3c159c8eb5e6e230c755e26438"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-status-observation.test.js",
+      "blob": "f33303e942db624d6253c4ca313d39a98368af2a"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/operation-port-throw-containment.test.js",
+      "blob": "b9b2210bec01c063012e1b16ea823b7d627e1df1"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/participation-gate.test.js",
+      "blob": "17208052d5b3b11fd3835c453ccf7ccd36bb2cf5"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-construction-seam.test.js",
+      "blob": "72af0ef4d59ee5b89e4f0a44c671495febc0f249"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/partition-peer-admission.test.js",
+      "blob": "4a008c2be4cb1a42f87b8e22330aea479504c2ec"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/peer-identity.test.js",
+      "blob": "e3eab12e8eaeaaf5a4861d1bb869612ead4ad0a4"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/persistence-admission.test.js",
+      "blob": "da0e5242216263f66f79f1e55e35d2a87e5ff091"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/raft-rs-ingress-fuzz.test.js",
+      "blob": "01d7b82bc1a92e3d991e5a33f3155d68415f98f4"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/real-partition-on-raft-rs.test.js",
+      "blob": "91eb8ca78c5a6c45a972d42d2c164cb36d14d314"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js",
+      "blob": "5accdc75d5e4fb48f4d9d1fba21e83b8ebb4b2dc"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/replica-membership-witness.test.js",
+      "blob": "63441ecdbfa2783d9c796a2dd791aa811428f663"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/reseed-hold-durability.test.js",
+      "blob": "072ffdfac2ce929339f55e5e50bfc238e576f03c"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+      "blob": "39897f08dcbd82449bf97ee7a28a70b7505d29d6"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-captured-inbound-boundary-native.test.js",
+      "blob": "2f2aaf91262c69eb73317efaedff5ccf09de5009"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-captured-inbound-service-native.test.js",
+      "blob": "debc16f442ba63b100332d93b285865d36d1c376"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-completion-consumers-partition.test.js",
+      "blob": "01561863073663608f15acd7956afdc086ab1c40"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-completion-consumers-transfers.test.js",
+      "blob": "16004b138c6d8edccfcaaf9cae0abd62dda12f3d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js",
+      "blob": "0f8f1ec526674c72793aa015bd137503f5753f66"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-opening-history.integration.test.js",
+      "blob": "925e5cb7dcedf21e8daa9ea4ab8a2ca7575d538a"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js",
+      "blob": "a200e8a7dbcc46e67aeea6aa949e6bdf4abd759d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-ordering-native-companion.test.js",
+      "blob": "7e1bb4e023f3a1d73e3364e6a596d2420ade6b8c"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js",
+      "blob": "917234a80f5a9049680839f11caf29dccd97c2e3"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-trap-and-restore.test.js",
+      "blob": "bd1cd6b41827b93dd510a111a4fd3538efd494f8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-turn-integrity.test.js",
+      "blob": "6dd7ff980c520ace3609e3397595d1cf02d77b5b"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/runtime-wait-bound-spent.test.js",
+      "blob": "9946d874eddb5baf459f3e1e93f1aaa6d5c19573"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/single-path-partition-cutover.test.js",
+      "blob": "d0a3f05d9d42cefbc2f1692fae6b6f7e048e6be5"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/stampless-opening-refusal.test.js",
+      "blob": "12d75e06e550b3d0710ca4cf04e301515b02f34d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/startup-cleanup.integration.test.js",
+      "blob": "a47b5c68d1ba6d78aea9d3feb8dd9e51a62847bd"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js",
+      "blob": "2761c2a5fb1439afa6fe3603617f2616673c103c"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-attack-matrix.test.js",
+      "blob": "dff73537790a6055b31693ee66a2a60b96da38ee"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-decision-inputs.test.js",
+      "blob": "9938cd6763cce13a262a4f6399b2cba611620c9f"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drain-anchors.test.js",
+      "blob": "cc2ec8aadd129f1d4082d9696be530f5373d14fe"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drain-oracle.test.js",
+      "blob": "e19ae663954033dc0398c286f6d85e4060def4da"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drain-order.test.js",
+      "blob": "c8b917d54189780e0854c863decfb252af62a4f0"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-drop-classification.test.js",
+      "blob": "141ecfbcf8c000081f97bc8f7d9bfcbeb259b4a0"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-property.test.js",
+      "blob": "2e6b60cb4c8467a0b5e5d8b26f3b15c8b0ca83a1"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/transfer-leadership-write-path.test.js",
+      "blob": "55cfda109f0e2494fa4be7a9756e19d4f4467ab8"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js",
+      "blob": "d442559ff933c00993841f8ccc170de6871cdd4d"
+    },
+    {
+      "path": "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js",
+      "blob": "9249f52b9a1350e5de4c90451cd4084d8393d661"
+    },
+    {
+      "path": "test/raft/replica-voter-readiness.test.js",
+      "blob": "f4d8af210dcb96cf894875daa1d86a4b6bfa407d"
+    },
+    {
+      "path": "test/raft/snapshot-boundary-observability.test.js",
+      "blob": "428c89b35972d701d0f25f5b08d87867687d4de8"
+    },
+    {
+      "path": "test/raft/snapshot-cadence.test.js",
+      "blob": "6c03195b3e6617855bb011beed193d7de112fed2"
+    },
+    {
+      "path": "test/raft/snapshot-catchup-cluster-identity.test.js",
+      "blob": "7020164d5f82521c828055b9f62d240f9c31daa8"
+    },
+    {
+      "path": "test/raft/snapshot-catchup-dispatch.test.js",
+      "blob": "69911efe65411ac02294821a74a907ec06e60ce8"
+    },
+    {
+      "path": "test/raft/snapshot-catchup-end-to-end.test.js",
+      "blob": "6452d76c49295ad1607abc8ecb05e336f660b1b6"
+    },
+    {
+      "path": "test/raft/snapshot-checkpoint-format-contract.test.js",
+      "blob": "b92071ddd3c262da762644635b6f478a43b8ac2f"
+    },
+    {
+      "path": "test/raft/snapshot-checkpoint-restart-read.test.js",
+      "blob": "bb55a3117b83beeb5aa311df1b0c53feb4e1e8d9"
+    },
+    {
+      "path": "test/raft/snapshot-checkpoint-sqlite-payload.test.js",
+      "blob": "09024f855372efc6641acbc67b0a20d2c472a7dc"
+    },
+    {
+      "path": "test/raft/snapshot-compaction-catchup-integration.test.js",
+      "blob": "a41326fffb4e78af50a3ef44b24039a4646ee1c8"
+    },
+    {
+      "path": "test/raft/snapshot-dispatcher-wiring.test.js",
+      "blob": "abdce357d5ed189884692ba7c074c80f8cb0ba85"
+    },
+    {
+      "path": "test/raft/snapshot-gated-compaction-contract.test.js",
+      "blob": "70cb26ef053faa5a4bf061f01e0936377c06eab6"
+    },
+    {
+      "path": "test/raft/snapshot-install-restart-states.test.js",
+      "blob": "0eb16a8249a56b00c89c34569c541800b23d5532"
+    },
+    {
+      "path": "test/raft/snapshot-install-transition.test.js",
+      "blob": "eb304df3bf4a92ca87554d29b8c46d0f66dc6e5b"
+    },
+    {
+      "path": "test/raft/snapshot-lifecycle-staging.test.js",
+      "blob": "79a363c57350e0cd80d789b334a2d6335c5e2dd0"
+    },
+    {
+      "path": "test/raft/snapshot-multichunk-transfer.test.js",
+      "blob": "6f8e7092bf2efb4ee83d3e3a17e678c7ed6e6d2e"
+    },
+    {
+      "path": "test/raft/snapshot-offer-router.test.js",
+      "blob": "36ff70a9053c5aca0f2ded087e5eba6a6a5c846e"
+    },
+    {
+      "path": "test/raft/snapshot-proof-gated-compaction.test.js",
+      "blob": "f99442902b6352cb9ae68ef8ecb2debcb9df8e70"
+    },
+    {
+      "path": "test/raft/snapshot-recorded-gaps.test.js",
+      "blob": "84745aad4df57bab7401c32835caf191e6423bb9"
+    },
+    {
+      "path": "test/raft/snapshot-retention-sweep.test.js",
+      "blob": "d2df3afb151170121038355f2592c595649fa6f3"
+    },
+    {
+      "path": "test/raft/snapshot-transfer-protocol.test.js",
+      "blob": "b095567e2499a5c3d3b1ac72eaf55c6a0fff4886"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-committed-truncation-guard.test.js",
+      "blob": "1d9b83388bb2c59db6f8a2910f33f5d5ba95173f"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-committed-watermark.test.js",
+      "blob": "3ae8efd911b990527b31802159f64cbd9872a5d7"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-committed-write-paths.test.js",
+      "blob": "eb08940e06731b27957ff9e35da9de59fba5aa3e"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-contract.test.js",
+      "blob": "0d1f96c87d6d9f5981e76da8d1f17963a0ca983c"
+    },
+    {
+      "path": "test/raft/sqlite-log-adapter-round-trip.property.test.js",
+      "blob": "88f98c8060c8848d1f09841c50f2da522bf4b8c1"
+    },
+    {
+      "path": "test/raft/sqlite-schema-migration.test.js",
+      "blob": "d79e82f9609fdd9d9b0680f240f85687b0ed29e0"
+    },
+    {
+      "path": "test/rebalancer/application-write-formation-authority.test.js",
+      "blob": "592d5e872b814e65a3a115dd2db5b65a97d9a685"
+    },
+    {
+      "path": "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js",
+      "blob": "71b6d04001fcc1c717a18eb13f113f24702c231c"
+    },
+    {
+      "path": "test/rebalancer/priority-publication-per-leg-evidence-census.test.js",
+      "blob": "4c0a331298567766145961d0ec1029c0f6a1dd9d"
+    },
+    {
+      "path": "test/rebalancer/replica-operation-membership-epoch-binding.test.js",
+      "blob": "3b5ff91666bd52f41792c9c8a62a273152923944"
+    },
+    {
+      "path": "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js",
+      "blob": "e8d44160f4c15f6475a3991c27acd2343c944623"
+    },
+    {
+      "path": "test/rebalancer/spread-cure-transition-authorization.test.js",
+      "blob": "7dd5404a2d9315b95bff8a245277b26185fa8317"
+    },
+    {
+      "path": "test/rebalancer/stabilization-timer-reset.property.test.js",
+      "blob": "c0c0241856824bab74d6424e8a7b49f7a5113355"
+    },
+    {
+      "path": "test/release/project-hardening-contracts.test.js",
+      "blob": "57c6370af77d2243f5878655b8ef8605426730c6"
+    },
+    {
+      "path": "test/release/public-api-side-effect-boundary.test.js",
+      "blob": "17a5c2dca9965f66b0bdfa7605d989ba44160e49"
+    },
+    {
+      "path": "test/release/runtime-entry-link.test.js",
+      "blob": "66dc5e05d2056f39b1ccc28b600a24b9c1238606"
+    },
+    {
+      "path": "test/runtime/call-cell-reduce-coordinator.test.js",
+      "blob": "c65011c1e919548572fcb8b4df72d5bb8966102d"
+    },
+    {
+      "path": "test/runtime/call-cell-worker.test.js",
+      "blob": "67a137127e7316f0a7c26ade92dc17263738868f"
+    },
+    {
+      "path": "test/runtime/cell-host-call-protocol.test.js",
+      "blob": "a6de3e131ca56f53b919a0dc31b0e5bb042580db"
+    },
+    {
+      "path": "test/runtime/component-export-resolution.test.js",
+      "blob": "d0fbfc57633e243a4a3fd51f8ab6699063332adb"
+    },
+    {
+      "path": "test/runtime/endpoint-intent.property.test.js",
+      "blob": "e7ee88fd088bdf95982ad7c27e8bdc0adeed4d64"
+    },
+    {
+      "path": "test/runtime/endpoint-lifecycle.test.js",
+      "blob": "fc2c1fd94c342028997dcb41f2a5196b7d099f03"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-config.test.js",
+      "blob": "3b6419a76eca79d208a3821fa534410f10e20c48"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-controller.test.js",
+      "blob": "2cdb48a5cd72e04883af1c2caebb8c8d6b415a63"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-k8s-client.test.js",
+      "blob": "6dd7ac97023d71a2eb87840f2cdb6a89169d8c8d"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-k8s-reconciler.test.js",
+      "blob": "b12b7d43abe71df1ecfe383e59227d05e70b1adf"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-leader-election.test.js",
+      "blob": "a3dd2078799a280dfd99263cf7a0e8e4bc124070"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-metrics.test.js",
+      "blob": "258d78891ba5587a1561a86263ec8518a6c80371"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-naming.test.js",
+      "blob": "6503b525d4f837b037776eb0efafe0851120d522"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-planner.test.js",
+      "blob": "41a845d840c4dd02dd2b5a765bbd6b88fcf45ab5"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-source-client.test.js",
+      "blob": "70e8d124f41107dfbaa147f4e0930f4cfef2591b"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-source-query.test.js",
+      "blob": "1e34d004856c6f74675068834c8e18b6185e9686"
+    },
+    {
+      "path": "test/runtime/endpoint-sync-source-wait-bound-spent.test.js",
+      "blob": "13dca473009fbaacdd63507243fffc422e239138"
+    },
+    {
+      "path": "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js",
+      "blob": "accb4508cbb8e94a9ecd64b6468e2a00d0f0e369"
+    },
+    {
+      "path": "test/runtime/movielens-affinity-demo-wiring.test.js",
+      "blob": "fe9967e7394ad5db607b6dc55607be95e49e7b7b"
+    },
+    {
+      "path": "test/runtime/movielens-failure-report-participant-failures.test.js",
+      "blob": "e8222bb2e590f2b9b88fb997e983c685a8df4218"
+    },
+    {
+      "path": "test/runtime/movielens-formation-probe-wiring.test.js",
+      "blob": "578a8a39293b1ebb5be52b2b705a335919701b4a"
+    },
+    {
+      "path": "test/runtime/movielens-formation-verdict.test.js",
+      "blob": "872268e94aeb65b86b4cc1bd33ef609f5378dd09"
+    },
+    {
+      "path": "test/runtime/movielens-live-report-formation-verdict.test.js",
+      "blob": "db43be14adf92d8eeac73dca30fd8b96e7befd2e"
+    },
+    {
+      "path": "test/runtime/movielens-live-report-host-scheduling.test.js",
+      "blob": "fc64e80a3c83744a644c37fb33a3ddba85ec7324"
+    },
+    {
+      "path": "test/runtime/movielens-live-report-partial-evidence.test.js",
+      "blob": "fc4425b3f4d8d73941aede435f2221ac01b9335c"
+    },
+    {
+      "path": "test/runtime/movielens-preload-admission-gate.test.js",
+      "blob": "685ddb21c620e045f13b0db50dae1cc6835a021b"
+    },
+    {
+      "path": "test/runtime/movielens-public-request-component-validation.test.js",
+      "blob": "2be4dac3d77a07788c6e3710fcb34c5ddaddc669"
+    },
+    {
+      "path": "test/runtime/movielens-three-way-affinity-demo.test.js",
+      "blob": "8518d0d134f0b6e9a549f9d7361cd08e4e4a686c"
+    },
+    {
+      "path": "test/runtime/native-js-driver-lifecycle.test.js",
+      "blob": "ff4e24a87abf4d572f91af3bbfecf18fd2f055a8"
+    },
+    {
+      "path": "test/runtime/native-js-driver.property.test.js",
+      "blob": "72d1fecb44de865e940607857284cc486f4af131"
+    },
+    {
+      "path": "test/runtime/native-js-driver.test.js",
+      "blob": "7851c1345a2740c13ecc863f541dceff61c997bc"
+    },
+    {
+      "path": "test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "blob": "fae4adbc26e360975024695161e4c4fc6bbfdff0"
+    },
+    {
+      "path": "test/runtime/oci-container-descriptor.test.js",
+      "blob": "2a77973f1765229144f816f92ef335fbe6352fd3"
+    },
+    {
+      "path": "test/runtime/oci-container-driver-contract.test.js",
+      "blob": "98108aeee7f17eec862eee4f490f851b2c2c0fa8"
+    },
+    {
+      "path": "test/runtime/oci-container-driver.test.js",
+      "blob": "0040358c6d71be62f919aa1a9d28aa548a95784c"
+    },
+    {
+      "path": "test/runtime/oci-container-gate-errors.test.js",
+      "blob": "3d9850e0650ceeac28f9aaecd13abc361b02a218"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-admission-table.test.js",
+      "blob": "eec603e5a84003e056883a7b19657a80dc828693"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-engine-translation.test.js",
+      "blob": "97dadeb955b95b7f84daf4f466d9cda5694f433d"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-enrollment.test.js",
+      "blob": "9d6cc6ec2cef4df93286aed97e3c7ae34c0399c8"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-protocol-admission.test.js",
+      "blob": "afbfc06b6a7a0fd590d86dc2177c403b9e35bf00"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-receipt-ledger.test.js",
+      "blob": "2ee87926b8d9d9bc6b59ec9f78aa4bf8697f036c"
+    },
+    {
+      "path": "test/runtime/oci-host-agent-tpm-counter.test.js",
+      "blob": "02ab18263d511bd83b603f03cb6964071a64676c"
+    },
+    {
+      "path": "test/runtime/oci-registry-policy.test.js",
+      "blob": "e30e8f5c799a3a6998679a28fc7318cddd3d2f3f"
+    },
+    {
+      "path": "test/runtime/pgwire-protocol-handler.test.js",
+      "blob": "c8f8db8ee4aa78fc55a3ed2fe38e03f9d80859e7"
+    },
+    {
+      "path": "test/runtime/pgwire-session.test.js",
+      "blob": "229c63f4004a1926092418e95fd9eecdce3ff060"
+    },
+    {
+      "path": "test/runtime/request-cell-definition-classification.test.js",
+      "blob": "a9a782397f339758418327d88a49f72b8ffcbd76"
+    },
+    {
+      "path": "test/runtime/request-cell-table-read-index.test.js",
+      "blob": "8833ae041508a88dcbb081a702a8b28e17b82c01"
+    },
+    {
+      "path": "test/runtime/runtime-adapter-determinism.test.js",
+      "blob": "55e527eb8d63815c978b3392f14300ea0e69bbce"
+    },
+    {
+      "path": "test/runtime/runtime-adapter-ingress.test.js",
+      "blob": "70794b51b7f06dfd8c381a6d81b9ef9492d2efef"
+    },
+    {
+      "path": "test/runtime/runtime-authn-authz.test.js",
+      "blob": "54cb640093c0019c92e943512fd22ddd9c41a2b3"
+    },
+    {
+      "path": "test/runtime/runtime-budget-enforcement.test.js",
+      "blob": "389ff8a1c18e371faf74882a7094c67e69c0f463"
+    },
+    {
+      "path": "test/runtime/runtime-callback-fail-closed.test.js",
+      "blob": "804b84e8465e20b83d3a3b33a97c540194ed59cc"
+    },
+    {
+      "path": "test/runtime/runtime-callback-invocation-contract.test.js",
+      "blob": "5cbf1dc3f74aacde489504cdb7b57aeb19d38167"
+    },
+    {
+      "path": "test/runtime/runtime-callback-lifecycle-routing.test.js",
+      "blob": "1264c97413e67940d9dc7e9f8556a83a1ce9b6b1"
+    },
+    {
+      "path": "test/runtime/runtime-callback-runtime-adapter-parity.test.js",
+      "blob": "2538fa0ed5bad3515647dfdc97212fe3ecaec301"
+    },
+    {
+      "path": "test/runtime/runtime-callback-unified-integration.test.js",
+      "blob": "1f0d8a5f7d94db1ba2131b7aaaf4ca3183a2f810"
+    },
+    {
+      "path": "test/runtime/runtime-cli-compat.test.js",
+      "blob": "c198c768ec087682cfadf7b5e01b7c9ce1e300d1"
+    },
+    {
+      "path": "test/runtime/runtime-command-metrics.test.js",
+      "blob": "8741e3cee5e6d83bba274a6afabbe940c72e4125"
+    },
+    {
+      "path": "test/runtime/runtime-command-routing.test.js",
+      "blob": "cbd1ccb1992621d9c8d5c9938d3a6c0963420948"
+    },
+    {
+      "path": "test/runtime/runtime-driver-no-writes.test.js",
+      "blob": "4b1701a95b6863f33cd267994c2509816cfa24ca"
+    },
+    {
+      "path": "test/runtime/runtime-driver-registry-determinism.property.test.js",
+      "blob": "40751196a243f95fc9f55b0587c5ad1abdbffade"
+    },
+    {
+      "path": "test/runtime/runtime-driver-registry.test.js",
+      "blob": "2b95e755bacfbe2ed95c9bb22d72a9e8b16dd677"
+    },
+    {
+      "path": "test/runtime/runtime-driver.test.js",
+      "blob": "9df51e1620dfab4eb1a950d4dfa5aafa88f704ea"
+    },
+    {
+      "path": "test/runtime/runtime-endpoint-writer.test.js",
+      "blob": "a81b14afd5ee3d30921c0bc6c8ba623cecd75312"
+    },
+    {
+      "path": "test/runtime/runtime-fail-closed.test.js",
+      "blob": "e6968882b1267f883c56e065322814b6bcfae7fa"
+    },
+    {
+      "path": "test/runtime/runtime-idempotency-key.test.js",
+      "blob": "9ed88dc9fd91066175d496e7098a21f329fb0830"
+    },
+    {
+      "path": "test/runtime/runtime-log-trace-dimensions.test.js",
+      "blob": "33915d8b113a32152c5c14fe70d6fc3127f1e44f"
+    },
+    {
+      "path": "test/runtime/runtime-migration-modes.test.js",
+      "blob": "317890e26dacfdf36745c77fb68f5ff68c76d4a9"
+    },
+    {
+      "path": "test/runtime/runtime-monotonic-transitions.test.js",
+      "blob": "c276cbf72223cd0a9ebee511a45b502706e32133"
+    },
+    {
+      "path": "test/runtime/runtime-mutation-path.test.js",
+      "blob": "b6493d1bdfdae3c93fac504927c85dc6187dc97f"
+    },
+    {
+      "path": "test/runtime/runtime-operation-stream.test.js",
+      "blob": "140dac973dbd865e03897a3fb0a4dc9fa7500873"
+    },
+    {
+      "path": "test/runtime/runtime-policy-gates.test.js",
+      "blob": "c4f61f4bb9dd1809fa7f2f109df969dc45eaed71"
+    },
+    {
+      "path": "test/runtime/runtime-replica-state-projection-retained-reconcile.test.js",
+      "blob": "7f0dd60271363ff8caba8ddedd5e9e7db501c387"
+    },
+    {
+      "path": "test/runtime/runtime-replica-state-projection-wiring.test.js",
+      "blob": "eb2b253498064dcf77f321daeb0928b305611a74"
+    },
+    {
+      "path": "test/runtime/runtime-selection-diagnostics.test.js",
+      "blob": "76b4853145846bf825f993d70f546fe03c6bca3c"
+    },
+    {
+      "path": "test/runtime/runtime-startup-wiring.test.js",
+      "blob": "1a6434a1a99a959fa1a5832076b692b31cd00526"
+    },
+    {
+      "path": "test/runtime/runtime-telemetry-dimensions.test.js",
+      "blob": "0cdaf515aff9ddff849b57ac84103fa513792307"
+    },
+    {
+      "path": "test/runtime/runtime-trace-continuity.test.js",
+      "blob": "7ec78a4ce99a71b011e08292061574670dcb3b01"
+    },
+    {
+      "path": "test/runtime/runtime-trace-propagation.test.js",
+      "blob": "59e5e615214bd159d5c290a88757902a3a0a3b29"
+    },
+    {
+      "path": "test/runtime/runtime-unavailable-errors.test.js",
+      "blob": "bf456af2c7a661b562dd95560514921e17b60d7a"
+    },
+    {
+      "path": "test/runtime/service-cell-bridge-roundtrip.test.js",
+      "blob": "da65a231a7108e03e381f508efdd3b0736a0f6cb"
+    },
+    {
+      "path": "test/runtime/service-cell-worker-modes.test.js",
+      "blob": "320fbbd12c0a196105e28c8cd261229f87e71727"
+    },
+    {
+      "path": "test/runtime/service-discovery-catalog.test.js",
+      "blob": "87fe0e4648abecdc4dcc280284bf40bffc86f406"
+    },
+    {
+      "path": "test/runtime/service-lifecycle-pgwire-executor-handoff.test.js",
+      "blob": "babcf3ba21c007c7255c5c2df577576c560a6265"
+    },
+    {
+      "path": "test/runtime/service-runtime-consensus-publication.test.js",
+      "blob": "99386b10a9426864036826174c47299b9cd5e9b2"
+    },
+    {
+      "path": "test/runtime/service-runtime-lifecycle-idempotency.test.js",
+      "blob": "03b1c577986bfecd6041745575446fb3b60686ec"
+    },
+    {
+      "path": "test/runtime/service-runtime-lifecycle-journal.test.js",
+      "blob": "9c71cfe5a0e04ec57dbde03cb5d238eba21fbf01"
+    },
+    {
+      "path": "test/runtime/service-runtime-lifecycle.test.js",
+      "blob": "2284286ff05c46c753f2771dc31b8870d7f97f01"
+    },
+    {
+      "path": "test/runtime/sql-query-loop-parallel-reduce-sql.test.js",
+      "blob": "c0a5e562ab1502bdc1c4117cff9be67ec7e9eb6d"
+    },
+    {
+      "path": "test/runtime/state-projection.test.js",
+      "blob": "833782f0898ae2cd8bf5bb24c256cc0022b85eb4"
+    },
+    {
+      "path": "test/runtime/wasm-api-compat.test.js",
+      "blob": "32e5ce4dc9cae56486aa3da7cc8b96f8df933c70"
+    },
+    {
+      "path": "test/runtime/wasm-component-driver.test.js",
+      "blob": "0a946f558c972f2bb6292ea8eda2d1e383eb8be3"
+    },
+    {
+      "path": "test/runtime/wasm-driver-contract-conformance.test.js",
+      "blob": "b969f8cfdf796405973fbd9ba26f53e7ee9f1166"
+    },
+    {
+      "path": "test/runtime/work-class-scheduler.test.js",
+      "blob": "defee29a35229227a3a3b887c45f93872e54bdb6"
+    },
+    {
+      "path": "test/scripts/acceptance-proof-manifest-runner.test.js",
+      "blob": "34b032ec36c1931413fa7f3ef6e1862ca718df06"
+    },
+    {
+      "path": "test/scripts/action-authority.test.js",
+      "blob": "5b532e6e72f75b8d3639ee236d0318c459a0870c"
+    },
+    {
+      "path": "test/scripts/analyze-cl039-link-rate.test.js",
+      "blob": "e6080bb46314a4c240db3427d7d1bd4f055e68e1"
+    },
+    {
+      "path": "test/scripts/analyze-fix-engagement.test.js",
+      "blob": "0ab9cbb3549c569220f5316fb13865fed39385d6"
+    },
+    {
+      "path": "test/scripts/analyze-formation-release-phases.test.js",
+      "blob": "f4648eab48268259fa5cf9e1a09609a4117f51ab"
+    },
+    {
+      "path": "test/scripts/analyze-latent-blockers.test.js",
+      "blob": "b2ef7efc6185cc7a7931419b698af2b19cb587f9"
+    },
+    {
+      "path": "test/scripts/analyze-monotone-drain.test.js",
+      "blob": "4e1e2a20b2ba4abcfd9fc9ea533d14cc6d5a84d6"
+    },
+    {
+      "path": "test/scripts/analyze-precondition-recurrence.test.js",
+      "blob": "11244baf6b61a2437c12d073fa5c6b54361387dc"
+    },
+    {
+      "path": "test/scripts/analyze-priority-recovery-residuals.test.js",
+      "blob": "422e0a8446bca3ebb3d85d12248a6d5c372ff8cf"
+    },
+    {
+      "path": "test/scripts/analyze-redecision-storm.test.js",
+      "blob": "5071bbf4677db5715d825cf9e03318a616ae7ecc"
+    },
+    {
+      "path": "test/scripts/analyze-replace-safety-blocks.test.js",
+      "blob": "dae5d864c586aa93517749d79dd7bc2968261253"
+    },
+    {
+      "path": "test/scripts/analyze-rolling-restart-liveness.test.js",
+      "blob": "5455770771d007f3552257ea1eac83ec1d01827b"
+    },
+    {
+      "path": "test/scripts/analyze-soft-warning-strikes.test.js",
+      "blob": "4b97cdd7eea8effc42b0193f565dd58b26e0cd73"
+    },
+    {
+      "path": "test/scripts/analyze-topology-convergence.test.js",
+      "blob": "6c1ec9135d54421505b35ee24aa137fac20c0dff"
+    },
+    {
+      "path": "test/scripts/apparatus-release-consolidation-budget.test.js",
+      "blob": "99723c035aa1be8ed9e04c0d117652829c4fbe9b"
+    },
+    {
+      "path": "test/scripts/canary-corpus-needed.test.js",
+      "blob": "1ee24a9cd6367acf6520a9755265cbb4618fedc8"
+    },
+    {
+      "path": "test/scripts/certification-verdict.test.js",
+      "blob": "c720b9a303920f6a66a7fc7c89b904329c76ca11"
+    },
+    {
+      "path": "test/scripts/change-proof-boundary.test.js",
+      "blob": "f8a4d8c1c425747f4c2adabd90aaf8a3b872ff7a"
+    },
+    {
+      "path": "test/scripts/change-proof-collection-safety.test.js",
+      "blob": "4f8a6643450e4aa97682c213cda22d700fced15f"
+    },
+    {
+      "path": "test/scripts/change-proof-lockfile-safety.test.js",
+      "blob": "75665b564a0bf9c070089a77f8482d73f72bbb3c"
+    },
+    {
+      "path": "test/scripts/change-proof-own-authority.test.js",
+      "blob": "f4e6886f4f964585d28abc58f823f39a182b6a30"
+    },
+    {
+      "path": "test/scripts/change-proof-package-range.test.js",
+      "blob": "031deb5bd96dba641abe8fd7955a19b358d9ce98"
+    },
+    {
+      "path": "test/scripts/change-proof-subsystem-participant-safety.test.js",
+      "blob": "5f4e0c28ed396dc477292512ccfdbc615090d883"
+    },
+    {
+      "path": "test/scripts/change-proof-transitive-lockfile-shape.test.js",
+      "blob": "a709b9ff209c9ac9512d7b5a6f01e702a72d596d"
+    },
+    {
+      "path": "test/scripts/change-selection-taxonomy.test.js",
+      "blob": "07cce010ea9ef612da1e4da361809097357de8f3"
+    },
+    {
+      "path": "test/scripts/changed-paths.test.js",
+      "blob": "9c42658c07163315abb8d9be914e9119bbb645ce"
+    },
+    {
+      "path": "test/scripts/check-architecture-slices.test.js",
+      "blob": "6f9a837c675b1a81ffbaabfc231f62460cd63faf"
+    },
+    {
+      "path": "test/scripts/check-base-range.test.js",
+      "blob": "54c03d3f0626f1d070f0ccde3f1f11dba78d9d2c"
+    },
+    {
+      "path": "test/scripts/check-cli-docs.test.js",
+      "blob": "6ec8bcaddba3b3e0ce088298e3ae64b289b89104"
+    },
+    {
+      "path": "test/scripts/check-current-capabilities.test.js",
+      "blob": "a28344eb90af743fefe6ae5ec8cdf9f58b86cbe5"
+    },
+    {
+      "path": "test/scripts/check-doc-audience.test.js",
+      "blob": "e08af7bd4e3e069b7b9df719bca66e7580fd0d77"
+    },
+    {
+      "path": "test/scripts/check-documentation-current-state.test.js",
+      "blob": "61b0752e6e67620a2adc24d50212951458f9b1e3"
+    },
+    {
+      "path": "test/scripts/check-fast-static.test.js",
+      "blob": "cb97448dc7a5a2c3e340042283c7221d8871eb08"
+    },
+    {
+      "path": "test/scripts/check-file-size-thresholds.test.js",
+      "blob": "0641e31b10f025302af94b9b2efe3ae446f4588e"
+    },
+    {
+      "path": "test/scripts/check-guideline-ambient-intrinsics.test.js",
+      "blob": "e28bab2cb6831d319830643fbbf3ac476092d52c"
+    },
+    {
+      "path": "test/scripts/check-guideline-boundary-mode-contracts.test.js",
+      "blob": "cf2b2dc31a275ece60a0d4264812bc5d54326703"
+    },
+    {
+      "path": "test/scripts/check-guideline-constant-names.test.js",
+      "blob": "8fcfb2dab4d7226e3ca4cf32a9b3a33d01a79ad2"
+    },
+    {
+      "path": "test/scripts/check-guideline-decision-boundaries.test.js",
+      "blob": "d56fb4cb67720b5525a9b3e201fe413e27428d0e"
+    },
+    {
+      "path": "test/scripts/check-guideline-deferred-outcomes.test.js",
+      "blob": "1c41955ae8bf0856fd18f396de3e686dae2b1c17"
+    },
+    {
+      "path": "test/scripts/check-guideline-literals.test.js",
+      "blob": "2e69a9249330ba844a2e165af5a96bc07ffe94fa"
+    },
+    {
+      "path": "test/scripts/check-no-ordinal-files.test.js",
+      "blob": "477605fd8960dfd8224c0074a858862516a37823"
+    },
+    {
+      "path": "test/scripts/check-operation-dispatch-completion-owner.test.js",
+      "blob": "baac482fd51c3db5ce8ef7c42d06c171660c6b59"
+    },
+    {
+      "path": "test/scripts/check-operation-progress-authority.test.js",
+      "blob": "6dbf0bb9acee6096e7a29172bbca4f44fd9abc35"
+    },
+    {
+      "path": "test/scripts/check-owner-traces.test.js",
+      "blob": "997346f6b6679a54cde0eabcd6b4ab5c87b357da"
+    },
+    {
+      "path": "test/scripts/check-partition-class-owner.test.js",
+      "blob": "ac32f81e003a00e2e5866bcb315d11d53b176ca3"
+    },
+    {
+      "path": "test/scripts/check-quest-log-append-only.test.js",
+      "blob": "b2d21277c96bb1a090d779405ec58fe8b520a6b6"
+    },
+    {
+      "path": "test/scripts/check-roadmap-authority.test.js",
+      "blob": "5d30ac37519d434fc0962b049eb1d5c8cda4dba7"
+    },
+    {
+      "path": "test/scripts/check-runtime-grammar-contracts.test.js",
+      "blob": "fd45de9ca67032811ba44b57927aa769bdcb0712"
+    },
+    {
+      "path": "test/scripts/check-solve-binary-guard.test.js",
+      "blob": "d9ee2cd2eb734e545f57edad94b904a9a9e6907a"
+    },
+    {
+      "path": "test/scripts/check-staged-constant-names.test.js",
+      "blob": "ba676a09a07714ea64a1e5e1e25a5739f820e176"
+    },
+    {
+      "path": "test/scripts/check-subsystem.test.js",
+      "blob": "54d72fb7a076a9401e84b59b7131d52bdbc78b1d"
+    },
+    {
+      "path": "test/scripts/check-unified-system-metadata-gateway.test.js",
+      "blob": "f63d45c299ffaa31591fda4129a0049d0a342f58"
+    },
+    {
+      "path": "test/scripts/closed-quest-shape.test.js",
+      "blob": "4ca6fe91ced99a339015732ad6fe9081e054fcc6"
+    },
+    {
+      "path": "test/scripts/closure-ledger-state.test.js",
+      "blob": "a7cc1283c42869a451d0201e36df7b43d2d2869f"
+    },
+    {
+      "path": "test/scripts/complexity-ratchet-closure.test.js",
+      "blob": "e826ea6106756c07e1529793e2246be6b8f48bd8"
+    },
+    {
+      "path": "test/scripts/dependency-policy-authority.test.js",
+      "blob": "6afe48bbfbaf2641ac622d0bf70323cf57b688da"
+    },
+    {
+      "path": "test/scripts/dependency-policy-classification.test.js",
+      "blob": "0ac0961dd92510a48ab294e1733548e1356bc526"
+    },
+    {
+      "path": "test/scripts/dependency-policy-producer-binding.test.js",
+      "blob": "7df4305a4f2001778320a0b73e28ef907482eb8b"
+    },
+    {
+      "path": "test/scripts/distributed-matrix-cli.test.js",
+      "blob": "5c1d9a398d6f6337061fe2db6a5088bf1c54b6c3"
+    },
+    {
+      "path": "test/scripts/dt-prove.test.js",
+      "blob": "d3452b2d33217413b1cb8e200a49e55bc2ef0319"
+    },
+    {
+      "path": "test/scripts/effective-placement-serial-priority-planner-scenario.test.js",
+      "blob": "816a45c33e281c93db1f3abf27e34197254a86c4"
+    },
+    {
+      "path": "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
+      "blob": "f962564df3fc5713fdedc90b0632da5b10c78f60"
+    },
+    {
+      "path": "test/scripts/examples-build-upload-run.test.js",
+      "blob": "b803623d16c1ed61079da5876f5381fcbf0f87fe"
+    },
+    {
+      "path": "test/scripts/formation-health.test.js",
+      "blob": "92c012f94b329fb6c7bd84f2a4861dd5781d080e"
+    },
+    {
+      "path": "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js",
+      "blob": "3aa9959d0cf4a247a3d55d067fea306871fc4758"
+    },
+    {
+      "path": "test/scripts/gen-solve-commands-index.test.js",
+      "blob": "e780d5dd797b37a12d98bf9d25861a550edea462"
+    },
+    {
+      "path": "test/scripts/helper-import-closure.test.js",
+      "blob": "869019a2ddf87f303aa071d9af8bc4b2e1c03f88"
+    },
+    {
+      "path": "test/scripts/historical-record-exemptions.test.js",
+      "blob": "d40e56a6484947ea1658ff95503faff97b097a15"
+    },
+    {
+      "path": "test/scripts/home-lab-cli-guidelines.test.js",
+      "blob": "77da29352809564da2cddb3741ea0b221ea972b4"
+    },
+    {
+      "path": "test/scripts/impact-contract-registry.test.js",
+      "blob": "fe1c44f4022f5d1148a243adf97130df5d256b4f"
+    },
+    {
+      "path": "test/scripts/impact-proof-cone-consumers.test.js",
+      "blob": "150265c3804e143cf9536a1ffbe67e321065fd49"
+    },
+    {
+      "path": "test/scripts/impact-proof-cone-followed-file-races.test.js",
+      "blob": "ac521f7eb4b686b9304a0bd5f76c72db843f5c07"
+    },
+    {
+      "path": "test/scripts/impact-proof-cone-producer.test.js",
+      "blob": "439c41f246646be75cf8695babf540612e56a70f"
+    },
+    {
+      "path": "test/scripts/impact-proof-cone.test.js",
+      "blob": "b8d32f759ff5ef58f1e82e38f400b5ab46b34096"
+    },
+    {
+      "path": "test/scripts/install-git-hooks-stdout-purity.test.js",
+      "blob": "6629cbe664e2376810045f40f68f4c9bb244e894"
+    },
+    {
+      "path": "test/scripts/inventory-ordinal-segments.test.js",
+      "blob": "7253b5badb70562bfecdb8e012de1b9be217994e"
+    },
+    {
+      "path": "test/scripts/lab-fleet-discovery.test.js",
+      "blob": "aa2df3ac28cab2ee38e2e16b7a7f14f1c8c84912"
+    },
+    {
+      "path": "test/scripts/lab-test-base.test.js",
+      "blob": "1adcfa1c7e66cff45a56033949bde9f781eb2bca"
+    },
+    {
+      "path": "test/scripts/lab-worker-provisioning.test.js",
+      "blob": "be527d0bbcf7d6affe8e4f3b6492161edfa88f8d"
+    },
+    {
+      "path": "test/scripts/list-commands.test.js",
+      "blob": "be21c9caa582e6864ca16aafc2ac8e562246463e"
+    },
+    {
+      "path": "test/scripts/local-corpus.test.js",
+      "blob": "238d12cfcbbfb2ff2b5f94118ace67e8c2beb1d5"
+    },
+    {
+      "path": "test/scripts/local-leader-row-visibility-model-contract.test.js",
+      "blob": "f2d05bb7c256da69b48236bbf46d51bf6d88327e"
+    },
+    {
+      "path": "test/scripts/model-contract-tools.test.js",
+      "blob": "7a2586eb043e355890276593188f09c8775cfddd"
+    },
+    {
+      "path": "test/scripts/model-invariants.test.js",
+      "blob": "77accc3c021aa2f57f7e510f295f52b8109ff572"
+    },
+    {
+      "path": "test/scripts/model-tlc-mode-selection.test.js",
+      "blob": "a028271750f380994edcd2c724ee4bc05e924f5e"
+    },
+    {
+      "path": "test/scripts/model-tlc-output-tail.test.js",
+      "blob": "15b60e70e7ba5114767758a80b28bbaf3e14aa3b"
+    },
+    {
+      "path": "test/scripts/no-external-llm-guards.test.js",
+      "blob": "c1833f0c854798a80cf70c05ca09724a3b842bc9"
+    },
+    {
+      "path": "test/scripts/no-legacy-consensus-reference-audit.test.js",
+      "blob": "4ef09254abc9a26d1fb8c40dba8afe5a4512c737"
+    },
+    {
+      "path": "test/scripts/no-legacy-consensus-reference-ratchet.test.js",
+      "blob": "e90f5836cab103ab8dbfa11aca9ed5325c025e23"
+    },
+    {
+      "path": "test/scripts/observation-census.test.js",
+      "blob": "b9b1fa7fdbda7567f42eb73ef68ac82eee2bac8e"
+    },
+    {
+      "path": "test/scripts/participant-release-completion-owner.test.js",
+      "blob": "3e9efe1be99fb6af21d8c572a487cfc53a6a3b48"
+    },
+    {
+      "path": "test/scripts/pre-push-hook-control-flow.test.js",
+      "blob": "0542e7c4749b4c4fd9f8a8d10ba25e4ab8dc4951"
+    },
+    {
+      "path": "test/scripts/pre-push-stage-manifest.test.js",
+      "blob": "6fc0c4826593a69d432769d880a7283ef2d51925"
+    },
+    {
+      "path": "test/scripts/priority-recovery-current-artifact-fixture.test.js",
+      "blob": "b6368c237ead97bc9f6e74655777a64b61ef3bb6"
+    },
+    {
+      "path": "test/scripts/proof-authority-falsifiers.test.js",
+      "blob": "3c8347a0b433470e9913c1bdb06a518e710a9821"
+    },
+    {
+      "path": "test/scripts/proof-authority.test.js",
+      "blob": "ce06b3eec362f8235ece9c40eee4c5a87e82b72f"
+    },
+    {
+      "path": "test/scripts/proof-cone-cli-output-completeness.test.js",
+      "blob": "ed390c91936ca54a9e0f609f91b8c4e58dfbef8d"
+    },
+    {
+      "path": "test/scripts/prune-test-output.test.js",
+      "blob": "9076b6aa2438d6ad68aa5a9960751e949ab4bb0e"
+    },
+    {
+      "path": "test/scripts/publish-head-workspace-links.test.js",
+      "blob": "cfdb4769846918d3edeaf5ca2d5019121f139bb1"
+    },
+    {
+      "path": "test/scripts/publish-head.test.js",
+      "blob": "a8cbf59abbdfe93fae1d3538af624e02905472d7"
+    },
+    {
+      "path": "test/scripts/push-gate-change-proof.test.js",
+      "blob": "b5c0e59170878373a3dc999e35f4d4769ef34abe"
+    },
+    {
+      "path": "test/scripts/push-gate-unused-files-reachability.test.js",
+      "blob": "103729ffeb87590e4f0b31c742382095eb7cc6b3"
+    },
+    {
+      "path": "test/scripts/quest-evidence-harness-expected-tests.test.js",
+      "blob": "9d206f0a5dbee42938c5d7dee7d9507f8ab47bc7"
+    },
+    {
+      "path": "test/scripts/release-content-digest.test.js",
+      "blob": "1d1281b239e06d40c14d432f218d1953308da76e"
+    },
+    {
+      "path": "test/scripts/release-notes.test.js",
+      "blob": "037a283ed303a96a875ce8ec16fdeb28f6c1f97a"
+    },
+    {
+      "path": "test/scripts/release-npm-package.test.js",
+      "blob": "477c32840b73bfc53dbee88fd7b769a3c6cca0d9"
+    },
+    {
+      "path": "test/scripts/release-preflight.test.js",
+      "blob": "7ee96945e19c5bb3b70520cb496aad3c07d01389"
+    },
+    {
+      "path": "test/scripts/release-proof-identity.test.js",
+      "blob": "f2ee15e7706b9d8e0f26f0ff02365183c5e78951"
+    },
+    {
+      "path": "test/scripts/rerun-failed-distributed-scenarios.test.js",
+      "blob": "c551c95bff610d890138353eaaa5bc94720f80b1"
+    },
+    {
+      "path": "test/scripts/rolling-restart-stat-gate-summary.test.js",
+      "blob": "f443ce4aded8c0c37543768d7c7af043cb9b7fc7"
+    },
+    {
+      "path": "test/scripts/rule-set-revision.test.js",
+      "blob": "fff2603b61bee95a5e64d9516de691aa115597ff"
+    },
+    {
+      "path": "test/scripts/run-classified-test-files.test.js",
+      "blob": "fb7ae226ecf4f205791f25ff4d52788ebf334612"
+    },
+    {
+      "path": "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "blob": "3d9fc64c2af32f41e11d4ba6d783ff15727c0f82"
+    },
+    {
+      "path": "test/scripts/run-formation-release-handoff-gcp-reverted-control.test.js",
+      "blob": "397475d4de64e898b4f40b2b408c054126f4fa3b"
+    },
+    {
+      "path": "test/scripts/run-formation-release-handoff-gcp-streak.test.js",
+      "blob": "44ba0a55d64833e29f2cb244c6fd2e5a7957384e"
+    },
+    {
+      "path": "test/scripts/run-formation-release-handoff-gcp.test.js",
+      "blob": "bfa43208dffc6bb56f55576931f32a7beb46bb55"
+    },
+    {
+      "path": "test/scripts/run-formation-seed-budget.test.js",
+      "blob": "91107a5f992310293e25acc0cc0e4d84db147d85"
+    },
+    {
+      "path": "test/scripts/run-live-repetitions.test.js",
+      "blob": "75e6fb8726184dc8ac9444113c6bc815f4e3037f"
+    },
+    {
+      "path": "test/scripts/run-test-ci.test.js",
+      "blob": "5c5cd14049e5e2020c533249857d8fe24f3b8e26"
+    },
+    {
+      "path": "test/scripts/run-test-files.test.js",
+      "blob": "f209786da3e26f92ea1a903e6b5699a2421b27df"
+    },
+    {
+      "path": "test/scripts/scenario-certification-consumers.test.js",
+      "blob": "cd6014b6e3af124f933404481af9fe9bb880ffd9"
+    },
+    {
+      "path": "test/scripts/scenario-refused-outcome-consumers.test.js",
+      "blob": "61207f5ddc43469061c922b1e9d22dc9cda6f90d"
+    },
+    {
+      "path": "test/scripts/select-change-tests.test.js",
+      "blob": "06f41259495ef5f806ce005c84df6bf16af4790c"
+    },
+    {
+      "path": "test/scripts/selection-golden-corpus.test.js",
+      "blob": "383d30920b7970bb74e5ba7c3d987f61ee5f625a"
+    },
+    {
+      "path": "test/scripts/service-portability-claims-contract.test.js",
+      "blob": "6a3ef20dfc44f65a04b0b4e5e5d0f640762afd83"
+    },
+    {
+      "path": "test/scripts/service-portability-static-gate.test.js",
+      "blob": "127f0bf73f9d6782bd99624ec7788f787b30cd43"
+    },
+    {
+      "path": "test/scripts/solve-footprint-accounting.test.js",
+      "blob": "45d77d81ea159562e4d8e3547b5e1e401a6ca68c"
+    },
+    {
+      "path": "test/scripts/spec-led-runtime-legacy-deletion-guard.test.js",
+      "blob": "c92fb9a55de4a82362013eed67466ffbb82891b7"
+    },
+    {
+      "path": "test/scripts/static-audit-input-triggers.test.js",
+      "blob": "ca10c42d2704e6a105a0aef51082f01ffa1cd7f6"
+    },
+    {
+      "path": "test/scripts/steering-diet.test.js",
+      "blob": "cdb3f463b61d9125fb2df705fd449a084f48a7dc"
+    },
+    {
+      "path": "test/scripts/stop-distributed-harness-containers.test.js",
+      "blob": "2c0cc378fcf2345e1e601bbb9d95f34eb4cfdf17"
+    },
+    {
+      "path": "test/scripts/summarize-distributed-failure-report.test.js",
+      "blob": "1e783634a2f7cc7c7ffa8e9824e716eff80b877e"
+    },
+    {
+      "path": "test/scripts/summarize-representative-evidence.test.js",
+      "blob": "862eb25b1a23445827f2429537eeb3e03e42f6da"
+    },
+    {
+      "path": "test/scripts/test-placement-lab-split.test.js",
+      "blob": "d40079c852f741ec8678beccd8570d88d20b3bc1"
+    },
+    {
+      "path": "test/scripts/test-placement.test.js",
+      "blob": "fc2aee26071f3120cd2ec99f42305ba342e338bb"
+    },
+    {
+      "path": "test/scripts/test-primary-classification.test.js",
+      "blob": "eabb199adc04acba2da509bcf1c095f109e32242"
+    },
+    {
+      "path": "test/scripts/test-resource-classification.test.js",
+      "blob": "4c4f9fdc3a213bae2e1188c9566a0517a575a732"
+    },
+    {
+      "path": "test/scripts/test-subsystem-classification.test.js",
+      "blob": "96aeb0454af8346356dbe8816b4f601d9f532980"
+    },
+    {
+      "path": "test/scripts/test-timeout-declarations.test.js",
+      "blob": "bee9230c868cf69fe4ff8aef1e8edfb6c5ccf006"
+    },
+    {
+      "path": "test/scripts/wait-for-load-headroom.test.js",
+      "blob": "8b75980559ccd8eb917dc212edb9f6d7ecbfeaf7"
+    },
+    {
+      "path": "test/scripts/workspace-injection-candidates.test.js",
+      "blob": "6ab688421fa23914653f4aea1caeafa4adbf328b"
+    },
+    {
+      "path": "test/service/adapters/adapter-conformance.test.js",
+      "blob": "15d6c39da36f991767cca30529eb137fcec11e17"
+    },
+    {
+      "path": "test/service/artifact-payload-internalization.test.js",
+      "blob": "67987fa243d5038760584e898b29b28c6edc01a8"
+    },
+    {
+      "path": "test/service/artifact-payload-store.test.js",
+      "blob": "184b5e1f8d3968addbf62bc5c5db26487f46ad24"
+    },
+    {
+      "path": "test/service/call-binding-route-resolver.test.js",
+      "blob": "72a24eb51ddbfbe708a6bea6a1e38213927ef361"
+    },
+    {
+      "path": "test/service/call-cell-batch-executor.test.js",
+      "blob": "52e8f343307d9b11e9017f5a27fc0ffb52e15573"
+    },
+    {
+      "path": "test/service/call-cell-invoker-parallel.test.js",
+      "blob": "6b527550d41d92873cd415bf2d32f4de8da3ee72"
+    },
+    {
+      "path": "test/service/call-cell-invoker.test.js",
+      "blob": "51c2bccf453892bec3238988d9263cd43edf446d"
+    },
+    {
+      "path": "test/service/call-cell-public-outcome.test.js",
+      "blob": "d3c89f0c31735c883684c2f6b025d7e80ae15985"
+    },
+    {
+      "path": "test/service/call-cell-routing-contract.test.js",
+      "blob": "899e604d3f3fd0ef39fad22a70fb7cbdd872f40a"
+    },
+    {
+      "path": "test/service/call-cell-statement-adapter.test.js",
+      "blob": "74e16bc6f1d13c6971c8f58633f1a7c581d4df72"
+    },
+    {
+      "path": "test/service/call-shard-dispatch-pool.test.js",
+      "blob": "afef52ee2077b2c6e57b18430cfcc6133e830a03"
+    },
+    {
+      "path": "test/service/data-local-owner-boundaries.test.js",
+      "blob": "43b4d7cab956b81388a3c13837ce3b88f233f866"
+    },
+    {
+      "path": "test/service/external-service-manifest.test.js",
+      "blob": "bb491ec8c0dbb8a60c403d180797b1c661767618"
+    },
+    {
+      "path": "test/service/handler-aware-runtime-invocation.test.js",
+      "blob": "5bc6bb2d46798f02e52fd2d5e3f2f2214cdde0ca"
+    },
+    {
+      "path": "test/service/installable-service-artifact-resolver.test.js",
+      "blob": "055420e4f4026fff10b00f9ff5ae4b3d8156cfea"
+    },
+    {
+      "path": "test/service/minimal-deployment-artifact-binding-identity-owner-guard.test.js",
+      "blob": "2d70be329a5c0d90291b4c297107d565c178498e"
+    },
+    {
+      "path": "test/service/minimal-deployment-artifact-owner-guard.test.js",
+      "blob": "f9ad118f39a2a9bab993482820bf70072ea2e214"
+    },
+    {
+      "path": "test/service/minimal-deployment-binding-owner-guard.test.js",
+      "blob": "45a74752cbc53947b1042a0c4f64f2bb666e40a1"
+    },
+    {
+      "path": "test/service/minimal-deployment-request-binding-compilation-owner-guard.test.js",
+      "blob": "e6df0bd62d75bb07fb667a1ed78cbdf10d0215a8"
+    },
+    {
+      "path": "test/service/minimal-deployment-request-cell-routing.test.js",
+      "blob": "f82d4715f86d737829996e60acb417d647cd2666"
+    },
+    {
+      "path": "test/service/minimal-deployment-single-contract-owner-guard.test.js",
+      "blob": "9bdea24a3ef71d69eeed4b5df22de191da09132f"
+    },
+    {
+      "path": "test/service/replicated-service-topology.test.js",
+      "blob": "0a48c683d6ee1f46b8f46c1b9b5c08598797d444"
+    },
+    {
+      "path": "test/service/request-cell-call-bridge.test.js",
+      "blob": "30163d7159a0f7811f504f7fafc9e431e0252dd6"
+    },
+    {
+      "path": "test/service/service-compiler-editor-typings.test.js",
+      "blob": "8a1647be9f5a84f51c7efa00fbf26d911c68ff44"
+    },
+    {
+      "path": "test/service/service-consensus-creation-intent.test.js",
+      "blob": "91c2ecb8c9486a5d8a03cd491cfdd975c6cca920"
+    },
+    {
+      "path": "test/service/service-consensus-creation-recovery.integration.test.js",
+      "blob": "3deb5d8e429692a9a029f82bc5400fe0c0616bb8"
+    },
+    {
+      "path": "test/service/service-deployment-record-generator.test.js",
+      "blob": "063726fb42414618587f43f7c65bab1907fdec3b"
+    },
+    {
+      "path": "test/service/service-descriptor.test.js",
+      "blob": "d9e27c17ca0de6c54956427dbff81d0dcda40de6"
+    },
+    {
+      "path": "test/service/service-dispatcher.test.js",
+      "blob": "a554f8294275cb501424586258e74845d39c7bb2"
+    },
+    {
+      "path": "test/service/service-installation-reconciler.test.js",
+      "blob": "a73d57bb03cdc3b4dfe4764529edee08bd4804b3"
+    },
+    {
+      "path": "test/service/service-lifecycle-command-owner.test.js",
+      "blob": "6e8f7aea6071de43aa3d51562af5c8bc3a1edf80"
+    },
+    {
+      "path": "test/service/service-lifecycle-errors.test.js",
+      "blob": "f73db49f412d2122a480c48de9f97fbb21a1121d"
+    },
+    {
+      "path": "test/service/service-lifecycle-manager.test.js",
+      "blob": "425cf00a3d97915d1a64493cb26c5c3549ff20a9"
+    },
+    {
+      "path": "test/service/service-local-oci-layout-builder.test.js",
+      "blob": "772f0cb4fcad3a7bbcc2bb80860bacb3b5f17b1f"
+    },
+    {
+      "path": "test/service/service-message-contract.test.js",
+      "blob": "782e755b10afa433b80ad8b6d35e5fb1bf0f4804"
+    },
+    {
+      "path": "test/service/service-reconciler.test.js",
+      "blob": "2ecf3ca05f84287334d5674c0c33e483cc1f5f6c"
+    },
+    {
+      "path": "test/service/service-source-contract.test.js",
+      "blob": "012deac624827e6e15ab16656cfd64b802303950"
+    },
+    {
+      "path": "test/service/service-type-adapter.test.js",
+      "blob": "dc4657b6719ddca7a5cafc87b5bfea48a196b35d"
+    },
+    {
+      "path": "test/simulation/formation-sim-production-transcript-determinism.test.js",
+      "blob": "30ff07bf97e34eddee93ee3b4d69df388ed556f9"
+    },
+    {
+      "path": "test/solve/commands.test.js",
+      "blob": "d311ea40ebf345016be3ce2fbfbfac9b41153574"
+    },
+    {
+      "path": "test/solve/evidence-store.test.js",
+      "blob": "0cd1450fb7d26bfa8237c75683e254b82625c76e"
+    },
+    {
+      "path": "test/solve/guards.test.js",
+      "blob": "c418739cd9044d239534592bb87d23fd499dac33"
+    },
+    {
+      "path": "test/solve/migrate-v1.test.js",
+      "blob": "01cd48d914cff9f504c7f3bd6ad9bac76cfc0d7a"
+    },
+    {
+      "path": "test/solve/probes.test.js",
+      "blob": "f021cadc55db97bf42fed35b924949d0528b8f12"
+    },
+    {
+      "path": "test/solve/schema.test.js",
+      "blob": "f0479bf5aa5e0bfe4c88828e8d4f8a1b149d4b83"
+    },
+    {
+      "path": "test/solve/store.test.js",
+      "blob": "facfab35e099f421d5433a4ae65aa585bbb4baf5"
+    },
+    {
+      "path": "test/sql-engine-read-migration.test.js",
+      "blob": "b28e99ff2b9bd5d32cc6ce6f749e2f9bd7768546"
+    },
+    {
+      "path": "test/storage-load/storage-load-report.test.js",
+      "blob": "536185733989594b0b3b80540d06a5303b93701d"
+    },
+    {
+      "path": "test/storage/data-directory-manager.test.js",
+      "blob": "5ca742f7f7302deb6c7568505de8e805a58eb375"
+    },
+    {
+      "path": "test/storage/data-directory-validation.property.test.js",
+      "blob": "2e733972d1e01335da570003487c409f90578309"
+    },
+    {
+      "path": "test/storage/persistent-storage-paths.property.test.js",
+      "blob": "a9ff97234f4f36032b02e4185dee2a173b10918d"
+    },
+    {
+      "path": "test/storage/sqlite-store.property.test.js",
+      "blob": "683be823bd3c62bdec8b606045ad0551305b0f33"
+    },
+    {
+      "path": "test/storage/sqlite-store.test.js",
+      "blob": "021bfb3e21d6dcc6d1b809a198b7da9eda97020f"
+    },
+    {
+      "path": "test/test-helpers/managed-timers.test.js",
+      "blob": "6f33e6ad6ce2b9318c74b64d88c9542b7426b669"
+    },
+    {
+      "path": "test/test-helpers/port-allocator.test.js",
+      "blob": "efa897b910a021a100eae6620e7110257eb5d50a"
+    },
+    {
+      "path": "test/test-helpers/topology-leak-check.test.js",
+      "blob": "7cf6742778957598d9e8a1a06fb5280af8ff0e56"
+    },
+    {
+      "path": "test/threading/service-thread-manager.test.js",
+      "blob": "272aacf5ed57a97545f2d88648a310b5ecc964b5"
+    },
+    {
+      "path": "test/transport/message-router-api.property.test.js",
+      "blob": "9eb7c5d40f62514d0cb5c12093e8e44238e55dfd"
+    },
+    {
+      "path": "test/utils/canonical-json-data.test.js",
+      "blob": "91dd68df85155efeb51703f3dda51837cc51a22f"
+    },
+    {
+      "path": "test/utils/correlation.test.js",
+      "blob": "883774fc23048bf863c4b703ec1799d70b389e99"
+    },
+    {
+      "path": "test/wasm-service/backward-compat-serialization.test.js",
+      "blob": "8378284c2b768af5e2bdab62ec27b2b9ed269072"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+      "blob": "22e40d9e0e59df7504cab87d67e241a6f14efb85"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+      "blob": "ed5ae4551b5b0e2e89bb8e129709a3c34ba9331f"
+    },
+    {
+      "path": "test/wasm-service/bound-creation-restart.integration.test.js",
+      "blob": "862f922b065286fcf5dd4f4f8475bbb09a872160"
+    },
+    {
+      "path": "test/wasm-service/bound-remove-physical-operation.integration.test.js",
+      "blob": "95c5fc096672104c8340926d62e497fb111f8bf0"
+    },
+    {
+      "path": "test/wasm-service/call-cell-world-abi.test.js",
+      "blob": "740b1213bfcd69300d2e293d6eb6dbab82b75c21"
+    },
+    {
+      "path": "test/wasm-service/capability-policy.test.js",
+      "blob": "3fec90a45ed363433b92c071125bca927f5504ff"
+    },
+    {
+      "path": "test/wasm-service/dependency-lock-determinism.property.test.js",
+      "blob": "0c4645bf47b41c5b74d01d823b9304631d1c89d9"
+    },
+    {
+      "path": "test/wasm-service/dependency-lock-service.test.js",
+      "blob": "0fb3598908bc7309e25b09d5fa660a1cca6ea320"
+    },
+    {
+      "path": "test/wasm-service/dependency-resolver.test.js",
+      "blob": "1d96a64609b1d48f0f7054f3bc40c34de2946044"
+    },
+    {
+      "path": "test/wasm-service/manifest-runtime-validator.test.js",
+      "blob": "265a7af72fe5e659e24c204ba88d524c1a60e44a"
+    },
+    {
+      "path": "test/wasm-service/meta-command-handlers-operations.test.js",
+      "blob": "9ba2a6896c90f77f4b54a7ab1043856250073948"
+    },
+    {
+      "path": "test/wasm-service/meta-command-handlers.test.js",
+      "blob": "9befa547880d0692b5668106c77aae3a095f4aad"
+    },
+    {
+      "path": "test/wasm-service/meta-service-factory.test.js",
+      "blob": "774fc4474d944b1536b3b22059da65c364fafbfc"
+    },
+    {
+      "path": "test/wasm-service/meta-service-lifecycle.test.js",
+      "blob": "9bf4dcd11c2f809da9d8528d599e804f12e3614e"
+    },
+    {
+      "path": "test/wasm-service/meta-service-router.test.js",
+      "blob": "e3b5b83f6d09c7cae5525e5dacbcaad9928f545a"
+    },
+    {
+      "path": "test/wasm-service/meta-validation-pipeline.test.js",
+      "blob": "b0f3fbf41d452516f0c28c01362d790244c8cf5a"
+    },
+    {
+      "path": "test/wasm-service/meta-write-executor.test.js",
+      "blob": "ae9a7e9c7f12b80db9b9ebb7bc3b4d8f6036f5e5"
+    },
+    {
+      "path": "test/wasm-service/module-audit-logger.test.js",
+      "blob": "8e521d96296ec3e80d81dd8bebb4ee4831cc0159"
+    },
+    {
+      "path": "test/wasm-service/module-manifest-models.property.test.js",
+      "blob": "e96a8b3ec8abd90289a145d6d950f4fdce135d82"
+    },
+    {
+      "path": "test/wasm-service/module-manifest-models.test.js",
+      "blob": "0c3dcdb105c4c4241d335fe0ce04cff3a18d6743"
+    },
+    {
+      "path": "test/wasm-service/module-mirror.test.js",
+      "blob": "e6a60c1e4da18aefdd981e7b21207923d2b8041a"
+    },
+    {
+      "path": "test/wasm-service/oci-reference.test.js",
+      "blob": "3c3d1b4ce15de95a61dfd45b99186ad29748d16c"
+    },
+    {
+      "path": "test/wasm-service/once-binding-compilation.test.js",
+      "blob": "36574fe2394b55c3ebc4ad57b4ade7a39c493184"
+    },
+    {
+      "path": "test/wasm-service/operation-lifecycle.test.js",
+      "blob": "e0820313791b05ca25ef9949ab05e4e8bd648ca3"
+    },
+    {
+      "path": "test/wasm-service/operation-stream.test.js",
+      "blob": "8e67a036c77cea477d0470c8179cce13b1a9627e"
+    },
+    {
+      "path": "test/wasm-service/package-reference.test.js",
+      "blob": "0a5a33ca4c466a7b3cc5d6662d914e03d2293350"
+    },
+    {
+      "path": "test/wasm-service/port-allocator.test.js",
+      "blob": "c5578d3ad5818a034d4c18095336cce193a88d63"
+    },
+    {
+      "path": "test/wasm-service/query-budget-constants.test.js",
+      "blob": "824146fa5557f4961343a95aba296b09ba97f093"
+    },
+    {
+      "path": "test/wasm-service/read-router.property.test.js",
+      "blob": "5436c70fcab7eb837b20ac5b54699b2744f3bfa1"
+    },
+    {
+      "path": "test/wasm-service/read-router.test.js",
+      "blob": "8e65b8dcd7423fb8bf1fac5445dc9abaac0873e7"
+    },
+    {
+      "path": "test/wasm-service/registry-resolver.test.js",
+      "blob": "f1a05d55efba5a5010aec18b96b5249db309164f"
+    },
+    {
+      "path": "test/wasm-service/resolver-precedence.test.js",
+      "blob": "35d6d86adcd5aa58fef984e5a10089ada28f76fe"
+    },
+    {
+      "path": "test/wasm-service/runtime-descriptor-validator.test.js",
+      "blob": "1450ff7c981953d17f271cec6760ab4de021bf70"
+    },
+    {
+      "path": "test/wasm-service/runtime-legacy-mapping.test.js",
+      "blob": "8e9223c5b5b9c174eefe42aacb22a6816928460e"
+    },
+    {
+      "path": "test/wasm-service/safety-interval.test.js",
+      "blob": "58c2ba492ac7629bb1207e95007e2687db3e58eb"
+    },
+    {
+      "path": "test/wasm-service/service-cell-v2-world-abi.test.js",
+      "blob": "2794a503bf972c17125aee059024de0f22c86388"
+    },
+    {
+      "path": "test/wasm-service/service-cell-world-abi.test.js",
+      "blob": "f718cd77c6591f47e0bdbfa683f51106529b9bad"
+    },
+    {
+      "path": "test/wasm-service/service-compiler-module-shape-spike.test.js",
+      "blob": "6617c932f1f85aec83360a59a4db1f3e3c29112b"
+    },
+    {
+      "path": "test/wasm-service/service-definition-validator.property.test.js",
+      "blob": "f8022b31aeaf1c5d9f21a805f73b2df9ff2b9ec2"
+    },
+    {
+      "path": "test/wasm-service/service-definition-validator.test.js",
+      "blob": "735f5b6802d8d44f72c2abf24aa51df0f5e59355"
+    },
+    {
+      "path": "test/wasm-service/service-endpoint-builder.property.test.js",
+      "blob": "26737dc053c74d440e608b5ef70ee30d165cda96"
+    },
+    {
+      "path": "test/wasm-service/service-endpoint-builder.test.js",
+      "blob": "e96814002adaedf21cc5e7f4458a73191d05de9b"
+    },
+    {
+      "path": "test/wasm-service/session-kv-store.property.test.js",
+      "blob": "44cbe4f5fa0e31c20b8f56ee3a26988fd18a7f63"
+    },
+    {
+      "path": "test/wasm-service/session-kv-store.test.js",
+      "blob": "25b0c7effa74e8e805fa1a37df411d01c73d6287"
+    },
+    {
+      "path": "test/wasm-service/sql-profile-endpoint.test.js",
+      "blob": "fde8602727a2c7e0f9b8d4d2aead7e745648d470"
+    },
+    {
+      "path": "test/wasm-service/sql-profile-factory.test.js",
+      "blob": "d4696ba826affc3efe79ccdf8574f4bd99657a9b"
+    },
+    {
+      "path": "test/wasm-service/sql-profile-validation.test.js",
+      "blob": "74addafec3a6efd9206803804a1c6a23d9e6a6de"
+    },
+    {
+      "path": "test/wasm-service/time-binding-compilation.test.js",
+      "blob": "8254a2dc8c6ff8c2f24439b96939673d90315b87"
+    },
+    {
+      "path": "test/wasm-service/timer-manager.property.test.js",
+      "blob": "0fcbd8c250d8fb032f6c39bf926308fabe2c073e"
+    },
+    {
+      "path": "test/wasm-service/timer-manager.test.js",
+      "blob": "0ec8a5612846397eb0419bdcbc1b0ace9d74e6a8"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-bound-native.test.js",
+      "blob": "4d0240829783d2a7cd9b29b725f635ea02887f7e"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-genesis.integration.test.js",
+      "blob": "fe1d1032c451491f57549af4f3b7e17f65d7783a"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-local-record.test.js",
+      "blob": "14b326edaaca099559c867e08c2761afd9a974bc"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-publication.integration.test.js",
+      "blob": "154b4e3ae138b769a341804eed4fe67185337696"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+      "blob": "14507bd0f1ecd179e13261b8f8fc6b4fdfeb6bed"
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-reconciliation.test.js",
+      "blob": "0e9b3825b97fbb0d7cdbdeed8cf6bb43e96260cf"
+    },
+    {
+      "path": "test/wasm-service/wasm-executor-run-export.test.js",
+      "blob": "7a49cff3ce43fb3aba44293048eda66e26155068"
+    },
+    {
+      "path": "test/wasm-service/wasm-executor-runtime-adapter-parity.test.js",
+      "blob": "fa782b149de938fd4de6b47af4b7ac4cec0cbd68"
+    },
+    {
+      "path": "test/wasm-service/wasm-executor.test.js",
+      "blob": "27c19975f0e5139f3e85b76fe655448eee20aba5"
+    },
+    {
+      "path": "test/wasm-service/wasm-meta-models.property.test.js",
+      "blob": "b9277a53d267655f4de01c795204a05cbb47c727"
+    },
+    {
+      "path": "test/wasm-service/wasm-meta-models.test.js",
+      "blob": "a2ffe25bbc3625aee93c61ad2baa35f829e6e83e"
+    },
+    {
+      "path": "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+      "blob": "6378673f213067e1ee6d43095acbfc442cb59554"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-constants.test.js",
+      "blob": "fb45c6c51a891b0170e338fc95d534e80473d248"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-lifecycle.test.js",
+      "blob": "ac20a0d5ed78caccc906f7bc0a1b79401b2ee15a"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-models.property.test.js",
+      "blob": "9bb2a45d8aeacbce883d332679595620d9ee7c4a"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-models.test.js",
+      "blob": "5dc5858a50414ba992ccbb05f09c345ffd50845a"
+    },
+    {
+      "path": "test/wasm-service/wasm-service-replica.test.js",
+      "blob": "82fa82c02d737bea2a484ac2c744d39e741cf58d"
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-completion.test.js",
+      "blob": "32bc78324927187134ea2e2e59de63467dbebed9"
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-v1-native-completion.test.js",
+      "blob": "6da463708ef5de1a16a068c20b5add69ce0cd4ff"
+    },
+    {
+      "path": "test/wasm-service/wasm-writer-client-v1.test.js",
+      "blob": "c740641e0449348776a2e2b1a4b5849d84d4ae14"
+    },
+    {
+      "path": "test/wasm-service/wasm-writer-completion-v1.test.js",
+      "blob": "b44395f27795d351b4c26df0a64802fc985a50d9"
+    },
+    {
+      "path": "test/wasm-service/wasm-writer-recreation-origin-v1.test.js",
+      "blob": "d9c116f6493da4a8b6a7c462e3a39ae3cd9f5ca4"
+    },
+    {
+      "path": "test/wasm-service/wasm-writer-state-v1.test.js",
+      "blob": "1860633cdb33381b922fb3d1c719c023245717d2"
+    }
+  ]
+}

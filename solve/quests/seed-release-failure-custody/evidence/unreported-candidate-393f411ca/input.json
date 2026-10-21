@@ -1,0 +1,24 @@
+{
+  "candidate": "393f411ca09449898465cc3cb7320c03fba2aba8",
+  "host": "lenovo-laptop",
+  "sourceTree": "ddf32b08e93c0b617f6ec24d0d70596e2888eec5",
+  "scriptsTree": "f9a8c3bd375965168152673ec1afe06f53216e5e",
+  "testTree": "45f645584c35fcca24d40955ca108ed1a967a387",
+  "files": [
+    "test/integration/create-table-partition-provisioning.integration.test.js",
+    "test/integration/managed-split-admission-reliability.integration.test.js",
+    "test/integration/sql-engine-system-writes-contract.integration.test.js"
+  ],
+  "environment": {
+    "LAGRANGE_RETRY_FAILED_ONCE": "0",
+    "LAGRANGE_LAB_AGENT": "codex:seed-origin-recovery-20261021"
+  },
+  "reason": "Complete the three files unreported at the canonical changed-selection shard deadline. Separate supplementary measurement; no retry of the99 measured-red files or extension of budgets.",
+  "priorPacket": "solve/quests/seed-release-failure-custody/evidence/changed-candidate-393f411ca",
+  "preparedAt": "2026-10-21T06:27:58.578174+00:00",
+  "command": [
+    "node",
+    "test-output/seed-release-custody/unreported-candidate-393f411ca/runner.mjs",
+    "test-output/seed-release-custody/unreported-candidate-393f411ca"
+  ]
+}
