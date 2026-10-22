@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 325,
+    "bootstrap-membership": 326,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -19,16 +19,16 @@
     "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 192,
-    "storage-raft": 139,
+    "storage-raft": 143,
     "test-infrastructure": 145,
     "transactions": 16,
     "transport-messaging": 97,
     "wasm-toolchain": 74
   },
-  "censusSize": 2433,
-  "digest": "fnv1a32-3af414f0",
+  "censusSize": 2438,
+  "digest": "fnv1a32-5a1796d9",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e2e60cbf",
+  "observationDigest": "fnv1a32-8882104d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -277,6 +277,7 @@
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
     "test/bootstrap/seed-message-group-cleanup-custody.test.js": "bootstrap-membership",
     "test/bootstrap/seed-message-group-founder-open-refusal.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-original-attempt-lifetime.test.js": "bootstrap-membership",
     "test/bootstrap/seed-participant-release-failure-projection.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-election-scheduling.test.js": "bootstrap-membership",
     "test/bootstrap/seed-registration-phase.test.js": "bootstrap-membership",
@@ -1638,6 +1639,7 @@
     "test/raft/raft-rs-backend/operation-port-regression.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-status-observation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/operation-port-throw-containment.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": "storage-raft",
     "test/raft/raft-rs-backend/participation-gate.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-construction-seam.test.js": "storage-raft",
     "test/raft/raft-rs-backend/partition-peer-admission.test.js": "storage-raft",
@@ -1679,6 +1681,9 @@
     "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-preparation.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-store.test.js": "storage-raft",
+    "test/raft/raft-rs-original-opening-authority.test.js": "storage-raft",
+    "test/raft/raft-rs-original-opening-effect-cut.test.js": "storage-raft",
+    "test/raft/raft-rs-original-opening.test.js": "storage-raft",
     "test/raft/replica-voter-readiness.test.js": "storage-raft",
     "test/raft/snapshot-boundary-observability.test.js": "storage-raft",
     "test/raft/snapshot-cadence.test.js": "storage-raft",
@@ -3301,6 +3306,18 @@
       "files": [
         "src/bootstrap/phases/seed-message-groups-phase.js",
         "src/raft/raft-committed-membership-constants.js"
+      ]
+    },
+    "test/bootstrap/seed-original-attempt-lifetime.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints-durable-evidence.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/index.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/storage/data-directory-manager.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/seed-participant-release-failure-projection.test.js": {
@@ -11283,6 +11300,11 @@
         "src/raft/raft-rs-runtime-tuning.js"
       ]
     },
+    "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js": {
+      "files": [
+        "src/raft/raft-rs-lifecycle-administration.js"
+      ]
+    },
     "test/raft/raft-rs-backend/participation-gate.test.js": {
       "files": [
         "src/partition/partition-replica-membership-constants.js",
@@ -11806,6 +11828,34 @@
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-store.js"
+      ]
+    },
+    "test/raft/raft-rs-original-opening-authority.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-opening-effect-cut.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-original-allocation-store.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-opening.test.js": {
+      "files": [
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
