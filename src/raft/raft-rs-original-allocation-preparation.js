@@ -18,6 +18,9 @@ import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN, originalAllocationError} from
   './raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE} from './raft-rs-original-allocation-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST as PORT_REQUEST} from './raft-operation-port-request.js';
+import {validateBootstrapMembershipStamp, validateDurableRecordBootstrap} from
+  './raft-committed-membership-stamp.js';
 
 const ABSENT_FILE = 'ENOENT';
 const JOURNAL_SUFFIXES = Object.freeze(['', '-wal', '-journal']);
@@ -95,6 +98,44 @@ function inspectColdMember(db, declaration, member) {
   return RaftRsDurableStore.readDurableRecordIn(db, member.groupId);
 }
 
+
+// Only this preparation owner mints these same-live capabilities. Neither a
+// declaration read from disk nor a copied object can reopen original work.
+// Tokens own no handle: the existing service/port keeps physical custody.
+const originalOpenings = new WeakMap();
+
+function requireOriginalOpening(opening) {
+  const record = originalOpenings.get(opening);
+  if (!record) throw originalAllocationError(REASON.AUTHORITY);
+  return record;
+}
+
+/**
+ * Consume the original opening at the operation-port construction boundary.
+ * The returned check belongs to the same attempt and exact native incarnation;
+ * it does not stop protocol settlement on runtimes that have already opened.
+ * @param {Object} opening Opaque capability issued by the preparation owner.
+ * @param {Object} request Canonical operation-port request.
+ * @return {Function} Final synchronous check immediately before native entry.
+ */
+function consumeOriginalAllocationOpening(opening, request) {
+  const record = requireOriginalOpening(opening);
+  record.assertCurrent();
+  if (record.consumed) {
+    throw originalAllocationError(REASON.OPENING_CONSUMED, record.member.replicaId);
+  }
+  record.validate(request);
+  record.assertCurrent();
+  // Even construction failure cannot turn this into another opening right.
+  record.consumed = true;
+  return (incarnation) => {
+    record.assertCurrent();
+    if (incarnation !== record.member.incarnation) {
+      throw originalAllocationError(REASON.IDENTITY, record.member.replicaId);
+    }
+  };
+}
+
 class RaftRsOriginalAllocationPreparation {
   #custody = new RaftRsPreparationCustody();
   #directoryOwner;
@@ -102,6 +143,11 @@ class RaftRsOriginalAllocationPreparation {
   #declarationIdentity;
   #started = false;
   #closed = false;
+  #declaration = null;
+  #openingMode = null;
+  #inspectApplicationHistory = null;
+  #openings = new Map();
+  #openingValidationActive = false;
 
   constructor({directoryOwner, dataDir, nodeId, buildDigest}) {
     this.#directoryOwner = directoryOwner;
@@ -112,10 +158,7 @@ class RaftRsOriginalAllocationPreparation {
   }
 
   assertCurrent() {
-    if (this.#closed) throw originalAllocationError(REASON.CLOSED);
-    if (!ownsDataDirectoryProcessOwner(this.#directoryOwner, this.#dataDir)) {
-      throw originalAllocationError(REASON.DIRECTORY);
-    }
+    this.#assertCurrent();
   }
 
   #begin() {
@@ -176,6 +219,8 @@ class RaftRsOriginalAllocationPreparation {
       this.#fail(error);
     }
     this.#finishRead();
+    this.#declaration = declaration;
+    this.#openingMode = STATE.LIVE_ISSUER;
   }
 
   inspect(declaration, inspectApplicationHistory) {
@@ -204,6 +249,106 @@ class RaftRsOriginalAllocationPreparation {
         originalAllocationError(REASON.OBSERVATION, null, error));
     }
     this.#finishRead();
+    this.#declaration = declaration;
+    this.#openingMode = STATE.COLD_RECOVERY;
+    this.#inspectApplicationHistory = inspectApplicationHistory;
+  }
+
+  /**
+   * Ask this exact live attempt for one declared member's original opening.
+   * There is no issuance from a row, serialized mode, or partial preparation.
+   * @param {string} replicaId Exact declared replica identity.
+   * @return {Object} Opaque process-local opening capability.
+   */
+  openingFor(replicaId) {
+    this.assertCurrent();
+    if (this.#openingMode === null) throw originalAllocationError(REASON.AUTHORITY);
+    const member = this.#declaration.members.find((entry) => entry.replicaId === replicaId);
+    if (!member) throw originalAllocationError(REASON.IDENTITY, replicaId);
+    if (!this.#openings.has(replicaId)) {
+      const opening = Object.freeze(Object.create(null));
+      originalOpenings.set(opening, {
+        member,
+        consumed: false,
+        assertCurrent: () => this.#assertCurrent(),
+        validate: (request) => this.#validateOpeningRequest(member, request),
+      });
+      this.#openings.set(replicaId, opening);
+    }
+    return this.#openings.get(replicaId);
+  }
+
+  #assertCurrent() {
+    // Keep revocation and actual directory custody at the existing owner.
+    // Do not route authority through a replaceable public instance method.
+    if (this.#closed) throw originalAllocationError(REASON.CLOSED);
+    if (!ownsDataDirectoryProcessOwner(this.#directoryOwner, this.#dataDir)) {
+      throw originalAllocationError(REASON.DIRECTORY);
+    }
+  }
+
+  #validateOpeningRequest(member, request) {
+    this.#assertCurrent();
+    if (this.#openingValidationActive) throw originalAllocationError(REASON.REENTRANT);
+    this.#openingValidationActive = true;
+    try {
+      this.#validateMemberOpening(member, request);
+    } finally {
+      this.#openingValidationActive = false;
+    }
+  }
+
+  #validateMemberOpening(member, request) {
+    const db = request[PORT_REQUEST.DURABLE_STORAGE];
+    const cold = this.#openingMode === STATE.COLD_RECOVERY;
+    const membership = request[PORT_REQUEST.BOOTSTRAP_MEMBERSHIP];
+    const checked = cold ? validateDurableRecordBootstrap(membership) :
+      validateBootstrapMembershipStamp(membership);
+    const peers = request[PORT_REQUEST.BOOTSTRAP_PEER_IDS];
+    if (request[PORT_REQUEST.GROUP_ID] !== member.groupId ||
+        request[PORT_REQUEST.PEER_ID] !== member.replicaId ||
+        typeof db?.name !== 'string' || path.resolve(db.name) !== member.dbPath ||
+        request[PORT_REQUEST.IDENTITY_EXISTED] !== cold ||
+        request[PORT_REQUEST.JOINING_EXISTING_GROUP] === true ||
+        !Array.isArray(peers) || peers.length !== member.replicaIds.length ||
+        !member.replicaIds.every((id, index) => peers[index] === id) ||
+        checked.valid !== true || (!cold &&
+          JSON.stringify(checked.stamp) !== JSON.stringify(member.membership))) {
+      throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+    }
+    try {
+      if (db.inTransaction) throw originalAllocationError(REASON.OBSERVATION, member.replicaId);
+      if (cold) {
+        // The application owner receives a readonly handle, just as at
+        // complete-cohort inspection. Do not reinterpret a writable handle
+        // as readonly authority or keep a cached approval across native open.
+        const observed = this.#custody.open(member, {readonly: true, fileMustExist: true});
+        try {
+          const record = inspectColdMember(observed, this.#declaration, member);
+          const assessment = this.#inspectApplicationHistory({db: observed,
+            declaration: this.#declaration, member, record});
+          this.#assertCurrent();
+          if (assessment !== STATE.HISTORY_ACCEPTED) {
+            throw originalAllocationError(REASON.CONTRARY, member.replicaId);
+          }
+        } catch (error) {
+          this.#fail(error);
+        }
+        this.#finishRead();
+      } else {
+        const row = verifyMemberBinding(db, this.#declaration, member);
+        const anchor = member.replicaId === this.#declaration.anchorReplicaId;
+        if (row[COLUMN.ISSUE] !== (anchor ? STATE.ISSUED : STATE.PREPARING) ||
+            row.native_history_state !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED ||
+            (anchor && row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED) ||
+            RaftRsDurableStore.hasDurableRecordIn(db, member.groupId)) {
+          throw originalAllocationError(REASON.HISTORY, member.replicaId);
+        }
+      }
+    } catch (error) {
+      throw error?.code === STATE.HOLD ? error :
+        originalAllocationError(REASON.OBSERVATION, member.replicaId, error);
+    }
   }
 
   #finishRead() {
@@ -230,6 +375,7 @@ class RaftRsOriginalAllocationPreparation {
 
   revoke() {
     this.#closed = true;
+    this.#openings.clear();
   }
 
   close() {
@@ -242,4 +388,5 @@ class RaftRsOriginalAllocationPreparation {
   }
 }
 
-export {RaftRsOriginalAllocationPreparation, verifyMemberBinding};
+export {RaftRsOriginalAllocationPreparation, verifyMemberBinding,
+  consumeOriginalAllocationOpening};

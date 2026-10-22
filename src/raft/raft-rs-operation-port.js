@@ -17,6 +17,7 @@ import {
   COMMITTED_MEMBERSHIP_REFUSAL,
 } from './raft-committed-membership-constants.js';
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
+import {consumeOriginalAllocationOpening} from './raft-rs-original-allocation-preparation.js';
 import {committedMembershipRefusal, normalizeCommittedLearnerRead,
   unavailableLearnerAction} from
   './raft-rs-committed-membership-read.js';
@@ -186,23 +187,41 @@ function createRaftRsOperationPort(request) {
   const timing = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
     request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);
+  // Capture the actual native inputs once: original admission validates what
+  // construction will use, not a later read of a callback-bearing request.
+  const bootstrapPeerIds = required(
+    request, RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS);
+  const membership = request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP];
+  const joiningExistingGroup = request[RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP];
+  const identityExisted = request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED];
+  // Original-mode permission precedes registry/lifecycle constructors and
+  // writable formatting. Ordinary authority remains with its existing caller.
+  const assertOriginalNativeEntry = Object.hasOwn(request,
+    RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING) ?
+    consumeOriginalAllocationOpening(
+      request[RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING], {
+        [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: groupId,
+        [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replicaIdentity,
+        [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: database,
+        [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: bootstrapPeerIds,
+        [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: membership,
+        [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]: joiningExistingGroup,
+        [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: identityExisted,
+      }) : null;
   const registry = new RaftRsPeerIdentityRegistry(database);
   const peerId = registry.registerReplica(replicaIdentity);
   // The bootstrap peer ids are address hints: each is reserved so the
   // replica can name and reach it. The configuration the group opens from is
   // the bootstrap membership's alone (an absent one is refused typed).
-  const bootstrapPeerIds = required(
-    request, RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS);
   for (const identity of bootstrapPeerIds) {
     registry.registerReplica(identity);
   }
   const bootstrap = bootstrapOfRequest({
-    membership: request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP],
+    membership,
     registry,
     peerId,
-    joiningExistingGroup:
-      request[RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP],
-    identityExisted: request[RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED],
+    joiningExistingGroup,
+    identityExisted,
   });
   const lifecycle = new RaftRsReplicaLifecycleOwner({
     db: database, groupId, peerId, replicaIdentity,
@@ -222,7 +241,7 @@ function createRaftRsOperationPort(request) {
   let timer = null;
   let closed = false;
   const lifecycleIncarnation = lifecycle.incarnation;
-  const dispatcher = lifecycle.active ? createRuntimeDispatcher({
+  const dispatcherOptions = lifecycle.active ? {
     database,
     groupId,
     replicaIdentity,
@@ -294,7 +313,13 @@ function createRaftRsOperationPort(request) {
     holdForReseed: () => holdForReseed(),
     reportFault: reportRaftRsRuntimeFault,
     emit,
-  }) : null;
+  } : null;
+  // Resolve every request callback before this final same-turn check. Moving
+  // it above argument construction permits a reentrant getter to revoke the
+  // attempt and still enter native creation. Already opened work is separate.
+  assertOriginalNativeEntry?.(lifecycle.incarnation);
+  const dispatcher = dispatcherOptions === null ? null :
+    createRuntimeDispatcher(dispatcherOptions);
 
   // Every entry into the runtime: admitted by the lifecycle owner, refused
   // once the port is closed, and contained (containRuntimeThrow).

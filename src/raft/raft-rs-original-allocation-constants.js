@@ -31,6 +31,7 @@ const ORIGINAL_ALLOCATION_REASON = Object.freeze({
   CONTRARY: 'original-allocation-contrary-durable-work',
   OBSERVATION: 'original-allocation-observation-unavailable',
   NATIVE: 'original-allocation-native-entry-refused',
+  OPENING_CONSUMED: 'original-allocation-opening-already-consumed',
 });
 
 const ORIGINAL_ALLOCATION_COLUMN = Object.freeze({

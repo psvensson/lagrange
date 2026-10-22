@@ -27,6 +27,11 @@ const RAFT_OPERATION_PORT_REQUEST = Object.freeze({
   // every bootstrap source (the open-time rule, 2026-10-05). Absent is no
   // such proof - a first opening.
   IDENTITY_EXISTED: 'identityExisted',
+  // Present only on an original-allocation opening: an opaque, same-live
+  // capability from complete preparation or readonly cohort inspection.
+  // Explicit undefined/null/serialized values refuse before formatting. An
+  // ordinary current-authority opening retains its existing separate route.
+  ORIGINAL_ALLOCATION_OPENING: 'originalAllocationOpening',
   // The acknowledgement that this opening's prior-existence fact is durable:
   // a promise the opening host settles once the fact it writes AFTER the
   // port opened (a CREATE_REPLICA target's SYNCING services row) is
