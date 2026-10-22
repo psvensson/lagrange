@@ -55,8 +55,12 @@ const LIFECYCLE_STATE = Object.freeze({
 // runtime through the existing recovery owner after a restart.
 const RUNTIME_LIFECYCLE_OWNERS = new WeakMap();
 const LIFECYCLE_ADMIN_OUTCOME = Object.freeze({NOT_MANAGED: 'NOT_MANAGED'});
+const LIFECYCLE_CLAIM_REFUSED = 'REPLICA_LIFECYCLE_CLAIM_REFUSED';
 const LIFECYCLE_REASON = Object.freeze({
   MISSING: 'lifecycle-record-missing',
+  ACTIVE: 'lifecycle-active',
+  CLAIM_SETTLED: 'lifecycle-claim-settled',
+  OBSERVATION_UNAVAILABLE: 'lifecycle-observation-unavailable',
   STAGING_PREPARED: 'snapshot-lifecycle-prepared',
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
@@ -239,12 +243,16 @@ class RaftRsReplicaLifecycleOwner {
     return this.#state === LIFECYCLE_STATE.ACTIVE && !this.#retiring;
   }
 
-  execute(work) {
-    if (!this.active) {
-      return frozenResult(
-        RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+  admission() {
+    return this.active ?
+      frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK, LIFECYCLE_REASON.ACTIVE) :
+      frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
         this.#refusalReason || LIFECYCLE_REASON.RETIRED);
-    }
+  }
+
+  execute(work) {
+    const admission = this.admission();
+    if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
     this.#activeCount += 1;
     let result;
     try {
@@ -520,6 +528,84 @@ async function retireReplicaLifecycle({runtime, groupId, replicaIdentity,
   return owner.retire(reason, evidence);
 }
 
+
+function lifecycleClaimError(lifecycle, cause = undefined) {
+  return Object.assign(new Error(LIFECYCLE_CLAIM_REFUSED,
+    cause === undefined ? undefined : {cause}), {
+    code: LIFECYCLE_CLAIM_REFUSED,
+    lifecycle,
+  });
+}
+
+function requireClaimGeneration(request, capturedOwner = null) {
+  const owner = RUNTIME_LIFECYCLE_OWNERS.get(request.runtime);
+  if (!owner || (capturedOwner !== null && owner !== capturedOwner)) {
+    throw lifecycleClaimError(frozenResult(LIFECYCLE_ADMIN_OUTCOME.NOT_MANAGED,
+      LIFECYCLE_REASON.STALE_RUNTIME_GENERATION));
+  }
+  if (owner.groupId !== request.groupId || owner.replicaIdentity !== request.replicaIdentity ||
+      typeof request.incarnation !== 'string' || request.incarnation.length === 0) {
+    throw lifecycleClaimError(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LIFECYCLE_REASON.IDENTITY_MISMATCH));
+  }
+  let incarnation;
+  try {
+    incarnation = owner.incarnation;
+  } catch (cause) {
+    throw lifecycleClaimError(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LIFECYCLE_REASON.OBSERVATION_UNAVAILABLE), cause);
+  }
+  if (incarnation !== request.incarnation) {
+    throw lifecycleClaimError(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LIFECYCLE_REASON.IDENTITY_MISMATCH));
+  }
+  const admission = owner.admission();
+  if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
+    throw lifecycleClaimError(admission);
+  }
+  return owner;
+}
+
+/**
+ * Hold the existing exact-runtime active-count claim across one handoff effect.
+ * The callback can recheck the same owner after awaits; neither the raw owner
+ * nor a current-logical-name lookup crosses this boundary. Retirement closes
+ * subsequent effect admission immediately, while already admitted work settles.
+ * @param {Object} request Exact runtime, group, replica and durable incarnation.
+ * @param {Function} work One awaited owner interaction, receiving assertCurrent.
+ * @return {Promise<*>} The work's value; refusal throws its owned lifecycle answer.
+ */
+async function withReplicaLifecycleClaim(request, work) {
+  // Capture caller fields once, so mutation during an await cannot retarget the
+  // claim or the later currentness checks to a replacement runtime.
+  const captured = Object.freeze({runtime: request?.runtime, groupId: request?.groupId,
+    replicaIdentity: request?.replicaIdentity, incarnation: request?.incarnation});
+  const owner = requireClaimGeneration(captured);
+  let entered = false;
+  const result = owner.execute(() => {
+    entered = true;
+    let settled = false;
+    const assertCurrent = Object.freeze(() => {
+      if (settled) {
+        throw lifecycleClaimError(frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+          LIFECYCLE_REASON.CLAIM_SETTLED));
+      }
+      requireClaimGeneration(captured, owner);
+    });
+    try {
+      assertCurrent();
+      return Promise.resolve(work(assertCurrent)).finally(() => {
+        settled = true;
+      });
+    } catch (error) {
+      settled = true;
+      throw error;
+    }
+  });
+  if (!entered) throw lifecycleClaimError(result);
+  return result;
+}
+
 // What a read of a replica database's lifecycle row found when it holds no
 // such row, or could not be read: neither is a lifecycle state.
 const DURABLE_LIFECYCLE_READ = Object.freeze({
@@ -569,7 +655,7 @@ function lifecycleRowOf(db, groupId, replicaIdentity) {
  * @param {string} dbPath - The replica's database file.
  * @param {string} groupId
  * @param {string} replicaIdentity
- * @return {Object} Frozen {state, reason, incarnation, retirementEvidence}.
+ * @return {Object} Frozen {state, reason, incarnation,retirementEvidence}.
  */
 function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
   try {
@@ -596,5 +682,6 @@ export {
   inspectReplicaLifecycleForSnapshot,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,
+  withReplicaLifecycleClaim,
   unregisterRuntimeLifecycle,
 };

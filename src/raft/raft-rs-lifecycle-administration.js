@@ -3,6 +3,7 @@ import {
   LIFECYCLE_STATE,
   readDurableReplicaLifecycle,
   retireReplicaLifecycle,
+  withReplicaLifecycleClaim,
 } from './raft-rs-replica-lifecycle-owner.js';
 
 // Retire the exact runtime generation the caller holds (its own operation
@@ -42,6 +43,9 @@ function holdsRow(lifecycle) {
 
 const raftRsLifecycleAdministration = Object.freeze({
   retireReplica: Object.freeze(retireReplica),
+  // The same native participation owner holds this scope through settlement.
+  // This does not replace the node lifecycle lane or activation-effect section.
+  withReplicaLifecycleClaim: Object.freeze(withReplicaLifecycleClaim),
   // The durable lifecycle row of one (group, replica identity) in a replica
   // database file, read-only (survives a restart that dropped the replica).
   readReplicaLifecycle: Object.freeze(readDurableReplicaLifecycle),
