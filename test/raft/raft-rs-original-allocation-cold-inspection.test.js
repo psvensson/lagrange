@@ -17,6 +17,8 @@ import {RaftRsDurableStore, commitDurably} from
   '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_COMMIT_DURABILITY} from
   '../../src/raft/raft-rs-durable-store-constants.js';
+import {RAFT_RS_TABLE} from '../../src/raft/raft-rs-durable-store-constants.js';
+import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
@@ -166,6 +168,122 @@ test('complete original cold inspection: current custody and exact rights', asyn
       return STATE.HISTORY_ACCEPTED;
     }), hold(REASON.DIRECTORY));
     assert.deepEqual(visited, [first.replicaId]);
+    assert.deepEqual(owner.observeResources(), []);
+  });
+});
+
+// Deliberately corrupt retained storage, not a native-history producer. The
+// existing preparation API must reject these facts before its application
+// callback. The valid zero-progress and pending-prefix controls remain separate.
+function nativeRecordFixture(member, mutate) {
+  const db = new Database(member.dbPath, {fileMustExist: true});
+  const store = new RaftRsDurableStore(db);
+  const confState = {voters: member.replicaIds.map(deriveRaftRsPeerId),
+    learners: [], votersOutgoing: [], learnersNext: [], autoLeave: false};
+  const entry = (index, term = '1', extra = {}) => ({index, term,
+    entryType: RAFT_RS_ENTRY_TYPE.NORMAL, ...extra});
+  try {
+    store.transaction(() => mutate({db, store, confState, entry,
+      groupId: member.groupId}), RAFT_RS_COMMIT_DURABILITY.SYNCED);
+  } finally {
+    db.close();
+  }
+}
+
+function resetNativeRecord(member) {
+  nativeRecordFixture(member, ({db, store, confState, groupId}) => {
+    for (const table of Object.values(RAFT_RS_TABLE)) {
+      db.prepare(`DELETE FROM ${table} WHERE group_id = ?`).run(groupId);
+    }
+    store.putBootstrapAppliedState(groupId, confState,
+      {bootstrapIndex: '0', admissionIndex: '0'});
+  });
+}
+
+const invalidNativeRecords = [
+  ['applied progress beyond commit', ({store, groupId, confState}) => {
+    store.putAppliedState(groupId, '1', confState);
+  }],
+  ['commit beyond retained log', ({store, groupId}) => {
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  }],
+  ['a hole in retained history', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1'), entry('3')]);
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '3'});
+  }],
+  ['regressing retained terms', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1', '2'), entry('2', '1')]);
+    store.putHardState(groupId, {term: '2', vote: '0', commit: '2'});
+  }],
+  ['a retained term beyond hard state', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1', '2')]);
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  }],
+  ['the missing required applied row', ({db, groupId}) => {
+    db.prepare(`DELETE FROM ${RAFT_RS_TABLE.APPLIED_STATE} WHERE group_id = ?`).run(groupId);
+  }],
+  ['an invalid stored auto-leave value', ({db, groupId}) => {
+    db.prepare(`UPDATE ${RAFT_RS_TABLE.APPLIED_STATE} SET auto_leave = 2 WHERE group_id = ?`)
+      .run(groupId);
+  }],
+  ['a foreign voter', ({store, groupId, confState}) => {
+    store.putAppliedState(groupId, '0', {...confState,
+      voters: [...confState.voters, deriveRaftRsPeerId('foreign-original-voter')]});
+  }],
+  ['a duplicate voter', ({store, groupId, confState}) => {
+    store.putAppliedState(groupId, '0', {...confState,
+      voters: [...confState.voters, confState.voters[0]]});
+  }],
+  ['an unknown native entry type', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1', '1', {entryType: 17})]);
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  }],
+  ['malformed payload encoding', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1', '1', {data: '%%%%'})]);
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  }],
+  ['undecodable proposal bytes', ({store, groupId, entry}) => {
+    store.appendEntries(groupId, [entry('1', '1', {data: Buffer.from('{').toString('base64')})]);
+    store.putHardState(groupId, {term: '1', vote: '0', commit: '1'});
+  }],
+];
+
+test('original cold native validation precedes application inspection', async (t) => {
+  const f = completeStorageFixture(t);
+  const first = f.declaration.members[0];
+  for (const [name, corrupt] of invalidNativeRecords) {
+    await t.test(name, () => {
+      nativeRecordFixture(first, corrupt);
+      const owner = f.createPreparation();
+      let applicationCalls = 0;
+      try {
+        assert.throws(() => owner.inspect(f.declaration, () => {
+          applicationCalls++;
+          return STATE.HISTORY_ACCEPTED;
+        }), hold(REASON.HISTORY), 'invalid native history cannot reach the application owner');
+        assert.equal(applicationCalls, 0);
+        assert.deepEqual(owner.observeResources(), []);
+      } finally {
+        resetNativeRecord(first);
+      }
+    });
+  }
+
+  await t.test('coherent applied committed-pending and local-uncommitted positions survive', () => {
+    nativeRecordFixture(first, ({store, groupId, confState, entry}) => {
+      store.appendEntries(groupId, [entry('1'), entry('2'), entry('3')]);
+      store.putHardState(groupId, {term: '1', vote: '0', commit: '2'});
+      store.putAppliedState(groupId, '1', confState);
+    });
+    const owner = f.createPreparation();
+    let seen = null;
+    owner.inspect(f.declaration, ({member, record}) => {
+      if (member.replicaId === first.replicaId) seen = record;
+      return STATE.HISTORY_ACCEPTED;
+    });
+    assert.equal(seen.appliedIndex, '1');
+    assert.equal(seen.hardState.commit, '2');
+    assert.deepEqual(seen.entries.map(({index}) => index), ['1', '2', '3']);
     assert.deepEqual(owner.observeResources(), []);
   });
 });
