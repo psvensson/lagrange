@@ -4,8 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
 import {deepFreeze} from './raft-operation-port.js';
-import {validateOriginalSeedDeclaration} from
+import {SERVICE_TYPE} from '../constants/service.js';
+import {validateOriginalSeedDeclaration, originalSeedPeerAddresses} from
   '../bootstrap/seed-original-allocation-declaration.js';
+import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations} from
   './raft-rs-peer-identity.js';
 import {RaftRsReplicaLifecycleOwner} from './raft-rs-replica-lifecycle-owner.js';
@@ -79,7 +81,8 @@ function verifyMemberBinding(db, declaration, member) {
   if (reservations.length !== member.replicaIds.length ||
       !member.replicaIds.every((replicaId) =>
         reservations.some((reservation) => reservation.replicaIdentity === replicaId &&
-          reservation.learnerAdmission === undefined && reservation.promotionAdmission === undefined))) {
+          reservation.learnerAdmission === undefined &&
+          reservation.promotionAdmission === undefined))) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
   return row;
@@ -87,7 +90,8 @@ function verifyMemberBinding(db, declaration, member) {
 
 function inspectColdMember(db, declaration, member) {
   const row = verifyMemberBinding(db, declaration, member);
-  const expectedIssue = member.replicaId === declaration.anchorReplicaId ? STATE.ISSUED : STATE.PREPARING;
+  const expectedIssue = member.replicaId === declaration.anchorReplicaId ?
+    STATE.ISSUED : STATE.PREPARING;
   if (row[COLUMN.ISSUE] !== expectedIssue ||
       row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
     throw originalAllocationError(REASON.HISTORY, member.replicaId);
@@ -221,7 +225,8 @@ class RaftRsOriginalAllocationPreparation {
       for (const member of declaration.members) {
         verifyMemberBinding(opened.get(member.replicaId), declaration, member);
       }
-      const anchor = declaration.members.find(({replicaId}) => replicaId === declaration.anchorReplicaId);
+      const anchor = declaration.members.find(({replicaId}) =>
+        replicaId === declaration.anchorReplicaId);
       markOriginalAllocationIssued(opened.get(anchor.replicaId), declaration, anchor);
     } catch (error) {
       this.#fail(error);
@@ -285,6 +290,45 @@ class RaftRsOriginalAllocationPreparation {
       this.#openings.set(replicaId, opening);
     }
     return this.#openings.get(replicaId);
+  }
+
+  // Queueing is admission, not consumption. Return owned options carrying the
+  // same exact token that the real service must consume at native opening.
+  admitReplica(options) {
+    this.#assertCurrent();
+    const owned = {...options};
+    const opening = this.openingFor(owned.replicaId);
+    const member = this.#declaration.members.find((entry) =>
+      entry.replicaId === owned.replicaId);
+    const groupBinding = member.serviceType === SERVICE_TYPE.PARTITION ?
+      {partitionId: member.groupId, tableName: member.tableName} : {groupId: member.groupId};
+    const peerAddresses = originalSeedPeerAddresses(this.#declaration.nodeId,
+      member.serviceType, member.replicaIds);
+    const schema = member.serviceType === SERVICE_TYPE.PARTITION ?
+      deepFreeze(structuredClone(getSchemaByTableName(member.tableName))) : undefined;
+    const required = {...groupBinding, serviceType: member.serviceType,
+      replicaIds: member.replicaIds, peerAddresses};
+    if (!Object.entries(required).every(([field, value]) =>
+      isDeepStrictEqual(owned[field], value)) ||
+        (owned.dbPath !== undefined && path.resolve(owned.dbPath) !== member.dbPath) ||
+        (owned.schema !== undefined && !isDeepStrictEqual(owned.schema, schema)) ||
+        (owned.originalAllocationOpening !== undefined &&
+          owned.originalAllocationOpening !== opening)) {
+      throw originalAllocationError(REASON.IDENTITY, member.replicaId);
+    }
+    if (owned.deferElection !== true) {
+      throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE, member.replicaId);
+    }
+    const admitted = Object.freeze({...owned,
+      dbPath: member.dbPath,
+      replicaIds: member.replicaIds,
+      peerAddresses,
+      schema,
+      bootstrapMembership: member.membership,
+      identityExisted: this.#openingMode === STATE.COLD_RECOVERY,
+      originalAllocationOpening: opening});
+    this.#assertCurrent();
+    return admitted;
   }
 
   #assertCurrent() {

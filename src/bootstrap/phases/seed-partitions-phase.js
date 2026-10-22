@@ -4,14 +4,12 @@
  * partition leadership wait, epoch manager initialization,
  * and partition replica progress reporting.
  *
- * Extracted from BootstrapService to keep the orchestrator thin.
- * The class receives required dependencies via constructor injection.
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
-import {genesisStamp} from '../../raft/raft-committed-membership-stamp.js';
-import {seedReplicaIdentityExisted} from
-  '../seed-startup-storage-admission.js';
+import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../raft/raft-rs-original-allocation-constants.js';
 import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
@@ -41,9 +39,7 @@ import {
 import {assignSeedPartitionReplicaProgressMethods} from
   './seed-partition-replica-progress.js';
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
@@ -98,9 +94,6 @@ function assertBootstrapPartitionStorageAdmission(options, admission, nodeId) {
   }
 }
 
-/**
- * Handles the partitions phase of seed bootstrap.
- */
 class SeedPartitionsPhase {
   /**
    * @param {Object} options
@@ -141,10 +134,8 @@ class SeedPartitionsPhase {
       });
 
       const nodeId = d.getNodeId();
-      const peerAddresses = replicaIds.map((replicaId) =>
-        `${nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}${replicaId}`,
-      );
+      const peerAddresses = originalSeedPeerAddresses(nodeId,
+        UNIFIED_SERVICE_TYPE.PARTITION, replicaIds);
       for (let index = 0; index < replicaIds.length; index++) {
         const replicaId = replicaIds[index];
         const dbPath = d.resolvePartitionDbPath(
@@ -218,10 +209,10 @@ class SeedPartitionsPhase {
     const definition = context?.definition || {};
     const serviceId =
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = d.resolveBootstrapReplicaOptions(
+    let options = d.admitOriginalSeedReplica(d.resolveBootstrapReplicaOptions(
       serviceId,
       UNIFIED_SERVICE_TYPE.PARTITION,
-    );
+    ));
     const startupAdmission = d.getStartupServicesAdmission?.();
     assertBootstrapPartitionStorageAdmission(
       options,
@@ -229,12 +220,17 @@ class SeedPartitionsPhase {
       d.getNodeId(),
     );
 
-    if (d.getPartitionServices().has(options.replicaId)) {
-      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-    }
-
-    if (options.createDelayMs > 0) {
+    const partitionServices = d.getPartitionServices();
+    if (!partitionServices.has(options.replicaId) && options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
+    }
+    options = d.admitOriginalSeedReplica(options);
+    const existing = partitionServices.get(options.replicaId);
+    if (existing) {
+      if (existing.initialized !== true || existing.isShutdown === true) {
+        throw originalAllocationError(ORIGINAL_ALLOCATION_REASON.RESOURCE, options.replicaId);
+      }
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
     const progress = this.startPartitionReplicaProgress({
@@ -247,6 +243,7 @@ class SeedPartitionsPhase {
     });
 
     try {
+      const cdcIntegrationService = d.getCdcIntegrationService();
       const partition = new PartitionService({
         partitionId: options.partitionId,
         tableId: options.tableName,
@@ -258,16 +255,9 @@ class SeedPartitionsPhase {
         // Handler retirement goes through the replica lifecycle owner (N2).
         resolveHandlerRetirementLane: () =>
           d.getReplicaStateMachine?.() || null,
-        // The seed founds each system partition from an explicit GENESIS
-        // stamp of its founding list, validated by the port like every stamp
-        // (verification V1a); a seed that holds a durable record restores
-        // from it instead.
-        bootstrapMembership: genesisStamp(options.replicaIds),
-        // A founder whose durable services row this seed already holds
-        // opened before: without its raft record it is refused
-        // reseed-required, never re-founded empty (the open-time rule).
-        identityExisted: seedReplicaIdentityExisted(
-          startupAdmission, options.replicaId, d.getNodeId()),
+        bootstrapMembership: options.bootstrapMembership,
+        identityExisted: options.identityExisted,
+        originalAllocationOpening: options.originalAllocationOpening,
         peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
@@ -280,8 +270,8 @@ class SeedPartitionsPhase {
         // stable empty/known bootstrap view at this point; a missing owner
         // must remain unavailable rather than be treated as no transition.
         systemTableCache: d.getSystemTableCache(),
-        cdcIntegrationService: d.getCdcIntegrationService(),
-        sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
+        cdcIntegrationService,
+        sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine,
         deferElection: Boolean(options.deferElection),
         // The replica is hosted by this node: this node's clock, and this
         // node's runtime for its node-local cache.
@@ -297,8 +287,10 @@ class SeedPartitionsPhase {
           ),
       });
 
+      // Retain this exact resource before initialize can yield or fail.
+      partitionServices.set(options.replicaId, partition);
       await partition.initialize();
-      d.getPartitionServices().set(options.replicaId, partition);
+      d.assertOriginalSeedAttempt();
       d.pushPartitionReplica(partition);
       d.incrementServicesCreated();
       this.finishPartitionReplicaProgress(progress);
@@ -326,6 +318,7 @@ class SeedPartitionsPhase {
    */
   async startBootstrapPartitionReplica(replicaHandle, _context) {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     const serviceId =
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
@@ -342,6 +335,7 @@ class SeedPartitionsPhase {
     );
 
     if (!options.deferElection) {
+      d.assertOriginalSeedContinuation();
       partition.startElection();
     }
 
@@ -391,6 +385,7 @@ class SeedPartitionsPhase {
    */
   async startDeferredBootstrapReplicaElections() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     const logger = d.getLogger();
     const messageGroupReplicas = d.getMessageGroupReplicas();
 

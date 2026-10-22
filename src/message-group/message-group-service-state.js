@@ -25,6 +25,7 @@ import {
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   MESSAGE_GROUP_SERVICE_DEFAULT,
@@ -308,6 +309,9 @@ class MessageGroupService extends EventEmitter {
     // The opening host's authoritative row proves this replica identity
     // existed before (the open-time rule).
     this.identityExisted = options.identityExisted === true;
+    Object.defineProperty(this, RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING, {
+      value: options.originalAllocationOpening,
+    });
     // A replica whose identity fact (its services row) is written only after
     // it opened: the port steps nothing until the durable row write releases
     // this (the identity-record window, verifier N3 / F1).
@@ -325,7 +329,11 @@ class MessageGroupService extends EventEmitter {
    * @return {Object} The frozen operation port.
    */
   createOperationPort(request) {
-    return createRaftRsOperationPort(request);
+    if (this.originalAllocationOpening === undefined) return createRaftRsOperationPort(request);
+    return createRaftRsOperationPort({
+      ...request,
+      [RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING]: this.originalAllocationOpening,
+    });
   }
   get systemTableCache() {
     return this._systemTableCache || null;

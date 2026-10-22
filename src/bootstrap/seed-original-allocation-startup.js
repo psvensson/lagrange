@@ -1,0 +1,103 @@
+// Original seed startup is an interaction of the existing bootstrap,
+// membership, directory-custody and allocation-preparation owners.
+import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
+  '../diagnostics/runtime-build-provenance.js';
+import {RaftRsOriginalAllocationPreparation} from
+  '../raft/raft-rs-original-allocation-preparation.js';
+import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  originalAllocationError} from '../raft/raft-rs-original-allocation-constants.js';
+import {isFreshSeedMembershipOutcome} from './rejoin-hints-constants.js';
+import {createSeedOriginalAllocation, originalSeedAnchor} from
+  './seed-original-allocation-declaration.js';
+
+const ABORT_EVENT = 'abort';
+
+function assertStartupStillOwnsAttempt(service) {
+  if (service.isShuttingDown === true || service.startupAbortSignal?.aborted === true) {
+    throw originalAllocationError(REASON.CLOSED);
+  }
+}
+
+function assertOriginalSeedAttempt(service) {
+  assertStartupStillOwnsAttempt(service);
+  if (!service.originalAllocationPreparation) throw originalAllocationError(REASON.AUTHORITY);
+  service.originalAllocationPreparation.assertCurrent();
+}
+
+async function initializeOriginalSeedAttempt(service) {
+  // Build measurement acquires no original member. After this await, all
+  // allocation inspection/issuance is synchronous in the preparation owner.
+  const build = await runtimeBuildProvenance();
+  assertStartupStillOwnsAttempt(service);
+  if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+    throw originalAllocationError(REASON.OBSERVATION, build.reason);
+  }
+  const dataDir = service.dataDirectoryManager.getDataDir();
+  const preparation = new RaftRsOriginalAllocationPreparation({
+    directoryOwner: service.dataDirectoryProcessOwner,
+    dataDir, nodeId: service.nodeId, buildDigest: build.digest,
+  });
+  // Publish custody before the first inspection/preparation acquisition.
+  service.originalAllocationPreparation = preparation;
+  const signal = service.startupAbortSignal;
+  const revoke = () => preparation.revoke();
+  signal?.addEventListener(ABORT_EVENT, revoke, {once: true});
+  service.detachOriginalAllocationAbort = () =>
+    signal?.removeEventListener(ABORT_EVENT, revoke);
+  try {
+    assertStartupStillOwnsAttempt(service);
+    const retained = preparation.readDeclaration(originalSeedAnchor(dataDir));
+    if (retained.state === STATE.PRESENT) {
+      // The real retained-command classifier is the next implementation
+      // boundary. No permissive callback or reconstructed genesis enters here.
+      throw originalAllocationError(REASON.CLASSIFICATION_UNAVAILABLE);
+    }
+    if (!isFreshSeedMembershipOutcome(service.membershipOwnerOutcome)) {
+      throw originalAllocationError(REASON.AUTHORITY);
+    }
+    preparation.prepare(createSeedOriginalAllocation({dataDir,
+      nodeId: service.nodeId, buildDigest: build.digest,
+      now: service.nodeService.getTimeSource().now()}));
+  } catch (error) {
+    preparation.revoke();
+    throw error;
+  }
+}
+
+function prepareOriginalSeedAttempt(service) {
+  assertStartupStillOwnsAttempt(service);
+  service.originalAllocationPreparation?.assertCurrent();
+  if (service.originalAllocationInitialization) return service.originalAllocationInitialization;
+  const {promise, resolve, reject} = Promise.withResolvers();
+  service.originalAllocationInitialization = promise;
+  initializeOriginalSeedAttempt(service).then(resolve, reject);
+  return promise;
+}
+
+function admitOriginalSeedReplica(service, options) {
+  assertOriginalSeedAttempt(service);
+  return service.originalAllocationPreparation.admitReplica(options);
+}
+
+function revokeOriginalSeedAttempt(service) {
+  service.originalAllocationPreparation?.revoke();
+}
+
+function closeOriginalSeedAttempt(service) {
+  revokeOriginalSeedAttempt(service);
+  service.detachOriginalAllocationAbort?.();
+  // A failed exact close stays reachable in preparation custody, and rejects
+  // startup cleanup so the existing ledger retains the directory custodian.
+  service.originalAllocationPreparation?.close();
+}
+
+function assertOriginalSeedContinuation(service) {
+  assertOriginalSeedAttempt(service);
+  // Until the classified replay and monotonic publication interaction is
+  // implemented, no original attempt may enter ordinary registration/election.
+  // This is an explicit unfinished WIP boundary, never a completion receipt.
+  throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE);
+}
+
+export {prepareOriginalSeedAttempt, assertOriginalSeedAttempt, admitOriginalSeedReplica,
+  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation};

@@ -66,6 +66,7 @@ class SeedCleanupHandler {
    */
   async handleBootstrapFailure(error) {
     const d = this.delegates;
+    d.setIsShuttingDown(true);
     const logger = d.getLogger();
     const failedPhase = d.getPhase();
     d.setPhase(BOOTSTRAP_PHASE.FAILED);
@@ -114,6 +115,7 @@ class SeedCleanupHandler {
       duration,
       error: error.message,
       phase: failedPhase,
+      cause: error,
       cleanup,
       servicesCreated: d.getServicesCreated(),
     };
@@ -127,6 +129,8 @@ class SeedCleanupHandler {
    */
   async cleanupFailedBootstrap(failedPhase, cleanupContext) {
     const d = this.delegates;
+    d.setIsShuttingDown(true);
+    await d.settleInfrastructureAcquisitions();
     const logger = d.getLogger();
 
     logger.info(
@@ -418,6 +422,7 @@ class SeedCleanupHandler {
         await transport.shutdown();
       }
       d.setTransport(null);
+      d.closeOriginalSeedAttempt();
 
       logger.info(
         BOOTSTRAP_LOG_MSG
@@ -514,6 +519,7 @@ class SeedCleanupHandler {
     const logger = d.getLogger();
 
     d.setIsShuttingDown(true);
+    await d.settleInfrastructureAcquisitions();
     logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_START, {
       nodeId: d.getNodeId(),
       messageGroupServices:
@@ -552,6 +558,7 @@ class SeedCleanupHandler {
 
     const transport = d.getTransport();
     await this.shutdownTransportAndRouter(d, transport, messageRouter);
+    d.closeOriginalSeedAttempt();
     logger.info(BOOTSTRAP_LOG_MSG.CLEANUP_COMPLETE, {
       nodeId: d.getNodeId(),
     });

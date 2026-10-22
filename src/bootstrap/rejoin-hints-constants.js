@@ -132,12 +132,24 @@ const AUTHORITATIVE_ROW_READ_STATE = Object.freeze({
  */
 const FORCE_NEW_CLUSTER_ENV = 'LAGRANGE_FORCE_NEW_CLUSTER';
 
+// The membership owner's fresh-seed outcome is consumed by both original
+// allocation and participant release. Neither consumer reclassifies storage.
+function isFreshSeedMembershipOutcome(proof) {
+  return proof?.semanticOwner === TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER &&
+    proof.boundary === TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY &&
+    proof.outcomeType === MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED &&
+    proof.startupMode === STARTUP_JOIN_MODE.SEED &&
+    proof.reasonCode === MEMBERSHIP_OWNER_REASON.FRESH_SEED &&
+    proof.durableStateDetected === false && proof.identityMismatch === false;
+}
+
 export {
   AUTHORITATIVE_ROW_READ_STATE,
   AUTO_REJOIN_DECISION_STATE,
   AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE,
   DURABLE_EVIDENCE_STATE,
   FORCE_NEW_CLUSTER_ENV,
+  isFreshSeedMembershipOutcome,
   MEMBERSHIP_OWNER_EVIDENCE_SOURCE,
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
   MEMBERSHIP_OWNER_REASON,

@@ -35,6 +35,34 @@ authorizes:
 
 # Raft-rs full cutover
 
+## Current coordination: original startup handoff (2026-10-22)
+
+The preserved lower-boundary checkpoint is `7766ccafbe3767c9e397fabf97f41a197d7fb53e`
+on `work/original-handoff-boundaries-20261021-cloud`. Lab
+[#735](https://github.com/psvensson/lagrange-lab/issues/735#issuecomment-6336552591)
+reports 6/6 files and 58/58 tests on that exact revision, with execution and
+thermal scopes closed. No main merge or handoff receipt follows from it.
+
+The active bounded work connects the startup-owned original attempt through
+queue admission and actual native construction, including revocation and exact
+cleanup custody. The
+[source attempt](../quests/retained-seed-original-handoff/evidence/ATTEMPT-startup-lifetime-2026-10-22.md)
+records the interaction and its unavailable continuation boundary. The
+[independent review history](../quests/retained-seed-original-handoff/evidence/REVIEW-startup-lifetime-2026-10-22.md)
+owns the four findings, their disposition and the reviewed-content binding.
+The original 14 witnesses are preserved against unchanged runtime source at
+`3fa20cefeca622ec2060509903a921979d32a082`; seven additive cases cover the
+review repairs. Runtime outcomes for the new wiring remain pending.
+
+The integration owner is the continuing root agent; its lab delegate observes
+and resumes the pinned requests. The next action is to measure the unchanged
+two-case baseline, then the exact candidate's seven-file opening/startup batch
+and applicable static checks. The inherited partition decision-boundary
+finding stays explicit; this is WIP preservation, not a green publication.
+The retained-command classifier, protected activation/leader/transfer,
+complete public-admission exclusions and composed two-start proof remain
+unfinished. All eight handoff receipts and the original seal stay unchanged.
+
 ## Closeout plan and lane composition (2026-10-17)
 
 The owner asked for the steps from the current lanes to a main merge as a

@@ -9,7 +9,7 @@ import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
 import {mintServiceRowCreatedAt} from '../node/service-row-incarnation.js';
 import {getMessageGroupDbPath, getPartitionDbPath} from
   '../storage/data-directory-manager.js';
-import {SERVICE_TYPE} from '../constants/index.js';
+import {ADDRESS, ENTITY_TYPE, SERVICE_TYPE} from '../constants/index.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   originalAllocationError} from '../raft/raft-rs-original-allocation-constants.js';
 import {SYSTEM_TABLE_SCHEMAS, SYSTEM_TABLE_NAME, INITIAL_PARTITION_IDS,
@@ -18,6 +18,15 @@ import {SYSTEM_TABLE_SCHEMAS, SYSTEM_TABLE_NAME, INITIAL_PARTITION_IDS,
 
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
+const PROPERTY_VALUE = 'value';
+const ARRAY_LENGTH = 'length';
+
+function originalSeedPeerAddresses(nodeId, serviceType, replicaIds) {
+  const entityType = serviceType === SERVICE_TYPE.MESSAGE_GROUP ?
+    ENTITY_TYPE.MESSAGE_GROUP : ENTITY_TYPE.PARTITION;
+  return Object.freeze(replicaIds.map((replicaId) =>
+    [nodeId, entityType, replicaId].join(ADDRESS.SEPARATOR)));
+}
 
 function catalogDigest() {
   return createHash(DIGEST_ALGORITHM).update(JSON.stringify({
@@ -91,8 +100,8 @@ function assertPlainDeclarationData(value, ancestors = new Set()) {
   ancestors.add(value);
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (typeof key !== 'string' || !Object.hasOwn(descriptor, 'value') ||
-        (!descriptor.enumerable && !(array && key === 'length'))) {
+    if (typeof key !== 'string' || !Object.hasOwn(descriptor, PROPERTY_VALUE) ||
+        (!descriptor.enumerable && !(array && key === ARRAY_LENGTH))) {
       throw originalAllocationError(REASON.IDENTITY);
     }
     assertPlainDeclarationData(descriptor.value, ancestors);
@@ -118,7 +127,9 @@ function validateOriginalSeedDeclaration(declaration, {dataDir, nodeId, buildDig
     }
   }
   const expected = originalSeedMemberDescriptors(path.resolve(dataDir));
-  if (expected.length !== declaration.members.length) throw originalAllocationError(REASON.INCOMPLETE);
+  if (expected.length !== declaration.members.length) {
+    throw originalAllocationError(REASON.INCOMPLETE);
+  }
   const tokens = new Set();
   for (let index = 0; index < expected.length; index++) {
     validateMember(declaration.members[index], expected[index], tokens);
@@ -142,4 +153,5 @@ function validateMember(member, expected, tokens) {
   tokens.add(member.incarnation);
 }
 
-export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, originalSeedAnchor};
+export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, originalSeedAnchor,
+  originalSeedPeerAddresses};

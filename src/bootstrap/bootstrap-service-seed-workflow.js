@@ -214,6 +214,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
         setTimeout(startTopologyAsync, 0);
     },
     completeSuccessfulBootstrap() {
+      this.assertOriginalSeedContinuation();
       const duration = Date.now() - this.startTime;
       const alreadyComplete = this.phase === BootstrapPhase.COMPLETE;
 
@@ -486,6 +487,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
       });
 
       try {
+        await this.prepareOriginalSeedAttempt();
         const startupPipelineRunner = new StartupPipelineRunner({
           logger: this.logger,
           eventSink: this,

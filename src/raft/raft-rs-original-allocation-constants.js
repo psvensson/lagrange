@@ -32,6 +32,8 @@ const ORIGINAL_ALLOCATION_REASON = Object.freeze({
   OBSERVATION: 'original-allocation-observation-unavailable',
   NATIVE: 'original-allocation-native-entry-refused',
   OPENING_CONSUMED: 'original-allocation-opening-already-consumed',
+  CLASSIFICATION_UNAVAILABLE: 'original-retained-history-classification-unavailable',
+  CONTINUATION_UNAVAILABLE: 'original-handoff-continuation-unavailable',
 });
 
 const ORIGINAL_ALLOCATION_COLUMN = Object.freeze({

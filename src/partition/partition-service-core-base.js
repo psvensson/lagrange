@@ -9,6 +9,7 @@ import {
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
 import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
@@ -256,6 +257,9 @@ class PartitionServiceCoreBase extends EventEmitter {
     // existed before (the open-time rule): opened without its durable record
     // it is refused reseed-required.
     this.identityExisted = options.identityExisted === true;
+    Object.defineProperty(this, RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING, {
+      value: options.originalAllocationOpening,
+    });
     // The acknowledgement that this opening's prior-existence fact (its
     // SYNCING services row, written after the port opens) is durable: until
     // it resolves the port steps nothing (verifier N3). Absent: no such
@@ -441,7 +445,11 @@ class PartitionServiceCoreBase extends EventEmitter {
    * @return {Object} The frozen operation port.
    */
   createOperationPort(request) {
-    return createRaftRsOperationPort(request);
+    if (this.originalAllocationOpening === undefined) return createRaftRsOperationPort(request);
+    return createRaftRsOperationPort({
+      ...request,
+      [RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING]: this.originalAllocationOpening,
+    });
   }
   isMetadataPublicationReady() {
     if (!this.metadataPublicationReadinessState) {

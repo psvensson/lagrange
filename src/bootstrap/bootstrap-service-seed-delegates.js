@@ -72,6 +72,9 @@ function composeSeedDelegates(bundles, options = {}) {
 function buildPhaseExecutionDelegates(service) {
   const self = service;
   return {
+    assertOriginalSeedAttempt: () => self.assertOriginalSeedAttempt(),
+    admitOriginalSeedReplica: (options) => self.admitOriginalSeedReplica(options),
+    assertOriginalSeedContinuation: () => self.assertOriginalSeedContinuation(),
     getNodeId: () => self.nodeId,
     getNodeAddress: () => self.nodeAddress,
     getAdvertisedNodeWsAddress: () =>
@@ -410,7 +413,11 @@ function buildCleanupDelegates(service) {
     },
     setIsShuttingDown: (v) => {
       self.isShuttingDown = v;
+      if (v === true) self.revokeOriginalSeedAttempt();
     },
+    closeOriginalSeedAttempt: () => self.closeOriginalSeedAttempt(),
+    settleInfrastructureAcquisitions: () =>
+      self.seedInfrastructurePhase.settleAcquisitions(),
     setMessageRouter: (v) => {
       self.messageRouter = v;
     },

@@ -424,6 +424,8 @@ async function startSeedNode(options) {
     nodeAddress: seedNodeHttpAddress,
     advertisedNodeWsAddress,
     dataDirectoryManager,
+    dataDirectoryProcessOwner: options.dataDirectoryProcessOwner,
+    startupAbortSignal: options.signal,
     wsPort: wsPort,
     rolloutControls,
     clusterIncarnationFence,
@@ -433,6 +435,8 @@ async function startSeedNode(options) {
     membershipOwnerOutcome: options.membershipOwnerOutcome,
   });
   options.cleanupLedger.defer(() => bootstrapService.shutdown());
+  await awaitStartupAcquisition(
+    bootstrapService.prepareOriginalSeedAttempt(), options.signal);
 
   const bootstrapAPI = new BootstrapAPI({
     seedNodeId: nodeId,
@@ -456,8 +460,6 @@ async function startSeedNode(options) {
   });
 
   options.cleanupLedger.defer(() => bootstrapAPI.shutdown());
-  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
-
   bootstrapService.seedRuntimeBridgeOwner.attachBootstrapTopologySnapshotOwner(
     bootstrapAPI.bootstrapTopologySnapshotOwner);
 
@@ -470,8 +472,10 @@ async function startSeedNode(options) {
     mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
       error: bootstrapResult.error,
     });
-    throw new Error(bootstrapResult.error || ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED);
+    throw bootstrapResult.cause ||
+      new Error(bootstrapResult.error || ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED);
   }
+  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
 
   let seedLogsPersistence = null;
 
@@ -762,7 +766,7 @@ async function acquireLagrangeRuntime(options, cleanupLedger) {
     });
   } else {
     runtime = await startSeedNode({cleanupLedger, config, mainLogger,
-      dataDirectoryManager, rolloutControls, env: environment,
+      dataDirectoryManager, dataDirectoryProcessOwner, rolloutControls, env: environment,
       membershipOwnerOutcome: startupJoinDecision.membershipOwnerOutcome,
       signal: options.signal});
   }

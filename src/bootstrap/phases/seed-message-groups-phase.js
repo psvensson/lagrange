@@ -7,8 +7,7 @@
  */
 
 import {MessageGroupService} from '../../message-group/message-group-service.js';
-import {seedReplicaIdentityExisted} from
-  '../seed-startup-storage-admission.js';
+import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
 import {
   initializeRegisteredMessageGroup,
   messageGroupCreationAlreadySettled,
@@ -85,10 +84,8 @@ class SeedMessageGroupsPhase {
 
     d.resetMessageGroupReplicas();
     const nodeId = d.getNodeId();
-    const peerAddresses = replicaIds.map((replicaId) =>
-      `${nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
-    );
+    const peerAddresses = originalSeedPeerAddresses(nodeId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP, replicaIds);
     for (let index = 0; index < replicaIds.length; index++) {
       const replicaId = replicaIds[index];
       d.queueBootstrapServiceReplica(
@@ -135,19 +132,19 @@ class SeedMessageGroupsPhase {
     const serviceId =
       directOptions?.replicaId ||
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = directOptions ||
+    let options = d.admitOriginalSeedReplica(directOptions ||
       d.resolveBootstrapReplicaOptions(
         serviceId,
         UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-      );
+      ));
 
-    if (messageGroupCreationAlreadySettled(
-      d.getMessageGroupServices(), options.replicaId)) {
-      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-    }
-
-    if (options.createDelayMs > 0) {
+    const messageGroupServices = d.getMessageGroupServices();
+    if (!messageGroupServices.has(options.replicaId) && options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
+    }
+    options = d.admitOriginalSeedReplica(options);
+    if (messageGroupCreationAlreadySettled(messageGroupServices, options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
     const messageGroup = new MessageGroupService({
@@ -157,22 +154,19 @@ class SeedMessageGroupsPhase {
       replicaIds: options.replicaIds,
       peerAddresses: options.peerAddresses,
       transport: d.getMessageRouter(),
-      dbPath: d.resolveMessageGroupDbPath(options.groupId, options.replicaId),
+      dbPath: options.dbPath,
+      originalAllocationOpening: options.originalAllocationOpening,
       deferElection: Boolean(options.deferElection),
-      // A founder whose durable services row this seed already holds opened
-      // before: without its raft record it is refused reseed-required, never
-      // re-founded empty (the open-time rule).
-      identityExisted: seedReplicaIdentityExisted(
-        d.getStartupServicesAdmission(), options.replicaId, d.getNodeId()),
+      identityExisted: options.identityExisted,
       // The replica is hosted by this node: this node's clock, and this
       // node's runtime for its node-local cache.
       ...resolveHostedReplicaAuthorities(d),
-      bootstrapReadinessState:
-        typeof d.getBootstrapReadinessState === 'function' ?
-          d.getBootstrapReadinessState() :
-          null,
+      bootstrapReadinessState: d.getBootstrapReadinessState(),
     });
 
+    // Cleanup must retain successful-but-revoked initialization as well as
+    // failed initialization. This map is custody before it is live service.
+    messageGroupServices.set(options.replicaId, messageGroup);
     const unifiedAddress =
       `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
@@ -184,17 +178,15 @@ class SeedMessageGroupsPhase {
     });
 
     await initializeRegisteredMessageGroup({messageGroup,
-      messageGroupServices: d.getMessageGroupServices(),
+      messageGroupServices,
       messageRouter: d.getMessageRouter(),
       address: unifiedAddress, replicaId: options.replicaId});
+    d.assertOriginalSeedAttempt();
 
     if (typeof d.attachMessageGroupService === 'function') {
       d.attachMessageGroupService(messageGroup);
     }
 
-    d.getMessageGroupServices().set(
-      options.replicaId, messageGroup,
-    );
     d.pushMessageGroupReplica(messageGroup);
     d.incrementServicesCreated();
 
@@ -216,6 +208,7 @@ class SeedMessageGroupsPhase {
    */
   async startBootstrapMessageGroupReplica(replicaHandle, _context) {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     const directOptions = _context?.replicaOptions || null;
     const serviceId =
       directOptions?.replicaId ||
@@ -235,6 +228,7 @@ class SeedMessageGroupsPhase {
     );
 
     if (!options.deferElection) {
+      d.assertOriginalSeedContinuation();
       messageGroup.startElection();
     }
 

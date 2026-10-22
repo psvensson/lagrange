@@ -235,6 +235,11 @@ class BootstrapService extends EventEmitter {
     // receivers fence stale-incarnation (zombie) writers.
     this.bootIncarnation = bootIncarnation;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
+    this.dataDirectoryProcessOwner = options.dataDirectoryProcessOwner || null;
+    this.startupAbortSignal = options.startupAbortSignal || null;
+    this.originalAllocationPreparation = null;
+    this.originalAllocationInitialization = null;
+    this.detachOriginalAllocationAbort = null;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({
         maxConcurrent: this.config.maxConcurrentServiceActions,

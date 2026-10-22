@@ -1,9 +1,4 @@
-import {
-  MEMBERSHIP_OWNER_OUTCOME_TYPE,
-  MEMBERSHIP_OWNER_REASON,
-  STARTUP_JOIN_MODE,
-  TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
-} from '../bootstrap/rejoin-hints-constants.js';
+import {isFreshSeedMembershipOutcome} from '../bootstrap/rejoin-hints-constants.js';
 import {CREATE_ADMISSION_STATE} from './replica-create-admission-owner.js';
 
 const AUTHORIZATION = new WeakMap();
@@ -12,16 +7,6 @@ const PARTICIPANT_RELEASE_AUTHORIZATION_KIND = Object.freeze({
   FRESH_SEED: 'fresh_seed',
   OPERATOR: 'operator',
 });
-
-function freshSeedOwnerProofValid(proof) {
-  return proof?.semanticOwner ===
-      TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER &&
-    proof.boundary === TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY &&
-    proof.outcomeType === MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED &&
-    proof.startupMode === STARTUP_JOIN_MODE.SEED &&
-    proof.reasonCode === MEMBERSHIP_OWNER_REASON.FRESH_SEED &&
-    proof.durableStateDetected === false && proof.identityMismatch === false;
-}
 
 function createParticipantReleaseAuthorizationOwner(handler) {
   function issue(kind, partitionId, targetBuildDigest, evidence = null) {
@@ -33,7 +18,7 @@ function createParticipantReleaseAuthorizationOwner(handler) {
 
   return Object.freeze({
     authorizeFreshSeed({partitionId, targetBuildDigest, membershipOwnerOutcome}) {
-      return freshSeedOwnerProofValid(membershipOwnerOutcome) ?
+      return isFreshSeedMembershipOutcome(membershipOwnerOutcome) ?
         issue(PARTICIPANT_RELEASE_AUTHORIZATION_KIND.FRESH_SEED,
           partitionId, targetBuildDigest, membershipOwnerOutcome) : null;
     },

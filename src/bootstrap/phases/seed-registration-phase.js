@@ -106,6 +106,7 @@ class SeedRegistrationPhase {
    */
   async phaseRegistration() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     const logger = d.getLogger();
     const timestamp = resolveHostedNodeClock(this.delegates)();
 
@@ -684,6 +685,7 @@ class SeedRegistrationPhase {
    */
   ensureSystemTableWriter() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     let systemTableWriter = d.getSystemTableWriter();
     if (!systemTableWriter) {
       const cdcIntegrationService =

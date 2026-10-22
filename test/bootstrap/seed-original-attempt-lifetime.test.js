@@ -428,3 +428,329 @@ async (t) => {
   }
   assert.deepEqual(f.entries, []);
 });
+
+// Additional acquisition and late-completion witnesses. The preceding 14
+// cases are preserved byte-for-byte for their separate baseline execution.
+import {MessageGroupService} from '../../src/message-group/message-group-service.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {ServiceReconciler} from '../../src/service/service-reconciler.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+
+function pausedWorkEntered(entered, work) {
+  return Promise.race([entered.promise, work.then(() => {
+    assert.fail('the actual owner completed without reaching its controlled await');
+  })]);
+}
+
+async function assertShutdownJoins(shutdown) {
+  let settled = false;
+  shutdown.then(() => {
+    settled = true;
+  }, () => {
+    settled = true;
+  });
+  // Flush the real shutdown yield and its following microtasks without
+  // releasing the acquisition. No elapsed-time success threshold is used.
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false, 'shutdown must join the in-flight acquisition');
+}
+
+function assertNativeClosed(f, runtime, db, port, router, entityType, groupId) {
+  assert.equal(db.open, false);
+  assert.equal(port.readStatus().outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+  const address = [NODE_ID, entityType, runtime.replicaId].join(ADDRESS.SEPARATOR);
+  assert.equal(router.getRegisteredHandler(address), null);
+  assert.equal(f.entries.filter((entry) =>
+    entry.groupId === groupId && entry.operation === 'free').length, 1,
+  'the actual native group was freed exactly once');
+}
+
+test('message-group creator retains its exact native runtime when revocation wins initialize completion',
+  async (t) => {
+    let runtime;
+    // A failing custody assertion must not leave an unowned native runtime
+    // alive in the test process; this runs before the fixture releases its directory.
+    t.after(async () => {
+      if (runtime?.db?.open) await runtime.shutdown();
+    });
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.MESSAGE_GROUP);
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const initialize = MessageGroupService.prototype.initialize;
+    t.mock.method(MessageGroupService.prototype, 'initialize', async function(...args) {
+      runtime = this;
+      await Reflect.apply(initialize, this, args);
+      entered.resolve();
+      await resume.promise;
+    });
+    const creation = f.service.seedMessageGroupsPhase.createBootstrapMessageGroupReplica(
+      queueReplica(f, options));
+    const settled = Promise.allSettled([creation]);
+    try {
+      await pausedWorkEntered(entered, creation);
+      assert.equal(runtime.raft.readStatus().outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(f.service.messageGroupServices.get(options.replicaId), runtime);
+      f.controller.abort();
+    } finally {
+      resume.resolve();
+    }
+    const [result] = await settled;
+    assert.equal(result.status, 'rejected');
+    assert.ok(hold(REASON.CLOSED)(result.reason));
+    assert.equal(f.service.messageGroupServices.get(options.replicaId), runtime);
+    assert.equal(f.service.messageGroupReplicas.length, 0);
+    const {db, raft: port} = runtime;
+    const router = f.service.messageRouter;
+    assert.equal(db.open, true, 'the rejected creator retains its acquired resource for cleanup');
+    await f.service.shutdown();
+    assert.equal(f.service.messageGroupServices.size, 0);
+    assertNativeClosed(f, runtime, db, port, router, ENTITY_TYPE.MESSAGE_GROUP, options.groupId);
+  });
+
+test('partition creator distinguishes an initializing resource from the same settled valid runtime',
+  async (t) => {
+    let runtime;
+    t.after(async () => {
+      if (runtime?.db?.open) await runtime.shutdown();
+    });
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.PARTITION);
+    const context = queueReplica(f, options);
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const updateSize = PartitionService.prototype.updatePartitionSize;
+    let paused = false;
+    t.mock.method(PartitionService.prototype, 'updatePartitionSize', async function(...args) {
+      await Reflect.apply(updateSize, this, args);
+      if (paused) return;
+      paused = true;
+      runtime = this;
+      entered.resolve();
+      await resume.promise;
+    });
+    const create = () => f.service.seedPartitionsPhase.createBootstrapPartitionReplica(context);
+    const creation = create();
+    const settled = Promise.allSettled([creation]);
+    try {
+      await pausedWorkEntered(entered, creation);
+      assert.equal(runtime.initialized, false);
+      assert.equal(runtime.raft.readStatus().outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+      assert.equal(f.service.partitionServices.get(options.replicaId), runtime);
+      await assert.rejects(create(), hold(REASON.RESOURCE));
+      assert.equal(f.service.partitionServices.get(options.replicaId), runtime);
+    } finally {
+      resume.resolve();
+    }
+    const [result] = await settled;
+    assert.equal(result.status, 'fulfilled');
+    assert.equal(result.value.status, SERVICE_LIFECYCLE_STATE.CREATED);
+    assert.equal((await create()).status, SERVICE_LIFECYCLE_STATE.CREATED);
+    assert.equal(f.service.partitionServices.get(options.replicaId), runtime);
+    assert.equal(f.entries.filter((entry) => entry.operation === 'create_node').length, 1);
+    const {db, raft: port} = runtime;
+    const router = f.service.messageRouter;
+    await f.service.shutdown();
+    assertNativeClosed(f, runtime, db, port, router, ENTITY_TYPE.PARTITION, options.partitionId);
+  });
+
+test('partition initialization failure remains exact cleanup debt and refuses a successful CREATE retry',
+  async (t) => {
+    let runtime;
+    t.after(async () => {
+      if (runtime?.db?.open) await runtime.shutdown();
+    });
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.PARTITION);
+    const context = queueReplica(f, options);
+    const failure = new Error('partition initialization size stage failed');
+    const updateSize = PartitionService.prototype.updatePartitionSize;
+    t.mock.method(PartitionService.prototype, 'updatePartitionSize', async function(...args) {
+      runtime = this;
+      await Reflect.apply(updateSize, this, args);
+      throw failure;
+    });
+    const create = () => f.service.seedPartitionsPhase.createBootstrapPartitionReplica(context);
+    await assert.rejects(create(), (error) => error === failure);
+    assert.equal(f.service.partitionServices.get(options.replicaId), runtime);
+    assert.equal(runtime.initialized, false);
+    assert.equal(runtime.db.open, true);
+    assert.equal(f.service.partitionReplicas.length, 0);
+    await assert.rejects(create(), hold(REASON.RESOURCE));
+    assert.equal(f.service.partitionServices.get(options.replicaId), runtime);
+    assert.equal(f.entries.filter((entry) => entry.operation === 'create_node').length, 1);
+    const {db, raft: port} = runtime;
+    const router = f.service.messageRouter;
+    await f.service.shutdown();
+    assert.equal(f.service.partitionServices.size, 0);
+    assertNativeClosed(f, runtime, db, port, router, ENTITY_TYPE.PARTITION, options.partitionId);
+  });
+
+test('original SERVICES admission pins canonical schema before queueing and actual SQLite DDL',
+  async (t) => {
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.PARTITION);
+    const canonical = structuredClone(options.schema);
+    const changed = structuredClone(canonical);
+    changed.columns[0].name = 'substituted_service_identity';
+    assert.throws(() => queueReplica(f, {...options, schema: changed}), hold(REASON.IDENTITY));
+    assert.equal(f.service.bootstrapDesiredServiceDefinitions.size, 0);
+    assert.equal(f.service.bootstrapReplicaOptionsByServiceId.size, 0);
+    const unopened = new Database(options.dbPath, {readonly: true, fileMustExist: true});
+    try {
+      assert.equal(unopened.prepare('SELECT name FROM sqlite_master WHERE name = ?')
+        .get(SYSTEM_TABLE_NAME.SERVICES), undefined, 'schema refusal precedes system-table DDL');
+    } finally {
+      unopened.close();
+    }
+    assert.deepEqual(f.entries, []);
+
+    const callerSchema = structuredClone(canonical);
+    const context = queueReplica(f, {...options, schema: callerSchema});
+    const admitted = f.service.bootstrapReplicaOptionsByServiceId.get(options.replicaId);
+    callerSchema.columns[0].name = 'changed_after_queue';
+    callerSchema.indices[0].columns[0] = 'changed_after_queue';
+    assert.notEqual(admitted.schema, callerSchema);
+    assert.deepEqual(admitted.schema, canonical);
+    assert.ok(Object.isFrozen(admitted.schema));
+    assert.ok(Object.isFrozen(admitted.schema.columns));
+    assert.ok(Object.isFrozen(admitted.schema.columns[0]));
+    assert.ok(Object.isFrozen(admitted.schema.indices[0].columns));
+    const created = await f.service.seedPartitionsPhase.createBootstrapPartitionReplica(context);
+    assert.equal(created.status, SERVICE_LIFECYCLE_STATE.CREATED);
+    const runtime = f.service.partitionServices.get(options.replicaId);
+    assert.equal(runtime.raft.readStatus().outcome, RAFT_OPERATION_OUTCOME.CORE_OK);
+    assert.deepEqual(runtime.db.prepare(`PRAGMA table_info(${SYSTEM_TABLE_NAME.SERVICES})`)
+      .all().map((column) => column.name), canonical.columns.map((column) => column.name));
+  });
+
+test('BootstrapService shutdown joins an acquired real router whose initialization is still pending',
+  async (t) => {
+    let router;
+    t.after(async () => {
+      if (router?.initialized) await router.shutdown();
+    });
+    const f = await fixture(t, {wsPort: 18082}, {withRouter: false});
+    await f.service.prepareOriginalSeedAttempt();
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const initialize = MessageRouter.prototype.initialize;
+    t.mock.method(MessageRouter.prototype, 'initialize', async function(...args) {
+      router = this;
+      entered.resolve();
+      await resume.promise;
+      return Reflect.apply(initialize, this, args);
+    });
+    const infrastructure = f.service.seedInfrastructurePhase.phaseInfrastructure();
+    const initialized = Promise.allSettled([infrastructure]);
+    let shutdown;
+    try {
+      await pausedWorkEntered(entered, infrastructure);
+      assert.equal(f.service.messageRouter, router, 'custody precedes initialize completion');
+      shutdown = f.service.shutdown();
+      await assertShutdownJoins(shutdown);
+    } finally {
+      resume.resolve();
+      await initialized;
+      await shutdown;
+    }
+    const [result] = await initialized;
+    assert.equal(result.status, 'rejected');
+    assert.ok(hold(REASON.CLOSED)(result.reason));
+    assert.equal(router.initialized, false);
+    assert.equal(router.server, null);
+    assert.equal(router.hasSelfConnection(), false);
+    assert.equal(f.service.messageRouter, null);
+    assert.equal(f.service.serviceLifecycleManager, null);
+    assert.equal(f.service.serviceReconciler, null);
+    assert.deepEqual(f.entries, []);
+  });
+
+test('BootstrapService shutdown joins initial reconciliation and retires its actual cadence',
+  async (t) => {
+    let reconciler;
+    let router;
+    t.after(() => reconciler?.stop());
+    const f = await fixture(t, {wsPort: 18082}, {withRouter: false});
+    await f.service.prepareOriginalSeedAttempt();
+    const phase = f.service.seedInfrastructurePhase;
+    const entered = Promise.withResolvers();
+    const resume = Promise.withResolvers();
+    const start = ServiceReconciler.prototype.start;
+    const readActual = phase.buildBootstrapActualStateRows;
+    t.mock.method(ServiceReconciler.prototype, 'start', function(...args) {
+      reconciler = this;
+      return Reflect.apply(start, this, args);
+    });
+    t.mock.method(phase, 'buildBootstrapActualStateRows', async function(...args) {
+      const actual = Reflect.apply(readActual, this, args);
+      entered.resolve();
+      await resume.promise;
+      return actual;
+    });
+    const infrastructure = phase.phaseInfrastructure();
+    const initialized = Promise.allSettled([infrastructure]);
+    let shutdown;
+    try {
+      await pausedWorkEntered(entered, infrastructure);
+      router = f.service.messageRouter;
+      assert.ok(router instanceof MessageRouter);
+      assert.equal(f.service.serviceReconciler, reconciler,
+        'the running reconciler is owned before its initial read completes');
+      assert.equal(reconciler._running, true);
+      assert.ok(reconciler._interval);
+      shutdown = f.service.shutdown();
+      await assertShutdownJoins(shutdown);
+    } finally {
+      resume.resolve();
+      await initialized;
+      await shutdown;
+    }
+    const [result] = await initialized;
+    assert.equal(result.status, 'rejected');
+    assert.ok(hold(REASON.CLOSED)(result.reason));
+    assert.equal(reconciler._running, false);
+    assert.equal(reconciler._interval, null);
+    assert.equal(router.initialized, false);
+    assert.equal(router.server, null);
+    assert.equal(router.hasSelfConnection(), false);
+    assert.equal(f.service.serviceReconciler, null);
+    assert.equal(f.service.serviceLifecycleManager, null);
+    assert.equal(f.service.messageRouter, null);
+    assert.deepEqual(f.entries, []);
+  });
+
+test('BootstrapService retains an exact acquired router after close rejection and retries real release',
+  async (t) => {
+    const f = await fixture(t, {wsPort: 18082}, {withRouter: false});
+    await f.service.prepareOriginalSeedAttempt();
+    await f.service.seedInfrastructurePhase.phaseInfrastructure();
+    const router = f.service.messageRouter;
+    const close = router.shutdown;
+    const failure = new Error('router release has not settled');
+    let failClose = true;
+    t.mock.method(router, 'shutdown', async function(...args) {
+      if (failClose) throw failure;
+      return Reflect.apply(close, this, args);
+    });
+    try {
+      await assert.rejects(f.service.shutdown(), (error) => error === failure);
+      assert.equal(f.service.messageRouter, router);
+      assert.equal(router.initialized, true);
+      assert.equal(router.server, null);
+      assert.throws(() => f.service.assertOriginalSeedAttempt(), hold(REASON.CLOSED));
+    } finally {
+      failClose = false;
+    }
+    await f.service.shutdown();
+    assert.equal(router.initialized, false);
+    assert.equal(router.server, null);
+    assert.equal(f.service.messageRouter, null);
+    assert.equal(f.service.serviceReconciler, null);
+    assert.deepEqual(f.entries, []);
+  });
