@@ -1,0 +1,97 @@
+[tv-dator] v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 50s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js
+
+# test-files planned=14
+classified lane ordinary: 12 file(s), jobs=4
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 53C (nvme/Sensor 1)
+ok test/partition/participant-decision-canonical-record.test.js (8 assertions, 265ms)
+ok test/partition/participant-origin-retained-history.test.js (35 assertions, 327ms)
+ok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 1653ms)
+ok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 339ms)
+ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 951ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 3638ms)
+ok test/raft/raft-rs-backend/persistence-admission.test.js (4 assertions, 744ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 4594ms)
+ok test/raft/raft-rs-backend/restart-from-durable-record.test.js (4 assertions, 1155ms)
+ok test/partition/partition-unreadable-durable-record.test.js (6 assertions, 9048ms)
+ok test/raft/raft-rs-original-allocation-cold-inspection.test.js (24 assertions, 10145ms)
+ok test/raft/raft-rs-original-opening-authority.test.js (24 assertions, 26171ms)
+# test-files total=12 pass=12 fail=0 assertions=198
+classified lane bootstrap: 1 file(s), jobs=2
+thermal: ok cpu 53C (coretemp/Package id 0) nvme 66C (nvme/Sensor 1)
+ok test/bootstrap/seed-original-attempt-lifetime.test.js (21 assertions, 45357ms)
+# test-files total=1 pass=1 fail=0 assertions=21
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 51C (coretemp/Package id 0) nvme 72C (nvme/Sensor 1)
+not ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 10992ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: a real committed ENABLE remains pending through cold inspection and replays its exact origin
+ok 1 - a real committed ENABLE remains pending through cold inspection and replays its exact origin
+  ---
+  duration_ms: 101.812203
+  type: 'test'
+  ...
+# Subtest: one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay
+not ok 2 - one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay
+  ---
+  duration_ms: 10156.912566
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/9f75118f-6129-40b9-b0ea-a10445939cd9/work/source/test/partition/participant-origin-retained-history.integration.test.js:203:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    setup: all three replicas share one settled native frontier, term and configuration
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/9f75118f-6129-40b9-b0ea-a10445939cd9/work/source/test/partition/participant-origin-retained-history.integration.test.js:212:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10278.158025
+# time=10992ms
+# test-files total=1 pass=0 fail=1 assertions=2
+

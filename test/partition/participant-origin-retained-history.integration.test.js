@@ -107,8 +107,9 @@ function pendingOrigin(view, state) {
   return entry;
 }
 
-function settledGroup(group, members, partitionId) {
+function settledGroup(group, members, partitionId, observation) {
   const views = members.map((member) => passive(group.dbFileOf(member), partitionId));
+  if (observation !== undefined) observation.views = views;
   const first = views[0].native;
   return views.every(({native, origin}) => origin.state === ORIGIN.PRE_ORIGIN &&
     native.appliedIndex === first.appliedIndex && native.commitIndex === first.appliedIndex &&
@@ -209,9 +210,18 @@ test('one real RF3 ENABLE is locally uncommitted then committed-pending before n
       tempPrefix: 'retained-origin-rf3-', serviceOptions: tableOptions(),
       budgetMs: GROUP_BUDGET_MS});
     t.after(() => group.dispose());
+    const settling = {};
     assert.equal(await group.waitFor(() =>
-      settledGroup(group, members, partitionId) !== null), true,
-    'setup: all three replicas share one settled native frontier, term and configuration');
+      settledGroup(group, members, partitionId, settling) !== null), true,
+    'setup: all three replicas share one settled native frontier, term and configuration; ' +
+      JSON.stringify(settling.views.map(({native, origin}, index) => ({
+        replicaId: members[index][0], appliedIndex: native.appliedIndex,
+        commitIndex: native.commitIndex, lastIndex: native.lastIndex,
+        hardState: native.record.hardState, confState: native.record.confState,
+        coverage: native.coverage, originState: origin.state,
+        originReason: origin.reason, originCoverage: origin.coverage,
+        originErrorCode: origin.cause?.code, originError: origin.cause?.message,
+      }))));
     const settled = settledGroup(group, members, partitionId);
     assert.ok(settled);
     const leader = group.services.find((service) =>

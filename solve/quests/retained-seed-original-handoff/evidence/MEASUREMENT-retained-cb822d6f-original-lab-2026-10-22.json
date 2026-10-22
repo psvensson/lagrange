@@ -1,0 +1,261 @@
+{
+  "schema": "retained-history-original-lab-results/v1",
+  "recordedAt": "2026-10-22T16:44:45.693+00:00",
+  "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+  "results": [
+    {
+      "originalIssue": "https://github.com/psvensson/lagrange-lab/issues/820",
+      "originalCompletion": {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/820#issuecomment-6345913972",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "1c795ef8bfa44d4ba1a835ba150467bd",
+          "request_sha256": "5b84727879b0483aa61ab7cd3f57ba8e2919fcceb88a3919e26349b3fee82017",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T16:32:57.973Z",
+          "result": {
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "finished_at": "2026-10-22T16:32:57.850Z",
+            "hosts": [
+              "lenovo-laptop"
+            ],
+            "log_bytes": 312,
+            "log_sha256": "4f246d622df9b87a9158db9a28fee1f8801e2a08caf47461ff930e840c55e185",
+            "logical_request_id": "1c795ef8-bfa4-4d4b-a1a8-35ba150467bd",
+            "logs_are_worker_tails": true,
+            "operation": "lab-work",
+            "outcome": "FAIL",
+            "payload_sha256": "4f0a2abdd9e76e3e96cbcc1c11b511f12c9e45047a9ac92bcc6e993639d10eb3",
+            "reason": "SETUP_FAILED",
+            "scope_closed": true,
+            "source_execution_started": true,
+            "source_sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+            "worker_receipt_count": 1,
+            "worker_receipts_sha256": "5677ea8e4c78c7bb4b4028fbc7ef9ac9fb49e51e1a54c2ec4a40a4218f64e769",
+            "workers": {
+              "lenovo-laptop": {
+                "containers_closed": true,
+                "driver_result": {
+                  "completed_test_files": 0,
+                  "exit_code": 1,
+                  "reason": "SETUP_FAILED"
+                },
+                "execution_scope_closed": true,
+                "exit_code": 1,
+                "last_thermals": {
+                  "cpu": 42,
+                  "missing": [
+                    "ssd"
+                  ],
+                  "ssd": null,
+                  "ssd_aux": null
+                },
+                "log_bytes": 295,
+                "log_sha256": "96820439ebe295e9f6370ba018866c78ad74a0c704c47d02108fc85efb8cb3bb",
+                "log_truncated": false,
+                "output_bytes": 295,
+                "output_sha256": "96820439ebe295e9f6370ba018866c78ad74a0c704c47d02108fc85efb8cb3bb",
+                "reason": "SETUP_FAILED",
+                "source_execution_started": true,
+                "state": "COMPLETE",
+                "thermal_scope_closed": true
+              }
+            }
+          }
+        }
+      },
+      "evidenceIssue": "https://github.com/psvensson/lagrange-lab/issues/830",
+      "evidenceCompletion": {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/830#issuecomment-6346056053",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "80aee9bab9044adaa6690355156a2d56",
+          "request_sha256": "81b9a129f1b58e518f39815f4c910f5c868c30d7cac2447b6e015795c538e1f1",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T16:40:33.542Z",
+          "result": {
+            "chunk_sha256": "4f246d622df9b87a9158db9a28fee1f8801e2a08caf47461ff930e840c55e185",
+            "job_id": "1c795ef8bfa44d4ba1a835ba150467bd",
+            "offset": 0,
+            "redacted": true,
+            "returned_bytes": 312,
+            "text": "[lenovo-laptop] npm ERR! Cannot read property '@bytecodealliance/jco-transpile' of undefined\n\nnpm ERR! A complete log of this run can be found in:\nnpm ERR!     /home/peter/.local/state/lagrange-lab-worker/generic/runs/1c795ef8-bfa4-4d4b-a1a8-35ba150467bd/work/cache/npm/_logs/2026-10-22T16_32_55_378Z-debug.log\n\n"
+          }
+        }
+      },
+      "logFile": "RUNTIME-retained-cb822d6f-setup-failure-2026-10-22.txt",
+      "binding": {
+        "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+        "controllerBytes": 312,
+        "controllerSha256": "4f246d622df9b87a9158db9a28fee1f8801e2a08caf47461ff930e840c55e185",
+        "workerBytes": 295,
+        "workerSha256": "96820439ebe295e9f6370ba018866c78ad74a0c704c47d02108fc85efb8cb3bb",
+        "completeWorkerLogVerified": true,
+        "workerReconstruction": "Remove one exact [host] prefix and one controller-added trailing LF",
+        "allScopesClosed": true
+      },
+      "interpretation": {
+        "result": "SETUP_FAILED",
+        "testsExecuted": 0,
+        "error": "npm ERR! Cannot read property '@bytecodealliance/jco-transpile' of undefined",
+        "limit": "npm ci failed; neither Node version nor exact root cause appears in the complete log. This is no candidate assertion verdict.",
+        "successorPlan": "One fresh generic tests request selects existing Node22.23.2 in setup and execution and invokes the project test:file runner, retaining candidate,14 selected files and1800-second budget."
+      }
+    },
+    {
+      "originalIssue": "https://github.com/psvensson/lagrange-lab/issues/821",
+      "originalCompletion": {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/821#issuecomment-6345926592",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "48e77e2c48ca4c90a242a431bbc91d35",
+          "request_sha256": "00d364971ecd8ef94a426c040962c40db2331d651f5e6e5116c6cf92dbc2d7de",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T16:33:36.318Z",
+          "result": {
+            "execution_scope_closed": true,
+            "exit_code": 0,
+            "finished_at": "2026-10-22T16:33:36.117Z",
+            "hosts": [
+              "tv-dator"
+            ],
+            "log_bytes": 2129,
+            "log_sha256": "a4574f437191305b534ca957f3f9aa8d3daf88fa99a0f3a332e790433f1dff7b",
+            "logical_request_id": "48e77e2c-48ca-4c90-a242-a431bbc91d35",
+            "logs_are_worker_tails": true,
+            "operation": "lab-work",
+            "outcome": "PASS",
+            "payload_sha256": "af86457b7316bd121fe60248c689533cf510cef44b5dee1e44e8ed85fac84261",
+            "reason": null,
+            "scope_closed": true,
+            "source_execution_started": true,
+            "source_sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+            "worker_receipt_count": 1,
+            "worker_receipts_sha256": "6a0c3ac96c001e28b19e23a5eafd8b34b523798926f19aa75fe559834faef4a4",
+            "workers": {
+              "tv-dator": {
+                "containers_closed": true,
+                "driver_result": {
+                  "counters": {},
+                  "exit_code": 0
+                },
+                "execution_scope_closed": true,
+                "exit_code": 0,
+                "last_thermals": {
+                  "cpu": 67,
+                  "missing": [],
+                  "ssd": 33.85,
+                  "ssd_aux": 51.85
+                },
+                "log_bytes": 2117,
+                "log_sha256": "b6a90e6fa45db9b3fe9dbde5a3d836f619f4101824f46f90beee8afe149132c2",
+                "log_truncated": false,
+                "output_bytes": 2117,
+                "output_sha256": "b6a90e6fa45db9b3fe9dbde5a3d836f619f4101824f46f90beee8afe149132c2",
+                "reason": null,
+                "source_execution_started": true,
+                "state": "COMPLETE",
+                "thermal_scope_closed": true
+              }
+            }
+          }
+        }
+      },
+      "evidenceIssue": "https://github.com/psvensson/lagrange-lab/issues/833",
+      "evidenceCompletion": {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/833#issuecomment-6346097342",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "f461689145c64c77aee6b799536362d8",
+          "request_sha256": "e6a0663e6bcd9e2492d8da7078c162f4895dee7c75bd156f7e8b9f4765789cce",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T16:42:54.754Z",
+          "result": {
+            "chunk_sha256": "a4574f437191305b534ca957f3f9aa8d3daf88fa99a0f3a332e790433f1dff7b",
+            "job_id": "48e77e2c48ca4c90a242a431bbc91d35",
+            "offset": 0,
+            "redacted": true,
+            "returned_bytes": 2129,
+            "text": "[tv-dator] npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n\n> lagrange-server@0.2.6 prepare\n> node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"\n\n[hooks] Installed repo hooks at .githooks\n\nadded 1057 packages, and audited 1058 packages in 45s\n\n223 packages are looking for funding\n  run `npm fund` for details\n\n33 vulnerabilities (10 moderate, 21 high, 2 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\nnpm notice\nnpm notice New major version of npm available! 10.9.8 -> 12.2.1\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1\nnpm notice To update run: npm install -g npm@12.2.1\nnpm notice\n\n> lagrange-server@0.2.6 audit:shards\n> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check\n\ncurated test shards: current\nprimary classification OK: 2440 tests (unit=2114 integration=109 bootstrap=210 convergence-probe=3 packaging=4)\nresource classification OK \u2014 2440 tests, digest fnv1a32-787a9daa\nsubsystem classification OK \u2014 2440 tests, 22 subsystems, digest fnv1a32-1d703973\nproof range: 1262e9c9b306b7289e9768f6ca8cce8f172594d9..HEAD (flag)\nchanged paths: 31 (12 JavaScript)\n  ok   9267ms  test:deps\n  ok   2283ms  audit:shards\n  ok   1121ms  test:metrics:scoped\n  ok    872ms  eslint(12 changed)\n  ok    460ms  audit:runtime-grammar\n  ok    295ms  audit:roadmap-authority\n  ok    281ms  audit:doc-ascii\n  ok    209ms  test:metadata-gateway:audit\n  ok    198ms  audit:impact-contracts\n  ok    158ms  audit:doc-audience\n  ok    153ms  audit:current-capabilities\n  ok    142ms  audit:cli-docs\n  ok    135ms  audit:closure-ledger\n  ok    130ms  audit:service-portability-claims\nfast-static: ok in 15704ms\n{\"metadata_exit\":0,\"fast_static_exit\":0,\"tracked_tree_exit\":0}\n\n"
+          }
+        }
+      },
+      "logFile": "STATIC-retained-cb822d6f-lab-2026-10-22.txt",
+      "binding": {
+        "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+        "controllerBytes": 2129,
+        "controllerSha256": "a4574f437191305b534ca957f3f9aa8d3daf88fa99a0f3a332e790433f1dff7b",
+        "workerBytes": 2117,
+        "workerSha256": "b6a90e6fa45db9b3fe9dbde5a3d836f619f4101824f46f90beee8afe149132c2",
+        "completeWorkerLogVerified": true,
+        "workerReconstruction": "Remove one exact [host] prefix and one controller-added trailing LF",
+        "allScopesClosed": true
+      },
+      "interpretation": {
+        "result": "PASS",
+        "exitStatuses": {
+          "metadata_exit": 0,
+          "fast_static_exit": 0,
+          "tracked_tree_exit": 0
+        },
+        "classifiedTests": 2440,
+        "fastStaticChecks": [
+          "test:deps",
+          "audit:shards",
+          "test:metrics:scoped",
+          "eslint(12 changed)",
+          "audit:runtime-grammar",
+          "audit:roadmap-authority",
+          "audit:doc-ascii",
+          "test:metadata-gateway:audit",
+          "audit:impact-contracts",
+          "audit:doc-audience",
+          "audit:current-capabilities",
+          "audit:cli-docs",
+          "audit:closure-ledger",
+          "audit:service-portability-claims"
+        ],
+        "fastStaticElapsedMs": 15704,
+        "proofBase": "1262e9c9b306b7289e9768f6ca8cce8f172594d9",
+        "changedPaths": 31,
+        "changedJavaScriptPaths": 12,
+        "limit": "This exact-source metadata/fast-static pass does not run or clear the separately preserved three inherited decision-boundary precommit findings."
+      }
+    }
+  ],
+  "evidenceRequests": [
+    {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "80aee9bab9044adaa6690355156a2d56",
+      "operation": "evidence",
+      "created_at": "2026-10-22T16:36:36.823Z",
+      "expires_at": "2026-10-22T18:36:36.823Z",
+      "job_id": "1c795ef8bfa44d4ba1a835ba150467bd",
+      "offset": 0,
+      "length": 8000
+    },
+    {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "f461689145c64c77aee6b799536362d8",
+      "operation": "evidence",
+      "created_at": "2026-10-22T16:36:36.823Z",
+      "expires_at": "2026-10-22T18:36:36.823Z",
+      "job_id": "48e77e2c48ca4c90a242a431bbc91d35",
+      "offset": 0,
+      "length": 8000
+    }
+  ],
+  "invariants": {
+    "sourceAndTestsUnchanged": true,
+    "eightHandoffReceiptsUnchanged": true,
+    "originalSealUnchanged": true,
+    "mainUnchangedByThisWork": true
+  }
+}

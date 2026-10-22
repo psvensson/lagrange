@@ -1,0 +1,118 @@
+{
+  "schema": "retained-history-runtime-successor-request/v1",
+  "supersedesSetupFailure": {
+    "issue": 820,
+    "requestId": "1c795ef8bfa44d4ba1a835ba150467bd",
+    "testsExecuted": 0,
+    "terminal": "https://github.com/psvensson/lagrange-lab/issues/820#issuecomment-6345913972",
+    "scopesClosed": true
+  },
+  "unchanged": {
+    "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+    "selectedFiles": 14,
+    "executionBudgetSeconds": 1800,
+    "productionAndTestBytes": true,
+    "testAssertionsAndTimeouts": true,
+    "projectRunnerDefaults": true
+  },
+  "correction": {
+    "environment": "Select existing Node22.23.2 in both setup and execution, within each child process only",
+    "runner": "npm run test:file -- exact original14 files, via generic tests driver explicit argv",
+    "attribution": "Original log proves npm ci setup failure, not exact Node/npm version or root cause; known operator-reported default Node14 on Lenovo motivates explicit declared compatible runtime."
+  },
+  "request": {
+    "schema": "lagrange-lab-job/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "9f75118f612940b9b0eaa10445939cd9",
+    "operation": "lab-work",
+    "created_at": "2026-10-22T16:44:18.370Z",
+    "expires_at": "2026-10-22T18:44:18.370Z",
+    "delivery": {
+      "protocol": "harnessd-lab-work-delivery-v1",
+      "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+      "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+      "totalBytes": 1828,
+      "partCount": 1
+    }
+  },
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792687458370,
+    "expiresAtMs": 1792694658370,
+    "work": {
+      "driver": "tests",
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci"
+          ]
+        ],
+        "argv": [
+          "/bin/bash",
+          "-c",
+          "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"",
+          "retained-history"
+        ],
+        "tests": [
+          "test/partition/participant-origin-retained-history.test.js",
+          "test/partition/participant-origin-retained-history.integration.test.js",
+          "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+          "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+          "test/raft/raft-rs-original-opening-authority.test.js",
+          "test/bootstrap/seed-original-attempt-lifetime.test.js",
+          "test/partition/partition-participant-transaction-apply.test.js",
+          "test/partition/partition-participant-transaction-staging.test.js",
+          "test/partition/participant-decision-canonical-record.test.js",
+          "test/partition/partition-unreadable-durable-record.test.js",
+          "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+          "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+          "test/raft/raft-rs-backend/persistence-admission.test.js"
+        ]
+      },
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/original-handoff-boundaries-20261021-cloud",
+        "sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 1800
+    }
+  },
+  "payload": {
+    "protocol": "harnessd-lab-work-part-v1",
+    "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+    "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+    "part": {
+      "index": 0,
+      "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+      "data": "eyJleHBpcmVzQXRNcyI6MTc5MjY5NDY1ODM3MCwiaXNzdWVkQXRNcyI6MTc5MjY4NzQ1ODM3MCwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiI5Zjc1MTE4Zi02MTI5LTQwYjktYjBlYS1hMTA0NDU5MzljZDkiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL29yaWdpbmFsLWhhbmRvZmYtYm91bmRhcmllcy0yMDI2MTAyMS1jbG91ZCIsInJlcG8iOiJwc3ZlbnNzb24vbGFncmFuZ2UiLCJzaGEiOiJjYjgyMmQ2ZmNmOGM3Yjc4YjM0YTcxODc3MmQwNjQ4ODQ5MGJjMGRhIn0sInNwZWMiOnsiYXJndiI6WyIvYmluL2Jhc2giLCItYyIsInNldCAtZXVcbnJldGFpbmVkX25vZGVfYmluPVwiJEhPTUUvLm52bS92ZXJzaW9ucy9ub2RlL3YyMi4yMy4yL2JpblwiXG50ZXN0IC14IFwiJHJldGFpbmVkX25vZGVfYmluL25vZGVcIlxuZXhwb3J0IFBBVEg9XCIkcmV0YWluZWRfbm9kZV9iaW46JFBBVEhcIlxuZXhlYyBucG0gcnVuIHRlc3Q6ZmlsZSAtLSBcIiRAXCIiLCJyZXRhaW5lZC1oaXN0b3J5Il0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaSJdXSwidGVzdHMiOlsidGVzdC9wYXJ0aXRpb24vcGFydGljaXBhbnQtb3JpZ2luLXJldGFpbmVkLWhpc3RvcnkudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpY2lwYW50LW9yaWdpbi1yZXRhaW5lZC1oaXN0b3J5LmludGVncmF0aW9uLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL2R1cmFibGUtc3RvcmUtY29tbWl0dGVkLWVudHJpZXMudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLW9yaWdpbmFsLWFsbG9jYXRpb24tY29sZC1pbnNwZWN0aW9uLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1vcmlnaW5hbC1vcGVuaW5nLWF1dGhvcml0eS50ZXN0LmpzIiwidGVzdC9ib290c3RyYXAvc2VlZC1vcmlnaW5hbC1hdHRlbXB0LWxpZmV0aW1lLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tcGFydGljaXBhbnQtdHJhbnNhY3Rpb24tYXBwbHkudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi1wYXJ0aWNpcGFudC10cmFuc2FjdGlvbi1zdGFnaW5nLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aWNpcGFudC1kZWNpc2lvbi1jYW5vbmljYWwtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tdW5yZWFkYWJsZS1kdXJhYmxlLXJlY29yZC50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9kdXJhYmxlLXJlYWR5LWxvb3AudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvb3BlcmF0aW9uLXBvcnQtcmVhZHktcmVjb3ZlcnkudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvcmVzdGFydC1mcm9tLWR1cmFibGUtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL3BlcnNpc3RlbmNlLWFkbWlzc2lvbi50ZXN0LmpzIl19LCJ0aW1lb3V0U2Vjb25kcyI6MTgwMH19Cg=="
+    }
+  },
+  "submission": {
+    "issue": 835,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/835",
+    "partCommentId": 6346139117,
+    "format": "raw JSON issue body and raw JSON part comment"
+  },
+  "independentRecipeReview": {
+    "verifier": "subagent:/root/startup_mapping",
+    "verdict": "ACCEPT",
+    "scope": "Decoded payload, source, exact14 in original order,1800s, both Node22 PATH preludes, preserved HOME, project runner argv and no overrides"
+  }
+}

@@ -917,3 +917,241 @@ Git-object, log and GitHub mailbox observations were used; no runtime or static
 gate was rerun, no source/test file changed and no GitHub mutation made. The
 preceding 48,036 bytes remain unchanged with SHA-256
 `11c897c9171a7ef3a633d10a7ff6d7c5d4624afa76be0bee35839d2a42c21517`.
+
+## Entry 7: terminal lab evidence and RF3 diagnostic successor - RUNTIME RED; DIAGNOSTIC APPROVE
+
+### Disposition and reviewed scope
+
+**ACCEPT #821's exact-candidate metadata/fast-static PASS at its stated scope;
+CONFIRM #820 as a setup failure without an assertion verdict; CONFIRM #835 as
+a runtime RED; APPROVE the diagnostic-only witness successor and its attempt
+plan.** There is no root-cause verdict for the RF3 failure and no passing
+candidate runtime checkpoint. The independent bounded production-source
+approval in Entry 4 remains valid; this result limits what its witnesses have
+measured, rather than converting that approval into a complete-unit pass.
+
+All three completed jobs name
+`cb822d6fcf8c7b78b34a718772d06488490bc0da`. The reviewer directly inspected
+their terminal receipts and evidence receipts, then independently checked the
+retained measurement records and complete log bytes. Local proof-branch HEAD
+at this review is `3a08f9421a116fc4ef0632eddf8a0b0e81201976`. Its src tree and
+the candidate src tree both equal
+`d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba`; the working production tree has no
+diff from cb822d6f. Among test files, the only current diff from cb822d6f is the
+diagnostic change reviewed below. The runtime and impact contracts remain
+byte-identical to the Entry 4/5 approvals. No production repair is proposed by
+this entry.
+
+### Original runtime request #820: setup failure, no assertion result
+
+[Runtime #820's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/820#issuecomment-6345913972)
+records request `1c795ef8bfa44d4ba1a835ba150467bd`, actual host
+`lenovo-laptop`, COMPLETE/FAIL with SETUP_FAILED and exit 1, finished at
+`2026-10-22T16:32:57.850Z`. The worker reports zero completed test files.
+Execution, thermal and container scopes are closed.
+
+The complete emitted failure is npm ci's
+`Cannot read property '@bytecodealliance/jco-transpile' of undefined`.
+It contains no Node-version observation and no TAP execution. Neither a
+specific Node version nor the precise npm failure cause is proved by this
+log. This is retained as an execution-setup failure, not a negative result
+against the candidate's application assertions.
+
+[Evidence #830](https://github.com/psvensson/lagrange-lab/issues/830#issuecomment-6346056053)
+returned the complete 312-byte controller text at offset zero. Its hash is
+`4f246d622df9b87a9158db9a28fee1f8801e2a08caf47461ff930e840c55e185`.
+Removing the one exact `[lenovo-laptop] ` controller prefix and its one added
+trailing LF reconstructs the complete 295-byte worker log, SHA-256
+`96820439ebe295e9f6370ba018866c78ad74a0c704c47d02108fc85efb8cb3bb`.
+Both hashes, lengths and the exported text agree with the local retained file
+and terminal receipt; worker log_truncated is false.
+
+### Original static request #821: bounded PASS
+
+[Static #821's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/821#issuecomment-6345926592)
+records request `48e77e2c48ca4c90a242a431bbc91d35`, actual host `tv-dator`,
+COMPLETE/PASS with exit 0, finished at `2026-10-22T16:33:36.117Z`. All three
+physical scopes are closed. This is the actual previously pending lab request;
+Entry 6's local static run is retained as a separate earlier observation.
+
+The complete log reports successful npm ci and current shard classifications
+for 2,440 files: 2,114 unit, 109 integration, 210 bootstrap, three convergence
+probe and four packaging. Fast-static uses the explicit committed base
+`1262e9c9b306b7289e9768f6ca8cce8f172594d9`, with 31 changed paths and 12 changed
+JavaScript paths. All fourteen emitted checks are ok. The final explicit
+statuses are metadata_exit 0, fast_static_exit 0 and tracked_tree_exit 0.
+
+[Evidence #833](https://github.com/psvensson/lagrange-lab/issues/833#issuecomment-6346097342)
+returned the entire 2,129-byte controller text at offset zero, SHA-256
+`a4574f437191305b534ca957f3f9aa8d3daf88fa99a0f3a332e790433f1dff7b`.
+The same prefix/single-LF reconstruction yields the entire 2,117-byte worker
+log, SHA-256
+`b6a90e6fa45db9b3fe9dbde5a3d836f619f4101824f46f90beee8afe149132c2`.
+All lengths, hashes and exported bytes agree; worker log_truncated is false.
+
+This PASS does not run or clear the three inherited decision-boundary findings
+retained with the normal precommit refusal. It is not a corpus, publication,
+complete cutover or handoff-receipt gate result. No baseline or gate was
+weakened by recording it.
+
+### Successor runtime #835: actual RF3 setup assertion failure
+
+The preserved fresh request uses the already reviewed explicit existing
+Node v22.23.2 PATH in setup and execution and invokes `npm run test:file --`
+through the project runner. It retains the exact cb822d6f source, the same
+fourteen selected files and the 1,800-second request budget. The HOME variable
+is not changed. The complete runtime log observes Node v22.23.2 and npm
+10.9.8, successful npm ci, and the actual classified project-runner invocation.
+That successful treatment does not retrospectively identify #820's cause.
+
+[Runtime #835's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/835#issuecomment-6346232201)
+records request `9f75118f612940b9b0eaa10445939cd9`, actual host `tv-dator`,
+COMPLETE/FAIL with exit 1, finished at `2026-10-22T16:49:49.253Z`. Its
+execution, thermal and container scopes are closed.
+
+The complete project-runner output has a verdict for each of the fourteen
+requested files:
+
+| Lane | Files passed / files reported | Runner-reported assertions |
+| --- | ---: | ---: |
+| ordinary | 12 / 12 | 198 |
+| bootstrap | 1 / 1 | 21 |
+| exclusive | 0 / 1 | 2 |
+
+Thus the emitted file results establish thirteen passing files and one failing
+file. The arithmetic total of the three runner-reported assertion counts is
+221; it is not the terminal receipt's generic counter. That receipt reports
+completed_test_files as null and contains the last failed file's two-test
+counter: one pass, one fail, zero cancellations, skips and todos. Those values
+must not be presented as the whole batch's counters or a fourteen-file pass.
+
+The frozen original-allocation-cold-inspection file passes with 24 reported
+assertions, alongside the participant-origin unit file with 35, native
+durable-store file with 33, original-opening-authority file with 24, the
+unchanged startup HOLD file with 21, and the selected neighboring runtime
+files. The baseline #814's eleven Missing expected exception leaves remain
+retained as historical failure evidence; their unchanged candidate file now
+has a passing file result. This is component progress within a red batch.
+
+The exclusive integration output individually records RF1's real committed
+ENABLE, cold inspection and replay case as ok. RF3 fails with ERR_ASSERTION,
+expected true and actual false, at integration-test line 212:
+`setup: all three replicas share one settled native frontier, term and configuration`.
+Its case duration is 10,156.912566 milliseconds, consistent with exhausting
+the existing ten-second predicate polling budget. This is a test assertion
+failure, not a runner timeout, cancellation, missing method or npm setup
+failure. The RF3 ENABLE proposal, commit-carrier interception and release,
+and locally-uncommitted/committed-pending/replayed origin assertions all occur
+later and were not reached. They are neither proved nor falsified by #835.
+
+[Evidence #837](https://github.com/psvensson/lagrange-lab/issues/837#issuecomment-6346256889)
+returned the entire 5,100-byte controller text at offset zero, SHA-256
+`0db40ccf7bbbd64545704a82d589c59545ed6a0127a15ee00c05a245e8fa0fb1`.
+Removing the exact `[tv-dator] ` prefix and one controller-added trailing LF
+yields the complete 5,088-byte worker log, SHA-256
+`26766783b2b83777b64a6044de65f51c8fd50782fa6675036524ab16f6bc184b`.
+The reviewer independently verified each equality against the receipt and
+retained file; worker log_truncated is false. All full-log and raw-receipt
+evidence remains preserved.
+
+### Causal review: established owner mismatch, failed-run cause unobserved
+
+The reviewer traced the actual admitted-group fixture, founding stamp, native
+opening and persistence path, retained-history reader, and participant-origin
+reader. At cb822d6f, `settledGroup` at integration-test lines 110-117 requires
+each replica to be PRE_ORIGIN; applied, commit and last indexes must all equal
+the first replica's applied index; all hard-state terms must match; and raw
+ConfState objects must pass isDeepStrictEqual.
+
+The conjecture that configuration entries alone cause an UNAVAILABLE origin
+observation is contradicted by the owner implementation. In
+partition-participant-transaction-store.js:127-135, those entries are retained
+in unclassifiedEntries. In :155-173, incomplete snapshot coverage produces
+UNAVAILABLE, but complete coverage still reaches originStateOf. Presence of
+unclassified configuration entries does not by itself block PRE_ORIGIN.
+
+A separate, source-proven witness mismatch exists: raw ConfState array order
+is not canonical configuration identity. The existing
+raft-rs-conf-state-key.js:4-12 compares the four role sets separately and also
+includes autoLeave. Its production consumers already use that authority.
+The native binding's conf_state_to_json at
+vendor/raft-rs-wasm/src/lib.rs:1070-1085 preserves the incoming vector order.
+Requiring isDeepStrictEqual therefore imposes a representation-order
+constraint that the semantic configuration owner does not impose.
+
+However, #835 contains no per-replica values. It does not establish whether
+order, membership content, frontier/term progress, coverage, or origin state
+caused the failed conjunction in that run. The canonical-comparator finding
+must not be relabeled as its measured root cause. A passing unmodified rerun
+would likewise not identify the earlier cause. The next attempt appropriately
+gathers the missing observations without changing the acceptance predicate.
+
+### Exact diagnostic-only diff and plan approval
+
+The reviewer independently compared the working integration file against its
+cb822d6f Git blob. Its only changes are: adding an optional observation
+argument to settledGroup; assigning its existing, already-read views to that
+observation; passing a local holder to the initial RF3 poll and formatting
+those retained values into the assertion message. No new database read, wait,
+timeout, retry, native fault, transport behavior, production byte, RF1 body or
+later RF3 assertion is introduced or changed.
+
+The formatted observations identify each replica and include applied/commit/
+last indexes, raw hard state, raw ConfState, native coverage, origin state,
+origin reason/coverage and available origin error code/message. They are the
+views captured by the actual last predicate evaluation, not a separate
+post-timeout reread. The original isDeepStrictEqual comparator remains in
+place. Message formatting adds no state-changing action.
+
+Exact text reconstruction from the old file using just these diagnostic
+replacements produces the current file byte-for-byte. In particular, the
+411-byte predicate substring beginning `const first = views[0].native;` and
+ending with its conditional return remains identical, SHA-256
+`ee66713ca21d883be740894ff5fc3998f54e425d76a920b8c7a991de2c3a3953`.
+The original 14,980-byte integration file remains in cb822d6f with SHA-256
+`65ca59a1719825bafaae66765e37dcd47a04ff4b9fc5fc27108375487ece8776`.
+The reviewed diagnostic file is 15,611 bytes, SHA-256
+`46b553c0c016456a14a845868ae622358a6b662745dc3619ddc5634ff6252ea0`,
+Git blob `f20f4fc235a1ee7637285f3c80d4efe286b49deb`.
+
+**APPROVE** ATTEMPT-retained-rf3-diagnostic-2026-10-22.md and this exact
+witness delta for the bounded diagnostic measurement of the existing two-case
+integration file. The plan correctly requires attribution from observed
+values and independent review before any correction, followed by the complete
+fourteen-file neighborhood and applicable exact-candidate static checks on a
+corrected revision. The diagnostic result alone is not a passing full-batch
+checkpoint, a source repair, an RF3 cause determination, or an acceptance-seal
+change. No diagnostic run or diagnostic commit exists as an observation of
+this review entry; final commit/result binding must be recorded separately.
+
+### Exact retained artifact binding
+
+Hashes below are SHA-256 over raw file bytes, without newline or encoding
+normalization. Git blob identity was independently obtained with git
+hash-object, without writing the object. Log evidence comparison uses the
+UTF-8 bytes of the complete exported text and the exact prefix/single-LF
+reconstruction described above.
+
+| Artifact under evidence/ | Bytes | SHA-256 |
+| --- | ---: | --- |
+| MEASUREMENT-retained-cb822d6f-original-lab-2026-10-22.json | 13,488 | `dcf7c0d8fa686c070f92c7a58b9b12cb9deee698daff9a676e01566a02a4bcf0` |
+| RUNTIME-retained-cb822d6f-setup-failure-2026-10-22.txt | 312 | `4f246d622df9b87a9158db9a28fee1f8801e2a08caf47461ff930e840c55e185` |
+| STATIC-retained-cb822d6f-lab-2026-10-22.txt | 2,129 | `a4574f437191305b534ca957f3f9aa8d3daf88fa99a0f3a332e790433f1dff7b` |
+| REQUEST-retained-cb822d6f-runtime-successor-2026-10-22.json | 7,197 | `f824c09dde5f957d37a1994e62134096c10789787fc588411cb95f91703ac026` |
+| MEASUREMENT-retained-cb822d6f-runtime-failure-2026-10-22.json | 20,828 | `6f3ebae60a98ab65bca166ad2925e7932afffe031e808711dc570e104cb2b31c` |
+| RUNTIME-retained-cb822d6f-candidate-failure-2026-10-22.txt | 5,100 | `0db40ccf7bbbd64545704a82d589c59545ed6a0127a15ee00c05a245e8fa0fb1` |
+| ATTEMPT-retained-rf3-diagnostic-2026-10-22.md | 2,766 | `55e28de017d659d1463241eb65fb6ae4a2c65bbcdbcab6b37a953497913eaa02` |
+
+The frozen malformed-history witness remains exactly 12,401 bytes, SHA-256
+`a1f4d8ee7f4fb5e457195d383c28512be0c23f4e74684b8e0b07caacc346fe3d`.
+All prior source-manifest bindings, startup CLASSIFICATION_UNAVAILABLE and
+CONTINUATION_UNAVAILABLE ceilings, original baseline failures, independent
+reviews, normal source decision-audit refusal and eight unchanged handoff
+receipts remain preserved. No public startup, serving, durable transfer,
+publication or main-merge approval follows.
+
+Only this append-only review artifact was changed by the reviewer. No
+source/test/contract file, Git object, GitHub object or lab request was
+mutated, and no runtime or static gate was executed by the reviewer. The
+preceding 56,987 bytes are unchanged with SHA-256
+`acede71deb8b5671375a92e7e7dfbf4db8a21f7dab38f9afd5501533719dd608`.

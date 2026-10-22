@@ -1,0 +1,363 @@
+{
+  "schema": "retained-history-runtime-failure/v1",
+  "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+  "request": {
+    "schema": "retained-history-runtime-successor-request/v1",
+    "supersedesSetupFailure": {
+      "issue": 820,
+      "requestId": "1c795ef8bfa44d4ba1a835ba150467bd",
+      "testsExecuted": 0,
+      "terminal": "https://github.com/psvensson/lagrange-lab/issues/820#issuecomment-6345913972",
+      "scopesClosed": true
+    },
+    "unchanged": {
+      "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+      "selectedFiles": 14,
+      "executionBudgetSeconds": 1800,
+      "productionAndTestBytes": true,
+      "testAssertionsAndTimeouts": true,
+      "projectRunnerDefaults": true
+    },
+    "correction": {
+      "environment": "Select existing Node22.23.2 in both setup and execution, within each child process only",
+      "runner": "npm run test:file -- exact original14 files, via generic tests driver explicit argv",
+      "attribution": "Original log proves npm ci setup failure, not exact Node/npm version or root cause; known operator-reported default Node14 on Lenovo motivates explicit declared compatible runtime."
+    },
+    "request": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "9f75118f612940b9b0eaa10445939cd9",
+      "operation": "lab-work",
+      "created_at": "2026-10-22T16:44:18.370Z",
+      "expires_at": "2026-10-22T18:44:18.370Z",
+      "delivery": {
+        "protocol": "harnessd-lab-work-delivery-v1",
+        "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+        "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+        "totalBytes": 1828,
+        "partCount": 1
+      }
+    },
+    "intent": {
+      "protocol": "harnessd-lab-work-v1",
+      "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+      "poolId": "default",
+      "principalId": "github:psvensson",
+      "issuedAtMs": 1792687458370,
+      "expiresAtMs": 1792694658370,
+      "work": {
+        "driver": "tests",
+        "spec": {
+          "cwd": ".",
+          "setup": [
+            [
+              "/bin/bash",
+              "-c",
+              "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci"
+            ]
+          ],
+          "argv": [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"",
+            "retained-history"
+          ],
+          "tests": [
+            "test/partition/participant-origin-retained-history.test.js",
+            "test/partition/participant-origin-retained-history.integration.test.js",
+            "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+            "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+            "test/raft/raft-rs-original-opening-authority.test.js",
+            "test/bootstrap/seed-original-attempt-lifetime.test.js",
+            "test/partition/partition-participant-transaction-apply.test.js",
+            "test/partition/partition-participant-transaction-staging.test.js",
+            "test/partition/participant-decision-canonical-record.test.js",
+            "test/partition/partition-unreadable-durable-record.test.js",
+            "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+            "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+            "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+            "test/raft/raft-rs-backend/persistence-admission.test.js"
+          ]
+        },
+        "source": {
+          "repo": "psvensson/lagrange",
+          "ref": "refs/heads/work/original-handoff-boundaries-20261021-cloud",
+          "sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da"
+        },
+        "hosts": {
+          "count": 1,
+          "prefer": [
+            "tv-dator"
+          ],
+          "requirements": [
+            "node",
+            "shell"
+          ]
+        },
+        "timeoutSeconds": 1800
+      }
+    },
+    "payload": {
+      "protocol": "harnessd-lab-work-part-v1",
+      "requestId": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+      "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+      "part": {
+        "index": 0,
+        "sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+        "data": "eyJleHBpcmVzQXRNcyI6MTc5MjY5NDY1ODM3MCwiaXNzdWVkQXRNcyI6MTc5MjY4NzQ1ODM3MCwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiI5Zjc1MTE4Zi02MTI5LTQwYjktYjBlYS1hMTA0NDU5MzljZDkiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL29yaWdpbmFsLWhhbmRvZmYtYm91bmRhcmllcy0yMDI2MTAyMS1jbG91ZCIsInJlcG8iOiJwc3ZlbnNzb24vbGFncmFuZ2UiLCJzaGEiOiJjYjgyMmQ2ZmNmOGM3Yjc4YjM0YTcxODc3MmQwNjQ4ODQ5MGJjMGRhIn0sInNwZWMiOnsiYXJndiI6WyIvYmluL2Jhc2giLCItYyIsInNldCAtZXVcbnJldGFpbmVkX25vZGVfYmluPVwiJEhPTUUvLm52bS92ZXJzaW9ucy9ub2RlL3YyMi4yMy4yL2JpblwiXG50ZXN0IC14IFwiJHJldGFpbmVkX25vZGVfYmluL25vZGVcIlxuZXhwb3J0IFBBVEg9XCIkcmV0YWluZWRfbm9kZV9iaW46JFBBVEhcIlxuZXhlYyBucG0gcnVuIHRlc3Q6ZmlsZSAtLSBcIiRAXCIiLCJyZXRhaW5lZC1oaXN0b3J5Il0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaSJdXSwidGVzdHMiOlsidGVzdC9wYXJ0aXRpb24vcGFydGljaXBhbnQtb3JpZ2luLXJldGFpbmVkLWhpc3RvcnkudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpY2lwYW50LW9yaWdpbi1yZXRhaW5lZC1oaXN0b3J5LmludGVncmF0aW9uLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL2R1cmFibGUtc3RvcmUtY29tbWl0dGVkLWVudHJpZXMudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLW9yaWdpbmFsLWFsbG9jYXRpb24tY29sZC1pbnNwZWN0aW9uLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1vcmlnaW5hbC1vcGVuaW5nLWF1dGhvcml0eS50ZXN0LmpzIiwidGVzdC9ib290c3RyYXAvc2VlZC1vcmlnaW5hbC1hdHRlbXB0LWxpZmV0aW1lLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tcGFydGljaXBhbnQtdHJhbnNhY3Rpb24tYXBwbHkudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi1wYXJ0aWNpcGFudC10cmFuc2FjdGlvbi1zdGFnaW5nLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aWNpcGFudC1kZWNpc2lvbi1jYW5vbmljYWwtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tdW5yZWFkYWJsZS1kdXJhYmxlLXJlY29yZC50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9kdXJhYmxlLXJlYWR5LWxvb3AudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvb3BlcmF0aW9uLXBvcnQtcmVhZHktcmVjb3ZlcnkudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvcmVzdGFydC1mcm9tLWR1cmFibGUtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL3BlcnNpc3RlbmNlLWFkbWlzc2lvbi50ZXN0LmpzIl19LCJ0aW1lb3V0U2Vjb25kcyI6MTgwMH19Cg=="
+      }
+    },
+    "submission": {
+      "issue": 835,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/835",
+      "partCommentId": 6346139117,
+      "format": "raw JSON issue body and raw JSON part comment"
+    },
+    "independentRecipeReview": {
+      "verifier": "subagent:/root/startup_mapping",
+      "verdict": "ACCEPT",
+      "scope": "Decoded payload, source, exact14 in original order,1800s, both Node22 PATH preludes, preserved HOME, project runner argv and no overrides"
+    }
+  },
+  "completion": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/835#issuecomment-6346232201",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "9f75118f612940b9b0eaa10445939cd9",
+      "request_sha256": "38ba163baa343f12ca601026bf4c9af48e4365722f68f75d953b6cc67014822d",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T16:49:50.239Z",
+      "result": {
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "finished_at": "2026-10-22T16:49:49.253Z",
+        "hosts": [
+          "tv-dator"
+        ],
+        "log_bytes": 5100,
+        "log_sha256": "0db40ccf7bbbd64545704a82d589c59545ed6a0127a15ee00c05a245e8fa0fb1",
+        "logical_request_id": "9f75118f-6129-40b9-b0ea-a10445939cd9",
+        "logs_are_worker_tails": true,
+        "operation": "lab-work",
+        "outcome": "FAIL",
+        "payload_sha256": "0ce5e6cfa9d8e2a84707beba220da634fb185ef465e1e20791fb9b2e493825b0",
+        "reason": null,
+        "scope_closed": true,
+        "source_execution_started": true,
+        "source_sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+        "worker_receipt_count": 1,
+        "worker_receipts_sha256": "2344258ff5184b0d6489a67ace4468b30d52f7b228eb79123380aa6e160d0916",
+        "workers": {
+          "tv-dator": {
+            "containers_closed": true,
+            "driver_result": {
+              "completed_test_files": null,
+              "counters": {
+                "cancelled": 0,
+                "fail": 1,
+                "pass": 1,
+                "skipped": 0,
+                "tests": 2,
+                "todo": 0
+              },
+              "exit_code": 1,
+              "selected_test_files": 14
+            },
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "last_thermals": {
+              "cpu": 50,
+              "missing": [],
+              "ssd": 39.85,
+              "ssd_aux": 58.85
+            },
+            "log_bytes": 5088,
+            "log_sha256": "26766783b2b83777b64a6044de65f51c8fd50782fa6675036524ab16f6bc184b",
+            "log_truncated": false,
+            "output_bytes": 5088,
+            "output_sha256": "26766783b2b83777b64a6044de65f51c8fd50782fa6675036524ab16f6bc184b",
+            "reason": null,
+            "source_execution_started": true,
+            "state": "COMPLETE",
+            "thermal_scope_closed": true
+          }
+        }
+      }
+    }
+  },
+  "evidenceRequest": {
+    "schema": "lagrange-lab-job/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "7c97cc4e105c4b4f98c60e720a82b7dc",
+    "operation": "evidence",
+    "created_at": "2026-10-22T16:50:53.472Z",
+    "expires_at": "2026-10-22T18:50:53.472Z",
+    "job_id": "9f75118f612940b9b0eaa10445939cd9",
+    "offset": 0,
+    "length": 8000
+  },
+  "evidenceCompletion": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/837#issuecomment-6346256889",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "7c97cc4e105c4b4f98c60e720a82b7dc",
+      "request_sha256": "96e465278b075abd950ac667b6ef3ed775c12ba5a63e2e9b11fad236d8d64e77",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T16:51:04.009Z",
+      "result": {
+        "chunk_sha256": "0db40ccf7bbbd64545704a82d589c59545ed6a0127a15ee00c05a245e8fa0fb1",
+        "job_id": "9f75118f612940b9b0eaa10445939cd9",
+        "offset": 0,
+        "redacted": true,
+        "returned_bytes": 5100,
+        "text": "[tv-dator] v22.23.2\n10.9.8\nnpm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n\n> lagrange-server@0.2.6 prepare\n> node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"\n\n[hooks] Installed repo hooks at .githooks\n\nadded 1057 packages, and audited 1058 packages in 50s\n\n223 packages are looking for funding\n  run `npm fund` for details\n\n33 vulnerabilities (10 moderate, 21 high, 2 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\nnpm notice\nnpm notice New major version of npm available! 10.9.8 -> 12.2.1\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1\nnpm notice To update run: npm install -g npm@12.2.1\nnpm notice\n\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js\n\n# test-files planned=14\nclassified lane ordinary: 12 file(s), jobs=4\nthermal: ok cpu 55C (coretemp/Package id 0) nvme 53C (nvme/Sensor 1)\nok test/partition/participant-decision-canonical-record.test.js (8 assertions, 265ms)\nok test/partition/participant-origin-retained-history.test.js (35 assertions, 327ms)\nok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 1653ms)\nok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 339ms)\nok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 951ms)\nok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 3638ms)\nok test/raft/raft-rs-backend/persistence-admission.test.js (4 assertions, 744ms)\nok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 4594ms)\nok test/raft/raft-rs-backend/restart-from-durable-record.test.js (4 assertions, 1155ms)\nok test/partition/partition-unreadable-durable-record.test.js (6 assertions, 9048ms)\nok test/raft/raft-rs-original-allocation-cold-inspection.test.js (24 assertions, 10145ms)\nok test/raft/raft-rs-original-opening-authority.test.js (24 assertions, 26171ms)\n# test-files total=12 pass=12 fail=0 assertions=198\nclassified lane bootstrap: 1 file(s), jobs=2\nthermal: ok cpu 53C (coretemp/Package id 0) nvme 66C (nvme/Sensor 1)\nok test/bootstrap/seed-original-attempt-lifetime.test.js (21 assertions, 45357ms)\n# test-files total=1 pass=1 fail=0 assertions=21\nclassified lane exclusive: 1 file(s), jobs=1\nthermal: ok cpu 51C (coretemp/Package id 0) nvme 72C (nvme/Sensor 1)\nnot ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 10992ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n# Subtest: a real committed ENABLE remains pending through cold inspection and replays its exact origin\nok 1 - a real committed ENABLE remains pending through cold inspection and replays its exact origin\n  ---\n  duration_ms: 101.812203\n  type: 'test'\n  ...\n# Subtest: one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay\nnot ok 2 - one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay\n  ---\n  duration_ms: 10156.912566\n  type: 'test'\n  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/9f75118f-6129-40b9-b0ea-a10445939cd9/work/source/test/partition/participant-origin-retained-history.integration.test.js:203:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    setup: all three replicas share one settled native frontier, term and configuration\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/9f75118f-6129-40b9-b0ea-a10445939cd9/work/source/test/partition/participant-origin-retained-history.integration.test.js:212:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 1\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 10278.158025\n# time=10992ms\n# test-files total=1 pass=0 fail=1 assertions=2\n\n"
+      }
+    }
+  },
+  "logFile": "RUNTIME-retained-cb822d6f-candidate-failure-2026-10-22.txt",
+  "binding": {
+    "controllerBytes": 5100,
+    "controllerSha256": "0db40ccf7bbbd64545704a82d589c59545ed6a0127a15ee00c05a245e8fa0fb1",
+    "workerBytes": 5088,
+    "workerSha256": "26766783b2b83777b64a6044de65f51c8fd50782fa6675036524ab16f6bc184b",
+    "completeWorkerLogVerified": true,
+    "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+    "allScopesClosed": true
+  },
+  "results": {
+    "nodeVersion": "v22.23.2",
+    "npmVersion": "10.9.8",
+    "plannedFiles": 14,
+    "fileVerdicts": [
+      {
+        "verdict": "ok",
+        "file": "test/partition/participant-decision-canonical-record.test.js",
+        "assertions": 8,
+        "elapsedMs": 265
+      },
+      {
+        "verdict": "ok",
+        "file": "test/partition/participant-origin-retained-history.test.js",
+        "assertions": 35,
+        "elapsedMs": 327
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+        "assertions": 7,
+        "elapsedMs": 1653
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "assertions": 33,
+        "elapsedMs": 339
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+        "assertions": 7,
+        "elapsedMs": 951
+      },
+      {
+        "verdict": "ok",
+        "file": "test/partition/partition-participant-transaction-apply.test.js",
+        "assertions": 27,
+        "elapsedMs": 3638
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-backend/persistence-admission.test.js",
+        "assertions": 4,
+        "elapsedMs": 744
+      },
+      {
+        "verdict": "ok",
+        "file": "test/partition/partition-participant-transaction-staging.test.js",
+        "assertions": 19,
+        "elapsedMs": 4594
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+        "assertions": 4,
+        "elapsedMs": 1155
+      },
+      {
+        "verdict": "ok",
+        "file": "test/partition/partition-unreadable-durable-record.test.js",
+        "assertions": 6,
+        "elapsedMs": 9048
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "assertions": 24,
+        "elapsedMs": 10145
+      },
+      {
+        "verdict": "ok",
+        "file": "test/raft/raft-rs-original-opening-authority.test.js",
+        "assertions": 24,
+        "elapsedMs": 26171
+      },
+      {
+        "verdict": "ok",
+        "file": "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "assertions": 21,
+        "elapsedMs": 45357
+      },
+      {
+        "verdict": "not ok",
+        "file": "test/partition/participant-origin-retained-history.integration.test.js",
+        "assertions": 2,
+        "elapsedMs": 10992
+      }
+    ],
+    "batchSummaries": [
+      {
+        "total": 12,
+        "pass": 12,
+        "fail": 0,
+        "assertions": 198
+      },
+      {
+        "total": 1,
+        "pass": 1,
+        "fail": 0,
+        "assertions": 21
+      },
+      {
+        "total": 1,
+        "pass": 0,
+        "fail": 1,
+        "assertions": 2
+      }
+    ],
+    "filesPassed": 13,
+    "filesFailed": 1,
+    "runnerReportedAssertions": 221,
+    "failedFileNodeCounters": {
+      "cancelled": 0,
+      "fail": 1,
+      "pass": 1,
+      "skipped": 0,
+      "tests": 2,
+      "todo": 0
+    },
+    "counterLimit": "Controller counters are the two-case failed integration file, not the whole batch. Do not report 2 as the batch total.",
+    "failure": {
+      "case": "one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay",
+      "at": "test/partition/participant-origin-retained-history.integration.test.js:212",
+      "assertion": "setup: all three replicas share one settled native frontier, term and configuration",
+      "expected": true,
+      "actual": false,
+      "durationMs": 10156.912566,
+      "classification": "RF3 initial fixture/observation precondition failed; no RF3 commit-carrier/ENABLE-phase assertions reached. Root cause under review. This is not a passing RF3 result and is not a test-runner timeout.",
+      "rf1": "The actual committed ENABLE cold-inspection and replay case passed."
+    },
+    "retryOccurred": false
+  }
+}
