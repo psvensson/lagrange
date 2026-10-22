@@ -1,0 +1,229 @@
+{
+  "schema": "startup-candidate-retained-log-recovery/v1",
+  "recordedAt": "2026-10-22T11:01:00.228Z",
+  "sourceSha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+  "originalRun": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/769#issuecomment-6338912468",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "7b0c43ba97354718a766b0565c3f75f5",
+      "request_sha256": "4fef1ac95222ad7ff2e73adfdfdf853be6499d86b23335a25c5e8ee093931927",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T10:48:54.444Z",
+      "result": {
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "finished_at": "2026-10-22T10:48:44.148Z",
+        "hosts": [
+          "tv-dator"
+        ],
+        "log_bytes": 8204,
+        "log_sha256": "87bb677def03d8e55ab7ec0a88d999f612be09cf11bc8b5557c4c546cae41010",
+        "logical_request_id": "7b0c43ba-9735-4718-a766-b0565c3f75f5",
+        "logs_are_worker_tails": true,
+        "operation": "lab-work",
+        "outcome": "FAIL",
+        "payload_sha256": "bd199b4817028c8c00ceb328f6d42b3c094b924e8aa06b5c4aae645ce222af70",
+        "reason": null,
+        "scope_closed": true,
+        "source_execution_started": true,
+        "source_sha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+        "worker_receipt_count": 1,
+        "worker_receipts_sha256": "014646011f84c659533bc370950f43844e37f9938b3140c5d4c679a718b04ac6",
+        "workers": {
+          "tv-dator": {
+            "containers_closed": true,
+            "driver_result": {
+              "completed_test_files": null,
+              "counters": {
+                "cancelled": 0,
+                "fail": 4,
+                "pass": 75,
+                "skipped": 0,
+                "tests": 79,
+                "todo": 0
+              },
+              "exit_code": 1,
+              "selected_test_files": 7
+            },
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "last_thermals": {
+              "cpu": 50,
+              "missing": [],
+              "ssd": 48.85,
+              "ssd_aux": 69.85
+            },
+            "log_bytes": 21297,
+            "log_sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+            "log_truncated": false,
+            "output_bytes": 21297,
+            "output_sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+            "reason": null,
+            "source_execution_started": true,
+            "state": "COMPLETE",
+            "thermal_scope_closed": true
+          }
+        }
+      }
+    }
+  },
+  "recoveryRequest": {
+    "body": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "57bf9b0ec8164d7ca7f90bc5890f33cb",
+      "operation": "lab-work",
+      "created_at": "2026-10-22T10:52:53.072Z",
+      "expires_at": "2026-10-22T12:52:53.072Z",
+      "delivery": {
+        "protocol": "harnessd-lab-work-delivery-v1",
+        "requestId": "57bf9b0e-c816-4d7c-a7f9-0bc5890f33cb",
+        "sha256": "2f7b279bcadee76f0070cceb603d8aa4ddad2d2340b947d66f5cf83be2f95ca8",
+        "totalBytes": 1540,
+        "partCount": 1
+      }
+    },
+    "part": {
+      "protocol": "harnessd-lab-work-part-v1",
+      "requestId": "57bf9b0e-c816-4d7c-a7f9-0bc5890f33cb",
+      "sha256": "2f7b279bcadee76f0070cceb603d8aa4ddad2d2340b947d66f5cf83be2f95ca8",
+      "part": {
+        "index": 0,
+        "sha256": "2f7b279bcadee76f0070cceb603d8aa4ddad2d2340b947d66f5cf83be2f95ca8",
+        "data": "eyJleHBpcmVzQXRNcyI6MTc5MjY3MzU3MzA3MiwiaXNzdWVkQXRNcyI6MTc5MjY2NjM3MzA3MiwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiI1N2JmOWIwZS1jODE2LTRkN2MtYTdmOS0wYmM1ODkwZjMzY2IiLCJ3b3JrIjp7ImRyaXZlciI6ImNvbW1hbmQiLCJob3N0cyI6eyJjb3VudCI6MSwicHJlZmVyIjpbInR2LWRhdG9yIl0sInJlcXVpcmVtZW50cyI6WyJjb21tYW5kIl19LCJzb3VyY2UiOm51bGwsInNwZWMiOnsiYXJndiI6WyJweXRob24zIiwiLWMiLCJcIlwiXCJSZWFkIG9uZSBhbHJlYWR5IGNsb3NlZCBsYWIgam9iJ3MgcmV0YWluZWQgbG9nOyBubyBzb3VyY2UgZXhlY3V0aW9uIG9yIG11dGF0aW9uLlwiXCJcIlxuaW1wb3J0IGJhc2U2NFxuaW1wb3J0IGhhc2hsaWJcbmltcG9ydCBqc29uXG5mcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGhcbmltcG9ydCB6bGliXG5cbnJlcXVlc3RfaWQgPSAnN2IwYzQzYmEtOTczNS00NzE4LWE3NjYtYjA1NjVjM2Y3NWY1J1xubG9nX3BhdGggPSBQYXRoKCcvaG9tZS9wZXRlci8ubG9jYWwvc3RhdGUvbGFncmFuZ2UtbGFiLXdvcmtlci9nZW5lcmljL3J1bnMnKSAvIHJlcXVlc3RfaWQgLyAnZXhlY3V0b3IubG9nJ1xuZXhwZWN0ZWRfc2hhMjU2ID0gJ2MyMTE2ZmUwNGE5ZTQ4YTExOTE5ODY1YjgyMmQwMWEwZTNmOWNkYjUwNmEyNGY5ZjNkOTBjNzkzNjViZDI2ZWMnXG5yYXcgPSBsb2dfcGF0aC5yZWFkX2J5dGVzKClcbmFjdHVhbF9zaGEyNTYgPSBoYXNobGliLnNoYTI1NihyYXcpLmhleGRpZ2VzdCgpXG5pZiBsZW4ocmF3KSAhPSAyMTI5NyBvciBhY3R1YWxfc2hhMjU2ICE9IGV4cGVjdGVkX3NoYTI1NjpcbiAgICByYWlzZSBTeXN0ZW1FeGl0KCdSZXRhaW5lZCBvcmlnaW5hbCBsb2cgZG9lcyBub3QgbWF0Y2ggdGhlIHRlcm1pbmFsIHdvcmtlciByZWNlaXB0JylcbnBheWxvYWQgPSB7XG4gICAgJ29yaWdpbmFsX2xvZ2ljYWxfcmVxdWVzdF9pZCc6IHJlcXVlc3RfaWQsXG4gICAgJ29yaWdpbmFsX3NvdXJjZV9zaGEnOiAnN2ZhNGQ3OWFlMGEyY2RiODA2YmYwNzNmOGNiM2UwNTc4YjBkNTc2ZicsXG4gICAgJ2J5dGVzJzogbGVuKHJhdyksXG4gICAgJ3NoYTI1Nic6IGFjdHVhbF9zaGEyNTYsXG4gICAgJ2VuY29kaW5nJzogJ3psaWItYmFzZTY0JyxcbiAgICAnZGF0YSc6IGJhc2U2NC5iNjRlbmNvZGUoemxpYi5jb21wcmVzcyhyYXcsIGxldmVsPTkpKS5kZWNvZGUoJ2FzY2lpJyksXG59XG50ZXh0ID0ganNvbi5kdW1wcyhwYXlsb2FkLCBzb3J0X2tleXM9VHJ1ZSwgc2VwYXJhdG9ycz0oJywnLCAnOicpKVxuaWYgbGVuKHRleHQuZW5jb2RlKCd1dGY4JykpID4gNzYwMDpcbiAgICByYWlzZSBTeXN0ZW1FeGl0KCdWZXJpZmllZCBsb2cgZXhwb3J0IGV4Y2VlZHMgb25lIGNvbnRyb2xsZXIgZXZpZGVuY2Ugd2luZG93OyBleHBsaWNpdCBjaHVua2luZyBuZWVkZWQnKVxucHJpbnQodGV4dClcbiJdfSwidGltZW91dFNlY29uZHMiOjMwMH19Cg=="
+      }
+    },
+    "intent": {
+      "protocol": "harnessd-lab-work-v1",
+      "requestId": "57bf9b0e-c816-4d7c-a7f9-0bc5890f33cb",
+      "poolId": "default",
+      "principalId": "github:psvensson",
+      "issuedAtMs": 1792666373072,
+      "expiresAtMs": 1792673573072,
+      "work": {
+        "driver": "command",
+        "spec": {
+          "argv": [
+            "python3",
+            "-c",
+            "\"\"\"Read one already closed lab job's retained log; no source execution or mutation.\"\"\"\nimport base64\nimport hashlib\nimport json\nfrom pathlib import Path\nimport zlib\n\nrequest_id = '7b0c43ba-9735-4718-a766-b0565c3f75f5'\nlog_path = Path('/home/peter/.local/state/lagrange-lab-worker/generic/runs') / request_id / 'executor.log'\nexpected_sha256 = 'c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec'\nraw = log_path.read_bytes()\nactual_sha256 = hashlib.sha256(raw).hexdigest()\nif len(raw) != 21297 or actual_sha256 != expected_sha256:\n    raise SystemExit('Retained original log does not match the terminal worker receipt')\npayload = {\n    'original_logical_request_id': request_id,\n    'original_source_sha': '7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f',\n    'bytes': len(raw),\n    'sha256': actual_sha256,\n    'encoding': 'zlib-base64',\n    'data': base64.b64encode(zlib.compress(raw, level=9)).decode('ascii'),\n}\ntext = json.dumps(payload, sort_keys=True, separators=(',', ':'))\nif len(text.encode('utf8')) > 7600:\n    raise SystemExit('Verified log export exceeds one controller evidence window; explicit chunking needed')\nprint(text)\n"
+          ]
+        },
+        "source": null,
+        "hosts": {
+          "count": 1,
+          "prefer": [
+            "tv-dator"
+          ],
+          "requirements": [
+            "command"
+          ]
+        },
+        "timeoutSeconds": 300
+      }
+    }
+  },
+  "recoveryCompletion": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/777#issuecomment-6339007226",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "57bf9b0ec8164d7ca7f90bc5890f33cb",
+      "request_sha256": "3d32a5afc3ebf08777b44a53633c925eeffff23c52d13ad6aadb36ee2902f9e6",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T10:54:07.680Z",
+      "result": {
+        "execution_scope_closed": true,
+        "exit_code": 0,
+        "finished_at": "2026-10-22T10:54:07.400Z",
+        "hosts": [
+          "tv-dator"
+        ],
+        "log_bytes": 5973,
+        "log_sha256": "cba811e2489bcf499bd877ea98162ec8efbaa4b7a4db70f0235c74aa7c1d2bde",
+        "logical_request_id": "57bf9b0e-c816-4d7c-a7f9-0bc5890f33cb",
+        "logs_are_worker_tails": true,
+        "operation": "lab-work",
+        "outcome": "PASS",
+        "payload_sha256": "2f7b279bcadee76f0070cceb603d8aa4ddad2d2340b947d66f5cf83be2f95ca8",
+        "reason": null,
+        "scope_closed": true,
+        "source_execution_started": true,
+        "source_sha": null,
+        "worker_receipt_count": 1,
+        "worker_receipts_sha256": "e50145aca49bcd510dc67e05692444d8825894c65cddbe26f41f6546aff9b099",
+        "workers": {
+          "tv-dator": {
+            "containers_closed": true,
+            "driver_result": {
+              "counters": {},
+              "exit_code": 0
+            },
+            "execution_scope_closed": true,
+            "exit_code": 0,
+            "last_thermals": {
+              "cpu": 50,
+              "missing": [],
+              "ssd": 29.85,
+              "ssd_aux": 46.85
+            },
+            "log_bytes": 5961,
+            "log_sha256": "5f45b003937337465492b0513f8a8bd180f9bcb55dcc139c470dd8638f75bda7",
+            "log_truncated": false,
+            "output_bytes": 5961,
+            "output_sha256": "5f45b003937337465492b0513f8a8bd180f9bcb55dcc139c470dd8638f75bda7",
+            "reason": null,
+            "source_execution_started": true,
+            "state": "COMPLETE",
+            "thermal_scope_closed": true
+          }
+        }
+      }
+    }
+  },
+  "evidenceCompletion": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/781#issuecomment-6339038452",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "566f363014804d27a16d037367080373",
+      "request_sha256": "161c1d74b4129d54fe862beb051cf3e3eaf0c00d9c4e1ba7bed2eb8b25520e4d",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T10:55:53.907Z",
+      "result": {
+        "chunk_sha256": "cba811e2489bcf499bd877ea98162ec8efbaa4b7a4db70f0235c74aa7c1d2bde",
+        "job_id": "57bf9b0ec8164d7ca7f90bc5890f33cb",
+        "offset": 0,
+        "redacted": true,
+        "returned_bytes": 5973,
+        "text": "[tv-dator] {\"bytes\":21297,\"data\":\"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\",\"encoding\":\"zlib-base64\",\"original_logical_request_id\":\"7b0c43ba-9735-4718-a766-b0565c3f75f5\",\"original_source_sha\":\"7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f\",\"sha256\":\"c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec\"}\n\n"
+      }
+    }
+  },
+  "workerLog": {
+    "path": "RAW-startup-candidate-7fa4d79a-2026-10-22.txt",
+    "bytes": 21297,
+    "sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+    "complete": true
+  },
+  "assessment": {
+    "result": "RED",
+    "tests": 79,
+    "passed": 75,
+    "failed": 4,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "firstDivergence": "All four failures compare hasSelfConnection() actual undefined against expected literal false. Existing unchanged owner yields undefined for an absent self-node connection entry.",
+    "failedAssertions": [
+      238,
+      426,
+      667,
+      721
+    ],
+    "unmeasuredAfterFirstDivergence": "Later assertions in the four cases, including five later continuation-loop invocations, were not reached. The oracle proposal does not convert this run to PASS.",
+    "preservedHistory": "The earlier MEASURE-startup-candidate record retains the full-log retrieval state at its original recording time. This is an appended completion and diagnosis, not a rewrite."
+  }
+}

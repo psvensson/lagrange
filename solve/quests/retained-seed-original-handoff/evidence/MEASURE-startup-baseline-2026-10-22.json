@@ -1,0 +1,169 @@
+{
+  "recordedAt": "2026-10-22T10:46:00Z",
+  "source": "3fa20cefeca622ec2060509903a921979d32a082",
+  "sourceRuntimeTree": "ee7f5447b63e7d291a286ef66ea51532a4ceecec",
+  "unchangedRuntimeBase": "7766ccafbe3767c9e397fabf97f41a197d7fb53e",
+  "witness": {
+    "path": "test/bootstrap/seed-original-attempt-lifetime.test.js",
+    "bytes": 20600,
+    "sha256": "e4afdcabc63bd3397b992978a5cdaa7da136122d4802eb203482b3e975a72790"
+  },
+  "request": {
+    "schema": "lagrange-lab-job/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "ba90892cba8440b687a522b3c953c24c",
+    "operation": "lab-work",
+    "created_at": "2026-10-22T10:39:17.000Z",
+    "expires_at": "2026-10-22T12:39:17.000Z",
+    "delivery": {
+      "protocol": "harnessd-lab-work-delivery-v1",
+      "requestId": "ba90892c-ba84-40b6-87a5-22b3c953c24c",
+      "sha256": "2f9861fb3d9700f35f38c4a100a4be83a0e53ade17e131b12445ff9cddeb2420",
+      "totalBytes": 802,
+      "partCount": 1
+    }
+  },
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "ba90892c-ba84-40b6-87a5-22b3c953c24c",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792665557000,
+    "expiresAtMs": 1792672757000,
+    "work": {
+      "driver": "tests",
+      "spec": {
+        "setup": [
+          [
+            "npm",
+            "ci"
+          ]
+        ],
+        "argv": [
+          "node",
+          "--test",
+          "--test-reporter=tap",
+          "--test-name-pattern=^(BootstrapService prepares one live original attempt before either creation catalog mutates|direct message-group creation cannot bypass BootstrapService attempt ownership)$",
+          "--"
+        ],
+        "tests": [
+          "test/bootstrap/seed-original-attempt-lifetime.test.js"
+        ]
+      },
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/original-startup-witnesses-20261022",
+        "sha": "3fa20cefeca622ec2060509903a921979d32a082"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node"
+        ]
+      },
+      "timeoutSeconds": 1800
+    }
+  },
+  "terminal": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/766#issuecomment-6338804478",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "ba90892cba8440b687a522b3c953c24c",
+      "request_sha256": "b2f6792b1081481ad46b7289cdd3c2696285c2b4a84a942f68aeba836106f864",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T10:42:46.805Z",
+      "result": {
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "finished_at": "2026-10-22T10:42:46.547Z",
+        "hosts": [
+          "tv-dator"
+        ],
+        "log_bytes": 2813,
+        "log_sha256": "38a405bbdb6a62bfd5e4a8d15e819853de75b4ed48444a1253a62551e38dc528",
+        "logical_request_id": "ba90892c-ba84-40b6-87a5-22b3c953c24c",
+        "logs_are_worker_tails": true,
+        "operation": "lab-work",
+        "outcome": "FAIL",
+        "payload_sha256": "2f9861fb3d9700f35f38c4a100a4be83a0e53ade17e131b12445ff9cddeb2420",
+        "reason": null,
+        "scope_closed": true,
+        "source_execution_started": true,
+        "source_sha": "3fa20cefeca622ec2060509903a921979d32a082",
+        "worker_receipt_count": 1,
+        "worker_receipts_sha256": "3cbcc60181a155219771387630b91b5c217489b05059696e132df0f3e526d01b",
+        "workers": {
+          "tv-dator": {
+            "containers_closed": true,
+            "driver_result": {
+              "completed_test_files": null,
+              "counters": {
+                "cancelled": 0,
+                "fail": 2,
+                "pass": 0,
+                "skipped": 0,
+                "tests": 2,
+                "todo": 0
+              },
+              "exit_code": 1,
+              "selected_test_files": 1
+            },
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "last_thermals": {
+              "cpu": 69,
+              "missing": [],
+              "ssd": 32.85,
+              "ssd_aux": 50.85
+            },
+            "log_bytes": 2801,
+            "log_sha256": "c38805988755d2ae50d6582e6dce73e3cd7f80fba202dd065f9a19ad52dd0570",
+            "log_truncated": false,
+            "output_bytes": 2801,
+            "output_sha256": "c38805988755d2ae50d6582e6dce73e3cd7f80fba202dd065f9a19ad52dd0570",
+            "reason": null,
+            "source_execution_started": true,
+            "state": "COMPLETE",
+            "thermal_scope_closed": true
+          }
+        }
+      }
+    }
+  },
+  "evidence": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/768#issuecomment-6338833788",
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "1a84694a6b79416594cb85adaad856ad",
+      "request_sha256": "71d4c06be1e38f0b53be2d480d68e1a7de736c6df0713d37bd24e82a2d195eb0",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T10:44:28.393Z",
+      "result": {
+        "chunk_sha256": "38a405bbdb6a62bfd5e4a8d15e819853de75b4ed48444a1253a62551e38dc528",
+        "job_id": "ba90892cba8440b687a522b3c953c24c",
+        "offset": 0,
+        "redacted": true,
+        "returned_bytes": 2813,
+        "text": "[tv-dator] npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n\n> lagrange-server@0.2.6 prepare\n> node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"\n\n[hooks] Installed repo hooks at .githooks\n\nadded 1057 packages, and audited 1058 packages in 46s\n\n223 packages are looking for funding\n  run `npm fund` for details\n\n33 vulnerabilities (10 moderate, 21 high, 2 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\nnpm notice\nnpm notice New major version of npm available! 10.9.8 -> 12.2.1\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1\nnpm notice To update run: npm install -g npm@12.2.1\nnpm notice\nTAP version 13\n# Subtest: BootstrapService prepares one live original attempt before either creation catalog mutates\nnot ok 1 - BootstrapService prepares one live original attempt before either creation catalog mutates\n  ---\n  duration_ms: 58.207874\n  type: 'test'\n  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/ba90892c-ba84-40b6-87a5-22b3c953c24c/work/source/test/bootstrap/seed-original-attempt-lifetime.test.js:160:1'\n  failureType: 'testCodeFailure'\n  error: 'Missing expected exception.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/ba90892c-ba84-40b6-87a5-22b3c953c24c/work/source/test/bootstrap/seed-original-attempt-lifetime.test.js:164:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)\n  ...\n# Subtest: direct message-group creation cannot bypass BootstrapService attempt ownership\nnot ok 2 - direct message-group creation cannot bypass BootstrapService attempt ownership\n  ---\n  duration_ms: 59.47305\n  type: 'test'\n  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/ba90892c-ba84-40b6-87a5-22b3c953c24c/work/source/test/bootstrap/seed-original-attempt-lifetime.test.js:276:1'\n  failureType: 'testCodeFailure'\n  error: 'Missing expected rejection.'\n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  stack: |-\n    async TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/ba90892c-ba84-40b6-87a5-22b3c953c24c/work/source/test/bootstrap/seed-original-attempt-lifetime.test.js:282:5)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 0\n# fail 2\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 713.655201\n\n"
+      }
+    }
+  },
+  "assessment": {
+    "selectedCases": 2,
+    "passed": 0,
+    "failed": 2,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0,
+    "firstFailure": "ERR_ASSERTION: Missing expected exception. at original witness line164 (queue admission before preparation)",
+    "secondFailure": "ERR_ASSERTION: Missing expected rejection. at original witness line282 (direct message-group creation before preparation)",
+    "engagedFailures": true,
+    "sourceFixClaim": false,
+    "limits": "Two existing-API witnesses only; the other twelve baseline cases were not selected. No lower-boundary or candidate counts are added. All handoff receipts remain unchanged."
+  }
+}

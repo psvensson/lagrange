@@ -1,0 +1,295 @@
+{
+  "source": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+  "sourceTree": "a3e339f8977ed79796579a3f66cec091267343e8",
+  "testTree": "2871afc5cef3971672ad9fec22174023cc350224",
+  "runtime": {
+    "request": {
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "created_at": "2026-10-22T10:45:02Z",
+      "expires_at": "2026-10-22T12:45:02Z",
+      "hosts": [
+        "tv-dator"
+      ],
+      "max_seconds": 1800,
+      "operation": "test-files",
+      "request_id": "7b0c43ba97354718a766b0565c3f75f5",
+      "schema": "lagrange-lab-job/v1",
+      "source_ref": "refs/heads/work/original-handoff-boundaries-20261021-cloud",
+      "source_sha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+      "tests": [
+        "test/raft/raft-rs-original-opening-effect-cut.test.js",
+        "test/raft/raft-rs-original-opening.test.js",
+        "test/raft/raft-rs-original-opening-authority.test.js",
+        "test/raft/raft-rs-backend/original-handoff-lifecycle-claim.test.js",
+        "test/raft/raft-rs-original-allocation-custody.test.js",
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js"
+      ]
+    },
+    "terminal": {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/769#issuecomment-6338912468",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "7b0c43ba97354718a766b0565c3f75f5",
+        "request_sha256": "4fef1ac95222ad7ff2e73adfdfdf853be6499d86b23335a25c5e8ee093931927",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-22T10:48:54.444Z",
+        "result": {
+          "execution_scope_closed": true,
+          "exit_code": 1,
+          "finished_at": "2026-10-22T10:48:44.148Z",
+          "hosts": [
+            "tv-dator"
+          ],
+          "log_bytes": 8204,
+          "log_sha256": "87bb677def03d8e55ab7ec0a88d999f612be09cf11bc8b5557c4c546cae41010",
+          "logical_request_id": "7b0c43ba-9735-4718-a766-b0565c3f75f5",
+          "logs_are_worker_tails": true,
+          "operation": "lab-work",
+          "outcome": "FAIL",
+          "payload_sha256": "bd199b4817028c8c00ceb328f6d42b3c094b924e8aa06b5c4aae645ce222af70",
+          "reason": null,
+          "scope_closed": true,
+          "source_execution_started": true,
+          "source_sha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+          "worker_receipt_count": 1,
+          "worker_receipts_sha256": "014646011f84c659533bc370950f43844e37f9938b3140c5d4c679a718b04ac6",
+          "workers": {
+            "tv-dator": {
+              "containers_closed": true,
+              "driver_result": {
+                "completed_test_files": null,
+                "counters": {
+                  "cancelled": 0,
+                  "fail": 4,
+                  "pass": 75,
+                  "skipped": 0,
+                  "tests": 79,
+                  "todo": 0
+                },
+                "exit_code": 1,
+                "selected_test_files": 7
+              },
+              "execution_scope_closed": true,
+              "exit_code": 1,
+              "last_thermals": {
+                "cpu": 50,
+                "missing": [],
+                "ssd": 48.85,
+                "ssd_aux": 69.85
+              },
+              "log_bytes": 21297,
+              "log_sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+              "log_truncated": false,
+              "output_bytes": 21297,
+              "output_sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+              "reason": null,
+              "source_execution_started": true,
+              "state": "COMPLETE",
+              "thermal_scope_closed": true
+            }
+          }
+        }
+      }
+    },
+    "controllerLogChunks": [
+      {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/773#issuecomment-6338952216",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "92e41e5130d44fbebc174847e9244a5e",
+          "request_sha256": "1558f53c45252a978bc57596cbaf86c10f50f0be5300590de80470704b159127",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T10:51:08.128Z",
+          "result": {
+            "chunk_sha256": "1af47da13349811888aa9f10451bf42372bdd0a08cfb0eac31ff613a13af1283",
+            "job_id": "7b0c43ba97354718a766b0565c3f75f5",
+            "offset": 0,
+            "redacted": true,
+            "returned_bytes": 8000,
+            "text": "[tv-dator] ion\n      ---\n      duration_ms: 35.919067\n      type: 'test'\n      ...\n    # Subtest: missing required file is a typed observation HOLD, not absence\n    ok 7 - missing required file is a typed observation HOLD, not absence\n      ---\n      duration_ms: 6.844522\n      type: 'test'\n      ...\n    # Subtest: application observation error remains the cause of a typed HOLD\n    ok 8 - application observation error remains the cause of a typed HOLD\n      ---\n      duration_ms: 7.543048\n      type: 'test'\n      ...\n    # Subtest: directory custody lost inside the callback stops before the next member\n    ok 9 - directory custody lost inside the callback stops before the next member\n      ---\n      duration_ms: 6.108\n      type: 'test'\n      ...\n    1..9\nok 29 - complete original cold inspection: current custody and exact rights\n  ---\n  duration_ms: 6209.75703\n  type: 'test'\n  ...\n# Subtest: actual native open refusal leaves no inaccessible application handle\nok 30 - actual native open refusal leaves no inaccessible application handle\n  ---\n  duration_ms: 4.257107\n  type: 'test'\n  ...\n# Subtest: formatter failure owns the returned DB before the fault and closes that DB\nok 31 - formatter failure owns the returned DB before the fault and closes that DB\n  ---\n  duration_ms: 14.224279\n  type: 'test'\n  ...\n# Subtest: formatter and exact close failures retain both errors, the DB and directory custody\nok 32 - formatter and exact close failures retain both errors, the DB and directory custody\n  ---\n  duration_ms: 10.884379\n  type: 'test'\n  ...\n# Subtest: post-ISSUED close failure retains only the exact failed handle and never returns success\nok 33 - post-ISSUED close failure retains only the exact failed handle and never returns success\n  ---\n  duration_ms: 4017.252715\n  type: 'test'\n  ...\n# Subtest: original admission is unavailable until the complete allocation closes preparation\nok 34 - original admission is unavailable until the complete allocation closes preparation\n  ---\n  duration_ms: 4102.105464\n  type: 'test'\n  ...\n# Subtest: opening capabilities bind exact member, store and original membership\n    # Subtest: refuses different group without native entry\n    ok 1 - refuses different group without native entry\n      ---\n      duration_ms: 0.860562\n      type: 'test'\n      ...\n    # Subtest: refuses different replica without native entry\n    ok 2 - refuses different replica without native entry\n      ---\n      duration_ms: 0.412547\n      type: 'test'\n      ...\n    # Subtest: refuses different member set without native entry\n    ok 3 - refuses different member set without native entry\n      ---\n      duration_ms: 0.395653\n      type: 'test'\n      ...\n    # Subtest: refuses different first-opening identity without native entry\n    ok 4 - refuses different first-opening identity without native entry\n      ---\n      duration_ms: 0.346445\n      type: 'test'\n      ...\n    # Subtest: refuses different membership source without native entry\n    ok 5 - refuses different membership source without native entry\n      ---\n      duration_ms: 0.359705\n      type: 'test'\n      ...\n    # Subtest: refuses different joining existing group without native entry\n    ok 6 - refuses different joining existing group without native entry\n      ---\n      duration_ms: 0.770444\n      type: 'test'\n      ...\n    # Subtest: another declared member cannot borrow the capability\n    ok 7 - another declared member cannot borrow the capability\n      ---\n      duration_ms: 0.654808\n      type: 'test'\n      ...\n    # Subtest: copying a capability cannot copy its authority\n    ok 8 - copying a capability cannot copy its authority\n      ---\n      duration_ms: 0.650813\n      type: 'test'\n      ...\n    # Subtest: copying a capability cannot copy its authority\n    ok 9 - copying a capability cannot copy its authority\n      ---\n      duration_ms: 0.316833\n      type: 'test'\n      ...\n    # Subtest: copying a capability cannot copy its authority\n    ok 10 - copying a capability cannot copy its authority\n      ---\n      duration_ms: 0.209438\n      type: 'test'\n      ...\n    1..10\nok 35 - opening capabilities bind exact member, store and original membership\n  ---\n  duration_ms: 4119.078124\n  type: 'test'\n  ...\n# Subtest: revoke closes queued original native admission\nok 36 - revoke closes queued original native admission\n  ---\n  duration_ms: 3797.27856\n  type: 'test'\n  ...\n# Subtest: directory closes queued original native admission\nok 37 - directory closes queued original native admission\n  ---\n  duration_ms: 3721.677276\n  type: 'test'\n  ...\n# Subtest: revocation during an intermediate constructor callback prevents native entry\nok 38 - revocation during an intermediate constructor callback prevents native entry\n  ---\n  duration_ms: 3509.444653\n  type: 'test'\n  ...\n# Subtest: constructor failure cannot restore an already consumed opening\nok 39 - constructor failure cannot restore an already consumed opening\n  ---\n  duration_ms: 3187.18283\n  type: 'test'\n  ...\n# Subtest: a changed durable incarnation cannot borrow the original opening\nok 40 - a changed durable incarnation cannot borrow the original opening\n  ---\n  duration_ms: 3098.009181\n  type: 'test'\n  ...\n# Subtest: all-member actual native opening then readonly original recovery\n    # Subtest: cold original permission never supplies genesis or a new identity\n    ok 1 - cold original permission never supplies genesis or a new identity\n      ---\n      duration_ms: 0.328287\n      type: 'test'\n      ...\n    # Subtest: readonly revalidation precedes actual durable reconstruction\n    ok 2 - readonly revalidation precedes actual durable reconstruction\n      ---\n      duration_ms: 3.643613\n      type: 'test'\n      ...\n    1..2\nok 41 - all-member actual native opening then readonly original recovery\n  ---\n  duration_ms: 5197.11277\n  type: 'test'\n  ...\n# Subtest: revocation while resolving the last dispatcher callback cannot cross native entry\nok 42 - revocation while resolving the last dispatcher callback cannot cross native entry\n  ---\n  duration_ms: 3166.549513\n  type: 'test'\n  ...\n# Subtest: unchanged original authority reaches actual native creation\nok 43 - unchanged original authority reaches actual native creation\n  ---\n  duration_ms: 4096.084026\n  type: 'test'\n  ...\n# Subtest: revocation inside native tuning cannot cross the actual creation cut\nok 44 - revocation inside native tuning cannot cross the actual creation cut\n  ---\n  duration_ms: 4094.16507\n  type: 'test'\n  ...\n# Subtest: late consumption of original_service_right cannot authorize native creation\nok 45 - late consumption of original_service_right cannot authorize native creation\n  ---\n  duration_ms: 3798.098534\n  type: 'test'\n  ...\n# Subtest: late consumption of original_identity_right cannot authorize native creation\nok 46 - late consumption of original_identity_right cannot authorize native creation\n  ---\n  duration_ms: 3764.995778\n  type: 'test'\n  ...\n# Subtest: native opening refuses missing original authority before core or storage effects\nok 47 - native opening refuses missing original authority before core or storage effects\n  ---\n  duration_ms: 4099.483524\n  type: 'test'\n  ...\n# Subtest: native opening refuses null original authority before core or storage effects\nok 48 - native opening refuses null original authority before core or storage effects\n  ---\n  duration_ms: 4090.269687\n  type: 'test'\n  ...\n# Subtest: native opening refuses serialized original authority before core or storage effects\nok 49 - native opening refuses serialized original authority before core or storage effects\n  ---\n  duration_ms: 3792.190103\n  type: 'test'\n  ...\n# Subtest: native opening refuses claimed mode original authority before core or storage effects\nok 50 - native opening refuses claimed mode original authority before core or storage effects\n  ---\n  duration_ms: 3753.073292\n  type: 'test'\n  ...\n# Subtest: ordinary port requests retain the existing constructor path\nok 51 - ordinary port reques"
+          }
+        }
+      },
+      {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/774#issuecomment-6338952858",
+        "receipt": {
+          "schema": "lagrange-lab-result/v1",
+          "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+          "request_id": "6e4622994fdc40f39332f29f9ec0ee7f",
+          "request_sha256": "ac952a2bb32e2e1dd08bdf07b9ca8957e6f1df5893d287561b81a3283816b4ba",
+          "status": "COMPLETE",
+          "recorded_at": "2026-10-22T10:51:08.149Z",
+          "result": {
+            "chunk_sha256": "4cf62cd3a0e9527fd802a07527cda41e1a080681640d044f1612c8bf7836ac6f",
+            "job_id": "7b0c43ba97354718a766b0565c3f75f5",
+            "offset": 8000,
+            "redacted": true,
+            "returned_bytes": 204,
+            "text": "ts retain the existing constructor path\n  ---\n  duration_ms: 3562.379365\n  type: 'test'\n  ...\n1..51\n# tests 79\n# suites 0\n# pass 75\n# fail 4\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 56412.172047\n\n"
+          }
+        }
+      }
+    ],
+    "scope": "Seven-file selected batch; 79 runner-reported tests, 75 passed and 4 failed. The retained controller tail omits the four startup failures. Full worker log retrieval is required before causal assessment."
+  },
+  "static": {
+    "request": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "eb6c37e3351d4861a1568ff6e30692f7",
+      "operation": "lab-work",
+      "created_at": "2026-10-22T10:46:39.801Z",
+      "expires_at": "2026-10-22T12:46:39.801Z",
+      "delivery": {
+        "protocol": "harnessd-lab-work-delivery-v1",
+        "requestId": "eb6c37e3-351d-4861-a156-8ff6e30692f7",
+        "sha256": "ff5a87c323d53d7e8e1401ef02c67514c0a079883f7d6ab43d292250c2d00bbe",
+        "totalBytes": 1105,
+        "partCount": 1
+      }
+    },
+    "intent": {
+      "protocol": "harnessd-lab-work-v1",
+      "requestId": "eb6c37e3-351d-4861-a156-8ff6e30692f7",
+      "poolId": "default",
+      "principalId": "github:psvensson",
+      "issuedAtMs": 1792665999801,
+      "expiresAtMs": 1792673199801,
+      "work": {
+        "driver": "shell",
+        "spec": {
+          "setup": [
+            [
+              "npm",
+              "ci"
+            ]
+          ],
+          "env": {
+            "NODE_OPTIONS": "--max-old-space-size=6144"
+          },
+          "script": "set -u\nnpm run audit:shards\nstartup_metadata_status=$?\nnode scripts/check-fast-static.js --base 7766ccafbe3767c9e397fabf97f41a197d7fb53e\nstartup_static_status=$?\ngit diff --exit-code\nstartup_tree_status=$?\nprintf '{\"metadata_exit\":%d,\"fast_static_exit\":%d,\"tracked_tree_exit\":%d}\\n' \"$startup_metadata_status\" \"$startup_static_status\" \"$startup_tree_status\"\nif [ \"$startup_metadata_status\" -ne 0 ] || [ \"$startup_static_status\" -ne 0 ] || [ \"$startup_tree_status\" -ne 0 ]; then\n  exit 1\nfi\n",
+          "cwd": "."
+        },
+        "source": {
+          "repo": "psvensson/lagrange",
+          "ref": "refs/heads/work/original-handoff-boundaries-20261021-cloud",
+          "sha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f"
+        },
+        "hosts": {
+          "count": 1,
+          "prefer": [
+            "local-workstation"
+          ],
+          "requirements": [
+            "node",
+            "shell"
+          ]
+        },
+        "timeoutSeconds": 3600
+      }
+    },
+    "terminal": {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/770#issuecomment-6338921684",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "eb6c37e3351d4861a1568ff6e30692f7",
+        "request_sha256": "dc7e884587c543374831a543b83888bb17bca7e5fc4bfda446ddbe82fd7895f4",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-22T10:49:26.162Z",
+        "result": {
+          "execution_scope_closed": true,
+          "exit_code": 0,
+          "finished_at": "2026-10-22T10:49:26.139Z",
+          "hosts": [
+            "local-workstation"
+          ],
+          "log_bytes": 1603,
+          "log_sha256": "de595e9dd789dec585c5b1fc3ea27bbbdc004c6cf23510e37714ddcfca9d7e5c",
+          "logical_request_id": "eb6c37e3-351d-4861-a156-8ff6e30692f7",
+          "logs_are_worker_tails": true,
+          "operation": "lab-work",
+          "outcome": "PASS",
+          "payload_sha256": "ff5a87c323d53d7e8e1401ef02c67514c0a079883f7d6ab43d292250c2d00bbe",
+          "reason": null,
+          "scope_closed": true,
+          "source_execution_started": true,
+          "source_sha": "7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f",
+          "worker_receipt_count": 1,
+          "worker_receipts_sha256": "f197d30c25f048094a20acb56d33e7485ffc43c735b0a61b0624b607244f7f39",
+          "workers": {
+            "local-workstation": {
+              "containers_closed": true,
+              "driver_result": {
+                "counters": {},
+                "exit_code": 0
+              },
+              "execution_scope_closed": true,
+              "exit_code": 0,
+              "last_thermals": {
+                "cpu": 53,
+                "missing": [],
+                "ssd": 38.85,
+                "ssd_aux": 67.85
+              },
+              "log_bytes": 1582,
+              "log_sha256": "1ce89ab6dee8762e7960bc4c44cc9f2814e2a1903119d7ae0462faeb204b110e",
+              "log_truncated": false,
+              "output_bytes": 1582,
+              "output_sha256": "1ce89ab6dee8762e7960bc4c44cc9f2814e2a1903119d7ae0462faeb204b110e",
+              "reason": null,
+              "source_execution_started": true,
+              "state": "COMPLETE",
+              "thermal_scope_closed": true
+            }
+          }
+        }
+      }
+    },
+    "controllerLog": {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/775#issuecomment-6338953426",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "24c37c86eb6e432db565bbdebfdb40a8",
+        "request_sha256": "967fdb9faed485a3dc8337a62b2bcad26774ad2c750284124f2d2f9582f20b0b",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-22T10:51:08.159Z",
+        "result": {
+          "chunk_sha256": "de595e9dd789dec585c5b1fc3ea27bbbdc004c6cf23510e37714ddcfca9d7e5c",
+          "job_id": "eb6c37e3351d4861a1568ff6e30692f7",
+          "offset": 0,
+          "redacted": true,
+          "returned_bytes": 1603,
+          "text": "[local-workstation] npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n\n> lagrange-server@0.2.6 prepare\n> node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"\n\n[hooks] Installed repo hooks at .githooks\n\nadded 1057 packages, and audited 1058 packages in 8s\n\n223 packages are looking for funding\n  run `npm fund` for details\n\n33 vulnerabilities (10 moderate, 21 high, 2 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\nnpm notice\nnpm notice New major version of npm available! 10.9.8 -> 12.2.1\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1\nnpm notice To update run: npm install -g npm@12.2.1\nnpm notice\n\n> lagrange-server@0.2.6 audit:shards\n> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check\n\ncurated test shards: current\nprimary classification OK: 2438 tests (unit=2113 integration=108 bootstrap=210 convergence-probe=3 packaging=4)\nresource classification OK — 2438 tests, digest fnv1a32-bb0ee5f6\nsubsystem classification OK — 2438 tests, 22 subsystems, digest fnv1a32-5a1796d9\nproof range: 7766ccafbe3767c9e397fabf97f41a197d7fb53e..HEAD (flag)\nfast-static: ok in 11885ms\n{\"metadata_exit\":0,\"fast_static_exit\":0,\"tracked_tree_exit\":0}\n\n"
+        }
+      }
+    },
+    "scope": "Canonical audit:shards, explicit-base check-fast-static and tracked-tree cleanliness all exited0. This is not the separate decision-boundary pre-commit gate or a full corpus/publication gate."
+  },
+  "fullWorkerLog": {
+    "bytes": 21297,
+    "sha256": "c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec",
+    "retrievalRequestIssue": 777,
+    "retrievalRequest": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "57bf9b0ec8164d7ca7f90bc5890f33cb",
+      "operation": "lab-work",
+      "created_at": "2026-10-22T10:52:53.072Z",
+      "expires_at": "2026-10-22T12:52:53.072Z",
+      "delivery": {
+        "protocol": "harnessd-lab-work-delivery-v1",
+        "requestId": "57bf9b0e-c816-4d7c-a7f9-0bc5890f33cb",
+        "sha256": "2f7b279bcadee76f0070cceb603d8aa4ddad2d2340b947d66f5cf83be2f95ca8",
+        "totalBytes": 1540,
+        "partCount": 1
+      }
+    },
+    "statusAtRecording": "QUEUED - WAITING_FOR_CAPACITY; no additional source execution requested"
+  },
+  "handoffReceiptsChanged": false
+}

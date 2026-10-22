@@ -235,7 +235,8 @@ test('SeedInfrastructurePhase requires an original attempt before lifecycle or l
     assert.ok(router instanceof MessageRouter);
     assert.equal(f.service.transport, router);
     assert.equal(router.server, null, 'a configured wsPort does not open a public listener');
-    assert.equal(router.hasSelfConnection(), false);
+    assert.ok(!router.hasSelfConnection());
+    assert.equal(router.nodeConnections.has(router.nodeId), false);
     assert.equal(router.isExternalAdmissionEnabled(), false);
     assert.ok(f.service.serviceLifecycleManager);
     assert.ok(f.service.serviceReconciler);
@@ -423,14 +424,20 @@ async (t) => {
     assert.equal(f.service.systemTableWriter, null);
     assert.equal(f.service.phase, phase);
     assert.equal(f.service.messageRouter.server, null);
-    assert.equal(f.service.messageRouter.hasSelfConnection(), false);
+    assert.ok(!f.service.messageRouter.hasSelfConnection());
+    assert.equal(
+      f.service.messageRouter.nodeConnections.has(f.service.messageRouter.nodeId),
+      false,
+    );
     assert.equal(f.service.messageRouter.isExternalAdmissionEnabled(), false);
   }
   assert.deepEqual(f.entries, []);
 });
 
-// Additional acquisition and late-completion witnesses. The preceding 14
-// cases are preserved byte-for-byte for their separate baseline execution.
+// Additional acquisition and late-completion witnesses. The original first
+// 14 cases remain preserved in commits 3fa20cef and 7fa4d79. Four self-connection
+// oracles in this revised file follow the existing falsy predicate contract
+// and additionally require exact absence of the self-node connection entry.
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ServiceReconciler} from '../../src/service/service-reconciler.js';
@@ -664,7 +671,8 @@ test('BootstrapService shutdown joins an acquired real router whose initializati
     assert.ok(hold(REASON.CLOSED)(result.reason));
     assert.equal(router.initialized, false);
     assert.equal(router.server, null);
-    assert.equal(router.hasSelfConnection(), false);
+    assert.ok(!router.hasSelfConnection());
+    assert.equal(router.nodeConnections.has(router.nodeId), false);
     assert.equal(f.service.messageRouter, null);
     assert.equal(f.service.serviceLifecycleManager, null);
     assert.equal(f.service.serviceReconciler, null);
@@ -718,7 +726,8 @@ test('BootstrapService shutdown joins initial reconciliation and retires its act
     assert.equal(reconciler._interval, null);
     assert.equal(router.initialized, false);
     assert.equal(router.server, null);
-    assert.equal(router.hasSelfConnection(), false);
+    assert.ok(!router.hasSelfConnection());
+    assert.equal(router.nodeConnections.has(router.nodeId), false);
     assert.equal(f.service.serviceReconciler, null);
     assert.equal(f.service.serviceLifecycleManager, null);
     assert.equal(f.service.messageRouter, null);

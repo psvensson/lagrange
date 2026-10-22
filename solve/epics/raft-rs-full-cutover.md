@@ -52,13 +52,30 @@ records the interaction and its unavailable continuation boundary. The
 owns the four findings, their disposition and the reviewed-content binding.
 The original 14 witnesses are preserved against unchanged runtime source at
 `3fa20cefeca622ec2060509903a921979d32a082`; seven additive cases cover the
-review repairs. Runtime outcomes for the new wiring remain pending.
+review repairs. The two baseline admission cases produced engaged assertion
+failures in [lab #766](https://github.com/psvensson/lagrange-lab/issues/766#issuecomment-6338804478).
+Both pass on candidate `7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f`, whose
+[seven-file run #769](https://github.com/psvensson/lagrange-lab/issues/769#issuecomment-6338912468)
+reports 79 tests: 75 pass and 4 fail, with no cancellations or skips.
+Its [metadata/fast-static run #770](https://github.com/psvensson/lagrange-lab/issues/770#issuecomment-6338921684)
+passes the explicit 7766-base check. Those execution and thermal scopes are closed.
+
+The complete original worker log is retained in
+[RAW-startup-candidate-7fa4d79a-2026-10-22.txt](../quests/retained-seed-original-handoff/evidence/RAW-startup-candidate-7fa4d79a-2026-10-22.txt).
+All four first divergences are new assertions expecting literal false where
+the unchanged router predicate returns undefined for an absent self entry.
+Independent review approves exactly four oracle corrections: respect the
+existing falsy predicate and additionally require exact map-entry absence.
+The revised witness must be measured; later assertions, including five later
+continuation calls, were not reached in #769. The historical first 14-case
+prefix remains in 3fa20cef and 7fa4d79a; the revised prefix will differ.
 
 The integration owner is the continuing root agent; its lab delegate observes
-and resumes the pinned requests. The next action is to measure the unchanged
-two-case baseline, then the exact candidate's seven-file opening/startup batch
-and applicable static checks. The inherited partition decision-boundary
-finding stays explicit; this is WIP preservation, not a green publication.
+and resumes pinned requests. The next action is to preserve the reviewed
+test-only successor and rerun its exact seven-file batch and applicable static
+checks. The inherited partition decision-boundary finding stays explicit;
+the passing fast-static run does not satisfy that separate red pre-commit gate.
+This is WIP preservation, not a green publication.
 The retained-command classifier, protected activation/leader/transfer,
 complete public-admission exclusions and composed two-start proof remain
 unfinished. All eight handoff receipts and the original seal stay unchanged.

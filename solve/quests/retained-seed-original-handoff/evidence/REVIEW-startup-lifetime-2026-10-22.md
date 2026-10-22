@@ -397,3 +397,191 @@ and hashed its UTF-8 bytes. It also recomputed both witness hashes. Independent
 3fa20cefeca622ec2060509903a921979d32a082 -- src/` returned zero, confirming that
 the test-only baseline did not change the source tree. Final committed-source
 binding and runtime execution evidence still require separate appended records.
+
+## Entry 4 — committed binding and narrow self-connection oracle correction
+
+Date: 2026-10-22. Reviewer: `subagent:/root/opening_review`.
+
+Verdict: **APPROVE the specified four-site witness correction and provenance
+comment update before edits.** The bounded production-source approval remains
+applicable. The measured candidate run remains RED. This entry does not claim
+that the revised witness bytes have been inspected or executed; their exact
+diff, digest and later result require a separate appended binding.
+
+### Committed production and original witness binding
+
+In the read-only follow-up to Entry 3, the reviewer independently read the Git
+blobs at `7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f` and compared all 20 source
+files against Entry 3's approved manifest. There were zero mismatches. The set
+of changed production paths relative to `7766ccaf` also exactly matched those
+20 files; no additional changed production path was present.
+
+The committed production manifest therefore remains:
+`550cd6fbe3c5a982933066921cfdf691228cfa45765fc8036efd6bce2985fdae`.
+
+The committed 21-case witness at `7fa4d79a` was 35,489 bytes with SHA-256
+`3ef091d21e2e67af4ae40f06e6061fa1334f29a88583a6aa4a5d9547584018c7`.
+Its first 20,600 bytes exactly equalled the 14-case file in test-only baseline
+`3fa20cefeca622ec2060509903a921979d32a082`, with SHA-256
+`e4afdcabc63bd3397b992978a5cdaa7da136122d4802eb203482b3e975a72790`.
+These are historical content bindings. They must not be relabelled as hashes of
+the forthcoming corrected witness.
+
+### Preserved candidate failure evidence
+
+The integration owner supplied the complete candidate controller log as
+`/workspace/scratch/fb19a647cca6/startup-candidate-7fa4-full.log`, corresponding
+to lab #769 at `7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f`. The reviewer read the
+log and independently verified its 21,297 bytes and SHA-256:
+`c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec`.
+
+The runner reports **79 tests, 75 passing, four failing, zero cancelled, zero
+skipped and zero todo**. All four failures are `ERR_ASSERTION` strict-equality
+comparisons with actual `undefined` and expected `false` in the startup witness:
+
+| Failing case | Original witness line | First failed observation |
+| --- | --- | --- |
+| Infrastructure requires an original attempt before lifecycle/listener setup | 238 | `router.hasSelfConnection()` strictly equals `false` |
+| Continuation entry points hold elections, registration and public admission | 426 | `f.service.messageRouter.hasSelfConnection()` strictly equals `false` |
+| Shutdown joins acquired router initialization | 667 | `router.hasSelfConnection()` strictly equals `false` |
+| Shutdown joins initial reconciliation and retires cadence | 721 | `router.hasSelfConnection()` strictly equals `false` |
+
+The continuation case failed during the first of its six loop iterations.
+Consequently #769 does not establish the remaining five continuation calls or
+the assertions following the failed comparison. In the other three failed
+cases, assertions after their first failing comparison likewise remain
+unmeasured on that run. Earlier reached assertions are not permission to mark
+the whole case successful. The 75 passing cases and four failed cases remain
+the result for the original exact witness; no corrected result is substituted
+for that history.
+
+The integration owner reported separate lab #770 metadata/fast-static PASS on
+the same candidate and closure of the run scopes. That independent operation
+does not make #769 green. This entry's direct verification is the supplied
+complete runtime log and source/oracle correspondence; it does not substitute
+for a separate final receipt/result review.
+
+### Existing router contract and approved oracle
+
+The unchanged `src/transport/message-router-delivery-behaviors.js:756-762`
+reads `router.nodeConnections.get(router.nodeId)` and returns:
+
+```javascript
+connection &&
+connection.isSelfConnection &&
+connection.state === ConnectionState.CONNECTED
+```
+
+When the current node has no map entry, that expression returns `undefined`.
+Existing owner witnesses already test falsiness for this state:
+`test/bootstrap/shared/message-router-setup.test.js:81-82` explicitly describes
+the falsy return, and `test/transport/message-router-tail-more-test-cases.js:440`
+uses `notOk`. Thus the four new strict-Boolean assertions contradict the
+existing absent-connection return contract. Their measured failures do not
+require changing the production router merely to return a Boolean.
+
+At exactly those four sites, approve replacing the strict `false` assertion
+with this pair, using the actual router's own node identity:
+
+```javascript
+assert.ok(!router.hasSelfConnection());
+assert.equal(router.nodeConnections.has(router.nodeId), false);
+```
+
+The continuation-loop site uses the corresponding
+`f.service.messageRouter` expressions. The first assertion conforms to the
+existing method contract. The added strict map assertion requires actual
+absence of the current node's connection entry, excluding a disconnected or
+otherwise nonqualifying retained entry. The strict `server === null` checks
+remain. Together these observations retain the intended listenerless/cleaned-up
+transport condition and make the absence requirement more explicit.
+
+The authorized correction is limited to those four assertion sites and the
+provenance comment. Queue admission, typed refusal, native-entry, durable-right,
+resource-custody, shutdown-join, cadence and other cleanup assertions remain
+unchanged. No source change, permissive authority, mocked consensus success,
+skip, case deletion or expectation suppression is approved.
+
+### Provenance and evidence ceiling after correction
+
+The old comment at lines432-433 describes the preceding 14 cases as preserved
+byte-for-byte. Two of the four approved corrections occur inside that prefix.
+Revise the comment to point to the frozen historical versions in `3fa20cef`
+and `7fa4d79a`; do not claim the revised prefix still equals those bytes. Preserve
+the old prefix and complete-file hashes, baseline RED, candidate #769 RED,
+full-log hash and separate #770 static result, then append the new witness
+digest and measured result when available.
+
+This oracle correction does not reopen an earlier source finding or change
+the scope ceiling. It also does not establish unexecuted assertions by
+reasoning alone. Runtime validation of the revised witness remains pending;
+all eight handoff receipts remain unchanged. The reviewer made no source or
+test edits and ran no runtime tests while assessing this correction.
+
+## Entry 5 — exact revised witness delta and content binding: APPROVE
+
+Date: 2026-10-22. Reviewer: `subagent:/root/opening_review`.
+
+Verdict: **APPROVE the actual revised witness delta** in
+`test/bootstrap/seed-original-attempt-lifetime.test.js`, bound below. The
+reviewer independently inspected its diff against committed `7fa4d79a` and
+reconstructed the entire revised file from the old bytes using exactly the
+three plain-router assertion replacements, the one service-router assertion
+replacement, and the provenance-comment replacement approved in Entry 4.
+The reconstructed bytes exactly equalled the working file. No other witness
+bytes changed.
+
+At each site the new pair tests the existing predicate's falsiness and strictly
+requires `nodeConnections.has(router.nodeId) === false` on that same router.
+All strict server-absence, refusal, native, durable-right, custody, cadence and
+other cleanup assertions remain unchanged. The comment accurately preserves
+the old versions in historical commits without claiming that the revised
+14-case prefix is byte-identical to them. The earlier owner-contract and
+oracle-strength approval therefore applies to these exact bytes.
+
+### Revised witness fingerprints
+
+| Input | Bytes | Binding |
+| --- | --- | --- |
+| Revised complete 21-case file | 35,941 | SHA-256 `2421740ecafb0c9dcb457be3e1ef8286321645a426d23f7814d2d9a91d1e086f` |
+| Revised complete file Git blob | 35,941 | `e87f872e32cca602d1055e6514437d49ec36ec10` |
+| Revised file's first 20,600 bytes | 20,600 | SHA-256 `bad72ffc8cfc36555d27e30e754e0237390f4985a6472022e3d11391e1adf5ab` |
+
+The last row is only a same-length prefix comparison. After inserted assertion
+lines, those first 20,600 bytes are not a claim about the complete boundary of
+the revised 14 cases. The historical 14-case prefix remains
+`e4afdcabc63bd3397b992978a5cdaa7da136122d4802eb203482b3e975a72790`
+in `3fa20cef` and `7fa4d79a`. The historical complete 21-case file remains
+`3ef091d21e2e67af4ae40f06e6061fa1334f29a88583a6aa4a5d9547584018c7`
+in `7fa4d79a`. Neither historical hash is reused for the corrected file.
+
+### Selected baseline cases remain unchanged
+
+The reviewer independently compared both complete selected case source blocks
+across baseline `3fa20cefeca622ec2060509903a921979d32a082`, candidate
+`7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f` and the revised working file. Both
+were byte-for-byte identical in all three versions:
+
+| Case | Block bytes | SHA-256 |
+| --- | --- | --- |
+| `BootstrapService prepares one live original attempt before either creation catalog mutates` | 1,531 | `85ed87038836d9a5c7614cd520478ba75e41438473deb44ef00ee31a16aac7f4` |
+| `direct message-group creation cannot bypass BootstrapService attempt ownership` | 905 | `746b615adbe3cf1a504ab6f725b92894b6683d4b2dcec5f7cb2eac60456a663d` |
+
+For this comparison, each block starts at its named top-level `test(` opening
+and ends immediately before the next top-level `test(` or `for (` opening,
+including intervening trailing whitespace. This binds the complete case body,
+including its original required-refusal assertion and later positive control.
+
+### Unchanged source and remaining execution gate
+
+Independent `git diff --quiet 7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f -- src/`
+returned zero. Rehashing the approved 20 production paths again produced
+`550cd6fbe3c5a982933066921cfdf691228cfa45765fc8036efd6bce2985fdae`.
+The production-source approval and scope ceiling remain unchanged.
+
+The revised witness has not been executed in this review. Candidate #769's
+75-pass/four-fail result and its unmeasured later assertions remain preserved
+in Entry 4. The integration owner may bind the next commit to these reviewed
+bytes; a successful runtime result is a separate outstanding gate. The reviewer
+wrote only this appended evidence entry and did not edit source/tests, run
+runtime tests or mutate GitHub state.
