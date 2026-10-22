@@ -2,6 +2,8 @@
 // before native opening. Its files are not an alternative membership authority.
 import fs from 'node:fs';
 import path from 'node:path';
+import {isDeepStrictEqual} from 'node:util';
+import {deepFreeze} from './raft-operation-port.js';
 import {validateOriginalSeedDeclaration} from
   '../bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations} from
@@ -62,7 +64,9 @@ function verifyMemberBinding(db, declaration, member) {
       row[COLUMN.MEMBER] !== JSON.stringify(member)) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
-  if (row[COLUMN.SERVICE_RIGHT] !== STATE.UNUSED) {
+  if (row[COLUMN.SERVICE_RIGHT] !== STATE.UNUSED ||
+      (member.replicaId === declaration.anchorReplicaId &&
+       row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED)) {
     throw originalAllocationError(REASON.SPENT, member.replicaId);
   }
   // Only the declared anchor owns a cluster-identity publication right.
@@ -85,8 +89,7 @@ function inspectColdMember(db, declaration, member) {
   const row = verifyMemberBinding(db, declaration, member);
   const expectedIssue = member.replicaId === declaration.anchorReplicaId ? STATE.ISSUED : STATE.PREPARING;
   if (row[COLUMN.ISSUE] !== expectedIssue ||
-      row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED ||
-      (member.replicaId === declaration.anchorReplicaId && row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED)) {
+      row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
     throw originalAllocationError(REASON.HISTORY, member.replicaId);
   }
   if (!RaftRsDurableStore.hasDurableRecordIn(db, member.groupId)) {
@@ -124,7 +127,7 @@ function consumeOriginalAllocationOpening(opening, request) {
   if (record.consumed) {
     throw originalAllocationError(REASON.OPENING_CONSUMED, record.member.replicaId);
   }
-  record.validate(request);
+  record.validate(request, false);
   record.assertCurrent();
   // Even construction failure cannot turn this into another opening right.
   record.consumed = true;
@@ -133,6 +136,11 @@ function consumeOriginalAllocationOpening(opening, request) {
     if (incarnation !== record.member.incarnation) {
       throw originalAllocationError(REASON.IDENTITY, record.member.replicaId);
     }
+    // Argument evaluation can revoke the attempt or consume durable rights.
+    // Re-read through the same owner at the final native-effect cut. The cold
+    // application classifier runs here, once, after caller inputs are owned.
+    record.validate(request, true);
+    record.assertCurrent();
   };
 }
 
@@ -271,7 +279,8 @@ class RaftRsOriginalAllocationPreparation {
         member,
         consumed: false,
         assertCurrent: () => this.#assertCurrent(),
-        validate: (request) => this.#validateOpeningRequest(member, request),
+        validate: (request, final) =>
+          this.#validateOpeningRequest(member, request, final),
       });
       this.#openings.set(replicaId, opening);
     }
@@ -287,18 +296,18 @@ class RaftRsOriginalAllocationPreparation {
     }
   }
 
-  #validateOpeningRequest(member, request) {
+  #validateOpeningRequest(member, request, final) {
     this.#assertCurrent();
     if (this.#openingValidationActive) throw originalAllocationError(REASON.REENTRANT);
     this.#openingValidationActive = true;
     try {
-      this.#validateMemberOpening(member, request);
+      this.#validateMemberOpening(member, request, final);
     } finally {
       this.#openingValidationActive = false;
     }
   }
 
-  #validateMemberOpening(member, request) {
+  #validateMemberOpening(member, request, final) {
     const db = request[PORT_REQUEST.DURABLE_STORAGE];
     const cold = this.#openingMode === STATE.COLD_RECOVERY;
     const membership = request[PORT_REQUEST.BOOTSTRAP_MEMBERSHIP];
@@ -324,12 +333,19 @@ class RaftRsOriginalAllocationPreparation {
         // as readonly authority or keep a cached approval across native open.
         const observed = this.#custody.open(member, {readonly: true, fileMustExist: true});
         try {
-          const record = inspectColdMember(observed, this.#declaration, member);
-          const assessment = this.#inspectApplicationHistory({db: observed,
-            declaration: this.#declaration, member, record});
-          this.#assertCurrent();
-          if (assessment !== STATE.HISTORY_ACCEPTED) {
-            throw originalAllocationError(REASON.CONTRARY, member.replicaId);
+          const record = deepFreeze(inspectColdMember(
+            observed, this.#declaration, member));
+          if (final) {
+            // Whole-cohort classification already preceded every writable
+            // opening. Reclassify this member once at the final cut, not
+            // before later caller getters can change its retained work.
+            const assessment = this.#inspectApplicationHistory({db: observed,
+              declaration: this.#declaration, member, record});
+            this.#assertCurrent();
+            if (assessment !== STATE.HISTORY_ACCEPTED || !isDeepStrictEqual(
+              record, inspectColdMember(observed, this.#declaration, member))) {
+              throw originalAllocationError(REASON.CONTRARY, member.replicaId);
+            }
           }
         } catch (error) {
           this.#fail(error);
@@ -340,7 +356,6 @@ class RaftRsOriginalAllocationPreparation {
         const anchor = member.replicaId === this.#declaration.anchorReplicaId;
         if (row[COLUMN.ISSUE] !== (anchor ? STATE.ISSUED : STATE.PREPARING) ||
             row.native_history_state !== RAFT_RS_OPENING_HISTORY.NEVER_OPENED ||
-            (anchor && row[COLUMN.IDENTITY_RIGHT] !== STATE.UNUSED) ||
             RaftRsDurableStore.hasDurableRecordIn(db, member.groupId)) {
           throw originalAllocationError(REASON.HISTORY, member.replicaId);
         }

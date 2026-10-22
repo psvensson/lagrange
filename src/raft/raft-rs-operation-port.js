@@ -18,6 +18,7 @@ import {
 } from './raft-committed-membership-constants.js';
 import {bootstrapOfRequest} from './raft-rs-bootstrap-membership.js';
 import {consumeOriginalAllocationOpening} from './raft-rs-original-allocation-preparation.js';
+import {captureOriginalRaftRsTiming} from './raft-rs-runtime-tuning.js';
 import {committedMembershipRefusal, normalizeCommittedLearnerRead,
   unavailableLearnerAction} from
   './raft-rs-committed-membership-read.js';
@@ -184,7 +185,7 @@ function createRaftRsOperationPort(request) {
     request, RAFT_OPERATION_PORT_REQUEST.PEER_ID);
   const database = required(
     request, RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE);
-  const timing = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
+  const suppliedTiming = required(request, RAFT_OPERATION_PORT_REQUEST.TIMING);
   const resolvePeerAddress = required(
     request, RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS);
   // Capture the actual native inputs once: original admission validates what
@@ -208,6 +209,11 @@ function createRaftRsOperationPort(request) {
         [RAFT_OPERATION_PORT_REQUEST.JOINING_EXISTING_GROUP]: joiningExistingGroup,
         [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: identityExisted,
       }) : null;
+  // Resolve callback-bearing timing while the consumed attempt can still
+  // refuse. Native creation receives owned scalar data, not getters to run
+  // after the last original-authority check. Ordinary timing is unchanged.
+  const timing = assertOriginalNativeEntry === null ? suppliedTiming :
+    captureOriginalRaftRsTiming(suppliedTiming);
   const registry = new RaftRsPeerIdentityRegistry(database);
   const peerId = registry.registerReplica(replicaIdentity);
   // The bootstrap peer ids are address hints: each is reserved so the
