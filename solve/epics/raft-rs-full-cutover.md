@@ -37,15 +37,22 @@ authorizes:
 
 ## Current coordination: original startup handoff (2026-10-22)
 
-The next bounded dependency is now active: native retained-history validation
-and read-only participant-origin classification. The [unit plan](../quests/retained-seed-original-handoff/evidence/PLAN-retained-history-2026-10-22.md)
-and [review history](../quests/retained-seed-original-handoff/evidence/REVIEW-retained-history-2026-10-22.md)
-keep complete SQL/MG effect permission and cold startup outside this increment.
+Native retained-history validation and read-only participant-origin observation
+are implemented and independently source-reviewed at
+`cb822d6fcf8c7b78b34a718772d06488490bc0da`. The [current checkpoint](../quests/retained-seed-original-handoff/evidence/CHECKPOINT-retained-history-2026-10-22.md)
+records the exact scope, static results and pending runtime verification.
 Baseline `79fa766ed290c5545cf4017ee589b86e440e0e47` produced eleven engaged
-malformed-history failures in lab #814; its positive controls passed. The full
-log and exact receipts are retained. All baseline/export scopes are closed;
-root is implementing the reviewed owner interaction with unchanged baseline
-witness bytes. Candidate verification is pending.
+malformed-history failures in lab #814; its positive controls passed. The
+baseline witness is unchanged, and full failed logs and receipts are retained.
+All baseline/export scopes are closed. The candidate's isolated fast-static
+check passes, while the normal source precommit retains its three independently
+attributed inherited decision findings. Lab requests #820 and #821 are posted
+against the exact candidate, with admission and execution still unobserved.
+The initial fenced-JSON submission error was corrected in place; a separate
+lab intake uncertainty also affects an earlier nonexecuting ping. No candidate
+runtime pass or physical scope closure is claimed. Complete SQL/MG effect
+permission and cold startup remain outside this increment, and all eight
+handoff receipts remain unchanged.
 
 The startup-owned lifetime is implemented and independently approved as a
 bounded WIP at `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` on
@@ -60,8 +67,8 @@ existing lower-boundary files were measured together at 328532f0. The
 [separate metadata/fast-static run #793](https://github.com/psvensson/lagrange-lab/issues/793#issuecomment-6339331559)
 passed against explicit base 7766ccaf; its tracked-tree check also passed.
 All execution, thermal and container scopes are closed. Full logs were
-recovered and verified against their terminal hashes; no owned work remains
-queued or running.
+recovered and verified against their terminal hashes; nothing from that startup
+batch remains queued or running.
 
 The [independent review history](../quests/retained-seed-original-handoff/evidence/REVIEW-startup-lifetime-2026-10-22.md)
 retains the four material source findings and their repairs, the exact

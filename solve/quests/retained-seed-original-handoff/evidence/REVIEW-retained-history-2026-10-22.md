@@ -645,3 +645,275 @@ Only this review record was appended by the reviewer. No tests were run, source
 or witness edited, GitHub object mutated, or commit made by the reviewer. The
 preceding 20,837 bytes remain unchanged with SHA-256
 `2a5aee949356359a3fec3d308bca3d29ff38ad6b712aef0124ca8a927ae2b3e9`.
+
+## Entry 5: exact preserved candidate and normal-hook provenance — BOUND
+
+### Approved bytes bound to the preserved commit
+
+The Entry 4 source and witness approval is now bound to
+[cb822d6fcf8c7b78b34a718772d06488490bc0da](https://github.com/psvensson/lagrange/commit/cb822d6fcf8c7b78b34a718772d06488490bc0da).
+The reviewer independently read the local Git objects and the live GitHub
+Git-commit and branch-ref API resources. They agree on the following identities:
+
+| Object | Identity |
+| --- | --- |
+| Commit | `cb822d6fcf8c7b78b34a718772d06488490bc0da` |
+| Sole parent | `79fa766ed290c5545cf4017ee589b86e440e0e47` |
+| Repository tree | `3b3a2471e9670fac863b2a380a998c2dc2cf1c29` |
+| Production src tree | `d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba` |
+| Test tree | `fc2296064ae7a02826a8c249054dab01a98f473e` |
+| Remote branch at this review | `work/original-handoff-boundaries-20261021-cloud` -> `cb822d6fcf8c7b78b34a718772d06488490bc0da` |
+
+Remote observations were made through read-only requests to
+`/repos/psvensson/lagrange/git/commits/cb822d6fcf8c7b78b34a718772d06488490bc0da`
+and `/repos/psvensson/lagrange/git/ref/heads/work/original-handoff-boundaries-20261021-cloud`.
+The remote commit carries the same tree and parent as the local object. This
+binding does not rely on the older locally cached origin branch ref.
+
+Using Entry 4's hashing method on bytes obtained from explicit `git show
+cb822d6f:<path>` objects, the reviewer independently reproduced all four
+manifests:
+
+| Scope | SHA-256 |
+| --- | --- |
+| Seven production files | `388cde621adf7d476ac55d38cf7e7b28babe7ac747b361925105a59b1c7778b8` |
+| Five witness files | `750518c8874d44f34f50fabd8707eefc5a601a56d049a524e2647e39d9f73f12` |
+| Two contract files | `1ae7e55d128800671f822acde46e4ecd2793a43ce00aba54e9642f9f593a5468` |
+| All fourteen reviewed files | `1779af01d1910bc34d49a6a707846e23128be9b26dd686adf3fb62a75c8163e3` |
+
+Every reviewed file also equals the aligned worktree byte-for-byte. The entire
+production delta from 79fa766e consists of the seven approved files; no extra
+runtime change was introduced during metadata generation or preservation.
+The frozen cold witness, startup witness and eight-receipt artifact retain
+their prior identities. The committed review artifact contains Entries 1–4
+exactly: 40,966 bytes, SHA-256
+`edf038254892dee77b9e4b2c4d538c934cd11573eaa788103960b168349d5d34`.
+Consequently the source approval remains applicable without reopening
+unaffected earlier reviews.
+
+### Normal-hook refusal and generated metadata
+
+The reviewer read the complete preserved normal-hook output and checked its
+relevant behavior against the unchanged hook source. The normal attempt ended
+with exit 1 and exactly one counted staged-check refusal: decision boundaries
+in the participant byte owner, with three raw_null_empty_state_outcome
+findings. The log explicitly says the scanner matched zero findings from its
+ratchet baseline; the historical attribution is a separate baseline/candidate
+comparison, not an assertion that the hook waived them.
+
+The reported preparation complexity of 28 remains report-only in this hook:
+the existing scoped-complexity branch documents that behavior and does not
+increment the staged failure counter. Inventory refresh also reports aggregate
+complexity/duplication debt while refreshing its reports. Those outputs must
+not be described as whole-source static clearance. The log records normal
+inventory and test-metadata generation after the decision refusal, then the
+single-failure summary. Evidence: STATIC-retained-candidate-precommit-2026-10-22.txt,
+especially lines 37–57, and the unchanged hook's staged decision check and
+report-only scoped-complexity branch.
+
+The retained audit outputs separately report current curated shards and
+2,440 classified test files (2,114 unit, 109 integration, 210 bootstrap,
+three convergence-probe and four packaging), plus passing resource/subsystem
+classification. The impact registry reports PASS for 69 contracts and 42
+coupled pairs. These are metadata counts, not executed tests. The committed
+generated deltas add the two new participant witnesses to their appropriate
+classes and refresh the source/graph seals and observation census. No runtime
+was inferred from those artifacts.
+
+The committed provenance artifacts were independently hashed:
+
+| Artifact under evidence/ | Bytes | SHA-256 |
+| --- | ---: | --- |
+| STATIC-retained-candidate-precommit-2026-10-22.txt | 3,949 | `f9f388827caf408602a7b362d4c3c830fe2f88b4665e79d19e4b3d0c477615fe` |
+| STATIC-retained-candidate-shards-2026-10-22.txt | 647 | `7176d3c9b031ca4941e8804c53a0f3ade506e1c1faf797f19a81a37850e527c5` |
+| STATIC-retained-candidate-impact-2026-10-22.txt | 327 | `8104c024419459aba496888decbf0ea9bc52c8562f4718d613012461f0254c44` |
+| STATIC-retained-inherited-byte-decisions-2026-10-22.json | 4,115 | `b4415a3252c71520087c3a9ba700f4ab33bfda64aa5c0101004bdca6c7d79be3` |
+
+The reviewer independently extracted each complete implicated top-level
+function, including its final LF, from both exact Git revisions. Both pairs
+are byte-identical and reproduce the prior attribution hashes:
+
+| Function | Bytes | SHA-256 |
+| --- | ---: | --- |
+| canonicalDecisionRecord | 897 | `abb0471716aba613b0d5014b1bfb0ccd4b2ecbde024558ca96f47f7d439e65a3` |
+| buildDecisionRecord | 556 | `bbaf027e46d9951f38bbf8adbcf0b8190913d0635365bb86a5a826ad363c808c` |
+
+Thus the normal hook is still RED, with the three findings correctly
+attributed to unchanged inherited function bodies. This entry neither fixes
+nor waives them and does not change any scanner baseline, selector, gate or
+hook. No local test rerun was performed by this reviewer.
+
+### Preservation scope and next evidence
+
+The documented route in solver-runbook.md:143–168 permits committed WIP
+preservation on a non-main branch and reserves LAGRANGE_SKIP_PRECOMMIT for
+that purpose; it explicitly does not confer Quest-land, merge, release or
+publication approval. This candidate's commit message and retained attempt
+record preserve the actual normal-hook refusal and pending lab status. The
+remote preservation is consistent with that bounded route. It is not a green
+gate result and supplies no authority to land source on the shared branch.
+
+The parent reports runtime #820 and metadata/fast-static #821 submitted on
+this exact commit. Their results are not reviewed or counted here. The next
+result review requires their exact terminal receipts and retained output,
+including selected/completed files, runner totals, relevant assertion outcomes
+and physical scope closure. The baseline #814 RED remains unchanged; no earlier
+passing tests are added to a future candidate total. All Entry 4 limits,
+startup's CLASSIFICATION_UNAVAILABLE hold and all eight receipt terms remain
+unchanged.
+
+Only this append-only record was changed by the reviewer. No source, witness,
+Git object or GitHub object was mutated, and no runtime/static command was
+rerun. The previous 40,966 bytes remain unchanged with SHA-256
+`edf038254892dee77b9e4b2c4d538c934cd11573eaa788103960b168349d5d34`.
+
+## Entry 6: local static evidence and unobserved lab intake — LIMITED ACCEPTANCE
+
+### Disposition
+
+**ACCEPT the recorded local fast-static PASS at its stated scope and the
+corrected submission/blocker attribution. No candidate runtime verdict is
+issued.** Entry 4's bounded source/witness approval and Entry 5's exact commit
+binding remain unchanged. Neither this local result nor the missing lab
+acknowledgments clears the normal-hook decision-boundary RED, advances a
+handoff receipt or proves execution of the submitted candidate tests.
+
+The reviewer read CHECKPOINT-retained-history-2026-10-22.md, the local static
+measurement and complete emitted log, the preserved candidate request, and the
+format-correction record. Root accepted the review's wording refinement to
+"While lab intake remained unobserved"; the checkpoint now distinguishes lack
+of observation from a diagnosed controller outage. Source, test and contract
+bytes remain frozen at cb822d6f.
+
+### Exact local static result and its limits
+
+The isolated checkout at `/tmp/lagrange-retained-candidate-cb822d6f` was inspected
+read-only. Its HEAD is `cb822d6fcf8c7b78b34a718772d06488490bc0da`, repository
+tree `3b3a2471e9670fac863b2a380a998c2dc2cf1c29`, src tree
+`d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba`, and test tree
+`fc2296064ae7a02826a8c249054dab01a98f473e`. Git status is clean there. The
+dependency symlink resolves to the declared existing installation at
+`/workspace/scratch/fb19a647cca6/lagrange/node_modules`; no fresh local npm ci
+result is claimed.
+
+The retained measurement names the exact invocation:
+
+```text
+NODE_OPTIONS=--max-old-space-size=6144 node scripts/check-fast-static.js --base 1262e9c9b306b7289e9768f6ca8cce8f172594d9 --explain
+```
+
+It records exit 0, Node v24.19.0, npm 11.9.0, 20,901 milliseconds, and no runtime
+test execution. The complete emitted output names the explicit committed base,
+31 changed paths and 12 JavaScript paths. The reviewer independently recomputed
+those path counts from the exact Git range; this is not a zero-file or
+worktree-only pass. The raw original local log is byte-identical to the retained
+628-byte artifact, SHA-256
+`cbae8b28e6df2663c3052aacc2628fefbe05b26d9f1ddeffaeb92124fa985c7c`.
+
+All fourteen emitted check results are ok: dependency boundaries, shard
+classification, scoped metrics, ESLint over twelve changed JavaScript files,
+runtime grammar, document ASCII, metadata gateway, impact contracts, roadmap
+authority, document audience, current capabilities, closure ledger, CLI docs
+and service portability claims. The reviewer inspected the unchanged
+scripts/check-fast-static.js allowlist and result/exit-code implementation;
+it matches that output and does not include the source decision-boundary
+scanner. Its success therefore coexists with the separately retained normal
+precommit refusal. Whole-corpus ratchets and runtime application behavior are
+outside this result. The reviewer did not rerun the static command.
+
+### Submission correction independently checked
+
+The reviewer directly fetched the live #820 and #821 issue bodies and #821's
+existing comment 6344551273. Both bodies and the comment parse as complete raw
+JSON. Their decoded objects are identical to the intended runtime request,
+static envelope and static part retained in
+REQUEST-retained-candidate-cb822d6f-2026-10-22.json. The request identities,
+exact source/ref, selections, expiry and intended static commands have not
+changed:
+
+| Request | Identity | Source and intended work |
+| --- | --- | --- |
+| [#820](https://github.com/psvensson/lagrange-lab/issues/820) | `1c795ef8bfa44d4ba1a835ba150467bd` | cb822d6f; fourteen named runtime files; requested host tv-dator |
+| [#821](https://github.com/psvensson/lagrange-lab/issues/821) | `48e77e2c48ca4c90a242a431bbc91d35` | cb822d6f; declared npm ci, shard audit, explicit-1262e9c9-base fast-static and tracked-tree check |
+
+Both retain expiry `2026-10-22T17:28:18.350Z`. The static part's base64 bytes
+decode to exactly 1,115 bytes, SHA-256
+`af86457b7316bd121fe60248c689533cf510cef44b5dee1e44e8ed85fac84261`.
+The envelope, packet and part digests agree, and the decoded intent equals the
+retained intended object. This is payload integrity and submission-shape
+verification, not evidence of controller admission or workload execution.
+
+The reviewer also read the immutable declared controller/protocol revision
+`439961a1580b5f6c444542c5a5cd69d7c0757850` directly. In
+current_protocol.py:58–63 and :110–115, the issue body is parsed directly with
+json.loads; Markdown fences are not stripped. recover_intent at :173 and
+:197–203 parses each comment body the same way and ignores unparsable part
+comments. In current_controller.py:294–298, validation precedes assignment of
+the request id; the exception handler at :338–340 can post a refusal only after
+that id exists. Thus the initial fenced issue bodies could leave no refusal
+comment. The root's retained account of that initial submission mistake is
+consistent with the named parser source. GitHub's current readback proves the
+correction, not the historical body bytes before the in-place edit or the
+currently running controller process's state.
+
+This is correctly recorded as a submission error, separate from any candidate
+test outcome. Correcting the same request and part objects avoids manufacturing
+a duplicate execution request or changing the test treatment.
+
+### What the operational evidence establishes
+
+At the independent readback immediately before 2026-10-22 15:42:00 UTC, #820
+had zero comments and #821 had exactly one comment: the corrected payload part,
+not a controller receipt. The earlier raw-JSON nonexecuting
+[ping #819](https://github.com/psvensson/lagrange-lab/issues/819), request
+`a58d9a51d4ae4aa4b07d8be3315c1822`, also had zero comments. None of these reads
+supplies an admission, assigned host, execution start or terminal result.
+
+The reviewer directly read the
+[operator record](https://github.com/psvensson/lagrange-lab/issues/657#issuecomment-6344538276).
+It identifies the missing observation as the controller account's actual
+lagrange-lab-bridge.service status and recent user journal, and reports no
+connected direct controller shell. It does not diagnose service failure,
+rate exhaustion, worker capacity or another cause. The separately corrected
+submission format explains why the original candidate bodies were inadmissible;
+it does not establish why the corrected bodies or earlier plain-JSON ping
+still lack acknowledgment.
+
+Consequently the accurate current blocker is **unobserved lab intake and
+execution**, not a candidate runtime failure and not a proven empty queue or
+stopped controller. Candidate execution, thermal and container scopes remain
+unobserved; none is claimed closed. Earlier baseline/export closure receipts
+still apply only to their own already completed work. The local static result
+is not relabeled as lab #821 and does not replace the pending native runtime.
+
+Root retains ownership of the existing #820/#821 identities. The checkpoint's
+next step is appropriately to recover/observe the existing controller path and
+inspect these requests, including expiry and any retained execution state,
+before issuing any successor. This review authorizes no controller restart,
+reinstall, credential change, duplicate request or additional execution. No
+such action was performed by the reviewer.
+
+### Reviewed record binding and preservation
+
+The following local evidence bytes were independently hashed after the
+checkpoint wording correction:
+
+| Artifact under evidence/ | Bytes | SHA-256 |
+| --- | ---: | --- |
+| MEASUREMENT-retained-cb822d6f-local-static-2026-10-22.json | 2,152 | `7f81cfe9b0b32b1d959e756bfc100455ddf7779995afc8b2ba856a797ddfc6ce` |
+| STATIC-retained-cb822d6f-local-fast-static-2026-10-22.txt | 628 | `cbae8b28e6df2663c3052aacc2628fefbe05b26d9f1ddeffaeb92124fa985c7c` |
+| REQUEST-retained-format-correction-2026-10-22.json | 3,031 | `be9367fcbe8fccd395f22971ea270f531282a5bbff7d5638db7fdb0d36be790c` |
+| REQUEST-retained-candidate-cb822d6f-2026-10-22.json | 16,087 | `a2354d25b26fb939134687e889e71f8ec72c2dcdc74aff010c9e2c26909fba09` |
+| CHECKPOINT-retained-history-2026-10-22.md | 10,798 | `af4a8a5f4ea6a5a496b1acbcf0258bc535864b1c57afb084e7845a2f0b24751c` |
+
+Preserving these additional proof records on a separate evidence branch keeps
+the requested candidate ref at cb822d6f. It does not create a new tested source
+revision or a passing runtime checkpoint. All prior scope limits, baseline RED
+evidence, the normal-hook RED and the eight unchanged handoff receipts remain
+in force.
+
+Only this review artifact was appended by the reviewer. Read-only source,
+Git-object, log and GitHub mailbox observations were used; no runtime or static
+gate was rerun, no source/test file changed and no GitHub mutation made. The
+preceding 48,036 bytes remain unchanged with SHA-256
+`11c897c9171a7ef3a633d10a7ff6d7c5d4624afa76be0bee35839d2a42c21517`.

@@ -1,0 +1,42 @@
+{
+  "schema": "retained-history-lab-format-correction/v1",
+  "recordedAt": "2026-10-22T15:39:16.588889+00:00",
+  "sourceSha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+  "originalSubmission": {
+    "runtimeIssue": 820,
+    "staticIssue": 821,
+    "staticPartComment": 6344551273,
+    "error": "Root posted issue bodies and static part comment inside Markdown JSON fences. Installed current_protocol.py parses complete bodies directly as JSON; those bodies were not admissible. This is a submission error, not a candidate test failure."
+  },
+  "correction": {
+    "action": "Updated the existing issue bodies and existing part comment in place to raw JSON",
+    "runtimeBodyUpdatedAt": "2026-10-22T15:34:42Z",
+    "staticBodyUpdatedAt": "2026-10-22T15:34:45Z",
+    "runtimeRequestId": "1c795ef8bfa44d4ba1a835ba150467bd",
+    "staticRequestId": "48e77e2c48ca4c90a242a431bbc91d35",
+    "expiresAt": "2026-10-22T17:28:18.350Z",
+    "requestIdsSourceContentAndExpiryUnchanged": true,
+    "rootReadback": "Both issue bodies and existing static part parse as raw JSON and equal original intended request/payload objects.",
+    "independentReadback": "lab_lane verified corrected raw JSON at15:36:35Z, decoded static payload1115bytes SHA256af86457b7316bd121fe60248c689533cf510cef44b5dee1e44e8ed85fac84261; all envelope/packet/part digests agree."
+  },
+  "parserEvidence": {
+    "installedSource": "439961a1580b5f6c444542c5a5cd69d7c0757850",
+    "protocol": "https://github.com/psvensson/lagrange-lab/blob/439961a1580b5f6c444542c5a5cd69d7c0757850/upgrades/v0.2.2/current_protocol.py",
+    "controller": "https://github.com/psvensson/lagrange-lab/blob/439961a1580b5f6c444542c5a5cd69d7c0757850/upgrades/v0.2.2/current_controller.py",
+    "finding": "validate_envelope parses issue.body before request ID assignment; invalid JSON can therefore leave no refusal comment. recover_intent parses comment.body directly and ignores invalid JSON parts."
+  },
+  "separateIntakeObservation": {
+    "observedAt": "2026-10-22T15:37:55Z",
+    "candidateRuntime": "posted; admission/execution unobserved; zero comments",
+    "candidateStatic": "posted; admission/execution unobserved; only corrected part comment",
+    "earlierNonexecutingPing": "https://github.com/psvensson/lagrange-lab/issues/819 also lacks a controller receipt",
+    "operatorRecord": "https://github.com/psvensson/lagrange-lab/issues/657#issuecomment-6344538276",
+    "missingObservation": "controller account lagrange-lab-bridge.service status and recent user journal",
+    "limit": "No diagnosis of service failure, rate exhaustion or worker capacity. No claim of queue, execution or thermal/container scope closure. No direct controller shell is exposed by connected tools."
+  },
+  "ownership": {
+    "root": "Retain and monitor existing820/821; do not duplicate pending execution requests",
+    "labLane": "Read-only observations",
+    "next": "Recover controller intake/status and inspect these existing request identities before considering any successor after expiry."
+  }
+}

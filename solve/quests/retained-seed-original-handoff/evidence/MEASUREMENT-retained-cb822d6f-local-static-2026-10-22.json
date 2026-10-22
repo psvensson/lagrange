@@ -1,0 +1,51 @@
+{
+  "schema": "retained-history-local-static-measurement/v1",
+  "recordedAt": "2026-10-22T15:39:16.588889+00:00",
+  "source": {
+    "sha": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+    "tree": "3b3a2471e9670fac863b2a380a998c2dc2cf1c29",
+    "srcTree": "d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba",
+    "testTree": "fc2296064ae7a02826a8c249054dab01a98f473e",
+    "base": "1262e9c9b306b7289e9768f6ca8cce8f172594d9"
+  },
+  "execution": {
+    "location": "local isolated detached checkout",
+    "checkout": "/tmp/lagrange-retained-candidate-cb822d6f",
+    "command": "NODE_OPTIONS=--max-old-space-size=6144 node scripts/check-fast-static.js --base 1262e9c9b306b7289e9768f6ca8cce8f172594d9 --explain",
+    "exitCode": 0,
+    "elapsedReportedMs": 20901,
+    "changedPaths": 31,
+    "changedJavaScript": 12,
+    "nodeVersion": "v24.19.0",
+    "npmVersion": "11.9.0",
+    "dependencyInjection": "node_modules symlink to /workspace/scratch/fb19a647cca6/lagrange/node_modules; no npm ci performed locally for this isolated static check",
+    "trackedTreeUnchanged": true,
+    "runtimeExecuted": false
+  },
+  "passedChecks": [
+    "test:deps",
+    "audit:shards",
+    "test:metrics:scoped",
+    "eslint(12 changed)",
+    "audit:runtime-grammar",
+    "audit:doc-ascii",
+    "test:metadata-gateway:audit",
+    "audit:impact-contracts",
+    "audit:roadmap-authority",
+    "audit:doc-audience",
+    "audit:current-capabilities",
+    "audit:closure-ledger",
+    "audit:cli-docs",
+    "audit:service-portability-claims"
+  ],
+  "log": {
+    "file": "STATIC-retained-cb822d6f-local-fast-static-2026-10-22.txt",
+    "bytes": 628,
+    "sha256": "cbae8b28e6df2663c3052aacc2628fefbe05b26d9f1ddeffaeb92124fa985c7c"
+  },
+  "limits": [
+    "The source normal precommit still refused three inherited decision-boundary findings in unchanged functions; fast-static does not include that source scanner.",
+    "The lab metadata/fast-static request821 remains posted without an admission or terminal receipt. This local result is not a lab result.",
+    "No candidate runtime test result, corpus proof, handoff receipt advancement, shared-branch landing or publication claim."
+  ]
+}
