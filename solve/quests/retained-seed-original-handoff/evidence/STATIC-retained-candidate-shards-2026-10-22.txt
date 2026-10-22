@@ -1,0 +1,9 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> lagrange-server@0.2.6 audit:shards
+> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check
+
+curated test shards: current
+primary classification OK: 2440 tests (unit=2114 integration=109 bootstrap=210 convergence-probe=3 packaging=4)
+resource classification OK — 2440 tests, digest fnv1a32-787a9daa
+subsystem classification OK — 2440 tests, 22 subsystems, digest fnv1a32-1d703973

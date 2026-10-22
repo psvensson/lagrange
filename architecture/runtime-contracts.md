@@ -48,6 +48,38 @@ Forbidden runtime patterns:
 - feature-local implementations of existing cache/read/write/retry primitives
 - shadow state for lifecycle, readiness, admission, leader, or routing truth
 
+## Retained Native History And Participant Origin
+
+`RaftRsDurableStore.readRetainedHistoryIn` owns the DDL-free read snapshot of
+the existing native record. It validates required raw rows before the legacy
+reader's normalization, keeps exact decimal-string positions, and distinguishes
+applied entries, committed entries awaiting application, and local uncommitted
+entries. It preserves the complete retained record. Snapshot coverage names
+the missing prefix; configuration entries remain bytes for the native
+membership owner. This observation is neither a replay engine nor application
+effect permission.
+
+Original-allocation preparation consumes that assessment before its application
+callback and again at the existing final native construction boundary. It
+requires the exact declared founder configuration and original bootstrap,
+admission and membership-generation provenance. Uncovered snapshot prefixes or
+uninterpreted configuration history remain `CLASSIFICATION_UNAVAILABLE`.
+
+The participant store's `readPartitionWriteOriginHistory` binds that native
+view to its generation/origin row in one owned read transaction. Its byte owner
+recognizes the canonical generation-origin command. A null applied origin is
+separate from a committed-pending ENABLE and from a local uncommitted proposal.
+An applied origin must match the first applied canonical command at its exact
+index and term; later idempotent origins may coexist in every range. Missing
+observations are unavailable, contradictory observations are contrary, and
+other commands remain explicitly unclassified. Inspection never installs
+schema enforcement, resets the generation, changes bytes, proposes or applies.
+
+These are bounded observation primitives. Complete SQL/MG effect correspondence,
+checkpoint/application binding and protected activation remain further owner
+obligations. The original startup composition still holds at
+`CLASSIFICATION_UNAVAILABLE`; no observation here grants public admission.
+
 ## System-Table Row Lifecycle
 
 For every system-table-backed entity, exactly one component owns row creation,

@@ -1,0 +1,102 @@
+{
+  "baselineCommit": "79fa766ed290c5545cf4017ee589b86e440e0e47",
+  "method": "same source scanner in detached exact baseline and candidate; compare violation identity/count and complete implicated function bytes",
+  "baseline": {
+    "scannedFileCount": 1,
+    "totalViolationCount": 3,
+    "filesWithViolations": [
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "violationCount": 3
+      }
+    ],
+    "violations": [
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 167,
+        "column": 5,
+        "functionName": "canonicalDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      },
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 172,
+        "column": 59,
+        "functionName": "canonicalDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      },
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 187,
+        "column": 5,
+        "functionName": "buildDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      }
+    ],
+    "rawViolationCount": 3,
+    "inheritedViolationCount": 0,
+    "baselineViolationCount": 806
+  },
+  "candidate": {
+    "scannedFileCount": 1,
+    "totalViolationCount": 3,
+    "filesWithViolations": [
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "violationCount": 3
+      }
+    ],
+    "violations": [
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 169,
+        "column": 5,
+        "functionName": "canonicalDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      },
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 174,
+        "column": 59,
+        "functionName": "canonicalDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      },
+      {
+        "filePath": "src/partition/partition-participant-transaction-bytes.js",
+        "line": 189,
+        "column": 5,
+        "functionName": "buildDecisionRecord",
+        "kind": "raw_null_empty_state_outcome",
+        "reason": "raw null or empty-state outcome returned for semantic target",
+        "ruleReference": "system guidelines.md \u00a74.5 Raw null or undefined must not encode runtime state"
+      }
+    ],
+    "rawViolationCount": 3,
+    "inheritedViolationCount": 0,
+    "baselineViolationCount": 806
+  },
+  "implicatedFunctions": {
+    "canonicalDecisionRecord": {
+      "bytes": 897,
+      "sha256": "abb0471716aba613b0d5014b1bfb0ccd4b2ecbde024558ca96f47f7d439e65a3",
+      "unchanged": true
+    },
+    "buildDecisionRecord": {
+      "bytes": 556,
+      "sha256": "bbaf027e46d9951f38bbf8adbcf0b8190913d0635365bb86a5a826ad363c808c",
+      "unchanged": true
+    }
+  },
+  "status": "inherited RED, routed guideline-audit owner; neither fixed nor waived by this bounded dependency",
+  "sourceChecks": "new helper/store named-state branches and owned constants satisfy scoped decision/literal/complexity checks"
+}

@@ -13,6 +13,8 @@
 // the participant never adds a second decision lookup during committed apply.
 
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {
   PARTICIPANT_TRANSACTION_BYTES as BYTES,
   PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
@@ -346,6 +348,22 @@ function isPinnedGenerationOrigin(command) {
     command.transactionId === undefined && command.sql === undefined;
 }
 
+// Cold observation asks a stricter question than ordinary admission: these
+// exact bytes must be producible by this partition's ENABLE owner. Retained
+// stamps are checked, never regenerated from today's clock or replica.
+function isCanonicalRetainedGenerationOrigin(command, partitionId) {
+  if (command?.type !== COMMAND.GENERATION_ORIGIN ||
+      command.partitionId !== partitionId || !isPinnedGenerationOrigin(command)) return false;
+  const {timestamp, proposedBy, proposedAt} = command;
+  const clock = HLCTimestamp.tryFromString(timestamp);
+  if (clock === null || clock.toString() !== timestamp ||
+      !isNonEmptyString(proposedBy) || !Number.isFinite(proposedAt) || proposedAt < 0) {
+    return false;
+  }
+  return isDeepStrictEqual(command,
+    buildGenerationOriginCommand(partitionId, {timestamp, proposedBy, proposedAt}));
+}
+
 /**
  * Whether a participant transaction command is in the pinned byte form the
  * leader builds (the admission owner asks before it is proposed).
@@ -377,6 +395,7 @@ export {
   decisionEntryIdOf,
   decisionMatchesPreparedRow,
   identityRefusalOf,
+  isCanonicalRetainedGenerationOrigin,
   isPinnedParticipantCommand,
   operationOutcomeKeyOf,
   operationsOf,

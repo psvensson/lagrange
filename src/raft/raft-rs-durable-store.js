@@ -32,6 +32,7 @@ import {
   RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
+  RAFT_RS_RETAINED_HISTORY_REASON,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,
@@ -44,6 +45,8 @@ import {RAFT_RS_HOST_WRITE} from './raft-rs-host-contract.js';
 import {decodeCommittedProposal} from './raft-rs-proposal-codec.js';
 import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
+import {retainedHistoryError, retainedHistoryOf, validateRetainedRows} from
+  './raft-rs-retained-history.js';
 
 const DECIMAL_DIGITS = /^\d+$/u;
 const PAYLOAD_ENCODING = 'base64';
@@ -204,7 +207,7 @@ function commitDurably(db, work) {
   }
 }
 
-function readDurableRecordIn(db, groupId) {
+function readDurableRowsIn(db, groupId) {
   const hardStateRow = readRecordTable(RAFT_RS_TABLE.HARD_STATE, () =>
     db.prepare(RAFT_RS_SQL.SELECT_HARD_STATE).safeIntegers(true).get(groupId));
   const appliedRow = readRecordTable(RAFT_RS_TABLE.APPLIED_STATE, () =>
@@ -214,6 +217,10 @@ function readDurableRecordIn(db, groupId) {
   const entryRows = readRecordTable(RAFT_RS_TABLE.LOG, () =>
     db.prepare(RAFT_RS_SQL.SELECT_LOG_ENTRIES)
       .safeIntegers(true).all(groupId));
+  return {hardStateRow, appliedRow, snapshotRow, entryRows};
+}
+
+function durableRecordOf({hardStateRow, appliedRow, snapshotRow, entryRows}) {
   return {
     hardState: hardStateRow ? {
       term: fromExactInteger(hardStateRow.term),
@@ -245,6 +252,27 @@ function readDurableRecordIn(db, groupId) {
       },
     } : null,
   };
+}
+
+function readDurableRecordIn(db, groupId) {
+  return durableRecordOf(readDurableRowsIn(db, groupId));
+}
+
+function readRetainedHistoryIn(db, groupId) {
+  let rows;
+  try {
+    rows = readDurableRowsIn(db, groupId);
+  } catch (cause) {
+    throw Object.assign(new Error(RAFT_RS_RETAINED_HISTORY_REASON.OBSERVATION, {cause}),
+      {code: RAFT_RS_STORE_ERROR_CODE.RETAINED_HISTORY_UNAVAILABLE});
+  }
+  validateRetainedRows(rows);
+  try {
+    return retainedHistoryOf(durableRecordOf(rows));
+  } catch (cause) {
+    if (cause.code === RAFT_RS_STORE_ERROR_CODE.RETAINED_HISTORY_INVALID) throw cause;
+    throw retainedHistoryError(RAFT_RS_RETAINED_HISTORY_REASON.OBSERVATION, cause);
+  }
 }
 
 /**
@@ -585,6 +613,13 @@ class RaftRsDurableStore {
 
   static readDurableRecordIn(db, groupId) {
     return readDurableRecordIn(db, groupId);
+  }
+
+  // One read snapshot, no DDL or normalization before raw-row validation.
+  // A caller composing application observations may own the enclosing read
+  // transaction. The result describes that view; it grants no opening right.
+  static readRetainedHistoryIn(db, groupId) {
+    return db.transaction(() => readRetainedHistoryIn(db, groupId))();
   }
 
   /**

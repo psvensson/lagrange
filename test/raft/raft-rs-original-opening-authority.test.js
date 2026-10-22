@@ -22,6 +22,8 @@ import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
 import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from '../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
+import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 
 const TIMING = Object.freeze({heartbeatMs: 50, electionMinMs: 150,
   electionMaxMs: 300, tickIntervalMs: 10});
@@ -111,9 +113,11 @@ test('opening capabilities bind exact member, store and original membership', as
     });
   }
   await t.test('another declared member cannot borrow the capability', () => {
-    assert.throws(() => f.native(f.declaration.members[1], opening).open(), hold(REASON.IDENTITY));
+    assert.throws(() => f.native(f.declaration.members[1], opening).open(),
+      hold(REASON.IDENTITY));
   });
-  for (const copy of [{...opening}, structuredClone(opening), JSON.parse(JSON.stringify(opening))]) {
+  const copies = [{...opening}, structuredClone(opening), JSON.parse(JSON.stringify(opening))];
+  for (const copy of copies) {
     await t.test('copying a capability cannot copy its authority', () => {
       assert.throws(() => f.native(member, copy).open(), hold(REASON.AUTHORITY));
     });
@@ -136,7 +140,8 @@ for (const close of ['revoke', 'directory']) {
     setActualCoreEntryObserver((entry) => entries.push(entry));
     assert.throws(native.open, hold(close === 'revoke' ? REASON.CLOSED : REASON.DIRECTORY));
     assert.deepEqual(entries, []);
-    assert.equal(originalAllocationRow(native.db, member).native_history_state, HISTORY.NEVER_OPENED);
+    assert.equal(originalAllocationRow(native.db, member).native_history_state,
+      HISTORY.NEVER_OPENED);
   });
 }
 
@@ -216,6 +221,60 @@ test('all-member actual native opening then readonly original recovery', async (
     assert.equal(native.open().readStatus().outcome, 'CORE_OK');
     assert.equal(inspected.length, f.declaration.members.length + 1);
   });
+  const treatments = [
+    {name: 'late commit beyond retained frontier', reason: REASON.HISTORY,
+      mutate(store, member) {
+        store.putHardState(member.groupId, {term: '1', vote: '0', commit: '1'});
+      }},
+    {name: 'late unclassified membership command', reason: REASON.CLASSIFICATION_UNAVAILABLE,
+      mutate(store, member) {
+        store.appendEntries(member.groupId, [{index: '1', term: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE_V2,
+          data: Buffer.from('membership-owner-bytes').toString('base64')}]);
+        store.putHardState(member.groupId, {term: '1', vote: '0', commit: '0'});
+      }},
+    {name: 'late snapshot with uncovered application prefix',
+      reason: REASON.CLASSIFICATION_UNAVAILABLE,
+      mutate(store, member) {
+        const {confState} = store.readDurableRecord(member.groupId);
+        store.putSnapshot(member.groupId, {metadata: {index: '1', term: '1', confState}});
+        store.putHardState(member.groupId, {term: '1', vote: '0', commit: '1'});
+      }},
+  ];
+  // All three complete-cohort inspections precede any treatment. Every later
+  // treatment has its own attempt and its own member's one-use capability.
+  const attempts = treatments.map(() => {
+    const owner = f.newOwner();
+    let callbacks = 0;
+    owner.inspect(f.declaration, () => {
+      callbacks++;
+      return STATE.HISTORY_ACCEPTED;
+    });
+    return {owner, callbacks: () => callbacks};
+  });
+  for (const [index, treatment] of treatments.entries()) {
+    await t.test(treatment.name, () => {
+      const member = f.declaration.members[index + 1];
+      const attempt = attempts[index];
+      const native = f.native(member, attempt.owner.openingFor(member.replicaId),
+        {identityExisted: true, bootstrapMembership: durableRecordBootstrap()});
+      const store = new RaftRsDurableStore(native.db);
+      let reached = false;
+      Object.defineProperty(native.request, 'sendToPeer', {get() {
+        treatment.mutate(store, member);
+        reached = true;
+        return () => {};
+      }});
+      const entries = [];
+      setActualCoreEntryObserver((entry) => entries.push(entry));
+      assert.throws(native.open, hold(treatment.reason));
+      assert.equal(reached, true, 'treatment runs after the first opening check');
+      assert.deepEqual(entries, [], 'renewed native assessment precedes actual core entry');
+      assert.equal(attempt.callbacks(), f.declaration.members.length,
+        'unclassified or contrary native history never reaches the application callback');
+      assert.deepEqual(attempt.owner.observeResources(), []);
+    });
+  }
 });
 
 test('revocation while resolving the last dispatcher callback cannot cross native entry', (t) => {

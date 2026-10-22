@@ -11,7 +11,17 @@
 
 import {PARTICIPANT_COMMIT_OUTCOME} from '../constants/transactions.js';
 import {stampParticipantConnection} from './partition-participant-transaction-connection.js';
+import {RaftRsDurableStore} from '../raft/raft-rs-durable-store.js';
+import {deepFreeze} from '../raft/raft-operation-port.js';
+import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
+  RAFT_RS_RETAINED_ENTRY_PHASE as ENTRY_PHASE,
+  RAFT_RS_RETAINED_HISTORY_COVERAGE as COVERAGE,
+  RAFT_RS_STORE_ERROR_CODE as RAFT_ERROR} from '../raft/raft-rs-durable-store-constants.js';
+import {isCanonicalRetainedGenerationOrigin} from './partition-participant-transaction-bytes.js';
 import {
+  PARTICIPANT_ORIGIN_HISTORY_REASON as ORIGIN_REASON,
+  PARTICIPANT_ORIGIN_HISTORY_STATE as ORIGIN_STATE,
+  PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
   PARTICIPANT_TRANSACTION_GENERATION_ORIGIN_COLUMNS as ORIGIN_COLUMNS,
   PARTICIPANT_TRANSACTION_SQL as SQL,
   PARTICIPANT_TRANSACTION_STATE as STATE,
@@ -105,6 +115,88 @@ function readPartitionWriteOrigin(db) {
   const row = generationRowOf(db);
   return row.origin_index === null ? null :
     Object.freeze({originIndex: row.origin_index, originTerm: row.origin_term});
+}
+
+function validOriginRow(row) {
+  if (typeof row.generation !== 'bigint' || row.generation < 0n) return false;
+  if (row.origin_index === null && row.origin_term === null) return true;
+  return typeof row.origin_index === 'bigint' && row.origin_index > 0n &&
+    typeof row.origin_term === 'bigint' && row.origin_term > 0n;
+}
+
+function originRanges(history) {
+  const origins = history.entries.filter((entry) =>
+    entry.kind === ENTRY_KIND.COMMAND && entry.command?.type === COMMAND.GENERATION_ORIGIN);
+  return {origins,
+    appliedCommands: origins.filter(({phase}) => phase === ENTRY_PHASE.APPLIED),
+    committedPending: origins.filter(({phase}) => phase === ENTRY_PHASE.COMMITTED_PENDING),
+    locallyUncommitted: origins.filter(({phase}) => phase === ENTRY_PHASE.LOCAL_UNCOMMITTED),
+    unclassifiedEntries: history.entries.filter((entry) =>
+      entry.kind !== ENTRY_KIND.NOOP && !origins.includes(entry))};
+}
+
+function originStateOf(observation) {
+  const {appliedOrigin, appliedCommands, committedPending, locallyUncommitted} = observation;
+  const first = appliedCommands[0];
+  const agrees = appliedOrigin === null ? appliedCommands.length === 0 :
+    first?.index === appliedOrigin.originIndex && first?.term === appliedOrigin.originTerm;
+  if (!agrees) {
+    return {state: ORIGIN_STATE.CONTRARY, reason: ORIGIN_REASON.POSITION};
+  } else if (appliedOrigin !== null) {
+    return {state: ORIGIN_STATE.APPLIED};
+  } else if (committedPending.length > 0) {
+    return {state: ORIGIN_STATE.COMMITTED_PENDING};
+  } else {
+    return {state: locallyUncommitted.length > 0 ?
+      ORIGIN_STATE.LOCAL_PENDING : ORIGIN_STATE.PRE_ORIGIN};
+  }
+}
+
+function originHistoryOf(history, row, partitionId) {
+  if (!validOriginRow(row)) {
+    return deepFreeze({state: ORIGIN_STATE.CONTRARY, reason: ORIGIN_REASON.ROW, partitionId});
+  }
+  const {origins, ...ranges} = originRanges(history);
+  const observation = {partitionId, coverage: history.coverage,
+    appliedIndex: history.appliedIndex, commitIndex: history.commitIndex,
+    lastIndex: history.lastIndex, generation: String(row.generation),
+    appliedOrigin: row.origin_index === null ? null :
+      {originIndex: String(row.origin_index), originTerm: String(row.origin_term)}, ...ranges};
+  if (origins.some(({command}) => !isCanonicalRetainedGenerationOrigin(command, partitionId))) {
+    return deepFreeze({...observation, state: ORIGIN_STATE.CONTRARY,
+      reason: ORIGIN_REASON.COMMAND});
+  }
+  if (history.coverage !== COVERAGE.COMPLETE) {
+    return deepFreeze({...observation, state: ORIGIN_STATE.UNAVAILABLE,
+      reason: ORIGIN_REASON.SNAPSHOT});
+  }
+  return deepFreeze({...observation, ...originStateOf(observation)});
+}
+
+/**
+ * Observe ENABLE's retained ranges and applied origin in one read snapshot.
+ * No open hook, connection stamp, enforcement DDL, proposal, apply or repair.
+ * Other commands remain explicitly unclassified, even beside a valid origin.
+ * Positions use exact decimal strings independently of the runtime Number API.
+ * @param {Object} db Existing connection, outside any caller transaction.
+ * @param {string} partitionId Exact native group/application partition.
+ * @return {Object} Frozen named observation, never opening/admission authority.
+ */
+function readPartitionWriteOriginHistory(db, partitionId) {
+  if (db.inTransaction) {
+    return Object.freeze({state: ORIGIN_STATE.UNAVAILABLE, reason: ORIGIN_REASON.TRANSACTION});
+  }
+  try {
+    return db.transaction(() => {
+      const history = RaftRsDurableStore.readRetainedHistoryIn(db, partitionId);
+      const row = db.prepare(SQL.SELECT_GENERATION).safeIntegers(true).get();
+      if (row === undefined) throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
+      return originHistoryOf(history, row, partitionId);
+    })();
+  } catch (cause) {
+    return Object.freeze({state: cause.code === RAFT_ERROR.RETAINED_HISTORY_INVALID ?
+      ORIGIN_STATE.CONTRARY : ORIGIN_STATE.UNAVAILABLE, reason: ORIGIN_REASON.OBSERVATION, cause});
+  }
 }
 
 /**
@@ -297,6 +389,7 @@ export {
   readPreparedParticipantIds,
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
+  readPartitionWriteOriginHistory,
   recordPartitionWriteOrigin,
   updateParticipantTransactionDecided,
 };

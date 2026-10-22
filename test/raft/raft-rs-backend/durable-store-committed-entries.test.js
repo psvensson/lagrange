@@ -24,6 +24,9 @@ import {RAFT_RS_PROPOSAL_CODEC_ERROR} from
   '../../../src/raft/raft-rs-proposal-codec-constants.js';
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
+import {RAFT_RS_RETAINED_ENTRY_KIND as KIND, RAFT_RS_RETAINED_ENTRY_PHASE as PHASE,
+  RAFT_RS_RETAINED_HISTORY_COVERAGE as COVERAGE, RAFT_RS_STORE_ERROR_CODE as ERROR,
+  RAFT_RS_TABLE as TABLE} from '../../../src/raft/raft-rs-durable-store-constants.js';
 
 const GROUP_ID = 'committed-entries-group';
 const OTHER_GROUP_ID = 'another-group';
@@ -179,3 +182,164 @@ test('the proposal codec is JSON only: what it encodes decodes, and bytes ' +
   assert.throws(() => encodeProposal(undefined),
     (error) => error.code === RAFT_RS_PROPOSAL_CODEC_ERROR.UNENCODABLE);
 });
+
+// These are storage-owner fixtures, including intentional corruptions. The
+// companion participant integration witness supplies real native histories.
+function coherentHistory(store) {
+  store.appendEntries(GROUP_ID, COMMANDS.map((command, index) => normalEntry(index + 1, command)));
+  commitAt(store, GROUP_ID, 2);
+  applyAt(store, GROUP_ID, 1);
+}
+
+function retainedView(db) {
+  const before = db.serialize();
+  const history = RaftRsDurableStore.readRetainedHistoryIn(db, GROUP_ID);
+  assert.deepEqual(db.serialize(), before, 'inspection preserves all native/application bytes');
+  assert.equal(db.inTransaction, false);
+  return history;
+}
+
+test('retained history preserves all three exact ranges and freezes its owned observation', () => {
+  withStore((store, db) => {
+    coherentHistory(store);
+    const history = retainedView(db);
+    assert.equal(history.coverage, COVERAGE.COMPLETE);
+    assert.equal(history.appliedIndex, '1');
+    assert.equal(history.commitIndex, '2');
+    assert.equal(history.lastIndex, '3');
+    assert.deepEqual(history.entries.map(({phase}) => phase),
+      [PHASE.APPLIED, PHASE.COMMITTED_PENDING, PHASE.LOCAL_UNCOMMITTED]);
+    assert.deepEqual(history.entries.map(({command}) => command), COMMANDS);
+    assert.deepEqual(history.record, store.readDurableRecord(GROUP_ID));
+    assert.throws(() => history.record.entries.pop(), TypeError);
+    assert.throws(() => history.entries[1].command.params.push('changed'), TypeError);
+  });
+});
+
+test('retained zero-progress founder permits no hard-state row', () => {
+  withStore((store, db) => {
+    store.putBootstrapAppliedState(GROUP_ID, {voters: ['1']},
+      {bootstrapIndex: '0', admissionIndex: '0'});
+    const history = retainedView(db);
+    assert.equal(history.record.hardState, null);
+    assert.equal(history.coverage, COVERAGE.COMPLETE);
+    assert.equal(history.appliedIndex, '0');
+    assert.equal(history.commitIndex, '0');
+    assert.equal(history.lastIndex, '0');
+  });
+});
+
+test('retained snapshot positions above Number precision remain exact with named prefix coverage',
+  () => {
+    withStore((store, db) => {
+      const snapshotIndex = 9007199254740993n;
+      store.putSnapshot(GROUP_ID, {metadata: {index: String(snapshotIndex), term: TERM}});
+      store.appendEntries(GROUP_ID, [normalEntry(snapshotIndex + 1n, COMMANDS[0]),
+        normalEntry(snapshotIndex + 2n, COMMANDS[1])]);
+      commitAt(store, GROUP_ID, snapshotIndex + 1n);
+      applyAt(store, GROUP_ID, snapshotIndex);
+      const history = retainedView(db);
+      assert.equal(history.coverage, COVERAGE.SNAPSHOT_PREFIX);
+      assert.equal(history.appliedIndex, '9007199254740993');
+      assert.equal(history.commitIndex, '9007199254740994');
+      assert.equal(history.lastIndex, '9007199254740995');
+      assert.deepEqual(history.entries.map(({phase}) => phase),
+        [PHASE.COMMITTED_PENDING, PHASE.LOCAL_UNCOMMITTED]);
+    });
+  });
+
+test('retained native no-ops and configuration bytes are distinct from application proposals', () => {
+  withStore((store, db) => {
+    store.appendEntries(GROUP_ID, [
+      {index: '1', term: TERM, entryType: RAFT_RS_ENTRY_TYPE.NORMAL},
+      {index: '2', term: TERM, entryType: RAFT_RS_ENTRY_TYPE.NORMAL, data: ''},
+      {index: '3', term: TERM, entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE_V2,
+        data: Buffer.from(NOT_JSON).toString(BASE64)},
+      normalEntry(4, null),
+    ]);
+    commitAt(store, GROUP_ID, 3);
+    applyAt(store, GROUP_ID, 2);
+    const history = retainedView(db);
+    assert.deepEqual(history.entries.map(({kind}) => kind),
+      [KIND.NOOP, KIND.NOOP, KIND.CONFIGURATION, KIND.COMMAND]);
+    assert.equal(Object.hasOwn(history.entries[2], 'command'), false,
+      'the reader never substitutes a membership parser');
+    assert.equal(history.entries[3].command, null,
+      'valid JSON is observed, without claiming application permission');
+  });
+});
+
+const RAW_CORRUPTIONS = [
+  ['non-integer applied index', `UPDATE ${TABLE.APPLIED_STATE} SET applied_index = 1.5`],
+  ['unknown native entry type', `UPDATE ${TABLE.LOG} SET entry_type = 0.5 WHERE log_index = 2`],
+  ['negative hard state', `UPDATE ${TABLE.HARD_STATE} SET term = -1`],
+  ['zero-term vote', `UPDATE ${TABLE.HARD_STATE} SET term = 0, vote = 1`],
+  ['non-boolean raw auto leave', `UPDATE ${TABLE.APPLIED_STATE} SET auto_leave = 2`],
+  ['noncanonical peer text', `UPDATE ${TABLE.APPLIED_STATE} SET voters = '["01"]'`],
+  ['non-string peer', `UPDATE ${TABLE.APPLIED_STATE} SET voters = '[1]'`],
+  ['duplicate peer', `UPDATE ${TABLE.APPLIED_STATE} SET voters = '["1","1"]'`],
+  ['invalid configuration JSON', `UPDATE ${TABLE.APPLIED_STATE} SET voters = '{'`],
+  ['membership generation beyond coverage',
+    `UPDATE ${TABLE.APPLIED_STATE} SET membership_generation_index = 9`],
+  ['invalid payload base64', `UPDATE ${TABLE.LOG} SET data = '%%%%' WHERE log_index = 2`],
+  ['noncanonical payload base64', `UPDATE ${TABLE.LOG} SET data = 'e30' WHERE log_index = 2`],
+  ['invalid UTF8 proposal', `UPDATE ${TABLE.LOG} SET data = '//4=' WHERE log_index = 2`],
+];
+
+test('raw retained corruption cannot be normalized into a coherent observation', async (t) => {
+  for (const [name, sql] of RAW_CORRUPTIONS) {
+    await t.test(name, () => withStore((store, db) => {
+      coherentHistory(store);
+      db.exec(sql);
+      const before = db.serialize();
+      assert.throws(() => retainedView(db), {code: ERROR.RETAINED_HISTORY_INVALID});
+      assert.deepEqual(db.serialize(), before);
+      assert.equal(db.inTransaction, false);
+    }));
+  }
+});
+
+test('missing required native observations remain unavailable and never create schema', async (t) => {
+  for (const sql of [
+    `DROP TABLE ${TABLE.HARD_STATE}`,
+    `DELETE FROM ${TABLE.APPLIED_STATE}`,
+    `ALTER TABLE ${TABLE.APPLIED_STATE} DROP COLUMN membership_generation_index`,
+  ]) {
+    await t.test(sql, () => withStore((store, db) => {
+      coherentHistory(store);
+      db.exec(sql);
+      const before = db.serialize();
+      assert.throws(() => retainedView(db), {code: ERROR.RETAINED_HISTORY_UNAVAILABLE});
+      assert.deepEqual(db.serialize(), before);
+      assert.equal(db.inTransaction, false);
+    }));
+  }
+});
+
+test('snapshot overlap and effective suffix boundaries are validated without deleting old entries',
+  async (t) => {
+    const corruptions = [
+      ['snapshot beyond commit', `UPDATE ${TABLE.SNAPSHOT} SET snapshot_index = 3`],
+      ['overlap term disagreement', `UPDATE ${TABLE.SNAPSHOT} SET snapshot_term = 2`],
+      ['term beyond hard state', `UPDATE ${TABLE.SNAPSHOT} SET snapshot_term = 4`],
+      ['suffix gap', `DELETE FROM ${TABLE.LOG} WHERE log_index = 3`],
+    ];
+    for (const [name, mutation] of [['valid overlap', null], ...corruptions]) {
+      await t.test(name, () => withStore((store, db) => {
+        coherentHistory(store);
+        store.appendEntries(GROUP_ID, [normalEntry(4, COMMANDS[0])]);
+        store.putSnapshot(GROUP_ID, {metadata: {index: '2', term: TERM}});
+        if (mutation !== null) {
+          db.exec(mutation);
+          const before = db.serialize();
+          assert.throws(() => retainedView(db), {code: ERROR.RETAINED_HISTORY_INVALID});
+          assert.deepEqual(db.serialize(), before);
+        } else {
+          const history = retainedView(db);
+          assert.equal(history.coverage, COVERAGE.SNAPSHOT_PREFIX);
+          assert.equal(history.record.entries.length, 4);
+          assert.deepEqual(history.record.entries, store.readDurableRecord(GROUP_ID).entries);
+        }
+      }));
+    }
+  });

@@ -298,6 +298,36 @@ const RAFT_RS_STORE_ERROR_CODE = Object.freeze({
   USER_TRANSACTION_OPEN: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN',
   DURABLE_COMMIT_INSIDE_TRANSACTION:
     'RAFT_RS_STORE_DURABLE_COMMIT_INSIDE_TRANSACTION',
+  RETAINED_HISTORY_INVALID: 'RAFT_RS_RETAINED_HISTORY_INVALID',
+  RETAINED_HISTORY_UNAVAILABLE: 'RAFT_RS_RETAINED_HISTORY_UNAVAILABLE',
+});
+
+// Observation, never application or opening permission. Snapshot coverage
+// requires the checkpoint/application owner to supply the missing prefix.
+const RAFT_RS_RETAINED_HISTORY_COVERAGE = Object.freeze({
+  COMPLETE: 'complete',
+  SNAPSHOT_PREFIX: 'snapshot-prefix',
+});
+const RAFT_RS_RETAINED_ENTRY_PHASE = Object.freeze({
+  APPLIED: 'applied',
+  COMMITTED_PENDING: 'committed-pending',
+  LOCAL_UNCOMMITTED: 'local-uncommitted',
+});
+const RAFT_RS_RETAINED_ENTRY_KIND = Object.freeze({
+  NOOP: 'noop',
+  COMMAND: 'command',
+  CONFIGURATION: 'configuration',
+});
+const RAFT_RS_RETAINED_HISTORY_REASON = Object.freeze({
+  OBSERVATION: 'retained native record could not be read',
+  APPLIED_ROW: 'retained native record has no required applied row',
+  INTEGER: 'retained native record has an invalid exact integer',
+  CONFIGURATION: 'retained native record has an invalid configuration',
+  FRONTIER: 'retained native frontiers contradict each other',
+  TERM: 'retained native terms contradict each other',
+  GAP: 'retained native suffix has a gap',
+  ENTRY_TYPE: 'retained native record has an unknown entry type',
+  PAYLOAD: 'retained native record has invalid payload bytes',
 });
 
 const RAFT_RS_ZERO_INDEX = '0';
@@ -328,6 +358,10 @@ export {
   RAFT_RS_PERSISTENCE_ADMISSION,
   RAFT_RS_RECORD_COMPATIBILITY,
   RAFT_RS_RECORD_TABLES,
+  RAFT_RS_RETAINED_ENTRY_KIND,
+  RAFT_RS_RETAINED_ENTRY_PHASE,
+  RAFT_RS_RETAINED_HISTORY_COVERAGE,
+  RAFT_RS_RETAINED_HISTORY_REASON,
   RAFT_RS_SCHEMA_SQL,
   RAFT_RS_SQL,
   RAFT_RS_STORE_ERROR_CODE,

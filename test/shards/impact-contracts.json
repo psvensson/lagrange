@@ -1279,6 +1279,26 @@
         "test/node/replica-handler-release-recovery.test.js",
         "test/partition/participant-release-protocol.test.js"
       ]
+    },
+    "original-retained-history-observation": {
+      "description": "The durable Raft owner validates required raw rows, exact applied/commit/retained frontiers, suffix coverage, terms and bytes before original preparation delegates application inspection and again at native construction. The participant byte/store owners observe canonical ENABLE commands across applied, committed-pending and local-uncommitted ranges in one read snapshot with the durable origin row, preserving legitimate repeats and every unclassified application effect. Neither observation writes, replays, truncates, grants full original-history acceptance or opens startup; checkpoint/configuration interpretation and SQL/MG effect permission remain explicit unavailable dependencies.",
+      "owners": [
+        "src/raft/raft-rs-durable-store.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-retained-history.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js"
+      ],
+      "tests": [
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/raft/raft-rs-original-opening-authority.test.js",
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "test/partition/participant-origin-retained-history.test.js",
+        "test/partition/participant-origin-retained-history.integration.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2625,6 +2645,59 @@
         "test/scripts/participant-release-completion-owner.test.js",
         "test/node/replica-handler-release-recovery.test.js",
         "test/partition/participant-release-protocol.test.js"
+      ]
+    },
+    "original-preparation-native-history": {
+      "description": "Original preparation consumes current validated native history before its application callback and at the final native effect cut.",
+      "endpoints": [
+        {
+          "id": "native-retained-record",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-durable-store-constants.js",
+            "src/raft/raft-rs-retained-history.js"
+          ]
+        },
+        {
+          "id": "original-preparation",
+          "owners": [
+            "src/raft/raft-rs-original-allocation-preparation.js"
+          ]
+        }
+      ],
+      "contract": "original-retained-history-observation",
+      "witnessTests": [
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/raft/raft-rs-original-opening-authority.test.js",
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js"
+      ]
+    },
+    "participant-origin-native-history": {
+      "description": "One read snapshot binds participant origin bytes and the durable origin row to native applied, committed and local ranges without applying any command.",
+      "endpoints": [
+        {
+          "id": "native-retained-record",
+          "owners": [
+            "src/raft/raft-rs-durable-store.js",
+            "src/raft/raft-rs-durable-store-constants.js",
+            "src/raft/raft-rs-retained-history.js"
+          ]
+        },
+        {
+          "id": "participant-origin",
+          "owners": [
+            "src/partition/partition-participant-transaction-bytes.js",
+            "src/partition/partition-participant-transaction-store.js",
+            "src/partition/partition-participant-transaction-constants.js"
+          ]
+        }
+      ],
+      "contract": "original-retained-history-observation",
+      "witnessTests": [
+        "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+        "test/partition/participant-origin-retained-history.test.js",
+        "test/partition/participant-origin-retained-history.integration.test.js"
       ]
     }
   }

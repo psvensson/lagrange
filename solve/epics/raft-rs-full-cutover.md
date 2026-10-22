@@ -37,6 +37,16 @@ authorizes:
 
 ## Current coordination: original startup handoff (2026-10-22)
 
+The next bounded dependency is now active: native retained-history validation
+and read-only participant-origin classification. The [unit plan](../quests/retained-seed-original-handoff/evidence/PLAN-retained-history-2026-10-22.md)
+and [review history](../quests/retained-seed-original-handoff/evidence/REVIEW-retained-history-2026-10-22.md)
+keep complete SQL/MG effect permission and cold startup outside this increment.
+Baseline `79fa766ed290c5545cf4017ee589b86e440e0e47` produced eleven engaged
+malformed-history failures in lab #814; its positive controls passed. The full
+log and exact receipts are retained. All baseline/export scopes are closed;
+root is implementing the reviewed owner interaction with unchanged baseline
+witness bytes. Candidate verification is pending.
+
 The startup-owned lifetime is implemented and independently approved as a
 bounded WIP at `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` on
 `work/original-handoff-boundaries-20261021-cloud`. The

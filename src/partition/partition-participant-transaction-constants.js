@@ -23,6 +23,25 @@ const PARTICIPANT_TRANSACTION_COMMAND = Object.freeze({
 const PARTICIPANT_TRANSACTION_COMMAND_TYPES = Object.freeze(
   Object.values(PARTICIPANT_TRANSACTION_COMMAND));
 
+// Read-only correspondence of the durable origin row and native retained
+// history. None of these states admits SQL, MG effects or original startup.
+const PARTICIPANT_ORIGIN_HISTORY_STATE = Object.freeze({
+  PRE_ORIGIN: 'pre-origin',
+  LOCAL_PENDING: 'local-pending',
+  COMMITTED_PENDING: 'committed-pending',
+  APPLIED: 'applied',
+  UNAVAILABLE: 'unavailable',
+  CONTRARY: 'contrary',
+});
+const PARTICIPANT_ORIGIN_HISTORY_REASON = Object.freeze({
+  OBSERVATION: 'participant origin observation unavailable',
+  TRANSACTION: 'participant origin requires its own read snapshot',
+  ROW: 'participant origin row is malformed',
+  COMMAND: 'retained participant origin differs from its canonical producer',
+  POSITION: 'participant origin row disagrees with applied native history',
+  SNAPSHOT: 'participant origin prefix requires checkpoint correspondence',
+});
+
 // What a decision decides (design 2.4).
 const PARTICIPANT_TRANSACTION_DECISION = Object.freeze({
   COMMIT: 'COMMIT',
@@ -378,6 +397,8 @@ const PARTICIPANT_COORDINATOR_TABLE_COLUMNS = Object.freeze({
 
 export {
   PARTICIPANT_COORDINATOR_TABLE_COLUMNS,
+  PARTICIPANT_ORIGIN_HISTORY_REASON,
+  PARTICIPANT_ORIGIN_HISTORY_STATE,
   PARTICIPANT_TRANSACTION_ADMISSION_CODE,
   PARTICIPANT_TRANSACTION_BYTES,
   PARTICIPANT_TRANSACTION_COMMAND,

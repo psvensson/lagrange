@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2113,
-    "integration": 108,
+    "unit": 2114,
+    "integration": 109,
     "bootstrap": 210,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2438,
-  "digest": "fnv1a32-54c627d2",
+  "censusSize": 2440,
+  "digest": "fnv1a32-efffa42a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1264,6 +1264,8 @@
     "test/partition/message-handler-registry.test.js": "unit",
     "test/partition/participant-decision-canonical-record.test.js": "unit",
     "test/partition/participant-envelope-admission.test.js": "unit",
+    "test/partition/participant-origin-retained-history.integration.test.js": "integration",
+    "test/partition/participant-origin-retained-history.test.js": "unit",
     "test/partition/participant-release-applied-position.test.js": "unit",
     "test/partition/participant-release-build-provenance.test.js": "unit",
     "test/partition/participant-release-control-three-member.test.js": "unit",

@@ -8,10 +8,13 @@ import {SERVICE_TYPE} from '../constants/service.js';
 import {validateOriginalSeedDeclaration, originalSeedPeerAddresses} from
   '../bootstrap/seed-original-allocation-declaration.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations} from
+import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations,
+  deriveRaftRsPeerId} from
   './raft-rs-peer-identity.js';
 import {RaftRsReplicaLifecycleOwner} from './raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from './raft-rs-durable-store.js';
+import {RAFT_RS_RETAINED_HISTORY_COVERAGE, RAFT_RS_RETAINED_ENTRY_KIND,
+  RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RaftRsPreparationCustody} from './raft-rs-preparation-custody.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
@@ -96,13 +99,31 @@ function inspectColdMember(db, declaration, member) {
       row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
     throw originalAllocationError(REASON.HISTORY, member.replicaId);
   }
-  if (!RaftRsDurableStore.hasDurableRecordIn(db, member.groupId)) {
+  let history;
+  try {
+    history = RaftRsDurableStore.readRetainedHistoryIn(db, member.groupId);
+  } catch (cause) {
+    throw originalAllocationError(REASON.HISTORY, member.replicaId, cause);
+  }
+  const {record} = history;
+  const voters = member.replicaIds.map(deriveRaftRsPeerId).sort();
+  const expected = {voters, learners: [], votersOutgoing: [], learnersNext: [],
+    autoLeave: false};
+  if (!isDeepStrictEqual({...record.confState,
+    voters: [...record.confState.voters].sort()}, expected) ||
+      record.bootstrapIndex !== RAFT_RS_ZERO_INDEX ||
+      record.admissionIndex !== RAFT_RS_ZERO_INDEX ||
+      record.membershipGenerationIndex !== RAFT_RS_ZERO_INDEX) {
     throw originalAllocationError(REASON.HISTORY, member.replicaId);
   }
-  // This is the existing DDL-free durable reader, including pending entries.
-  // Application/transition classification is a further required owner check;
-  // neither an applied projection nor committed==applied supplies it.
-  return RaftRsDurableStore.readDurableRecordIn(db, member.groupId);
+  // Native membership/checkpoint interpretation remains with those owners.
+  // A current founder set cannot classify a retained configuration command or
+  // the application prefix a snapshot replaced.
+  if (history.coverage !== RAFT_RS_RETAINED_HISTORY_COVERAGE.COMPLETE ||
+      history.entries.some(({kind}) => kind === RAFT_RS_RETAINED_ENTRY_KIND.CONFIGURATION)) {
+    throw originalAllocationError(REASON.CLASSIFICATION_UNAVAILABLE, member.replicaId);
+  }
+  return record;
 }
 
 
