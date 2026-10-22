@@ -1,0 +1,96 @@
+{
+  "recorded_at": "2026-10-22T15:58:34.079647+00:00",
+  "kind": "lab-intake-observation-and-owner-handoff",
+  "candidate": {
+    "repository": "psvensson/lagrange",
+    "branch": "work/original-handoff-boundaries-20261021-cloud",
+    "commit": "cb822d6fcf8c7b78b34a718772d06488490bc0da",
+    "tree": "3b3a2471e9670fac863b2a380a998c2dc2cf1c29",
+    "source_tree": "d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba",
+    "test_tree": "fc2296064ae7a02826a8c249054dab01a98f473e"
+  },
+  "operator_evidence": {
+    "provenance": "User-supplied service status and journal attachment, copied verbatim from the provided scratch attachment.",
+    "artifact": "OPERATOR-lab-bridge-status-2026-10-22.txt",
+    "bytes": 12868,
+    "sha256": "a211197707c2bab9adddc51606ae074751c021c98eb3696e1a81388c53617cad",
+    "service": "lagrange-lab-bridge.service",
+    "state_at_supplied_snapshot": "active (running)",
+    "pid": 3749683,
+    "active_since_utc": "2026-10-22T09:23:21Z",
+    "installed_controller_source": "439961a1580b5f6c444542c5a5cd69d7c0757850",
+    "latest_displayed_journal_exception_at": "2026-10-22T10:51:30.556Z",
+    "later_successful_receipt": {
+      "request_id": "b163ead8499d4704a85e60bd58cc12ce",
+      "completed_at": "2026-10-22T14:47:15.025Z",
+      "url": "https://github.com/psvensson/lagrange-lab/issues/816#issuecomment-6343637060"
+    },
+    "interpretation": "An active process is observed. The displayed exceptions predate later successful lab receipts and do not establish the current intake obstruction. This supersedes the earlier record that service status and journal had not been supplied."
+  },
+  "installed_source_observation": {
+    "url": "https://github.com/psvensson/lagrange-lab/blob/439961a1580b5f6c444542c5a5cd69d7c0757850/upgrades/v0.2.2/current_controller.py",
+    "observers": [
+      "root",
+      "subagent:/root/startup_mapping",
+      "subagent:/root/lab_lane"
+    ],
+    "findings": [
+      "Each cycle pages all open issues in ascending creation order, starting at page 1 with 30 issues per page; dispatch follows the complete scan.",
+      "The loop waits through twenty quarter-second intervals after a completed or failed cycle, adding approximately five seconds between cycles.",
+      "GitHub HTTP errors are reduced to GITHUB_HTTP_<status>, omitting response headers and body diagnostics.",
+      "Successful cycles and intake progress have no periodic log. Journal silence alone does not establish that the loop stopped."
+    ],
+    "limit": "Source inspection establishes the repeated scan and diagnostic loss. It does not identify the precise runtime cause of the latest missing receipts."
+  },
+  "repair_ownership": {
+    "owner": "Harnessd agent",
+    "status": "User reports the rescan and discarded-diagnostics defect is being fixed.",
+    "deployment_or_recovery_observed": false,
+    "rs_raft_action": "Leave the controller repair with its current owner; preserve the candidate and original validation request identities."
+  },
+  "request_observation": {
+    "observed_at": "2026-10-22T15:54:04Z",
+    "observer": "subagent:/root/lab_lane",
+    "requests": [
+      {
+        "issue": 820,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/820",
+        "request_id": "1c795ef8bfa44d4ba1a835ba150467bd",
+        "logical_id": "1c795ef8-bfa4-4d4b-a1a8-35ba150467bd",
+        "comments": 0,
+        "controller_receipt_observed": false
+      },
+      {
+        "issue": 821,
+        "url": "https://github.com/psvensson/lagrange-lab/issues/821",
+        "request_id": "48e77e2c48ca4c90a242a431bbc91d35",
+        "logical_id": "48e77e2c-48ca-4c90-a242-a431bbc91d35",
+        "comments": 1,
+        "only_comment": "Corrected raw-JSON submission part 6344551273",
+        "controller_receipt_observed": false
+      }
+    ],
+    "expires_at": "2026-10-22T17:28:18.350Z",
+    "unobserved": [
+      "admission",
+      "host assignment",
+      "execution",
+      "result",
+      "execution scope closure",
+      "thermal scope closure",
+      "container scope closure"
+    ]
+  },
+  "continuation": {
+    "request_owner": "root",
+    "next_action": "When intake resumes, inspect the original request IDs and their recorded execution or expiry state before considering any successor request.",
+    "preserved": [
+      "Exact candidate source and witnesses",
+      "Existing requests and expiry",
+      "Previous malformed-submission and correction evidence",
+      "Reviewed checkpoint and append-only review history",
+      "All eight handoff receipts and original quest seal"
+    ],
+    "verification_status": "Candidate local fast-static PASS and independent source approval remain bounded. Candidate runtime proof remains pending; inherited normal source precommit refusal remains RED."
+  }
+}

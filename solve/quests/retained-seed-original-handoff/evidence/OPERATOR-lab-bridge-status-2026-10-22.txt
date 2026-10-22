@@ -1,0 +1,122 @@
+$ systemctl --user status lagrange-lab-bridge.service --no-pager
+journalctl --user -u lagrange-lab-bridge.service -n 100 --no-pager
+● lagrange-lab-bridge.service - Lagrange private outbound lab bridge
+     Loaded: loaded (/home/peter/.config/systemd/user/lagrange-lab-bridge.service; enabled; vendor preset: enabled)
+     Active: active (running) since Thu 2026-10-22 11:23:21 CEST; 6h ago
+   Main PID: 3749683 (python3)
+      Tasks: 1 (limit: 37744)
+     Memory: 145.8M
+        CPU: 18min 11.777s
+     CGroup: /user.slice/user-1000.slice/user@1000.service/app.slice/lagrange-lab-bridge.service
+             └─3749683 /usr/bin/python3 -E -s -B /home/peter/.local/share/lagrange-lab/current-releases/439961a1580b5f6c444542c5a5cd69d7c0757850/6c339c42f1394f33bd3794069a946825/current_controller.py --config /home/peter/.config/lagrange-lab/con…
+
+Oct 22 12:47:18 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:18.247Z Refused GITHUB_HTTP_403
+Oct 22 12:47:23 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:23.468Z Refused GITHUB_HTTP_403
+Oct 22 12:47:28 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:28.668Z Refused GITHUB_HTTP_403
+Oct 22 12:47:33 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:33.902Z Refused GITHUB_HTTP_403
+Oct 22 12:47:39 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:39.125Z Refused GITHUB_HTTP_403
+Oct 22 12:47:44 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:44.343Z Refused GITHUB_HTTP_403
+Oct 22 12:47:49 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:49.583Z Refused GITHUB_HTTP_403
+Oct 22 12:47:54 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:54.798Z Refused GITHUB_HTTP_403
+Oct 22 12:48:00 peter-System-Product-Name python3[3749683]: 2026-10-22T10:48:00.001Z Refused GITHUB_HTTP_403
+Oct 22 12:51:30 peter-System-Product-Name python3[3749683]: 2026-10-22T10:51:30.556Z Refused GITHUB_HTTP_500
+Oct 22 06:47:26 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:26.806Z Refused GITHUB_HTTP_403
+Oct 22 06:47:32 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:32.021Z Refused GITHUB_HTTP_403
+Oct 22 06:47:37 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:37.219Z Refused GITHUB_HTTP_403
+Oct 22 06:47:42 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:42.419Z Refused GITHUB_HTTP_403
+Oct 22 06:47:47 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:47.640Z Refused GITHUB_HTTP_403
+Oct 22 06:47:52 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:52.860Z Refused GITHUB_HTTP_403
+Oct 22 06:47:58 peter-System-Product-Name python3[2608734]: 2026-10-22T04:47:58.074Z Refused GITHUB_HTTP_403
+Oct 22 07:45:19 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:19.484Z Refused GITHUB_HTTP_403
+Oct 22 07:45:24 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:24.690Z Refused GITHUB_HTTP_403
+Oct 22 07:45:29 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:29.922Z Refused GITHUB_HTTP_403
+Oct 22 07:45:35 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:35.148Z Refused GITHUB_HTTP_403
+Oct 22 07:45:40 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:40.377Z Refused GITHUB_HTTP_403
+Oct 22 07:45:45 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:45.585Z Refused GITHUB_HTTP_403
+Oct 22 07:45:50 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:50.803Z Refused GITHUB_HTTP_403
+Oct 22 07:45:56 peter-System-Product-Name python3[2608734]: 2026-10-22T05:45:56.015Z Refused GITHUB_HTTP_403
+Oct 22 07:46:01 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:01.228Z Refused GITHUB_HTTP_403
+Oct 22 07:46:06 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:06.437Z Refused GITHUB_HTTP_403
+Oct 22 07:46:11 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:11.643Z Refused GITHUB_HTTP_403
+Oct 22 07:46:16 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:16.853Z Refused GITHUB_HTTP_403
+Oct 22 07:46:22 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:22.069Z Refused GITHUB_HTTP_403
+Oct 22 07:46:27 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:27.537Z Refused GITHUB_HTTP_403
+Oct 22 07:46:32 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:32.740Z Refused GITHUB_HTTP_403
+Oct 22 07:46:37 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:37.946Z Refused GITHUB_HTTP_403
+Oct 22 07:46:43 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:43.168Z Refused GITHUB_HTTP_403
+Oct 22 07:46:48 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:48.382Z Refused GITHUB_HTTP_403
+Oct 22 07:46:53 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:53.589Z Refused GITHUB_HTTP_403
+Oct 22 07:46:58 peter-System-Product-Name python3[2608734]: 2026-10-22T05:46:58.797Z Refused GITHUB_HTTP_403
+Oct 22 07:47:04 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:04.026Z Refused GITHUB_HTTP_403
+Oct 22 07:47:09 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:09.257Z Refused GITHUB_HTTP_403
+Oct 22 07:47:14 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:14.468Z Refused GITHUB_HTTP_403
+Oct 22 07:47:19 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:19.662Z Refused GITHUB_HTTP_403
+Oct 22 07:47:24 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:24.876Z Refused GITHUB_HTTP_403
+Oct 22 07:47:30 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:30.138Z Refused GITHUB_HTTP_403
+Oct 22 07:47:35 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:35.352Z Refused GITHUB_HTTP_403
+Oct 22 07:47:40 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:40.566Z Refused GITHUB_HTTP_403
+Oct 22 07:47:45 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:45.823Z Refused GITHUB_HTTP_403
+Oct 22 07:47:51 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:51.034Z Refused GITHUB_HTTP_403
+Oct 22 07:47:56 peter-System-Product-Name python3[2608734]: 2026-10-22T05:47:56.250Z Refused GITHUB_HTTP_403
+Oct 22 08:21:52 peter-System-Product-Name python3[2608734]: 2026-10-22T06:21:52.775Z URLError <urlopen error [Errno 104] Connection reset by peer>
+Oct 22 08:47:04 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:04.341Z Refused GITHUB_HTTP_403
+Oct 22 08:47:09 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:09.557Z Refused GITHUB_HTTP_403
+Oct 22 08:47:14 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:14.764Z Refused GITHUB_HTTP_403
+Oct 22 08:47:19 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:19.969Z Refused GITHUB_HTTP_403
+Oct 22 08:47:25 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:25.188Z Refused GITHUB_HTTP_403
+Oct 22 08:47:30 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:30.404Z Refused GITHUB_HTTP_403
+Oct 22 08:47:35 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:35.599Z Refused GITHUB_HTTP_403
+Oct 22 08:47:40 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:40.826Z Refused GITHUB_HTTP_403
+Oct 22 08:47:46 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:46.057Z Refused GITHUB_HTTP_403
+Oct 22 08:47:51 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:51.263Z Refused GITHUB_HTTP_403
+Oct 22 08:47:56 peter-System-Product-Name python3[2608734]: 2026-10-22T06:47:56.463Z Refused GITHUB_HTTP_403
+Oct 22 09:15:25 peter-System-Product-Name python3[2608734]: 2026-10-22T07:15:25.741Z Refused GITHUB_HTTP_504
+Oct 22 09:47:50 peter-System-Product-Name python3[2608734]: 2026-10-22T07:47:50.036Z Refused GITHUB_HTTP_403
+Oct 22 09:47:55 peter-System-Product-Name python3[2608734]: 2026-10-22T07:47:55.256Z Refused GITHUB_HTTP_403
+Oct 22 09:48:00 peter-System-Product-Name python3[2608734]: 2026-10-22T07:48:00.463Z Refused GITHUB_HTTP_403
+Oct 22 10:28:36 peter-System-Product-Name systemd[3332]: Stopping Lagrange private outbound lab bridge...
+Oct 22 10:28:43 peter-System-Product-Name systemd[3332]: Stopped Lagrange private outbound lab bridge.
+Oct 22 10:28:43 peter-System-Product-Name systemd[3332]: lagrange-lab-bridge.service: Consumed 37min 36.028s CPU time.
+Oct 22 10:28:45 peter-System-Product-Name systemd[3332]: Started Lagrange private outbound lab bridge.
+Oct 22 11:23:07 peter-System-Product-Name systemd[3332]: Stopping Lagrange private outbound lab bridge...
+Oct 22 11:23:13 peter-System-Product-Name systemd[3332]: Stopped Lagrange private outbound lab bridge.
+Oct 22 11:23:13 peter-System-Product-Name systemd[3332]: lagrange-lab-bridge.service: Consumed 2min 44.748s CPU time.
+Oct 22 11:23:21 peter-System-Product-Name systemd[3332]: Started Lagrange private outbound lab bridge.
+Oct 22 11:47:22 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:22.926Z Refused GITHUB_HTTP_403
+Oct 22 11:47:28 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:28.599Z Refused GITHUB_HTTP_403
+Oct 22 11:47:33 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:33.810Z Refused GITHUB_HTTP_403
+Oct 22 11:47:39 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:39.033Z Refused GITHUB_HTTP_403
+Oct 22 11:47:44 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:44.265Z Refused GITHUB_HTTP_403
+Oct 22 11:47:49 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:49.473Z Refused GITHUB_HTTP_403
+Oct 22 11:47:54 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:54.685Z Refused GITHUB_HTTP_403
+Oct 22 11:47:59 peter-System-Product-Name python3[3749683]: 2026-10-22T09:47:59.898Z Refused GITHUB_HTTP_403
+Oct 22 12:45:33 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:33.099Z Refused GITHUB_HTTP_403
+Oct 22 12:45:38 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:38.334Z Refused GITHUB_HTTP_403
+Oct 22 12:45:43 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:43.977Z Refused GITHUB_HTTP_403
+Oct 22 12:45:49 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:49.481Z Refused GITHUB_HTTP_403
+Oct 22 12:45:54 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:54.684Z Refused GITHUB_HTTP_403
+Oct 22 12:45:59 peter-System-Product-Name python3[3749683]: 2026-10-22T10:45:59.916Z Refused GITHUB_HTTP_403
+Oct 22 12:46:05 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:05.130Z Refused GITHUB_HTTP_403
+Oct 22 12:46:10 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:10.361Z Refused GITHUB_HTTP_403
+Oct 22 12:46:15 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:15.580Z Refused GITHUB_HTTP_403
+Oct 22 12:46:20 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:20.790Z Refused GITHUB_HTTP_403
+Oct 22 12:46:26 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:26.005Z Refused GITHUB_HTTP_403
+Oct 22 12:46:31 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:31.209Z Refused GITHUB_HTTP_403
+Oct 22 12:46:36 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:36.436Z Refused GITHUB_HTTP_403
+Oct 22 12:46:41 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:41.638Z Refused GITHUB_HTTP_403
+Oct 22 12:46:46 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:46.892Z Refused GITHUB_HTTP_403
+Oct 22 12:46:52 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:52.168Z Refused GITHUB_HTTP_403
+Oct 22 12:46:57 peter-System-Product-Name python3[3749683]: 2026-10-22T10:46:57.368Z Refused GITHUB_HTTP_403
+Oct 22 12:47:02 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:02.583Z Refused GITHUB_HTTP_403
+Oct 22 12:47:07 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:07.803Z Refused GITHUB_HTTP_403
+Oct 22 12:47:13 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:13.037Z Refused GITHUB_HTTP_403
+Oct 22 12:47:18 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:18.247Z Refused GITHUB_HTTP_403
+Oct 22 12:47:23 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:23.468Z Refused GITHUB_HTTP_403
+Oct 22 12:47:28 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:28.668Z Refused GITHUB_HTTP_403
+Oct 22 12:47:33 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:33.902Z Refused GITHUB_HTTP_403
+Oct 22 12:47:39 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:39.125Z Refused GITHUB_HTTP_403
+Oct 22 12:47:44 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:44.343Z Refused GITHUB_HTTP_403
+Oct 22 12:47:49 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:49.583Z Refused GITHUB_HTTP_403
+Oct 22 12:47:54 peter-System-Product-Name python3[3749683]: 2026-10-22T10:47:54.798Z Refused GITHUB_HTTP_403
+Oct 22 12:48:00 peter-System-Product-Name python3[3749683]: 2026-10-22T10:48:00.001Z Refused GITHUB_HTTP_403
+Oct 22 12:51:30 peter-System-Product-Name python3[3749683]: 2026-10-22T10:51:30.556Z Refused GITHUB_HTTP_500

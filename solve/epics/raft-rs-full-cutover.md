@@ -48,11 +48,18 @@ All baseline/export scopes are closed. The candidate's isolated fast-static
 check passes, while the normal source precommit retains its three independently
 attributed inherited decision findings. Lab requests #820 and #821 are posted
 against the exact candidate, with admission and execution still unobserved.
-The initial fenced-JSON submission error was corrected in place; a separate
-lab intake uncertainty also affects an earlier nonexecuting ping. No candidate
-runtime pass or physical scope closure is claimed. Complete SQL/MG effect
-permission and cold startup remain outside this increment, and all eight
-handoff receipts remain unchanged.
+The initial fenced-JSON submission error was corrected in place. The
+[operator observation](../quests/retained-seed-original-handoff/evidence/OBSERVATION-lab-intake-repair-2026-10-22.json)
+now supplies an active bridge process and historical journal output. Installed
+controller source confirms repeated oldest-first scans of every open issue and
+loss of GitHub HTTP diagnostics. The user reports that the Harnessd agent is
+fixing this defect; deployment and intake recovery are not yet observed. At
+15:54:04 UTC, #820 still had no comments and #821 only its submitted payload.
+The existing request IDs remain owned and expire at 17:28:18.350 UTC; inspect
+their recorded state before considering successors. No candidate runtime pass
+or physical scope closure is claimed. Complete SQL/MG effect permission and
+cold startup remain outside this increment, and all eight handoff receipts
+remain unchanged.
 
 The startup-owned lifetime is implemented and independently approved as a
 bounded WIP at `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` on
