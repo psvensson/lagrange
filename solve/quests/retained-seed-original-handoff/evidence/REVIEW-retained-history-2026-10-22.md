@@ -1309,3 +1309,248 @@ production/test/contract bytes, Git objects, GitHub objects or lab requests
 were mutated by the reviewer. The preceding 71,426 bytes remain unchanged
 with SHA-256
 `5cf01392c0d21adc863463918eb03b466b289210a9d0b3a479eabe370e8479ab`.
+
+## Entry 9: exact corrected candidate and completed lab verification - BOUNDED APPROVE
+
+### Verdict and scope
+
+**APPROVE the bounded retained-native-history and participant-origin
+observation checkpoint at d7ef793b.** The previously approved production
+implementation now has passing evidence for the complete selected
+fourteen-file neighborhood, including actual RF1 cold replay and the RF3
+locally-uncommitted/committed-pending/applied sequence. The exact same revision
+also passes the requested metadata and fast-static checks. This is the
+completed verification result for this dependency unit, not acceptance of the
+complete original-startup handoff, clearance of inherited source-audit debt,
+or permission to land/publish the larger work.
+
+The reviewer independently fetched the remote Git commit and all four final
+runtime/static result and full-log evidence receipts, compared their decoded
+objects and log bytes with the retained measurement, checked the frozen
+source/witness bindings, and inspected the runner's verdict rules. No test,
+static gate or native runtime was rerun by the reviewer.
+
+### Exact content and normal-hook provenance
+
+The remote commit object and local committed objects agree:
+
+| Object | Identity |
+| --- | --- |
+| Corrected candidate | `d7ef793be58af944639e6fae69a2c023c85e9002` |
+| Remote candidate ref | `refs/heads/work/original-retained-rf3-correction-20261022` |
+| Parent diagnostic commit | `164479277f58f6075e0c6bfd214ba3d2654da3db` |
+| Repository tree | `3806e8bad05150ccb5ede2e2363a03e108ec8f03` |
+| Production src tree | `d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba` |
+| Test tree | `8fd5261465147e3ed8e321c62122bd6a5d6a9143` |
+| Corrected integration blob | `232d8daccc3e00a04b6dba8594bccb8fc64a1993` |
+
+The integration file is exactly the Entry 8 approved 15,673 bytes, SHA-256
+`667cca126f8a6d36fea0b9aadc7a529740e67f1e6b6db025f2b185ad190403ca`.
+The entire production tree is unchanged from cb822d6f, so the source approval
+manifest remains applicable. No runtime repair was hidden in the oracle
+correction. The normal local commit
+`0e46c4a534afda9d0f2abaac2f1560f1dd6be772` has the same repository tree as
+the preserved remote candidate; the reviewer independently checked that tree
+equality.
+
+The first normal hook attempt is retained with its spawnSync git EPERM errors
+in the binary guard and metadata path. The later normal hook completes and
+creates the local commit after metadata refresh. The request record identifies
+Node v24.19.0 with NODE_OPTIONS=--max-old-space-size=6144 and records no local
+runtime tests. The successful staged correction is a test/evidence change:
+the log explicitly reports zero JavaScript files scanned by the source
+decision-boundary checker. That PASS cannot clear the three previously
+measured participant-byte decision findings or the earlier startup-lifetime
+mixed cache/SQL decision finding. Both source-audit RED records remain in
+force. The initial hook failure and subsequent successful hook log are
+retained separately; neither is presented as the final lab static result.
+
+### Final runtime #855: all fourteen files passed on one exact revision
+
+[Runtime #855's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/855#issuecomment-6347034607)
+names request `6c642df6f8c74ea190546b4ad71e04ba`, exact d7ef793b, and actual
+host `local-workstation`. It is COMPLETE/PASS, exit 0, finished at
+`2026-10-22T17:29:46.927Z`. The worker records fourteen selected and fourteen
+completed files. Execution, thermal and container scopes are all closed.
+
+The full log observes Node v22.23.2 and npm 10.9.8, successful npm ci, and the
+actual project runner with the same fourteen explicit paths. The reviewer
+decoded the retained request payload, checked its 1,827 bytes and SHA-256
+`159c77f50913928282e4832e62974d00743a53736424ff3a3caeff3775ecdad7`
+against the packet and receipt, and confirmed that its decoded intent equals
+the retained request. No source/ref or test-selection substitution appears.
+
+The following are the complete emitted file verdicts. Each requested file
+appears exactly once and every verdict is ok:
+
+| File under test/ | Runner-reported assertions |
+| --- | ---: |
+| partition/participant-decision-canonical-record.test.js | 8 |
+| partition/participant-origin-retained-history.test.js | 35 |
+| partition/partition-participant-transaction-apply.test.js | 27 |
+| raft/raft-rs-backend/durable-store-committed-entries.test.js | 33 |
+| raft/raft-rs-backend/durable-ready-loop.test.js | 7 |
+| partition/partition-participant-transaction-staging.test.js | 19 |
+| raft/raft-rs-backend/persistence-admission.test.js | 4 |
+| raft/raft-rs-backend/operation-port-ready-recovery.test.js | 7 |
+| raft/raft-rs-backend/restart-from-durable-record.test.js | 4 |
+| partition/partition-unreadable-durable-record.test.js | 6 |
+| raft/raft-rs-original-allocation-cold-inspection.test.js | 24 |
+| raft/raft-rs-original-opening-authority.test.js | 24 |
+| bootstrap/seed-original-attempt-lifetime.test.js | 21 |
+| partition/participant-origin-retained-history.integration.test.js | 2 |
+
+The ordinary lane reports 12/12 files passed and 198 assertions; bootstrap
+reports 1/1 and 21; exclusive reports 1/1 and two. These independently parsed
+lane summaries and file results agree on **14/14 passing files and 221
+runner-reported assertions** for this revision. There are no failed-file
+verdicts or rerun verdicts in the complete output.
+
+The generic worker counters object is empty. Therefore this review does not
+invent an aggregate Node test/pass/cancellation counter from that receipt.
+The reported 221 is the project runner's TAP-assertion total, which may include
+parent assertions. In scripts/run-test-files.js:251-269 and :551-580, an ok
+file requires complete successful TAP analysis, positive assertion count, no
+skip or TODO, no unanalyzed output, no timeout/process error/signal, and a
+zero exit code. Consequently these file passes cannot be achieved by silently
+skipping the two integration cases or accepting an incomplete test stream.
+The successful compact log does not print individual numeric cancellation
+counters or full per-case TAP, and none is claimed to be present.
+
+[Evidence #859](https://github.com/psvensson/lagrange-lab/issues/859#issuecomment-6347049740)
+returns all 3,577 controller-log bytes at offset zero, SHA-256
+`5e960c197713616aeed5c3856fabd9b4edb76c2f2d9c049a6d6352fbcd4b2624`.
+Removing the one exact `[local-workstation] ` prefix and controller-added
+trailing LF reconstructs the complete 3,556-byte worker log, SHA-256
+`d390a96db9b32d0c7b5af0c4a4176eb1f0e1d2c8cf2f812b57ad339153cda9ca`.
+The reviewer verified both hashes, lengths, complete text equality and the
+worker's log_truncated false flag independently against the live receipts.
+
+### Actual engagement established by the frozen integration cases
+
+Both cases in the bound integration file are unconditional and have no early
+successful exit around the required controls. Their two passing TAP
+assertions therefore establish that their awaited bodies and cleanup
+obligations completed. The inference uses the exact frozen source plus the
+project runner's complete successful file verdict, not an assumed result from
+the previously failed setup.
+
+RF1 applies a finite fault to the actual committed GENERATION_ORIGIN callback
+and requires the callback to be reached. It observes the exact command at its
+retained index and term as COMMITTED_PENDING, closes the original service,
+checks actual database/native port/transport-handler closure and no reported
+ENABLE success, and performs a read-only cold inspection. Reconstruction then
+replays the same original retained prefix to APPLIED, preserves the first
+origin and generation zero, and produces no replacement ENABLE. Its final
+idempotent ENABLE assertion preserves the complete observed history.
+
+RF3 now passes the same settled native frontier/term/PRE_ORIGIN checks with
+the canonical configuration identity. It forms the real admitted three-replica
+group, intercepts the exact destination/group/from/to/term native append or
+heartbeat commit carrier, and waits until the real follower durably stores
+the leader's ENABLE as LOCAL_PENDING. The carrier must cover that exact
+origin index. Forwarding the captured carrier reaches the actual held
+application callback and produces COMMITTED_PENDING for the same index, term
+and command, while the retained native entries remain unchanged. Removing
+the finite application fault and transport hold lets the existing recovery
+cadence reach APPLIED with that same origin and generation zero. These are
+the assertions that #835 and #842 had never reached; they are engaged and
+passing here.
+
+The passive observer used throughout requires unchanged serialized SQLite
+bytes and a settled read transaction. No fabricated durable ENABLE row,
+replacement command, fabricated leader, alternate apply path or production
+retry was introduced by the correction. This remains one-host RF3 using the
+existing loopback transport, not a cross-host consensus or crash-durability
+experiment.
+
+The original malformed-history witness remains byte-identical to baseline
+79fa766e: 12,401 bytes, SHA-256
+`a1f4d8ee7f4fb5e457195d383c28512be0c23f4e74684b8e0b07caacc346fe3d`.
+Its 24-assertion passing file result includes the unchanged eleven previously
+failing malformed-history cases, the already-passing missing-applied case,
+and the coherent applied/commit/last 1/2/3 control. The historical baseline
+failure and already-pass distinction are retained. The passing baseline
+file, native/participant observation tests, opening refusal tests and startup
+HOLD regression belong to this single final batch; no old results are added
+to its count.
+
+### Final metadata/static #856: same candidate, bounded PASS
+
+[Static #856's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/856#issuecomment-6347024387)
+names request `b73da6098cb74fe8a22f44bd21055715`, exact d7ef793b, and actual
+host `tv-dator`. It is COMPLETE/PASS, exit 0, finished at
+`2026-10-22T17:29:11.995Z`. Execution, thermal and container scopes are closed.
+The decoded 1,463-byte intent payload has SHA-256
+`a7f1416200297a0a8f515894fd4fd3142e28695c8135fbb18667599be328fea1`,
+matching the packet, retained intent and terminal receipt.
+
+The complete log observes Node v22.23.2, npm 10.9.8 and successful npm ci.
+Shard classification is current for 2,440 files: 2,114 unit, 109 integration,
+210 bootstrap, three convergence probe and four packaging. Fast-static names
+the explicit proof base `1262e9c9b306b7289e9768f6ca8cce8f172594d9`, 51
+changed paths and 12 JavaScript paths. All fourteen emitted checks pass:
+dependencies, shards, scoped metrics, ESLint over the changed JavaScript,
+runtime grammar, ASCII docs, metadata gateway, impact contracts, roadmap
+authority, document audience, current capabilities, CLI docs, closure ledger
+and service portability claims. The final status object records metadata_exit
+0, fast_static_exit 0 and tracked_tree_exit 0.
+
+[Evidence #860](https://github.com/psvensson/lagrange-lab/issues/860#issuecomment-6347048988)
+returns all 2,145 controller-log bytes at offset zero, SHA-256
+`6f4df28e7e75e646049c0861466aba473022d248935ce1dd0a2428ac7868538b`.
+The exact prefix/single-LF reconstruction yields the complete 2,133-byte worker
+log, SHA-256
+`5e6751177f8afff1b843f2aa5eac590eb9622ef666fb9ae01094ee80bf33a817`.
+The reviewer independently verified all log bytes, hashes, lengths and the
+untruncated worker flag against the live receipts. This is not a zero-file or
+implicit-base result. It still excludes the separately red source
+decision-boundary audit and whole-corpus/publication gates.
+
+### Preserved acceptance boundary and evidence identities
+
+The reviewer independently compared the sealed Quest and eight-receipt file
+with cb822d6f and the final candidate. Both are byte-identical: quest.json is
+5,929 bytes, SHA-256
+`aec414983521d167af223597bc468ef7b662c986b4fe2e46b4f2aaff4a3368ae`;
+receipt.json is 1,951 bytes, SHA-256
+`4f0068b3d61f7c78af5f5ee4b62c2ddd1c713898a06de56cb5ca29a2438f3e93`.
+All eight receipt fields remain false. Their unchanged status does not erase
+the now measured component progress; it correctly prevents this dependency
+unit from being substituted for the larger composed acceptance.
+
+Unknown application effects still require their real owners. Full retained
+SQL/MG effect classification, cold membership/autonomous-effect exclusions,
+public original-startup handoff, protected activation through acknowledgment
+and transfer, complete public admission exclusions and the composed two-start
+proof are not established by this batch. Startup's explicit unavailable
+ceiling remains. The inherited source audit findings, whole-corpus and
+publication/merge obligations remain outstanding. No cross-host RF3, main
+merge, serving or complete-cutover approval is issued.
+
+Baseline #814 RED, setup failure #820, first candidate runtime #835 RED,
+diagnostic #842 RED, prior static results and all earlier reviews remain
+preserved. The canonical comparator repair follows the measured diagnostic
+values; the earlier #835 values remain unobserved. The passing #855/#856
+receipts apply only to d7ef793b and are not transferred to future production
+revisions or pooled with previous counts.
+
+Artifact hashes below cover complete raw bytes with no normalization. The
+live receipt/log comparisons and worker-log reconstruction methods are
+stated above. These files and the exact candidate provide the reviewable
+evidence for this bounded approval:
+
+| Artifact under evidence/ | Bytes | SHA-256 |
+| --- | ---: | --- |
+| REQUEST-retained-corrected-d7ef793b-2026-10-22.json | 13,177 | `fbfa1e0d44a577c94b2ac0b1b01466ca4775ea7cb9b8993eb96930851d5ecfa2` |
+| MEASUREMENT-retained-corrected-d7ef793b-2026-10-22.json | 34,519 | `05f7783629587f9a028479afd35102bf3fcb798387d2262d2720465bf28693bb` |
+| RUNTIME-retained-corrected-d7ef793b-2026-10-22.txt | 3,577 | `5e960c197713616aeed5c3856fabd9b4edb76c2f2d9c049a6d6352fbcd4b2624` |
+| STATIC-retained-corrected-d7ef793b-2026-10-22.txt | 2,145 | `6f4df28e7e75e646049c0861466aba473022d248935ce1dd0a2428ac7868538b` |
+| STATIC-retained-rf3-correction-sandbox-failure-2026-10-22.txt | 7,475 | `9b29bf02a251c9c0f8132d248e2eca0895b5b0cf2a7b008f56f1ec74ae689b41` |
+| STATIC-retained-rf3-correction-precommit-2026-10-22.txt | 3,889 | `ff771c860fa17b2be9b07c26accd2b6d7abfff79c2d54ebe8401819d90b8c6e5` |
+
+Only this append-only review artifact was changed by the reviewer. No
+production/test/contract bytes, Git objects, GitHub objects or lab requests
+were mutated by the reviewer; no additional measurement was requested. The
+preceding 80,518 bytes remain unchanged with SHA-256
+`605540d654709fc2a0322d55445746de31a071a4fbed43584203d2ca892e7f3e`.

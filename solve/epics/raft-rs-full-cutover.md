@@ -38,28 +38,33 @@ authorizes:
 ## Current coordination: original startup handoff (2026-10-22)
 
 Native retained-history validation and read-only participant-origin observation
-are implemented and independently source-reviewed at
-`cb822d6fcf8c7b78b34a718772d06488490bc0da`. The [current checkpoint](../quests/retained-seed-original-handoff/evidence/CHECKPOINT-retained-history-2026-10-22.md)
-records the exact scope, static results and pending runtime verification.
-Baseline `79fa766ed290c5545cf4017ee589b86e440e0e47` produced eleven engaged
-malformed-history failures in lab #814; its positive controls passed. The
-baseline witness is unchanged, and full failed logs and receipts are retained.
-All baseline/export scopes are closed. The candidate's isolated fast-static
-check passes, while the normal source precommit retains its three independently
-attributed inherited decision findings. Lab requests #820 and #821 are posted
-against the exact candidate, with admission and execution still unobserved.
-The initial fenced-JSON submission error was corrected in place. The
-[operator observation](../quests/retained-seed-original-handoff/evidence/OBSERVATION-lab-intake-repair-2026-10-22.json)
-now supplies an active bridge process and historical journal output. Installed
-controller source confirms repeated oldest-first scans of every open issue and
-loss of GitHub HTTP diagnostics. The user reports that the Harnessd agent is
-fixing this defect; deployment and intake recovery are not yet observed. At
-15:54:04 UTC, #820 still had no comments and #821 only its submitted payload.
-The existing request IDs remain owned and expire at 17:28:18.350 UTC; inspect
-their recorded state before considering successors. No candidate runtime pass
-or physical scope closure is claimed. Complete SQL/MG effect permission and
-cold startup remain outside this increment, and all eight handoff receipts
-remain unchanged.
+have completed their bounded lab verification at exact corrected candidate
+`d7ef793be58af944639e6fae69a2c023c85e9002`. The
+[verified checkpoint](../quests/retained-seed-original-handoff/evidence/CHECKPOINT-retained-history-verified-2026-10-22.md)
+binds the complete results and remaining boundaries. Runtime #855 passed on the
+lab local-workstation worker: **14/14 files, 221 runner-reported TAP assertions**,
+including both real RF1/RF3 origin cases and all 24 unchanged cold-inspection
+assertions. Exact-candidate static #856 passed on tv-dator: 2,440 classifications,
+all 14 fast-static checks against explicit base 1262e9c9, and an unchanged
+tracked tree. Both jobs' execution, thermal and container scopes are closed.
+Full controller and worker log bytes and hashes are retained and verified.
+
+The initial candidate #835 exposed an RF3 setup-witness failure. Diagnostic
+#842 preserved its predicate and measured identical frontiers, term, origin
+state and membership roles, with a different voter vector order on one replica.
+The reviewed correction consumes the existing raftRsConfStateKey owner; all
+production bytes, other predicate conditions, later assertions and deadlines
+are unchanged. RF3 now reaches and passes the held native commit-carrier and
+locally-pending/committed-pending/applied transition assertions. Earlier #835
+has no captured predicate values, so its cause is not retroactively asserted.
+
+Baseline #814, original setup failure #820, static pass #821, runtime failure
+#835, diagnostic #842, submission-format and static-preparation failures remain
+in the append-only evidence. Lab intake resumed; controller repair stayed with
+the separate Harnessd owner. The source precommit's three independently
+attributed inherited decision findings remain RED. Complete SQL/MG effect
+permission and cold original public startup remain outside this increment;
+all eight handoff receipts and the original seal are unchanged.
 
 The startup-owned lifetime is implemented and independently approved as a
 bounded WIP at `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` on
@@ -96,15 +101,16 @@ This checkpoint cannot complete fresh or retained startup: retained history
 and later activation/registration/public continuation remain named holds.
 
 The continuing root agent owns integration. The next implementation unit is
-read-only retained-command classification in the existing durable/application
-owners: keep applied, committed-but-unapplied and locally uncommitted work
-distinct, preserve genuine pending ENABLE and original foundation/MG effects,
-and keep unknown/contrary observations as named holds. Cold consumers also need
-durable-record membership and the required autonomous-effect exclusions before
-that path is admitted. Protected activation/leader acknowledgment/durable
-transfer, full public-admission exclusions and composed two-start proof remain
-unfinished. All eight handoff receipts and the original seal are unchanged;
-nothing from this continuation has been merged to main.
+complete retained-command producer/effect classification through the existing
+application owners. Native range separation and participant-origin observation
+are now measured; original foundation SQL and MG effects still need their exact
+correspondence, with unknown or contrary observations retained as named holds.
+Cold consumers also need durable-record membership, snapshot application
+correspondence and the required autonomous-effect exclusions before that path
+is admitted. Protected activation/leader acknowledgment/durable transfer,
+full public-admission exclusions and composed two-start proof remain unfinished.
+All eight handoff receipts and the original seal are unchanged; nothing from
+this continuation has been merged to main.
 
 ## Closeout plan and lane composition (2026-10-17)
 
