@@ -1,12 +1,18 @@
 /**
- * Message Group Assignment - Strategies for assigning message groups to new nodes.
- * Implements replica movement and self-hosted creation strategies.
+ * Message Group Assignment - how a new node gets its message group.
+ *
+ * Every joiner hosts its own message group (CREATE_SELF_HOSTED); a node that
+ * already holds one rejoins it. A message-group replica is never moved to a
+ * joiner: its raft id derives from its name, so a move re-opened a committed
+ * identity on a new host with an empty log and no conf change (the leader
+ * kept its progress) - vote amnesia, a trapped core, two leaders in one term
+ * (the identity-reuse safety fix). Spreading
+ * a group over nodes is a fresh-identity ADD and promotion, never a move.
  * Requirements: 7.5, 7.6, 7.9
  */
 
 import {LoggingService} from '../logging/logging-service.js';
 import {STRING} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
   REPLICATION_TARGET_SOURCE,
@@ -41,34 +47,24 @@ class MessageGroupAssignment {
   }
 
   /**
-   * Determine message group assignment for a new node.
-   * Strategy 1: Move replica from node with 2+ replicas
-   * Strategy 2: Create self-hosted message group (3 replicas on new node)
+   * Determine message group assignment for a new node: rejoin the group it
+   * already holds, or host a new self-hosted group.
    * @param {string} newNodeId - New node ID.
    * @param {Array<Object>} messageGroups - Existing message groups.
    * @param {Object} [options={}] - Optional assignment filters.
-   * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs that are
-   *   temporarily unavailable for MOVE_REPLICA selection.
-   * @param {Set<string>} [options.excludedSourceNodeIds] - Source nodes that
-   *   must not be selected for MOVE_REPLICA assignments.
-    * @param {boolean} [options.allowRejoinSingleOwnedGroup=false] - When true,
-    *   a durable rejoin may reuse a single existing non-canonical owned group.
+   * @param {boolean} [options.allowRejoinSingleOwnedGroup=false] - When true,
+   *   a durable rejoin may reuse a single existing non-canonical owned group.
    * @return {Object} Assignment instructions.
    */
   determineAssignment(newNodeId, messageGroups, options = {}) {
     this.logger.debug(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.DETERMINING, {
       newNodeId,
       messageGroupCount: messageGroups.length,
-      excludedReplicaCount:
-        options.excludedReplicaIds instanceof Set ?
-          options.excludedReplicaIds.size :
-          0,
     });
 
     // If the joining node already has a message group replica,
-    // it is a restarting node. Skip MOVE_REPLICA and go straight
-    // to CREATE_SELF_HOSTED so it rejoins its existing group
-    // with the same deterministic group ID.
+    // it is a restarting node: CREATE_SELF_HOSTED rejoins its existing
+    // group with the same deterministic group ID.
     const existingMembershipGroupId =
       this.findExistingMembershipGroupId(newNodeId, messageGroups, options);
     if (existingMembershipGroupId) {
@@ -107,39 +103,7 @@ class MessageGroupAssignment {
       };
     }
 
-    // Strategy 1: Find a message group with 2+ replicas on the same node
-    const excludedSourceNodeIds = new Set(
-      options.excludedSourceNodeIds instanceof Set ?
-        options.excludedSourceNodeIds :
-        [],
-    );
-    if (typeof newNodeId === LOCAL_STR_STRING && newNodeId.length > 0) {
-      excludedSourceNodeIds.add(newNodeId);
-    }
-    const movableReplica = this.findMovableReplica(messageGroups, {
-      ...options,
-      excludedSourceNodeIds,
-    });
-
-    if (movableReplica) {
-      this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_MOVE_REPLICA, {
-        newNodeId,
-        groupId: movableReplica.groupId,
-        sourceNodeId: movableReplica.sourceNodeId,
-        replicaToMove: movableReplica.replicaId,
-      });
-
-      return {
-        strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA,
-        groupId: movableReplica.groupId,
-        sourceNodeId: movableReplica.sourceNodeId,
-        replicaToMove: movableReplica.replicaId,
-        replicaAddresses: movableReplica.replicaAddresses,
-        existingPeerIds: movableReplica.peerIds,
-      };
-    }
-
-    // Strategy 2: Create self-hosted message group
+    // Host a new self-hosted message group.
     const newGroupId = this.generateGroupId(newNodeId);
 
     this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_CREATE_SELF_HOSTED, {
@@ -160,8 +124,7 @@ class MessageGroupAssignment {
    * Check whether the joining node already has a replica in any
    * existing message group. A node with existing membership is
    * a restarting node and should rejoin its group via
-   * CREATE_SELF_HOSTED rather than receiving a MOVE_REPLICA
-   * assignment for a different group.
+   * CREATE_SELF_HOSTED rather than hosting a new group.
    *
    * Returns true when the node already owns a canonical restart group.
    * This is normally the node-ID-derived self-hosted group, but durable
@@ -223,89 +186,6 @@ class MessageGroupAssignment {
     }
 
     return null;
-  }
-
-  /**
-   * Find a message group with 2+ replicas on the same node.
-   * @param {Array<Object>} messageGroups - Message groups to search.
-   * @param {Object} [options={}] - Optional candidate filters.
-   * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs excluded
-   *   from MOVE_REPLICA consideration.
-   * @param {Set<string>} [options.excludedSourceNodeIds] - Source nodes
-   *   excluded from MOVE_REPLICA consideration.
-   * @return {Object|null} Movable replica info or null.
-   */
-  findMovableReplica(messageGroups, options = {}) {
-    const excludedReplicaIds = options.excludedReplicaIds instanceof Set ?
-      options.excludedReplicaIds :
-      null;
-    const excludedSourceNodeIds = options.excludedSourceNodeIds instanceof Set ?
-      options.excludedSourceNodeIds :
-      null;
-
-    for (const group of messageGroups) {
-      const replicas = group.replicas || [];
-
-      // Skip groups with fewer than 3 replicas
-      if (replicas.length < MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_FOR_MOVE) {
-        continue;
-      }
-
-      // Count replicas per node
-      const selectableReplicas = excludedReplicaIds ?
-        replicas.filter((replica) =>
-          !excludedReplicaIds.has(replica.replica_id),
-        ) :
-        replicas;
-
-      // If reservations leave fewer than 2 replicas on every node, this
-      // group cannot safely provide another MOVE_REPLICA candidate.
-      const replicasByNode = this.countReplicasByNode(selectableReplicas);
-
-      // Find node with 2+ replicas
-      for (const [nodeId, nodeReplicas] of replicasByNode) {
-        if (excludedSourceNodeIds?.has(nodeId)) {
-          continue;
-        }
-        if (nodeReplicas.length >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_ON_NODE_FOR_MOVE) {
-          const nonLeaderReplicas = nodeReplicas.filter((replica) =>
-            replica.raft_role !== RAFT_ROLE.LEADER,
-          );
-          const replicaToMove = nonLeaderReplicas.length > 0 ?
-            nonLeaderReplicas[0] :
-            nodeReplicas[0];
-
-          return {
-            groupId: group.group_id,
-            sourceNodeId: nodeId,
-            replicaId: replicaToMove.replica_id,
-            replicaAddresses: replicas.map((r) => r.address),
-            peerIds: replicas.map((r) => r.replica_id),
-          };
-        }
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Count replicas by node.
-   * @param {Array<Object>} replicas - Replicas to count.
-   * @return {Map<string, Array<Object>>} Map of nodeId to replicas.
-   */
-  countReplicasByNode(replicas) {
-    const replicasByNode = new Map();
-
-    for (const replica of replicas) {
-      const nodeId = replica.node_id;
-      if (!replicasByNode.has(nodeId)) {
-        replicasByNode.set(nodeId, []);
-      }
-      replicasByNode.get(nodeId).push(replica);
-    }
-
-    return replicasByNode;
   }
 
   /**
@@ -389,19 +269,6 @@ class MessageGroupAssignment {
 
     if (!assignment.groupId) {
       errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.GROUP_ID_REQUIRED);
-    }
-
-    if (assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.MOVE_REPLICA) {
-      if (!assignment.sourceNodeId) {
-        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.SOURCE_NODE_REQUIRED);
-      }
-      if (!assignment.replicaToMove) {
-        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_TO_MOVE_REQUIRED);
-      }
-      if (!assignment.replicaAddresses ||
-          assignment.replicaAddresses.length === 0) {
-        errors.push(MESSAGE_GROUP_ASSIGNMENT_ERROR.REPLICA_ADDRESSES_REQUIRED);
-      }
     }
 
     if (assignment.strategy === MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED) {

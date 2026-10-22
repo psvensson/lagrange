@@ -248,7 +248,7 @@ test('PRECONDITION WITNESS: the join/durable-rejoin factory sets the seam',
   });
 
 test('the wired dispatcher types SOCKET_UNAVAILABLE for an unreachable ' +
-  'follower and never throws into liferaft', async (t) => {
+  'follower and never throws into the consensus caller', async (t) => {
   const fixture = await createProductionShapedGeneration('wiring-socket-');
   try {
     const service = {

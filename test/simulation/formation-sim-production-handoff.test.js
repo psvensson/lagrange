@@ -184,8 +184,8 @@ test('D-4. the complete artifacts repeat, in and under load', async () => {
   // the host transcript's boundaries in the same causal order, the network
   // transcript structurally equal modulo consensus timing, formation reached
   // within the calibrated bound - and no longer asserts at which virtual
-  // instant anything happens. When O2 is funded, restore the exact
-  // hostTranscript, networkTranscript and nowMs assertions.
+  // instant anything happens. O2 was closed on 2026-10-04 without seeding
+  // (no fork of the consensus crate), so this narrowing is permanent.
   const formationBoundMs = loadCalibration(REPO_ROOT).formationWindowMs;
   const assertFormationBound = (run, label) => {
     assert.ok(run.formationCompleteAtMs > 0 &&

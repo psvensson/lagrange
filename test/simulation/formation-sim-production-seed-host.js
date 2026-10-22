@@ -13,10 +13,14 @@
 // the phase calls, a field the bootstrap service sets - and nothing
 // production does depends on whether anyone is watching.
 import {TRANSPORT_EVENT} from '../../src/constants/transport.js';
-import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {reserveSimulatedBootIncarnation} from
   './formation-sim-boot-incarnation.js';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {createVirginSeedDataDirectoryManager} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {DURABLE_EVIDENCE_STATE} from
   '../../src/bootstrap/rejoin-hints-constants.js';
 import {
@@ -79,6 +83,9 @@ const SETTLE_HORIZON_MS = 50;
 // Past the replica stagger a phase may pace itself on, and far short of the
 // keepalive and reconcile cadences a composed node arms.
 const PHASE_HORIZON_MS = 1000;
+// Message-group consensus is durable (MessageGroupService requires a dbPath),
+// so the virgin seed runs over its own empty data directory, as production does.
+const SIM_SEED_DATA_DIR_PREFIX = 'formation-sim-seed-';
 const PARTITION_PHASE_HORIZON_MS = 120000;
 
 function refusePrecomposedInfrastructure(options) {
@@ -325,13 +332,16 @@ function createProductionSeedSimHost(environment, options = {}) {
     createInfrastructureCompositionRegistry();
   compositionRegistry.claim(nodeId, PRODUCTION_BOOTSTRAP_COMPOSER);
 
+  const dataDir = mkdtempSync(join(tmpdir(), SIM_SEED_DATA_DIR_PREFIX));
   const bootstrap = new BootstrapService({
     nodeId, nodeAddress, wsPort,
+    dataDir,
+    dataDirectoryManager: createVirginSeedDataDirectoryManager(null, dataDir),
     // Acquired by the caller through the boot incarnation owner
     // (reserveSimulatedBootIncarnation), exactly as production startup does.
     bootIncarnation: options.bootIncarnation,
     nodeService: environment.nodeService, routerFactory, randomSource,
-    // The simulated seed is virgin: no data directory, so no durable SERVICES
+    // The simulated seed is virgin: an empty data directory, so no durable SERVICES
     // identity. Production reads this at startup (readSeedStartupStorageAdmission).
     startupServicesAdmission: Object.freeze({
       state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
@@ -518,6 +528,7 @@ function createProductionSeedSimHost(environment, options = {}) {
     if (bootstrap.messageRouter) await bootstrap.messageRouter.shutdown();
     await environment.stop();
     compositionRegistry.release(nodeId);
+    rmSync(dataDir, {recursive: true, force: true});
     transcript.record('TEARDOWN_COMPLETED', {nodeId});
   }
 
@@ -764,11 +775,26 @@ function chargedSummary(environment, nodeId, mark) {
 // segments it caused. Scheduling decisions are untouched - selection, order
 // and delivery are the network's - only the busyUntil the next selection
 // sees has moved.
+//
+// One step is one SCHEDULING DECISION, not one re-timing. A busy node's
+// overdue events are re-timed forward one per network step (the network's
+// single-core contention gate), and a re-timing runs no production code,
+// moves no clock and charges nothing. Handing each re-timing back to the
+// closure authority cost a full closure round per overdue event - several
+// whole-queue scans and two host turns each - and charging raft-rs protocol
+// turns roughly doubled the queue those scans walk (measured 2026-10-04:
+// ~1.9M re-timings per charged run, ~94% of all steps). So the re-timings
+// run back to back here until the network either delivers (the same event,
+// at the same instant, the closure authority's next step would deliver) or
+// reaches the horizon. Selection, order, instants and charges are unchanged.
 function chargingScheduler(network, chargeDelta) {
   return Object.freeze({
     ...network,
     runStep(options) {
-      const step = network.runStep(options);
+      let step = network.runStep(options);
+      while (!step.delivered && step.event !== null) {
+        step = network.runStep(options);
+      }
       chargeDelta();
       return step;
     },
@@ -776,18 +802,13 @@ function chargingScheduler(network, chargeDelta) {
 }
 
 // The consensus population production composed, read at the mark from the
-// services themselves: which replica services run a liferaft runtime and how
-// many sibling peers each joins, and how many partition replicas the single
-// rs-raft path serves. A census compares what it observed against this rather
-// than against a topology written down once.
+// services themselves: every message-group and every partition replica runs
+// one raft-rs operation port. A census compares what it observed against this
+// rather than against a topology written down once.
 function consensusComposition(bootstrap) {
-  const liferaftServices = [...bootstrap.messageGroupServices.values()]
-    .filter((service) => service.raftProvider instanceof LiferaftProvider);
   return {
-    liferaftRuntimes: liferaftServices.length,
-    liferaftPeers: liferaftServices.reduce(
-      (total, service) => total + service.replicaIds.length - 1, 0),
-    rsRaftReplicas: bootstrap.partitionServices.size,
+    messageGroupReplicas: bootstrap.messageGroupServices.size,
+    partitionReplicas: bootstrap.partitionServices.size,
   };
 }
 
@@ -916,8 +937,9 @@ async function runSeedScenarioInRoot({
 // crypto.getRandomValues inside the binding and the port does not thread the
 // substrate's randomSource, so election expiries - and every tick they shift -
 // land at different virtual instants run to run. Production offers no
-// repeatable consensus schedule to assert. When O2 is funded (a seeded core),
-// the witnesses compare networkTranscript exactly again and this goes.
+// repeatable consensus schedule to assert, and O2 was closed on 2026-10-04
+// without seeding (the owner rejected carrying a fork of the consensus
+// crate), so this normalisation is the comparison, not a stopgap.
 const NETWORK_TIMER_EVENT_PREFIX = 'fired:adapter-timer:';
 
 function networkTranscriptStructure(networkTranscript) {

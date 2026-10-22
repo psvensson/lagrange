@@ -43,25 +43,23 @@ async function resolveBootSourceProvenance(env = process.env) {
 }
 
 /**
- * Decide and report a dry run: the node and data directory it validated, the
- * Raft provider the process selected, and the raft-rs binding's own verdict
- * on the binding this artifact carries (present, matching its digests and
- * loadable). A dry run validates the deployment layout, so an unavailable
- * binding is its named failure whichever provider is selected: it is logged
- * at error level and ends the process non-zero.
+ * Decide and report a dry run: the node and data directory it validated and
+ * the raft-rs binding's own verdict on the binding this artifact carries
+ * (present, matching its digests and loadable). A dry run validates the
+ * deployment layout, so an unavailable binding is its named failure: it is
+ * logged at error level and ends the process non-zero.
  * @param {Object} options
  * @param {Object} options.logger
  * @param {string} options.nodeId
  * @param {string} options.dataDir
- * @param {string} options.provider
  * @return {{dryRun: boolean, dryRunOutcome: string, exitCode: number}}
  */
-function reportDryRunCompletion({logger, nodeId, dataDir, provider}) {
+function reportDryRunCompletion({logger, nodeId, dataDir}) {
   const raftRsBinding = verifyRaftRsBinding();
   const dryRunOutcome = raftRsBinding.state === RAFT_RS_BINDING_STATE.VERIFIED ?
     ENTRYPOINT_DRY_RUN_OUTCOME.COMPLETED :
     ENTRYPOINT_DRY_RUN_OUTCOME.BINDING_UNAVAILABLE;
-  const report = {nodeId, dataDir, provider, raftRsBinding, dryRunOutcome};
+  const report = {nodeId, dataDir, raftRsBinding, dryRunOutcome};
   if (dryRunOutcome === ENTRYPOINT_DRY_RUN_OUTCOME.COMPLETED) {
     logger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, report);
   } else {

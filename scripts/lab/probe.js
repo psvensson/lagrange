@@ -5,10 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
+import {WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
-import {LANE_JOBS_CAP_ENV, RESOURCE_CLASS_EXCLUSIVE}
-  from '../checks/test-resource-classification-constants.js';
-import {THERMAL_REFUSAL_LINE} from '../checks/wait-for-thermal-headroom.js';
+import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
+import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
+import {defaultLoadThreshold} from '../checks/wait-for-load-headroom.js';
+import {HEADROOM, THERMAL_REFUSAL_LINE, waitForThermalHeadroom}
+  from '../checks/wait-for-thermal-headroom.js';
 import {TEST_FILE_LINE, formatTestFilesSummary, relayedLine} from '../run-test-files.js';
 import {capture, killGroup, run} from './process.js';
 import {loadState, saveState} from './state.js';
@@ -1172,6 +1175,9 @@ const PLACEMENT_EXIT = Object.freeze({
   SETUP: LAB_LOCK_EXIT.SETUP, BUSY: LAB_LOCK_EXIT.BUSY, INTERRUPTED: 130,
   TERMINATED: LAB_LOCK_EXIT.TERMINATED, SSH: 255,
 });
+// How the workspace injections a placement declares are joined: the
+// separator the change taxonomy's reader splits on (scripts/checks/changed-paths.js).
+const PLACEMENT_INJECTION_SEPARATOR = ',';
 const PLACEMENT_SHELL_LINE = /^placement-shell=(\d+)$/mu;
 // A stopped shard's shell gets this long to clean up before its connection
 // is cut.
@@ -1309,14 +1315,19 @@ const PLACEMENT_TEXT = Object.freeze({
 
 /**
  * Split files over machines by measured cost. Longest first, each file goes to
- * the machine that would finish it soonest: its duration over its lane's
- * workers, scaled by the machine's measured speed, after the machine's setup.
- * A lab machine left with less work than its setup is dropped and the split
- * redone, so a machine is used only when it shortens the run. The controller
- * is always a machine and never avoids a file.
+ * the machine that would finish it soonest: its duration over the lanes'
+ * workers that machine runs (its own cores less one, as its runner caps them),
+ * scaled by the machine's measured speed, after the machine's setup. A
+ * machine's `tier` orders who may take a file at all: a file goes to the
+ * lowest tier with a machine that fits it - 0 a free machine, then a lab host
+ * held by another run (its shard waits for the lock), then a controller with
+ * no headroom - so a held tier takes only what no free machine can. A lab
+ * machine left with less work than its setup is dropped and the split redone
+ * while another free machine remains, so a machine is used only when it
+ * shortens the run.
  * @param {Array<{file: string, ms: number, jobs: number}>} costs
  * @param {Array<{name: string, controller: boolean, speed: number,
- *   avoid?: string[]}>} machines
+ *   cores?: number, tier?: number, avoid?: string[]}>} machines
  * @param {{setupMs?: number}} [options]
  * @return {Array<{machine: Object, files: string[], loadMs: number}>}
  */
@@ -1324,8 +1335,11 @@ export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETU
   let candidates = machines;
   for (;;) {
     const shards = assignByCost(costs, candidates, setupMs);
+    const free = candidates.filter((machine) => !machine.tier).length;
     const idle = shards
-      .filter((shard) => !shard.machine.controller && shard.loadMs < 2 * setupMs)
+      .filter((shard) => !shard.machine.controller &&
+        shard.loadMs - (shard.machine.waitMs ?? 0) < 2 * setupMs &&
+        (shard.machine.tier || free > 1))
       .sort((left, right) => left.loadMs - right.loadMs)[0];
     if (!idle) return shards.filter((shard) => shard.files.length > 0);
     candidates = candidates.filter((machine) => machine !== idle.machine);
@@ -1334,7 +1348,7 @@ export function placeTestFiles(costs, machines, {setupMs = PLACEMENT_REMOTE_SETU
 
 function assignByCost(costs, machines, setupMs) {
   const shards = machines.map((machine) => ({
-    machine, files: [], loadMs: machine.controller ? 0 : setupMs,
+    machine, files: [], loadMs: machine.controller ? 0 : setupMs + (machine.waitMs ?? 0),
   }));
   const ordered = [...costs].sort((left, right) =>
     (right.ms / right.jobs) - (left.ms / left.jobs) ||
@@ -1344,8 +1358,10 @@ function assignByCost(costs, machines, setupMs) {
     let bestFinish = Infinity;
     for (const shard of shards) {
       if (!fits(shard.machine, cost)) continue;
-      const finish = shard.loadMs + (cost.ms / cost.jobs) * shard.machine.speed;
-      if (finish < bestFinish) {
+      const finish = shard.loadMs + (cost.ms / jobsOn(shard.machine, cost)) * shard.machine.speed;
+      const tier = shard.machine.tier || 0;
+      const bestTier = best?.machine.tier || 0;
+      if (!best || tier < bestTier || (tier === bestTier && finish < bestFinish)) {
         best = shard;
         bestFinish = finish;
       }
@@ -1354,6 +1370,13 @@ function assignByCost(costs, machines, setupMs) {
     best.loadMs = bestFinish;
   }
   return shards;
+}
+
+// The workers a file's lane gets on a machine: the lane's own on the
+// controller, and on a lab machine at most its cores less one.
+function jobsOn(machine, cost) {
+  return machine.controller || !(machine.cores > 1) ? cost.jobs :
+    Math.min(cost.jobs, machine.cores - 1);
 }
 
 // Whether a file may go to a machine: the controller takes anything; a lab
@@ -1378,19 +1401,22 @@ function placementGapsKey(entry) {
  * the controller reached a second time, answering, with the checkout path,
  * the commit it holds and a speed sample recorded. Speed is relative to the
  * controller; the machine factor the tests scale their wall-clock budgets by
- * is that speed times the controller's own factor, never below 1.
+ * is that speed times the controller's own factor, never below 1. With
+ * `held`, the same machines another run holds under the lab convention instead.
  * @param {Array<Object>} fleet discoverFleet's result
  * @param {Object} state the lab inventory
- * @param {{controllerFactor?: number}} [options]
+ * A held machine also carries `waitMs`, how long its holder expects to keep it.
+ * @param {{controllerFactor?: number, held?: boolean, now?: number}} [options]
  * @return {Array<Object>}
  */
-export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
+export function placementMachines(fleet, state, {controllerFactor = 1, held = false,
+  now = Date.now()} = {}) {
   const reference = fleet.find((entry) => entry.controller)?.capability?.cpuSampleMs;
   const machines = [];
   for (const entry of fleet) {
     const cap = entry.capability;
     const node = state.nodes?.[entry.name];
-    if (!(reference > 0) || !isPlaceable(entry, node)) continue;
+    if (!(reference > 0) || !isPlaceable(entry, node, held)) continue;
     const speed = cap.cpuSampleMs / reference;
     const gapsKey = placementGapsKey(entry);
     machines.push({
@@ -1409,20 +1435,30 @@ export function placementMachines(fleet, state, {controllerFactor = 1} = {}) {
         .split(PLACEMENT_VERSION_SEPARATOR)[0],
       gapsKey,
       avoid: node.placement?.gapsKey === gapsKey ? [...node.placement.avoid] : [],
+      ...(held ? {waitMs: holdWaitMs(cap.machineLock?.holder, now)} : {}),
     });
   }
   return machines;
+}
+
+// How long a held host is expected to stay held: its holder's own estimate
+// less what has passed. A record that cannot say - none, no start or
+// estimate, or already overdue - is the longest any lock wait may be.
+function holdWaitMs(holder, now) {
+  const left = Date.parse(holder?.startedAt) +
+    Number(holder?.expectedMinutes) * MS_PER_MINUTE - now;
+  return Number.isFinite(left) && left > 0 ? left : LAB_LOCK_WAIT_MAX_MS;
 }
 
 // A lab machine a shard can go to: discovered ready this run, answering, not
 // the controller reached a second time, not held by another agent under the
 // lab convention, with an ssh target, the checkout path, the commit that
 // checkout is at and a speed sample. A stale holder record is no lock.
-function isPlaceable(entry, node) {
+function isPlaceable(entry, node, held) {
   const cap = entry.capability;
   const distinct = !entry.controller && !entry.error && !entry.sameMachineAs;
   const reachable = Boolean(node?.ssh) && entry.readiness?.ready === true &&
-    cap?.machineLock?.state !== LAB_LOCK_STATE.BUSY;
+    (cap?.machineLock?.state === LAB_LOCK_STATE.BUSY) === held;
   return distinct && reachable && Boolean(cap?.repoPath) && Boolean(cap.repo?.head) &&
     cap.cpuSampleMs > 0;
 }
@@ -1443,6 +1479,11 @@ export function recordPlacementMisses(state, name, gapsKey, files) {
   node.placement = {gapsKey, avoid: [...new Set([...kept, ...files])].sort()};
   return state;
 }
+
+// Who may take a file, in order: a free machine, a lab host another run
+// holds, a controller without headroom.
+const TIER = Object.freeze({HELD: 1, HOT: 2});
+const CONTROLLER_FIT = Object.freeze({fit: true, reason: null});
 
 const CONTROLLER_MACHINE = Object.freeze({
   name: FLEET_CONTROLLER_NAME, controller: true, speed: 1,
@@ -1629,9 +1670,13 @@ export async function runPlacedTestFiles(files, deps) {
     return local(`${discoveryFailureText(error)}${error.message}`);
   }
   if (fleet.machines.length === 0) return local(PLACEMENT_TEXT.NO_MACHINE);
-  const shards = placeTestFiles(costs, [CONTROLLER_MACHINE, ...fleet.machines]);
+  // A controller without headroom takes only what no lab machine can.
+  const headroom = deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
+  const shards = placeTestFiles(costs, [{...CONTROLLER_MACHINE, tier: headroom.fit ? 0 : TIER.HOT},
+    ...fleet.machines]);
   const remote = shards.filter((shard) => !shard.machine.controller);
   if (remote.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
+  if (!headroom.fit) write(`${PLACEMENT_TEXT.PREFIX}${FLEET_CONTROLLER_NAME}: ${headroom.reason}`);
   write(`${PLACEMENT_TEXT.PREFIX}${files.length} files over ${shards.length} machines, ` +
     `~${minutes(Math.max(...shards.map((shard) => shard.loadMs)))} min ` +
     `(controller alone ~${minutes(aloneMs)} min)`);
@@ -1758,6 +1803,9 @@ async function settleRemoteShards(settled, {deps, fleet, statuses, write, runHer
 // next ready host, or runs it itself. The runner leads its own process group,
 // so the controller's deadline can stop everything it started.
 const PLACEMENT_RESULTS_PREFIX = 'placement-results=';
+const PLACEMENT_IMPORT_GRAPH = Object.freeze({NAME: 'import-graph',
+  PRODUCER: 'scripts/generate-global-owner-debt-inventory.js',
+  FLAG: '--refresh-import-graph-only'});
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
@@ -1828,19 +1876,27 @@ const PLACEMENT_SCRIPT_HEAD = [
   // The workspace links the publisher's gate checkout gets - but only for
   // what this checkout ignores: an older checkout's copy of a tracked path
   // the placed commit deleted must not reappear in it (verifier round 1).
-  'for dir in node_modules data; do',
+  // tools/ holds only fetched model checkers (tla2tools.jar, alloy), each
+  // ignored on its own: linked entry by entry, as data/ is. Every link made is
+  // declared a workspace injection, the publisher's own contract, so none is
+  // ever repository content to the change taxonomy: an ignore rule written
+  // for a directory (tools/alloy-*/) does not match a link to one.
+  'injected=""',
+  'for dir in node_modules data tools; do',
   '  [ -e "$repo/$dir" ] || continue',
-  '  if [ ! -e "$wt/$dir" ]; then',
-  '    git -C "$repo" check-ignore -q "$dir" && ln -s "$repo/$dir" "$wt/$dir" && ' +
-    'echo "placement-link=$dir"',
+  '  if [ ! -e "$wt/$dir" ] && git -C "$repo" check-ignore -q "$dir"; then',
+  '    ln -s "$repo/$dir" "$wt/$dir" && echo "placement-link=$dir" && ' +
+    `injected="\${injected:+$injected${PLACEMENT_INJECTION_SEPARATOR}}$dir"`,
   '    continue',
   '  fi',
+  '  mkdir -p "$wt/$dir"',
   '  for entry in "$repo/$dir"/* "$repo/$dir"/.[!.]*; do',
   '    [ -e "$entry" ] || continue',
   '    name="$dir/${entry##*/}"',
   '    [ -e "$wt/$name" ] && continue',
   '    git -C "$repo" check-ignore -q "$name" || continue',
-  '    ln -s "$entry" "$wt/$name" && echo "placement-link=$name"',
+  '    ln -s "$entry" "$wt/$name" && echo "placement-link=$name" && ' +
+    `injected="\${injected:+$injected${PLACEMENT_INJECTION_SEPARATOR}}$name"`,
   '  done',
   'done',
   `cat > "$list" <<'${PLACEMENT_FILES_MARK}'`,
@@ -1848,9 +1904,18 @@ const PLACEMENT_SCRIPT_HEAD = [
 const PLACEMENT_SCRIPT_TAIL = [
   PLACEMENT_FILES_MARK,
   `cd "$wt" || exit ${PLACEMENT_EXIT.SETUP}`,
+  // The generated import graph a fresh checkout lacks (CI's "Prepare
+  // generated test metadata"), produced for this commit by its own producer:
+  // without it the tests that read the sealed graph are red only here.
+  `if [ -f ${PLACEMENT_IMPORT_GRAPH.PRODUCER} ]; then`,
+  `  node ${PLACEMENT_IMPORT_GRAPH.PRODUCER} ${PLACEMENT_IMPORT_GRAPH.FLAG} >/dev/null || ` +
+    `{ echo "placement: the import graph could not be generated" >&2; exit ${PLACEMENT_EXIT.SETUP}; }`,
+  `  echo "placement-prepared=${PLACEMENT_IMPORT_GRAPH.NAME}"`,
+  'fi',
   // Its own budgets scaled by its measured speed, the controller's retry and
   // timeout policy, and never placed again.
-  `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL}`,
+  `export ${PLACEMENT_MACHINE_FACTOR_ENV}="$factor" ${PLACEMENT_ENV}=${PLACEMENT_LOCAL} ` +
+    `${WORKSPACE_INJECTION_ENV}="$injected"`,
   `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
   // Every lane capped at this host's own processors less one, counted here at
@@ -2266,12 +2331,12 @@ async function discoverPlacement(root, env, sha) {
     ...requirement,
   });
   await saveState(recordFleet(state, fleet));
-  const controllerFactor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
+  const factor = Number(env[PLACEMENT_MACHINE_FACTOR_ENV]);
+  const controllerFactor = factor >= 1 ? factor : 1;
   return {
     fleet,
-    machines: placementMachines(fleet, state, {
-      controllerFactor: controllerFactor >= 1 ? controllerFactor : 1,
-    }),
+    machines: placementMachines(fleet, state, {controllerFactor}),
+    held: placementMachines(fleet, state, {controllerFactor, held: true}),
     record: async (name, gapsKey, files) => {
       await saveState(recordPlacementMisses(await loadState(), name, gapsKey, files));
     },
@@ -2339,6 +2404,7 @@ export function placementDeps({root, failFast = false, env = process.env,
     commitAt: () => commitAt(root),
     discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
+    controllerHeadroom: () => controllerHeadroom({env}),
   };
 }
 
@@ -2383,6 +2449,11 @@ const LAB_TEST_TEXT = Object.freeze({
   UNREPORTED: ' file(s) reported no result: ',
   COPIED: 'results copied to ',
   LANES: ', ',
+  SKIPPED: 'skipped ',
+  HOT: 'thermally held: ',
+  LOADED: 'loaded: one-minute load ',
+  NOT_NEEDED: 'not needed (its share would not outlast its setup, or nothing fits it)',
+  GRAPH: 'generating the import graph the change selector reads (none yet) in ',
 });
 
 function gitMust(root, args) {
@@ -2455,43 +2526,217 @@ export function labTestSelectorArgs({sha, baseSha = null}) {
   return [LAB_TEST_SELECTOR.SCRIPT, LAB_TEST_SELECTOR.LIST, LAB_TEST_SELECTOR.HEAD, sha, ...base];
 }
 
-function bySpeed(left, right) {
-  return left.speed - right.speed;
+/**
+ * The generated import graph the selector reads from the checkout it runs in,
+ * made by its own producer when that checkout never generated one (a fresh
+ * worktree): without it a changed test helper refuses the whole run as
+ * UNKNOWN_SCOPE. A graph already there is the operator's and is left as it
+ * is, and so is the tracked seal: one the producer rewrote is put back, so a
+ * tree with uncommitted import changes stays as it was and the selector
+ * refuses on it in its own words.
+ * @param {string} root the checkout the selector runs in
+ * @param {{produce: Function, write: Function}} io `produce(args, cwd)`
+ *   runs node with args there; `write(line)` reports the step
+ * @return {Promise<boolean>} whether the graph was generated
+ */
+export async function prepareSelectorImportGraph(root, {produce, write}) {
+  if (fs.existsSync(path.join(root, IMPORT_GRAPH_PATH))) return false;
+  const sealPath = path.join(root, IMPORT_GRAPH_SEAL_PATH);
+  const seal = fs.existsSync(sealPath) ? fs.readFileSync(sealPath) : null;
+  write(`${LAB_TEST_TEXT.PREFIX}${LAB_TEST_TEXT.GRAPH}${root}`);
+  await produce([PLACEMENT_IMPORT_GRAPH.PRODUCER, PLACEMENT_IMPORT_GRAPH.FLAG], root);
+  if (seal !== null && !seal.equals(fs.readFileSync(sealPath))) fs.writeFileSync(sealPath, seal);
+  return true;
 }
 
-function isExclusiveLane(lane) {
-  return lane.resourceClass === RESOURCE_CLASS_EXCLUSIVE;
+function bySpeed(left, right) {
+  return left.speed - right.speed;
 }
 
 /**
  * Which machine runs which lanes of a hand run. Without --split every lane
  * goes to one lab machine: the one named, or the fastest measured this run.
- * With --split the exclusive lane goes there alone - it may share a machine
- * with nothing - and the other lanes go to whichever is measured faster of
- * the controller and the next lab machine.
+ * With --split the files are spread by measured cost (placeTestFiles) as
+ * planLabSplit decides. Each machine's own runner takes its lanes one after
+ * another, so the exclusive lane still shares its machine with nothing.
  * @param {Array<{resourceClass: string, files: string[], jobs: number}>} plan
  * @param {Array<Object>} machines placementMachines' result
  * @param {{on?: string|null, split?: boolean, controller?: Object,
- *   fleet?: Array<Object>}} [options]
+ *   fleet?: Array<Object>, costs?: Array<Object>, held?: Array<Object>,
+ *   controllerHeadroom?: {fit: boolean}}} [options]
  * @return {Array<{machine: Object, lanes: Array<Object>}>}
  */
 export function placeLabLanes(plan, machines, {on = null, split = false,
-  controller = CONTROLLER_MACHINE, fleet = []} = {}) {
+  controller = CONTROLLER_MACHINE, fleet = [], costs = [], held = [],
+  controllerHeadroom = CONTROLLER_FIT} = {}) {
+  if (split) {
+    return planLabSplit(plan, machines, {controller, costs, held, controllerHeadroom}).assignments;
+  }
   if (machines.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
-  const ranked = [...machines].sort(bySpeed);
-  const first = on === null ? ranked[0] : machines.find((machine) => machine.name === on);
+  const first = on === null ? [...machines].sort(bySpeed)[0] :
+    machines.find((machine) => machine.name === on);
   if (!first) {
     const entry = fleet.find((one) => one.name === on);
     throw new Error(`${on}${LAB_TEST_TEXT.NOT_READY}` +
       `${entry ? fleetVerdict(entry) : LAB_TEST_TEXT.NOT_LISTED}`);
   }
-  if (!split) return [{machine: first, lanes: plan}];
-  // Stable: on a tie the controller, listed first, keeps the lanes here.
-  const rest = [controller, ...ranked.filter((machine) => machine !== first)].sort(bySpeed)[0];
-  return [
-    {machine: first, lanes: plan.filter(isExclusiveLane)},
-    {machine: rest, lanes: plan.filter((lane) => !isExclusiveLane(lane))},
-  ].filter((assignment) => assignment.lanes.length > 0);
+  return [{machine: first, lanes: plan}];
+}
+
+// The controller is a reserve while the lab can carry the run (owner,
+// 2026-10-05: test work is parallelized on the lab machines as much as
+// possible; the controller is the machine every agent works on, and it runs
+// hot). From this many free lab hosts - or this many held ones whose locks
+// free within the shares' own waits - it takes only what no lab host fits.
+const CONTROLLER_RESERVE_MIN_HOSTS = 2;
+const CONTROLLER_ROLE_TEXT = Object.freeze({
+  LINE: 'controller: ',
+  RESERVE: 'reserve - ',
+  FREE: ' free lab hosts',
+  QUEUED: ' held lab hosts, queued on their locks (longest expected wait ~',
+  QUEUED_CLOSE: ' min)',
+  PEER: 'peer - ',
+  FEW: ' free lab host(s), fewer than ',
+  LATE: ' held lab host(s) expected busy past their shares\' lock wait',
+  TAKES: '; takes ',
+  FILES: ' file(s)',
+  UNFIT: ', only what no lab host fits',
+});
+
+/**
+ * A --split plan and the controller's part in it, with why. The rule:
+ * - a controller without headroom takes only what no lab host fits;
+ * - with CONTROLLER_RESERVE_MIN_HOSTS free lab hosts it is a reserve: it
+ *   takes only what no lab host fits, and held hosts only what no free one does;
+ * - else with that many held hosts it is a reserve too: the held hosts are
+ *   peers whose shares queue on their locks, charged their holders' expected
+ *   wait - unless a share's host is expected to stay held past that share's
+ *   own bounded lock wait, when the controller is the way to finish and
+ *   takes part as a peer;
+ * - else it takes part as a peer, and held hosts take only what no free
+ *   machine does.
+ * @param {Array<Object>} plan the lanes
+ * @param {Array<Object>} machines the free ready lab machines
+ * @param {{controller?: Object, costs?: Array<Object>, held?: Array<Object>,
+ *   controllerHeadroom?: {fit: boolean, reason: string|null}}} [options]
+ * @return {{assignments: Array<Object>, controller: {reason: string,
+ *   reserve: boolean}}}
+ */
+export function planLabSplit(plan, machines, {controller = CONTROLLER_MACHINE, costs = [],
+  held = [], controllerHeadroom = CONTROLLER_FIT} = {}) {
+  if (machines.length + held.length === 0) throw new Error(PLACEMENT_TEXT.NO_MACHINE);
+  const split = (tier, heldMachines) =>
+    splitLanes(plan, [{...controller, tier}, ...machines, ...heldMachines], costs);
+  const heldTier = held.map((machine) => ({...machine, tier: TIER.HELD}));
+  const role = (assignments, reason, reserve) => ({assignments, controller: {reason, reserve}});
+  if (!controllerHeadroom.fit) {
+    return role(split(TIER.HOT, heldTier), controllerHeadroom.reason, true);
+  }
+  if (machines.length >= CONTROLLER_RESERVE_MIN_HOSTS) {
+    return role(split(TIER.HOT, heldTier), `${CONTROLLER_ROLE_TEXT.RESERVE}${machines.length}` +
+      `${CONTROLLER_ROLE_TEXT.FREE}`, true);
+  }
+  if (held.length >= CONTROLLER_RESERVE_MIN_HOSTS) {
+    const queued = split(TIER.HOT, held.map((machine) =>
+      ({...machine, waitMs: machine.waitMs ?? LAB_LOCK_WAIT_MAX_MS})));
+    const late = lateQueuedShares(queued, costs);
+    if (late.length === 0) return role(queued, queuedReason(machines, held, queued), true);
+    return role(split(0, heldTier), `${CONTROLLER_ROLE_TEXT.PEER}${late.length}` +
+      `${CONTROLLER_ROLE_TEXT.LATE}`, false);
+  }
+  return role(split(0, heldTier), `${CONTROLLER_ROLE_TEXT.PEER}${machines.length}` +
+    `${CONTROLLER_ROLE_TEXT.FEW}${CONTROLLER_RESERVE_MIN_HOSTS}`, false);
+}
+
+// The queued shares whose host is expected to stay held past the share's own
+// lock wait - its estimate, capped as every lab lock wait is - so the share
+// would refuse busy rather than run.
+function lateQueuedShares(assignments, costs) {
+  const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
+  return assignments.filter(({machine, lanes}) => machine.waitMs !== undefined &&
+    machine.waitMs > Math.min(LAB_LOCK_WAIT_MAX_MS,
+      labShareEstimateMs(machine, lanes.flatMap((lane) => lane.files), costOf)));
+}
+
+function queuedReason(machines, held, assignments) {
+  const waits = assignments.map(({machine}) => machine.waitMs ?? 0);
+  return `${CONTROLLER_ROLE_TEXT.RESERVE}${machines.length}${CONTROLLER_ROLE_TEXT.FREE}, ` +
+    `${held.length}${CONTROLLER_ROLE_TEXT.QUEUED}${minutes(Math.max(0, ...waits))}` +
+    `${CONTROLLER_ROLE_TEXT.QUEUED_CLOSE}`;
+}
+
+/**
+ * The plan line that says what the controller took in a split, and why.
+ * @param {{assignments: Array<Object>, controller: {reason: string,
+ *   reserve: boolean}}} split planLabSplit's result
+ * @return {string}
+ */
+export function formatLabController({assignments, controller}) {
+  const files = assignments.filter(({machine}) => machine.controller)
+    .reduce((sum, {lanes}) => sum + lanes.reduce((count, lane) => count + lane.files.length, 0), 0);
+  return `${LAB_TEST_TEXT.PREFIX}${CONTROLLER_ROLE_TEXT.LINE}${controller.reason}` +
+    `${CONTROLLER_ROLE_TEXT.TAKES}${files}${CONTROLLER_ROLE_TEXT.FILES}` +
+    `${controller.reserve ? CONTROLLER_ROLE_TEXT.UNFIT : EMPTY}`;
+}
+
+// A lab machine's estimate for a share, as its shard announces it and waits
+// for the lock: its setup, then its files' cost scaled by its speed.
+function labShareEstimateMs(machine, files, costOf) {
+  return PLACEMENT_REMOTE_SETUP_MS +
+    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+}
+
+// The plan's files spread by cost, each machine's share as its own lanes.
+function splitLanes(plan, candidates, costs) {
+  const costOf = new Map(costs.map((cost) => [cost.file, cost]));
+  const priced = plan.flatMap((lane) => lane.files.map((file) =>
+    costOf.get(file) ?? {file, ms: 0, jobs: lane.jobs}));
+  return placeTestFiles(priced, candidates).map((shard) => {
+    const files = new Set(shard.files);
+    return {machine: shard.machine, loadMs: shard.loadMs,
+      lanes: plan.map((lane) => ({...lane, files: lane.files.filter((file) => files.has(file))}))
+        .filter((lane) => lane.files.length > 0)};
+  });
+}
+
+/**
+ * Whether the controller may take files this run: one reading of the thermal
+ * owner (no wait; its skip variable honoured) under its hold thresholds, and
+ * the one-minute load under the load owner's threshold for its cores.
+ * @param {{env?: Object, thermal?: Function, load?: number, cores?: number}} [input]
+ * @return {{fit: boolean, reason: string|null}}
+ */
+export function controllerHeadroom({env = process.env,
+  thermal = () => waitForThermalHeadroom({attempts: 0, env}),
+  load = os.loadavg()[0], cores = os.cpus().length} = {}) {
+  const reading = thermal();
+  const threshold = defaultLoadThreshold(cores);
+  const reason = reading.outcome === HEADROOM.EXHAUSTED ?
+    `${LAB_TEST_TEXT.HOT}${reading.reading.reason}` :
+    load >= threshold ? `${LAB_TEST_TEXT.LOADED}${load.toFixed(1)} >= ` +
+      `${threshold.toFixed(1)} (${cores} cores)` : null;
+  return reason === null ? CONTROLLER_FIT : {fit: false, reason};
+}
+
+/**
+ * Why each machine of the fleet a placement left out was left out, one line
+ * each, so a bad split is visible before anything runs.
+ * @param {Array<Object>} fleet discoverFleet's result
+ * @param {Array<{machine: Object}>} assignments
+ * @param {{fit: boolean, reason: string|null}} headroom the controller's
+ * @return {string[]}
+ */
+export function formatLabSkipped(fleet, assignments, headroom = CONTROLLER_FIT) {
+  const used = new Set(assignments.map(({machine}) => machine.name));
+  return fleet.filter((entry) => !used.has(entry.name)).map((entry) =>
+    `${LAB_TEST_TEXT.PREFIX}${LAB_TEST_TEXT.SKIPPED}${entry.name}: ${skipReason(entry, headroom)}`);
+}
+
+function skipReason(entry, headroom) {
+  if (entry.controller) return headroom.reason ?? LAB_TEST_TEXT.NOT_NEEDED;
+  if (entry.error || entry.sameMachineAs || !entry.readiness?.ready) return fleetVerdict(entry);
+  const lock = entry.capability?.machineLock;
+  return lock?.state === LAB_LOCK_STATE.BUSY ? labLockText(lock) : LAB_TEST_TEXT.NOT_NEEDED;
 }
 
 function gibibytes(memKiB) {
@@ -2505,13 +2750,21 @@ function gibibytes(memKiB) {
  * @return {string[]}
  */
 export function formatLabDecision(assignments) {
-  return assignments.map(({machine, lanes}) => {
+  return assignments.map(({machine, lanes, loadMs}) => {
     const files = lanes.reduce((sum, lane) => sum + lane.files.length, 0);
     return `${LAB_TEST_TEXT.PREFIX}${machine.name}: ` +
       `${lanes.map((lane) => lane.resourceClass).join(LAB_TEST_TEXT.LANES)} (${files} files) ` +
       `cores=${machine.cores ?? FLEET_UNKNOWN} mem=${gibibytes(machine.memKiB)}GiB ` +
-      `speed x${machine.speed.toFixed(FLEET_FACTOR_DIGITS)}`;
+      `speed x${machine.speed.toFixed(FLEET_FACTOR_DIGITS)}` +
+      (loadMs === undefined ? EMPTY : ` ~${minutes(loadMs)} min`);
   });
+}
+
+// A split's controller headroom: its tree must be exactly the commit it
+// runs, and it must have thermal and load headroom.
+function splitHeadroom(deps, sha) {
+  if (deps.commitAt() !== sha) return {fit: false, reason: `${LAB_TEST_TEXT.CONTROLLER_TREE}${sha}`};
+  return deps.controllerHeadroom ? deps.controllerHeadroom() : CONTROLLER_FIT;
 }
 
 function controllerMachine(fleet) {
@@ -2532,8 +2785,7 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
     if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(relayedLine(machine.name, line));
   };
   if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
-  const loadMs = PLACEMENT_REMOTE_SETUP_MS +
-    files.reduce((sum, file) => sum + (costOf.get(file) || 0), 0) * machine.speed;
+  const loadMs = labShareEstimateMs(machine, files, costOf);
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
     deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
     holder: {purpose: labTestPurpose(lanes.map((lane) => lane.resourceClass)),
@@ -2601,13 +2853,16 @@ export async function runLabTest({plan, costs = [], commit, on = null, split = f
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
   let shares = [];
   try {
-    const {fleet = [], machines} = await deps.discover(commit.sha);
-    const assignments = placeLabLanes(plan, machines,
-      {on, split, controller: controllerMachine(fleet), fleet});
+    const {fleet = [], machines, held = []} = await deps.discover(commit.sha);
+    const placed = split ? planLabSplit(plan, machines, {held, costs,
+      controller: controllerMachine(fleet), controllerHeadroom: splitHeadroom(deps, commit.sha)}) :
+      {assignments: placeLabLanes(plan, machines, {on, fleet})};
+    const {assignments} = placed;
+    for (const line of [...formatLabDecision(assignments), ...(split ? [formatLabController(placed),
+      ...formatLabSkipped(fleet, assignments, placed.controller)] : [])]) write(line);
     if (assignments.some(({machine}) => machine.controller) && deps.commitAt() !== commit.sha) {
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }
-    for (const line of formatLabDecision(assignments)) write(line);
     const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
     const context = {commit, deps, forward: forwardedPolicy(env), results, costOf, write};
     shares = assignments.map((assignment) => startLabShare(assignment, context));
@@ -2634,6 +2889,7 @@ export function labTestDeps({root, env = gitProcessEnvironment()}) {
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root, env}),
     runLocalChild: (files, options) => runClassifiedChild(root, files, env, options),
     commitAt: () => commitAt(root),
+    controllerHeadroom: () => controllerHeadroom({env}),
   };
 }
 

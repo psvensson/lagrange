@@ -22,7 +22,6 @@ import {
   LEAK_DEFAULTS,
   BENCHMARK_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
-  RAFT_PROVIDER_DEFAULTS,
 } from '../constants.js';
 
 // --- Unit Tests ---
@@ -163,20 +162,12 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
       );
       assert.strictEqual(
-        config.benchmarkGate.baselineProvider,
-        BENCHMARK_GATE_DEFAULTS.baselineProvider,
-      );
-      assert.strictEqual(
         config.benchmarkGate.failIfBaselineMissing,
         BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
       );
       assert.strictEqual(
         config.benchmarkGate.approvedMitigationId,
         BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
-      );
-      assert.strictEqual(
-        config.raftProvider,
-        RAFT_PROVIDER_DEFAULTS.provider,
       );
     },
   );
@@ -250,11 +241,9 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
       benchmarkGate: {
         enabled: true,
         maxThroughputRegressionRatio: 0.2,
-        baselineProvider: 'liferaft',
         failIfBaselineMissing: true,
         approvedMitigationId: 'MIT-42',
       },
-      raftProvider: 'raft_logic',
     };
 
     const config = mergeWithDefaults(partial);
@@ -315,10 +304,8 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.baselineCacheTtlMs, 60000);
     assert.strictEqual(config.benchmarkGate.enabled, true);
     assert.strictEqual(config.benchmarkGate.maxThroughputRegressionRatio, 0.2);
-    assert.strictEqual(config.benchmarkGate.baselineProvider, 'liferaft');
     assert.strictEqual(config.benchmarkGate.failIfBaselineMissing, true);
     assert.strictEqual(config.benchmarkGate.approvedMitigationId, 'MIT-42');
-    assert.strictEqual(config.raftProvider, 'raft_logic');
     assert.strictEqual(
       config.benchmark.loadOpsPerSec,
       BENCHMARK_DEFAULTS.loadOpsPerSec,

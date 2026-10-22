@@ -26,7 +26,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -145,7 +145,7 @@ test('F-f: a single-replica partition whose port refuses its campaign fails ' +
   'initialization closed with a typed outcome', {timeout: TEST_TIMEOUT_MS},
 async () => {
   await withDirectory(async (dbPath) => {
-    const provider = new ControllablePartitionRaftProvider();
+    const provider = new ControllableConsensusPort();
     provider.setCampaignHandler(() => CAMPAIGN_REFUSAL);
     const service = createControllablePartitionService(
       partitionOptions('ff-controllable', dbPath), provider);
@@ -209,7 +209,7 @@ test('F-h: peer admission records the port\'s actual answer - proposed, ' +
   'refused with its reason, deferred, or queued and then settled',
 {timeout: TEST_TIMEOUT_MS}, async () => {
   await withDirectory(async (dbPath) => {
-    const provider = new ControllablePartitionRaftProvider();
+    const provider = new ControllableConsensusPort();
     const service = createControllablePartitionService(
       partitionOptions('fh-admission', dbPath), provider);
     try {
@@ -277,7 +277,7 @@ test('F-h: peer admission records the port\'s actual answer - proposed, ' +
 test('F-h: the services-cache reconcile records a refused admission as ' +
   'refused, with the port\'s reason', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withDirectory(async (dbPath) => {
-    const provider = new ControllablePartitionRaftProvider();
+    const provider = new ControllableConsensusPort();
     const partitionId = 'fh-reconcile';
     const cache = new SystemTableCache();
     const service = createControllablePartitionService({

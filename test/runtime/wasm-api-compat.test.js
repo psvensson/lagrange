@@ -151,7 +151,12 @@ describe('WASM API compatibility with runtime abstraction', () => {
 
     it('should prepare both drivers independently', async () => {
       const nativeDriver = new NativeJsDriver();
-      const wasmDriver = new WasmComponentDriver();
+      const preparedReplicas = [];
+      const wasmDriver = new WasmComponentDriver({
+        wasmServiceLifecycle: {
+          createReplica: (definition) => preparedReplicas.push(definition),
+        },
+      });
 
       const nativeDef = {
         serviceId: 'svc-native-1',
@@ -169,6 +174,7 @@ describe('WASM API compatibility with runtime abstraction', () => {
       };
       const wasmResult = await wasmDriver.prepare(wasmDef, {});
       assert.equal(wasmResult.status, PREPARE_STATUS.READY);
+      assert.deepEqual(preparedReplicas, [wasmDef]);
     });
   });
 

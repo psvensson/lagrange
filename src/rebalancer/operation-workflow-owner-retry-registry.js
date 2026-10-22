@@ -197,7 +197,7 @@ class OperationWorkflowOwnerRetryRegistry extends
     return joinInFlightOperationOwnerLanes({
       inFlightExecutionsByOwnerKey:
         this.operationWorkflowCoordinator?.inFlightExecutionsByOwnerKey,
-      timeoutMs: options.timeoutMs,
+      timeoutMs: options.timeoutMs, logger: this.logger, scope: {nodeId: this.nodeId},
       nowFn:
         this.timeSource && typeof this.timeSource.now === 'function' ?
           () => this.timeSource.now() :

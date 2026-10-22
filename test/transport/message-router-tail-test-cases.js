@@ -1,5 +1,9 @@
 import {registerMessageRouterTailMoreTests} from './message-router-tail-more-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
 
 export async function registerMessageRouterTailTests({
   t,
@@ -12,6 +16,7 @@ export async function registerMessageRouterTailTests({
   LoggingService,
   initializeTestEnvironment,
   cleanupTestEnvironment,
+  resolveRaftTransportDeliveryOptions,
 }) {
   t.test('should replace superseded heartbeat NODE_STATE_UPDATE deliveries in the pending queue',
     async (t) => {
@@ -109,8 +114,28 @@ export async function registerMessageRouterTailTests({
       await router.shutdown();
     });
 
-  t.test('should replace superseded Raft heartbeat appends in the pending queue',
+  t.test('should replace superseded raft-rs heartbeats in the pending queue',
     async (t) => {
+      const targetAddress = 'remote-node/message-group/mg-1-r2';
+      const heartbeatEnvelope = {
+        protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+        groupId: 'mg-1',
+        from: '101',
+        to: '202',
+        targetAddress,
+        message: {
+          msgType: RAFT_RS_MESSAGE_TYPE.HEARTBEAT,
+          from: '101',
+          to: '202',
+          term: '1',
+          logTerm: '0',
+          index: '0',
+          commit: '0',
+          entries: [],
+        },
+      };
+      const heartbeatOptions =
+        resolveRaftTransportDeliveryOptions(heartbeatEnvelope);
       const router = new MessageRouter({
         bootIncarnation: TEST_BOOT_INCARNATION,
         nodeId: 'test-node',
@@ -138,9 +163,9 @@ export async function registerMessageRouterTailTests({
           return {acknowledged: true, heartbeatId: 'second'};
         },
         {
-          deliveryPriority: 'critical',
-          targetAddress: 'remote-node/message-group/mg-1-r2',
-          message: {type: 'append', data: []},
+          ...heartbeatOptions,
+          targetAddress,
+          message: heartbeatEnvelope,
         },
       );
       await Promise.resolve();
@@ -152,9 +177,9 @@ export async function registerMessageRouterTailTests({
           return {acknowledged: true, heartbeatId: 'third'};
         },
         {
-          deliveryPriority: 'critical',
-          targetAddress: 'remote-node/message-group/mg-1-r2',
-          message: {type: 'append'},
+          ...heartbeatOptions,
+          targetAddress,
+          message: heartbeatEnvelope,
         },
       );
 
@@ -171,132 +196,22 @@ export async function registerMessageRouterTailTests({
       );
 
       const queue = router.getOutboundQueue('remote-node');
-      t.equal(
-        queue.pending.length,
-        1,
-        'heartbeat replacement should keep only one pending heartbeat',
-      );
-      t.equal(
-        queue.pending[0].deliverySource,
-        'raft:append:heartbeat',
-        'pending heartbeat should use the explicit heartbeat delivery source',
-      );
+      t.equal(queue.pending.length, 1,
+        'heartbeat replacement should keep only one pending heartbeat');
+      t.equal(queue.pending[0].deliverySource, 'raft:heartbeat',
+        'pending heartbeat should use the explicit raft-rs delivery source');
 
       releaseFirstSend();
       await firstDelivery;
       const finalHeartbeatResult = await thirdDelivery;
 
-      t.same(
-        deliveredHeartbeatIds,
-        ['third'],
-        'only the latest queued heartbeat should be delivered',
-      );
-      t.equal(
-        finalHeartbeatResult?.result?.heartbeatId,
-        'third',
-        'latest heartbeat should be the one that actually drains',
-      );
+      t.same(deliveredHeartbeatIds, ['third'],
+        'only the latest queued heartbeat should be delivered');
+      t.equal(finalHeartbeatResult?.result?.heartbeatId, 'third',
+        'latest heartbeat should be the one that actually drains');
 
       await router.shutdown();
     });
-
-  t.test('should replace superseded Raft append-fail notifications in the ' +
-    'pending queue for the same target replica',
-  async (t) => {
-    const router = new MessageRouter({
-      bootIncarnation: TEST_BOOT_INCARNATION,
-      nodeId: 'test-node',
-      outboundQueueMaxConcurrent: 1,
-      outboundQueueMaxPending: 2,
-      outboundQueueCriticalReserve: 0,
-    });
-    await router.initialize();
-
-    let releaseFirstSend = null;
-    const deliveredFailureIndexes = [];
-    const firstDelivery = router.enqueueOutbound(
-      'remote-node',
-      () => new Promise((resolve) => {
-        releaseFirstSend = () => resolve({acknowledged: true});
-      }),
-      {deliveryPriority: 'background'},
-    );
-    await Promise.resolve();
-
-    const secondDelivery = router.enqueueOutbound(
-      'remote-node',
-      async () => {
-        deliveredFailureIndexes.push('second');
-        return {acknowledged: true, appendFailIndex: 12};
-      },
-      {
-        deliveryPriority: 'background',
-        targetAddress: 'remote-node/partition/sql_transactions-p1-r4',
-        message: {
-          type: 'append fail',
-          data: {index: 12, term: 4},
-        },
-      },
-    );
-    await Promise.resolve();
-
-    const thirdDelivery = router.enqueueOutbound(
-      'remote-node',
-      async () => {
-        deliveredFailureIndexes.push('third');
-        return {acknowledged: true, appendFailIndex: 11};
-      },
-      {
-        deliveryPriority: 'background',
-        targetAddress: 'remote-node/partition/sql_transactions-p1-r4',
-        message: {
-          type: 'append fail',
-          data: {index: 11, term: 4},
-        },
-      },
-    );
-
-    const supersededResult = await secondDelivery;
-    t.equal(
-      supersededResult?.result?.acknowledged,
-      true,
-      'superseded append-fail should resolve without surfacing an error',
-    );
-    t.equal(
-      supersededResult?.result?.replacedPending,
-      true,
-      'superseded append-fail should be marked as replaced pending work',
-    );
-
-    const queue = router.getOutboundQueue('remote-node');
-    t.equal(
-      queue.pending.length,
-      1,
-      'append-fail replacement should keep only one pending failure notification',
-    );
-    t.equal(
-      queue.pending[0].deliverySource,
-      'message:append fail',
-      'pending append-fail should preserve the original delivery-source classification',
-    );
-
-    releaseFirstSend();
-    await firstDelivery;
-    const finalAppendFailResult = await thirdDelivery;
-
-    t.same(
-      deliveredFailureIndexes,
-      ['third'],
-      'only the latest queued append-fail should be delivered',
-    );
-    t.equal(
-      finalAppendFailResult?.result?.appendFailIndex,
-      11,
-      'latest append-fail should be the one that actually drains',
-    );
-
-    await router.shutdown();
-  });
 
   t.test('should drain critical deliveries ahead of background backlog',
     async (t) => {

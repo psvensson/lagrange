@@ -86,11 +86,20 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
       Object.freeze({
         functionName: 'buildPrioritySpreadDecision',
         requiredFragments: Object.freeze([
-          'hasPriorityRecoverySpreadGap',
+          'resolvePrioritySpreadPending',
           'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.PRIORITY_PARTITION_SUMMARY',
           'PUBLICATION_PRIORITY_SPREAD_DECISION_SOURCE.OWNER_EVIDENCE_UNAVAILABLE',
           'prioritySpreadEvidenceUnavailable',
           'prioritySpreadPending',
+        ]),
+      }),
+      // The one priority-spread rule (owner decision 2026-10-04): the census
+      // gap OR a PENDING closure witness; the witness only adds a blocker.
+      Object.freeze({
+        functionName: 'resolvePrioritySpreadPending',
+        requiredFragments: Object.freeze([
+          'resolvePrioritySpreadPendingFromSummary',
+          'isPriorityRecoveryClosureWitnessPending',
         ]),
       }),
     ]),
@@ -352,7 +361,10 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
           'selectedPriorityRecoveryDecisionSnapshots',
           'priorityRecoveryDecisionSnapshots:',
           'priorityRecoveryClosureWitness:',
-          'closureRecordId: publicationRecoveryGate?.closureRecordId || null',
+          // The runtime gate no longer carries a closure record id (owner
+          // decision 2026-10-04): the load gate reads the gate's one
+          // priority-spread answer.
+          'publicationRecoveryGate.prioritySpreadPending === true',
         ]),
       }),
     ]),

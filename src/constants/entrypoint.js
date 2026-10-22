@@ -52,6 +52,7 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   // Compatibility-only export. Runtime port derivation is owned by the
   // listener-port model and no production consumer applies this offset.
   WS_PORT_OFFSET: LISTENER_PORT_OFFSET.TRANSPORT_WEBSOCKET,
+  // ends-on: n/a delay (an advertised drain window published on the readiness probe; nothing in src/ waits on it)
   READINESS_DRAIN_DEADLINE_MS: 10000,
   LOCALHOST: 'localhost',
   HTTP_PREFIX: 'http://',
@@ -59,6 +60,7 @@ const ENTRYPOINT_DEFAULT = Object.freeze({
   AUTO_REJOIN_BOOTSTRAP_READY_PATH: '/bootstrap/ready',
   AUTO_REJOIN_HEALTH_PATH: '/health',
   AUTO_REJOIN_PROBE_METHOD: 'GET',
+  // ends-on: the peer answers the health probe
   AUTO_REJOIN_PROBE_TIMEOUT_MS: 1000,
   SEED_ADDRESS_CANDIDATE_SEPARATOR: ',',
   JOIN_HINT_CLUSTER_NODE_COUNT: 2,

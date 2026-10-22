@@ -25,6 +25,9 @@ import {
   FORMATION_ONLY_SCENARIO,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -144,6 +147,9 @@ function renderDecision(decision, reportPath) {
     `formation seed budget: ${decision.ok ? 'PASS' : 'FAIL'} ` +
     `(${decision.outcome})`,
     `  report: ${reportPath || 'none'}`,
+    // Five local processes on one machine: a seed-starvation gate, never
+    // certification evidence.
+    `  ${NOT_CERTIFICATION_EVIDENCE.statement}`,
   ];
   if (verdict) {
     lines.push(

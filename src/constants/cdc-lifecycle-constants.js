@@ -12,12 +12,12 @@ import {TIME_MS} from './time.js';
 
 // --- Timeouts and capacities ---
 
-const CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+const CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE; // ends-on: a cache-change event confirms the key
 const CDC_EVENT_BUFFER_CAPACITY = NUM.THOUSAND;
 const CDC_EVENT_SLIDING_WINDOW_CAPACITY = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_PIPELINE_READINESS_POLL_INTERVAL_MS = NUM.HUNDRED;
-const CDC_PIPELINE_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
-const CLUSTER_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
+const CDC_PIPELINE_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: every CDC pipeline readiness condition holds
+const CLUSTER_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the rebalancer planning gate observes the cluster ready
 
 // --- Error type names ---
 
@@ -34,7 +34,6 @@ const CDC_LIFECYCLE_LOG_MSG = Object.freeze({
   EVENT_DROPPED_OVERFLOW: 'CDC event dropped due to buffer overflow',
   BUFFER_REPLAY_STARTED: 'Replaying buffered CDC events to subscriber',
   BUFFER_REPLAY_COMPLETE: 'Buffered CDC event replay complete',
-  CONFIRMATION_TIMEOUT: 'CDC confirmation timed out',
   CONFIRMATION_SHUTDOWN: 'CDC confirmation rejected due to shutdown',
   PIPELINE_NOT_READY: 'CDC pipeline readiness conditions not met',
   PIPELINE_READY: 'CDC pipeline readiness confirmed',

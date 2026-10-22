@@ -23,25 +23,16 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   BOOTSTRAP_HINT: 'bootstrap_hint',
   INITIALIZING_MESSAGE_GROUP_SERVICE: 'Initializing message group service',
   DEFERRING_ELECTION_START: 'Deferring election start',
-  HEARTBEAT_ELECTION: 'heartbeat, election',
-  CLEARED_LIFERAFT_TIMERS_FOR_DEFERRED_ELECTION:
-    'Cleared liferaft timers for deferred election',
   FAILED_DURING_INITIALIZE_CLEANING_UP_RAFT:
     'Failed during initialize, cleaning up raft',
   MESSAGE_GROUP_SERVICE_INITIALIZED: 'Message group service initialized',
   INITIALIZED: 'initialized',
   LEADER_CHANGED: 'Leader changed',
-  SINGLE_REPLICA_BECOMING_LEADER_IMMEDIATELY:
-    'Single replica - becoming leader immediately',
   LEADERELECTED: 'leaderElected',
   STARTING_RAFT_ELECTION_TIMER: 'Starting Raft election timer',
   APPLIED_RUNTIME_RAFT_TIMING_CONFIGURATION:
     'Applied runtime raft timing configuration',
-  TICKINTERVALMS: 'tickIntervalMs',
-  MESSAGE: 'MESSAGE',
-  CDC: 'CDC',
   CDCAPPLIED: 'cdcApplied',
-  ACK: 'ACK',
   MESSAGEGROUPSERVICE_NOT_INITIALIZED: 'MessageGroupService not initialized',
   SENDING_MESSAGE: 'Sending message',
   MESSAGE_DELIVERED_DIRECTLY: 'Message delivered directly',
@@ -59,7 +50,6 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   DELIVERY_ATTEMPT_FAILED: 'Delivery attempt failed',
   MAX_RETRIES_EXCEEDED: 'Max retries exceeded',
   RAFT_COMMAND_FAILED: 'Raft command failed',
-  RECEIVED_RAFT_PACKET: 'Received Raft packet',
   DATA: 'data',
   RECEIVED_APPLICATION_MESSAGE: 'Received application message',
   DUPLICATE_MESSAGE_IGNORED: 'Duplicate message ignored',
@@ -95,12 +85,12 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   COOLDOWN_MS: 1000,
   FAILURE_COOLDOWN_MS: 5000,
   NO_CHANGE_COOLDOWN_MS: 2000,
+  // ends-on: the authoritative control-plane read returns its rows
   QUERY_TIMEOUT_MS: 1500,
 });
 const CDC_FORWARD_MAX_RELAY_DEPTH = 2;
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
-const CDC_BATCH_COMMAND_TYPE = 'CDC_BATCH';
 const DIRECT_ONLY_MESSAGE_TYPES = new Set([
   ...Object.values(ControlPlaneMessageType),
 ]);
@@ -273,6 +263,10 @@ function wrapCdcProposeError(message, error) {
   if (typeof error?.code === 'string' && error.code.length > 0) {
     wrappedError.code = error.code;
   }
+  // The consensus port's typed reason survives the wrap.
+  if (typeof error?.reason === 'string' && error.reason.length > 0) {
+    wrappedError.reason = error.reason;
+  }
   if (error?.retryable === false) {
     wrappedError.retryable = false;
   }
@@ -393,7 +387,6 @@ function buildLatencyCdcPropagationResult({
 }
 
 export {
-  CDC_BATCH_COMMAND_TYPE,
   CDC_FORWARD_MAX_RELAY_DEPTH,
   DIRECT_ONLY_MESSAGE_TYPES,
   FLUSH_SKIP_DISABLED,

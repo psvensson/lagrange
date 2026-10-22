@@ -25,7 +25,7 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 
@@ -79,7 +79,7 @@ test('a REMOVING row retires its peer by one REMOVE_PEER while the row still ' +
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.INSERT,
       serviceRow(replicaId, ReplicaStatus.ACTIVE, 1));
   }
-  const provider = new ControllablePartitionRaftProvider();
+  const provider = new ControllableConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: PARTITION_ID,
     tableId: 'users',

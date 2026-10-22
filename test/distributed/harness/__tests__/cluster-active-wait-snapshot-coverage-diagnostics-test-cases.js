@@ -1,3 +1,5 @@
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
 export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(context) {
   const {
     ACTIVE_WAIT_PUBLICATION_STATUS_ACK_PENDING,
@@ -665,44 +667,37 @@ export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(contex
         }],
       });
 
+      // SUPERSEDED (owner decision 2026-10-04, "delete the second
+      // authority"). Before: the old embedded stale-publication closure
+      // witness (prioritySpreadPending false, refreshed summary, CL-003)
+      // rebuilt the stale evidence as spread - publication not pending, gate
+      // ready, active-gate progress satisfied with zero blocked partitions.
+      // An old artifact still rebuilds (no crash, the witness is classified),
+      // but the rebuilt gate reads the census: the publication summary shows
+      // the gap, the old witness is not PENDING, so spread stays pending and
+      // the runtime names no closure record of its own.
       assert.equal(
         snapshotDiagnostics.publicationConvergence.prioritySpreadPending,
-        false,
+        true,
       );
-      assert.deepEqual(
-        snapshotDiagnostics.publicationConvergence.priorityRecoveryReasonCodes,
-        [],
-      );
-      assert.equal(
-        snapshotDiagnostics.publicationConvergence.closureRecordId,
-        CLOSURE_RECORD_ID,
+      assert.ok(
+        arrayIncludes(
+          snapshotDiagnostics.publicationConvergence.priorityRecoveryReasonCodes,
+          'priority_partitions_not_spread',
+        ),
       );
       assert.equal(
         snapshotDiagnostics.publicationConvergenceGate.ready,
-        true,
-      );
-      assert.equal(
-        snapshotDiagnostics.priorityRecoveryObservation.prioritySpreadPending,
         false,
       );
       assert.equal(
-        snapshotDiagnostics.priorityRecoveryObservation.closureRecordId,
-        CLOSURE_RECORD_ID,
-      );
-      assert.equal(
-        snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
-          .prioritySpreadSatisfied,
+        snapshotDiagnostics.priorityRecoveryObservation.prioritySpreadPending,
         true,
       );
-      assert.equal(
-        snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
-          .priorityRecoveryBlockedPartitionCount,
-        0,
-      );
-      assert.deepEqual(
-        snapshotDiagnostics.priorityRecoveryObservation.activeGateProgress
-          .blockers,
-        ['ready'],
+      assert.notEqual(
+        snapshotDiagnostics.publicationConvergence.closureRecordId,
+        CLOSURE_RECORD_ID,
+        'the old witness\'s CL-003 is not re-emitted by the runtime',
       );
     },
   );

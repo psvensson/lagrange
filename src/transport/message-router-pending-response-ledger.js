@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 
@@ -16,6 +17,40 @@ const {
   buildServiceResponseDisposition,
   normalizeIdentifier,
 } = MESSAGE_ROUTER_SHARED;
+
+const PENDING_RESPONSE_WAIT = Object.freeze({
+  wait: 'MESSAGE_TIMEOUT_MS (SERVICE_RESPONSE after ACK)',
+  awaited: 'SERVICE_RESPONSE from the target node for an acknowledged message',
+});
+
+/**
+ * A SERVICE_RESPONSE waiter spent its post-ACK bound: one wait_bound_spent
+ * ERROR naming the target and what the waiter was answering.
+ * @param {Object} router - The message router.
+ * @param {string} messageId - The correlated message.
+ * @param {Object} pending - The retired waiter.
+ * @param {number} timeoutMs - The bound.
+ * @return {void}
+ */
+function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
+  reportWaitBoundSpent(router.logger, {
+    ...PENDING_RESPONSE_WAIT,
+    boundMs: timeoutMs,
+    elapsedMs: router.timeSource.now() - pending.armedAtMs,
+    lastObserved: () => ({
+      targetConnectionState:
+        router.nodeConnections?.get?.(pending.targetNodeId)?.state ?? null,
+      deliverySource: pending.deliverySource,
+      responseContext: pending.responseContext,
+      pendingResponses: router.pendingResponses.size,
+    }),
+    scope: {
+      nodeId: router.nodeId ?? null,
+      targetNodeId: pending.targetNodeId,
+      messageId,
+    },
+  });
+}
 
 /**
  * Pending-response ledger for the message router: classify and warn about
@@ -354,8 +389,10 @@ class MessageRouterPendingResponseLedger {
     if (!pending || pending.timeoutId) {
       return false;
     }
+    pending.armedAtMs = this.timeSource.now();
     const timeoutId = this.timeSource.setTimeout(() => {
       this.pendingResponses.delete(messageId);
+      reportPendingResponseSpent(this, messageId, pending, timeoutMs);
       this.detachPendingResponseAbortSignal(pending);
       this.rememberRetiredPendingResponse(
         messageId,

@@ -7,7 +7,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
   createLoopbackTransport,
   createTrafficReadinessState,
@@ -1236,7 +1236,7 @@ test(
 test(
   'PartitionService - joining learner ignores candidate and follower demotion events before promotion',
   async (t) => {
-    const raftProvider = new ControllablePartitionRaftProvider();
+    const consensusPort = new ControllableConsensusPort();
     const partition = createControllablePartitionService({
       partitionId: 'joiner-partition',
       tableId: 'joiner-table',
@@ -1247,7 +1247,7 @@ test(
       transport: createLoopbackTransport(),
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
-    }, raftProvider);
+    }, consensusPort);
 
     try {
       await partition.initialize();
@@ -1259,8 +1259,8 @@ test(
         'joining replica should start as learner',
       );
 
-      raftProvider.setRole(RaftRole.CANDIDATE);
-      raftProvider.setRole(RaftRole.FOLLOWER);
+      consensusPort.setRole(RaftRole.CANDIDATE);
+      consensusPort.setRole(RaftRole.FOLLOWER);
 
       t.equal(
         partition.role,

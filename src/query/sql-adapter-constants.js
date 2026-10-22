@@ -65,6 +65,8 @@ const ADAPTER_ERROR_MSG = Object.freeze({
   STATEMENT_REQUIRED: 'SQL statement string is required',
   STATEMENT_MUST_BE_STRING: 'SQL statement must be a string',
   PARAMETERS_MUST_BE_ARRAY: 'SQL parameters must be an array',
+  EXPECTED_TRANSACTION_ID_INVALID:
+    'expectedTransactionId must be a non-empty string or null',
   SECURITY_CONTEXT_INVALID:
     'SqlRequest security context must contain tenantId, principal, and roles',
   LIFECYCLE_AUTH_ACTION_REQUIRED:
@@ -163,6 +165,9 @@ const ADAPTER_LOG_MSG = Object.freeze({
   FALLBACK_REJECTED: 'Fallback execution path rejected',
   PROTOCOL_SESSION_MAPPED: 'Protocol session mapped to tenant/policy',
   UNSUPPORTED_FEATURE: 'Unsupported protocol feature negotiation',
+  CLOSED_SESSION_ROLLBACK_FAILED:
+    'Rollback of a closed protocol session\'s open transaction failed ' +
+    '(the transaction budget sweep remains the backstop)',
   WASM_CALL_DELEGATED: 'DB.call delegated to SqlCore',
   EXECUTE_REQUEST_START: 'SqlCore.executeRequest dispatching',
   EXECUTE_REQUEST_COMPLETE: 'SqlCore.executeRequest complete',

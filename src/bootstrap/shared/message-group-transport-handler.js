@@ -1,5 +1,7 @@
-import {retireReplicaTransportHandler} from
-  '../../node/replica-transport-handler-identity.js';
+import {
+  reportReplicaHandlerRetirement,
+  retireReplicaTransportHandler,
+} from '../../node/replica-transport-handler-identity.js';
 import {ADDRESS, ENTITY_TYPE} from '../../constants/index.js';
 
 // A local message-group replica's transport handler (owner decision N2, class
@@ -31,20 +33,27 @@ function registerMessageGroupTransportHandler(messageGroup, registration) {
 
 /**
  * Retire a local message-group replica's exact transport handler through the
- * replica's lifecycle owner.
+ * replica's lifecycle owner; a refused retirement (the handler is left
+ * registered) is surfaced through the replica's logger, never discarded.
  * @param {Object} retirement - {messageGroup, messageRouter, address,
  *   replicaId}.
  * @return {Promise<string>} A REPLICA_HANDLER_RETIREMENT_OUTCOME.
  */
-function retireMessageGroupTransportHandler(retirement) {
+async function retireMessageGroupTransportHandler(retirement) {
   const messageGroup = retirement.messageGroup || null;
-  return retireReplicaTransportHandler({
+  const outcome = await retireReplicaTransportHandler({
     transport: retirement.messageRouter,
     address: retirement.address,
     handler: messageGroup?.transportHandler || null,
     replicaId: retirement.replicaId,
     lane: messageGroup?.resolveHandlerRetirementLane?.() || null,
   });
+  // A refusal needs a registered handler, so the replica (and its logger)
+  // exists whenever there is something to report.
+  return reportReplicaHandlerRetirement(messageGroup?.logger, {
+    address: retirement.address,
+    replicaId: retirement.replicaId,
+  }, outcome);
 }
 
 /**

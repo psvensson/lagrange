@@ -8,6 +8,7 @@ import {
 } from './replica-operation-membership-epoch-binding.js';
 
 const {
+  EntityType,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
   REBALANCER_PRE_EXECUTION_RETURN_STATE,
@@ -44,6 +45,47 @@ function resolveLedgerSurplusDrainTargetState(
 }
 
 class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
+  /**
+   * The one planning refusal for message groups (owner decision 2026-10-04):
+   * their replica membership does not change - no ADD, REPLACE or MOVE is
+   * planned, so no operation is minted and no CREATE_REPLICA dispatched -
+   * until the fresh-identity ADD/promote path for message groups exists.
+   * The outcome is unsatisfiable until that capability ships, so it parks:
+   * logged once per planner, never retried on a timer: checkRebalance
+   * returns on it before evaluating and schedules no further check.
+   * @return {Object|null} The typed refusal for a message group, else null.
+   */
+  messageGroupMembershipChangeRefusal() {
+    if (this.entityType !== EntityType.MESSAGE_GROUP) {
+      return null;
+    }
+    const reason =
+      REBALANCER_SKIP_REASON.MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED;
+    if (this.messageGroupMembershipChangeParked !== true) {
+      this.messageGroupMembershipChangeParked = true;
+      this.logger.warn(
+        REBALANCER_LOG_MSG.MESSAGE_GROUP_MEMBERSHIP_CHANGE_PARKED,
+        {entityId: this.entityId, entityType: this.entityType, reason},
+      );
+    }
+    return this.buildRebalanceResult(true, {
+      skipped: true,
+      parked: true,
+      reason,
+      moves: [],
+    });
+  }
+
+  /**
+   * Whether this planner is parked (checkRebalance returns before any
+   * evaluation and schedules no further check): a message group's, until
+   * the fresh-identity ADD path exists.
+   * @return {boolean}
+   */
+  isPlanningParked() {
+    return this.messageGroupMembershipChangeRefusal() !== null;
+  }
+
   async executeRebalancingMoves(moves, context = {}) {
     const normalizedMoves = Array.isArray(moves) ? moves : [];
     const batchSize =
@@ -173,6 +215,11 @@ class UnifiedRebalancerRebalanceLoop extends UnifiedRebalancerMoveExecution {
       return this.buildRebalanceResult(false, {
         reason: REBALANCER_RUNTIME_REASON.NOT_LEADER,
       });
+    }
+
+    const membershipChangeRefusal = this.messageGroupMembershipChangeRefusal();
+    if (membershipChangeRefusal !== null) {
+      return membershipChangeRefusal;
     }
 
     const effectivePolicy = policy || (await this.getPolicy());

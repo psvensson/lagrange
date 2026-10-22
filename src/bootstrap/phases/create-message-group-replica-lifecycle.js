@@ -1,5 +1,6 @@
 import {assertCritical} from '../../utils/assert.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
+import {getMessageGroupDbPath} from '../../storage/data-directory-manager.js';
 import {
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
@@ -84,6 +85,8 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       nodeId: this.nodeId,
       replicaIds: options.replicaIds,
       transport: this.delegates.getMessageRouter(),
+      dbPath: getMessageGroupDbPath(
+        this.delegates.getDataDir(), options.groupId, options.replicaId),
       peerAddresses: options.peerAddresses,
       deferElection: Boolean(options.deferElection),
       deferElectionUntilJoinConvergence:

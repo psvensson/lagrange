@@ -5,10 +5,14 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createControllableMessageGroupService,
   createTestTransport,
   registerMessageGroupServiceLifecycleHooks,
+  reportingConsensusPort,
   setTestPortBase,
 } from './message-group-service-test-support.js';
+import {ControllableConsensusPort} from
+  '../test-helpers/controllable-consensus-port.js';
 import {
   MessageGroupService,
   MessageStatus,
@@ -26,14 +30,16 @@ import {
   COLUMN,
   CDC_OPERATION,
   SERVICE_STATUS,
+  SERVICE_TYPE,
   STATE,
   TABLES,
 } from '../../src/constants/index.js';
-import LifeRaft from '@markwylde/liferaft';
-import {
-  RAFT_PACKET_TYPE,
-} from '../../src/raft/constants.js';
-import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
+import {RAFT_OPERATION_OUTCOME} from
+  '../../src/raft/raft-operation-port-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
+import {RAFT_RS_TRANSPORT_PROTOCOL} from
+  '../../src/raft/raft-rs-ingress-constants.js';
 import {
 } from '../../src/control-plane/control-plane-constants.js';
 import {
@@ -42,6 +48,7 @@ import {
 } from '../../src/control-plane/control-plane-workload-profile.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const TEST_SEMANTIC_LOCAL_LEADER_GROUP_ID =
   'mg-semantic-local-propose';
@@ -119,23 +126,18 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
     setServiceNodeResolver() {},
   };
 
-  const service = new MessageGroupService({
+  const service = new MessageGroupService(withTestDbPath({
     groupId: 'mg-1',
     replicaId: 'mg-1-r2',
     nodeId: 'node-mg-1-r2',
     transport,
-  });
+  }));
 
   const errorLogs = [];
   service.logger.error = (msg, fields) => {
     errorLogs.push({msg, fields});
   };
-  service.raft = {state: LifeRaft.FOLLOWER};
-  service.raftProvider = {
-    async proposeWithLeaderRouting(_raft, command, options) {
-      await options.forwardToLeader(command);
-    },
-  };
+  service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
   service.forwardCDCEventToLeader = async () => {
     const error = new Error('Cannot forward CDC event because message-group leader is unknown');
     error.deferRetry = true;
@@ -173,8 +175,8 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
     t.equal(errorLogs[0]?.msg, 'Raft CDC command failed');
     t.equal(errorLogs[0]?.fields?.isCurrentRaftLeader, false,
       'failure log should classify local leadership state');
-    t.equal(errorLogs[0]?.fields?.raftState, LifeRaft.FOLLOWER,
-      'failure log should preserve raft state');
+    t.equal(errorLogs[0]?.fields?.raftState, RaftRole.FOLLOWER,
+      'failure log should preserve the published raft role');
     t.equal(errorLogs[0]?.fields?.leaderTargetSource, 'forward_to_leader',
       'failure log should identify the leader routing path');
     t.equal(errorLogs[0]?.fields?.configuredRetryBudget, service.retryMaxAttempts || 1,
@@ -203,12 +205,12 @@ test(
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: TEST_RETRYABLE_FORWARD_GROUP_ID,
       replicaId: TEST_RETRYABLE_FORWARD_REPLICA_ID,
       nodeId: TEST_RETRYABLE_FORWARD_NODE_RUNTIME_ID,
       transport,
-    });
+    }));
 
     service.resolveCDCForwardSelection = () => ({
       strictForwarding: true,
@@ -248,7 +250,7 @@ test(
       t.equal(
         error?.retryable,
         true,
-        'closed leader delivery should stay retryable so the provider can re-resolve a new target',
+        'closed leader delivery should stay retryable so the routing can re-resolve a new target',
       );
       t.equal(
         error?.code,
@@ -265,7 +267,7 @@ test(
 );
 
 test(
-  'MessageGroupService - proposeCDCCommand retries retryable strict forward failures through the provider budget',
+  'MessageGroupService - proposeCDCCommand retries retryable strict forward failures through the routing budget',
   async (t) => {
     const transport = {
       async deliver() {
@@ -276,17 +278,16 @@ test(
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: TEST_RETRYABLE_FORWARD_PROPOSE_GROUP_ID,
       replicaId: TEST_RETRYABLE_FORWARD_PROPOSE_REPLICA_ID,
       nodeId: TEST_RETRYABLE_FORWARD_PROPOSE_NODE_RUNTIME_ID,
       transport,
-    });
+    }));
 
     service.retryMaxAttempts = 2;
     service.computeCdcForwardRetryDelayMs = () => 0;
-    service.raft = {state: LifeRaft.FOLLOWER};
-    service.raftProvider = new LiferaftProvider();
+    service.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
 
     let forwardCalls = 0;
     service.forwardCDCEventToLeader = async () => {
@@ -316,7 +317,7 @@ test(
     t.equal(
       forwardCalls,
       2,
-      'retryable strict forward failures should consume the remaining provider retry budget before surfacing a final error',
+      'retryable strict forward failures should consume the remaining routing retry budget before surfacing a final error',
     );
   },
 );
@@ -341,12 +342,12 @@ test('MessageGroupService - non-query sendMessage honors deferred retry hints',
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-deferred-retry',
       replicaId: 'mg-deferred-retry-r1',
       nodeId: 'node-deferred-retry',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.retryMaxAttempts = 4;
@@ -390,12 +391,12 @@ test('MessageGroupService - control-plane targets default to critical router pri
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-priority-default',
       replicaId: 'mg-priority-default-r1',
       nodeId: 'node-priority-default',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.persistToRaftLog = async () => ({success: true});
@@ -436,12 +437,12 @@ test('MessageGroupService - typeless control-plane target messages use a sender-
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-critical-target-source',
       replicaId: 'mg-critical-target-source-r1',
       nodeId: 'node-critical-target-source',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.persistToRaftLog = async () => ({success: true});
@@ -498,12 +499,12 @@ test('MessageGroupService - non-critical initial partitions do not claim the cri
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-non-critical-priority-default',
       replicaId: 'mg-non-critical-priority-default-r1',
       nodeId: 'node-non-critical-priority-default',
       transport,
-    });
+    }));
 
     service.initialized = true;
     service.persistToRaftLog = async () => ({success: true});
@@ -524,205 +525,49 @@ test('MessageGroupService - non-critical initial partitions do not claim the cri
     );
   });
 
-test('MessageGroupService - deferred raft responses use the readiness router lane',
+test('MessageGroupService - consensus envelopes to message-group peers use the readiness router lane',
   async (t) => {
     const deliveries = [];
     const transport = {
       async deliver(targetService, payload, options) {
         deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: false,
-          error: 'Connection to node seed closed',
-          errorCode: 'ROUTER_CONNECTION_CLOSED',
-          deferRetry: true,
-          retryAfterMs: 200,
-        };
+        return {acknowledged: true};
       },
       async initialize() {},
       async shutdown() {},
       setServiceNodeResolver() {},
     };
 
-    const service = new MessageGroupService({
+    const port = new ControllableConsensusPort();
+    const service = createControllableMessageGroupService({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
+      replicaIds: ['mg-1-r1', 'mg-1-r2'],
+      peerAddresses: ['seed/message-group/mg-1-r2'],
       nodeId: 'node-mg-1',
       transport,
-    });
+    }, port);
 
     await service.initialize();
     try {
-      const originalEmit = service.raft.emit.bind(service.raft);
-      service.raft.emit = function(eventName, payload, write) {
-        if (eventName === 'data' && typeof write === 'function') {
-          write({
-            type: 'voted',
-            term: payload.term,
-            address: payload.address,
-          });
-          return true;
-        }
-        return originalEmit(eventName, payload, write);
+      const envelope = {
+        protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+        groupId: 'mg-1',
+        from: '1',
+        to: '2',
+        message: {msgType: 'MsgRequestVoteResponse', term: '3'},
       };
+      await port.request[RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER](
+        'seed/message-group/mg-1-r2', envelope);
 
-      const result = await service.receiveMessage({
-        payload: {
-          type: 'vote',
-          term: 3,
-          address: 'seed/message-group/mg-1-r2',
-        },
-      });
-
-      t.equal(result.acknowledged, true,
-        'raft packets should still acknowledge local handling');
       t.equal(deliveries.length, 1,
-        'raft response delivery should still be attempted once');
+        'the consensus envelope should be delivered once');
+      t.same(deliveries[0]?.payload, envelope,
+        'the semantic envelope should reach the transport unchanged');
       t.equal(
         deliveries[0]?.options?.deliveryPriority,
         TEST_DELIVERY_PRIORITY.READINESS,
-        'raft response delivery to mg-1 should use the readiness router lane',
-      );
-    } finally {
-      await service.shutdown();
-    }
-  });
-
-test('MessageGroupService - raft append-entry replication uses the background router lane',
-  async (t) => {
-    const deliveries = [];
-    const transport = {
-      async deliver(targetService, payload, options) {
-        deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: true,
-        };
-      },
-      async initialize() {},
-      async shutdown() {},
-      setServiceNodeResolver() {},
-    };
-
-    const service = new MessageGroupService({
-      groupId: 'mg-raft-lane',
-      replicaId: 'mg-raft-lane-r1',
-      replicaIds: ['mg-raft-lane-r1', 'mg-raft-lane-r2'],
-      peerAddresses: ['peer-node/message-group/mg-raft-lane-r2'],
-      nodeId: 'node-mg-raft-lane',
-      transport,
-    });
-
-    await service.initialize();
-    try {
-      await new Promise((resolve, reject) => {
-        service.raft.nodes[0].write({
-          type: RAFT_PACKET_TYPE.APPEND,
-          term: 3,
-          address: service.getUnifiedAddress(),
-          leader: service.getUnifiedAddress(),
-          state: LifeRaft.LEADER,
-          last: {
-            index: 0,
-            term: 0,
-            committedIndex: 0,
-          },
-          data: [{
-            index: 1,
-            term: 3,
-            command: {
-              type: 'CDC',
-            },
-          }],
-        }, (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        });
-      });
-
-      t.equal(deliveries.length, 1,
-        'append-entry replication should perform one peer delivery');
-      t.equal(
-        deliveries[0]?.options?.deliveryPriority,
-        TEST_DELIVERY_PRIORITY.BACKGROUND,
-        'append-entry replication to mg-1 peers should use the shared background lane',
-      );
-    } finally {
-      await service.shutdown();
-    }
-  });
-
-test('MessageGroupService - append-fail raft responses use the readiness router lane',
-  async (t) => {
-    const deliveries = [];
-    const transport = {
-      async deliver(targetService, payload, options) {
-        deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: false,
-          error: 'Connection to node seed closed',
-          errorCode: 'ROUTER_CONNECTION_CLOSED',
-          deferRetry: true,
-          retryAfterMs: 200,
-        };
-      },
-      async initialize() {},
-      async shutdown() {},
-      setServiceNodeResolver() {},
-    };
-
-    const service = new MessageGroupService({
-      groupId: 'mg-1',
-      replicaId: 'mg-1-r1',
-      nodeId: 'node-mg-1',
-      transport,
-    });
-
-    await service.initialize();
-    try {
-      const originalEmit = service.raft.emit.bind(service.raft);
-      service.raft.emit = function(eventName, payload, write) {
-        if (eventName === 'data' && typeof write === 'function') {
-          write({
-            type: RAFT_PACKET_TYPE.APPEND_FAIL,
-            term: payload.term,
-            address: payload.address,
-            leader: payload.address,
-            state: LifeRaft.FOLLOWER,
-            data: {
-              index: payload.last?.index || 0,
-              term: payload.last?.term || payload.term,
-            },
-          });
-          return true;
-        }
-        return originalEmit(eventName, payload, write);
-      };
-
-      const result = await service.receiveMessage({
-        payload: {
-          type: RAFT_PACKET_TYPE.APPEND,
-          term: 3,
-          address: 'seed/message-group/mg-1-r2',
-          leader: 'seed/message-group/mg-1-r2',
-          state: LifeRaft.LEADER,
-          last: {
-            index: 4,
-            term: 2,
-            committedIndex: 0,
-          },
-        },
-      });
-
-      t.equal(result.acknowledged, true,
-        'raft packets should still acknowledge local handling');
-      t.equal(deliveries.length, 1,
-        'append-fail response delivery should still be attempted once');
-      t.equal(
-        deliveries[0]?.options?.deliveryPriority,
-        TEST_DELIVERY_PRIORITY.READINESS,
-        'append-fail response delivery to mg-1 should use the readiness router lane',
+        'consensus delivery to an mg-1 peer should use the readiness router lane',
       );
     } finally {
       await service.shutdown();
@@ -732,12 +577,12 @@ test('MessageGroupService - append-fail raft responses use the readiness router 
 test('MessageGroupService - receiveMessage processes message', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -839,12 +684,12 @@ test('MessageGroupService - receiveMessage processes message', async (t) => {
 test('MessageGroupService - receiveMessage detects duplicates', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -879,12 +724,12 @@ test('MessageGroupService - receiveMessage detects duplicates', async (t) => {
 test('MessageGroupService - acknowledgeMessage marks message', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -909,12 +754,12 @@ test('MessageGroupService - acknowledgeMessage marks message', async (t) => {
 test('MessageGroupService - subscribeToCDC adds subscription', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
 
@@ -934,12 +779,12 @@ test('MessageGroupService - subscribeToCDC adds subscription', async (t) => {
 test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
     await service.subscribeToCDC('nodes');
@@ -973,27 +818,23 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
 test('MessageGroupService - applyCDCEvent fails closed on Raft propose error', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const port = new ControllableConsensusPort();
+    const service = createControllableMessageGroupService({
       groupId: 'mg-raft-fail',
       replicaId: 'mg-raft-fail-r1',
       nodeId,
       transport: router,
-    });
+    }, port);
 
     await service.initialize();
+    t.equal(port.role, RaftRole.LEADER, 'the lone replica leads its group');
     service.replicaIds = ['mg-raft-fail-r1', 'mg-raft-fail-r2'];
-    if (service.raft) {
-      Object.defineProperty(service.raft, 'state', {
-        value: LifeRaft.LEADER,
-        writable: true,
-        configurable: true,
-      });
-    }
     await service.subscribeToCDC('nodes');
 
-    service.raftProvider.proposeWithLeaderRouting = async () => {
-      throw new Error('raft propose failed');
-    };
+    port.setProposeHandler(() => ({
+      outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      reason: 'raft propose failed',
+    }));
 
     await t.rejects(
       service.applyCDCEvent('nodes', 'INSERT', {
@@ -1016,23 +857,25 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const service = new MessageGroupService(withTestDbPath({
         groupId: TEST_SEMANTIC_LOCAL_LEADER_GROUP_ID,
         replicaId: TEST_SEMANTIC_LOCAL_LEADER_REPLICA_ID,
         nodeId,
         transport: router,
-      });
+      }));
 
       const proposedCommands = [];
       let forwardCalls = 0;
       service.role = RaftRole.LEADER;
-      service.raft = {
-        state: null,
-        async command(command) {
-          proposedCommands.push(command);
-          return {ok: true};
-        },
-      };
+      // The core has not elected this replica: its port reports a candidate.
+      const port = new ControllableConsensusPort({
+        role: RaftRole.CANDIDATE,
+        peers: [],
+      });
+      service.raft = port.createOperationPort({});
+      port.setProposeHandler((command) => {
+        proposedCommands.push(command);
+      });
       service.forwardCDCEventToLeader = async () => {
         forwardCalls += 1;
         return undefined;
@@ -1048,7 +891,7 @@ test(
       t.same(
         proposedCommands,
         [],
-        'published leader role alone must not authorize a local raft propose while live raft leadership is still unset',
+        'published leader role alone must not authorize a local propose while the core does not lead',
       );
     } finally {
       await cleanup();
@@ -1062,14 +905,17 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: TEST_STALE_FORWARD_GROUP_ID,
         replicaId: TEST_STALE_FORWARD_LOCAL_REPLICA_ID,
         nodeId,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
+      t.equal(port.role, RaftRole.LEADER,
+        'the core still leads while the published ownership moved away');
       service.replicaIds = [
         TEST_STALE_FORWARD_LOCAL_REPLICA_ID,
         TEST_STALE_FORWARD_REMOTE_REPLICA_ID,
@@ -1078,11 +924,10 @@ test(
       service.role = RaftRole.FOLLOWER;
       service.leaderId = TEST_STALE_FORWARD_REMOTE_REPLICA_ID;
       service.peerAddresses = [TEST_STALE_FORWARD_REMOTE_ADDRESS];
-      if (service.raft) {
-        service.raft.nodes = [
-          {address: TEST_STALE_FORWARD_REMOTE_ADDRESS},
-        ];
-      }
+      port.peers = [{
+        address: TEST_STALE_FORWARD_REMOTE_ADDRESS,
+        replicaIdentity: TEST_STALE_FORWARD_REMOTE_REPLICA_ID,
+      }];
       await service.subscribeToCDC(TEST_NON_SYSTEM_CDC_TABLE);
 
       const forwardedPayloads = [];
@@ -1101,7 +946,7 @@ test(
       t.equal(
         forwardedPayloads.length,
         1,
-        'non-leader CDC should forward instead of applying locally when raw raft leadership is stale',
+        'non-leader CDC should forward instead of applying locally when the core leadership is stale',
       );
       t.equal(
         forwardedPayloads[0]?.address,
@@ -1125,25 +970,19 @@ test('MessageGroupService - applyCDCEvent defers strict CDC on ' +
   'followers before leader routing when ingress is not ready', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const port = new ControllableConsensusPort();
+    const service = createControllableMessageGroupService({
       groupId: 'mg-strict-defer',
       replicaId: 'mg-strict-defer-r2',
       nodeId,
       transport: router,
-    });
+    }, port);
 
     await service.initialize();
     service.replicaIds = ['mg-strict-defer-r1', 'mg-strict-defer-r2'];
-    service.role = RaftRole.FOLLOWER;
-    if (service.raft) {
-      Object.defineProperty(service.raft, 'state', {
-        value: LifeRaft.FOLLOWER,
-        writable: true,
-        configurable: true,
-      });
-    } else {
-      service.raft = {state: LifeRaft.FOLLOWER};
-    }
+    port.setRole(RaftRole.FOLLOWER);
+    t.equal(service.role, RaftRole.FOLLOWER,
+      'the follower announcement publishes the follower role');
     service.resolveCdcIngressDecision = () => ({
       action: MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
       state: MESSAGE_GROUP_CDC_INGRESS_STATE.DEFER_STRICT_TARGET_UNKNOWN,
@@ -1183,31 +1022,26 @@ test(
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-retry-same-ts',
         replicaId: 'mg-retry-same-ts-r1',
         nodeId,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
       service.replicaIds = ['mg-retry-same-ts-r1', 'mg-retry-same-ts-r2'];
-      if (service.raft) {
-        Object.defineProperty(service.raft, 'state', {
-          value: LifeRaft.LEADER,
-          writable: true,
-          configurable: true,
-        });
-      }
       await service.subscribeToCDC('nodes');
 
       let proposeAttempts = 0;
-      service.raftProvider.proposeWithLeaderRouting = async () => {
+      port.setProposeHandler(() => {
         proposeAttempts += 1;
-        if (proposeAttempts === 1) {
-          throw new Error('synthetic propose failure');
-        }
-      };
+        return proposeAttempts === 1 ? {
+          outcome: RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+          reason: 'synthetic propose failure',
+        } : null;
+      });
 
       const retryTimestamp = '1234567890:42:test-node';
       await t.rejects(
@@ -1251,28 +1085,22 @@ test('MessageGroupService - CDC batch propagation proposes one raft command',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: 'mg-batch-propose',
         replicaId: 'mg-batch-propose-r1',
         nodeId,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
       service.replicaIds = ['mg-batch-propose-r1', 'mg-batch-propose-r2'];
-      if (service.raft) {
-        Object.defineProperty(service.raft, 'state', {
-          value: LifeRaft.LEADER,
-          writable: true,
-          configurable: true,
-        });
-      }
       await service.subscribeToCDC('nodes');
 
       const proposedCommands = [];
-      service.raftProvider.proposeWithLeaderRouting = async (_raft, command) => {
+      port.setProposeHandler((command) => {
         proposedCommands.push(command);
-      };
+      });
 
       const result = await service.handleLatencyCdcPropagationBatchMessage(
         'msg-batch',
@@ -1320,15 +1148,71 @@ test('MessageGroupService - CDC batch propagation proposes one raft command',
   },
 );
 
+test(
+  'MessageGroupService - a lone-founded group replicates CDC through its port once the services cache names a second replica',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
+        groupId: 'mg-grown',
+        replicaId: 'mg-grown-r1',
+        nodeId,
+        transport: router,
+      }, port);
+      await service.initialize();
+      await service.subscribeToCDC('nodes');
+      t.equal(port.role, RaftRole.LEADER, 'the lone founder leads its group');
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-grown-r2',
+          [COLUMN.GROUP_ID]: 'mg-grown',
+          [COLUMN.NODE_ID]: 'node-grown-2',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        },
+      );
+      await new Promise((resolve) => setImmediate(resolve));
+      t.same(
+        port.confChanges.map((change) => change.replicaIdentity),
+        ['mg-grown-r2'],
+        'the leader admits the second replica the services cache names',
+      );
+      t.ok(service.replicaIds.includes('mg-grown-r2'),
+        'the admitted replica is kept in the group hint list');
+
+      const proposedCommands = [];
+      port.setProposeHandler((command) => {
+        proposedCommands.push(command);
+      });
+      await service.applyCDCEvent('nodes', 'INSERT', {
+        id: 'node-grown-cdc',
+        status: 'active',
+      });
+      t.equal(proposedCommands.length, 1,
+        'CDC of a group that grew past one replica is proposed through the port');
+      t.equal(proposedCommands[0]?.type, 'CDC',
+        'the proposal carries the CDC command');
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
 test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
-    const service = new MessageGroupService({
+    const service = new MessageGroupService(withTestDbPath({
       groupId: 'mg-1',
       replicaId: 'mg-1-r1',
       nodeId,
       transport: router,
-    });
+    }));
 
     await service.initialize();
     t.equal(service.cdcHandler.getSubscriptions().length, 0);

@@ -36,7 +36,11 @@ const TARGET_THRESHOLD = 20;
 // 2026-09-27: tightened 159 -> 157 after durable lifecycle owner extraction
 // 2026-09-28: tightened 157 -> 155 after the node lifecycle publication owner
 // replaced the dispatch node-state write path (measured with the hint).
-const BASELINE_COUNT = 155;
+// 2026-10-03: tightened 155 -> 153 on the checker's hint after the
+// origin/main ec63fbb00 merge and the native-append inference deletion.
+// 2026-10-04: tightened 153 -> 152 on the checker's hint (the scenario
+// result summary's status label split out of the table printer).
+const BASELINE_COUNT = 152;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

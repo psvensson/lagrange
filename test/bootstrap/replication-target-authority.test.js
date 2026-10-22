@@ -60,6 +60,7 @@ import {
 } from '../../src/bootstrap/owners/seed-registration-runtime-owner.js';
 import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -792,7 +793,7 @@ test('message-group-handoff-cannot-mutate-the-declaration', () => {
   // seed phase hands INITIAL_MESSAGE_GROUP_REPLICA_IDS to the service by
   // reference and raft lifecycle pushes onto service.replicaIds.
   const declaredLength = INITIAL_MESSAGE_GROUP_REPLICA_IDS.length;
-  const service = new MessageGroupService({
+  const service = new MessageGroupService(withTestDbPath({
     // A MessageRouter-shaped transport: deliver + initialize +
     // setServiceNodeResolver is what the service validates.
     transport: {
@@ -804,7 +805,7 @@ test('message-group-handoff-cannot-mutate-the-declaration', () => {
     replicaId: INITIAL_MESSAGE_GROUP_REPLICA_IDS[0],
     replicaIds: INITIAL_MESSAGE_GROUP_REPLICA_IDS,
     nodeId: 'seed',
-  });
+  }));
 
   assert.notEqual(service.replicaIds, INITIAL_MESSAGE_GROUP_REPLICA_IDS,
     'the service peer list must not BE the declaration');

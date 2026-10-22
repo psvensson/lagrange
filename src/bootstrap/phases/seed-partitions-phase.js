@@ -52,7 +52,13 @@ import {
 import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
   '../shared/hosted-replica-authorities.js';
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const LOCAL_STR_STRING = 'string';
+const SEED_PARTITION_LEADERSHIP_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'a live leader for every seed system-table partition',
+});
 const CLEANUP_IN_PROGRESS_CODE = 'CLEANUP_IN_PROGRESS';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const RESTORABLE_SEED_PARTITION_STATUSES = new Set([
@@ -497,12 +503,17 @@ class SeedPartitionsPhase {
     const missing = [...partitionIds].filter(
       (id) => !leaders.has(id),
     );
-    logger.error(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_PENDING, {
-      totalPartitions: partitionIds.size,
-      leadersFound: leaders.size,
-      missingLeaders: missing,
+    reportWaitBoundSpent(logger, {
+      ...SEED_PARTITION_LEADERSHIP_WAIT,
+      boundMs: timeoutMs,
       elapsedMs: now() - startTime,
-      nodeId: d.getNodeId(),
+      lastObserved: {
+        totalPartitions: partitionIds.size,
+        leadersFound: leaders.size,
+        missingLeaders: missing,
+        lastDelayMs: delay,
+      },
+      scope: () => ({nodeId: d.getNodeId()}),
     });
 
     const error = new Error(

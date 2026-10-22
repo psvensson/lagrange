@@ -35,6 +35,9 @@ import {
 } from '../../examples/service-data-affinity/formation-verdict.js';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -73,6 +76,11 @@ const EMPTY_CELL = '-';
 const CELL_SEPARATOR = ' ';
 const STDIO_INHERIT = 'inherit';
 const NO_REPORT_MESSAGE = 'formation health: no live report to record';
+// A standing health signal (local processes or one node per GCP VM, no
+// host-level placement requirement, no real publication-convergence
+// observation): never certification evidence, and every rendering says so.
+const NOT_CERTIFICATION_LINE =
+  `formation health: ${NOT_CERTIFICATION_EVIDENCE.statement}`;
 const UNKNOWN_VERDICT_MESSAGE = 'formation health: the run produced no ' +
   'measuring verdict (UNKNOWN) - nothing recorded; a non-verdict is a failed ' +
   'run, not a trend record';
@@ -293,6 +301,7 @@ function renderTrendSummary(records, limit = DEFAULT_SUMMARY_LIMIT) {
     header, ...rows,
     `formation health: ${passCount}/${recent.length} passed (${rate}%), ` +
     `${starvedCount} with a starved seed`,
+    NOT_CERTIFICATION_LINE,
   ].join(LINE_SEPARATOR);
 }
 

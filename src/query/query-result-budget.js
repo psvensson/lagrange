@@ -1,4 +1,10 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
 const BYTE_ENCODING = 'utf8';
+const RESULT_DEADLINE_WAIT = Object.freeze({
+  wait: 'resultDeadlineMs',
+  awaited: 'partition result rows collected before the request deadline',
+});
 
 const QUERY_RESULT_BUDGET_ERROR_CODE = Object.freeze({
   BYTES_EXHAUSTED: 'query_result_bytes_exhausted',
@@ -26,10 +32,19 @@ function positiveSafeLimit(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-function assertQueryResultDeadline(options) {
+function assertQueryResultDeadline(options, progress) {
   options.cancellationToken?.throwIfCancelled?.();
   const deadlineMs = positiveSafeLimit(options.deadlineMs);
   if (deadlineMs !== null && Date.now() >= deadlineMs) {
+    reportWaitBoundSpent(null, {
+      ...RESULT_DEADLINE_WAIT,
+      boundMs: null,
+      lastObserved: {
+        ...progress,
+        deadlineMs,
+        overshootMs: Date.now() - deadlineMs,
+      },
+    });
     throw new QueryResultBudgetError(
       QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED,
       QUERY_RESULT_BUDGET_ERROR_MESSAGE.WALL_TIME_EXHAUSTED,
@@ -48,9 +63,12 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
   }
   const rows = [];
   let totalBytes = 0;
-  assertQueryResultDeadline(options);
+  assertQueryResultDeadline(options, {rowsCollected: 0, bytesCollected: 0});
   for (const row of statement.iterate(...params)) {
-    assertQueryResultDeadline(options);
+    assertQueryResultDeadline(options, {
+      rowsCollected: rows.length,
+      bytesCollected: totalBytes,
+    });
     const nextRowCount = rows.length + 1;
     if (maxRows !== null && nextRowCount > maxRows) {
       throw new QueryResultBudgetError(
@@ -74,7 +92,11 @@ function collectBoundedSqliteRows(statement, params = [], options = {}) {
     rows.push(row);
     totalBytes = nextBytes;
   }
-  assertQueryResultDeadline(options);
+  assertQueryResultDeadline(options, {
+    rowsCollected: rows.length,
+    bytesCollected: totalBytes,
+    iterationComplete: true,
+  });
   return rows;
 }
 

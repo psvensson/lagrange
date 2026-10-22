@@ -1,4 +1,40 @@
+// Module-load captures (the harness tree's ambient-intrinsics rule).
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
 const CONTROL_SNAPSHOT_SCHEMA_VERSION = 1;
+// The stub cluster's persisted partitions policy: the voter target every
+// convergence verdict reads per partition (convergence-voter-targets.js).
+const STUB_POLICY_REPLICA_COUNT = 3;
+const VOTER_TARGET_QUERY_PREFIX = 'SELECT partition_id, replica_count FROM';
+
+/**
+ * Give a stub node the partitions policy rows a convergence verdict reads:
+ * `targets` is one replica count for every listed partition, or a
+ * {partitionId: replicaCount} map. An existing SQL handler keeps answering
+ * every other query.
+ * @param {Object} node
+ * @param {Array<string>} partitionIds
+ * @param {number|Object} targets
+ * @return {Object} the node
+ */
+function withPolicyTargets(node, partitionIds, targets = STUB_POLICY_REPLICA_COUNT) {
+  const rows = arrayMap(partitionIds, (partitionId) => ({
+    partition_id: partitionId,
+    replica_count: typeof targets === 'number' ? targets : targets[partitionId],
+  }));
+  const delegate = typeof node.query === 'function' ? node.query : null;
+  node.query = async (sql, ...rest) => {
+    if (stringStartsWith(String(sql), VOTER_TARGET_QUERY_PREFIX)) {
+      return {rows};
+    }
+    if (delegate === null) {
+      throw new Error('stub node answers only the partitions policy read');
+    }
+    return delegate(sql, ...rest);
+  };
+  return node;
+}
 const TERMINAL_OPERATION_STATUSES = new Set(['active', 'removed', 'failed']);
 
 function normalizeReplicaRowsByPartition(rows) {
@@ -162,11 +198,11 @@ function buildConvergedMockNode(partitionIds, targetVoterCount) {
     partitionIds,
     servicesRows: rows,
   });
-  return {
+  return withPolicyTargets({
     id: 'mock-node-1',
     isReachable: async () => true,
     getControlSnapshot: async () => ({rows: [snapshot]}),
-  };
+  }, partitionIds, targetVoterCount);
 }
 
 function buildNonConvergingMockNode() {
@@ -204,7 +240,7 @@ function buildSequencedConvergenceNode(options = {}) {
   let snapshotIndex = 0;
   let operationSnapshotIndex = 0;
 
-  return {
+  return withPolicyTargets({
     id: options.id || 'mock-sequence-node',
     isReachable: async () => true,
     getControlSnapshot: async () => {
@@ -227,10 +263,11 @@ function buildSequencedConvergenceNode(options = {}) {
       });
       return {rows: [snapshot]};
     },
-  };
+  }, partitionIds, options.policyReplicaCount ?? STUB_POLICY_REPLICA_COUNT);
 }
 
 export {
+  withPolicyTargets,
   buildConvergedMockNode,
   buildControlSnapshotRecord,
   buildNonConvergingMockNode,

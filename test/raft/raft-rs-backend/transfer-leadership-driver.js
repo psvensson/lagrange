@@ -29,8 +29,8 @@ import {
   RAFT_EVENT,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
@@ -56,7 +56,6 @@ const TRANSFER_REASON = Object.freeze({
   NO_ELIGIBLE_SUCCESSOR: 'no-eligible-successor',
 });
 const IN_PROGRESS_REASON = 'leadership-transfer-in-progress';
-const UNSUPPORTED_BACKEND_REASON = 'leadership-transfer-unsupported-backend';
 
 /**
  * @param {string} replicaIdentity - The named successor.
@@ -171,7 +170,7 @@ class TransferLeadershipDriver {
    */
   electionTickOf(replicaId) {
     return tuningOf(this.cluster.replica(replicaId)
-      .request[RAFT_PARTITION_NODE_REQUEST.TIMING]).electionTick;
+      .request[RAFT_OPERATION_PORT_REQUEST.TIMING]).electionTick;
   }
 
   /**
@@ -438,7 +437,6 @@ export {
   IN_PROGRESS_REASON,
   TRANSFER_REASON,
   TransferLeadershipDriver,
-  UNSUPPORTED_BACKEND_REASON,
   assertAccepted,
   assertLeadershipHeld,
   assertRefused,

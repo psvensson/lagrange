@@ -15,7 +15,6 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
-  RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
 } from './constants.js';
 import {
@@ -197,7 +196,6 @@ function mergeWithDefaults(partial = {}) {
       enabled: BENCHMARK_GATE_DEFAULTS.enabled,
       maxThroughputRegressionRatio:
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
-      baselineProvider: BENCHMARK_GATE_DEFAULTS.baselineProvider,
       failIfBaselineMissing: BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
       approvedMitigationId: BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
       ...(partial.benchmarkGate || {}),
@@ -213,8 +211,6 @@ function mergeWithDefaults(partial = {}) {
     },
     ...(partition ? {partition} : {}),
     ...(scenarioOverrides ? {scenarios: scenarioOverrides} : {}),
-    raftProvider:
-      partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),
   };

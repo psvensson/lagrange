@@ -318,7 +318,7 @@ test('stuck_transaction_heal section is recorded around the hold-timeout ' +
     '../../src/partition/partition-service-shared.js'
   );
   const {RaftRole} = PARTITION_SERVICE_SHARED;
-  const warns = [];
+  const errors = [];
   const service = Object.assign(
     Object.create(PartitionServiceTransactionBase.prototype),
     {
@@ -332,8 +332,8 @@ test('stuck_transaction_heal section is recorded around the hold-timeout ' +
       isSoloReplicaGroup: () => false,
       logger: {
         info: () => {},
-        warn: (message, context) => warns.push([message, context]),
-        error: () => {},
+        warn: () => {},
+        error: (message, context) => errors.push([message, context]),
         debug: () => {},
       },
     },
@@ -347,11 +347,14 @@ test('stuck_transaction_heal section is recorded around the hold-timeout ' +
 
   t.equal(after, before + 1, 'the heal sweep entered its sync section');
   t.equal(released, 0, 'leader-role heal still deferred (returns 0)');
-  t.equal(warns.length, 1, 'heal-deferred warn still emitted once');
+  // The spent hold is reported once as a wait_bound_spent ERROR (it was a
+  // heal-deferred warn before spent waits became visible failures).
+  t.equal(errors.length, 1, 'heal-deferred spent hold reported once');
+  t.equal(errors[0][1]?.event, 'wait_bound_spent', 'through the reporter');
   t.equal(
-    warns[0][1]?.expiredPreparedSessionCount,
+    errors[0][1]?.lastObserved?.expiredPreparedSessionCount,
     1,
-    'deferred warn context unchanged',
+    'deferred report carries the expired session count',
   );
   t.ok(
     service.preparedTransactions.has('session-1'),

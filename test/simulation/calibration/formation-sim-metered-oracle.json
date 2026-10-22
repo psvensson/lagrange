@@ -84,7 +84,7 @@
   "formationCorrespondence": false,
   "composition": {
     "name": "legacySyntheticFormationComposition",
-    "description": "Six raft cohorts keyed from PRIORITY_CONTROL_PLANE_TABLE_IDS, one LifeRaft per node per group, constructed by formation-sim-raft-cohort.js. Table ids are not partition ids and the placement is one replica per node, so this composition does not correspond to production replica ownership.",
+    "description": "Six Raft cohorts keyed from PRIORITY_CONTROL_PLANE_TABLE_IDS, one raft-rs operation port per node per group. Table ids are not partition ids and the placement is one replica per node, so this composition does not correspond to production replica ownership.",
     "status": "VALID for the sealed legacy substrate composition it measured. NOT authoritative for the production-composed positive formation scenario. Not invalidated, and its hashes are not updated: it continues to protect the scheduler, attribution, clock closure, current-instant closure, generation isolation and host-speed independence against regression."
   }
 }

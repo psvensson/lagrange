@@ -231,6 +231,10 @@ test('streak-report-is-projection-of-run-reports: three admitted passing ' +
       assert.equal(entry.sourceFingerprint, expected.report.sourceFingerprint);
       assert.equal(entry.finishedAt, expected.report.finishedAt);
     }
+    // Not certification under the 2026-10-05 rulings, and it says so.
+    assert.equal(result.certification.certificationEvidence, false);
+    assert.match(result.certification.statement,
+      /^NOT certification evidence/u);
     assert.ok(streakPath.startsWith(reportRoot));
     assert.ok(!streakPath.endsWith('.report.json'),
       'the aggregate never enters the probe-scanned *.report.json surface');

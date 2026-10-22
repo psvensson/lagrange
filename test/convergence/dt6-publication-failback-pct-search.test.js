@@ -1,9 +1,6 @@
 import t from 'tap';
-import LifeRaft from '../../src/raft/liferaft.js';
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
 import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {connectRaftCluster, driveNetwork} from
-  '../distributed/harness/raft-network-host.js';
+import {connectRaftRsNetwork} from '../test-helpers/raft-rs-network-host.js';
 import {PctScheduler} from '../../src/time/pct-scheduler.js';
 import {SeededRandomSource} from '../../src/random/random-source.js';
 import {buildMembershipPublicationRow} from
@@ -17,12 +14,12 @@ import {
 } from './membership-publication-owner-driver-host.js';
 
 // DT6 item 3 — turn the hosted control plane into a FALSIFIER over the DELIVERY-ORDER space: drive
-// the real CL-039 publication fail-back (step 7's real owner driver + real quorum-gated raft.command
-// commit) under a seeded PctScheduler that PERMUTES co-due delivery order, and CENSUS the convergence
+// the real CL-039 publication fail-back (step 7's real owner driver + a real quorum-gated proposal
+// committed through a real raft-rs operation port per node, each on its own SQLite file) under a seeded PctScheduler that PERMUTES co-due delivery order, and CENSUS the convergence
 // invariant across the searched schedules instead of replaying one fixed (dueAt, seq) order.
 //
 // Step 7 ran a single delivery order; this searches the co-due delivery-order space (PCT depth 2 =
-// one priority-change point, grouped by sender so different nodes' co-due raft packets race) over
+// one priority-change point, grouped by sender so different nodes' co-due raft envelopes race) over
 // many seeds, performing thousands of genuine co-due reorderings (asserted via an instrumented
 // reorder count), and asserts the invariant holds for EVERY searched schedule — or surfaces a
 // counterexample seed (a real CL-039-class divergence).
@@ -31,15 +28,15 @@ import {
 // ROBUST to delivery reordering — the invariant holds across all searched schedules, and the search
 // finds no schedule that flips it. So the search's value here is EXHAUSTIVE NEGATIVE EVIDENCE over
 // the delivery-order space (which step 7 did not cover), not a verdict the reordering changes. The
-// leaderA/leaderB variety reported in the census comes from the per-node election RNG (the seed),
-// NOT from the delivery reordering; the search-load-bearing assertion is the reorder COUNT (the
+// leaderA/leaderB variety reported in the census comes from the seeded per-replica election
+// windows (the seed), NOT from the delivery reordering; the search-load-bearing assertion is the reorder COUNT (the
 // scheduler genuinely permuted co-due deliveries), and the invariant held regardless.
 //
-// NEGATIVE-EVIDENCE SCOPE (drive granularity): this search drives the coarse `driveNetwork`, whose
+// NEGATIVE-EVIDENCE SCOPE (drive granularity): this search drives the coarse `host.runUntil`, whose
 // stepMs-batched run() delivers a whole co-due batch before flushing microtasks, so the not-found
 // result is bounded negative evidence over the schedule space reachable at THAT granularity — coarse
-// batching hides microtask-spawned co-due orderings, and coarse vs fine are NOT equivalent under a
-// PctScheduler (see dt6-fine-drive-midchurn-safety.test.js). Together with the seed budget and PCT
+// batching hides microtask-spawned co-due orderings, and coarse vs fine drive granularity are NOT
+// equivalent under a PctScheduler. Together with the seed budget and PCT
 // depth, this bounds the claim: "no schedule found" here is not a proof over all interleavings.
 //
 // INVARIANT (asserted on the FINAL, fully-healed, fully-settled state — the coarse converged-outcome
@@ -47,34 +44,30 @@ import {
 // fidelity concern): after partition(leader) + a required v2 bump + heal, every node converges to a
 // committed published version of 2, and committed raft log entries agree at every index (no
 // same-index/different-term divergence — the CL-040 check).
+//
+// DETERMINISM IS NARROWED TO THE SEMANTIC OUTCOME (owner decision, the consensus cutover quest
+// Phase J): raft-rs draws its randomized election timeout from the platform RNG, which no seed can
+// choose (owner decision O2, closed 2026-10-04: the binding is not seeded and no fork of the
+// consensus crate is carried, so exact replay is not a property to restore). The seed fixes
+// every owned timing input (each replica's election window, the PCT priorities), so a replayed seed
+// must reach the same terminal leaders, versions and verdicts with zero divergence - but this test
+// does NOT claim exact schedule replay: event counts such as the reorder count may differ by the few
+// co-due ticks the platform draw shifts. It is not equivalent to byte-identical replay.
 
 const IDS = Object.freeze(['N1', 'N2', 'N3']);
 const EXPECTED = Object.freeze([...IDS]);
 const PUBLICATION_COMMAND_MARKER = '__membershipPublication';
 
-function clusterOptions(seed) {
-  return (id) => ({
-    'election min': '100 ms',
-    'election max': '200 ms',
-    'heartbeat': '30 ms',
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') {
-        callback(null);
-      }
-    },
-    'Log': InMemoryLogAdapter,
-    'randomSource': new SeededRandomSource({seed: seed * IDS.length + IDS.indexOf(id)}),
-  });
-}
+const PARTITION_ID = 'dt6-publication-pct';
 
-function leaderOf(rafts) {
-  return IDS.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+function leaderOf(host) {
+  return IDS.find((id) => host.isLeader(id)) || null;
 }
 
 // The real owner-membership driver committing the publication via the real raft log (step 7).
-function hostQuorumPublisher(net, raft, nodeId, required) {
+function hostQuorumPublisher(net, host, nodeId, required) {
   const state = {committedVersion: 0, committedRow: null, lastCommandKey: null, commands: 0};
-  raft.on('commit', (command) => {
+  host.onCommitted(nodeId, ({command}) => {
     if (command && command[PUBLICATION_COMMAND_MARKER]) {
       state.committedVersion = command.requiredVersion;
       state.committedRow = command.row;
@@ -85,7 +78,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
     systemTableCache: {get: () => null, find: () => null, getAll: () => []},
     cdcIntegrationService: {
       canWriteSystemTableLocally: (table) =>
-        table === TABLES.CONTROL_PLANE_PUBLICATIONS && raft.state === LifeRaft.LEADER,
+        table === TABLES.CONTROL_PLANE_PUBLICATIONS && host.isLeader(nodeId),
     },
     ownerMembershipReconcileInFlight: false,
     assertSingleMembershipPartition: () => {},
@@ -106,7 +99,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
       };
     },
     reconcileActiveGateMembershipPublication: async () => {
-      const key = `${raft.term}:${required.version}`;
+      const key = `${host.term(nodeId)}:${required.version}`;
       if (state.lastCommandKey === key) {
         return;
       }
@@ -115,7 +108,7 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
         candidate: {
           publicationEpoch: required.version,
           publishedActiveNodeIds: EXPECTED,
-          publisherNodeId: raft.address,
+          publisherNodeId: nodeId,
           requiredAckNodeIds: EXPECTED,
           acknowledgedNodeIds: EXPECTED,
         },
@@ -123,15 +116,13 @@ function hostQuorumPublisher(net, raft, nodeId, required) {
         nowMs: net.now(),
       });
       state.commands += 1;
-      try {
-        await raft.command({
-          [PUBLICATION_COMMAND_MARKER]: true,
-          requiredVersion: required.version,
-          row,
-        });
-      } catch {
-        // NOTLEADER if leadership was lost between the gate and the write; the next tick re-evaluates.
-      }
+      // A refused proposal (leadership lost between the gate and the write) is not fatal: the next
+      // tick re-evaluates.
+      host.propose(nodeId, {
+        [PUBLICATION_COMMAND_MARKER]: true,
+        requiredVersion: required.version,
+        row,
+      });
     },
     _emitConvergenceDecisionTrace: () => {},
     _buildPublicationReadinessTraceFields: () => ({}),
@@ -153,12 +144,9 @@ async function runFailbackUnderPct(seed) {
     randomSource: random,
     depth: 2, // one priority-change point: can delay one sender's chain across another's
     stepBudget: 16,
-    // Group co-due events by their SENDER so different nodes' co-due raft packets are distinct PCT
+    // Group co-due events by their SENDER so different nodes' co-due raft envelopes are distinct PCT
     // tasks the search can reorder (generalises step 3's contested-vote race to the full fail-back).
-    keyOf: (event) =>
-      (event.payload && event.payload.packet && event.payload.packet.address) ||
-      event.from ||
-      event.type,
+    keyOf: (event) => event.from || event.type,
   });
   // Instrument pick() to count GENUINE reorderings (picked != lowest-seq among a co-due set > 1) so
   // the test can assert the search actually permuted delivery order rather than running an inert
@@ -177,20 +165,21 @@ async function runFailbackUnderPct(seed) {
     },
   };
   const net = createVirtualNetwork({scheduler, random});
-  const rafts = connectRaftCluster(net, IDS, clusterOptions(seed));
+  const host = connectRaftRsNetwork(net, IDS, {partitionId: PARTITION_ID, seed});
   const pubs = new Map(
-    IDS.map((id) => [id, hostQuorumPublisher(net, rafts.get(id), id, required)]),
+    IDS.map((id) => [id, hostQuorumPublisher(net, host, id, required)]),
   );
+  host.start();
 
   // Phase A — elect + commit membership v1 cluster-wide.
-  await driveNetwork(net, {untilMs: 600, stepMs: 5});
-  const leaderA = leaderOf(rafts);
+  await host.runUntil(600);
+  const leaderA = leaderOf(host);
   if (!leaderA) {
     assertMembershipPublicationOwnerDriverHostsHealthy(
       [...pubs.values()].map(({coordinator}) => coordinator),
     );
     IDS.forEach((id) => pubs.get(id).coordinator.stopOwnerMembershipDriver());
-    IDS.forEach((id) => rafts.get(id).end());
+    host.dispose();
     return {leaderA: null, leaderB: null, converged: false,
       divergentCommittedIndexes: [], reorders, reason: 'no-leaderA'};
   }
@@ -201,14 +190,14 @@ async function runFailbackUnderPct(seed) {
   for (const other of followers) {
     net.partition(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 1600, stepMs: 5});
-  const leaderB = followers.find((id) => rafts.get(id).state === LifeRaft.LEADER) || null;
+  await host.runUntil(1600);
+  const leaderB = followers.find((id) => host.isLeader(id)) || null;
 
   // Phase C — heal and settle generously, then read the FINAL converged state.
   for (const other of followers) {
     net.heal(leaderA, other);
   }
-  await driveNetwork(net, {untilMs: 3000, stepMs: 5});
+  await host.runUntil(3000);
 
   const versions = Object.fromEntries(IDS.map((id) => [id, pubs.get(id).state.committedVersion]));
   const converged = IDS.every((id) => versions[id] === 2);
@@ -216,10 +205,8 @@ async function runFailbackUnderPct(seed) {
   // Committed-log agreement: any index with >1 distinct {term, command} across nodes is a violation.
   const committedByIndex = new Map();
   for (const id of IDS) {
-    for (const [index, entry] of rafts.get(id).log.entries) {
-      if (!entry || entry.committed !== true) {
-        continue;
-      }
+    for (const entry of host.committedEntries(id)) {
+      const {index} = entry;
       const fingerprint = JSON.stringify({term: entry.term, command: entry.command});
       if (!committedByIndex.has(index)) {
         committedByIndex.set(index, new Set());
@@ -235,7 +222,7 @@ async function runFailbackUnderPct(seed) {
     [...pubs.values()].map(({coordinator}) => coordinator),
   );
   IDS.forEach((id) => pubs.get(id).coordinator.stopOwnerMembershipDriver());
-  IDS.forEach((id) => rafts.get(id).end());
+  host.dispose();
   return {leaderA, leaderB, versions, converged, divergentCommittedIndexes, reorders, reason: null};
 }
 
@@ -271,8 +258,8 @@ t.test('PCT search over the control-plane fail-back: convergence holds across se
       }
     }
     t.comment(`PCT census over ${SEEDS} seeds: ${JSON.stringify(census)}; ` +
-      `totalReorders=${totalReorders}; leadersA=${[...leadersA]} (election-RNG variety), ` +
-      `leadersB=${[...leadersB]} (election-RNG variety)`);
+      `totalReorders=${totalReorders}; leadersA=${[...leadersA]} (seeded election-window variety), ` +
+      `leadersB=${[...leadersB]} (seeded election-window variety)`);
 
     t.equal(counterexamples.length, 0,
       'no searched delivery-order schedule violated convergence/agreement ' +
@@ -287,14 +274,17 @@ t.test('PCT search over the control-plane fail-back: convergence holds across se
       `(totalReorders=${totalReorders})`);
   });
 
-t.test('a PCT-searched fail-back seed replays identically (determinism)', async (t) => {
+// NARROWED (see DETERMINISM above): semantic outcome determinism, not exact schedule replay.
+t.test('a PCT-searched fail-back seed replays to the same semantic outcome ' +
+  '(outcome determinism; exact schedule replay not claimed)', async (t) => {
   const a = await runFailbackUnderPct(5);
   const b = await runFailbackUnderPct(5);
-  t.same(
-    {leaderA: a.leaderA, leaderB: a.leaderB, versions: a.versions,
-      divergent: a.divergentCommittedIndexes, reorders: a.reorders},
-    {leaderA: b.leaderA, leaderB: b.leaderB, versions: b.versions,
-      divergent: b.divergentCommittedIndexes, reorders: b.reorders},
-    'same seed -> identical searched schedule (incl. reorder count) and converged outcome',
-  );
+  const outcome = (m) => ({leaderA: m.leaderA, leaderB: m.leaderB, versions: m.versions,
+    converged: m.converged, divergent: m.divergentCommittedIndexes, reason: m.reason});
+  t.same(outcome(b), outcome(a),
+    'same seed -> same terminal leaders, versions and convergence/agreement verdicts');
+  t.same(a.divergentCommittedIndexes, [], 'the replayed seed has zero committed-log divergence');
+  t.equal(a.converged, true, 'the replayed seed converged to committed v2 cluster-wide');
+  t.ok(a.reorders > 0 && b.reorders > 0,
+    `both replays genuinely permuted co-due delivery (reorders ${a.reorders}, ${b.reorders})`);
 });

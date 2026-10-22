@@ -184,11 +184,8 @@ test('Property 14: Code Path Uniqueness', async (t) => {
   t.test('each class has exactly one implementation', async (t) => {
     // Classes that are intentionally duplicated for different contexts
     // CLI has its own LiveQueryManager that wraps the core one
-    // RaftNode is defined in both message-group-service.js and partition-service.js
-    // as inner classes extending LifeRaft for their specific use cases
     const allowedDuplicates = new Set([
       'LiveQueryManager', // CLI wrapper vs core implementation
-      'RaftNode', // Inner class in message-group-service.js and partition-service.js
       // Shared utility/error names used in separate bounded contexts
       'InvalidTransitionError',
       'InProcWebSocket',

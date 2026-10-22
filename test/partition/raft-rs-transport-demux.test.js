@@ -8,7 +8,7 @@ import {
 import {PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -27,7 +27,7 @@ afterEach(() => {
 
 test('PartitionService routes semantic raft-rs transport envelopes to the operation port',
   async (t) => {
-    const raftProvider = new ControllablePartitionRaftProvider();
+    const consensusPort = new ControllableConsensusPort();
     const transport = {
       register() {},
       unregister() {},
@@ -46,7 +46,7 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
       transport,
       dbPath: ':memory:',
       deferElection: true,
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
     try {
@@ -73,17 +73,17 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
 
       t.equal(result.acknowledged, true,
         'the transport envelope is consumed as consensus traffic');
-      t.equal(raftProvider.steps.length, 1,
+      t.equal(consensusPort.steps.length, 1,
         'exactly one semantic step crosses the existing operation port');
-      t.same(raftProvider.steps[0], semanticEnvelope,
-        'the semantic envelope crosses unchanged; no fake Liferaft packet is built');
+      t.same(consensusPort.steps[0], semanticEnvelope,
+        'the semantic envelope crosses unchanged; no native packet is fabricated');
     } finally {
       await partition.shutdown();
     }
   });
 
 
-test('raft-rs runtime emits a semantic envelope instead of a Liferaft packet',
+test('raft-rs runtime emits a semantic envelope instead of a native packet',
   async (t) => {
     const sent = [];
     const replicaIds = ['transport-a', 'transport-b', 'transport-c'];
@@ -110,7 +110,7 @@ test('raft-rs runtime emits a semantic envelope instead of a Liferaft packet',
       t.equal(first.packet.to, first.packet.message?.to,
         'recipient identity is the core message recipient');
       t.equal(first.packet.type, undefined,
-        'the runtime never fabricates a Liferaft packet type');
+        'the runtime never fabricates a native packet type');
     } finally {
       cluster.dispose();
     }
@@ -162,5 +162,5 @@ test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
     t.same(transmitted?.payload, payload,
       'MessageRouter preserves the semantic envelope unchanged');
     t.equal(transmitted?.payload?.type, undefined,
-      'MessageRouter does not fabricate a Liferaft packet type');
+      'MessageRouter does not fabricate a native packet type');
   });

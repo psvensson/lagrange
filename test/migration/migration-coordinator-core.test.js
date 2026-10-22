@@ -1,5 +1,7 @@
 import fc from 'fast-check';
 import {test} from '../../src/test-helpers/tap.js';
+import {MigrationCoordinator} from
+  '../../src/migration/migration-coordinator.js';
 import {
   MIGRATION_CANCELLABLE_STAGES,
   MIGRATION_DEFAULT,
@@ -1203,4 +1205,26 @@ test('retry exhaustion transitions migration to failed with error', async (t) =>
   t.equal(row.status, MIGRATION_STATUS.FAILED);
   t.match(row.error_message, /partition apply failed|retry/i);
   t.ok(row.updated_at >= row.created_at);
+});
+
+test('cutover statements are sent for the transaction BEGIN opened', async (t) => {
+  const sent = [];
+  const fake = {
+    now: () => 1,
+    async executeSql(sql, params, options) {
+      sent.push([sql.split(' ')[0], options.expectedTransactionId ?? null]);
+      return sql === 'BEGIN' ?
+        {success: true, transactionId: 'tx-cutover'} :
+        {success: true};
+    },
+  };
+  await MigrationCoordinator.prototype.executeCutoverTransaction.call(fake,
+    {migration_id: 'm-1', table_id: 'tbl', target_schema: '{}'},
+    [{partition_id: 'p1'}]);
+  t.same(sent, [
+    ['BEGIN', null],
+    ['UPDATE', 'tx-cutover'],
+    ['UPDATE', 'tx-cutover'],
+    ['COMMIT', null],
+  ], 'the statements of the cutover carry the BEGIN\'s transaction id');
 });

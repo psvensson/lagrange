@@ -154,15 +154,15 @@ test(
     staleLeader.role = 'leader';
     staleLeader.isLeader = true;
     staleLeader.leaderId = staleLeader.replicaId;
-    staleLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    staleLeader.controllableProvider.setProposeHandler(async () => {});
+    staleLeader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    staleLeader.controllablePort.setProposeHandler(async () => {});
 
     currentLeader.role = 'leader';
     currentLeader.isLeader = true;
     currentLeader.leaderId = currentLeader.replicaId;
-    currentLeader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    currentLeader.controllableProvider.setProposeHandler(async (entry) => {
-      currentLeader.controllableProvider.commit(entry);
+    currentLeader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    currentLeader.controllablePort.setProposeHandler(async (entry) => {
+      currentLeader.controllablePort.commit(entry);
     });
 
     const staleAddress = 'node-stale/partition/ratings-r1';
@@ -206,7 +206,7 @@ test(
         const response = service.handleRemoteQuery(message);
         if (address === staleAddress) {
           await Promise.resolve();
-          staleLeader.controllableProvider.setRole(RAFT_ROLE.FOLLOWER);
+          staleLeader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
         }
         return response;
       },
@@ -416,9 +416,9 @@ test(
     leader.role = 'leader';
     leader.isLeader = true;
     leader.leaderId = leader.replicaId;
-    leader.controllableProvider.setRole(RAFT_ROLE.LEADER);
-    leader.controllableProvider.setProposeHandler(async (entry) => {
-      leader.controllableProvider.commit(entry);
+    leader.controllablePort.setRole(RAFT_ROLE.LEADER);
+    leader.controllablePort.setProposeHandler(async (entry) => {
+      leader.controllablePort.commit(entry);
     });
 
     const address = 'node-leader/partition/counters-r1';

@@ -661,6 +661,71 @@ test('commit failure is not followed by rollback', async (t) => {
   t.same(core.calls.map(({sql}) => sql), ['BEGIN', 'COMMIT']);
 });
 
+test('statements of a transaction are sent for the BEGIN\'s transaction',
+  async (t) => {
+    const core = createCore(async (sql) => sql === 'BEGIN' ?
+      {success: true, transactionId: 'tx-from-begin'} :
+      {success: true});
+    const runtime = createBoundApplicationDatabaseRuntime(core);
+    const db = runtime.openApplicationDatabase({applicationId: 'images'});
+    await db.transaction(async (tx) => {
+      await tx.query('SELECT in tx');
+      await db.query('SELECT facade in tx');
+    });
+    await db.query('SELECT outside');
+    t.same(core.calls.map(({sql, options}) =>
+      [sql, options.expectedTransactionId ?? null]), [
+      ['BEGIN', null],
+      ['SELECT in tx', 'tx-from-begin'],
+      ['SELECT facade in tx', 'tx-from-begin'],
+      ['COMMIT', null],
+      ['SELECT outside', null],
+    ]);
+  });
+
+test('a COMMIT that may have passed its commit point rejects ' +
+  'TRANSACTION_OUTCOME_UNKNOWN; only a typed not-reached failure is plain',
+async (t) => {
+  for (const [answer, expectedCode] of [
+    [{success: false, errorCode: 'TIMEOUT', error: 'Query timeout',
+      stage: 'COMMITTING', commitPointReached: true},
+    'TRANSACTION_OUTCOME_UNKNOWN'],
+    [{success: false, errorCode: 'COMMIT_FAILED', error: 'x'},
+      'TRANSACTION_OUTCOME_UNKNOWN'],
+    [{success: false, errorCode: 'NO_TRANSACTION', error: 'No active',
+      commitPointReached: false}, 'NO_TRANSACTION'],
+    [{success: false, errorCode: 'TIMEOUT', error: 'Query timeout',
+      stage: 'ACTIVE', commitPointReached: false}, 'TIMEOUT'],
+  ]) {
+    const core = createCore(async (sql) => sql === 'COMMIT' ?
+      answer : {success: true});
+    const runtime = createBoundApplicationDatabaseRuntime(core);
+    const db = runtime.openApplicationDatabase({applicationId: 'images'});
+    const error = await captureRejection(db.transaction(async () => 1));
+    t.equal(error instanceof ApplicationDatabaseError, true);
+    t.equal(error.code, expectedCode, JSON.stringify(answer));
+    t.equal(error.operation, 'commit');
+    if (expectedCode === 'TRANSACTION_OUTCOME_UNKNOWN') {
+      t.equal(error.message, 'the transaction\'s outcome is unknown; some ' +
+        'changes may have been committed');
+      t.equal(error.cause.code, answer.errorCode);
+      t.equal(error.cause.stage, answer.stage ?? null);
+      t.equal(error.deferred, false, 'never offered as retryable');
+    }
+    t.same(core.calls.map(({sql}) => sql), ['BEGIN', 'COMMIT'],
+      'no ROLLBACK after a COMMIT');
+  }
+  const thrownCore = createCore(async (sql) => {
+    if (sql === 'COMMIT') throw new Error('transport lost');
+    return {success: true};
+  });
+  const thrownDb = createBoundApplicationDatabaseRuntime(thrownCore)
+    .openApplicationDatabase({applicationId: 'images'});
+  const thrown = await captureRejection(thrownDb.transaction(async () => 1));
+  t.equal(thrown.code, 'TRANSACTION_OUTCOME_UNKNOWN',
+    'a COMMIT that threw is outcome-unknown');
+});
+
 test('rollback failure preserves primary typed metadata', async (t) => {
   const core = createCore(async (sql) => {
     if (sql === 'SELECT broken') {

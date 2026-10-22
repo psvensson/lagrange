@@ -1,0 +1,205 @@
+// The local-log precondition guard at the single raft-rs ingress: one pure
+// decision, asked by the runtime owner in its inbound drain immediately
+// before a delivered envelope is stepped, over the envelope and the
+// receiving group's own positions. Nothing here enters the core, a store or
+// a row; the runtime owner hands in what it already holds.
+//
+// These are not Raft's protocol checks (raft-rs owns those). They are
+// raft-rs's panicking preconditions - the core assumes no peer lost its
+// history and traps the whole shared instance when one did - plus the O1
+// participation gate applied at the authoritative ingress (M5):
+//   - a heartbeat whose commit lies beyond this replica's persisted log
+//     (crate raft_log.rs commit_to). A correct leader never sends it: its
+//     heartbeat commit is min(matched, committed), matched is acknowledged
+//     only after this replica persisted the entries, and committed entries
+//     are never truncated. Sent by a member of this replica's own
+//     configuration at a term not below its own, it therefore proves this
+//     replica lost history the leader holds it to have: the group is held for
+//     a reseed (O4), never dropped and stepped on (a dropped heartbeat never
+//     resets the election timer, so the amnesic replica would campaign the
+//     leader away). Sent by anyone else - a raft id outside the configuration
+//     the core holds (voters, outgoing voters, learners, next learners) or a
+//     term below this replica's, which raft-rs itself ignores - it proves
+//     nothing about this replica and is refused, never held (M5: unadmitted
+//     traffic has no lasting effect). An amnesic incarnation opened empty
+//     holds exactly the configuration it was opened with (the GENESIS
+//     founders, or a join's committed voters plus itself) and term 0, so its
+//     legitimate leader - a founder, or the leader that answered the join -
+//     satisfies both conditions;
+//   (an append carrying an entry at or below this replica's commit while
+//   its own index is not below it - the crate's committed-conflict fatal in
+//   raft_log.rs maybe_append - cannot reach this guard: entry contiguity
+//   from index + 1 is part of the ingress schema, raft-rs-ingress.js);
+//   - an empty proposal forwarded by a peer (crate raft.rs "stepped empty
+//     MsgProp"). A forwarded proposal with entries is legitimate (proposal
+//     forwarding is on) and is stepped;
+//   - an accepting append response whose index lies beyond this replica's
+//     persisted log. A correct follower acknowledges only what the leader
+//     sent, and the leader persists before it sends, so only an amnesic
+//     peer's answer exceeds it (a follower whose commit runs past an empty
+//     leader answers index = its commit). Stepped, it would set the peer's
+//     matched past the log: replication to it is skipped and the next
+//     heartbeat carries a commit the peer may not hold. Refused, not held;
+//   - while the participation gate is closed, a MsgTimeoutNow: a replica
+//     that may not take part may not campaign on a peer's word (O1, M5). A
+//     MsgTransferLeader is never refused here: a transfer named at a
+//     follower is forwarded to the leader as exactly that peer message.
+//
+//   - a vote or pre-vote request at a term above this replica's from a raft
+//     id outside its configuration, while this replica leads or follows a
+//     leader: the disruptive-server rule of Raft (Ongaro, section 4.2.3:
+//     a server that believes a current leader exists disregards a
+//     RequestVote) applied only to senders this replica's configuration does
+//     not name. raft-rs runs without check_quorum and pre_vote, so it has no
+//     such lease and steps any higher-term request down to its term. The
+//     refusal ends when this replica's own election timer clears its leader
+//     (it then campaigns, follows no one, and the request is stepped), so a
+//     legitimately added voter this replica has not yet applied is never
+//     locked out (the membership-transition race, witnessed by
+//     local-log-guard-sender-admissibility A5). Appends and heartbeats from
+//     outside the configuration are stepped: a new leader the receiver has
+//     not yet applied sends exactly those (binding direction section 6).
+//
+// A held group never reaches this guard: the runtime owner answers every
+// delivery and operation of a held group with its hold, votes included, and
+// the core is not entered for it again. A vote request to a gated replica
+// that is not held is stepped: the candidate counts it only if the candidate applied the
+// AddNode that made it a voter, and refusing it locks a group out for good
+// when that replica's vote is the one a quorum needs (it opens its gate only
+// by applying entries from a leader that then cannot be elected - witnessed
+// by evidence-o1-restart-equivalence, H1 + self). Whether the gate should
+// refuse votes at all is an owner decision this guard does not take.
+
+import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
+import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
+import {RAFT_RS_LOCAL_LOG_REFUSAL} from
+  './raft-rs-runtime-owner-constants.js';
+
+const ZERO = 0n;
+const CONFIGURATION_PARTS = Object.freeze([
+  'voters', 'votersOutgoing', 'learners', 'learnersNext']);
+const VOTE_REQUESTS = new Set([
+  RAFT_RS_MESSAGE_TYPE.REQUEST_VOTE, RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE]);
+
+function positionOf(value) {
+  return value === undefined ? ZERO : BigInt(value);
+}
+
+function refusal(reason, holds = false) {
+  return {reason, holds};
+}
+
+// Whether the configuration the core holds names the sender (as voter,
+// outgoing voter, learner or next learner).
+function namesSender(confState, sender) {
+  return CONFIGURATION_PARTS.some((part) =>
+    (confState?.[part] || []).some((id) => String(id) === sender));
+}
+
+// A heartbeat whose commit lies beyond the persisted log: held only when a
+// member at a term not below this replica's sent it.
+function commitBeyondLocalLog(message, local) {
+  if (positionOf(message.commit) <= local.lastIndex) {
+    return null;
+  }
+  return positionOf(message.term) >= local.term &&
+    namesSender(local.confState, String(message.from)) ?
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.PEER_COMMIT_BEYOND_LOCAL_LOG, true) :
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.UNADMITTED_COMMIT_BEYOND_LOCAL_LOG);
+}
+
+// The sender admissibility decided before any position check, so a sender
+// that may not move this replica can never hold it either.
+function senderRefusal(message, local) {
+  return VOTE_REQUESTS.has(message.msgType) && local.leaderKnown &&
+    positionOf(message.term) > local.term &&
+    !namesSender(local.confState, String(message.from)) ?
+    refusal(RAFT_RS_LOCAL_LOG_REFUSAL.VOTE_REQUEST_OUTSIDE_CONFIGURATION) :
+    null;
+}
+
+const POSITION_CHECKS = Object.freeze({
+  [RAFT_RS_MESSAGE_TYPE.HEARTBEAT]: commitBeyondLocalLog,
+  [RAFT_RS_MESSAGE_TYPE.PROPOSE]: (message) =>
+    !Array.isArray(message.entries) || message.entries.length === 0 ?
+      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.EMPTY_FORWARDED_PROPOSAL) : null,
+  // A peer forwards a transfer request to its leader with its term set; a
+  // follower that knows a leader at that same term re-forwards it, and
+  // raft.rs send() is fatal on a set term. No correct peer reaches such a
+  // follower with it (a former leader that stepped down is at a higher term
+  // and ignores it); everywhere else raft-rs drops or ignores it.
+  [RAFT_RS_MESSAGE_TYPE.TRANSFER_LEADER]: (message, local) =>
+    !local.leading && local.leaderKnown &&
+      positionOf(message.term) === local.term ?
+      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.TRANSFER_REQUEST_AT_NON_LEADER) :
+      null,
+  [RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE]: (message, local) =>
+    message.reject !== true && positionOf(message.index) > local.lastIndex ?
+      refusal(RAFT_RS_LOCAL_LOG_REFUSAL.APPEND_RESPONSE_BEYOND_LOCAL_LOG) :
+      null,
+});
+
+/**
+ * Whether a delivered message may be stepped into this group's core.
+ * @param {Object} message - The raft message on an admitted envelope.
+ * @param {Object} local - The receiving group's own state, read without
+ *   entering the core: {gateOpen, lastIndex (bigint, the persisted
+ *   last index: the last entry or the snapshot written), term (bigint,
+ *   the core's term as last observed), leaderKnown (whether it leads or
+ *   follows a leader as last observed), leading (whether it leads as last
+ *   observed), confState (the configuration the
+ *   core held as last observed)}. The runtime observes them after every
+ *   stepped envelope's Ready, so they are the core's own as of this turn.
+ * @return {Object|null} null to step it, or {reason, holds}: the typed
+ *   refusal, and whether it proves this replica's own history lost (the
+ *   group is then held for a reseed).
+ */
+function inboundStepRefusal(message, local) {
+  const type = message.msgType;
+  if (!local.gateOpen && type === RAFT_RS_MESSAGE_TYPE.TIMEOUT_NOW) {
+    return refusal(PARTICIPATION_GATE.GATE_CLOSED);
+  }
+  const sender = senderRefusal(message, local);
+  if (sender !== null) {
+    return sender;
+  }
+  const check = POSITION_CHECKS[type];
+  return check === undefined ? null : check(message, local);
+}
+
+/**
+ * The persisted last index after one Ready's durable writes: the snapshot
+ * resets it, appended entries set it to their last index (an append replaces
+ * any conflicting suffix first, so it can move down), and a Ready that wrote
+ * neither leaves it unchanged.
+ * @param {bigint} previous - The persisted last index before the Ready.
+ * @param {Object} ready - The Ready the store persisted.
+ * @return {bigint}
+ */
+function persistedLastIndexAfter(previous, ready) {
+  const entries = ready.entries || [];
+  if (entries.length > 0) {
+    return positionOf(entries[entries.length - 1].index);
+  }
+  return ready.snapshot ? positionOf(ready.snapshot.metadata?.index) :
+    previous;
+}
+
+/**
+ * The persisted last index of a group opened from its durable record (the
+ * last entry, or the snapshot when the log holds nothing after it), or of a
+ * group created from a bootstrap (zero).
+ * @param {Object|null} record - The durable record, or null when created.
+ * @return {bigint}
+ */
+function openedLastIndex(record) {
+  if (record === null) {
+    return ZERO;
+  }
+  const lastEntry = record.entries.length === 0 ? ZERO :
+    positionOf(record.entries[record.entries.length - 1].index);
+  const snapshotIndex = positionOf(record.snapshot?.metadata?.index);
+  return lastEntry > snapshotIndex ? lastEntry : snapshotIndex;
+}
+
+export {inboundStepRefusal, openedLastIndex, persistedLastIndexAfter};

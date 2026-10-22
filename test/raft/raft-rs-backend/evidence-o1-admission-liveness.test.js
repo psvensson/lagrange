@@ -62,8 +62,8 @@ import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   '../../../src/partition/partition-replica-membership-constants.js';
 import {genesisStamp} from
   '../../../src/raft/raft-committed-membership-stamp.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 
 const PARTITION_ID = 'evidence-o1-m3';
 const HISTORY_KEY = 'H3';
@@ -308,7 +308,7 @@ test('F-2 (the gate clause): a replica whose applied view omits it below ' +
     assert.ok(settle(cluster, () => leaderOf(cluster) !== null, ['gx-a']),
       'setup: a leader');
     cluster.addReplica(outsider, [...founders, outsider],
-      {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+      {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
         genesisStamp(founders)});
     const status = cluster.node(outsider).readStatus();
     assert.equal(status.gateOpen, false, 'setup: never admitted, closed');

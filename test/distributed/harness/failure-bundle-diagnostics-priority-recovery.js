@@ -45,17 +45,16 @@ export function isPrioritySpreadSummarySatisfied(summary) {
   return isRecord(summary) && summary.satisfied === true;
 }
 
+// Satisfied spread evidence is a census summary that says so. A closure
+// witness never counts as spread evidence (owner decision 2026-10-04): an old
+// artifact's stale-publication witness and its synthesized summary are the
+// deleted second authority, so they no longer clear a gap here either.
 export function hasSatisfiedPrioritySpreadEvidence({
-  decisionClosureWitness,
   publicationConvergence,
   publicationConvergenceGate,
   priorityRecoveryObservation,
 }) {
   return (
-    decisionClosureWitness?.prioritySpreadPending === false ||
-    isPrioritySpreadSummarySatisfied(
-      decisionClosureWitness?.refreshedPriorityPartitionSummary,
-    ) ||
     isPrioritySpreadSummarySatisfied(
       priorityRecoveryObservation?.priorityPartitionSummary,
     ) ||

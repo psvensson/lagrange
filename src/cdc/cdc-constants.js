@@ -28,6 +28,7 @@ const CDC_DEFAULTS = Object.freeze({
   RETRY_MAX_ATTEMPTS: 6,
   RETRY_DELAY_MS: 100,
   // Wait briefly for CDC to apply to the cache after successful writes.
+  // ends-on: the routed write appears in the local cache
   CACHE_WAIT_TIMEOUT_MS: 1000,
 });
 

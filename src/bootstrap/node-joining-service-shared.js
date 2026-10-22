@@ -112,7 +112,10 @@ import {
   JOIN_READINESS_REPAIR,
   JOINING_UNIFIED_RECONCILE,
 } from './node-joining-constants.js';
-import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
+} from '../runtime/runtime-startup-wiring.js';
 import {
   WORK_CLASS,
   WorkClassScheduler,
@@ -418,6 +421,7 @@ const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({
   createJoiningPhaseOwners,
   createNodeStateUpdateDeferredPublicationState,
   createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
   extractJoinSchemaVersionFromRecord,
   formatReplicatedServiceAddress,
   getControlPlaneErrorCode,

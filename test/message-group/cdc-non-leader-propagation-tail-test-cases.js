@@ -11,29 +11,25 @@ import {
 import {
   TRANSPORT_ERROR_MSG,
 } from '../../src/constants/transport.js';
-import LifeRaft from '@markwylde/liferaft';
-import {
-  MessageGroupService,
-} from '../../src/message-group/message-group-service.js';
+import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {registerCdcNonLeaderPropagationTailMoreTests} from './cdc-non-leader-propagation-tail-more-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
+import {
+  createControllableMessageGroupService,
+  seedConsensusPeersFromPeerAddresses,
+} from './message-group-service-test-support.js';
 
 let testPortCounter = 27200;
 const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
 
 
-function seedLiveRaftPeersFromPeerAddresses(service) {
-  if (!service?.raft || !Array.isArray(service.peerAddresses)) {
-    return;
-  }
-  service.raft.nodes = service.peerAddresses
-    .filter((address) => typeof address === 'string' && address.length > 0)
-    .map((address) => ({address}));
-}
 
 export function registerCdcNonLeaderPropagationTailTests({
   test,
@@ -63,13 +59,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-strict-stale-ready',
           replicaId: 'mg-strict-stale-ready-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-strict-stale-ready-r1',
@@ -81,13 +79,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.isLeader = false;
         mg.role = 'follower';
         mg.leaderId = null;
-        if (mg.raft) {
-          Object.defineProperty(mg.raft, 'state', {
-            value: LifeRaft.FOLLOWER,
-            writable: true,
-            configurable: true,
-          });
-        }
+        consensus.role = RaftRole.FOLLOWER;
 
         const now = Date.now();
         mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
@@ -196,13 +188,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-retry-exhausted',
           replicaId: 'mg-retry-exhausted-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-retry-exhausted-r1', 'mg-retry-exhausted-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -211,7 +205,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-retry-exhausted-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-retry-exhausted-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryInitialDelayMs = 20;
         mg.retryBackoffMultiplier = 1;
         mg.retryMaxAttempts = 2;
@@ -264,13 +258,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-nonleader-no-local-apply',
           replicaId: 'mg-nonleader-no-local-apply-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-nonleader-no-local-apply-r1',
@@ -282,7 +278,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-nonleader-no-local-apply-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-nonleader-no-local-apply-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryInitialDelayMs = 20;
         mg.retryBackoffMultiplier = 1;
         mg.retryMaxAttempts = 1;
@@ -340,13 +336,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-retry-past-budget',
           replicaId: 'mg-retry-past-budget-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-retry-past-budget-r1', 'mg-retry-past-budget-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -406,13 +404,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-no-handler',
           replicaId: 'mg-no-handler-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = ['mg-no-handler-r1', 'mg-no-handler-r2'];
         await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
@@ -421,7 +421,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.role = 'follower';
         mg.leaderId = 'mg-no-handler-r2';
         mg.peerAddresses = ['remote-node/message-group/mg-no-handler-r2'];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
 
         let deliverAttempts = 0;
@@ -476,6 +476,8 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
         const groupId = 'mg-forward-topology-repair';
         const staleReplicaId = `${groupId}-r2`;
@@ -485,7 +487,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         const nowMs = Date.now();
         const authoritativeReadCalls = [];
 
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId,
           replicaId: `${groupId}-r1`,
           nodeId,
@@ -561,7 +563,7 @@ export function registerCdcNonLeaderPropagationTailTests({
               };
             },
           },
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           `${groupId}-r1`,
@@ -578,13 +580,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.retryBackoffMultiplier = 1;
         mg.forwardTargetSuppressionMs = 1000;
         mg.computeCdcForwardRetryDelayMs = () => 0;
-        if (mg.raft) {
-          Object.defineProperty(mg.raft, 'state', {
-            value: LifeRaft.FOLLOWER,
-            writable: true,
-            configurable: true,
-          });
-        }
+        consensus.role = RaftRole.FOLLOWER;
 
         const cache = NodeService.getInstance().getSystemTableCache();
         cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
@@ -703,13 +699,15 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-forward-suppress',
           replicaId: 'mg-forward-suppress-r1',
           nodeId,
           transport: router,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-forward-suppress-r1',
@@ -723,7 +721,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         mg.peerAddresses = [
           'remote-node/message-group/mg-forward-suppress-r2',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 2;
         mg.retryInitialDelayMs = 10;
         mg.retryBackoffMultiplier = 1;
@@ -787,14 +785,16 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-no-connection-suppress',
           replicaId: 'mg-no-connection-suppress-r1',
           nodeId,
           transport: router,
           now: () => nowMs,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-no-connection-suppress-r1',
@@ -810,7 +810,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           'remote-node-2/message-group/mg-no-connection-suppress-r2',
           'remote-node-3/message-group/mg-no-connection-suppress-r3',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
         mg.forwardTargetSuppressionMs = 1000;
 
@@ -907,14 +907,16 @@ export function registerCdcNonLeaderPropagationTailTests({
       };
 
       let mg;
+
+      const consensus = new ControllableConsensusPort();
       try {
-        mg = new MessageGroupService({
+        mg = createControllableMessageGroupService({
           groupId: 'mg-timeout-suppress',
           replicaId: 'mg-timeout-suppress-r1',
           nodeId,
           transport: router,
           now: () => nowMs,
-        });
+        }, consensus);
         await mg.initialize();
         mg.replicaIds = [
           'mg-timeout-suppress-r1',
@@ -930,7 +932,7 @@ export function registerCdcNonLeaderPropagationTailTests({
           'remote-node-2/message-group/mg-timeout-suppress-r2',
           'remote-node-3/message-group/mg-timeout-suppress-r3',
         ];
-        seedLiveRaftPeersFromPeerAddresses(mg);
+        seedConsensusPeersFromPeerAddresses(consensus, mg.peerAddresses);
         mg.retryMaxAttempts = 1;
         mg.forwardTargetSuppressionMs = 1000;
 

@@ -7,7 +7,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
   createLoopbackTransport,
   createTrafficReadinessState,
@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
-  const raftProvider = new ControllablePartitionRaftProvider();
+  const consensusPort = new ControllableConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: 'test-partition-leader-gate',
     tableId: 'leader_gate_test',
@@ -82,7 +82,7 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     dbPath: ':memory:',
     deferElection: true,
     leaderActivationStabilizationMs: 20,
-  }, raftProvider);
+  }, consensusPort);
 
   await partition.initialize();
 
@@ -100,10 +100,10 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     leaderEvents += 1;
   });
 
-  raftProvider.setTerm(7);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.LEADER);
+  consensusPort.setTerm(7);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.LEADER);
 
   await waitForCondition(() => leaderEvents === 1, 500, 10);
 
@@ -118,9 +118,9 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
   leaderEvents = 0;
   rebalancerLeadershipUpdates = 0;
 
-  raftProvider.setTerm(8);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.CANDIDATE);
+  consensusPort.setTerm(8);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.CANDIDATE);
 
   await new Promise((resolve) => setTimeout(resolve, 60));
 

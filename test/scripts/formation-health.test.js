@@ -575,6 +575,7 @@ const HOOK_CLOSURE = Object.freeze([
   'examples/service-data-affinity/formation-verdict.js',
   'src/diagnostics/formation-diagnostics-contract.js',
   'src/test-helpers/probe-guard.js',
+  'test/distributed/harness/certification-evidence-statement.js',
 ]);
 
 test('the real hook admits a trend append and refuses a smuggled change, at any checkout path', (t) => {

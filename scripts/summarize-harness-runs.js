@@ -12,6 +12,10 @@
 
 import {readdirSync, readFileSync, existsSync} from 'node:fs';
 import {join, basename} from 'node:path';
+import {
+  SCENARIO_OUTCOME,
+  scenarioOutcomeOf,
+} from '../test/distributed/harness/scenario-outcome.js';
 
 const LOCAL_STR_SPACE = ' ';
 const LOCAL_STR_DISTRIBUTED_HARNESS_SUMMARY = 'Distributed Harness Summary: ';
@@ -23,8 +27,15 @@ const RERUN_FILE_PREFIX = 'rerun-';
 const MS_PER_SECOND = 1000;
 const PASS_SYMBOL = '\u2713';
 const FAIL_SYMBOL = '\u2717';
+const REFUSED_SYMBOL = '\u2298';
+const STATUS_TEXT = Object.freeze({
+  FAIL: ' FAIL',
+  PASS: ' PASS',
+  PASS_ON_RETRY: ' PASS*',
+  REFUSED: ' REFUSED',
+});
 const SCENARIO_COL_WIDTH = 48;
-const STATUS_COL_WIDTH = 8;
+const STATUS_COL_WIDTH = 10;
 const DUR_COL_WIDTH = 8;
 const CLUSTER_COL_WIDTH = 5;
 const OPS_COL_WIDTH = 9;
@@ -72,6 +83,8 @@ function parseReport(filePath) {
       file: basename(filePath),
       scenario: scenario.scenario || UNKNOWN_SCENARIO,
       passed: !!scenario.passed,
+      // Not run: never a pass, and shown apart from a failure.
+      refused: scenarioOutcomeOf(scenario) === SCENARIO_OUTCOME.REFUSED,
       // A rerun report must never silently displace the original failure it
       // retried (rerun-failed-distributed-scenarios.sh writes rerun-*.json
       // with the same scenario key and a newer timestamp).
@@ -176,6 +189,17 @@ function fmtInt(val, suffix) {
   return Math.round(val) + (suffix || '');
 }
 
+function statusLabel(run) {
+  if (run.refused) {
+    return REFUSED_SYMBOL + STATUS_TEXT.REFUSED;
+  }
+  if (!run.passed) {
+    return FAIL_SYMBOL + STATUS_TEXT.FAIL;
+  }
+  return PASS_SYMBOL +
+    (run.passedOnlyOnRetry ? STATUS_TEXT.PASS_ON_RETRY : STATUS_TEXT.PASS);
+}
+
 /**
  * Print the summary table to stdout.
  * @param {Array<object>} runs - Array of scenario summaries.
@@ -183,12 +207,14 @@ function fmtInt(val, suffix) {
 function printTable(runs) {
   const sep = '\u2500'.repeat(SEPARATOR_WIDTH);
   const passCount = runs.filter((r) => r.passed).length;
-  const failCount = runs.length - passCount;
+  const refusedCount = runs.filter((r) => r.refused).length;
+  const failCount = runs.length - passCount - refusedCount;
 
   console.log(sep);
   console.log(
     LOCAL_STR_DISTRIBUTED_HARNESS_SUMMARY +
-    `${passCount} passed, ${failCount} failed ` +
+    `${passCount} passed, ${failCount} failed, ` +
+    `${refusedCount} refused (not run) ` +
     `(${runs.length} scenarios)`,
   );
   console.log(sep);
@@ -207,9 +233,7 @@ function printTable(runs) {
   console.log(sep);
 
   for (const r of runs) {
-    const status = r.passed ?
-      (PASS_SYMBOL + (r.passedOnlyOnRetry ? ' PASS*' : ' PASS')) :
-      (FAIL_SYMBOL + ' FAIL');
+    const status = statusLabel(r);
     const dur = fmtNum(r.durationMs / MS_PER_SECOND, 's');
     const cluster = r.clusterSize + 'n';
     const ops = r.opsPerSec != null ?

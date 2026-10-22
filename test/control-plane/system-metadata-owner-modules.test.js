@@ -1,5 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
@@ -586,3 +587,45 @@ test('System metadata owners throw typed errors when mutation retries still fail
       );
     }
   });
+
+test('A system metadata owner write whose retry budget is spent names its ' +
+  'owner and table in the wait_bound_spent ERROR', async (t) => {
+  const owner = new NodesOwner({
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow() {
+        return {
+          success: false,
+          error: 'Query execution failed',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+          retryAfterMs: 250,
+          deferRetry: true,
+        };
+      },
+    },
+    controlPlaneWriteRetrySleep: async () => {},
+    controlPlaneWriteRetryTimeoutMs: 0,
+  });
+  // The owner has no logger of its own: the reporter writes through the
+  // process LoggingService.
+  const logging = LoggingService.getInstance();
+  const originalError = logging.error;
+  const spent = [];
+  logging.error = (message, context) => {
+    if (context?.event === 'wait_bound_spent') {
+      spent.push(context);
+    }
+  };
+  try {
+    await t.rejects(owner.updateNode('node-1', {status: 'active'}),
+      /Query execution failed/, 'the write still fails as before');
+  } finally {
+    logging.error = originalError;
+  }
+  t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+  t.equal(spent[0].wait, 'controlPlaneWriteRetryTimeoutMs');
+  t.same(spent[0].scope, {
+    ownerName: 'nodes-owner',
+    tableName: TABLES.NODES,
+    operation: 'update',
+  }, 'scope names the owner, its table and the operation');
+});

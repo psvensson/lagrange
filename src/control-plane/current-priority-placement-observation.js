@@ -1,10 +1,10 @@
-import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   resolvePriorityControlPlanePartitionIds,
 } from '../bootstrap/system-partition-classification.js';
 import {
   buildDerivedPriorityPartitionSummary,
+  isPrioritySpreadHolderServiceRow,
 } from './membership-publication-priority-partition-summary.js';
 import {
   appendOwnArrayValue,
@@ -28,7 +28,6 @@ import {
   normalizeNodeIdList,
   normalizePositiveInteger,
 } from './membership-publication-row-helpers.js';
-import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 
 const CURRENT_PRIORITY_PLACEMENT_OBSERVATION_STATE = Object.freeze({
   AVAILABLE: 'available',
@@ -162,26 +161,16 @@ function normalizeCurrentVoterServiceRow({
   priorityPartitionIdSet,
   serviceRow,
 }) {
-  const serviceType = readOwnLowerPrimitiveString(
-    serviceRow,
-    ['service_type', 'serviceType'],
-  );
-  const status = readOwnLowerPrimitiveString(serviceRow, ['status']);
   const raftRole = readOwnLowerPrimitiveString(
     serviceRow,
     ['raft_role', 'raftRole'],
   );
   const nodeId = readOwnPrimitiveString(serviceRow, ['node_id', 'nodeId']);
-  const address = readOwnPrimitiveString(serviceRow, ['address']);
   const partitionId = readOwnPrimitiveString(
     serviceRow,
     ['partition_id', 'partitionId'],
   );
-  if (serviceType !== SERVICE_TYPE.PARTITION ||
-      status !== SERVICE_STATUS.ACTIVE ||
-      !isVoterRaftRole(raftRole) ||
-      nodeId.length === 0 ||
-      address.length === 0 ||
+  if (!isPrioritySpreadHolderServiceRow(serviceRow) ||
       !setHas(priorityPartitionIdSet, partitionId) ||
       (setSize(eligibleNodeIdSet) > 0 &&
         !setHas(eligibleNodeIdSet, nodeId))) {

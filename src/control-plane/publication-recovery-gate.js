@@ -409,12 +409,10 @@ function buildPublicationRecoveryGateSnapshotUntracked(options = {}) {
       prioritySpreadDecision.priorityPartitionSummary ?
         Object.freeze({...prioritySpreadDecision.priorityPartitionSummary}) :
         null,
-    // The STRICT (voter-ready-sound) summary, distinct from the optimistic
-    // priorityPartitionSummary above (which the closure witness can mark
-    // satisfied for a spread_satisfied_in_flight REPLACE without a voter-ready
-    // replacement while a remove-dispatch op is still within its stall budget).
-    // Exposed so serve-eligibility decisions can require genuine voter-ready
-    // spread independent of that in-flight optimism.
+    // The durable census summary. Since the closure witness no longer
+    // synthesizes a summary (owner decision 2026-10-04) it is the same census
+    // answer as priorityPartitionSummary; kept under this name for the
+    // serve-eligibility consumers that read it.
     durablePriorityPartitionSummary:
       prioritySpreadDecision.durablePriorityPartitionSummary ?
         Object.freeze({
@@ -438,12 +436,6 @@ function buildPublicationRecoveryGateSnapshotUntracked(options = {}) {
     prioritySpreadDecisionSource: prioritySpreadDecision.decisionSource,
     prioritySpreadEvidenceUnavailable:
       streamCompatibilityEvidence.prioritySpreadEvidenceUnavailable,
-    closureRecordId:
-      prioritySpreadDecision.priorityRecoveryClosureWitness?.closureRecordId ||
-      null,
-    closureWitnessClass:
-      prioritySpreadDecision.priorityRecoveryClosureWitness?.closureWitnessClass ||
-      null,
     requiredAckNodeIds: streamCompatibilityEvidence.requiredAckNodeIds,
     requiredAckCount:
       normalizeNonNegativeInteger(

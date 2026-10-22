@@ -1,3 +1,4 @@
+import {captureLogger} from '../test-helpers/wait-bound-spent-capture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -30,9 +31,9 @@ const DRIVE_STEP_MS = 200;
 const DRIVE_STEP_LIMIT = 200;
 const RETRYABLE_FAILURE = Object.freeze({success: false, deferRetry: true});
 
-function makeOperation(repository) {
+function makeOperation(repository, operationId = TEST_OPERATION_ID) {
   return repository.rowToOperation({
-    operation_id: TEST_OPERATION_ID,
+    operation_id: operationId,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
     replica_id: TEST_REPLICA_ID,
@@ -50,7 +51,12 @@ function makeOperation(repository) {
   });
 }
 
-function createRepository({timeSource, readAuthoritativeRows, executeQuery}) {
+const SILENT_LOGGER = Object.freeze({
+  info() {}, warn() {}, error() {}, debug() {},
+});
+
+function createRepository({timeSource, readAuthoritativeRows, executeQuery,
+  logger = SILENT_LOGGER}) {
   return new ReplicaOperationRepository({
     nodeId: TEST_NODE_ID,
     timeSource,
@@ -66,7 +72,7 @@ function createRepository({timeSource, readAuthoritativeRows, executeQuery}) {
     },
     authoritativeVisibilityTimeoutMs: VISIBILITY_TIMEOUT_MS,
     authoritativeVisibilityRetryDelayMs: VISIBILITY_RETRY_DELAY_MS,
-    logger: {info() {}, warn() {}, error() {}, debug() {}},
+    logger,
   });
 }
 
@@ -177,3 +183,159 @@ test('the persist retry settles on the repository clock', async (t) => {
   t.ok(timeSource.now() > START_MS, 'the budget was spent virtually');
   t.end();
 });
+
+// A spent wait is a failure, and is visible: each of the three bounded loops
+// logs exactly one wait_bound_spent ERROR when its bound is spent, naming the
+// wait and what the loop last observed, and none when the awaited condition
+// arrives. The post-expiry result is unchanged (the honest last failure /
+// MISSING).
+const RETRYABLE_SHED_FAILURE = Object.freeze({
+  ...RETRYABLE_FAILURE,
+  errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+  error: 'control-plane lane shed',
+});
+
+test('a spent visibility confirmation logs one wait_bound_spent ERROR',
+  async (t) => {
+    const capture = captureLogger();
+    const timeSource = new VirtualTimeSource({startMs: START_MS});
+    const repository = createRepository({
+      timeSource,
+      logger: capture.logger,
+      readAuthoritativeRows: async () => ({success: true, rows: []}),
+    });
+    const operation = makeOperation(repository, 'op-visibility-spent');
+    const drive = await driveUntilSettled(
+      timeSource,
+      repository.confirmReplicaOperationVisibility(operation),
+    );
+    t.ok(drive.settled, 'the confirmation settled on the virtual clock');
+    t.equal(drive.value?.operation ?? null, null,
+      'post-expiry result unchanged: nothing confirmed');
+    const spent = capture.spent(
+      'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS');
+    t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+    t.equal(capture.errors().length, 1, 'and no other ERROR');
+    const context = spent[0].context;
+    t.equal(context.boundMs, VISIBILITY_TIMEOUT_MS, 'names the bound');
+    t.ok(context.elapsedMs >= VISIBILITY_TIMEOUT_MS,
+      'elapsed measured on the repository clock');
+    t.ok(context.lastObserved.polls > 1, 'lastObserved carries the polls');
+    t.equal(context.lastObserved.sawVisibilityMismatch, false,
+      'lastObserved says no mismatching row was seen');
+    t.notSame(context.lastObserved, {state: 'site_observed_nothing'},
+      'lastObserved is real state');
+    t.equal(context.scope.operationId, 'op-visibility-spent');
+    t.end();
+  });
+
+test('a confirmed visibility logs no wait_bound_spent', async (t) => {
+  const capture = captureLogger();
+  const timeSource = new VirtualTimeSource({startMs: START_MS});
+  let repository = null;
+  const operationId = 'op-visibility-confirmed';
+  repository = createRepository({
+    timeSource,
+    logger: capture.logger,
+    readAuthoritativeRows: async () => ({
+      success: true,
+      rows: [{
+        operation_id: operationId,
+        type: OperationType.ADD,
+        partition_id: TEST_PARTITION_ID,
+        replica_id: TEST_REPLICA_ID,
+        source_node_id: TEST_NODE_ID,
+        target_node_id: 'node-b',
+        status: ReplicaStatus.ACTIVE,
+        workflow_step: WORKFLOW_STEP.ACTIVE,
+        created_at: START_MS,
+        updated_at: START_MS,
+        completed_at: START_MS,
+        error_message: null,
+        steps_history: JSON.stringify([]),
+        entity_type: SERVICE_TYPE.PARTITION,
+        entity_id: TEST_PARTITION_ID,
+      }],
+    }),
+  });
+  const operation = makeOperation(repository, operationId);
+  const drive = await driveUntilSettled(
+    timeSource,
+    repository.confirmReplicaOperationVisibility(operation),
+  );
+  t.ok(drive.settled, 'settled');
+  t.equal(drive.value?.operation?.operationId, operationId, 'confirmed');
+  t.equal(capture.errors().length, 0, 'no ERROR on normal completion');
+  t.end();
+});
+
+test('a spent persist retry logs one wait_bound_spent ERROR and returns the ' +
+  'last failure', async (t) => {
+  const capture = captureLogger();
+  const timeSource = new VirtualTimeSource({startMs: START_MS});
+  let attempts = 0;
+  const repository = createRepository({
+    timeSource,
+    logger: capture.logger,
+    readAuthoritativeRows: async () => ({success: true, rows: []}),
+    executeQuery: async () => {
+      attempts += 1;
+      return RETRYABLE_SHED_FAILURE;
+    },
+  });
+  const drive = await driveUntilSettled(
+    timeSource,
+    repository.executeOperationMutationWithRetry(
+      'UPDATE replica_operations SET status = ?', ['x'], {}),
+  );
+  t.ok(drive.settled, 'settled on the virtual clock');
+  t.equal(drive.value, RETRYABLE_SHED_FAILURE,
+    'post-expiry result unchanged: the last retryable failure');
+  const spent = capture.spent('OPERATION_PERSIST_RETRY_TIMEOUT_MS');
+  t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+  t.ok(attempts > 1, 'it retried before spending the bound');
+  t.equal(spent[0].context.lastObserved.error, RETRYABLE_SHED_FAILURE.error,
+    'lastObserved names the last failure');
+  t.end();
+});
+
+test('a persist that succeeds logs no wait_bound_spent', async (t) => {
+  const capture = captureLogger();
+  const timeSource = new VirtualTimeSource({startMs: START_MS});
+  const repository = createRepository({
+    timeSource,
+    logger: capture.logger,
+    readAuthoritativeRows: async () => ({success: true, rows: []}),
+  });
+  const drive = await driveUntilSettled(
+    timeSource,
+    repository.executeOperationMutationWithRetry(
+      'UPDATE replica_operations SET status = ?', ['x'], {}),
+  );
+  t.equal(drive.value?.success, true, 'committed');
+  t.equal(capture.errors().length, 0, 'no ERROR on normal completion');
+  t.end();
+});
+
+test('a spent authoritative read retry logs one wait_bound_spent ERROR',
+  async (t) => {
+    const capture = captureLogger();
+    const timeSource = new VirtualTimeSource({startMs: START_MS});
+    const repository = createRepository({
+      timeSource,
+      logger: capture.logger,
+      readAuthoritativeRows: async () => RETRYABLE_SHED_FAILURE,
+    });
+    const drive = await driveUntilSettled(
+      timeSource,
+      repository.executeReplicaOperationsRead(
+        'SELECT 1', [], {retryOnRetryableFailure: true}),
+    );
+    t.equal(drive.value?.success, false,
+      'post-expiry result unchanged: the last retryable failure');
+    const spent = capture.spent('REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS');
+    t.equal(spent.length, 1, 'exactly one wait_bound_spent ERROR');
+    t.ok(spent[0].context.lastObserved.attempts > 1,
+      'lastObserved carries the attempts');
+    t.end();
+  });

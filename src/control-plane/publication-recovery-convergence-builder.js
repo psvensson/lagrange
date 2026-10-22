@@ -428,13 +428,12 @@ function buildCanonicalPublicationConvergence(options = {}) {
       ),
     ],
   });
+  // Active-gate observer classifications (the runtime witness carries none).
   const closureRecordId =
     normalizeOptionalString(priorityRecoveryObservation?.closureRecordId) ||
-    normalizeOptionalString(publicationConvergenceGate?.closureRecordId) ||
     normalizeOptionalString(rawPublicationConvergence?.closureRecordId);
   const closureWitnessClass =
     normalizeOptionalString(priorityRecoveryObservation?.closureWitnessClass) ||
-    normalizeOptionalString(publicationConvergenceGate?.closureWitnessClass) ||
     normalizeOptionalString(rawPublicationConvergence?.closureWitnessClass);
   const priorityRecoveryClosureWitness =
     publicationConvergenceGate?.priorityRecoveryClosureWitness ||

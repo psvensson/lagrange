@@ -26,6 +26,7 @@ import {
   RELEASE_SURFACE_PREFIXES,
   SELECTION_REFUSED,
   SOURCE_SUBSYSTEM_RULES,
+  WORKSPACE_INJECTION_ENV,
 } from '../../scripts/checks/change-selection-constants.js';
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -150,4 +151,33 @@ test('the current taxonomy census excludes tracked worktree deletions', () => {
   } finally {
     fs.rmSync(fixture, {recursive: true, force: true});
   }
+});
+
+// A lab machine's placement checkout links the controller's fetched model
+// checkers into tools/. The ignore rule `tools/alloy-*/` matches only a
+// directory, and git sees a link to one as a file, so the link is untracked
+// and NOT ignored: undeclared it is repository content with no owner, and the
+// EXHAUSTIVE census above refused there. Declared, as the placement script
+// declares every link it makes, the universe is exhaustive again.
+test('a declared workspace link never enters the candidate universe', (t) => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'taxonomy-link-'));
+  const saved = process.env[WORKSPACE_INJECTION_ENV];
+  t.after(() => {
+    if (saved === undefined) delete process.env[WORKSPACE_INJECTION_ENV];
+    else process.env[WORKSPACE_INJECTION_ENV] = saved;
+    fs.rmSync(fixture, {recursive: true, force: true});
+  });
+  const link = 'tools/alloy-6.2.0';
+  execFileSync('git', ['init', '--quiet', 'checkout'], {cwd: fixture});
+  const checkout = path.join(fixture, 'checkout');
+  fs.writeFileSync(path.join(checkout, '.gitignore'), 'tools/alloy-*/\n');
+  fs.mkdirSync(path.join(fixture, 'alloy-6.2.0'));
+  fs.mkdirSync(path.join(checkout, 'tools'));
+  fs.symlinkSync(path.join(fixture, 'alloy-6.2.0'), path.join(checkout, link));
+  delete process.env[WORKSPACE_INJECTION_ENV];
+  assert.ok(candidatePaths(checkout).candidates.includes(link),
+    'the mechanism: a directory ignore rule does not match a link to one');
+  process.env[WORKSPACE_INJECTION_ENV] = ['node_modules', link].join(',');
+  assert.ok(!candidatePaths(checkout).candidates.includes(link),
+    'a link the placement declared is not repository content');
 });

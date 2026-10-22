@@ -9,8 +9,8 @@ const {
   EMPTY_STRING,
   FAILURE_ARTIFACT_PUBLICATION_MISSING_ACTIVE_NODE_REASON_PREFIX,
   FAILURE_BARRIER_REASON_COUNT,
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
   ONE,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,
   PUBLICATION_MISSING_PUBLISHED_ACTIVE_GATE_SELECTION_STATE,
   PUBLICATION_MISSING_PUBLISHED_EVIDENCE_RULES,
@@ -536,7 +536,7 @@ export function hasStalePublicationClosureEvidence({
       ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
     ) ||
     closureStates.includes(
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
+      LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
     )
   );
 }
@@ -1496,7 +1496,6 @@ export function buildPublicationConvergenceSummary(controlPlane) {
       orderedPublicationConvergenceGateReasons;
   const priorityPartitionSummary = normalizePriorityPartitionSummary(
     priorityRecoveryObservation?.priorityPartitionSummary ||
-      decisionClosureWitness?.refreshedPriorityPartitionSummary ||
       priorityRecoveryDecisionSnapshots?.priorityPartitionSummary ||
       null,
   );

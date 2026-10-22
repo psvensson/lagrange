@@ -366,7 +366,12 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
     }
   });
 
-test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
+// W8 (identity-reuse safety fix, A3): a joiner of a seed whose whole mg-1
+// is on the seed hosts its own new message group; mg-1's membership stays
+// the seed's. This test once pinned the MOVE of an mg-1 replica to the
+// joiner.
+test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
+  'stays on the seed', async (t) => {
   initializeTestEnvironment();
 
   // Configure faster Raft elections for testing
@@ -462,12 +467,9 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       }
     });
 
-  // Create system table cache with message group data
-  // This triggers MOVE_REPLICA strategy when there are 2+ replicas on same node
+  // The seed's message group, all three replicas on the seed: the layout
+  // that used to make the seed move one of them to the joiner.
   const systemTableCache = new SystemTableCache();
-
-  // Add message group to cache - no message_groups table entry means no leader check
-  // The services table entries are used for MOVE_REPLICA assignment
 
   // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
   // This satisfies the leader readiness check
@@ -565,10 +567,10 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     };
     service.triggerJoinReconciler = async function() {};
 
-    // Mock phaseJoinExistingMessageGroup - it requires SQL engine which isn't available
-    service.phaseJoinExistingMessageGroup = async function() {
-      // Skip actual message group joining - just mark as complete
-    };
+    // The self-hosted group's runtime needs a SQL engine this test has
+    // not; the assignment is what is witnessed.
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup =
+      async function() {};
 
     service.phaseWaitForLeadership = async () => {
       throw new Error('leadership timeout (test)');
@@ -587,19 +589,17 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       t.ok(result.error.includes('leadership'), 'error should mention leadership');
     }
 
-    // Verify the bootstrap response had correct MOVE_REPLICA strategy
-    // This is available even if join failed
+    // The assignment is available even if the join failed.
     t.ok(service.bootstrapResponse, 'should have bootstrap response');
-    t.ok(
-      service.bootstrapResponse.messageGroupAssignment.strategy ===
-        AssignmentStrategy.MOVE_REPLICA,
-      'should use MOVE_REPLICA strategy',
-    );
-    t.equal(
-      service.bootstrapResponse.messageGroupAssignment.groupId,
-      'mg-1',
-      'should target existing group',
-    );
+    const assignment = service.bootstrapResponse.messageGroupAssignment;
+    t.equal(assignment.strategy, AssignmentStrategy.CREATE_SELF_HOSTED,
+      'the joiner hosts its own message group');
+    t.not(assignment.groupId, 'mg-1', 'mg-1 is not spread to the joiner');
+    t.notOk(assignment.replicaToMove, 'no mg-1 replica is moved');
+    t.same(['mg-1-r1', 'mg-1-r2', 'mg-1-r3'].map((replicaId) =>
+      systemTableCache.get('services', replicaId)?.node_id),
+    ['seed-node-1', 'seed-node-1', 'seed-node-1'],
+    'mg-1\'s replicas all stay on the seed');
   } finally {
     // Cleanup
     if (service) {

@@ -217,6 +217,16 @@ Five-node cold formation is a standing signal, not a release gate.
   critical spread gap and in-flight count, the schema-admission end state
   and an ordered causal chain. A red run explains itself without log
   forensics.
+- None of these is certification evidence, and each says so in its output:
+  they run on one machine or one node per VM without a host-level placement
+  requirement and never require real publication convergence (startup admits
+  nodes with publication convergence not claimed). Formation acceptance that
+  a release note or a quest calls certified is a `certified: true` verdict
+  from a `--certify <sha>` distributed harness run: five nodes on five
+  distinct machines, real publication convergence observed after formation,
+  voters at target, the host-spread gate in the host unit, every spent wait
+  classified against the bounded-wait census, and the exact clean commit
+  (`test/distributed/README.local.md`, "Certification").
 
 ## Convergence: what the release does and does not promise
 

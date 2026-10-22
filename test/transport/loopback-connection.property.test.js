@@ -15,7 +15,7 @@ import {describe, it, beforeEach, afterEach, mock} from 'node:test';
 import assert from 'node:assert';
 import fc from 'fast-check';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 describe('Property 4: Loopback Connection Maintenance', () => {
@@ -41,10 +41,10 @@ describe('Property 4: Loopback Connection Maintenance', () => {
       fc.asyncProperty(
         fc.uuid(),
         async (replicaId) => {
-          const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          router.registerWorkerHandler(address, deliverFn);
+          router.register(address, deliverFn);
 
           // Verify handler exists (loopback routing)
           assert.ok(
@@ -71,14 +71,14 @@ describe('Property 4: Loopback Connection Maintenance', () => {
           data: fc.string({minLength: 0, maxLength: 50}),
         }),
         async (replicaId, payload) => {
-          const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const receivedPayloads = [];
           const deliverFn = mock.fn(async (envelope) => {
             receivedPayloads.push(envelope.payload);
             return {status: 'ok'};
           });
 
-          router.registerWorkerHandler(address, deliverFn);
+          router.register(address, deliverFn);
 
           // Invoke handler directly (simulating local routing)
           const handler = router.handlers.get(address);
@@ -101,21 +101,21 @@ describe('Property 4: Loopback Connection Maintenance', () => {
 
           // Register handlers for all local workers
           for (const replicaId of replicaIds) {
-            const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+            const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             const deliverFn = mock.fn(async () => ({replicaId}));
             handlers.set(replicaId, deliverFn);
-            router.registerWorkerHandler(address, deliverFn);
+            router.register(address, deliverFn);
           }
 
           // Verify all handlers exist
           for (const replicaId of replicaIds) {
-            const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+            const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             assert.ok(router.handlers.has(address));
           }
 
           // Verify each handler routes to correct worker
           for (const replicaId of replicaIds) {
-            const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+            const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
             const handler = router.handlers.get(address);
             const result = await handler({});
             assert.strictEqual(result.replicaId, replicaId);
@@ -131,13 +131,13 @@ describe('Property 4: Loopback Connection Maintenance', () => {
       fc.asyncProperty(
         fc.uuid(),
         async (replicaId) => {
-          const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
           const deliverFn = mock.fn(async () => ({status: 'ok'}));
 
-          router.registerWorkerHandler(address, deliverFn);
+          router.register(address, deliverFn);
           assert.ok(router.handlers.has(address));
 
-          router.unregisterWorkerHandler(address);
+          router.unregister(address);
           assert.strictEqual(router.handlers.has(address), false);
         },
       ),
@@ -152,15 +152,15 @@ describe('Property 4: Loopback Connection Maintenance', () => {
         fc.uuid(),
         async (partitionReplicaId, msgGroupReplicaId) => {
           const partitionAddress =
-            `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
+            `node-1/${ENTITY_TYPE.PARTITION}/${partitionReplicaId}`;
           const msgGroupAddress =
-            `node-1/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
+            `node-1/${ENTITY_TYPE.MESSAGE_GROUP}/${msgGroupReplicaId}`;
 
           const partitionDeliverFn = mock.fn(async () => ({type: 'partition'}));
           const msgGroupDeliverFn = mock.fn(async () => ({type: 'message-group'}));
 
-          router.registerWorkerHandler(partitionAddress, partitionDeliverFn);
-          router.registerWorkerHandler(msgGroupAddress, msgGroupDeliverFn);
+          router.register(partitionAddress, partitionDeliverFn);
+          router.register(msgGroupAddress, msgGroupDeliverFn);
 
           // Both should have handlers
           assert.ok(router.handlers.has(partitionAddress));
@@ -186,19 +186,19 @@ describe('Property 4: Loopback Connection Maintenance', () => {
       fc.asyncProperty(
         fc.uuid(),
         async (replicaId) => {
-          const address = `node-1/${WORKER_ENTITY_TYPE.PARTITION}/${replicaId}`;
+          const address = `node-1/${ENTITY_TYPE.PARTITION}/${replicaId}`;
 
           const deliverFn1 = mock.fn(async () => ({version: 1}));
           const deliverFn2 = mock.fn(async () => ({version: 2}));
 
           // Register first handler
-          router.registerWorkerHandler(address, deliverFn1);
+          router.register(address, deliverFn1);
           let handler = router.handlers.get(address);
           let result = await handler({});
           assert.strictEqual(result.version, 1);
 
           // Replace with second handler
-          router.registerWorkerHandler(address, deliverFn2);
+          router.register(address, deliverFn2);
           handler = router.handlers.get(address);
           result = await handler({});
           assert.strictEqual(result.version, 2);

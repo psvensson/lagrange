@@ -61,9 +61,7 @@ const {
   QUERY_PAYLOAD_FIELD_OPERATION_ID,
   RaftRole,
   SYSTEM_TABLE_NAME,
-  isRaftPacket,
   isRaftRsTransportEnvelope,
-  resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
 
@@ -196,8 +194,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
   }
   /**
    * Handle incoming transport message.
-   * Detects Raft packets using isRaftPacket() and routes them directly to liferaft.
-   * Handles non-Raft messages as application messages.
+   * A raft-rs semantic envelope is stepped into the replica's operation
+   * port; anything else is an application message.
    * Requirements: 8.3, 8.4, 13.1, 13.2, 13.3, 13.4
    * @param {Object} envelope - Message envelope.
    * @return {Promise<Object>} Response.
@@ -211,49 +209,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       }
       return {acknowledged: true};
     }
-    if (isRaftPacket(payload)) {
-      if (this.raft) {
-        this.logger.trace(PARTITION_SERVICE_LOG_MSG.RECEIVED_RAFT_PACKET, {
-          type: payload.type,
-          term: payload.term,
-          address: payload.address,
-          replicaId: this.replicaId,
-          partitionId: this.partitionId,
-        });
-        const senderAddress = payload.address;
-        const write = (responsePacket) => {
-          if (responsePacket) {
-            this.logger.trace(PARTITION_SERVICE_LOG_MSG.SENDING_RAFT_RESPONSE, {
-              type: responsePacket.type,
-              destination: senderAddress,
-              term: responsePacket.term,
-            });
-            this.transport
-              .deliver(
-                senderAddress,
-                responsePacket,
-                resolveRaftTransportDeliveryOptions({
-                  ...responsePacket,
-                  targetAddress: senderAddress,
-                }),
-              )
-              .catch((err) => {
-                this.logger.error(
-                  PARTITION_SERVICE_LOG_MSG.FAILED_RAFT_RESPONSE,
-                  {error: err.message, destination: senderAddress},
-                );
-              });
-          }
-        };
-        this.raft.step({payload, reply: write});
-      }
-      return {acknowledged: true};
-    }
     return this.handleApplicationMessage(envelope);
   }
   /**
    * Handle application messages (non-Raft messages).
-   * Raft packets are handled by handleTransportMessage() using isRaftPacket().
+   * Consensus envelopes are handled by handleTransportMessage().
    * This method only handles application-level messages like FORWARD_WRITE.
    * Requirements: 13.3, 13.4
    * @param {Object} message - Application message

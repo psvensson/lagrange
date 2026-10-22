@@ -17,8 +17,33 @@ import {
 import {
   PRE_CUTOVER_SPLIT_STATES,
 } from './managed-split-workflow-execution-gate-methods.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const SPLIT_CUTOVER_READINESS_WAIT = Object.freeze({
+  wait: 'QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS',
+  awaited: 'every split child partition canonical leader serve-routable',
+});
+
+/**
+ * Report the spent cutover readiness budget (the typed refusal).
+ * @param {Object} owner - ManagedSplitWorkflow.
+ * @param {Object} workflow - Workflow snapshot.
+ * @param {Object} budget - The readiness budget.
+ * @param {Object} decision - The last refused readiness decision.
+ * @private
+ */
+function reportSplitCutoverReadinessSpent(owner, workflow, budget, decision) {
+  reportWaitBoundSpent(owner.logger, {
+    ...SPLIT_CUTOVER_READINESS_WAIT,
+    boundMs: budget?.configuredBudgetMs ?? null,
+    elapsedMs: Number.isFinite(budget?.startedAtMs) ?
+      owner.now() - budget.startedAtMs :
+      null,
+    lastObserved: {...decision},
+    scope: {workflowId: workflow?.workflowId ?? null},
+  });
+}
 const LOCAL_NUM_SPLIT_CHILD_COUNT = 2;
 
 /**
@@ -124,6 +149,7 @@ class ManagedSplitWorkflowCutoverReadinessMethods {
       }
       const remainingMs = getRemainingBudgetMs(budget, {now: this.now});
       if (remainingMs <= 0) {
+        reportSplitCutoverReadinessSpent(this, workflow, budget, decision);
         return decision;
       }
       if (!waitLogged) {
@@ -179,7 +205,7 @@ class ManagedSplitWorkflowCutoverReadinessMethods {
     }
     const readiness = await this.awaitSplitChildLeadersRoutable(workflow);
     if (readiness.decision !== SPLIT_CUTOVER_READINESS_DECISION.ROUTABLE) {
-      this.logSplitCutoverRefused(workflowId, readiness);
+      // The spent readiness budget was reported as wait_bound_spent.
       return {applied: false, readiness};
     }
     return {
@@ -189,7 +215,7 @@ class ManagedSplitWorkflowCutoverReadinessMethods {
   }
 
   /**
-   * Log the typed cutover refusal once the readiness budget is spent.
+   * Log the typed cutover refusal re-decided inside the owner lane.
    * @param {string} workflowId
    * @param {Object} decision - Refused readiness decision.
    * @return {void}

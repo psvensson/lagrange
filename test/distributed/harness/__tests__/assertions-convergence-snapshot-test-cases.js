@@ -1,7 +1,11 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import {waitForConvergence} from '../assertions.js';
-import {buildControlSnapshotRecord} from './assertions-test-helpers.js';
+import {ASSERTIONS_CONVERGENCE_WAIT} from '../assertions-convergence-wait.js';
+import {
+  buildControlSnapshotRecord,
+  withPolicyTargets,
+} from './assertions-test-helpers.js';
 
 // -------------------------------------------------------
 // Convergence timeout throws descriptive error (Req 5.3)
@@ -323,7 +327,8 @@ test('waitForConvergence — does not double-count replicated services snapshots
 
     const nodeA = createSnapshotNode('mock-snapshot-a');
     const nodeB = createSnapshotNode('mock-snapshot-b');
-    const result = await waitForConvergence([nodeA, nodeB], {
+    const result = await waitForConvergence([
+      withPolicyTargets(nodeA, ['p1']), withPolicyTargets(nodeB, ['p1'])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -340,6 +345,8 @@ test('waitForConvergence — uses control snapshot path only',
     const node = {
       id: 'mock-control-snapshot-node',
       isReachable: async () => true,
+      // Only the partitions policy read (withPolicyTargets) may run: the
+      // services/partitions SQL fanout must not.
       query: async () => {
         throw new Error('SQL fanout should not run');
       },
@@ -364,7 +371,7 @@ test('waitForConvergence — uses control snapshot path only',
       }),
     };
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node, ['p1'])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -401,7 +408,7 @@ test('waitForConvergence — uses SQL compatibility when control snapshot owner 
       query: async (sql) => {
         sqlQueryCount += 1;
         if (sql.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', replica_count: 3}]};
         }
         if (sql.includes('FROM services')) {
           return {rows: buildSqlFallbackServicesRows('leader')};
@@ -439,6 +446,7 @@ test('waitForConvergence — SQL fallback derives leaders from partitions metada
             rows: [{
               partition_id: 'p1',
               leader_node_id: 'node-a',
+              replica_count: 3,
             }],
           };
         }
@@ -465,7 +473,7 @@ test('waitForConvergence — SQL fallback derives leaders from partitions metada
     );
   });
 
-test('waitForConvergence — can ignore stale over-target caused by stale in-flight operations',
+test('waitForConvergence — can ignore a stale in-flight operation at the policy target',
   async () => {
     const node = {
       id: 'mock-stale-inflight-node',
@@ -496,13 +504,6 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
               address: 'node-c/p1/r2',
               partition_id: 'p1',
             },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address: 'node-d/p1/r3',
-              partition_id: 'p1',
-            },
           ],
           operationRows: [
             {
@@ -531,7 +532,7 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
     };
 
     await assert.rejects(
-      waitForConvergence([node], {
+      waitForConvergence([withPolicyTargets(node, ['p1'])], {
         settleTimeoutMs: 80,
         finalAdjudicationDrainTimeoutMs: 0,
         quietWindowMs: 0,
@@ -540,10 +541,10 @@ test('waitForConvergence — can ignore stale over-target caused by stale in-fli
         targetVoterCount: 3,
       }),
       /Convergence timeout/,
-      'stale over-target should still gate convergence by default',
+      'a stale in-flight operation still gates convergence by default',
     );
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node, ['p1'])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -587,13 +588,6 @@ test('waitForConvergence — uses drain-row stale classification when control-pl
               address: 'node-c/p1/r2',
               partition_id: 'p1',
             },
-            {
-              service_type: 'partition',
-              status: 'ACTIVE',
-              raft_role: 'follower',
-              address: 'node-d/p1/r3',
-              partition_id: 'p1',
-            },
           ],
           operationRows: [
             {
@@ -618,7 +612,7 @@ test('waitForConvergence — uses drain-row stale classification when control-pl
       }),
     };
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node, ['p1'])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -745,7 +739,7 @@ test('waitForConvergence — falls back to summary stale count when canonical dr
       getControlSnapshot: async () => ({rows: [snapshot]}),
     };
 
-    const result = await waitForConvergence([node], {
+    const result = await waitForConvergence([withPolicyTargets(node, ['p1'])], {
       settleTimeoutMs: 80,
       finalAdjudicationDrainTimeoutMs: 0,
       quietWindowMs: 0,
@@ -846,3 +840,228 @@ test('waitForConvergence — does not use noncanonical additional drain discount
       /Convergence/,
     );
   });
+
+// -------------------------------------------------------
+// Replica-target convergence: under-target is not converged
+// -------------------------------------------------------
+
+const REPLICA_TARGET_VOTER_COUNT = 3;
+const REPLICA_TARGET_UNDER_VOTER_COUNT = 1;
+const REPLICA_TARGET_PARTITION_FULL = 'p-full';
+const REPLICA_TARGET_PARTITION_UNDER = 'p-under';
+const REPLICA_TARGET_LEADER = 'node-a';
+const REPLICA_TARGET_TOLERANCE_REASON =
+  'witness: the fixture deliberately runs below the replica target';
+
+// The partitions rows' policy target for both fixture partitions.
+const REPLICA_TARGET_POLICY = Object.freeze({
+  voterTargets: new Map([
+    [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+    [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_VOTER_COUNT],
+  ]),
+});
+
+function buildReplicaTargetSnapshot(voterCountEntries) {
+  const leaders = new Map();
+  const voterCounts = new Map();
+  const expectedPartitionIds = new Set();
+  for (const [partitionId, voterCount] of voterCountEntries) {
+    expectedPartitionIds.add(partitionId);
+    leaders.set(partitionId, REPLICA_TARGET_LEADER);
+    if (voterCount !== null) {
+      voterCounts.set(partitionId, voterCount);
+    }
+  }
+  return {
+    expectedPartitionIds,
+    leaders,
+    voterCounts,
+    inFlightReplicaOperationCount: 0,
+  };
+}
+
+test('isConvergedSnapshot — a partition at 1 of 3 voters is not converged',
+  async () => {
+    const {isConvergedSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
+    const snapshot = buildReplicaTargetSnapshot([
+      [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+      [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_UNDER_VOTER_COUNT],
+    ]);
+    assert.strictEqual(
+      isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT,
+        REPLICA_TARGET_POLICY),
+      false,
+      'an under-target partition must block convergence',
+    );
+  });
+
+test('isConvergedSnapshot — an expected partition with no voter count is ' +
+  'not converged', async () => {
+  const {isConvergedSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
+  const snapshot = buildReplicaTargetSnapshot([
+    [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+    [REPLICA_TARGET_PARTITION_UNDER, null],
+  ]);
+  assert.strictEqual(
+    isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT,
+      REPLICA_TARGET_POLICY),
+    false,
+    'absent voter evidence counts as zero voters, never as at-target',
+  );
+});
+
+test('classifyConvergedSnapshot — names the under-target state and partitions',
+  async () => {
+    const {classifyConvergedSnapshot, CONVERGED_SNAPSHOT_STATE} =
+      ASSERTIONS_CONVERGENCE_WAIT;
+    const snapshot = buildReplicaTargetSnapshot([
+      [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+      [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_UNDER_VOTER_COUNT],
+    ]);
+    const decision = classifyConvergedSnapshot(
+      snapshot,
+      REPLICA_TARGET_VOTER_COUNT,
+      REPLICA_TARGET_POLICY,
+    );
+    assert.strictEqual(decision.state, 'under_target_voters');
+    assert.strictEqual(CONVERGED_SNAPSHOT_STATE.CONVERGED, 'converged');
+    assert.deepStrictEqual(
+      Array.from(decision.voterTargetVerdict.underTarget,
+        (entry) => entry.partitionId),
+      [REPLICA_TARGET_PARTITION_UNDER],
+    );
+    assert.strictEqual(
+      classifyConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT).state,
+      'voter_target_evidence_absent',
+      'without policy targets the snapshot is never converged',
+    );
+  });
+
+test('isConvergedSnapshot — every partition at its replica target converges',
+  async () => {
+    const {isConvergedSnapshot, classifyConvergedSnapshot,
+      CONVERGED_SNAPSHOT_STATE} = ASSERTIONS_CONVERGENCE_WAIT;
+    const snapshot = buildReplicaTargetSnapshot([
+      [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+      [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_VOTER_COUNT],
+    ]);
+    assert.strictEqual(
+      isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT,
+        REPLICA_TARGET_POLICY),
+      true,
+    );
+    assert.strictEqual(
+      classifyConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT,
+        REPLICA_TARGET_POLICY).state,
+      CONVERGED_SNAPSHOT_STATE.CONVERGED,
+    );
+  });
+
+test('isConvergedSnapshot — tolerateUnderReplication names the tolerated ' +
+  'under-target state', async () => {
+  const {isConvergedSnapshot, classifyConvergedSnapshot,
+    CONVERGED_SNAPSHOT_STATE} = ASSERTIONS_CONVERGENCE_WAIT;
+  const snapshot = buildReplicaTargetSnapshot([
+    [REPLICA_TARGET_PARTITION_FULL, REPLICA_TARGET_VOTER_COUNT],
+    [REPLICA_TARGET_PARTITION_UNDER, REPLICA_TARGET_UNDER_VOTER_COUNT],
+  ]);
+  const options = {...REPLICA_TARGET_POLICY,
+    tolerateUnderReplication: {minVoters: REPLICA_TARGET_UNDER_VOTER_COUNT,
+      reason: REPLICA_TARGET_TOLERANCE_REASON}};
+  assert.strictEqual(
+    isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, options),
+    true,
+  );
+  const decision = classifyConvergedSnapshot(
+    snapshot,
+    REPLICA_TARGET_VOTER_COUNT,
+    options,
+  );
+  assert.strictEqual(decision.state, CONVERGED_SNAPSHOT_STATE.CONVERGED);
+  assert.strictEqual(decision.voterTargetVerdict.state,
+    'under_replication_tolerated');
+  assert.strictEqual(
+    decision.voterTargetVerdict.toleranceReason,
+    REPLICA_TARGET_TOLERANCE_REASON,
+  );
+  assert.throws(
+    () => isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, {
+      ...REPLICA_TARGET_POLICY,
+      tolerateUnderReplication: '',
+    }),
+    /tolerateUnderReplication/,
+    'a tolerance without a reason is refused, never a silent default',
+  );
+  assert.throws(
+    () => isConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, {
+      ...REPLICA_TARGET_POLICY,
+      tolerateUnderReplication: REPLICA_TARGET_TOLERANCE_REASON,
+    }),
+    /tolerateUnderReplication/,
+    'a tolerance without a declared voter floor is refused',
+  );
+  assert.strictEqual(
+    classifyConvergedSnapshot(snapshot, REPLICA_TARGET_VOTER_COUNT, {
+      ...REPLICA_TARGET_POLICY,
+      tolerateUnderReplication: {minVoters: REPLICA_TARGET_VOTER_COUNT - 1,
+        reason: REPLICA_TARGET_TOLERANCE_REASON},
+    }).state,
+    'under_target_voters',
+    'a partition below the declared floor is never tolerated',
+  );
+});
+
+test('queryReachableClusterSnapshot — prefers the at-target view over an ' +
+  'earlier under-target view', async () => {
+  const {queryReachableClusterSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
+  const leaderRow = {
+    service_type: 'partition',
+    status: 'ACTIVE',
+    raft_role: 'leader',
+    address: 'node-a/p1/r0',
+    partition_id: 'p1',
+  };
+  const followerRows = [
+    {
+      service_type: 'partition',
+      status: 'ACTIVE',
+      raft_role: 'follower',
+      address: 'node-b/p1/r1',
+      partition_id: 'p1',
+    },
+    {
+      service_type: 'partition',
+      status: 'ACTIVE',
+      raft_role: 'follower',
+      address: 'node-c/p1/r2',
+      partition_id: 'p1',
+    },
+  ];
+  function createViewNode(nodeId, servicesRows) {
+    const snapshot = buildControlSnapshotRecord({
+      nodeId,
+      partitionIds: ['p1'],
+      servicesRows,
+    });
+    return {
+      id: nodeId,
+      isReachable: async () => true,
+      getControlSnapshot: async () => ({rows: [snapshot]}),
+    };
+  }
+  const underTargetNode = createViewNode('mock-under-target', [leaderRow]);
+  const atTargetNode = createViewNode('mock-at-target', [
+    leaderRow,
+    ...followerRows,
+  ]);
+  const snapshot = await queryReachableClusterSnapshot(
+    [underTargetNode, atTargetNode],
+    {targetVoterCount: REPLICA_TARGET_VOTER_COUNT,
+      voterTargets: new Map([['p1', REPLICA_TARGET_VOTER_COUNT]])},
+  );
+  assert.strictEqual(snapshot.nodeId, 'mock-at-target');
+  assert.strictEqual(
+    snapshot.voterCounts.get('p1'),
+    REPLICA_TARGET_VOTER_COUNT,
+  );
+});

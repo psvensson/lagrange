@@ -28,6 +28,9 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
     config: 'local-three-node.json',
     name: 'node-failure-rebalance',
   }),
+  // Claims child leaders on distinct HOSTS: REFUSED (not run, exit 3) on
+  // this single-host config by its declared SCENARIO_TOPOLOGY_REQUIREMENT;
+  // the lab/GCP targets of this matrix carry it (README.local.md).
   Object.freeze({
     config: 'local-three-node.json',
     name: 'public-path-multinode-baseline',

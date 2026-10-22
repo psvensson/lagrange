@@ -630,6 +630,7 @@ const SPLIT_MERGE_DEFAULT = Object.freeze({
 });
 
 const PENDING_REQUEST_DEFAULT = Object.freeze({
+  // ends-on: the tracked request is acknowledged (unreachable: track() has no live caller)
   REQUEST_TIMEOUT_MS: 30000,
   CLEANUP_INTERVAL_MS: 60000,
   STALE_REQUEST_BUFFER_MS: 5000,
@@ -637,7 +638,6 @@ const PENDING_REQUEST_DEFAULT = Object.freeze({
 });
 
 const PENDING_REQUEST_LOG_MSG = Object.freeze({
-  REQUEST_TIMED_OUT: 'Request timed out',
   TRACKING_REQUEST: 'Tracking request',
   REQUEST_RESOLVED: 'Request resolved',
   REQUEST_REJECTED: 'Request rejected',
@@ -646,7 +646,6 @@ const PENDING_REQUEST_LOG_MSG = Object.freeze({
   NO_PENDING_REQUEST_REJECT: 'No pending request found for rejection',
   TRACKER_SHUTDOWN: 'Tracker shutdown',
   CLEARED_PENDING_REQUESTS: 'Cleared pending requests on shutdown',
-  CLEANED_STALE_REQUEST: 'Cleaned up stale request',
 });
 
 const PENDING_REQUEST_ERROR_MSG = Object.freeze({

@@ -20,6 +20,7 @@ import {
 import {
   BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
+  BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
 } from '../bootstrap-api-constants.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -28,6 +29,10 @@ import {runRetryableControlPlaneWrite} from
   '../shared/retryable-control-plane-write.js';
 
 const LOCAL_STR_INSERT = 'insert';
+const REGISTER_SERVICE_WRITE_WAIT = Object.freeze({
+  wait: 'registerServiceWriteRetryTimeoutMs',
+  awaited: 'register-service services-row control-plane write accepted',
+});
 const LOCAL_STR_UPDATE = 'update';
 const LOCAL_STR_RETRYABLE_REGISTER_SERVICE_METADATA_WRIT = 'retryable register-service metadata write failure';
 const LOCAL_STR_SYNCING = 'syncing';
@@ -412,6 +417,13 @@ class ServiceRegistrationHandoffOwner {
           );
         },
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.getLogger(),
+        spentWait: REGISTER_SERVICE_WRITE_WAIT,
+        scope: {
+          nodeId: serviceData[COLUMN.NODE_ID],
+          serviceId: serviceData[COLUMN.SERVICE_ID],
+          groupId: serviceData[COLUMN.GROUP_ID] || null,
+        },
       },
     );
   }
@@ -438,6 +450,56 @@ class ServiceRegistrationHandoffOwner {
     return buildServiceRegistrationHandoffContract(options);
   }
 
+  /**
+   * Whether a register-service request is a MOVE_REPLICA handoff: it
+   * carries a MOVE assignment token, or the MOVE subsystem's own predicate
+   * names it one (a message-group replica the seed hosts, registered from
+   * another node).
+   * @param {Object} serviceData - The request body.
+   * @return {boolean}
+   */
+  isMoveReplicaHandoffRequest(serviceData) {
+    const assignmentId = serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID];
+    return (typeof assignmentId === 'string' && assignmentId.length > 0) ||
+      this.delegates.isMoveReplicaHandoffRequest(serviceData) === true;
+  }
+
+  /**
+   * The MOVE_REPLICA handoff is refused, unconditionally (owner decision
+   * 2026-10-04, raft-rs full cutover): a message-group replica is never
+   * moved onto another node - the joiner self-hosts its own group - and a
+   * handoff completed for an old-version joiner would re-open a seed
+   * replica's identity on an empty log. Answered before the assignment
+   * reservation is read, so an expired pre-upgrade reservation is never
+   * force-renewed; nothing is written, started or removed. Non-retryable.
+   * @param {Object} serviceData - The request body.
+   * @param {Object} reply - The Fastify reply.
+   * @return {Object} The typed refusal.
+   */
+  refuseMoveReplicaHandoff(serviceData, reply) {
+    const code =
+      BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.MOVE_REPLICA_HANDOFF_UNSUPPORTED;
+    this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_REFUSED, {
+      serviceId: serviceData[COLUMN.SERVICE_ID],
+      nodeId: serviceData[COLUMN.NODE_ID],
+      groupId: serviceData[COLUMN.GROUP_ID],
+      assignmentId: serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID] || null,
+      code,
+    });
+    reply.code(HTTP_STATUS.CONFLICT);
+    return {
+      success: false,
+      error: BOOTSTRAP_API_ERROR.MOVE_REPLICA_HANDOFF_UNSUPPORTED,
+      code,
+      [SERVICE_REGISTRATION_HANDOFF_FIELD.CONTRACT]:
+        this.buildRegisterServiceHandoffContract({
+          serviceData,
+          retryable: false,
+          reasonCode: code,
+        }),
+    };
+  }
+
   async handleRegisterServiceRequest(request, reply) {
     const serviceData = request.body || {};
     let assignmentContext = null;
@@ -462,6 +524,10 @@ class ServiceRegistrationHandoffOwner {
     if (!serviceData[COLUMN.NODE_ID]) {
       reply.code(HTTP_STATUS.BAD_REQUEST);
       return {success: false, error: BOOTSTRAP_API_ERROR.SERVICE_NODE_ID_REQUIRED};
+    }
+
+    if (this.isMoveReplicaHandoffRequest(serviceData)) {
+      return this.refuseMoveReplicaHandoff(serviceData, reply);
     }
 
     let handoffContext = null;

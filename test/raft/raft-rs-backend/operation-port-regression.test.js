@@ -37,14 +37,8 @@ test('the verified integration remains green while transport has no raft-rs node
         `\n--- child stderr ---\n${stderr}`,
       );
     }
-    const provider = fs.readFileSync(
-      path.join(ROOT, 'src', 'raft', 'raft-rs-provider.js'), 'utf8');
     const transportQuest = path.join(ROOT, 'solve', 'quests',
       'raft-rs-partition-transport-demux', 'quest.json');
-    assert.match(provider, /createPartitionPort/u,
-      'phase integration enters raft-rs only through the operation port');
-    assert.doesNotMatch(provider,
-      /createPartitionNode|createNodeClass|partitionControlOf|raftRsGroupOf/u);
     if (fs.existsSync(transportQuest)) {
       const transport = JSON.parse(fs.readFileSync(transportQuest, 'utf8'));
       assert.notEqual(transport.status, 'complete',

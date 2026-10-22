@@ -11,6 +11,22 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
+
+// The one active consensus wire shape: a semantic raft-rs envelope addressed
+// to a message-group replica.
+function buildMessageGroupRaftRsEnvelope() {
+  return {
+    protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+    groupId: 'mg-1',
+    from: 'mg-1-r2',
+    to: 'mg-1-r1',
+    message: {msgType: RAFT_RS_MESSAGE_TYPE.APPEND, entries: []},
+  };
+}
 /**
  * Initialize test environment.
  */
@@ -851,9 +867,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       const result = await router.deliver(
         'remote-node/message-group/mg-1-r1',
         {
-          type: 'append',
+          ...buildMessageGroupRaftRsEnvelope(),
           messageId: 'msg-raft-direct',
-          data: [{command: {type: 'CDC_BATCH'}}],
         },
       );
 
@@ -872,8 +887,11 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       t.equal(sentMessages.length, 1, 'direct delivery should send one frame');
       t.equal(sentMessages[0].type, RouterMessageType.SERVICE_MESSAGE,
         'direct delivery should still use a service envelope');
-      t.equal(sentMessages[0].payload.type, 'append',
-        'direct delivery should preserve the Raft payload');
+      t.equal(sentMessages[0].payload.protocol, RAFT_RS_TRANSPORT_PROTOCOL,
+        'direct delivery should preserve the raft-rs envelope');
+      t.equal(sentMessages[0].payload.message.msgType,
+        RAFT_RS_MESSAGE_TYPE.APPEND,
+        'direct delivery should preserve the semantic raft-rs message');
 
       await router.shutdown();
     });
@@ -917,9 +935,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       const result = await router.deliver(
         'remote-node/message-group/mg-1-r1',
         {
-          type: 'append',
+          ...buildMessageGroupRaftRsEnvelope(),
           messageId: 'msg-raft-fallback',
-          data: [{command: {type: 'CDC_BATCH'}}],
         },
       );
 

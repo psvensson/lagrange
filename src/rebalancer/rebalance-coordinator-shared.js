@@ -37,6 +37,7 @@ import {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
+  doesPriorityRecoveryOperationHoldAddBudget,
 } from '../control-plane/priority-recovery-snapshot.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
@@ -322,5 +323,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
+  doesPriorityRecoveryOperationHoldAddBudget,
   uuidv4,
 };

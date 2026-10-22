@@ -10,6 +10,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 26000;
@@ -32,13 +33,13 @@ beforeEach(async () => {
   await router.initialize({startServer: true});
 
   // Create and initialize a message group for testing
-  messageGroup = new MessageGroupService({
+  messageGroup = new MessageGroupService(withTestDbPath({
     groupId: 'mg-1',
     replicaId: 'mg-1-r1',
     nodeId,
     replicaIds: ['mg-1-r1'],
     transport: router,
-  });
+  }));
   await messageGroup.initialize();
 
   // Subscribe to system tables and add test data

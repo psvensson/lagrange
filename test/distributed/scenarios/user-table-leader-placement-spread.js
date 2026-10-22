@@ -3,9 +3,9 @@
  *
  * Creates an ordinary user table on a live 3-node cluster, drives a
  * managed split through split-friendly policies plus write activity,
- * waits for the children's replicas to occupy at least two distinct
- * hosts, and then requires the platform itself to spread the child
- * partition RAFT LEADERS across more than one host: the rebalancer's
+ * waits for the children's active voters to occupy at least two distinct
+ * NODES, and then requires the platform itself to spread the child
+ * partition RAFT LEADERS across more than one NODE: the rebalancer's
  * user-table leader-placement cure must mint the leader handoffs — the
  * scenario never fabricates topology and exposes no admin transfer.
  *
@@ -15,6 +15,14 @@
  * support spread, or if leadership keeps churning after spread is
  * reached (the hysteresis guard: spread must hold through a bounded
  * stability hold with an unchanged leader fingerprint).
+ *
+ * Unit (owner ruling 2026-10-04): this scenario certifies distinct-NODE
+ * leader spread - what the production cure promises
+ * (src/rebalancer/user-table-leader-placement-cure.js counts leader node
+ * ids) - NOT host / failure-domain spread. Every claim, gate record and
+ * report field carries `spreadUnit: 'node'`. Host-aware user-table leader
+ * placement is a separate placement-owner quest; until it lands and is
+ * proven, no host spread may be claimed from this scenario.
  *
  * The measured phases start only after a cluster-wide leader-quiescence
  * hold: the cure must move leadership away from a HEALTHY stable leader
@@ -33,9 +41,22 @@ import {
 import {
   buildUserActivityTableSql,
   createTableTopologyHelpers,
-  selectSettledPartitionRows,
   topologyFingerprint,
 } from './user-table-topology-helpers.js';
+import {
+  PARTITION_ROLE,
+  buildGateRecord,
+  describeGateFailure,
+  evaluateSplitSpreadClaim,
+} from '../harness/scenario-ground-truth.js';
+import {
+  createScenarioStepRunner,
+  recordScenarioGate,
+} from '../harness/scenario-step-log.js';
+import {
+  SPREAD_UNIT,
+  requireSpreadUnit,
+} from '../harness/scenario-host-topology.js';
 
 const SCENARIO_NAME = 'user-table-leader-placement-spread';
 const TABLE_NAME = 'leader_spread_activity';
@@ -44,8 +65,8 @@ const ZERO = 0;
 const ONE = 1;
 const MIN_NODE_COUNT = 3;
 const MIN_PARTITION_COUNT = 2;
-const MIN_DISTINCT_LEADER_HOSTS = 2;
-const MIN_DISTINCT_REPLICA_HOSTS = 2;
+const MIN_DISTINCT_LEADER_NODES = 2;
+const MIN_DISTINCT_REPLICA_NODES = 2;
 const SPREAD_POLL_MS = 500;
 const SPLIT_WAIT_TIMEOUT_MS = 180_000;
 const REPLICA_SPREAD_TIMEOUT_MS = 120_000;
@@ -71,7 +92,47 @@ const MAX_SENTINEL_ROWS = 40;
 const QUIESCENCE_POLL_MS = 1000;
 const QUIESCENCE_STABLE_POLLS = 30;
 const QUIESCENCE_TIMEOUT_MS = 420_000;
-const REPORT_DETAIL_SCHEMA_VERSION = 2;
+// v3: spread counts are in NODES and carry `spreadUnit` (owner ruling
+// 2026-10-04); v2 named node counts "hosts".
+const REPORT_DETAIL_SCHEMA_VERSION = 3;
+
+// What each measured gate claims (module docstring), stated as explicit
+// ground-truth conditions (scenario-ground-truth): spread counts distinct
+// NODES (spreadUnit 'node'), replicas are active voters, and the managed
+// split is complete only once the parent is dissolved.
+const MANAGED_SPLIT_CLAIM = Object.freeze({
+  minChildren: MIN_PARTITION_COUNT,
+  minDistinctLeaders: ZERO,
+  minReplicaSpreadPerChild: ZERO,
+  requireChildLeader: false,
+  requireParentDissolved: true,
+  requirePolicyReplicaCount: false,
+  spreadUnit: SPREAD_UNIT.NODE,
+});
+const REPLICA_SPREAD_CLAIM = Object.freeze({
+  ...MANAGED_SPLIT_CLAIM,
+  minReplicaSpreadPerChild: MIN_DISTINCT_REPLICA_NODES,
+});
+const LEADER_SPREAD_CLAIM = Object.freeze({
+  ...REPLICA_SPREAD_CLAIM,
+  minDistinctLeaders: MIN_DISTINCT_LEADER_NODES,
+  requireChildLeader: true,
+});
+const GATE = Object.freeze({
+  LEADER_SPREAD: 'leader-node-spread',
+  LEADER_SPREAD_HOLD: 'leader-node-spread-hold',
+  MANAGED_SPLIT: 'managed-split',
+  REPLICA_SPREAD_SUPPORT: 'replica-node-spread-support',
+});
+
+/**
+ * The topology this scenario's claim needs: distinct NODES, so no host
+ * minimum (the run asserts its node count itself).
+ */
+export const SCENARIO_TOPOLOGY_REQUIREMENT = Object.freeze({
+  minDistinctHosts: ZERO,
+  spreadUnit: SPREAD_UNIT.NODE,
+});
 
 const SQL = Object.freeze({
   ...buildUserActivityTableSql(TABLE_NAME),
@@ -80,8 +141,6 @@ const SQL = Object.freeze({
   // every partition, not the (not-yet-existing) scenario table's.
   SELECT_ALL_PARTITIONS:
     'SELECT partition_id, leader_node_id, state FROM partitions',
-  SELECT_SERVICES:
-    'SELECT partition_id, node_id, status, raft_role FROM services',
 });
 
 const helpers = createTableTopologyHelpers({
@@ -105,6 +164,7 @@ function resolveScenarioDependencies(cluster) {
       Number.isInteger(overrides.replicaSpreadTimeoutMs) ?
         overrides.replicaSpreadTimeoutMs :
         REPLICA_SPREAD_TIMEOUT_MS,
+    now: overrides.now || Date.now,
     sleep: overrides.sleep || defaultSleep,
     splitWaitTimeoutMs: Number.isInteger(overrides.splitWaitTimeoutMs) ?
       overrides.splitWaitTimeoutMs :
@@ -154,198 +214,163 @@ async function waitForClusterLeaderQuiescence(nodes, deps) {
   );
 }
 
-function distinctLeaderHosts(partitionRows) {
-  return new Set(
-    partitionRows
-      .map((row) => row?.leader_node_id)
-      .filter((id) => typeof id === 'string' && id.length > ZERO),
-  );
+function claimGate(deps, name, claim, budgetMs, extra = {}) {
+  return {
+    budgetMs,
+    claim,
+    name,
+    now: deps.now,
+    pollMs: SPREAD_POLL_MS,
+    sleep: deps.sleep,
+    stableReadbacks: TOPOLOGY_STABLE_READBACKS,
+    ...extra,
+  };
 }
 
-// Wait for the policy-driven split: at least MIN_PARTITION_COUNT settled
-// children with no transitional parent left. While the table is still
-// single-partition a bounded trickle of sentinel rows keeps
-// write-activity split evaluation firing.
-async function waitForManagedSplit(nodes, seedNode, deps) {
-  const deadline = Date.now() + deps.splitWaitTimeoutMs;
+// Wait for the policy-driven split: at least MIN_PARTITION_COUNT children
+// and the parent dissolved (a lingering parent reads state NORMAL until
+// dissolution, so a state filter cannot tell it from a child). While the
+// table is still single-partition a bounded trickle of sentinel rows
+// keeps write-activity split evaluation firing.
+async function waitForManagedSplit(cluster, nodes, seedNode, deps) {
   let sentinelCount = ZERO;
-  let lastRows = [];
-  while (Date.now() < deadline) {
-    const allRows =
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
-    lastRows = selectSettledPartitionRows(allRows);
-    if (lastRows.length >= MIN_PARTITION_COUNT &&
-        allRows.length === lastRows.length) {
-      return {partitionRows: lastRows, sentinelCount};
-    }
-    if (lastRows.length < MIN_PARTITION_COUNT &&
-        sentinelCount < MAX_SENTINEL_ROWS) {
-      const sentinel = buildSentinelRow(sentinelCount);
-      await seedNode.query(SQL.INSERT_ROW, [
-        sentinel.id, sentinel.accountId, sentinel.amountCents,
-        sentinel.flagged, sentinel.pad,
-      ]);
-      sentinelCount += ONE;
-    }
-    await deps.sleep(SPREAD_POLL_MS);
-  }
-  throw new Error(
-    `${SCENARIO_NAME}: no managed split within ` +
-    `${deps.splitWaitTimeoutMs}ms: ` +
-    JSON.stringify(lastRows),
-  );
+  const proven = await helpers.waitForSplitClaim(cluster, nodes, claimGate(
+    deps, GATE.MANAGED_SPLIT, MANAGED_SPLIT_CLAIM, deps.splitWaitTimeoutMs, {
+      onReadback: async (evaluation) => {
+        const current = evaluation.partitions
+          .filter((entry) => entry.role !== PARTITION_ROLE.PARENT).length;
+        if (current < MIN_PARTITION_COUNT &&
+            sentinelCount < MAX_SENTINEL_ROWS) {
+          const sentinel = buildSentinelRow(sentinelCount);
+          await seedNode.query(SQL.INSERT_ROW, [
+            sentinel.id, sentinel.accountId, sentinel.amountCents,
+            sentinel.flagged, sentinel.pad,
+          ]);
+          sentinelCount += ONE;
+        }
+      },
+    }));
+  return {...proven, sentinelCount};
 }
 
-function replicaHostsByPartition(serviceRows, partitionIds) {
-  const hosts = new Map();
-  for (const partitionId of partitionIds) {
-    hosts.set(partitionId, new Set());
-  }
-  for (const row of serviceRows) {
-    const partitionId = row?.partition_id;
-    const nodeId = row?.node_id;
-    if (hosts.has(partitionId) &&
-        typeof nodeId === 'string' && nodeId.length > ZERO) {
-      hosts.get(partitionId).add(nodeId);
-    }
-  }
-  return hosts;
+// Leader spread is only achievable once every child has ACTIVE VOTERS on
+// at least two distinct NODES; gate on that first so a leader-spread
+// timeout can never mask a replica-placement failure.
+async function waitForReplicaSpreadSupport(cluster, nodes, deps,
+  knownParentIds) {
+  const proven = await helpers.waitForSplitClaim(cluster, nodes, claimGate(
+    deps, GATE.REPLICA_SPREAD_SUPPORT, REPLICA_SPREAD_CLAIM,
+    deps.replicaSpreadTimeoutMs, {knownParentIds}));
+  return new Map(proven.record.partitions.map((entry) =>
+    [entry.partitionId, entry.activeVoterNodeIds.length]));
 }
 
-function replicaSpreadSupported(hostsByPartition) {
-  for (const hosts of hostsByPartition.values()) {
-    if (hosts.size < MIN_DISTINCT_REPLICA_HOSTS) {
-      return false;
-    }
-  }
-  return hostsByPartition.size > ZERO;
+function childLeaderRows(record) {
+  return record.partitions
+    .filter((entry) => entry.role === PARTITION_ROLE.CHILD)
+    .map((entry) => ({
+      leader_node_id: entry.leader.nodeId,
+      partition_id: entry.partitionId,
+    }));
 }
 
-// Leader spread is only achievable once every settled child has
-// replicas on at least two distinct hosts; gate on that first so a
-// leader-spread timeout can never mask a replica-placement failure.
-async function waitForReplicaSpreadSupport(nodes, deps) {
-  const deadline = Date.now() + deps.replicaSpreadTimeoutMs;
-  let lastHosts = new Map();
-  while (Date.now() < deadline) {
-    const partitionRows = selectSettledPartitionRows(
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
-    const partitionIds = partitionRows
-      .map((row) => row?.partition_id)
-      .filter((id) => typeof id === 'string' && id.length > ZERO);
-    const serviceRows =
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_SERVICES);
-    lastHosts = replicaHostsByPartition(serviceRows, partitionIds);
-    if (partitionRows.length >= MIN_PARTITION_COUNT &&
-        replicaSpreadSupported(lastHosts)) {
-      return lastHosts;
-    }
-    await deps.sleep(SPREAD_POLL_MS);
-  }
-  const summary = [...lastHosts.entries()]
-    .map(([partitionId, hosts]) => `${partitionId}:${hosts.size}`)
-    .join(',');
-  throw new Error(
-    `${SCENARIO_NAME}: replica placement never supported leader ` +
-    `spread within ${deps.replicaSpreadTimeoutMs}ms ` +
-    `(distinct replica hosts per partition: ${summary})`,
-  );
+// The measured gate: the PLATFORM must move child leaders apart onto
+// distinct NODES, holding across consecutive identical readbacks so a
+// mid-handoff window is never frozen into the measured topology.
+async function waitForLeaderSpread(cluster, nodes, deps, knownParentIds) {
+  const proven = await helpers.waitForSplitClaim(cluster, nodes, claimGate(
+    deps, GATE.LEADER_SPREAD, LEADER_SPREAD_CLAIM,
+    deps.leaderSpreadTimeoutMs, {knownParentIds}));
+  const partitionRows = childLeaderRows(proven.record);
+  return {
+    fingerprint: topologyFingerprint(partitionRows),
+    hostIndex: proven.hostIndex,
+    partitionRows,
+    record: proven.record,
+  };
 }
 
-// The measured gate: the PLATFORM must move child leaders apart. The
-// spread must hold with an identical partition/leader fingerprint
-// across consecutive polls so a mid-handoff window is never frozen into
-// the measured topology.
-async function waitForLeaderSpread(nodes, deps) {
-  const deadline = Date.now() + deps.leaderSpreadTimeoutMs;
-  let lastRows = [];
-  let stableFingerprint = null;
-  let stableCount = ZERO;
-  while (Date.now() < deadline) {
-    const allRows =
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
-    lastRows = selectSettledPartitionRows(allRows);
-    if (lastRows.length >= MIN_PARTITION_COUNT &&
-        allRows.length === lastRows.length &&
-        distinctLeaderHosts(lastRows).size >= MIN_DISTINCT_LEADER_HOSTS) {
-      const fingerprint = topologyFingerprint(lastRows);
-      stableCount = fingerprint === stableFingerprint ?
-        stableCount + ONE :
-        ONE;
-      stableFingerprint = fingerprint;
-      if (stableCount >= TOPOLOGY_STABLE_READBACKS) {
-        return {fingerprint, partitionRows: lastRows};
-      }
-    } else {
-      stableFingerprint = null;
-      stableCount = ZERO;
+function leaderFlap(previousLeaders, evaluation) {
+  for (const entry of evaluation.partitions) {
+    const previousLeader = previousLeaders.get(entry.partitionId);
+    if (entry.role === PARTITION_ROLE.CHILD && previousLeader !== undefined &&
+        previousLeader !== entry.leader.nodeId) {
+      return `${entry.partitionId} leader ${previousLeader} -> ` +
+        String(entry.leader.nodeId);
     }
-    await deps.sleep(SPREAD_POLL_MS);
   }
-  throw new Error(
-    `${SCENARIO_NAME}: user-table leader placement never spread ` +
-    `across >= ${MIN_DISTINCT_LEADER_HOSTS} hosts within ` +
-    `${deps.leaderSpreadTimeoutMs}ms (leaders on ` +
-    `${distinctLeaderHosts(lastRows).size} host(s)): ` +
-    JSON.stringify(lastRows),
-  );
+  return null;
 }
 
-// The hysteresis gate: once spread is reached, no surviving partition's
-// leader may move — that is the flapping the cure's deadband and
-// one-directional bound must prevent. A partition ROW disappearing is
-// not a flap: a dissolving split parent lingers readable in state
-// NORMAL through its final window (witnessed live: run
-// user-table-leader-placement-spread-20260810T193638Z froze a 3-row
-// set, then the parent dissolved mid-hold while both child leaders
-// stayed put), so the hold compares leaders on the surviving
-// intersection and re-asserts spread on each current set.
-async function assertLeaderSpreadHolds(nodes, frozen, deps) {
+function holdGateRecord(frozen, evaluation, outcome, deps) {
+  return buildGateRecord({
+    budgetMs: deps.stabilityHoldPolls * SPREAD_POLL_MS,
+    claim: LEADER_SPREAD_CLAIM,
+    gate: GATE.LEADER_SPREAD_HOLD,
+    hostIndex: frozen.hostIndex,
+    outcome: {evaluation, unmetTally: {}, ...outcome},
+    stableReadbacksRequired: deps.stabilityHoldPolls,
+  });
+}
+
+// The hysteresis gate: once spread is reached, no child's leader may
+// move - that is the flapping the cure's deadband and one-directional
+// bound must prevent - and the full leader-spread claim (children only,
+// parent dissolved, leaders on distinct nodes) must hold on every poll.
+async function assertLeaderSpreadHolds(cluster, nodes, frozen, deps,
+  knownParentIds) {
+  const startedAtMs = deps.now();
   let previousLeaders = new Map(frozen.partitionRows.map((row) =>
     [row.partition_id, row.leader_node_id]));
-  let lastRows = frozen.partitionRows;
+  let evaluation = frozen.record;
   for (let poll = ZERO; poll < deps.stabilityHoldPolls; poll += ONE) {
     await deps.sleep(SPREAD_POLL_MS);
-    const rows = selectSettledPartitionRows(
-      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
-    for (const row of rows) {
-      const previousLeader = previousLeaders.get(row?.partition_id);
-      if (previousLeader !== undefined &&
-          previousLeader !== row?.leader_node_id) {
-        throw new Error(
-          `${SCENARIO_NAME}: leader placement flapped during the ` +
-          `stability hold (poll ${poll + ONE}/` +
-          `${deps.stabilityHoldPolls}): ${row?.partition_id} leader ` +
-          `${previousLeader} -> ${row?.leader_node_id}`,
-        );
-      }
-    }
-    if (rows.length < MIN_PARTITION_COUNT ||
-        distinctLeaderHosts(rows).size < MIN_DISTINCT_LEADER_HOSTS) {
+    const truth = await helpers.readSplitGroundTruth(nodes);
+    evaluation = evaluateSplitSpreadClaim({
+      claim: LEADER_SPREAD_CLAIM, hostIndex: frozen.hostIndex,
+      knownParentIds, ...truth,
+    });
+    const flap = leaderFlap(previousLeaders, evaluation);
+    if (flap !== null || !evaluation.satisfied) {
+      const record = holdGateRecord(frozen, evaluation, {
+        elapsedMs: deps.now() - startedAtMs, passed: false,
+        readbacks: poll + ONE, stableReadbacks: poll,
+      }, deps);
+      recordScenarioGate(cluster, record);
       throw new Error(
-        `${SCENARIO_NAME}: leader spread was lost during the ` +
-        `stability hold (poll ${poll + ONE}/` +
-        `${deps.stabilityHoldPolls}): ` +
-        JSON.stringify(rows),
-      );
+        `${SCENARIO_NAME}: leader ${flap === null ? 'spread was lost' :
+          'placement flapped'} during the stability hold (poll ` +
+        `${poll + ONE}/${deps.stabilityHoldPolls}` +
+        `${flap === null ? '' : `: ${flap}`}): ` +
+        describeGateFailure(record));
     }
-    previousLeaders = new Map(rows.map((row) =>
-      [row.partition_id, row.leader_node_id]));
-    lastRows = rows;
+    previousLeaders = new Map(evaluation.partitions.map((entry) =>
+      [entry.partitionId, entry.leader.nodeId]));
   }
-  return lastRows;
+  recordScenarioGate(cluster, holdGateRecord(frozen, evaluation, {
+    elapsedMs: deps.now() - startedAtMs, passed: true,
+    readbacks: deps.stabilityHoldPolls,
+    stableReadbacks: deps.stabilityHoldPolls,
+  }, deps));
+  return evaluation;
 }
 
-function composeTopologyDetail(partitionRows, hostsByPartition) {
-  const partitions = partitionRows.map((row) => ({
-    leaderNodeId: row?.leader_node_id,
-    partitionId: row?.partition_id,
-    replicaHostCount:
-      hostsByPartition.get(row?.partition_id)?.size ?? ZERO,
-  }));
+function composeTopologyDetail(evaluation, replicaNodeCounts) {
+  const partitions = evaluation.partitions
+    .filter((entry) => entry.role === PARTITION_ROLE.CHILD)
+    .map((entry) => ({
+      leaderNodeId: entry.leader.nodeId,
+      partitionId: entry.partitionId,
+      replicaNodeCount: replicaNodeCounts.get(entry.partitionId) ?? ZERO,
+    }));
+  const leaderSpread = requireSpreadUnit({
+    members: evaluation.leaderSpread?.members,
+    spreadUnit: evaluation.leaderSpread?.unit,
+  }, SPREAD_UNIT.NODE, `${SCENARIO_NAME} leader spread evidence`);
   return {
-    distinctLeaderHosts: distinctLeaderHosts(partitionRows).size,
+    distinctLeaderNodes: leaderSpread.members.length,
     partitions,
+    spreadUnit: leaderSpread.spreadUnit,
   };
 }
 
@@ -359,35 +384,49 @@ export async function run(cluster) {
   const seedNode = nodes.find((node) => node.role === 'seed') ||
     nodes[ZERO];
 
+  const step = createScenarioStepRunner(cluster, SCENARIO_NAME, deps.now);
+
   // The stable-leader precondition: no data substrate exists until the
   // cluster's leader topology has held still — the cure's later target
   // is a healthy, heartbeating leader, never formation churn.
-  const quiescence = await waitForClusterLeaderQuiescence(nodes, deps);
+  const quiescence = await step('cluster-leader-quiescence', () =>
+    waitForClusterLeaderQuiescence(nodes, deps));
 
   // Data substrate: table, split-friendly policies, deterministic
   // dataset sized for exactly one managed split. Setup writes retry
   // transient post-boot settling; measured phases do not.
   const rows = generateDatasetRows();
-  await helpers.retryTransientAdminQuery(deps, 'create-table',
-    () => seedNode.query(SQL.CREATE_TABLE));
-  const tableId = await helpers.retryTransientAdminQuery(
-    deps, 'resolve-table-id', () => helpers.resolveTableId(seedNode));
-  await helpers.applySplitPolicies(seedNode, tableId, deps);
-  await helpers.waitForTableWriteReadiness(nodes, deps);
-  await helpers.seedDataset(seedNode, rows, deps);
+  await step('create-table', () => helpers.retryTransientAdminQuery(
+    deps, 'create-table', () => seedNode.query(SQL.CREATE_TABLE)));
+  const tableId = await step('resolve-table-id', () =>
+    helpers.retryTransientAdminQuery(deps, 'resolve-table-id',
+      () => helpers.resolveTableId(seedNode)));
+  await step('apply-split-policies', () =>
+    helpers.applySplitPolicies(seedNode, tableId, deps));
+  await step('wait-table-write-readiness', () =>
+    helpers.waitForTableWriteReadiness(nodes, deps));
+  await step('seed-dataset', () => helpers.seedDataset(seedNode, rows, deps));
 
   // Measured phases: split, replica-spread support, then the platform
-  // spreading the child leaders — and holding them spread.
-  const split = await waitForManagedSplit(nodes, seedNode, deps);
-  const hostsByPartition = await waitForReplicaSpreadSupport(nodes, deps);
-  const spread = await waitForLeaderSpread(nodes, deps);
-  const heldRows = await assertLeaderSpreadHolds(nodes, spread, deps);
+  // spreading the child leaders across nodes - and holding them spread.
+  const split = await step(GATE.MANAGED_SPLIT, () =>
+    waitForManagedSplit(cluster, nodes, seedNode, deps));
+  const knownParentIds = split.knownParentIds;
+  const replicaNodeCounts = await step(GATE.REPLICA_SPREAD_SUPPORT, () =>
+    waitForReplicaSpreadSupport(cluster, nodes, deps, knownParentIds));
+  const spread = await step(GATE.LEADER_SPREAD, () =>
+    waitForLeaderSpread(cluster, nodes, deps, knownParentIds));
+  const held = await step(GATE.LEADER_SPREAD_HOLD, () =>
+    assertLeaderSpreadHolds(cluster, nodes, spread, deps, knownParentIds));
 
-  const topology =
-    composeTopologyDetail(heldRows, hostsByPartition);
+  const topology = composeTopologyDetail(held, replicaNodeCounts);
+  requireSpreadUnit(topology, SPREAD_UNIT.NODE,
+    `${SCENARIO_NAME} final topology`);
   assert.ok(
-    topology.distinctLeaderHosts >= MIN_DISTINCT_LEADER_HOSTS,
-    `${SCENARIO_NAME}: final topology lost leader spread`,
+    topology.distinctLeaderNodes >= MIN_DISTINCT_LEADER_NODES,
+    `${SCENARIO_NAME}: final topology lost leader spread (unit: node, ` +
+    `${topology.distinctLeaderNodes} distinct leader node(s), need >= ` +
+    `${MIN_DISTINCT_LEADER_NODES})`,
   );
   return {
     leaderFingerprint: spread.fingerprint,

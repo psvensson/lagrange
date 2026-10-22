@@ -22,6 +22,7 @@ import {
   MEMBERSHIP_MEMBER_STATE,
   normalizeMembershipMemberState,
 } from './membership-lifecycle-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 // The detector and its projection consumption are UNCONDITIONAL: promoted from a
 // default-on opt-out flag on 2026-07-02 (no-flag policy) after the 2026-06-21 matched
@@ -58,6 +59,10 @@ const SELF_CONFIRMER = 'self';
 // confirmation, but must NOT collapse onto the first-hand SELF_CONFIRMER key
 // (which would undercount independent confirmations / lengthen the timeout).
 const UNKNOWN_CONFIRMER = 'unknown-source';
+const SWIM_SUSPICION_WAIT = Object.freeze({
+  wait: 'swimSuspicionTimeoutMs',
+  awaited: 'refutation (alive at a newer incarnation) of a suspected member',
+});
 
 // Member states that exclude a node from the active set regardless of liveness
 // (a draining or retired node is leaving, not serving) — matches the shadow rule's
@@ -83,6 +88,24 @@ function isFiniteIncarnation(value) {
   return Number.isFinite(value);
 }
 
+// The suspicion window closed without a refutation: the member is declared
+// DEAD (unchanged). Visibility only; the detector stays pure otherwise.
+function reportSuspicionSpent(detector, entry, nowMs) {
+  reportWaitBoundSpent(detector._logger, {
+    ...SWIM_SUSPICION_WAIT,
+    boundMs: entry.suspicionDeadlineMs - entry.suspectRaisedAtMs,
+    elapsedMs: nowMs - entry.suspectRaisedAtMs,
+    lastObserved: {
+      memberState: entry.state,
+      incarnation: entry.incarnation,
+      confirmers: entry.confirmers.size,
+      localHealthMultiplier: detector._localHealthMultiplier,
+    },
+    scope: {nodeId: detector._localNodeId, memberNodeId: entry.nodeId},
+    subject: entry.nodeId,
+  });
+}
+
 /**
  * SWIM + Lifeguard per-node liveness state machine with a Local Health Multiplier.
  */
@@ -92,6 +115,7 @@ class MembershipSwimDetector {
     this._randomSource = resolveRandomSource(options);
     this._config = {...SWIM_DETECTOR_DEFAULTS, ...(options.config || {})};
     this._localNodeId = normalizeNodeId(options.localNodeId) || null;
+    this._logger = options.logger || null;
     // nodeId -> {nodeId, state, incarnation, suspectRaisedAtMs, suspicionDeadlineMs, confirmers:Set}
     this._members = new Map();
     this._localHealthMultiplier = LHM_MIN;
@@ -352,6 +376,7 @@ class MembershipSwimDetector {
         isFiniteIncarnation(entry.suspicionDeadlineMs) &&
         now >= entry.suspicionDeadlineMs
       ) {
+        reportSuspicionSpent(this, entry, now);
         entry.state = SWIM_MEMBER_STATE.DEAD;
         entry.suspicionDeadlineMs = null;
         // Conservatively gossip a SUSPECT (not DEAD): a locally-timed-out node may

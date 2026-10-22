@@ -30,6 +30,7 @@ import {MessageGroupService} from '../../src/message-group/message-group-service
 import {
   LIFECYCLE_PHASE,
 } from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 setTestPortBase(25400);
 registerMessageGroupServiceLifecycleHooks();
@@ -72,12 +73,12 @@ function readinessStateFor(snapshot) {
  * @return {Object} {service, rebalancer, flapStops()}.
  */
 function createActiveLeaderService(router, nodeId, groupId) {
-  const service = new MessageGroupService({
+  const service = new MessageGroupService(withTestDbPath({
     groupId,
     replicaId: `${groupId}-r1`,
     nodeId,
     transport: router,
-  });
+  }));
   let flapStops = 0;
   const rebalancer = {
     isLeader: true,

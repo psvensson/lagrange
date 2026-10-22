@@ -20,9 +20,17 @@ function isTransactionControlType(type) {
 function createApplicationDatabaseExecutionOptions(
   sessionId,
   transactionControl = false,
+  expectedTransactionId = null,
 ) {
   const options = objectCreate(null);
   options.sessionId = sessionId;
+  // A statement of a transaction(callback) is sent for the transaction its
+  // BEGIN opened: the engine refuses it once it no longer holds that
+  // transaction (budget expiry) instead of running it as autocommit.
+  if (typeof expectedTransactionId === 'string' &&
+      expectedTransactionId.length > 0) {
+    options.expectedTransactionId = expectedTransactionId;
+  }
   options[APPLICATION_DATABASE_SESSION] = true;
   if (transactionControl) {
     options[APPLICATION_DATABASE_TRANSACTION_CONTROL] = true;
