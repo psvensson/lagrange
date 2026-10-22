@@ -37,48 +37,50 @@ authorizes:
 
 ## Current coordination: original startup handoff (2026-10-22)
 
-The preserved lower-boundary checkpoint is `7766ccafbe3767c9e397fabf97f41a197d7fb53e`
-on `work/original-handoff-boundaries-20261021-cloud`. Lab
-[#735](https://github.com/psvensson/lagrange-lab/issues/735#issuecomment-6336552591)
-reports 6/6 files and 58/58 tests on that exact revision, with execution and
-thermal scopes closed. No main merge or handoff receipt follows from it.
+The startup-owned lifetime is implemented and independently approved as a
+bounded WIP at `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` on
+`work/original-handoff-boundaries-20261021-cloud`. The
+[measured checkpoint](../quests/retained-seed-original-handoff/evidence/CHECKPOINT-startup-lifetime-2026-10-22.md)
+records the interaction, exact bindings, failure lineage and remaining work.
 
-The active bounded work connects the startup-owned original attempt through
-queue admission and actual native construction, including revocation and exact
-cleanup custody. The
-[source attempt](../quests/retained-seed-original-handoff/evidence/ATTEMPT-startup-lifetime-2026-10-22.md)
-records the interaction and its unavailable continuation boundary. The
-[independent review history](../quests/retained-seed-original-handoff/evidence/REVIEW-startup-lifetime-2026-10-22.md)
-owns the four findings, their disposition and the reviewed-content binding.
-The original 14 witnesses are preserved against unchanged runtime source at
-`3fa20cefeca622ec2060509903a921979d32a082`; seven additive cases cover the
-review repairs. The two baseline admission cases produced engaged assertion
-failures in [lab #766](https://github.com/psvensson/lagrange-lab/issues/766#issuecomment-6338804478).
-Both pass on candidate `7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f`, whose
-[seven-file run #769](https://github.com/psvensson/lagrange-lab/issues/769#issuecomment-6338912468)
-reports 79 tests: 75 pass and 4 fail, with no cancellations or skips.
-Its [metadata/fast-static run #770](https://github.com/psvensson/lagrange-lab/issues/770#issuecomment-6338921684)
-passes the explicit 7766-base check. Those execution and thermal scopes are closed.
+[Lab #792](https://github.com/psvensson/lagrange-lab/issues/792#issuecomment-6339380493)
+passed on tv-dator: **7/7 files and 79/79 runner-reported tests**, with no
+failures, cancellations, skips or todos. All 21 startup cases and the six
+existing lower-boundary files were measured together at 328532f0. The
+[separate metadata/fast-static run #793](https://github.com/psvensson/lagrange-lab/issues/793#issuecomment-6339331559)
+passed against explicit base 7766ccaf; its tracked-tree check also passed.
+All execution, thermal and container scopes are closed. Full logs were
+recovered and verified against their terminal hashes; no owned work remains
+queued or running.
 
-The complete original worker log is retained in
-[RAW-startup-candidate-7fa4d79a-2026-10-22.txt](../quests/retained-seed-original-handoff/evidence/RAW-startup-candidate-7fa4d79a-2026-10-22.txt).
-All four first divergences are new assertions expecting literal false where
-the unchanged router predicate returns undefined for an absent self entry.
-Independent review approves exactly four oracle corrections: respect the
-existing falsy predicate and additionally require exact map-entry absence.
-The revised witness must be measured; later assertions, including five later
-continuation calls, were not reached in #769. The historical first 14-case
-prefix remains in 3fa20cef and 7fa4d79a; the revised prefix will differ.
+The [independent review history](../quests/retained-seed-original-handoff/evidence/REVIEW-startup-lifetime-2026-10-22.md)
+retains the four material source findings and their repairs, the exact
+committed production/witness binding, and final bounded result approval.
+The two admission cases on unchanged runtime source produced engaged RED
+in lab #766. The original candidate's #769 result remains 75 pass / 4 fail.
+Those four later failures came from new strict-false expectations where the
+unchanged router returns undefined for an absent self entry. The reviewed
+correction follows that falsy contract and additionally requires exact
+map-entry absence; source, all admission assertions and both baseline case
+bodies are unchanged. Historical witness bytes and failed logs remain intact.
 
-The integration owner is the continuing root agent; its lab delegate observes
-and resumes pinned requests. The next action is to preserve the reviewed
-test-only successor and rerun its exact seven-file batch and applicable static
-checks. The inherited partition decision-boundary finding stays explicit;
-the passing fast-static run does not satisfy that separate red pre-commit gate.
-This is WIP preservation, not a green publication.
-The retained-command classifier, protected activation/leader/transfer,
-complete public-admission exclusions and composed two-start proof remain
-unfinished. All eight handoff receipts and the original seal stay unchanged.
+The source pre-commit decision-boundary finding in
+createBootstrapPartitionReplica exists on unchanged 7766ccaf and remains
+routed to the guideline-audit owner. The test-only normal hook and passing
+fast-static batch do not clear that separate RED or grant publication.
+This checkpoint cannot complete fresh or retained startup: retained history
+and later activation/registration/public continuation remain named holds.
+
+The continuing root agent owns integration. The next implementation unit is
+read-only retained-command classification in the existing durable/application
+owners: keep applied, committed-but-unapplied and locally uncommitted work
+distinct, preserve genuine pending ENABLE and original foundation/MG effects,
+and keep unknown/contrary observations as named holds. Cold consumers also need
+durable-record membership and the required autonomous-effect exclusions before
+that path is admitted. Protected activation/leader acknowledgment/durable
+transfer, full public-admission exclusions and composed two-start proof remain
+unfinished. All eight handoff receipts and the original seal are unchanged;
+nothing from this continuation has been merged to main.
 
 ## Closeout plan and lane composition (2026-10-17)
 

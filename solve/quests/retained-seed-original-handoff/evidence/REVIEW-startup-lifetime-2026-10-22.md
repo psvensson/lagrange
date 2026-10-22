@@ -585,3 +585,231 @@ in Entry 4. The integration owner may bind the next commit to these reviewed
 bytes; a successful runtime result is a separate outstanding gate. The reviewer
 wrote only this appended evidence entry and did not edit source/tests, run
 runtime tests or mutate GitHub state.
+
+## Entry 6 — exact oracle-successor commit binding
+
+Date: 2026-10-22. Reviewer: `subagent:/root/opening_review`.
+
+Verdict: **The approved production source and revised witness are exactly bound
+to committed successor `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d`.** This is a
+content/provenance binding, not a verdict on pending runtime or static results.
+The existing bounded source and witness approvals remain applicable at their
+stated ceiling.
+
+### Independent committed-byte verification
+
+The reviewer read the successor's Git blobs directly, rehashed each of the
+20 approved production paths using the earlier manifest procedure, and
+compared the revised witness against Entry 5's exact byte and blob bindings.
+All 20 production files matched, with zero mismatches. The successor's complete
+`src` tree equals its parent's complete `src` tree, establishing that no
+production-source change accompanied the oracle correction.
+
+| Object | Verified binding |
+| --- | --- |
+| Successor commit | `328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d` |
+| Parent commit | `7fa4d79ae0a2cdb806bf073f8cb3e0578b0d576f` |
+| Successor repository tree | `3a8369d78e66d4ce618040d1b65aab9ac0170d0a` |
+| Successor and parent `src` tree | `a3e339f8977ed79796579a3f66cec091267343e8` |
+| Approved 20-file production manifest SHA-256 | `550cd6fbe3c5a982933066921cfdf691228cfa45765fc8036efd6bce2985fdae` |
+| Revised witness bytes | 35,941 |
+| Revised witness SHA-256 | `2421740ecafb0c9dcb457be3e1ef8286321645a426d23f7814d2d9a91d1e086f` |
+| Revised witness Git blob | `e87f872e32cca602d1055e6514437d49ec36ec10` |
+
+Independent local object inspection also confirmed that the repository tree
+of evidence commit `3a4aa5405f4e34175a95b8dba3f00f80e531fcd9` equals the
+successor tree above; the local normal-hook commit `bb96af78` has the same
+`src` tree. The backup branch
+`work/original-startup-oracle-local-20261022` points to that evidence commit.
+The integration owner reported remote-ref verification separately; this entry
+does not present a local object check as a new independent remote-ref query.
+
+### Retained historical evidence
+
+The original witness still hashes to
+`3ef091d21e2e67af4ae40f06e6061fa1334f29a88583a6aa4a5d9547584018c7`
+in parent `7fa4d79a`. Its first 20,600 bytes still exactly equal the baseline
+file in `3fa20cef`, whose SHA-256 remains
+`e4afdcabc63bd3397b992978a5cdaa7da136122d4802eb203482b3e975a72790`.
+The successor contains the previously reviewed 35,134-byte review history,
+SHA-256 `fb0532935120a7b7d8cadfa9d3a3b640d964d2731ef15e2c694357f487d9076a`,
+and preserves the parent's entire review-file content as its initial bytes.
+
+The following evidence blobs were independently read from the successor:
+
+| Evidence file in this directory | Bytes | SHA-256 |
+| --- | --- | --- |
+| `MEASURE-startup-baseline-2026-10-22.json` | 8,929 | `83fef3bb44fb20b7e0bedaf4bea7109f4b5a91cd705f2feb443879a1a7179f01` |
+| `MEASURE-startup-candidate-7fa4d79a-2026-10-22.json` | 22,125 | `b8897c1c41e4ba21b7cd932d591a97f51a9325acfe25f2727703b3302116b85a` |
+| `MEASURE-startup-full-log-7fa4d79a-2026-10-22.json` | 17,478 | `f9bc323a129043e1ec796731f559e1f7914aea5c28881167c19a4324ecd63676` |
+| `RAW-startup-candidate-7fa4d79a-2026-10-22.txt` | 21,297 | `c2116fe04a9e48a11919865b822d01a0e3f9cdb506a24f9f3d90c79365bd26ec` |
+| `ORACLE-startup-transport-absence-2026-10-22.md` | 3,904 | `2657a8f56040fa28aaef7a6a2b85def6417e5dea5ad40645627afe9fc9b295cd` |
+
+The committed baseline record matches the bytes previously independently
+reviewed, and the committed raw candidate log matches the complete log reviewed
+in Entry 4. The appended full-log assessment preserves #769 as RED with
+75 passing and four failing tests and retains the explicitly unmeasured later
+assertions. The historical baseline and candidate evidence was not replaced
+with an anticipated corrected result. Entry 5's byte-identical baseline-case
+comparison applies to the exact revised witness now committed here.
+
+### Pending result review
+
+At this binding handoff, the integration owner reported that lab #792 had been
+submitted for the same seven runtime test files and #793 for metadata plus
+static verification with explicit `7766ccaf` base. Both were pending; this
+reviewer did not poll or assess their results. No PASS or completion claim is
+made for either operation in this entry.
+
+The test-only normal hook's zero scanned decision files cannot clear the
+separately recorded source decision-audit RED. Its disposition remains a
+distinct owner/evidence question. Runtime and static receipts still need
+exact-source review when supplied. The unavailable WIP ceiling, all eight
+unchanged handoff receipts and the absence of a `main` merge claim remain.
+Only this review-history entry was appended; no source/test or GitHub mutation
+was performed by the reviewer.
+
+## Entry 7 — exact successor runtime and scoped-static result: APPROVE
+
+Date: 2026-10-22. Reviewer: `subagent:/root/opening_review`.
+
+Verdict: **APPROVE the measured bounded startup-to-native checkpoint at
+`328532f0274c2a6ed7ce9e1af6a4fcc941bdc84d`.** The independently reviewed source
+and corrected witness now have exact-revision runtime evidence. The seven-file
+batch completed with 79 runner-reported tests passing and no failure,
+cancellation, skip or todo. The separate metadata/fast-static/tracked-tree
+operation also passed on that same revision. This verdict retains every
+scope exclusion below and does not clear the separate source decision audit.
+
+### Independently retrieved terminal receipts
+
+The reviewer fetched the exact terminal comments through the GitHub read
+connector, then compared the complete parsed receipt objects with the local
+measurement record. All five were equal: runtime #792, static #793, static
+evidence #796, retained-log export #798 and export evidence #801. This review
+used no test rerun and issued no GitHub mutation.
+
+| Operation | Exact terminal receipt | Verified result |
+| --- | --- | --- |
+| Runtime #792 | [6339380493](https://github.com/psvensson/lagrange-lab/issues/792#issuecomment-6339380493) | PASS on `tv-dator`; selected/completed 7/7 files; 79 tests, 79 pass, zero fail/cancelled/skipped/todo; finished `2026-10-22T11:14:38.703Z` |
+| Metadata and fast-static #793 | [6339331559](https://github.com/psvensson/lagrange-lab/issues/793#issuecomment-6339331559) | PASS on `local-workstation`; source `328532f0`; exit 0; finished `2026-10-22T11:11:57.079Z` |
+| Static-log evidence #796 | [6339355973](https://github.com/psvensson/lagrange-lab/issues/796#issuecomment-6339355973) | COMPLETE; offset 0; all 1,603 controller-log bytes returned for #793 |
+| Read-only retained-log export #798 | [6339421996](https://github.com/psvensson/lagrange-lab/issues/798#issuecomment-6339421996) | PASS on `tv-dator`; exit 0; finished `2026-10-22T11:16:54.529Z` |
+| Export evidence #801 | [6339438662](https://github.com/psvensson/lagrange-lab/issues/801#issuecomment-6339438662) | COMPLETE; offset 0; all 5,429 export controller-log bytes returned for #798 |
+
+Runtime request `58d4245e7a0f43eaaef74b4352f2e3b7` and static request
+`c7ebd3585bab424ab8844bb757bf2f23` match the preserved submission record, and
+both execution receipts name the exact successor source SHA. Runtime, static
+and export operations each report execution scope closed, thermal scope closed
+and containers closed. Their workers report no log truncation. The evidence
+retrieval requests are terminal COMPLETE. There is no remaining execution or
+thermal obligation from these operations.
+
+### Full runtime-log correspondence and observed cases
+
+The original #792 receipt distinguishes its controller tail from the full
+worker log. The full worker log is exactly 18,183 bytes with SHA-256
+`80e03c63f1c44c60944d61b9ff0341ef498c0ebf7a133f42c5c9dd7a02876ca7`.
+The reviewer independently hashed the retained
+`RAW-startup-candidate-328532f0-2026-10-22.txt` and obtained that exact digest
+and byte count.
+
+The export request's decoded payload matches its recorded intent and payload
+hash. Its command only reads the already closed #792 executor log, checks the
+expected size/hash, and exports compressed bytes; it has no source checkout
+and runs no tests. Independently decoding the zlib/base64 payload returned by
+#801 produced exactly the retained raw runtime file. The export's embedded
+original logical request and source SHA match #792, and its controller-log
+size/hash match the independently retrieved #798/#801 receipts. The export is
+therefore evidence recovery for the original execution, not a second test run.
+
+Every one of the first 21 startup cases individually reports `ok` in the full
+log. This includes:
+
+- admission before catalog publication, exact member/peer/deferred-participation
+  binding, abort during build measurement, and direct MG creation admission;
+- the real listenerless infrastructure and actual native MG/partition creation
+  through the owned opening capability;
+- both post-stagger revocation paths, synchronous shutdown/failure revocation,
+  missing direct-start directory/membership authority, and retained-declaration
+  HOLD while the classifier is unavailable;
+- the continuation case covering all six election, registration, transport and
+  completion entry points;
+- exact MG custody after successful-but-revoked initialization, partition
+  initializing-versus-settled state, failed partition cleanup debt, and canonical
+  schema ownership through actual SQLite DDL;
+- shutdown joining acquired router initialization and initial reconciliation,
+  real cadence retirement, and exact router custody through a failed close and
+  subsequent successful release.
+
+In particular, corrected cases 4, 14, 19 and 20 now complete successfully.
+Because the reviewed continuation test has an unconditional six-entry awaited
+loop, its successful completion establishes that all six calls and their
+following assertions ran on this successor. The assertions after the old
+first-divergence sites in the other three cases are likewise reached. This
+evidence belongs to #792; it does not retroactively change the unmeasured
+extent of #769.
+
+The same #792 execution also ran the six opening/participation/custody/inspection
+files listed in the preserved request. Its terminal TAP summary reports
+`tests 79`, `pass 79`, `fail 0`, `cancelled 0`, `skipped 0`, `todo 0`. The
+79-test count is entirely from this one exact-revision execution. No result
+from #735, #766, #769 or another source revision is added to it.
+
+### Scoped static evidence and its limit
+
+The independently retrieved #796 text exactly equals the retained
+`RAW-startup-static-328532f0-2026-10-22.txt`: 1,603 bytes, SHA-256
+`cef2e59d61e1c6b9fd2cc7e345d71e5b40b5ddbe6fef4a066246b06b3bfc994a`.
+This matches #793's controller-log receipt. The submitted 1,105-byte static
+payload decodes to the recorded intent and matches SHA-256
+`fe568a944f10fcf9f2fd87bfa076bcf19991a19474924fbc4ab16054d465684f`.
+
+The script runs `npm run audit:shards`, then
+`node scripts/check-fast-static.js --base 7766ccafbe3767c9e397fabf97f41a197d7fb53e`,
+then `git diff --exit-code`. The complete log confirms the explicit
+`7766ccaf..HEAD (flag)` proof range and reports:
+
+```json
+{"metadata_exit":0,"fast_static_exit":0,"tracked_tree_exit":0}
+```
+
+These three scoped checks passed. The separate inherited source
+decision-boundary audit remains RED and is not covered or cleared by this
+result. Neither this fast-static result nor a test-only hook with zero scanned
+decision files is a substitute for that owner's disposition.
+
+### Durable record and retained review ceiling
+
+At verification, the successor measurement record was
+`MEASURE-startup-successor-328532f0-2026-10-22.json`, 23,340 bytes with SHA-256
+`0da8b33b2923319e65a23df357c6b79d7e7a2e0f168615abeba6e7f0d517cf30`.
+Its referenced submission record has SHA-256
+`98cf9c73daa96eb3c17564ffc6c293993478a22a930e814c14c5325c22c0cba5`.
+Receipt identities, source identities, submitted-payload hashes, retained-log
+sizes/hashes and export decoding all matched independently.
+
+Entry 6's production manifest
+`550cd6fbe3c5a982933066921cfdf691228cfa45765fc8036efd6bce2985fdae`
+and revised witness SHA-256
+`2421740ecafb0c9dcb457be3e1ef8286321645a426d23f7814d2d9a91d1e086f`
+remain the content binding for this measured revision. Baseline #766 remains
+the valid engaged two-case RED on `3fa20cef`. The two selected admission case
+bodies remain byte-identical. Original candidate #769 remains RED, 75/79, on
+`7fa4d79a`; its full log and oracle diagnosis stay preserved. The four witness
+corrections and their provenance are not hidden by the passing successor.
+
+This establishes the reviewed startup-owned lifetime, queue/constructor
+authority, synchronous revocation, exact resource custody, and explicit
+listenerless/unavailable continuation behavior at the bounded WIP ceiling.
+It does not establish a complete public startup, retained-command classifier,
+protected activation through leader acknowledgment, durable transfer, complete
+public-ingress exclusion, or the composed two-start acceptance proof. All eight
+handoff receipts remain unchanged. No Quest completion, Solver landing,
+publication, release or merge to `main` is approved or claimed.
+
+The source review and these runtime/scoped-static results are accepted for the
+exact bounded checkpoint. The next implementation boundary and the separate
+source-audit disposition remain with their existing owners. This reviewer
+appended only this evidence entry and did not change source or tests, execute
+runtime tests, or mutate GitHub state.
