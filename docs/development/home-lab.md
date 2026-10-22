@@ -32,6 +32,55 @@ The lab inventory is user-local. It defaults to
 `%APPDATA%` location on Windows. Override the directory with
 `LAGRANGE_LAB_HOME`. No credentials or K3s tokens are stored in the inventory.
 
+## Workload capability and continuation
+
+The test service must be able to execute the workload currently needed to prove
+the repair or service milestone. A reachable host or successful smoke run does
+not establish capacity for that workload. Check the actual runner, toolchain,
+source/dependency identity, storage, memory, topology, lock, and thermal facts.
+The representative public WASI service milestone needs its real public entry
+path, production owners, and declared distributed failure domains. Use the
+repository's existing scenario and proof owners for the claim.
+
+The commands below describe the repository-owned CLI. The private control
+workflow example is a deployment recipe, not evidence that a remote dispatcher
+or queue is installed or callable from this session. When using an installed
+control service, inspect its actual contract and supported operations before
+submission. If a required profile or workload is absent, record the capability
+gap and its owner; do not substitute smoke, claim a run was queued, or invent a
+command. Lab capacity is an engineering dependency to repair through the
+existing service.
+
+Existing authorization to use the lab covers routine preparation, execution,
+result collection, and continuation within that scope. Do not ask the user to
+reapprove each of those steps. Seek a decision only when scope, spending, or
+authority actually exceeds what is already authorized. Machine locks, thermal
+admission, trusted-runner boundaries, and required proof remain in force.
+
+Record the request-to-result facts in existing Quest evidence and the epic's
+current summary, using the stages the runner actually exposes:
+
+| Stage | Evidence to retain |
+| --- | --- |
+| Requested/submitted | Exact source, workload/profile, configuration, target, invocation, and request identity or returned receipt. |
+| Admitted/queued | Actual admission or queue observation and timestamp; do not infer this from a submission attempt. |
+| Running | Observed execution identity, hosts, start time, and result/log source. |
+| Terminal | Exit/verdict, first failure, complete artifacts, and whether the target path was reached. |
+| Collected/cleaned up | Durable artifact reference and confirmed cleanup/lock release, or the owner of remaining cleanup. |
+
+A synchronous command may not expose a queue; record that honestly. A process
+that is running remotely does not imply an agent is still watching it. Before
+waiting or handing off, name the actual request, result source, next check, and
+continuation owner or supported resumption mechanism. If none exists, state
+that collection is blocked and who must resume it. Do not promise polling,
+callbacks, or automatic follow-up unless they have actually been established.
+
+Use existing timestamps to identify the current cycle bottleneck: submission,
+queue, runtime, review, or result collection. Improve one demonstrated delay at
+a time without creating another tracking service. A target duration is an
+operating expectation; it does not override a correctness, release, or thermal
+requirement.
+
 ## Recommended topology
 
 A useful initial layout is:
@@ -286,7 +335,7 @@ and invoke the repo's existing commands. Suggested label examples are:
 
 A minimal private-control-repository workflow can stay intentionally dumb: it
 chooses a machine and delegates the proof definition back to this repository.
-For example:
+For example (the available remote workflow must be checked separately):
 
 ```yaml
 name: lagrange-home-lab
@@ -416,6 +465,14 @@ Every matrix report records the execution target and profile. Lab reports also
 record the selected physical host names. The matrix runner deliberately has no
 Raft-provider selector: consensus implementation choice is not an execution
 substrate dimension.
+
+Report safety, recovery progress under the scenario's finite-failure assumptions,
+and resource behavior separately. Name the actual independent hosts, network
+paths, and storage paths used; several Lagrange processes on one machine do not
+prove host-failure isolation. Deterministic topology witnesses remain valuable
+regressions with a different ceiling from physical certification. A passing
+representative scenario is a milestone, not full stable-core or release proof;
+see [`release-gate.md`](../../test/guidelines/release-gate.md).
 
 For GCP, the default provisioning template is
 `test/distributed/config/gcp-default.json`. The runner overlays its `gcp`
@@ -563,3 +620,10 @@ Keep the boundaries explicit:
 
 A failure should be repaired at the owner that produced it rather than by
 teaching a neighboring layer to compensate for it.
+
+Preserve the first failure before retrying and distinguish product failures from
+fixture/harness errors, verifier errors, and execution unavailable because of
+capacity, connectivity, locks, or thermal admission. A correctly measured
+product failure remains a failure. Unavailable execution is inconclusive and
+does not satisfy the requested proof. Route a different causal blocker to the
+integration owner while retaining any independently complete repair evidence.

@@ -1,58 +1,67 @@
 ---
 audience: agent
-last_reviewed: 2026-09-06
+last_reviewed: 2026-10-22
 ---
 
 # Quest workflow
 
 Conditional: read when starting, recording, scoping or landing a unit of
-work. The invariants themselves are rules R15 to R23; this page says only how
-they are carried out here. The command reference is generated at
-[`solve-commands.md`](../generated/solve-commands.md); it is the authority on what
-the CLI offers, and nothing here restates it.
+work. Rules R15 to R23 own the invariants. The generated
+[`command reference`](../generated/solve-commands.md) owns the CLI.
 
 ## Choosing the unit
 
 Work likely to need more than one measured attempt, or that changes an owner
-boundary, is a quest (R15). A single-sitting change with an obvious proof is
-committed directly, and its commit message names the witness.
+boundary, is a quest (R15). Commit a single-sitting change with an obvious
+proof directly, naming its witness. Define a bounded repair by its reproducer
+and affected interaction. Keep the distributed service milestone and release
+acceptance in their existing owning contracts. An accepted repair can close
+and integrate while a wider scenario remains red for another cause.
 
-## What a quest is
+A quest directory holds its record, append-only log and required evidence.
+The record names the statement, owning epic (or `class: fix`) and one
+`doneWhen`. `start` validates it and seals only against a measuring red probe.
+Do not weaken a seal to close work; explicitly supersede a changed premise.
 
-A directory holding the sealed record, an append-only log, and while open the
-evidence its probe reads. The record fixes the statement, the owning epic and
-one binary `doneWhen` probe. Sealing measures that probe and refuses to seal
-unless it is red, so a quest can never be born already satisfied.
+## Decision owners and work in progress
 
-## The four owner decisions
+The author owns routine diagnosis and repair; an independent reviewer owns
+verification; one integration owner coordinates acceptance, proof and landing.
+Existing authority persists. Judgment, audit repair and authorized landing do
+not automatically require a human stop. Ask the user for a genuine product or
+scope decision or missing authority after resolving what the records allow.
 
-Automation stops, and a person decides, at exactly four points: judgment about
-what to do next, independent verification of source changes, repair of an
-audit the work cannot resolve, and terminal landing. Everything between those
-is recorded, not decided.
+Use one writer per changing interaction and serialize its integration. Parallel
+investigation, review and independent interactions remain useful. Count work
+awaiting review, test and integration as WIP. The integration owner maintains
+one current summary in the epic, linking the baseline, blocker, active work,
+evidence and next owner/action; authoritative records retain their own claims.
+For a standalone `class: fix`, the existing quest record and log suffice.
 
-## Recording
+## Recording and review
 
-Findings, attempts, verifications and one terminal entry are appended. An
-attempt records the head it was made against and the change set it covers.
-Nothing recorded is ever edited (R21); a correction is a new entry.
+Append findings, attempts, verifications and terminal entries. An attempt
+records its head and changed paths. Correct history with a new entry (R21).
+Bound review to the candidate, affected interaction and acceptance. Return all
+reachable material findings together, then review repairs and what they
+invalidate. Retain applicable unaffected evidence; do not broaden acceptance
+or impose a fixed number of review rounds. Route unrelated findings to owners.
 
-## Verification
+A change under `src/` lands only behind independent approval newer than the
+last attempt, naming the verifier and reviewed content. A standing rejection
+blocks landing until answered. Evidence reuse needs applicability under the
+existing provenance and proof-selection rules, not an assertion of sameness.
 
-A change under `src/` lands only behind an independent verification newer
-than the last attempt, recorded with the verifier's identity and verdict. A
-standing rejection blocks landing until an attempt answers it.
+## Landing, publication and continuation
 
-## Landing and publishing
+`land` measures the sealed probe, enforces scope, interaction and static guards,
+proves the staged change, commits and records `solved`. It never pushes.
+Publication proves its exact candidate through the existing gates (R22, R23).
+Neither repair acceptance nor an earlier receipt grants broader readiness.
 
-Landing proves the tree that will be committed: it refuses unless the probe is
-green, the scope holds, the interaction guard and the changed-path audits
-pass, and the change proof succeeds. It commits and records the terminal
-entry. It never pushes. Publishing is separate, runs the gate against the
-exact head, and is the only thing that moves the shared branch (R22, R23).
-
-## When a quest cannot finish
-
-An honest stop is better than a false success. A quest that cannot proceed
-records why and who must decide; a quest whose premise is gone is superseded.
-Neither is a failure to hide.
+When an input is missing, record why, the actual next owner and action. A
+pending run needs its request or run id, revision, workload, status and an
+owner or mechanism that will observe and resume it. If none exists, report the
+pending action; do not claim background execution. Unavailable measurement is
+not exhaustion. Record `exhausted` only when no honest remaining move exists,
+or `superseded` when the sealed premise is gone.

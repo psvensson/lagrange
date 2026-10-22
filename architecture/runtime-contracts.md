@@ -3,7 +3,7 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Runtime, control-plane, data, cache and transport
@@ -27,7 +27,10 @@ Do not use this file for Quest workflow, roadmap scope, or style-only rules.
 
 ## Owner And Path Detail
 
-One semantic owner per concern remains the root rule.
+One semantic owner per concern remains the root rule. Logical ownership does not
+require a new component, lifecycle or asynchronous handoff for each concern.
+Prefer the existing owner when it can carry the responsibility without competing
+authority.
 
 Required runtime patterns:
 
@@ -40,6 +43,13 @@ Required runtime patterns:
    decision path.
 5. A transitional delegator must have a removal task, target owner, and
    structural guard preventing new callers from binding to it.
+6. A permanent ingress or encoding adapter may translate representation under
+   the owner's declared contract. This is distinct from a transitional delegator:
+   it has a continuing boundary responsibility, not a second semantic decision.
+7. Conversion preserves identity and generation domains, remaining deadline
+   budget, typed outcomes, durable obligations and recovery meaning. An adapter
+   cannot remint authority, reset a deadline, drop retry debt or reinterpret an
+   unavailable owner as success or absence.
 
 Forbidden runtime patterns:
 

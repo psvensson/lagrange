@@ -7,8 +7,7 @@ requires:
 
 # AGENTS
 
-This repository uses the **Quest** workflow. This file is the single steering
-entry point and the only document that prescribes a load order.
+This is the single steering entry point and load order for the **Quest** workflow.
 
 ## Steering Load Order
 
@@ -19,16 +18,16 @@ entry point and the only document that prescribes a load order.
    the work touches. Nothing else is read by default, and no rule holds the
    detail its owner holds.
 
-That is the whole always-loaded surface. Every other document is conditional
-material the router names, or an owner's own authority.
+Only this file, the rules and router load by default. On starting or resuming,
+identify the rule-set revision and source commit; reconcile older handoffs with
+the current owners before continuing.
 
 ## Choose The Work Unit
 
-Create a Quest for work likely to need more than one measured attempt, or for a
-change to an owner-boundary contract. A single-sitting fix, documentation edit,
-or mechanical change with an obvious proof may be done and committed directly.
-The binding threshold is in
-[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
+Create a Quest for work likely to need more than one measured attempt or to change
+an owner-boundary contract. A single-sitting fix, documentation edit or mechanical
+change with an obvious proof may be committed directly; see the binding threshold
+in [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
 
 ## Quest Happy Path
 
@@ -39,13 +38,17 @@ node scripts/solve.js probe --id <id>
 node scripts/solve.js land --id <id>       # guards, npm test, commit; never pushes
 ```
 
-A quest is `solve/quests/<id>/quest.json` (statement, epic, `doneWhen`
-probe) plus an append-only `log.ndjson` of findings, attempts, verifications
-and one terminal entry. Stop for exactly four owner decisions: judgment,
-independent verification, audit repair, or terminal landing. Source changes
-require an independent verifier (`note --verification ... --verifier
-subagent:<id> --verdict approve`). Solver commits only reviewed Quest scope
-and never pushes.
+A Quest has `solve/quests/<id>/quest.json` (statement, epic or `class: fix`, `doneWhen`)
+and an append-only `log.ndjson` of findings, attempts, verifications and a terminal
+entry. Assigned agents own judgment, independent verification, audit repair and
+landing within existing authority. Ask the user only for a missing decision or
+authority; the workflow owner defines continuation responsibilities. Source changes
+require independent verification (`note --verification ... --verifier subagent:<id>
+--verdict approve`). Solver commits only reviewed Quest scope and never pushes.
+
+A bounded repair, a representative service milestone and full release acceptance
+are separate claims. Record the remaining service blocker after a repair closes;
+do not enlarge the repair merely to make the whole milestone green.
 
 After every intended Quest commit has landed, publish the exact committed HEAD:
 
@@ -53,13 +56,9 @@ After every intended Quest commit has landed, publish the exact committed HEAD:
 npm run publish
 ```
 
-The publisher gates a clean temporary worktree, writes a HEAD-bound receipt,
-checks fast-forward eligibility and the remote SHA, and never stages, commits,
-amends, force-pushes, or sweeps the caller's worktree. Its one rewrite: when
-origin/main advanced only by inert data commits (the nightly formation trend),
-it rebases the local commits over them and publishes the rebased HEAD.
-
-A GitHub-merged head has no corpus proof until `npm run publish -- --post-merge <sha>` runs; prefer the publisher (runbook).
+The publisher verifies a clean candidate and remote eligibility, then records
+HEAD-bound evidence. Its inert-data rebase exception and GitHub post-merge proof
+requirements are owned by the [runbook](docs/development/solver-runbook.md).
 
 ## Find The Right Surface
 
@@ -71,9 +70,8 @@ A GitHub-merged head has no corpus proof until `npm run publish -- --post-merge 
 | Available project commands | `npm run commands` |
 | Open epics and quests | `node scripts/solve.js board` |
 
-Before writing an ad-hoc shell command for a repository task, look for the
-script that already does it: `npm run commands` is the curated quickstart and
-the generated tools index is the complete list.
+Before an ad-hoc repository command, check `npm run commands` and the complete
+generated tools index for an existing script.
 
 Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
 raising them; tighten a baseline when its checker prints the hint.

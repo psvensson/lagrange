@@ -24,6 +24,60 @@ authorizes:
 
 # Raft-rs full cutover
 
+## Current coordination summary
+
+This is the mutable index for this milestone. The agent holding the integration
+role maintains it using
+[`documentation-lifecycle.md`](../../docs/development/documentation-lifecycle.md).
+The contracts and immutable records it links remain the acceptance authorities.
+
+| Field | Current observation |
+| --- | --- |
+| Governing steering | Rule-set revision 4 in [`rule-set.json`](../../docs/steering/rule-set.json); identify the containing commit on resume with `git log -1 --format=%H -- docs/steering/rule-set.json` |
+| Last checked | 2026-10-22; source baseline `67c92b49629b5da765d19f8feaba1ff03427d28b`, read-only source and retained-record inspection during the coordinated steering revision |
+| Current bounded unit | [`steering-stabilization-20261022`](../quests/steering-stabilization-20261022/quest.json) updates operating instructions; it does not claim a runtime repair or milestone completion |
+| Integration responsibility | The coordinating agent for this revision; at runtime-work resumption, record the receiving integration agent and its source commit before assigning overlapping writes |
+| Verified construction fact | `PartitionService.createOperationPort` selects the rs-raft provider exclusively; message-group and generic replica defaults still use the legacy provider. Source inspection establishes reachability, not successful distributed execution |
+| First established acceptance blocker | Full-cutover evidence is incomplete: [`raft-rs-full-cutover.json`](../oracle/raft-rs-full-cutover.json) retains metric 8 and no terminal evidence. Its old transport status is not a fresh runtime diagnosis; the first causal failure of a current representative run has not been measured by this revision |
+| Next action | The integration agent reconciles current in-flight repairs and their exact commits/receipts, selects the smallest existing supported representative service configuration, and runs the next missing bounded proof under existing authority |
+| Current review/evidence index | [Revision 4 coverage and review](raft-rs-full-cutover/steering-revision-4-review.md); prior repair truth remains in each Quest's own record and log |
+
+Independent in-flight interactions may continue; this summary does not cancel,
+restart or absorb them. Count waiting review, proof and integration work before
+opening another competing repair. Use one writer per changing interaction and
+one integration role, following
+[`quest-subagents.md`](../../docs/development/quest-subagents.md).
+
+## Representative service objective
+
+The immediate product objective is a stable distributed public service through
+the supported WASI service path and its required failure domains. Use the
+smallest useful configuration already supported by the current product; record
+its exact workload, ingress, topology, source and environment in existing
+evidence. Required scenarios exercise public requests, acknowledged state,
+restart and recovery, leader change and resource pressure as applicable to the
+declared service contract. Report safety, recovery progress and resource behavior
+separately. A single process substitute or an internal helper test cannot prove
+the distributed public outcome.
+
+The configuration is an evidence choice, not a new stabilization mode. Compare
+evidenced costs before excluding scope; safe exclusion must cover ingress,
+admission, internal/background paths and retained durable debt. Product promises
+change only with the user's decision. The
+[`roadmap policy`](../../docs/development/roadmap-policy.md) owns that tradeoff.
+
+An independently accepted bounded repair may integrate while this service
+scenario remains blocked by another cause. Keep its closure, the representative
+service result and R8/full-core acceptance separate. This revision does not
+change R8, the zero-active-legacy requirement, or the Q0-before-Q1 dependency.
+
+Evaluate the operating changes using one current or recent cycle's existing
+timestamps: diagnosis, review, queue wait, result availability, integration and
+context recovery. Review after the first representative run and around ten
+working days of use. That interval and the initial WIP limit are heuristics;
+reduced cycle time and fewer repeated causal failures are hypotheses to measure,
+not claimed gains or promised completion dates.
+
 ## Owner decision
 
 Lagrange is no longer pursuing a long-lived dual-backend architecture.
