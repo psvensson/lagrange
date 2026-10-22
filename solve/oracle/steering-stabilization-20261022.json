@@ -1,0 +1,22 @@
+{
+  "metric": 0,
+  "target": 0,
+  "claim": "Coordinated steering coverage and consistency only; no product, stable-core or release certification.",
+  "baseCommit": "67c92b49629b5da765d19f8feaba1ff03427d28b",
+  "reviewRecord": "solve/epics/raft-rs-full-cutover/steering-revision-4-review.md",
+  "unresolved": [],
+  "status": "steering_coverage_and_consistency_verified",
+  "resolvedAreas": [
+    "governing-authority",
+    "workflow",
+    "review-and-proof",
+    "lab-and-continuation",
+    "roadmap-and-current-summary",
+    "enforcement-and-validation"
+  ],
+  "reviewer": "subagent:steering_audit_review",
+  "instructionContentSha256": "de1f46c9f57e40678893858634285b45b80ec55d8c7f2e9d3afd15b2ea10f178",
+  "instructionPathCount": 48,
+  "limits": "Normal landing/publication gates are still required; no runtime, service, corpus or release acceptance is established.",
+  "initialReviewedDiffSha256": "3b100622756b8a15799c01a279e37a44fce68db8dc47706b3a6fb4c627a46903"
+}

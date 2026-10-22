@@ -291,6 +291,12 @@ own contracts.
 
 ## Operational Analysis
 
+The retry and recoverable-wake invariants below govern runtime progression.
+They do not prescribe a number of engineering attempts, require a user decision
+after repeated symptoms, or create a new work unit automatically. Engineering
+reassessment follows the workflow owner and the actual evidence; runtime retry
+budgets and nonpromotion guarantees remain unchanged.
+
 FMEA/STPA treat the architecture itself as the controller for the core logic
 shape. The unsafe actions are accepting owner-flow drift without model updates
 and allowing observer-only or degraded evidence to become readiness authority.

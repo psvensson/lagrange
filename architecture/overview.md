@@ -44,19 +44,34 @@ A scalable distributed database where:
 ## Core Principles
 
 1. **Tables as the Universal Storage Model** - System metadata and user data are stored in tables
-2. **Partitions as Raft Groups** - Each partition is a Raft consensus group behind the partition Raft provider/operation-port boundary. The current production default remains Liferaft; the Rust raft-rs/WASM backend has landed behind the same partition seam but is not yet the production-default transport cutover.
+2. **Partitions as Raft Groups** - Each partition is a Raft consensus group. `PartitionService` constructs its frozen operation port exclusively through the Rust raft-rs/WASM provider and refuses retired backend-selection and provider-injection options. Message-group and generic replica paths still retain the legacy consensus backend, so the system-wide cutover remains incomplete.
 3. **System Cache as Canonical Observational Read Model** - In-memory cache of
    CDC-propagated system tables, updated by CDC events. It is the steady-state
    read model for propagated metadata, but it is not a second completion oracle
    for topology workflows. Non-propagated tables remain queryable from their
    owning partition via SQL.
 4. **Message Router for All Communication** - All messages (local and remote) route through MessageRouter
-5. **No Fallback Code Paths** - Single code path for any given logic; no legacy or alternative mechanisms
+5. **No Fallback Code Paths** - One authoritative path for each semantic decision; unavailable owners produce explicit outcomes, never replacement authority in a caller
 6. **System Cache Read Policy** - The system cache is strictly read-only from
    the consumer perspective (updated only by CDC events). Components may read
    directly from the cache for performance-critical paths. No component may
    write to the cache outside the CDC event path (plus bootstrap hydration).
-7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one owning component
+7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one semantic owner
+
+An owner is a responsibility boundary, not a requirement for a new class,
+service, queue or asynchronous handoff. Functions and modules may implement
+separate responsibilities within an existing owner. Removing duplicate decisions,
+state or handoffs is useful when their equivalence is demonstrated; moving code
+or adding a component does not by itself improve ownership.
+
+Protocol adapters and encodings may normalize requests and project owner
+outcomes. They preserve meaning, identity and generation domains, original
+deadlines, typed unavailability and retained durable obligations. They cannot
+manufacture authority or choose a competing semantic execution path. The SQL,
+admin and WASM ingress adapters below follow this distinction. Diagnose the first
+causal divergence before assigning a failure to an owner or interaction; a broken
+fixture or observation is not evidence of a runtime architecture defect by itself.
+
 ## Single-Path Contract
 
 To prevent overlap and contradictory runtime behavior:

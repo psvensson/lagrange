@@ -20,10 +20,10 @@ node scripts/solve.js probe --id <id>       # measures doneWhen, changes nothing
 node scripts/solve.js land  --id <id>       # guards, tests, commits; never pushes
 ```
 
-Two more exist: `evidence add <path> --quest <id>` uploads a file too large for
-git and records it only after re-download and re-hash, and `board` lists open
-epics and quests. There are no others; anything else you have seen written down
-is a retired v1 operation.
+`evidence add <path> --id <id>` uploads a file too large for git and records it
+only after re-download and re-hash; `board` lists open epics and quests.
+Consult the generated reference for supported operations. Older frontier,
+strategy-rung, `run`/`step` and generic executor instructions are retired.
 
 `note` takes exactly one of `--finding`, `--attempt`, `--verification`,
 `--blocked`, `--exhausted` or `--superseded`. A verification also takes
@@ -32,9 +32,18 @@ cannot land without an approving verification newer than the last attempt.
 
 ## After A Rejection
 
-Record the rejection as a verification with `--verdict reject`, repair, then
-record the next attempt with `note --attempt`. A rejection stands until an
-attempt is newer than it; there is no separate corrective verb.
+Agree the candidate, affected interaction, acceptance and review scope before
+review. The reviewer returns every reachable material finding together,
+separating blocking defects from optional improvements and unrelated work.
+Record rejection with `--verdict reject`, answer the complete set, and record
+the next attempt with `note --attempt`. A rejection stands until an attempt
+is newer than it; source landing then needs current independent approval.
+
+Re-review the repairs and what they invalidate. Preserve applicable unaffected
+findings and evidence; do not restart the entire review or widen its acceptance
+for each round. A newly discovered concrete safety defect still needs a
+disposition. Repeated rejection is a reason to reassess the design, evidence,
+owner or review scope, without a fixed round count or an automatic human stop.
 
 ## When Landing Refuses
 
@@ -44,51 +53,107 @@ attempt is newer than it; there is no separate corrective verb.
 | --- | --- |
 | `doneWhen is not green` | the sealed probe does not yet measure success |
 | `doneWhen differs from the sealed probe` | the acceptance criterion was edited after sealing; it is immutable, so supersede the quest instead |
-| `outside the scope of <epic>` | a staged path is not authorised by the epic; widen the epic explicitly or leave the change out |
-| a verification entry is required | an independent verifier has not approved this tree |
+| `paths outside epic ... authorizes` | a changed path is not authorised by the epic; record a justified scope decision under existing authority or leave it out; ask only if authority is missing |
+| a verification entry is required | source landing lacks the required current independent approval; the note must identify reviewed content and evidence |
 | `the newest verification is a rejection` | repair and record a newer attempt first |
+| altitude-check budget exceeded | more than three attempts since the last altitude check need a recorded reassessment before landing; this is not a human-approval gate |
 
 None of these is worked around. Each names the thing to fix.
 
 ## Deciding Without Asking
 
-Relocated from the retired always-load pack, whose "Default Posture: Autonomy"
-stated it. R16 says which actions need authority you do not already have.
-Everything outside that is autonomous: choose the obvious default, record a
-finding stating the choice and why, and keep going. Surface the decisions in
-the final report, not mid-run. Pausing on a question the repository, the quest
-or a sensible default already answers costs more than a recorded wrong guess
-about how, which the next attempt corrects.
+Existing authority in the session, quest and owning epic persists. The author
+chooses routine diagnosis and implementation; an independent reviewer verifies;
+the integration owner coordinates proof, acceptance and authorized landing or
+publication. Make reasonable implementation choices and record material ones
+as findings. Audit repair, review rejection or terminal landing does not by
+itself transfer judgment to the user.
 
-Questioning a quest's altitude is not pausing and is not moving goalposts. When
-the evidence says the real lever is an owner boundary the sealed scope cannot
-touch, record the insight, end the quest honestly, and author the higher one.
+Ask the user when a product tradeoff, genuine scope change or outward action
+needs authority that is absent. First resolve what existing decisions and
+evidence already allow, then present the concrete remaining choice. Do not
+ask again merely because a new agent or session takes over.
+
+Reassess the lever when evidence stops supporting it: inspect the failing
+interaction, ruled-out causes and missing observation before another patch.
+Record an `altitude-check` finding when the existing landing guard requires
+it (more than three attempts since the last such finding), or earlier when
+useful. Repetition alone neither requires a new quest nor authorizes rewriting
+its acceptance. A changed scope needs an explicit decision; a changed sealed
+premise needs explicit supersession. Route a separate owner defect to its own
+unit instead of enlarging the current repair indefinitely.
+
+## Repair Acceptance And Current State
+
+Before sealing, distinguish the bounded repair from the distributed service
+milestone and from release acceptance. The repair's reproducer and affected
+interaction determine its acceptance; the milestone keeps its public scenario
+requirements; the publisher and release process keep their exact-candidate
+gates. A repair that satisfies its sealed acceptance can close and integrate
+while a wider scenario remains red for a different recorded cause. Link that
+remaining cause and its owner. Do not reinterpret an already-sealed broad
+predicate as a local one to declare success.
+
+The integration owner keeps one mutable current summary in the existing epic.
+Link the accepted baseline and evidence, current blocker and interaction owner,
+work awaiting review/test/integration, and next action. Quest logs retain the
+append-only history; contracts and receipts retain acceptance authority. This
+summary replaces duplicate status prose, not those records. Start a later
+session from it and follow only the links needed for the next action.
+A standalone `class: fix` uses its existing quest record and log; do not create
+an epic solely to hold a summary.
 
 ## Commit On Completion
-
-Relocated from the retired always-load pack, whose "Default Posture: Commit On
-Completion" and must-not #16 stated it. It applies to ad-hoc work as much as to
-a quest, so it needs a home that ad-hoc work reaches.
 
 When a unit of work is complete and coherent - a quest terminal, a bug fix, a
 docs or tooling change, anything you would report as done - commit it. Do not
 leave finished work sitting uncommitted waiting to be asked. Committing
 completed work is durably authorised; a never-before-authorised push or publish
-is not, and stays an authority boundary under R16.
+is not, and stays an authority boundary under R26.
 
 Scope every commit to the work at hand, never sweeping unrelated dirty worktree
-entries. For a quest the landing guard already does this by staging only the
-quest's own scope; ad-hoc work has to do it deliberately.
+entries. `land` considers the changed paths in the worktree and enforces the
+epic's authorised scope; keep unrelated work isolated rather than assuming it
+will be ignored. Ad-hoc commits need the same deliberate scope control.
 
 ## Choosing What To Run In Parallel
 
-Also relocated from the retired pack. Independent sub-tasks run concurrently:
-batch independent reads and searches into one step, verify N independent
-findings with N concurrent verifiers, and use the workflow harness for broad
-mechanical sweeps. Serialize only when outputs feed each other or when workers
-would mutate the same files, in which case isolate them in worktrees or order
-the writes. Parallelism applies to the work, never to the proof: verification,
-measurement and one-quest-per-commit stay serial.
+Use one writer per changing interaction and one integration owner. An
+interaction includes both sides of a coupled owner boundary and its contract;
+separate files or worktrees alone do not make it independent. Investigations,
+focused reviews and independent interactions can proceed concurrently. Count
+items awaiting review, test and integration as WIP before admitting more work
+that competes for the same owner or scarce runner. There is no fixed agent
+count or project-wide ban on independent work.
+
+Proof can run concurrently when its inputs and required capacity are independent.
+Sequence dependent changes, measurements that share mutable state, and final
+integration of one candidate. Consolidate reviewer findings before repair, and
+prove the composed candidate through its existing interaction and publication
+gates. Prefer completing an accepted repair over accumulating more unintegrated
+patches on the same interaction.
+
+## Proof Cost And Waiting For Capacity
+
+Use the smallest existing proof that discriminates the suspected owner defect,
+then the affected interaction proof. Reuse accepted evidence only when the
+existing selection and receipt rules establish its applicability, including
+dependencies, callers, configuration and environment. A passing old run or
+unchanged file name is insufficient. Run the missing or invalidated proof;
+retain exact-candidate final gates and the milestone's public scenario checks.
+
+Shared-runner waits are work state, not completion. Record the actual submitted
+request or run id, revision, workload, status and owner or mechanism that will
+observe completion and resume. If no request was accepted, say "not submitted"
+and name the next action. If there is no active continuation, say so. `probe`
+reads evidence and cannot submit or resume a run. Do not invent a queue, status
+or background supervisor that the current tools do not implement.
+
+When delays recur, retain request, start and finish times from existing run
+artifacts and review/integration records. Use those timings to distinguish
+waiting for capacity, execution, repeated review and integration delay before
+changing scheduling or buying more capacity. Keep this evidence with the
+current work rather than creating a second tracking system.
 
 ## Authorizing An Outward Action
 
@@ -259,5 +324,5 @@ would change every SHA the quest records cite (`draftedAtCommit`, `sealedAt`,
 `changeRef`) and needs a commit-map pass first (design note
 `solve/epics/solve-v2/design.md`, section 5).
 
-Upload evidence with `node scripts/solve.js evidence add <path> --quest <id>`;
+Upload evidence with `node scripts/solve.js evidence add <path> --id <id>`;
 the record is written only after the asset is downloaded again and re-hashed.

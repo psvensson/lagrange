@@ -1,14 +1,12 @@
 ---
 audience: agent
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-22
 ---
 
 # Owner router
 
-Every rule in [`rules.md`](rules.md) names an owner key. This table is the
-only place a key becomes a path, so renaming or replacing an implementation
-changes one row here and no rule. Consult an owner when the work touches it;
-nothing below is read by default.
+This table maps each [`rules.md`](rules.md) owner key to its authority; changing
+an implementation changes its row, not the rule. Consult only relevant owners.
 
 | Key | Authority | Consult when |
 | --- | --- | --- |
@@ -20,7 +18,7 @@ nothing below is read by default.
 | `sealed-acceptance` | the quest's own `quest.json` and [`solve-commands.md`](generated/solve-commands.md) | sealing a claim, or judging whether evidence proves one |
 | `quest-lifecycle` | the landing guard in [`guards.js`](../../scripts/solve/guards.js), plus [`solve-commands.md`](generated/solve-commands.md) and [`solver-quests.md`](workflow-guidelines/solver-quests.md) | starting, recording, scoping or landing a unit of work |
 | `terminal-proof` | `npm run audit:closed-quest-shape` | closing a unit, or deciding what a closed unit keeps |
-| `record-history` | `npm run audit:quest-log-append-only` | correcting something already recorded |
+| `record-history` | `npm run audit:quest-log-append-only` and [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) | correcting recorded evidence or maintaining its current summary |
 | `publication` | [`solver-runbook.md`](../development/solver-runbook.md) | landing, publishing, or repairing a red shared branch |
 | `action-authority` | [`action-authority.js`](../../scripts/action-authority.js) | taking an action that cannot be taken back, or that leaves this repository |
 | `solve-probes` | [`probes.js`](../../scripts/solve/probes.js) and [`probe-guard.js`](../../src/test-helpers/probe-guard.js) | writing a `doneWhen` probe, or a harness that must refuse to run under one |
@@ -28,10 +26,8 @@ nothing below is read by default.
 
 ## Conditional material
 
-Loaded only for the work named, never by default. Owner detail lives with its
-owner, so these paths sit under `docs/development`, `architecture`, `test/` and
-the source tree rather than here. Which of them a public reader may be sent to
-is owned by `npm run audit:doc-audience`, not by this table.
+Load these owners only for the work named. `npm run audit:doc-audience` owns
+which paths a public reader may be sent to.
 
 | Work | Read |
 | --- | --- |
@@ -43,17 +39,15 @@ is owned by `npm run audit:doc-audience`, not by this table.
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording, closing or auditing a quest's artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md), [`quest-lifecycle.md`](../development/quest-lifecycle.md), [`quest-closure.md`](../development/quest-closure.md), [`quest-validators.md`](../development/quest-validators.md), [`quest-subagents.md`](../development/quest-subagents.md) |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
+| resuming or coordinating a service milestone | the active epic's current summary, using [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) and [`quest-subagents.md`](../development/quest-subagents.md) |
+| choosing a physical test runner or continuing a queued run | [`home-lab.md`](../development/home-lab.md) |
 
 ## Known owner gap
 
-Every outward action performed by this repository's own code now asks that
-owner before acting, and an action nobody has registered is refused. What sits
-outside it is the release workflow and the push hook: pushing a container image
-and creating a public release happen in workflow YAML, which cannot ask a
-module, so they are registered but unasked; the pre-push hook decides for
-itself whether the shared branch is red; and nothing refuses a force push or a
-release-tag push, which is true because no code here performs either rather
-than because anything would stop it.
+Repository code asks the action owner and refuses unregistered actions. Workflow
+YAML's container publication and public release actions remain registered but
+unasked; the push hook decides shared-branch redness separately. No code here
+performs force or release-tag pushes, and no guard refuses them.
 
 ## When authorities disagree
 
@@ -66,3 +60,7 @@ the code.
 
 Do not average two authorities or split the difference. State the
 contradiction where the work is recorded, then follow the order above.
+
+Current source and receipts establish what exists and what was measured. Steering
+establishes required conduct and acceptance. A policy revision does not make an
+unimplemented capability available or a missing proof green.
