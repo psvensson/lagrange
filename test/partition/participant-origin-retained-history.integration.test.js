@@ -5,7 +5,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {isDeepStrictEqual} from 'node:util';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -19,6 +18,7 @@ import {PARTICIPANT_TRANSACTION_COMMAND as COMMAND,
   PARTICIPANT_ORIGIN_HISTORY_STATE as ORIGIN} from
   '../../src/partition/partition-participant-transaction-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_MESSAGE_TYPE, RAFT_RS_TRANSPORT_PROTOCOL} from
@@ -115,7 +115,8 @@ function settledGroup(group, members, partitionId, observation) {
     native.appliedIndex === first.appliedIndex && native.commitIndex === first.appliedIndex &&
     native.lastIndex === first.appliedIndex &&
     native.record.hardState.term === first.record.hardState.term &&
-    isDeepStrictEqual(native.record.confState, first.record.confState)) ? first : null;
+    raftRsConfStateKey(native.record.confState) ===
+      raftRsConfStateKey(first.record.confState)) ? first : null;
 }
 
 async function closeServices(services, pending, directory) {

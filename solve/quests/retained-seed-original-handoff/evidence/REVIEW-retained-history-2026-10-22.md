@@ -1155,3 +1155,157 @@ source/test/contract file, Git object, GitHub object or lab request was
 mutated, and no runtime or static gate was executed by the reviewer. The
 preceding 56,987 bytes are unchanged with SHA-256
 `acede71deb8b5671375a92e7e7dfbf4db8a21f7dab38f9afd5501533719dd608`.
+
+## Entry 8: measured RF3 oracle defect and canonical identity correction - APPROVE; runtime remains RED
+
+### Disposition and exact diagnostic source
+
+**CONFIRM the ordered-configuration comparison as the sole false conjunct in
+#842's captured last predicate evaluation; APPROVE the bounded witness
+correction and its attempt note.** No production correction or complete
+runtime pass is claimed. This finding directly attributes the observed
+diagnostic evaluation. The earlier #835 run did not capture its values and
+remains separate historical evidence; its exact false conjunct is not
+retrospectively proved by this later run.
+
+The diagnostic ran exact commit
+`164479277f58f6075e0c6bfd214ba3d2654da3db`, repository tree
+`4042eab2ecff6e922af97ad5f9c415efa07c0051`. The reviewer independently read
+that commit's integration-test blob: it is exactly the Entry 7 approved
+15,611-byte diagnostic witness, SHA-256
+`46b553c0c016456a14a845868ae622358a6b662745dc3619ddc5634ff6252ea0`,
+Git blob `f20f4fc235a1ee7637285f3c80d4efe286b49deb`. The diagnostic src tree
+remains `d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba`, identical to cb822d6f.
+The current production worktree also has no diff from cb822d6f. The prior
+production review is preserved without repeating or widening it here.
+
+### Terminal result and independent complete-log binding
+
+The reviewer directly fetched
+[#842's terminal receipt](https://github.com/psvensson/lagrange-lab/issues/842#issuecomment-6346735121)
+and [#848's evidence receipt](https://github.com/psvensson/lagrange-lab/issues/848#issuecomment-6346763568).
+Their complete decoded objects equal the corresponding retained measurement
+objects. The local raw log equals the independently fetched evidence text
+byte-for-byte.
+
+Request `f50591d655414733be82f4c4903dc287` completed on `tv-dator` at
+`2026-10-22T17:14:45.361Z`, outcome FAIL and exit 1, naming the exact diagnostic
+source above. The worker reports one selected file, two tests, one pass, one
+failure, and zero cancellations, skips or todos. Its completed_test_files
+field is null; the emitted runner output supplies the single failing file
+verdict. Execution, thermal and container scopes are all closed.
+
+The complete output observes Node v22.23.2 and npm 10.9.8, successful npm ci,
+and the project `npm run test:file --` invocation of only the existing
+two-case integration file. It records the normal thermal hold before test
+execution and then an allowed temperature; it does not show a test timeout
+or thermal abort. RF1 passes. RF3 fails its initial settled-state assertion
+at test line 214 with ERR_ASSERTION, expected true and actual false, before
+ENABLE, commit-carrier interception, or any RF3 origin transition is reached.
+
+The controller log is exactly 4,148 bytes, SHA-256
+`8629963aae172e2b2e822cfc4d908f7c996307453bd3cc4daae66281c689df38`.
+Evidence #848 returns all 4,148 bytes at offset zero with the same chunk hash.
+The reviewer independently removed the exact `[tv-dator] ` controller prefix
+and its single added trailing LF, recovering the complete 4,136-byte worker
+log, SHA-256
+`9c026fea331428be27d1c0c794b23fbd2de172032f4a8436e7dc2ea8a5e27cda`.
+Both hashes and lengths match the terminal receipt; log_truncated is false.
+No runtime command was rerun during this verification.
+
+### What the captured predicate values establish
+
+The reviewer parsed the JSON views directly from the raw failure message and
+independently evaluated every original conjunct using those values. The
+result equals the retained measurement's lastPredicateViews and
+lastPredicateChecks. The diagnostic stores the actual views before evaluating
+the unchanged predicate, so this is the final evaluated sample rather than
+a later database observation.
+
+| Replica | Applied / commit / last | Term | Origin state | Coverage | Ordered ConfState equal to r1 | Canonical role identity equal to r1 |
+| --- | --- | --- | --- | --- | --- | --- |
+| r1 | 3 / 3 / 3 | 1 | pre-origin | complete | true | true |
+| r2 | 3 / 3 / 3 | 1 | pre-origin | complete | true | true |
+| r3 | 3 / 3 / 3 | 1 | pre-origin | complete | false | true |
+
+The native and origin coverage fields both read complete. For r1 and r2,
+voters are ordered as
+`[4026241048186186741, 625587603728697910, 8106538631273010085]`.
+For r3 they are ordered as
+`[625587603728697910, 4026241048186186741, 8106538631273010085]`.
+These identifiers are exact decimal strings in the raw log. Learners,
+outgoing voters and next learners are empty on every replica; autoLeave is
+false on every replica. Only the first two voter positions differ. Hard-state
+vote values need not be equal and are not a conjunct of the original setup
+predicate; hard-state terms are equal as required.
+
+Thus the observation is not an origin-state, snapshot-coverage, frontier,
+term or membership-role mismatch. The ordered ConfState test is the sole
+false conjunct in the captured evaluation. This is a measured witness
+identity defect at that boundary. It does not demonstrate a retained-origin
+production defect, and the untouched RF3 transition assertions remain
+unmeasured. The sample does not provide an observation history for every
+earlier poll or values for #835.
+
+### Exact correction and oracle-strength review
+
+The complete working correction removes the unused node:util
+isDeepStrictEqual import, imports the existing raftRsConfStateKey owner, and
+replaces only the configuration conjunct with equality of the two canonical
+keys. The reviewer reconstructed the current file from the exact 16447927
+blob using those three text replacements; the result matches the current
+file byte-for-byte. No other integration-test bytes changed.
+
+The existing owner at src/raft/raft-rs-conf-state-key.js:4-12 preserves the
+distinction among voters, outgoing voters, learners and next learners and
+includes autoLeave. It makes array order irrelevant without merging roles,
+discarding members or consulting cache projections. The native history
+reader still validates the configuration before this comparison; the witness
+does not substitute canonical equality for that validation or rewrite any
+persisted data. No new configuration implementation or fallback is added.
+
+Every origin, applied/commit/last frontier and term conjunct remains exact.
+The diagnostic capture/message, entire RF1 case, all RF3 code after the setup
+check, finite deadlines, fault and carrier controls, and actual native
+history/replay assertions remain unchanged. The admitted-group fixture and
+production source are unchanged. This is a correction to the witness's use
+of existing configuration authority, not a relaxation of the requirement for
+one settled native configuration and frontier.
+
+**APPROVE** this exact 15,673-byte corrected witness, SHA-256
+`667cca126f8a6d36fea0b9aadc7a529740e67f1e6b6db025f2b185ad190403ca`,
+Git blob `232d8daccc3e00a04b6dba8594bccb8fc64a1993`, and
+ATTEMPT-retained-rf3-configuration-identity-2026-10-22.md. The attempt correctly
+requires the original fourteen-file runtime selection and applicable
+metadata/fast-static checks against one frozen corrected revision. The RF3
+locally-uncommitted, committed-pending and normal replay observations must
+actually engage and pass. No corrected-source commit or corrected runtime
+result is asserted by this entry; those require their own later binding.
+
+### Reviewed artifact bindings and preserved limits
+
+The following SHA-256 values were independently computed over complete raw
+bytes without normalization. Git blob identities use git hash-object without
+writing an object. The source comparison and exact-diff reconstruction were
+read-only; no application runtime or test was executed locally.
+
+| Artifact under evidence/ | Bytes | SHA-256 |
+| --- | ---: | --- |
+| REQUEST-retained-rf3-diagnostic-16447927-2026-10-22.json | 4,621 | `63f588645974486ad5497d170eeb3051d2162653d97061e10ecb34e7e1498faf` |
+| RUNTIME-retained-rf3-diagnostic-16447927-2026-10-22.txt | 4,148 | `8629963aae172e2b2e822cfc4d908f7c996307453bd3cc4daae66281c689df38` |
+| MEASUREMENT-retained-rf3-diagnostic-16447927-2026-10-22.json | 16,840 | `2a15e8987af8294df17866e4cdd3482b5a796f59ff3e909aa5cfdb2d79709839` |
+| ATTEMPT-retained-rf3-configuration-identity-2026-10-22.md | 2,555 | `11c27093c034dd2f218d220980163900c2498f608b69d8fc827c441116a3d004` |
+
+#835 and #842 remain RED with their complete logs preserved. #820 remains a
+separate setup failure, and #821 remains a bounded static PASS on cb822d6f;
+it is not a static receipt for the corrected witness revision. Results from
+these revisions are not pooled into a new test total. The inherited source
+decision-audit refusal, all eight handoff receipts and the unavailable startup
+ceiling remain unchanged. This review grants no public startup, serving,
+transfer, publication, main merge or complete-cutover acceptance.
+
+Only this append-only review artifact was changed by the reviewer. No
+production/test/contract bytes, Git objects, GitHub objects or lab requests
+were mutated by the reviewer. The preceding 71,426 bytes remain unchanged
+with SHA-256
+`5cf01392c0d21adc863463918eb03b466b289210a9d0b3a479eabe370e8479ab`.

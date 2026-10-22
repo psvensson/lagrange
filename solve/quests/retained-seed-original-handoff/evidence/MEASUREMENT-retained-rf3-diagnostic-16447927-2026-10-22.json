@@ -1,0 +1,324 @@
+{
+  "schema": "retained-history-rf3-diagnostic/v1",
+  "sourceSha": "164479277f58f6075e0c6bfd214ba3d2654da3db",
+  "issue": 842,
+  "request": {
+    "mode": "diagnostic",
+    "request": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "f50591d655414733be82f4c4903dc287",
+      "operation": "lab-work",
+      "created_at": "2026-10-22T17:10:56.139Z",
+      "expires_at": "2026-10-22T19:10:56.139Z",
+      "delivery": {
+        "protocol": "harnessd-lab-work-delivery-v1",
+        "requestId": "f50591d6-5541-4733-be82-f4c4903dc287",
+        "sha256": "af824cb8112f51fbe7a0b9a27c8f9e89d9193d000cb964622ebc045e1eac0dba",
+        "totalBytes": 1024,
+        "partCount": 1
+      }
+    },
+    "intent": {
+      "protocol": "harnessd-lab-work-v1",
+      "requestId": "f50591d6-5541-4733-be82-f4c4903dc287",
+      "poolId": "default",
+      "principalId": "github:psvensson",
+      "issuedAtMs": 1792689056139,
+      "expiresAtMs": 1792696256139,
+      "work": {
+        "driver": "tests",
+        "spec": {
+          "cwd": ".",
+          "setup": [
+            [
+              "/bin/bash",
+              "-c",
+              "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci"
+            ]
+          ],
+          "argv": [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"",
+            "retained-history"
+          ],
+          "tests": [
+            "test/partition/participant-origin-retained-history.integration.test.js"
+          ]
+        },
+        "source": {
+          "repo": "psvensson/lagrange",
+          "ref": "refs/heads/work/original-retained-rf3-diagnostic-20261022",
+          "sha": "164479277f58f6075e0c6bfd214ba3d2654da3db"
+        },
+        "hosts": {
+          "count": 1,
+          "prefer": [
+            "tv-dator"
+          ],
+          "requirements": [
+            "node",
+            "shell"
+          ]
+        },
+        "timeoutSeconds": 1800
+      }
+    },
+    "payload": {
+      "protocol": "harnessd-lab-work-part-v1",
+      "requestId": "f50591d6-5541-4733-be82-f4c4903dc287",
+      "sha256": "af824cb8112f51fbe7a0b9a27c8f9e89d9193d000cb964622ebc045e1eac0dba",
+      "part": {
+        "index": 0,
+        "sha256": "af824cb8112f51fbe7a0b9a27c8f9e89d9193d000cb964622ebc045e1eac0dba",
+        "data": "eyJleHBpcmVzQXRNcyI6MTc5MjY5NjI1NjEzOSwiaXNzdWVkQXRNcyI6MTc5MjY4OTA1NjEzOSwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiJmNTA1OTFkNi01NTQxLTQ3MzMtYmU4Mi1mNGM0OTAzZGMyODciLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL29yaWdpbmFsLXJldGFpbmVkLXJmMy1kaWFnbm9zdGljLTIwMjYxMDIyIiwicmVwbyI6InBzdmVuc3Nvbi9sYWdyYW5nZSIsInNoYSI6IjE2NDQ3OTI3N2Y1OGY2MDc1ZTBjNmJmZDIxNGJhM2QyNjU0ZGEzZGIifSwic3BlYyI6eyJhcmd2IjpbIi9iaW4vYmFzaCIsIi1jIiwic2V0IC1ldVxucmV0YWluZWRfbm9kZV9iaW49XCIkSE9NRS8ubnZtL3ZlcnNpb25zL25vZGUvdjIyLjIzLjIvYmluXCJcbnRlc3QgLXggXCIkcmV0YWluZWRfbm9kZV9iaW4vbm9kZVwiXG5leHBvcnQgUEFUSD1cIiRyZXRhaW5lZF9ub2RlX2JpbjokUEFUSFwiXG5leGVjIG5wbSBydW4gdGVzdDpmaWxlIC0tIFwiJEBcIiIsInJldGFpbmVkLWhpc3RvcnkiXSwiY3dkIjoiLiIsInNldHVwIjpbWyIvYmluL2Jhc2giLCItYyIsInNldCAtZXVcbnJldGFpbmVkX25vZGVfYmluPVwiJEhPTUUvLm52bS92ZXJzaW9ucy9ub2RlL3YyMi4yMy4yL2JpblwiXG50ZXN0IC14IFwiJHJldGFpbmVkX25vZGVfYmluL25vZGVcIlxuZXhwb3J0IFBBVEg9XCIkcmV0YWluZWRfbm9kZV9iaW46JFBBVEhcIlxubm9kZSAtLXZlcnNpb25cbm5wbSAtLXZlcnNpb25cbmV4ZWMgbnBtIGNpIl1dLCJ0ZXN0cyI6WyJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aWNpcGFudC1vcmlnaW4tcmV0YWluZWQtaGlzdG9yeS5pbnRlZ3JhdGlvbi50ZXN0LmpzIl19LCJ0aW1lb3V0U2Vjb25kcyI6MTgwMH19Cg=="
+      }
+    },
+    "sourceBinding": {
+      "commit": "164479277f58f6075e0c6bfd214ba3d2654da3db",
+      "tree": "4042eab2ecff6e922af97ad5f9c415efa07c0051",
+      "sourceTree": "d2ce2fdae880c6b2ec9c78fbcc03f164ec3213ba",
+      "testTree": "572717755805af5043fecb046afa3ec609bc5f11",
+      "localEquivalentCommit": "310daebca6e9639d9e9168d265873bad3cc67536"
+    },
+    "submission": {
+      "issue": 842,
+      "partCommentId": 6346657031,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/842"
+    },
+    "staticPreparation": {
+      "normalPrecommit": "PASS on unchanged staged diagnostic after canonical inventory and generated-test-metadata refresh",
+      "nodeOptions": "--max-old-space-size=6144",
+      "priorDefaultHeapAttempt": "OOM in check-duplication; preserved terminal tail and quest log",
+      "limit": "Test-only staged pass does not clear cb822d6f's three inherited source decision-boundary findings"
+    }
+  },
+  "completion": {
+    "comment": {
+      "id": 6346735121,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/842#issuecomment-6346735121"
+    },
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "f50591d655414733be82f4c4903dc287",
+      "request_sha256": "52a84e75bf37db1d2086827cfe7f0e95241cdde0d36d8a7fbf88049d4c8b33b3",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T17:14:45.517Z",
+      "result": {
+        "execution_scope_closed": true,
+        "exit_code": 1,
+        "finished_at": "2026-10-22T17:14:45.361Z",
+        "hosts": [
+          "tv-dator"
+        ],
+        "log_bytes": 4148,
+        "log_sha256": "8629963aae172e2b2e822cfc4d908f7c996307453bd3cc4daae66281c689df38",
+        "logical_request_id": "f50591d6-5541-4733-be82-f4c4903dc287",
+        "logs_are_worker_tails": true,
+        "operation": "lab-work",
+        "outcome": "FAIL",
+        "payload_sha256": "af824cb8112f51fbe7a0b9a27c8f9e89d9193d000cb964622ebc045e1eac0dba",
+        "reason": null,
+        "scope_closed": true,
+        "source_execution_started": true,
+        "source_sha": "164479277f58f6075e0c6bfd214ba3d2654da3db",
+        "worker_receipt_count": 1,
+        "worker_receipts_sha256": "b959307cab589a88725f47150169bbf9286df510e42846d048f5e618d17ec181",
+        "workers": {
+          "tv-dator": {
+            "containers_closed": true,
+            "driver_result": {
+              "completed_test_files": null,
+              "counters": {
+                "cancelled": 0,
+                "fail": 1,
+                "pass": 1,
+                "skipped": 0,
+                "tests": 2,
+                "todo": 0
+              },
+              "exit_code": 1,
+              "selected_test_files": 1
+            },
+            "execution_scope_closed": true,
+            "exit_code": 1,
+            "last_thermals": {
+              "cpu": 48,
+              "missing": [],
+              "ssd": 29.85,
+              "ssd_aux": 46.85
+            },
+            "log_bytes": 4136,
+            "log_sha256": "9c026fea331428be27d1c0c794b23fbd2de172032f4a8436e7dc2ea8a5e27cda",
+            "log_truncated": false,
+            "output_bytes": 4136,
+            "output_sha256": "9c026fea331428be27d1c0c794b23fbd2de172032f4a8436e7dc2ea8a5e27cda",
+            "reason": null,
+            "source_execution_started": true,
+            "state": "COMPLETE",
+            "thermal_scope_closed": true
+          }
+        }
+      }
+    }
+  },
+  "evidence": {
+    "request": {
+      "schema": "lagrange-lab-job/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "1fa94caca13b170cafeadfbe58188c92",
+      "operation": "evidence",
+      "created_at": "2026-10-22T17:16:06.140Z",
+      "expires_at": "2026-10-22T19:16:06.140Z",
+      "job_id": "f50591d655414733be82f4c4903dc287",
+      "offset": 0,
+      "length": 8000
+    },
+    "issue": 848,
+    "comment": {
+      "id": 6346763568,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/848#issuecomment-6346763568"
+    },
+    "receipt": {
+      "schema": "lagrange-lab-result/v1",
+      "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+      "request_id": "1fa94caca13b170cafeadfbe58188c92",
+      "request_sha256": "782fb5e37c57ec42c8cb5af2621fbbcccaef1d89a267ad2d760a515f9ec526e5",
+      "status": "COMPLETE",
+      "recorded_at": "2026-10-22T17:16:18.233Z",
+      "result": {
+        "chunk_sha256": "8629963aae172e2b2e822cfc4d908f7c996307453bd3cc4daae66281c689df38",
+        "job_id": "f50591d655414733be82f4c4903dc287",
+        "offset": 0,
+        "redacted": true,
+        "returned_bytes": 4148,
+        "text": "[tv-dator] v22.23.2\n10.9.8\nnpm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead\n\n> lagrange-server@0.2.6 prepare\n> node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"\n\n[hooks] Installed repo hooks at .githooks\n\nadded 1057 packages, and audited 1058 packages in 49s\n\n223 packages are looking for funding\n  run `npm fund` for details\n\n33 vulnerabilities (10 moderate, 21 high, 2 critical)\n\nTo address issues that do not require attention, run:\n  npm audit fix\n\nTo address all issues (including breaking changes), run:\n  npm audit fix --force\n\nRun `npm audit` for details.\nnpm notice\nnpm notice New major version of npm available! 10.9.8 -> 12.2.1\nnpm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1\nnpm notice To update run: npm install -g npm@12.2.1\nnpm notice\n\n> lagrange-server@0.2.6 test:file\n> node scripts/run-classified-test-files.js test/partition/participant-origin-retained-history.integration.test.js\n\n# test-files planned=1\nclassified lane exclusive: 1 file(s), jobs=1\nthermal: hold cpu 76C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1) - CPU package 76C >= 75C, waiting 30s (poll 1/20)\nthermal: ok cpu 49C (coretemp/Package id 0) nvme 45C (nvme/Sensor 1)\nnot ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 10955ms)\n# TAP assertions failed; test process exited 1\nTAP version 13\n# Subtest: a real committed ENABLE remains pending through cold inspection and replays its exact origin\nok 1 - a real committed ENABLE remains pending through cold inspection and replays its exact origin\n  ---\n  duration_ms: 108.761901\n  type: 'test'\n  ...\n# Subtest: one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay\nnot ok 2 - one real RF3 ENABLE is locally uncommitted then committed-pending before normal replay\n  ---\n  duration_ms: 10163.204219\n  type: 'test'\n  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/f50591d6-5541-4733-be82-f4c4903dc287/work/source/test/partition/participant-origin-retained-history.integration.test.js:204:1'\n  failureType: 'testCodeFailure'\n  error: |-\n    setup: all three replicas share one settled native frontier, term and configuration; [{\"replicaId\":\"retained-origin-rf3-r1\",\"appliedIndex\":\"3\",\"commitIndex\":\"3\",\"lastIndex\":\"3\",\"hardState\":{\"term\":\"1\",\"vote\":\"625587603728697910\",\"commit\":\"3\"},\"confState\":{\"voters\":[\"4026241048186186741\",\"625587603728697910\",\"8106538631273010085\"],\"learners\":[],\"votersOutgoing\":[],\"learnersNext\":[],\"autoLeave\":false},\"coverage\":\"complete\",\"originState\":\"pre-origin\",\"originCoverage\":\"complete\"},{\"replicaId\":\"retained-origin-rf3-r2\",\"appliedIndex\":\"3\",\"commitIndex\":\"3\",\"lastIndex\":\"3\",\"hardState\":{\"term\":\"1\",\"vote\":\"0\",\"commit\":\"3\"},\"confState\":{\"voters\":[\"4026241048186186741\",\"625587603728697910\",\"8106538631273010085\"],\"learners\":[],\"votersOutgoing\":[],\"learnersNext\":[],\"autoLeave\":false},\"coverage\":\"complete\",\"originState\":\"pre-origin\",\"originCoverage\":\"complete\"},{\"replicaId\":\"retained-origin-rf3-r3\",\"appliedIndex\":\"3\",\"commitIndex\":\"3\",\"lastIndex\":\"3\",\"hardState\":{\"term\":\"1\",\"vote\":\"0\",\"commit\":\"3\"},\"confState\":{\"voters\":[\"625587603728697910\",\"4026241048186186741\",\"8106538631273010085\"],\"learners\":[],\"votersOutgoing\":[],\"learnersNext\":[],\"autoLeave\":false},\"coverage\":\"complete\",\"originState\":\"pre-origin\",\"originCoverage\":\"complete\"}]\n    \n    false !== true\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: true\n  actual: false\n  operator: 'strictEqual'\n  stack: |-\n    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/f50591d6-5541-4733-be82-f4c4903dc287/work/source/test/partition/participant-origin-retained-history.integration.test.js:214:12)\n    async Test.run (node:internal/test_runner/test:1054:7)\n    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)\n  ...\n1..2\n# tests 2\n# suites 0\n# pass 1\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 10279.271706\n# time=10955ms\n# test-files total=1 pass=0 fail=1 assertions=2\n\n"
+      }
+    }
+  },
+  "verifiedLog": {
+    "path": "RUNTIME-retained-rf3-diagnostic-16447927-2026-10-22.txt",
+    "bytes": 4148,
+    "sha256": "8629963aae172e2b2e822cfc4d908f7c996307453bd3cc4daae66281c689df38",
+    "complete": true,
+    "workerBytes": 4136,
+    "workerSha256": "9c026fea331428be27d1c0c794b23fbd2de172032f4a8436e7dc2ea8a5e27cda"
+  },
+  "lastPredicateViews": [
+    {
+      "replicaId": "retained-origin-rf3-r1",
+      "appliedIndex": "3",
+      "commitIndex": "3",
+      "lastIndex": "3",
+      "hardState": {
+        "term": "1",
+        "vote": "625587603728697910",
+        "commit": "3"
+      },
+      "confState": {
+        "voters": [
+          "4026241048186186741",
+          "625587603728697910",
+          "8106538631273010085"
+        ],
+        "learners": [],
+        "votersOutgoing": [],
+        "learnersNext": [],
+        "autoLeave": false
+      },
+      "coverage": "complete",
+      "originState": "pre-origin",
+      "originCoverage": "complete"
+    },
+    {
+      "replicaId": "retained-origin-rf3-r2",
+      "appliedIndex": "3",
+      "commitIndex": "3",
+      "lastIndex": "3",
+      "hardState": {
+        "term": "1",
+        "vote": "0",
+        "commit": "3"
+      },
+      "confState": {
+        "voters": [
+          "4026241048186186741",
+          "625587603728697910",
+          "8106538631273010085"
+        ],
+        "learners": [],
+        "votersOutgoing": [],
+        "learnersNext": [],
+        "autoLeave": false
+      },
+      "coverage": "complete",
+      "originState": "pre-origin",
+      "originCoverage": "complete"
+    },
+    {
+      "replicaId": "retained-origin-rf3-r3",
+      "appliedIndex": "3",
+      "commitIndex": "3",
+      "lastIndex": "3",
+      "hardState": {
+        "term": "1",
+        "vote": "0",
+        "commit": "3"
+      },
+      "confState": {
+        "voters": [
+          "625587603728697910",
+          "4026241048186186741",
+          "8106538631273010085"
+        ],
+        "learners": [],
+        "votersOutgoing": [],
+        "learnersNext": [],
+        "autoLeave": false
+      },
+      "coverage": "complete",
+      "originState": "pre-origin",
+      "originCoverage": "complete"
+    }
+  ],
+  "lastPredicateChecks": [
+    {
+      "replicaId": "retained-origin-rf3-r1",
+      "originPreOrigin": true,
+      "appliedMatches": true,
+      "commitMatchesApplied": true,
+      "lastMatchesApplied": true,
+      "termMatches": true,
+      "orderedConfStateMatches": true,
+      "canonicalRoleSetsMatch": true
+    },
+    {
+      "replicaId": "retained-origin-rf3-r2",
+      "originPreOrigin": true,
+      "appliedMatches": true,
+      "commitMatchesApplied": true,
+      "lastMatchesApplied": true,
+      "termMatches": true,
+      "orderedConfStateMatches": true,
+      "canonicalRoleSetsMatch": true
+    },
+    {
+      "replicaId": "retained-origin-rf3-r3",
+      "originPreOrigin": true,
+      "appliedMatches": true,
+      "commitMatchesApplied": true,
+      "lastMatchesApplied": true,
+      "termMatches": true,
+      "orderedConfStateMatches": false,
+      "canonicalRoleSetsMatch": true
+    }
+  ],
+  "interpretation": {
+    "outcome": "RF1 PASS; RF3 FAIL at initial settled-state assertion before ENABLE and commit-carrier interception",
+    "measuredCause": "Only ordered ConfState comparison differs: r3 voters have different vector order with identical role membership and autoLeave; all other original conjuncts are true in the recorded evaluation",
+    "configurationOwner": "src/raft/raft-rs-conf-state-key.js",
+    "limits": "This directly attributes diagnostic #842. Earlier #835 has the same failing assertion but no recorded views, so its exact failed conjunct is not independently measured. No retained-origin RF3 transition assertion engaged in either failed run."
+  }
+}
