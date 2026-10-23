@@ -33,6 +33,14 @@ source checkpoint and verified remote heads. Do not mistake the pre-preservation
 base above for the new WIP commit. The repository remote is
 `git@github.com:psvensson/lagrange.git`.
 
+The source checkpoint is **`681da1dc1beb5728a52ee5d223113b71b423156b`**.
+Its remote head on `work/mg-source-occurrence-delivery-20261023` was read back
+and verified after push. All 269 staged paths were re-hashed from committed
+Git blobs. `RECEIPT-mg-delivery-user-stop-preservation-2026-10-23.json` records
+that verification, the exact source/test trees, commit/push logs and archive
+custody. The final handover/receipt commit adds only preservation records and
+has identical source/test trees.
+
 All 58 current production paths still match the frozen source manifest in
 `evidence/mg-delivery-candidate-static-2026-10-23/` below. There are 17 changed or
 new test files, three test helpers, and a draft impact-contract registration.
@@ -231,6 +239,9 @@ The earlier manifest's archive paths identify the `previous-archives/` members
 inside this remotely verified archive. Local tar copies are retained, but are
 not Git content: the repository forbids archives under `solve/`. Raw text logs
 remain byte-for-byte, including whitespace and failed/intermediate attempts.
+The 13 exact local archive copies were moved outside the checkout to
+`/mnt/data/peter/projects/.handover-artifacts/rs-raft-delivery-20261023/archives/`.
+Each former path and unchanged hash is recorded in the preservation receipt.
 
 The user explicitly requested a stopped WIP checkpoint. The runbook at
 `docs/development/solver-runbook.md` permits `LAGRANGE_SKIP_PRECOMMIT=1` for a WIP

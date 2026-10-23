@@ -1,0 +1,1366 @@
+{
+  "purpose": "Exact user-requested stopped WIP staging, no validation/landing claim",
+  "sourceBase": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a",
+  "files": [
+    {
+      "path": "solve/epics/raft-rs-full-cutover/HANDOVER-2026-10-23-delivery-stop.md",
+      "bytes": 19991,
+      "sha256": "37c018cc117779ff1d732ffe2a2cdfa9d3e0ebdc3c16bfc5b1fb60686a5c0432"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/DESIGN-mg-complete-vector-outcome-correction-2026-10-23.md",
+      "bytes": 7225,
+      "sha256": "f569b1c16e8ecb1cdf43d9b5b161c8a4ee120a65d2ef445d2f4a07d9f4676a72"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/DESIGN-mg-complete-vector-outcome-correction-r2-2026-10-23.md",
+      "bytes": 8953,
+      "sha256": "7ccbad6c08aebc6275a400f80fe7f6eb2007094479116cddb5b2d28f61b7a76c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/LAB-REVIEW-mg-delivery-fixture-trace-r2-2026-10-23.md",
+      "bytes": 16398,
+      "sha256": "cf2991f3d8d84cdb90077999aa7ab8bdaef537d5ce1a2962e4db7ad84405deb4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/LAB-REVIEW-mg-delivery-s2-baseline-2026-10-23.md",
+      "bytes": 20736,
+      "sha256": "7956488ddaa2975eb90cff87c9fac6fd321cdc74f0eb4833831910639d08d01f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/LAB-REVIEW-mg-delivery-witnesses-r1-2026-10-23.md",
+      "bytes": 12501,
+      "sha256": "f085762a4848df59a65b47fa626415a9d7123275b5d97544e4004d6a25f5f9ea"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-candidate-drafts-preservation-2026-10-23.json",
+      "bytes": 27665,
+      "sha256": "93057009ab4e9c5ee448c04703079378448641fd0a56cb78e03bd6d6d0809b1f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-fixture-trace-r2-runtime-2026-10-23.json",
+      "bytes": 8191,
+      "sha256": "160a9e5875198c4bc0bba04ef5c6955520eef8b0bf358fa2a5a06a2d42831f66"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-fixture-trace-r2-runtime-preservation-2026-10-23.json",
+      "bytes": 9801,
+      "sha256": "d07faa1e5b370acc428c5258310967b215e3fab6055bb14e76fbffa9bd7cae45"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-reviewed-drafts-2026-10-23.json",
+      "bytes": 46309,
+      "sha256": "507d050f82a757e9dbc803d645d644d8004b76d34ec32c12b2697ef87ec51270"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-root-source-draft-2026-10-23.json",
+      "bytes": 3602,
+      "sha256": "e9fbf7cf28344d8f10bba5c0f6bb889d088d970168be22da89d7494d5b413137"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-s2-baseline-runtime-preservation-2026-10-23.json",
+      "bytes": 7741,
+      "sha256": "1b78c1ca5cf569bec34a5d32913e9d637dd90115067741b672482bbd03cfb5c7"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-witnesses-r1-runtime-2026-10-23.json",
+      "bytes": 18660,
+      "sha256": "01690cd08378a133079030a1dd370e796b2c2a743139a8e16af269ca8dc5e417"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/PLAN-mg-delivery-s2-fixture-2026-10-23.md",
+      "bytes": 16446,
+      "sha256": "7cc760d931c539108a56077d1e5541ff70dbf6b6cdd2521afb51a4dd359cada9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REQUEST-mg-delivery-witnesses-r1-runtime-2026-10-23.json",
+      "bytes": 4123,
+      "sha256": "b6932088dfc558dad9a64d5dd2234929a8f726fa31d29afa993fc3028c112ee6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-candidate-request-builder-2026-10-23.md",
+      "bytes": 5681,
+      "sha256": "08c528787765f615f5f0c6d09b81be53d308562a37d22d45eee6b0cef0b98a3e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-canonical-output-custody-wrapper-2026-10-23.md",
+      "bytes": 6812,
+      "sha256": "f8b20a159265aeee451b9389b84d53c28e737d2bf1f91cb3e6e543500b618c01"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-complete-vector-outcome-correction-2026-10-23.md",
+      "bytes": 14496,
+      "sha256": "19bbc21416cdbbefb0a3a8d1bdc1e18568e793e831892fe31694ee1188a582ab"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-complete-vector-outcome-correction-r2-2026-10-23.md",
+      "bytes": 6370,
+      "sha256": "9a745248900ea63f25ea6bf1767be4f342a3a5781704f6d51df925e703734247"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-complete-vector-source-r1-2026-10-23.md",
+      "bytes": 18859,
+      "sha256": "f26fa320ee3e2cc9ac2b91ed4f92724120010e420a77e3f3f2e59c3cfda72941"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-complete-vector-witnesses-r1-2026-10-23.md",
+      "bytes": 8155,
+      "sha256": "2593b758e6a672fce6b0b457c74f7f45db1ecf4b25532d5f9ce93704224348bf"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-complete-vector-witnesses-r2-2026-10-23.md",
+      "bytes": 5690,
+      "sha256": "54562f0d75ee0c9539a3407e7f3f4a653ae87c617f5a9fd729ba82096b02bfec"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-currentness-witnesses-r1-2026-10-23.md",
+      "bytes": 9967,
+      "sha256": "e23eb6e063712ffbb13b53ba76c6d435219e568c485613ef36702cb100a70e14"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-currentness-witnesses-r2-2026-10-23.md",
+      "bytes": 4204,
+      "sha256": "6045bbe6a83742325defea89abdc10fffd4c026c0065110919881406ba1c91a6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-envelope-witnesses-2026-10-23.md",
+      "bytes": 7269,
+      "sha256": "34c1f4e9dd4798bf831a1ec49cc41745e37fd839c3b1444a7f39d9f9160989b4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-forwarding-source-r1-2026-10-23.md",
+      "bytes": 25685,
+      "sha256": "8d57c56fcb76281a521a3127ccf4de8d352a96490b2c417f16f6a53e909b089a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-forwarding-source-r2-2026-10-23.md",
+      "bytes": 16041,
+      "sha256": "80cd661f5e41e6f5e5a01d608d43bed6b97be91910a61118ef4e93d609538ad1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-forwarding-source-r3-2026-10-23.md",
+      "bytes": 9979,
+      "sha256": "e21322f12b1daea206e0a4b1db44ede2a3cad1ae0e1bb587cd5253871dbe5b7d"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-invocation-custody-witnesses-2026-10-23.md",
+      "bytes": 9417,
+      "sha256": "93b22fd8f41ea4fca1b2b67fba62e4ce29aced54298641de081ae11d7d23310b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-invocation-notification-witnesses-r2-2026-10-23.md",
+      "bytes": 6997,
+      "sha256": "0abf1d3f164898c3345227f3648abb6bc5ee82ffa4f5b561fea18d7171401623"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-native-custody-r1-r6-2026-10-23.md",
+      "bytes": 11233,
+      "sha256": "98ba8aa8b252efa6e9d9fb3691d05e4a1753167b052e59fc14d48f4925ad8146"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-root-selection-topology-r2-2026-10-23.md",
+      "bytes": 12415,
+      "sha256": "462fcd8cf8cd4693d9e5ef8b03a9c1e1e66368cc951bd833be0365c9444fe004"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-root-source-r1-2026-10-23.md",
+      "bytes": 24983,
+      "sha256": "b404fadb31060fad56944dbd4c05603f7fa8d0ecc70ff92193ef7a83d235ca7a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-s2-fixture-plan-2026-10-23.md",
+      "bytes": 11470,
+      "sha256": "40d4bc6a8f9ed3274450952a5b46c03fef4cee955c2a2eebc148580cc8e43ed8"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-s2-witnesses-2026-10-23.md",
+      "bytes": 12494,
+      "sha256": "9076a551e9f6ecaf3e825cd1cbf72320a925dd237a22f06c107968d134d5ca53"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-source-progress-witnesses-r1-2026-10-23.md",
+      "bytes": 13222,
+      "sha256": "b2925f2bcf10e487759de13c96e09bf42e339572606ad3e0a0455684a45d9eca"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-transport-source-r1-2026-10-23.md",
+      "bytes": 20111,
+      "sha256": "f96b6e5769b8fa5892964a77d8ecef5ba4dfec5140ffd0e5e69a6a85bd2d403f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-transport-source-r2-2026-10-23.md",
+      "bytes": 16312,
+      "sha256": "24bd7711ca20e49337b45d4507f4e10079b6066766d4b647624529dbbb37f71a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-f1-transport-witnesses-r1-2026-10-23.md",
+      "bytes": 3704,
+      "sha256": "09285001de0afdf81536a79372fc00c6b7ff8410833967b998fc8b0690f2c280"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-native-fixture-candidate-r3-2026-10-23.md",
+      "bytes": 8896,
+      "sha256": "f78c1a0637c17c0ede02d470b7a987af86ba2d0c3b0111bf77ad7165b65dafe9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-native-fixture-candidate-r4-2026-10-23.md",
+      "bytes": 6398,
+      "sha256": "c7ee58dcc3bd3c2bad210927b195bd9a5159ac1d73d63b733f69519e18125483"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-native-mixed-vector-witness-r1-2026-10-23.md",
+      "bytes": 5545,
+      "sha256": "c8105a1f65a18a03e582deb8b291ea8997700048418f1023aea8f8c801d6e9e3"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-native-mixed-vector-witness-r2-2026-10-23.md",
+      "bytes": 3677,
+      "sha256": "e84bb6e9fea10f5cda99ae2f956534e634a1ac6524457843a04f77e8c7aec409"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-owner-static-repair-r1-2026-10-23.md",
+      "bytes": 13018,
+      "sha256": "841e5f6856565dc0fa934e7870fa903177e9e3380f92d567c9d4d58e8d9c314f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-owner-static-repair-r2-2026-10-23.md",
+      "bytes": 10980,
+      "sha256": "7acef625b7e8a8a5b868e259d89d11478e45a6380f7ddab94eaafb7df45ce8d4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-transport-owner-static-r3-2026-10-23.md",
+      "bytes": 10083,
+      "sha256": "7a96c814a42bd43241aa56082b31b3942461c6d2c6a34a362c9c05d5796949e5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-vector-owner-guard-witnesses-r1-2026-10-23.md",
+      "bytes": 7154,
+      "sha256": "f31a720247192aa22bfc893ab4921dba0963056b4ef52d442a38e3db9f6b0897"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-vector-owner-guards-r1-2026-10-23.md",
+      "bytes": 4217,
+      "sha256": "af86c263a29d1274c6ed5bd04d333d46ea8a076b01ae1ab924b7b33320609a0a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-vector-owner-guards-r2-2026-10-23.md",
+      "bytes": 3220,
+      "sha256": "b300df420f6cb51ff29b6c3e1292fd2c53ab16aadd0650d9f5d0315e50b2637a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-candidate-static-2026-10-23/mg-delivery-candidate-drafts-preservation-upload-2026-10-23.json",
+      "bytes": 1417,
+      "sha256": "04f1a4f1b1aa6486923cef6fdace165870010d11a848e3e2b610a121c14b24ba"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-candidate-static-2026-10-23/mg-delivery-final-source-eslint-2026-10-23.json",
+      "bytes": 10866,
+      "sha256": "70b393e98f06d27b6b84db942a1dde38b64782f995c695a8aac05fc81c7f7bb0"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-candidate-static-2026-10-23/mg-delivery-final-source-static-head-delta-2026-10-23.json",
+      "bytes": 45798,
+      "sha256": "cf1760f6540d28c887176d8712e67e2659cd6d74d88322cf8c4b95d149fa13bf"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-candidate-static-2026-10-23/mg-delivery-source-syntax-r2-2026-10-23.json",
+      "bytes": 14326,
+      "sha256": "3972db2a86653b417fdc46b3e040fbaf96db5b2041936bfb20fc195620dc0054"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-candidate-static-2026-10-23/mg-vector-owner-guard-witnesses-root-static-2026-10-23.json",
+      "bytes": 574,
+      "sha256": "aa8be230259dfb93436fd34809c8d20be55c619d96029ce76b50677e831df922"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-boundary-verification.json",
+      "bytes": 3691,
+      "sha256": "aa71c72fb9465b6d9c366be271188cdb56ccf3f0c350c8442bb7561c2ed388c0"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-chunk-issues.json",
+      "bytes": 2405,
+      "sha256": "4bc37831fe44d710798ad80d79e57e2b06dbe1b455181f647c9bcd2ba20d95cf"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-chunk-requests.json",
+      "bytes": 7336,
+      "sha256": "d3b78eca45df6190d27ee07b3d475be91dad3f6e27863a5f33d19018d84969fc"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-decoded-diagnostics.json",
+      "bytes": 115674,
+      "sha256": "95fce175c9a4654c98168730e727510418156117ebf19e229affd6822bdc069f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence0-request.json",
+      "bytes": 688,
+      "sha256": "17782f5aabac2d02fccf2642bf1ec388d57fed010fa721ca34bd751fc7f0aea9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence0.json",
+      "bytes": 21284,
+      "sha256": "abce47a426ccf7a8a7c43f1161cfdf4bb0cafc486b674cea4581500f033f3ad1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence16000-request.json",
+      "bytes": 775,
+      "sha256": "ec14a289c45e2209b1e51cc6310bc95d57962dfc344a65869f2817a5340b4f88"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence16000.json",
+      "bytes": 21714,
+      "sha256": "ebb1bade4ceaf5352a7bd852fae8bc57a4cae0beeea92749b2544b71dc407b17"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence24000-request.json",
+      "bytes": 775,
+      "sha256": "501d784c9c817bdec57c720ad0471a603fe73cc533b85fede738a221aa3a2abb"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence24000.json",
+      "bytes": 21854,
+      "sha256": "f8c3c8c2b3c4b6b14cf68d23be7384f8809116be3f414beb2bb590765bfc2e69"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence32000-request.json",
+      "bytes": 775,
+      "sha256": "5a165c5500b460ab05ec15501249341ab2ca27f3924bec8ee541ebad453e1a39"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence32000.json",
+      "bytes": 21536,
+      "sha256": "b304c4ea2ce2fad01f12a6ad44cb8d341b8460dc4920e185ed0a61042b718298"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence40000-request.json",
+      "bytes": 775,
+      "sha256": "500e640c4be37928dda642e25c5852f84f37acefdefed81d5c91c3c1e0b88823"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence40000.json",
+      "bytes": 21632,
+      "sha256": "6d85e205d024f8c265b45f96c4c0604892da8dc54ddb488ea2dd087a3a0c13d4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence48000-request.json",
+      "bytes": 775,
+      "sha256": "78481c7ea65cc92807972239e11c8e27f37fcd482b670b1ae4e717a2656a84d9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence48000.json",
+      "bytes": 21599,
+      "sha256": "e897a9a5dc1cac41ce21a9dcd84c566002c27c906c140ed27b07c9d64d6b9cf9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence56000-request.json",
+      "bytes": 775,
+      "sha256": "a6a750c7d516ee86c050464ba98f5502bc2da5db6cca8fda570429c9248f5d28"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence56000.json",
+      "bytes": 21454,
+      "sha256": "d90aaa85e560face877db4a2e48d3d80bd21c90d0ace8a394d60f086c0350681"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence64000-request.json",
+      "bytes": 775,
+      "sha256": "abd08bd31ea6a460c9de2798ebb6ff5cbba9ef1740684b2849d7cf037b794e33"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence64000.json",
+      "bytes": 21436,
+      "sha256": "784317a54b231957cf539a7431ede8d674efc04b78243d24137b49ee1e7ca59e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence72000-request.json",
+      "bytes": 775,
+      "sha256": "22ef18cdc271b9776d24f5e8b807e092655b51e3cfb82bed328262724e79895b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence72000.json",
+      "bytes": 21438,
+      "sha256": "d469115be439a3b324d24a699a408ddd7878c7bcb941982bb837fa095e82bb57"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence8000-request.json",
+      "bytes": 774,
+      "sha256": "fb04c74f0e62d11fe6992a9adbaa2e0dae3a51d756101398b6851b6df616f6ef"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-evidence8000.json",
+      "bytes": 21685,
+      "sha256": "34d54e679d42b0c45965b013420a0d2944f4bbc1e432930502ac913ca7c630b9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-log-custody.json",
+      "bytes": 10994,
+      "sha256": "bf2a7e3096826eef51bfde41b66c514b19cfff57f3db3cef153d089aea81bb6d"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-post-fleet-request.json",
+      "bytes": 593,
+      "sha256": "c26114b4b9ca43e93d2049f8180112b425f9b1ae98b36bcc15e1dc74a43abb7c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-post-fleet.json",
+      "bytes": 5864,
+      "sha256": "d191003865f2dfd6ff9a16e9e649ad028b4a715efb05d5c9c58732e794465bd5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-pre-fleet.json",
+      "bytes": 5862,
+      "sha256": "6e7b3cb780aca0c3475df92b849d26206ada5f5644652adce5439e767d1dded1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-read-issues.json",
+      "bytes": 546,
+      "sha256": "e00ec716f0d1024b72be753dd88826a70813a52221e947c3e2d8d5dba017b606"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-request.json",
+      "bytes": 4008,
+      "sha256": "0d6e567f6ddb014d74cc25c509665b07068e29e1adc1e80341187854a5363294"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-source-envelope-observed.json",
+      "bytes": 2371,
+      "sha256": "56586efc72ac55e6b0a0e2bdd104d82150b06709662719035eb877fe774f6382"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-terminal-receipts.json",
+      "bytes": 3485,
+      "sha256": "232b9ea25d7eb31532aa72bbddff57dfa2591e553ab223975ae5ff4c6da554a0"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-fixture-trace-r2-runtime-2026-10-23/mg-delivery-fixture-trace-r2-runtime-worker.log",
+      "bytes": 79861,
+      "sha256": "ebd6c7de17da2592ee8683f1e1cc1c5c65655fe0132a8790854d41c4f45a6142"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-chunk0.bin",
+      "bytes": 8000,
+      "sha256": "77aa3ffef75cc1a3dac823a96101ad02b7d2660d85ae1220a9a12ee129ee59a5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-diagnostics.json",
+      "bytes": 84411,
+      "sha256": "5fd30d139d70f6cc651fc6524ec54785716cac370d0738e7cdf503913e081997"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence0-request.json",
+      "bytes": 688,
+      "sha256": "631feb3bb007f175b6b6945df1729f11a9a02d5adcdd3ff147f8f72b81266df8"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence0.json",
+      "bytes": 21269,
+      "sha256": "ef1f47cb02cc3b2b7c332cbd67e51dcc06df4885cf14798a9b1a67657545cc6a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence16000-request.json",
+      "bytes": 775,
+      "sha256": "b5c511e1981d057b91b7a69bac38b7911b4071771421e80e73d1d1a596965f3c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence16000.json",
+      "bytes": 21529,
+      "sha256": "6ac122a638bc7512e26e24f5314ce1cd6bdc0c936ee4c75a0657c111cb651d9e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence24000-request.json",
+      "bytes": 775,
+      "sha256": "cd9ce566154908a14342cb40ac6ada958ad7f0aec94156aebb87eb8fc9f94c8e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence24000.json",
+      "bytes": 21513,
+      "sha256": "a0cd02305c87222fa0bd2d98b7724f5c1e400ea9c2de6c198788510653745a51"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence32000-request.json",
+      "bytes": 775,
+      "sha256": "262c3b88d6df5c3df76f4e9d0ec9fb212623f1bc024b9ba16980b8284761991b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence32000.json",
+      "bytes": 21527,
+      "sha256": "59c4db6e0b488ca439b33746520707736acdd520ec894935be077b861b52338a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence40000-request.json",
+      "bytes": 775,
+      "sha256": "ae8a1ab4b86edc130fe45d1132dcce0fd4cc74a061e98a67793c10a6498f47c9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence40000.json",
+      "bytes": 21535,
+      "sha256": "fbbe6675e47fdb35b109317521c86d0ca4094194ce922b88466db6c18de3b425"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence48000-request.json",
+      "bytes": 775,
+      "sha256": "0c219991a7700b928f4e9f7e5ddc7ea261e4ad5c98d5774b289edf5c0d275dd0"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence48000.json",
+      "bytes": 21588,
+      "sha256": "b637e3b5bbb68cde2195fda3c24c8008b7a53250206ed6acbc37dcc6cbdac512"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence56000-request.json",
+      "bytes": 775,
+      "sha256": "8e8c258914d8bd5882f7bb3b48b1a72ed57dcd400f26feac03c6bf26068e6ffa"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence56000.json",
+      "bytes": 10019,
+      "sha256": "19e8696ec7c805236c2f4ba8da0a4b5a583ffe298bfd5a61de737c578c3e51ec"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence8000-request.json",
+      "bytes": 774,
+      "sha256": "d61a708bff014ad0e5ef7e20bc1fa3784d9638759431b56075abc64a34ea5494"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-evidence8000.json",
+      "bytes": 21466,
+      "sha256": "da289ad2351811275788aaa06bb82f410dbfe9c0f7414fd9361825827f3a0324"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-log-custody.json",
+      "bytes": 13435,
+      "sha256": "05a778c342137e4ba2e2e7e497c7b88097a03a5ec29cd923798b42fb71972057"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-partial.txt",
+      "bytes": 40000,
+      "sha256": "534c21fe989853e5ff0abcda656d7d136b8a5da9c93ef5ea492689b96b6a3aea"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-post-fleet-request.json",
+      "bytes": 593,
+      "sha256": "c9967fc1ee69053fafb15d0d5eb16f646c767fddaba08fc7b382e7b663e43f6c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-post-fleet.json",
+      "bytes": 5861,
+      "sha256": "4b4991028839dee0816fec17e7a8e5e834861c084a6763a2565b11f30456de44"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-pre-fleet.json",
+      "bytes": 5861,
+      "sha256": "25a3f6bf7e7d817be4206b172dec464ca295372aab14aedcdee471381ce46987"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-request.json",
+      "bytes": 4014,
+      "sha256": "9d3856915190cbe028ed4107273923ffc0ce258a9ebbd374218a5b60258747e6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-source-envelope-observed.json",
+      "bytes": 2375,
+      "sha256": "1d54e3d3d086517982ad0f6c359631c34a7925faf3111bd0d90d6284993dd02f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-terminal-receipts.json",
+      "bytes": 3485,
+      "sha256": "21d065351e51373d2371b283352ca9a638c2b4eb5025f0c0ca16372f59a719e4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-s2-baseline-runtime-2026-10-23/mg-delivery-s2-baseline-runtime-worker.log",
+      "bytes": 59196,
+      "sha256": "2826f710e7a1e3a3b22ccdc4ebeb8896c13011e62aa45e7eb8a8b06ef3a88884"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/MANIFEST.json",
+      "bytes": 3254,
+      "sha256": "5d17281c54879af9bd3db7344701b2c91e8914405b1fc06bff06d5261aa64ab3"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-candidate-preflight-fleet-receipts-2026-10-23.json",
+      "bytes": 7119,
+      "sha256": "fed335d7974c8bf100127648423f86bfe1002c06a739e7c68f86007c8e253987"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-candidate-preflight-fleet-request-2026-10-23.json",
+      "bytes": 593,
+      "sha256": "b860af1cdfb226de97d4e762864d7721ae67c414f1094ffeb641f7ea25c0048e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-candidate-preflight-ping-receipts-2026-10-23.json",
+      "bytes": 2095,
+      "sha256": "2d77b83667968d66357273065ae2e351d7a0559e711ae4cc3be8797fbe65e790"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-candidate-preflight-ping-request-2026-10-23.json",
+      "bytes": 580,
+      "sha256": "d24d832fad49945f02f868b192002e05f244da515082b5ae83934d4d0efbc953"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-decision-boundaries-preflight-2026-10-23.json",
+      "bytes": 3664,
+      "sha256": "5d7ff956112feda8b53f4dbad24a0b9ad359a294663604a014ef2410c4a8fb54"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-literals-preflight-2026-10-23.json",
+      "bytes": 3588,
+      "sha256": "8e9deec196989d403bcf80e8f38b8bcfdb6ba4d53b6dfe8e7981286e582f5711"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-silent-catch-preflight-2026-10-23.json",
+      "bytes": 3693,
+      "sha256": "e966bc4e25a8c1eae154bc44cafaf5240f43c3b84dad413bb9982b351231427c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-source-composition-audit-working-2026-10-23.json",
+      "bytes": 48052,
+      "sha256": "ae5c5f0bf9e1b1d1b549e06f527a3e6b8c4f7dc88c4c79329546a365ff00fad2"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-stop-state-2026-10-23/mg-delivery-user-stop-inventory-2026-10-23.json",
+      "bytes": 73473,
+      "sha256": "88fc570a93cacefa24636a33c2ab1dbf45e7af8b988580731e73878d0208f059"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-chunk-issues.json",
+      "bytes": 6573,
+      "sha256": "3800754f4b613128dad4abba1eb2517b39eaa0835d2a1c82ceb35ef71abac57c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-chunk-requests.json",
+      "bytes": 19585,
+      "sha256": "355dc2d3328e315b94317bdc4e7e51fbaff58785455d76f3f14bb73de2da7ccb"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-decoded-diagnostics.json",
+      "bytes": 89990,
+      "sha256": "60946c12cb64f3c8630d45b42084b7d2d2cf352e3ea509843e48466a027f0a72"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence0-request.json",
+      "bytes": 688,
+      "sha256": "7076434a921005abd678bb5156fa932914886c1a71ceb6d711b4ff78cd6c41b5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence0.json",
+      "bytes": 20931,
+      "sha256": "aacf5bd7b70debda789a076ff3be843afae001bf686969df064d0bdcb37c9908"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence104000-request.json",
+      "bytes": 776,
+      "sha256": "39bb3c7f853e6ef22477d7f0f4bdcda2da88ca374542966178af7472f509b7e1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence104000.json",
+      "bytes": 20813,
+      "sha256": "cb8eb1f265aa0cc1ab26bb9ed223afe9581f8e65f90a91f81c24ad1782fc86c7"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence112000-request.json",
+      "bytes": 776,
+      "sha256": "bfb5d76908fbb2476d7fc4f2724e83144cb1bd1a2531f98432b5b502dd6aaae2"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence112000.json",
+      "bytes": 20812,
+      "sha256": "81251b55ace98561215fd3cd809e272187f027f0f6318a78ad74e90e54c181b6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence120000-request.json",
+      "bytes": 776,
+      "sha256": "6cee1bf231657cf324c5814e85e0a40d111e369e31319b373b101fd27e450142"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence120000.json",
+      "bytes": 20819,
+      "sha256": "8363dba0cc4673f590519e1e162b32e7991d71cec6d8c0a4f54b29e20faa0302"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence128000-request.json",
+      "bytes": 776,
+      "sha256": "d85bcba5c01d72bb1b0c94d086e47b2cd43e7baec1e777b475ae4ff141c83c2d"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence128000.json",
+      "bytes": 21005,
+      "sha256": "94e7577867d43e84b9d8682df1a11192f990ea7920d1d3757cad581d3c3e7037"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence136000-request.json",
+      "bytes": 776,
+      "sha256": "0a896aebfa6ca5185d43c967d3ed0c717fbfbee32bbdd5735f7ba4e3a292e544"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence136000.json",
+      "bytes": 21656,
+      "sha256": "211ee2f64433880279ae993945f4da1fe352fe51a4c463849194a8016a23bc37"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence144000-request.json",
+      "bytes": 776,
+      "sha256": "ebbb4e3b16c3fe567ebe271263d4d9a179c2dbe419a02a3fd92ec1e2a1137c8c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence144000.json",
+      "bytes": 21677,
+      "sha256": "65a06022ec0a686ed41c421b77b7b5b11fdf4588cdbdcd0e8af835708c175ee1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence152000-request.json",
+      "bytes": 776,
+      "sha256": "5e2eb647a36818af7fe0c15da4db6c4516d64c72dd42fd28ce10b8b11ba2fa97"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence152000.json",
+      "bytes": 21859,
+      "sha256": "dc52de20aaacebcbd4782a2ee4fd3cd64f13b26d9c8ef4e142bbfb1713fc32c1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence16000-request.json",
+      "bytes": 775,
+      "sha256": "fe7575ff5d928854337cd3d68892bbba9cd9761e486079c7fc5be561cafd38b1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence16000-retry1-request.json",
+      "bytes": 775,
+      "sha256": "85fd0da02d59da1f1182e9254f8aec4e5f0b7f341a4271eb6d5590ffef459544"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence16000-retry1.json",
+      "bytes": 20825,
+      "sha256": "0cbb6ac905903e630d04b2481e78d08d616baed456dd38330ef561a03bee4490"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence16000.json",
+      "bytes": 1328,
+      "sha256": "85eb70e8f07d4bff4091ff1356752221cb2c5ae1c5e7f2c099730b7c1c42ea0c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence160000-request.json",
+      "bytes": 776,
+      "sha256": "7a67ad078d8df90eff27cb306e560ef612bfbcd5e285e97aa547aba652720715"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence160000.json",
+      "bytes": 21539,
+      "sha256": "c20553ee16aefcbf6b6122ad320ea54a4e8a577029adc631b75548dc71596ade"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence168000-request.json",
+      "bytes": 776,
+      "sha256": "ba378a623cbd8b4bb9a93a92c4597ad5381d382e443c4c6213ac6b3d6279f84b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence168000.json",
+      "bytes": 21659,
+      "sha256": "7d06052f714b340a0aeffeffe5d3e357fb7992fc748611ee6852a7a5c1568c9e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence176000-request.json",
+      "bytes": 776,
+      "sha256": "3a799cb2ba3e494e376fd6895e263538c870db6194394aaf6979079af2d90da3"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence176000.json",
+      "bytes": 21715,
+      "sha256": "99d1dcedb51b3e727fb6f000e75c58ab17e82a44956adaa165dcdc4045b02619"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence184000-request.json",
+      "bytes": 776,
+      "sha256": "8ea313876ded75ff20873cb55a83b4c3abc5a09278a98ee8ce760cd1c68acd5e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence184000.json",
+      "bytes": 21933,
+      "sha256": "61ebea338fa87b06fec04094635fd6cbd3c1c5601912aa34c38dc796f836a772"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence192000-request.json",
+      "bytes": 776,
+      "sha256": "06aaaea7575545f4087a461b1c528e16c4b57269e9a9b1e173b1008603c0cdb2"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence192000.json",
+      "bytes": 8499,
+      "sha256": "a85b6b9de7f6a581e52e8b1682974563bb0c6b4b714c2de695841b83a33590dd"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence24000-request.json",
+      "bytes": 775,
+      "sha256": "f6eb29bb95a6194b6f3d3698f03a6ec9485a9b32990bb9dd1b4f616078a02d1f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence24000.json",
+      "bytes": 20821,
+      "sha256": "c0ec7dc98776a87732cb949e7ce7a7f67019c0a863a27d56e9ed8558bcc40dcc"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence32000-request.json",
+      "bytes": 775,
+      "sha256": "7e0bff96d8cc6e6792541cc06bde5fb75c670ce8c96bcd5441188e7c54ae03d7"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence32000.json",
+      "bytes": 20817,
+      "sha256": "9fcf91bf822e648d3cb4db475fe11060d2d2e2bae27432cd523db1cf22482aad"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence40000-request.json",
+      "bytes": 775,
+      "sha256": "78c080e157ef678c89fec37fdde2ec8377fc0a01d38082fee7a7f568710f0c3b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence40000.json",
+      "bytes": 20817,
+      "sha256": "222d01dce5b2d141bca1cadec207027ff249e0541eddf903c9876ae0d50236c4"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence48000-request.json",
+      "bytes": 775,
+      "sha256": "59f90ad27ede2551011346b72f6860281388d0a0ed99f340441732ee114b34ef"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence48000.json",
+      "bytes": 20822,
+      "sha256": "08cdc450a33d4d6cfe76b7e66f8b619fd12e5408601264476a2ade02b2947b8f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence56000-request.json",
+      "bytes": 775,
+      "sha256": "6221ed2006716fd3ac08c54c740fee9399ee38aced00879aa58261be7f43f471"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence56000.json",
+      "bytes": 20824,
+      "sha256": "44f0489543016b45758f93058e01ad662d2d9f44d44fa6ebdd1645b599f2bd75"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence64000-request.json",
+      "bytes": 775,
+      "sha256": "1fe9cb6172e876aa5418580910a4f08feb892b0bff80431860e779fd50c0522e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence64000.json",
+      "bytes": 20831,
+      "sha256": "e07892e91bd34dd75c748ee772a7ab5f3fa4431fb3505700959d2192be4f8c6c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence72000-request.json",
+      "bytes": 775,
+      "sha256": "429db7da049b38dca6e20e492dc36908667c2358aec5ba2805407b2d68c292a9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence72000-retry1-request.json",
+      "bytes": 775,
+      "sha256": "4890b9f8662fbed5fb94f95d00433b88a5bf5e352b5d63518096ab2e1533554a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence72000-retry1.json",
+      "bytes": 20823,
+      "sha256": "f1342bed15aa4e0c10d77c04d1091875a8795feb6a950ed3e6faf2cb0de969fe"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence72000.json",
+      "bytes": 1330,
+      "sha256": "8052f3a077cba541751875487dcb062e4d32e12b6bf867fcb7b086b68843e423"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence8000-request.json",
+      "bytes": 774,
+      "sha256": "720e66cd93f498e33f9440aa7eeeada22023c7f69380b74a487ee0812b42983a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence8000.json",
+      "bytes": 20823,
+      "sha256": "58847da48ca884f56ccf3b2cc726864b3c8a1a3dca0152808f32018f26a43587"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence80000-request.json",
+      "bytes": 775,
+      "sha256": "a11a2a18c9b1105a628fae4675410c4ce91a6c409d5cf20c152e46ff4576038a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence80000.json",
+      "bytes": 20823,
+      "sha256": "b49356a08e40b314754c20542e2695d9bf8e4268710acec551a3ff2af9854775"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence88000-request.json",
+      "bytes": 775,
+      "sha256": "a494d4872d66bdd8ae98d93a12cb585dfb80d865b540032f519522937463187c"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence88000.json",
+      "bytes": 20818,
+      "sha256": "e58da05f8543001a21df0489d409a9d44ea5995cfac77f196caf5508c9b0375a"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence96000-request.json",
+      "bytes": 775,
+      "sha256": "a3449d52d500f018e8368092ca14c3af2048195d18e8f7e60d5f35fcf3f9c943"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-evidence96000.json",
+      "bytes": 20819,
+      "sha256": "a9f1db8336284205ae2ba5d9508f307af34c29903bfe95445c1b841721cd8b4f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-log-custody.json",
+      "bytes": 42722,
+      "sha256": "9102d1ff814e60afa3bdd3a84ed9433b03902b0ba5bfd61a7e6cd5be8d22910b"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-post-fleet-request.json",
+      "bytes": 593,
+      "sha256": "0135965b4f971aeddedf469c4e28165ea3e20811b4e40ec75a750d3fb3e84a49"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-post-fleet.json",
+      "bytes": 5862,
+      "sha256": "2f6606ee7c9e266ef7424a0a95ce3c84fb1c0ea1e9d2e4c4a9d0eb273687450f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-request.json",
+      "bytes": 4123,
+      "sha256": "b6932088dfc558dad9a64d5dd2234929a8f726fa31d29afa993fc3028c112ee6"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-retrieval-retry-issues.json",
+      "bytes": 537,
+      "sha256": "dc856dbea68cefde5efbb7d843a9f2ba61e4d40b1528015d01983e93341b57b5"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-source-envelope-observed.json",
+      "bytes": 2429,
+      "sha256": "ac163547653d6bbca18c9233cfaa7038622d00eeb40e76b0ff2c8a256067ad3f"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-terminal-receipts.json",
+      "bytes": 3484,
+      "sha256": "eb3edf6954a5e12c3d83cf0d53f4345c2ff90b06520ddf2db8127ba1a53ce4dd"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-witnesses-r1-runtime-2026-10-23/mg-delivery-witness-r1-runtime-worker.log",
+      "bytes": 194657,
+      "sha256": "a6f4d11b800a2edb3cc56dca1c38916fe011011e0f93fff847657cd70a7ec8de"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/log.ndjson",
+      "bytes": 64355,
+      "sha256": "6ba51ff57fbe122fa2d5f95fb530b2cbe9d1125364e41ecda4d5f27541af274e"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-replica-registration-methods.js",
+      "bytes": 26207,
+      "sha256": "eed164d27cdc25f8a642d550102b2e0ca368b1c3de3a78587019d759ce84d22e"
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service-seed-delegates.js",
+      "bytes": 19210,
+      "sha256": "fe661a9d39f60885d36891aeb67f3f8939b119b73706ab82d64e215d42b276f7"
+    },
+    {
+      "path": "src/bootstrap/node-joining-publication-activation.js",
+      "bytes": 27926,
+      "sha256": "84200103b6bf1c23180ca22f304c1fcb2a1ce8da961c8c3e211c91131aa28fb5"
+    },
+    {
+      "path": "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+      "bytes": 7563,
+      "sha256": "2810695ed1ca4326262d69d615267f3956c82452a2b391355b3edaab6ac6a328"
+    },
+    {
+      "path": "src/bootstrap/phases/seed-cache-hydration-cdc-subscription.js",
+      "bytes": 4053,
+      "sha256": "e21ce1df9e4bdf6f1e3bc1b7dd26aa0e327170c85507460ed157bff0acf526dc"
+    },
+    {
+      "path": "src/bootstrap/phases/seed-cache-hydration-phase.js",
+      "bytes": 24603,
+      "sha256": "cab65589180531be81c46ae883ca49cef7cf499983dfce6a7d339d35d36e4491"
+    },
+    {
+      "path": "src/bootstrap/shared/message-group-selection.js",
+      "bytes": 14240,
+      "sha256": "c4b6dafc4cbb39c7bc83c90cb895e7500f303ce2cd6b70e813dabf147542df7a"
+    },
+    {
+      "path": "src/bootstrap/shared/message-group-transport-handler.js",
+      "bytes": 5958,
+      "sha256": "650cacdf21b59d6ff03a0b5f16c97e37422209b411441579a466acd53769a5bd"
+    },
+    {
+      "path": "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+      "bytes": 10262,
+      "sha256": "cac24307086ab9da6dc38758fdaa507d75002891ce2f857ca7b4e188f28470f7"
+    },
+    {
+      "path": "src/cdc/cdc-delivery-budget.js",
+      "bytes": 2964,
+      "sha256": "b8531cb441c74bd51cf66bea23e64c68a09ca45272bc1f59dfbdac089d7ed27d"
+    },
+    {
+      "path": "src/cdc/cdc-delivery-invocation.js",
+      "bytes": 9173,
+      "sha256": "5d02b240662e0784175006884effeb9bbf913a192fed300626f4c2a0464e2d84"
+    },
+    {
+      "path": "src/cdc/cdc-delivery-outcome.js",
+      "bytes": 15999,
+      "sha256": "1a90b9799e839c0aeda6a18170d9fcbf70849482e3e5202397c23de89666f0a3"
+    },
+    {
+      "path": "src/cdc/cdc-event-envelope.js",
+      "bytes": 6803,
+      "sha256": "77477cfc01232da5feec9bb77fb310290583911e1754953a7c893424f5f56660"
+    },
+    {
+      "path": "src/cdc/cdc-propagation-progress.js",
+      "bytes": 6522,
+      "sha256": "e29b62dc9abc1c88505ad815aad9a0606a65a5ed9788baee9811818411dc856e"
+    },
+    {
+      "path": "src/cdc/cdc-source-scope-evidence.js",
+      "bytes": 4566,
+      "sha256": "288cd0e273b9294c1bb51e4d13cf6bfde5e13791e56c67552eeb6e6a4be8ecc6"
+    },
+    {
+      "path": "src/message-group/message-group-cdc-committed-acceptance.js",
+      "bytes": 13532,
+      "sha256": "7bb0595056b206384a9128773b53291ddeef11b66c6b7921b6ce78f9837fb5ae"
+    },
+    {
+      "path": "src/message-group/message-group-consensus-port.js",
+      "bytes": 9898,
+      "sha256": "1ac52797b4654c067358c04b82615650eb631696f5141746115cb7658c0eee81"
+    },
+    {
+      "path": "src/message-group/message-group-forwarding-owner-constants.js",
+      "bytes": 6847,
+      "sha256": "fc88e3a5c9002a636f6cc70b1b15bd85be124d9319a0fa20131794ecb9b3b020"
+    },
+    {
+      "path": "src/message-group/message-group-forwarding-owner-delivery-methods.js",
+      "bytes": 28515,
+      "sha256": "56488a9b2f94065a148ba6627beb0cb9c14f988c4d4ed58de6ef2bbec4dc9a61"
+    },
+    {
+      "path": "src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+      "bytes": 13791,
+      "sha256": "533d3baef282be4f8afa51c850e1ece1bafb95c4de79133dba122a94c88efde9"
+    },
+    {
+      "path": "src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "bytes": 23374,
+      "sha256": "80c3b8db820295f6f791645e250ad83ed576e8b5a7a4f7ae82610ddeb5e58edb"
+    },
+    {
+      "path": "src/message-group/message-group-forwarding-owner.js",
+      "bytes": 23986,
+      "sha256": "3d210ea4fd8639a76dfb307a2217e7716d8517923c81102d58ea1193a47bcf9d"
+    },
+    {
+      "path": "src/message-group/message-group-proposal-routing.js",
+      "bytes": 9377,
+      "sha256": "9223219f63154f22545827c7978e0a8a7215f99621cfae1a15de50e4c0d2b7d1"
+    },
+    {
+      "path": "src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+      "bytes": 7273,
+      "sha256": "a68da6f777a88575935ed03c00622a86466ec8223de1f7822b32db9be5fe243a"
+    },
+    {
+      "path": "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+      "bytes": 13026,
+      "sha256": "35d0dd7f0df64009fdd8050aa068f70d991e4dce0b06a5fd11ce575da20cf2f7"
+    },
+    {
+      "path": "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+      "bytes": 18243,
+      "sha256": "8f1fece571068e8207b66c6afb0397ce39f22016467ba0f7f542d6b67dbd39e4"
+    },
+    {
+      "path": "src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+      "bytes": 10342,
+      "sha256": "4f2db5fce3e601e42d5cc4fa9ff470807f7e98a823e5d3f5e371dd64ed437796"
+    },
+    {
+      "path": "src/message-group/message-group-service-raft-timing.js",
+      "bytes": 8400,
+      "sha256": "7e120945c65ea7ef7ad4aaab1c2d119437144ab7ba068ee8c2f66b8a9c84abb3"
+    },
+    {
+      "path": "src/message-group/message-group-service-runtime-support.js",
+      "bytes": 12577,
+      "sha256": "371502c80d9d92445ccc7b910c0d8001ae514e3f6c1b4651941c5f52b07e3397"
+    },
+    {
+      "path": "src/message-group/message-group-service-state.js",
+      "bytes": 20037,
+      "sha256": "15ac50dc159c585ab5e24c8351afa797b4c3a8bc2b15719b0ed0d49fac95fbd4"
+    },
+    {
+      "path": "src/partition/cdc-event-buffer.js",
+      "bytes": 8264,
+      "sha256": "e6da185a0c0968c7fc13c72f6b76b2a02f81f9ac83e8e7e9f57be43d9d48e305"
+    },
+    {
+      "path": "src/partition/partition-cdc-delivery.js",
+      "bytes": 32557,
+      "sha256": "1789927b3c87f700998ffa77c797e6c3db23bb000d74689e1d7251c5a342d24b"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-constants.js",
+      "bytes": 12385,
+      "sha256": "7a03324c2e9329e5d5a487ced32d6c8599bd205a2855dc0608c00dbd250248ac"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-delivery.js",
+      "bytes": 27206,
+      "sha256": "f3821b9850910c368ba1168fff7f8fcaf870448c5c6eec0c0c9eda4afbac7056"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-progress.js",
+      "bytes": 4312,
+      "sha256": "63500b9dddb7493640559d21317a0f3123bb774d3884fac4ee639f82e3829779"
+    },
+    {
+      "path": "src/partition/proposal-queue.js",
+      "bytes": 9719,
+      "sha256": "46f83d0ae76d47fc382a19490014267c60e83509ce6a216e5af5115fa9f3bc3c"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-constants.js",
+      "bytes": 4270,
+      "sha256": "13804a6528f9380f786b7e3aed894088fd998d8b19e2b5291793d720c7a9332c"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 29068,
+      "sha256": "4ada1cb1d7b3f21f8b41235720ff4277380ac128bada807253b86008d7a9a87f"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-durable-delivery.js",
+      "bytes": 9450,
+      "sha256": "43aa42c2242fb6aad42c47835326ca6c7bf25432a6a730485a50a22dfc3dd212"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-durable-plan.js",
+      "bytes": 1718,
+      "sha256": "63e2d39b6e73f45d48d6c2555c74404e11e0234f7d7c7174c995fd6a9ce66451"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-retry-wait-report.js",
+      "bytes": 3903,
+      "sha256": "adc81bca8437c9485e26c53b5a6fac256687d8a6da610ba172d3465900273258"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-routing.js",
+      "bytes": 8188,
+      "sha256": "60653a2a63007d6ab2f979b9d023aa8b62f6d043f8082570b32ef08385ab96c0"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-service.js",
+      "bytes": 27256,
+      "sha256": "f2b1e510d61b559afaeb649dadfc88f6fe3c777937fa9f2ca2e554fc561cd2b6"
+    },
+    {
+      "path": "src/transport/inproc-transport.js",
+      "bytes": 5106,
+      "sha256": "41d9d98528ea92c98dd4364cd9f2f26c4e05914366272b9ecfba176d571309f8"
+    },
+    {
+      "path": "src/transport/message-router-ack-delivery.js",
+      "bytes": 7114,
+      "sha256": "705908af1b3b3dab58bd42e25078f15a5097c45d0d9dfe5ff51482207e5d0e43"
+    },
+    {
+      "path": "src/transport/message-router-connection-authority.js",
+      "bytes": 26074,
+      "sha256": "5c160ec241239b4cbf2dbded07bc9cfffde9ba7be80d81a7734a19dc83c2ecb8"
+    },
+    {
+      "path": "src/transport/message-router-delivery-behaviors.js",
+      "bytes": 18759,
+      "sha256": "6b4c267cdfc54a6bc6060e147a7e5a31960ab837b8d8c4ed5c18e7b9341e545d"
+    },
+    {
+      "path": "src/transport/message-router-delivery-delegation.js",
+      "bytes": 8149,
+      "sha256": "6ef00a78d076ff5450ad9bb9f10f5b317bc8bbe3f3fbbe5c32020fdfb80d7a0e"
+    },
+    {
+      "path": "src/transport/message-router-delivery-encoding.js",
+      "bytes": 4827,
+      "sha256": "7b0f339eefe5add8c329b266e060240f299d6840555823b612bd92ad5923b0c8"
+    },
+    {
+      "path": "src/transport/message-router-delivery-lifetime.js",
+      "bytes": 8847,
+      "sha256": "23cdf9a752920671c6905b73af4d97717913026b88c281b1859c3ecaf586f7a7"
+    },
+    {
+      "path": "src/transport/message-router-delivery-pressure-routing.js",
+      "bytes": 13846,
+      "sha256": "ae5ec3c006a3db1cc017caa6bdd7a33e88bda352d6d03665c6e3f9c14ade22be"
+    },
+    {
+      "path": "src/transport/message-router-outbound-delivery-registry.js",
+      "bytes": 24698,
+      "sha256": "9f7acfeea54a5fe9fe3b47ba41f9a3d5575c35544bae657ead2fc6cfd5df6184"
+    },
+    {
+      "path": "src/transport/message-router-pending-response-ledger.js",
+      "bytes": 20411,
+      "sha256": "940d91837954bc3a1ea48c4cb738a380cf85a9de67c0956df14b13786b3096d3"
+    },
+    {
+      "path": "src/transport/message-router-reconnect-behaviors.js",
+      "bytes": 21192,
+      "sha256": "975d73d99cc901dc6c5afe33ef10624d291ef69633da5d286cb29c4e6b8eb11d"
+    },
+    {
+      "path": "src/transport/message-router-shared-vocabulary.js",
+      "bytes": 15612,
+      "sha256": "5fec7f365ad2d1967c11b63fc866c6ed80b032a6a7dbcb4a1fcfc5477bdd6d69"
+    },
+    {
+      "path": "src/transport/message-router-stats-shutdown.js",
+      "bytes": 9925,
+      "sha256": "8ccbb9844e69e2ca1e987d0b7364e9f56867df3fae7fae70ca4a4cdc5c4b141c"
+    },
+    {
+      "path": "src/transport/transport-semantic-outcome.js",
+      "bytes": 11723,
+      "sha256": "a793f1a62cfc4d8597c02971be67c02600122d0dec838b7e6e6598b0c2d3a3ff"
+    },
+    {
+      "path": "src/utils/canonical-json-data.js",
+      "bytes": 10994,
+      "sha256": "3a850f1c2ce950367fc5918d54d7fa7a406344a941d573dfa1f9d8cb250dafb7"
+    },
+    {
+      "path": "test/bootstrap/cdc-propagation-source-owner-currentness.test.js",
+      "bytes": 4703,
+      "sha256": "bd09ea41037440df8c173b834aa7b50c1578c60eff405a8499b38e5070345c6b"
+    },
+    {
+      "path": "test/bootstrap/seed-registration-phase.test.js",
+      "bytes": 16945,
+      "sha256": "4ea435c46864651cc1b7a73499e53747a604c2b68eb616698c412d7c098d3ed5"
+    },
+    {
+      "path": "test/cdc/cdc-delivery-complete-vector.test.js",
+      "bytes": 10124,
+      "sha256": "c7f6647b6829824ae16b2a460807111955248238a891bb8b3a7d09ce6d262915"
+    },
+    {
+      "path": "test/cdc/cdc-delivery-outcome.test.js",
+      "bytes": 10511,
+      "sha256": "36840c75759db3456132855cc1bbb239dd3f3c81d13d4da3c8d403ecd7bcacb1"
+    },
+    {
+      "path": "test/cdc/cdc-event-envelope.test.js",
+      "bytes": 14148,
+      "sha256": "482e1d0a5a07d0682a437faa9171e0203d7e4e242ab2150efec2fc09cc7728b0"
+    },
+    {
+      "path": "test/message-group/message-group-cdc-input-guard.test.js",
+      "bytes": 13653,
+      "sha256": "40adc3e235fd82f10f79a166c61a5b5eacffd3803395c81208fc2b56eeffb25c"
+    },
+    {
+      "path": "test/message-group/message-group-native-application-membership.test.js",
+      "bytes": 7222,
+      "sha256": "aa64c7978594077cb5f0c07170fdc7fcdf2c7d3c706f7b312122cb5b8e750e77"
+    },
+    {
+      "path": "test/message-group/message-group-native-custody-handoff.test.js",
+      "bytes": 28046,
+      "sha256": "2413080c7eae679e3661d1f0a9f804ea0d6694d16187f24500aa5766132662ee"
+    },
+    {
+      "path": "test/message-group/message-group-native-mixed-vector.test.js",
+      "bytes": 7375,
+      "sha256": "cdac9bf0b0a0b00f68c2481f518d2bd0b4a245e31af2e5f873fc2f0c0554accb"
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route-fixture.js",
+      "bytes": 17955,
+      "sha256": "0ad1ba30c274779fddbbf57a199e2a8d4f4ce377f2fc16b62743454d54f71673"
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route.test.js",
+      "bytes": 24240,
+      "sha256": "f977fc15f679f98b8b4de141ee6d8add85e56008bd3223fadb318d1e9efbb6cf"
+    },
+    {
+      "path": "test/node/replica-state-machine-registered-activation.test.js",
+      "bytes": 22968,
+      "sha256": "434b56aa4374c5b23f6177d7f0873de8a26508576cc98a0baabf5f5e856bfbf2"
+    },
+    {
+      "path": "test/partition/partition-cdc-delivery-progress.test.js",
+      "bytes": 12042,
+      "sha256": "c526bf87363a7d4e22733576a077929ec99814d2088d1b6773c6bb36ad1e8eb6"
+    },
+    {
+      "path": "test/partition/partition-cdc-invocation-custody.test.js",
+      "bytes": 17942,
+      "sha256": "556f2519388645603e727e70a81ac40eb42fcb95dc791f17641642852c064772"
+    },
+    {
+      "path": "test/partition/partition-cdc-topology-progress-currentness.test.js",
+      "bytes": 7403,
+      "sha256": "a769fc6d38892421f4e6d76c636ca4e981e79c53da74240f72a340bf0c134a37"
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "bytes": 181493,
+      "sha256": "3e8b9f90d49b77b01c82ee49667e2f336529a14712283228aa64a54222318718"
+    },
+    {
+      "path": "test/test-helpers/cdc-topology-progress-fixture.js",
+      "bytes": 7691,
+      "sha256": "5df5b96b221c5811167301374e13cb64a35d4a1589e7c49276912e3ae2ceeca9"
+    },
+    {
+      "path": "test/test-helpers/message-router-cdc-fixture.js",
+      "bytes": 7496,
+      "sha256": "daac517dbbd3dbc393c6817556f4cf4180d37ccb79c7b3bc861571989813fd79"
+    },
+    {
+      "path": "test/transport/message-router-cdc-custody.test.js",
+      "bytes": 10939,
+      "sha256": "48dd9a604bf5711d2777856b927b45f494759e967daf34d71ae9c94459c363e0"
+    },
+    {
+      "path": "test/transport/message-router-cdc-encoding.test.js",
+      "bytes": 10957,
+      "sha256": "237a94258f2a7636ac37be3c7c60300197d64cd4fb319fa206efc2f3bd01f957"
+    },
+    {
+      "path": "test/transport/message-router-cdc-response-boundary.test.js",
+      "bytes": 4369,
+      "sha256": "1314312ea0e774bb63052c903352083508f8768f136783abe3995159305923a2"
+    }
+  ],
+  "excludedBinaryEvidenceArchives": [
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-complete-vector-r4-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r1-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r2-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-root-source-r1-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-transport-r2-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-f3-forwarding-frozen-r3-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-invocation-notification-witness-r2-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-custody-r1-r6-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r3-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r4-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-mixed-vector-r2-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-root-selection-topology-r2-20261023.tar.gz",
+    "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-transport-owner-static-r3-20261023.tar.gz"
+  ]
+}
