@@ -1,0 +1,13 @@
+{
+  "solve/changes/global-owner-debt-inventory/inventory.json": "57a088733fd0c81ad6331f9a59f7a37408767f508a692024e3be777617076e1d",
+  "solve/quests/retained-seed-original-handoff/evidence/PLAN-mg-delivery-s2-fixture-2026-10-23.md": "7cc760d931c539108a56077d1e5541ff70dbf6b6cdd2521afb51a4dd359cada9",
+  "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-s2-fixture-plan-2026-10-23.md": "40d4bc6a8f9ed3274450952a5b46c03fef4cee955c2a2eebc148580cc8e43ed8",
+  "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-s2-witnesses-2026-10-23.md": "9076a551e9f6ecaf3e825cd1cbf72320a925dd237a22f06c107968d134d5ca53",
+  "test/message-group/message-group-native-provisional-route-fixture.js": "0ad1ba30c274779fddbbf57a199e2a8d4f4ce377f2fc16b62743454d54f71673",
+  "test/message-group/message-group-native-provisional-route.test.js": "128995ce2c8002b1266ba4eaad14c6f66c1919f43db89c274eba9465887543ab",
+  "test/shards/impact-contracts.json": "078ea712f72906564be3d43f5d41a426291e549860f0b235ad7993e5dd8db800",
+  "test/shards/impact-graph-seal.json": "4e8441c8af62c0f4f236e732a025df46528aa55389132e3c567f9a8d24d7fecc",
+  "test/shards/primary-classes.json": "e69be0b42ecde2806cf7ebcb03a099e009a143b3daef9093385723b7d81b810e",
+  "test/shards/resource-classes.json": "13926c82a3082850ef380cc770c5630efce3fc236f66ddce5c4f6a904c01cc88",
+  "test/shards/subsystem-classes.json": "7dba07e794e6e782e1e73f36853dacf188d8102bcd1089f7ef100c8e045071ee"
+}

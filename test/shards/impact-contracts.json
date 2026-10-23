@@ -1368,7 +1368,8 @@
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
-        "test/message-group/message-group-native-custody-handoff.test.js"
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-native-provisional-route.test.js"
       ]
     }
   },
@@ -2850,7 +2851,8 @@
       "contract": "cdc-source-native-delivery",
       "witnessTests": [
         "test/cdc/cdc-delivery-outcome.test.js",
-        "test/message-group/message-group-native-custody-handoff.test.js"
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-native-provisional-route.test.js"
       ]
     }
   }

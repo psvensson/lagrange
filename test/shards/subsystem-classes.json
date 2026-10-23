@@ -22,13 +22,13 @@
     "storage-raft": 143,
     "test-infrastructure": 145,
     "transactions": 16,
-    "transport-messaging": 97,
+    "transport-messaging": 98,
     "wasm-toolchain": 74
   },
-  "censusSize": 2444,
-  "digest": "fnv1a32-0422fc97",
+  "censusSize": 2445,
+  "digest": "fnv1a32-36c9b743",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-83bb67aa",
+  "observationDigest": "fnv1a32-fe01a4a2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1115,6 +1115,7 @@
     "test/message-group/message-group-fresh-learner-promotion.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-snapshot.test.js": "transport-messaging",
     "test/message-group/message-group-native-custody-handoff.test.js": "transport-messaging",
+    "test/message-group/message-group-native-provisional-route.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-registration-exact-birth.test.js": "transport-messaging",
@@ -8132,6 +8133,26 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/cdc-group-propagation-constants.js",
         "test/message-group/message-group-native-custody-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/message-group/message-group-native-provisional-route.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-selection.js",
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
