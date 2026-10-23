@@ -102,12 +102,16 @@ function activationOptions(writer) {
 
 async function createRegistrationEvidenceFixture(options = {}) {
   let durableRow = null;
+  let insertCount = 0;
   let readCount = 0;
   let updateCount = 0;
   let ownerNow = 100;
   let readsAvailable = options.readsAvailable !== false;
+  let returnWithoutApply = options.returnWithoutApply === true;
+  const updates = [];
   const writer = {
     async insertSystemTableRow(_tableName, row) {
+      insertCount += 1;
       durableRow = {...row};
       return {success: true, partitionResult: {affectedRows: 1}};
     },
@@ -120,7 +124,8 @@ async function createRegistrationEvidenceFixture(options = {}) {
     },
     async updateSystemTableRow(_tableName, whereClause, data) {
       updateCount += 1;
-      const applied = matches(durableRow, whereClause);
+      updates.push({whereClause: {...whereClause}, data: {...data}});
+      const applied = !returnWithoutApply && matches(durableRow, whereClause);
       if (applied) durableRow = {...durableRow, ...data};
       return {
         success: true,
@@ -146,8 +151,12 @@ async function createRegistrationEvidenceFixture(options = {}) {
     owner,
     registrationEvidence,
     stateMachine,
+    updates,
     get durableRow() {
       return durableRow;
+    },
+    get insertCount() {
+      return insertCount;
     },
     get readCount() {
       return readCount;
@@ -160,6 +169,9 @@ async function createRegistrationEvidenceFixture(options = {}) {
     },
     setReadsAvailable(value) {
       readsAvailable = value;
+    },
+    setReturnWithoutApply(value) {
+      returnWithoutApply = value;
     },
     setOwnerNow(value) {
       ownerNow = value;
@@ -253,6 +265,90 @@ test('ReplicaStateMachine replays exact INSERT evidence after clock advance',
       'idempotent replay should require authoritative generation observation');
   });
 
+test('PartitionServiceRowOwner redrives deferred branded evidence through ' +
+  'ReplicaStateMachine without another INSERT', async (t) => {
+  const fixture = await createRegistrationEvidenceFixture({
+    returnWithoutApply: true,
+  });
+  const {owner, registrationEvidence, stateMachine} = fixture;
+  const originalRow = {...fixture.durableRow};
+  let handlerChecks = 0;
+  const options = {
+    isEffectHandlerCurrent: () => {
+      handlerChecks += 1;
+      return true;
+    },
+    partitionId: 'p1',
+    replicaId: 'p1-r1',
+    nodeId: 'node-a',
+    registrationEvidence,
+  };
+
+  // The caller retains the actual creation owner's object. This owner-level
+  // witness does not claim the seed phase retains it after a rejected call.
+  await t.rejects(owner.activateReplica(options), {
+    code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED,
+    errorCode: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.DURABILITY_DEFERRED,
+    deferRetry: true,
+  }, 'exact zero-row CAS plus authoritative source readback retains activation debt');
+  t.equal(fixture.updateCount, 1, 'the actual lifecycle owner attempts one CAS');
+  t.equal(fixture.readCount, 1, 'nonapply is classified by authoritative readback');
+  t.same(fixture.durableRow, originalRow, 'defer preserves the original STOPPED row');
+  t.equal(stateMachine.getState('p1-r1'), null,
+    'defer must not install an ACTIVE lifecycle projection');
+  t.same(fixture.updates[0].whereClause, {
+    service_id: originalRow.service_id,
+    service_type: originalRow.service_type,
+    partition_id: originalRow.partition_id,
+    node_id: originalRow.node_id,
+    replica_id: originalRow.replica_id,
+    group_id: originalRow.group_id,
+    status: 'stopped',
+    cleanup_token: originalRow.cleanup_token,
+    create_attempt_token: originalRow.create_attempt_token,
+    created_at: originalRow.created_at,
+    state_entered_at: originalRow.state_entered_at,
+  }, 'the CAS is bound to the exact original birth and lifecycle generation');
+
+  await t.rejects(owner.activateReplica({
+    ...options,
+    registrationEvidence: Object.freeze({...registrationEvidence}),
+  }), {code: REPLICA_REGISTERED_ACTIVATION_ERROR_CODE.SOURCE_CHANGED},
+  'a byte-identical counterfeit cannot replace the retained owner-branded evidence');
+  t.equal(fixture.updateCount, 1, 'counterfeit evidence cannot enter the CAS');
+  t.equal(fixture.readCount, 1, 'counterfeit evidence cannot fall back to a point read');
+
+  fixture.setReturnWithoutApply(false);
+  fixture.setOwnerNow(originalRow.created_at + 10_000);
+  const activated = await owner.activateReplica(options);
+  const activeRow = {...fixture.durableRow};
+  t.same(activated, activeRow, 'the real lifecycle owner returns the applied destination');
+  t.match(activeRow, {
+    status: 'active',
+    created_at: originalRow.created_at,
+    state_entered_at: originalRow.state_entered_at + 1,
+    updated_at: originalRow.state_entered_at + 1,
+  }, 'retry retains the birth and chooses its causal successor despite clock advance');
+  t.equal(fixture.readCount, 1, 'an exact applied retry needs no extra readback');
+  t.match(stateMachine.getState('p1-r1'), {
+    state: 'active',
+    createdAt: originalRow.created_at,
+    durableVersion: activeRow.state_entered_at,
+  }, 'the canonical lifecycle projection binds the applied generation');
+
+  fixture.setOwnerNow(originalRow.created_at + 20_000);
+  const replayed = await owner.activateReplica(options);
+  t.same(replayed, activated, 'duplicate evidence resolves to the same ACTIVE destination');
+  t.same(fixture.durableRow, activeRow, 'idempotent replay cannot replace the durable row');
+  t.equal(fixture.readCount, 2, 'duplicate zero-row CAS reads back the exact ACTIVE generation');
+  t.equal(fixture.updateCount, 3, 'defer, apply and replay each use the lifecycle CAS');
+  t.same(fixture.updates[1], fixture.updates[0], 'redrive preserves source and destination');
+  t.same(fixture.updates[2], fixture.updates[0], 'replay preserves source and destination');
+  t.equal(handlerChecks, 3, 'each genuine attempt consults the in-lane handler boundary');
+  t.equal(fixture.insertCount, 1, 'activation debt never becomes another registration INSERT');
+  t.same(registrationEvidence, originalRow, 'retained branded evidence remains the original source');
+});
+
 test('ReplicaStateMachine refuses fabricated registration evidence',
   async (t) => {
     const writer = createWriter(registeredRow());
@@ -311,6 +407,8 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
     status: 'stopped',
   });
   const recreatedRow = fixture.durableRow;
+  t.equal(fixture.insertCount, 2,
+    'the fixture explicitly removes then recreates through the creation owner');
 
   await t.rejects(
     owner.activateReplica({
@@ -325,6 +423,12 @@ test('ReplicaStateMachine refuses old registration evidence after same-ID ' +
   );
   t.equal(fixture.updateCount, 1,
     'the old generation must be fenced by the exact activation CAS');
+  t.equal(fixture.readCount, 1,
+    'the exact zero-row CAS must observe the newer birth before refusing');
+  t.equal(fixture.insertCount, 2,
+    'refusing stale activation must not issue another registration INSERT');
+  t.equal(fixture.stateMachine.getState('p1-r1'), null,
+    'refused evidence must not install an ACTIVE lifecycle projection');
   t.same(fixture.durableRow, recreatedRow,
     'the recreated incarnation must remain byte-for-byte unchanged');
   t.equal(fixture.durableRow.created_at > registrationEvidence.created_at,

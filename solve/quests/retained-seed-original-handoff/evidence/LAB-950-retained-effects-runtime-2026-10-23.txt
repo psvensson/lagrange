@@ -1,0 +1,360 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 8s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects.integration.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js test/partition/partition-cdc-obligation.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-cdc-generator.test.js test/bootstrap/seed-registration-phase.test.js test/bootstrap/seed-registration-election-scheduling.test.js test/bootstrap/pipeline/seed-registration-phase-custody.test.js test/cdc/cdc-integration-service-mutations-and-epoch.test.js test/cdc/cdc-integration-service.test.js test/cdc/cdc-integration-service-time-seam.test.js test/cdc/bootstrap-mode-routing.property.test.js test/bootstrap/cluster-identity-mint.test.js test/bootstrap/replication-target-authority.test.js test/integration/managed-split-admission-reliability.integration.test.js test/node/replica-lifecycle-durable-generation.test.js
+
+# test-files planned=31
+classified lane ordinary: 20 file(s), jobs=4
+thermal: ok cpu 71C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/cdc/cdc-integration-service-time-seam.test.js (11 assertions, 472ms)
+ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 714ms)
+ok test/node/replica-lifecycle-durable-generation.test.js (194 assertions, 1321ms)
+ok test/partition/participant-decision-canonical-record.test.js (8 assertions, 144ms)
+ok test/partition/participant-origin-retained-history.test.js (35 assertions, 185ms)
+ok test/cdc/cdc-integration-service-mutations-and-epoch.test.js (150 assertions, 2332ms)
+ok test/partition/partition-cdc-generator.test.js (40 assertions, 223ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 2217ms)
+ok test/partition/partition-cdc-obligation.test.js (20 assertions, 2316ms)
+ok test/partition/committed-statement-outcome.test.js (18 assertions, 4206ms)
+ok test/cdc/cdc-integration-service.test.js (128 assertions, 5378ms)
+ok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 161ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 2911ms)
+ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 2183ms)
+ok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 4122ms)
+ok test/raft/raft-rs-backend/persistence-admission.test.js (4 assertions, 2022ms)
+ok test/raft/raft-rs-backend/restart-from-durable-record.test.js (4 assertions, 3169ms)
+ok test/partition/partition-unreadable-durable-record.test.js (6 assertions, 9253ms)
+ok test/raft/raft-rs-original-allocation-cold-inspection.test.js (24 assertions, 26370ms)
+ok test/raft/raft-rs-original-opening-authority.test.js (24 assertions, 58681ms)
+# test-files total=20 pass=20 fail=0 assertions=770
+classified lane bootstrap: 9 file(s), jobs=2
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/bootstrap/pipeline/seed-registration-phase-custody.test.js (1 assertions, 546ms)
+ok test/bootstrap/cluster-identity-mint.test.js (9 assertions, 671ms)
+ok test/bootstrap/replication-target-authority.test.js (21 assertions, 2947ms)
+ok test/bootstrap/seed-registration-election-scheduling.test.js (22 assertions, 622ms)
+not ok test/bootstrap/seed-registration-phase.test.js (51 assertions, 418ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: SeedRegistrationPhase registers partition rows as stopped before activation
+    ok 1 - service registration consults continuation authority
+    ok 2 - initial partition row should register as stopped
+    ok 3 - partition row should activate only through the lifecycle owner
+    ok 4 - partition registration should never use the old services upsert path
+    ok 5 - seed registration retains exact STOPPED authority for later activation
+    1..5
+ok 1 - SeedRegistrationPhase registers partition rows as stopped before activation # time=5.342ms
+
+# Subtest: SeedRegistrationPhase does not complete while partition activation is deferred and re-enters idempotently
+    ok 1 - seed registration must leave the phase incomplete while exact activation is debt
+    ok 2 - deferred activation must retain its durable STOPPED source generation
+    ok 3 - the seed phase must not report registration completion on defer
+    not ok 4 - Partition replica creation REPLICA_IDENTITY_CONFLICT: p1-r1
+      ---
+      stack: >
+        partitionCreateOwnershipError
+        (src/partition/partition-service-row-owner.js:96:17)
+      
+        resolvePartitionRegistration
+        (src/partition/partition-service-row-owner.js:148:9)
+      
+        async SeedRegistrationPhase.registerServices
+        (src/bootstrap/phases/seed-registration-phase.js:267:11)
+      
+        async Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:226:3)
+      at:
+        fileName: src/partition/partition-service-row-owner.js
+        lineNumber: 96
+        columnNumber: 17
+        functionName: partitionCreateOwnershipError
+      code: REPLICA_IDENTITY_CONFLICT
+      errorCode: REPLICA_IDENTITY_CONFLICT
+      deferRetry: false
+      tapCaught: returnedPromiseRejection
+      source: |
+      
+        function partitionCreateOwnershipError(code, replicaId, cause = null) {
+          const error = new Error(`Partition replica creation ${code}: ${replicaId}`);
+        ----------------^
+          error.code = code;
+          error.errorCode = code;
+      ...
+    
+    1..4
+not ok 2 - SeedRegistrationPhase does not complete while partition activation is deferred and re-enters idempotently # time=14.269ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 141
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('SeedRegistrationPhase does not complete while partition activation is '
+    +
+  
+    ^
+      'deferred and re-enters idempotently', async (t) => {
+      const continuation = createSeedPhaseContinuationFixture();
+  ...
+
+# Subtest: SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration
+    ok 1 - meta registration consults continuation authority
+    ok 2 - bootstrap registration should project each boot-owned meta endpoint into cache
+    ok 3 - bootstrap registration never projects a postgres-wire endpoint: the runtime lifecycle publishes it after the listener binds
+    1..3
+ok 3 - SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration # time=1.213ms
+
+# Subtest: SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration
+    ok 1 - both the phase and writer acquisition retain their gates
+    ok 2 - bootstrap-direct registration should wait only for cache-hydration leader partitions
+    ok 3 - bootstrap-direct writer should be enabled before registration steps run
+    1..3
+ok 4 - SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration # time=0.99ms
+
+# Subtest: SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected
+    ok 1 - epoch persistence consults continuation authority
+    ok 2 - bootstrap epoch should be written directly when no config leader exists yet
+    ok 3 - bootstrap epoch should use direct upsert
+    ok 4 - bootstrap epoch should be written into the config table
+    ok 5 - bootstrap epoch should write the authoritative epoch config row
+    1..5
+ok 5 - SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected # time=0.557ms
+
+# Subtest: continuation refusal precedes registration, writer access and activation effects
+    # Subtest: phaseRegistration
+        ok 1 - the real delegate preserves the exact continuation refusal
+        ok 2 - the guarded boundary consults its owner exactly once
+        ok 3 - only the real entry path's declared pre-guard reads occur
+        ok 4 - no writer acquisition, publication, mutation, leadership or activation escapes
+        1..4
+    ok 1 - phaseRegistration # time=0.568ms
+    
+    # Subtest: ensureSystemTableWriter
+        ok 1 - the real delegate preserves the exact continuation refusal
+        ok 2 - the guarded boundary consults its owner exactly once
+        ok 3 - only the real entry path's declared pre-guard reads occur
+        ok 4 - no writer acquisition, publication, mutation, leadership or activation escapes
+        1..4
+    ok 2 - ensureSystemTableWriter # time=0.454ms
+    
+    # Subtest: registerServices
+        ok 1 - the real delegate preserves the exact continuation refusal
+        ok 2 - the guarded boundary consults its owner exactly once
+        ok 3 - only the real entry path's declared pre-guard reads occur
+        ok 4 - no writer acquisition, publication, mutation, leadership or activation escapes
+        1..4
+    ok 3 - registerServices # time=0.447ms
+    
+    # Subtest: registerMetaServiceDefinitions
+        ok 1 - the real delegate preserves the exact continuation refusal
+        ok 2 - the guarded boundary consults its owner exactly once
+        ok 3 - only the real entry path's declared pre-guard reads occur
+        ok 4 - no writer acquisition, publication, mutation, leadership or activation escapes
+        1..4
+    ok 4 - registerMetaServiceDefinitions # time=0.453ms
+    
+    # Subtest: persistCurrentEpochIfMissing
+        ok 1 - the real delegate preserves the exact continuation refusal
+        ok 2 - the guarded boundary consults its owner exactly once
+        ok 3 - only the real entry path's declared pre-guard reads occur
+        ok 4 - no writer acquisition, publication, mutation, leadership or activation escapes
+        1..4
+    ok 5 - persistCurrentEpochIfMissing # time=0.445ms
+    
+    1..5
+ok 6 - continuation refusal precedes registration, writer access and activation effects # time=4.67ms
+
+1..6
+# { total: 40, pass: 39, fail: 1 }
+# time=36.094ms
+ok test/bootstrap/seed-retained-effects-preparation.test.js (9 assertions, 18229ms)
+ok test/bootstrap/seed-retained-effects.integration.test.js (3 assertions, 958ms)
+ok test/bootstrap/seed-retained-effects.test.js (166 assertions, 1298ms)
+ok test/bootstrap/seed-original-attempt-lifetime.test.js (21 assertions, 66571ms)
+# test-files total=9 pass=8 fail=1 assertions=303
+classified lane exclusive: 2 file(s), jobs=1
+thermal: ok cpu 46C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/integration/managed-split-admission-reliability.integration.test.js (22 assertions, 2274ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: managed split seed fixture refuses cleanup-owned and conflicting durable identities
+    ok 1 - the adapter preserves the exact requested options
+    ok 2 - cleanup ownership remains fail closed
+    ok 3 - cleanup ownership preserves its typed refusal
+    ok 4 - cleanup ownership consults the prior owner before durable-storage admission
+    ok 5 - cleanup ownership refuses before partition storage access
+    ok 6 - the adapter preserves the exact requested options
+    ok 7 - conflicting identity remains fail closed
+    ok 8 - conflicting identity preserves its typed refusal
+    ok 9 - conflicting identity consults the prior owner before durable-storage admission
+    ok 10 - conflicting identity refuses before partition storage access
+    ok 11 - the adapter preserves the exact requested options
+    ok 12 - missing authoritative admission remains fail closed
+    ok 13 - missing authoritative admission preserves its typed refusal
+    ok 14 - missing authoritative admission consults the prior owner before durable-storage admission
+    ok 15 - missing authoritative admission refuses before partition storage access
+    1..15
+ok 1 - managed split seed fixture refuses cleanup-owned and conflicting durable identities # time=8.998ms
+
+{"level":50,"time":"2026-10-23T07:38:06.739Z","nodeId":"test-node","pid":1201487,"subsystem":"bootstrap","nodeId":"test-node","phase":"not_started","duration":832,"error":"original-allocation-directory-custody-unavailable","stack":"Error: original-allocation-directory-custody-unavailable\n    at originalAllocationError (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-constants.js:57:24)\n    at #assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:395:13)\n    at RaftRsOriginalAllocationPreparation.assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:195:24)\n    at new RaftRsOriginalAllocationPreparation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:191:10)\n    at initializeOriginalSeedAttempt (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/seed-original-allocation-startup.js:50:23)\n    at async BootstrapService.bootstrap (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/bootstrap-service-seed-workflow.js:490:9)\n    at async bootstrapManagedSplitFixture (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:140:29)\n    at async Test.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:483:21)","servicesCreated":0,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+# Subtest: managed split persists blocked split admission instead of generic failure
+    not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+      ---
+      stack: |
+        resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:108:43)
+        bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:156:28)
+        async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:483:21)
+      at:
+        fileName: test/integration/managed-split-admission-reliability.integration.test.js
+        lineNumber: 108
+        columnNumber: 43
+        functionName: resolveCanonicalAdmissionOwner
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+          return {
+            storageAccountingService: coordinator.storageAccountingService,
+        ------------------------------------------^
+            controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+            storageAdmissionService: coordinator.storageAdmissionService,
+      ...
+    
+    1..1
+not ok 2 - managed split persists blocked split admission instead of generic failure # time=903.331ms
+  ---
+  at:
+    fileName: test/integration/managed-split-admission-reliability.integration.test.js
+    lineNumber: 480
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('managed split persists blocked split admission instead of generic
+    failure',
+  
+    ^
+      {timeout: TEST_TIMEOUT_MS}, async (t) => {
+        const tableName = 'managed_split_blocked_events';
+  ...
+
+{"level":50,"time":"2026-10-23T07:38:06.808Z","nodeId":"test-node","pid":1201487,"subsystem":"bootstrap","nodeId":"test-node","phase":"not_started","duration":0,"error":"original-allocation-directory-custody-unavailable","stack":"Error: original-allocation-directory-custody-unavailable\n    at originalAllocationError (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-constants.js:57:24)\n    at #assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:395:13)\n    at RaftRsOriginalAllocationPreparation.assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:195:24)\n    at new RaftRsOriginalAllocationPreparation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:191:10)\n    at initializeOriginalSeedAttempt (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/seed-original-allocation-startup.js:50:23)\n    at async BootstrapService.bootstrap (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/bootstrap-service-seed-workflow.js:490:9)\n    at async bootstrapManagedSplitFixture (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:140:29)\n    at async Test.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:567:19)","servicesCreated":0,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+# Subtest: managed split defers on degraded publication mode and admin diagnostics expose the canonical mode
+    not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+      ---
+      stack: |
+        resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:108:43)
+        bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:156:28)
+        async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:567:19)
+      at:
+        fileName: test/integration/managed-split-admission-reliability.integration.test.js
+        lineNumber: 108
+        columnNumber: 43
+        functionName: resolveCanonicalAdmissionOwner
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+          return {
+            storageAccountingService: coordinator.storageAccountingService,
+        ------------------------------------------^
+            controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+            storageAdmissionService: coordinator.storageAdmissionService,
+      ...
+    
+    1..1
+not ok 3 - managed split defers on degraded publication mode and admin diagnostics expose the canonical mode # time=52.757ms
+  ---
+  at:
+    fileName: test/integration/managed-split-admission-reliability.integration.test.js
+    lineNumber: 563
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('managed split defers on degraded publication mode and admin diagnostics
+    ' +
+  
+    ^
+      'expose the canonical mode',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+{"level":50,"time":"2026-10-23T07:38:06.853Z","nodeId":"test-node","pid":1201487,"subsystem":"bootstrap","nodeId":"test-node","phase":"not_started","duration":0,"error":"original-allocation-directory-custody-unavailable","stack":"Error: original-allocation-directory-custody-unavailable\n    at originalAllocationError (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-constants.js:57:24)\n    at #assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:395:13)\n    at RaftRsOriginalAllocationPreparation.assertCurrent (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:195:24)\n    at new RaftRsOriginalAllocationPreparation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/raft/raft-rs-original-allocation-preparation.js:191:10)\n    at initializeOriginalSeedAttempt (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/seed-original-allocation-startup.js:50:23)\n    at async BootstrapService.bootstrap (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/src/bootstrap/bootstrap-service-seed-workflow.js:490:9)\n    at async bootstrapManagedSplitFixture (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:140:29)\n    at async Test.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/85d2a821-7653-47bd-a455-b0000a67847a/work/source/test/integration/managed-split-admission-reliability.integration.test.js:754:19)","servicesCreated":0,"contextNodeId":"550e8400-e29b-41d4-a716-446655449902","msg":"Bootstrap failed"}
+# Subtest: managed split admission repairs stale connected node readiness from authoritative local rows before denying provisioning
+    not ok 1 - Cannot read properties of null (reading 'storageAccountingService')
+      ---
+      stack: |
+        resolveCanonicalAdmissionOwner (test/integration/managed-split-admission-reliability.integration.test.js:108:43)
+        bootstrapManagedSplitFixture (test/integration/managed-split-admission-reliability.integration.test.js:156:28)
+        async Test.<anonymous> (test/integration/managed-split-admission-reliability.integration.test.js:754:19)
+      at:
+        fileName: test/integration/managed-split-admission-reliability.integration.test.js
+        lineNumber: 108
+        columnNumber: 43
+        functionName: resolveCanonicalAdmissionOwner
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          const coordinator = fixture.bootstrapService.rebalanceCoordinator;
+          return {
+            storageAccountingService: coordinator.storageAccountingService,
+        ------------------------------------------^
+            controlPlaneReadinessService: coordinator.controlPlaneReadinessService,
+            storageAdmissionService: coordinator.storageAdmissionService,
+      ...
+    
+    1..1
+not ok 4 - managed split admission repairs stale connected node readiness from authoritative local rows before denying provisioning # time=44.335ms
+  ---
+  at:
+    fileName: test/integration/managed-split-admission-reliability.integration.test.js
+    lineNumber: 750
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    });
+  
+    test('managed split admission repairs stale connected node readiness from ' +
+    ^
+      'authoritative local rows before denying provisioning',
+    {timeout: TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..4
+# { total: 18, pass: 15, fail: 3 }
+# time=1017.704ms
+ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 1209ms)
+# test-files total=2 pass=1 fail=1 assertions=24

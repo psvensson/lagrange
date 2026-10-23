@@ -1,0 +1,88 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] 85d2a821765347bda455b0000a67847a",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T07:34:50.419Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"85d2a821-7653-47bd-a455-b0000a67847a\",\"sha256\":\"33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9\",\"totalBytes\":2765},\"expires_at\":\"2026-10-23T09:34:50.419Z\",\"operation\":\"lab-work\",\"request_id\":\"85d2a821765347bda455b0000a67847a\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc0ODA5MDQxOSwiaXNzdWVkQXRNcyI6MTc5Mjc0MDg5MDQxOSwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiI4NWQyYTgyMS03NjUzLTQ3YmQtYTQ1NS1iMDAwMGE2Nzg0N2EiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL3JldGFpbmVkLWVmZmVjdHMtcmVwbGFjZW1lbnQtMjAyNjEwMjMiLCJyZXBvIjoicHN2ZW5zc29uL2xhZ3JhbmdlIiwic2hhIjoiYzExYzRjYTI2NmU3OGM4MTVjOWNkNDE5NTRlMzUxZDIwYjE4MmE0MSJ9LCJzcGVjIjp7ImFyZ3YiOlsiL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbmV4ZWMgbnBtIHJ1biB0ZXN0OmZpbGUgLS0gXCIkQFwiXG4iLCJyZXRhaW5lZC1lZmZlY3RzIl0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaVxuIl1dLCJ0ZXN0cyI6WyJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLXJldGFpbmVkLWVmZmVjdHMudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3NlZWQtcmV0YWluZWQtZWZmZWN0cy5pbnRlZ3JhdGlvbi50ZXN0LmpzIiwidGVzdC9ib290c3RyYXAvc2VlZC1yZXRhaW5lZC1lZmZlY3RzLXByZXBhcmF0aW9uLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aWNpcGFudC1vcmlnaW4tcmV0YWluZWQtaGlzdG9yeS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGljaXBhbnQtb3JpZ2luLXJldGFpbmVkLWhpc3RvcnkuaW50ZWdyYXRpb24udGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvZHVyYWJsZS1zdG9yZS1jb21taXR0ZWQtZW50cmllcy50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtb3JpZ2luYWwtYWxsb2NhdGlvbi1jb2xkLWluc3BlY3Rpb24udGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLW9yaWdpbmFsLW9wZW5pbmctYXV0aG9yaXR5LnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLW9yaWdpbmFsLWF0dGVtcHQtbGlmZXRpbWUudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi1wYXJ0aWNpcGFudC10cmFuc2FjdGlvbi1hcHBseS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGl0aW9uLXBhcnRpY2lwYW50LXRyYW5zYWN0aW9uLXN0YWdpbmcudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpY2lwYW50LWRlY2lzaW9uLWNhbm9uaWNhbC1yZWNvcmQudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi11bnJlYWRhYmxlLWR1cmFibGUtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL2R1cmFibGUtcmVhZHktbG9vcC50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9vcGVyYXRpb24tcG9ydC1yZWFkeS1yZWNvdmVyeS50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9yZXN0YXJ0LWZyb20tZHVyYWJsZS1yZWNvcmQudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvcGVyc2lzdGVuY2UtYWRtaXNzaW9uLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tY2RjLW9ibGlnYXRpb24udGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL2NvbW1pdHRlZC1zdGF0ZW1lbnQtb3V0Y29tZS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGl0aW9uLWNkYy1nZW5lcmF0b3IudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3NlZWQtcmVnaXN0cmF0aW9uLXBoYXNlLnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLXJlZ2lzdHJhdGlvbi1lbGVjdGlvbi1zY2hlZHVsaW5nLnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9waXBlbGluZS9zZWVkLXJlZ2lzdHJhdGlvbi1waGFzZS1jdXN0b2R5LnRlc3QuanMiLCJ0ZXN0L2NkYy9jZGMtaW50ZWdyYXRpb24tc2VydmljZS1tdXRhdGlvbnMtYW5kLWVwb2NoLnRlc3QuanMiLCJ0ZXN0L2NkYy9jZGMtaW50ZWdyYXRpb24tc2VydmljZS50ZXN0LmpzIiwidGVzdC9jZGMvY2RjLWludGVncmF0aW9uLXNlcnZpY2UtdGltZS1zZWFtLnRlc3QuanMiLCJ0ZXN0L2NkYy9ib290c3RyYXAtbW9kZS1yb3V0aW5nLnByb3BlcnR5LnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9jbHVzdGVyLWlkZW50aXR5LW1pbnQudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3JlcGxpY2F0aW9uLXRhcmdldC1hdXRob3JpdHkudGVzdC5qcyIsInRlc3QvaW50ZWdyYXRpb24vbWFuYWdlZC1zcGxpdC1hZG1pc3Npb24tcmVsaWFiaWxpdHkuaW50ZWdyYXRpb24udGVzdC5qcyIsInRlc3Qvbm9kZS9yZXBsaWNhLWxpZmVjeWNsZS1kdXJhYmxlLWdlbmVyYXRpb24udGVzdC5qcyJdfSwidGltZW91dFNlY29uZHMiOjM2MDB9fQo=\",\"index\":0,\"sha256\":\"33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"85d2a821-7653-47bd-a455-b0000a67847a\",\"sha256\":\"33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9\"}"
+  ],
+  "request_id": "85d2a821765347bda455b0000a67847a",
+  "request_sha256": "ec2ac7181c719e63e5e69088358353669c1857c81ca0ca920da0201304b945e5",
+  "source_execution_by_generator": false,
+  "payload_sha256": "33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "85d2a821-7653-47bd-a455-b0000a67847a",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792740890419,
+    "expiresAtMs": 1792748090419,
+    "work": {
+      "driver": "tests",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/retained-effects-replacement-20261023",
+        "sha": "c11c4ca266e78c815c9cd41954e351d20b182a41"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 3600,
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci\n"
+          ]
+        ],
+        "argv": [
+          "/bin/bash",
+          "-c",
+          "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"\n",
+          "retained-effects"
+        ],
+        "tests": [
+          "test/bootstrap/seed-retained-effects.test.js",
+          "test/bootstrap/seed-retained-effects.integration.test.js",
+          "test/bootstrap/seed-retained-effects-preparation.test.js",
+          "test/partition/participant-origin-retained-history.test.js",
+          "test/partition/participant-origin-retained-history.integration.test.js",
+          "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+          "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+          "test/raft/raft-rs-original-opening-authority.test.js",
+          "test/bootstrap/seed-original-attempt-lifetime.test.js",
+          "test/partition/partition-participant-transaction-apply.test.js",
+          "test/partition/partition-participant-transaction-staging.test.js",
+          "test/partition/participant-decision-canonical-record.test.js",
+          "test/partition/partition-unreadable-durable-record.test.js",
+          "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+          "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+          "test/raft/raft-rs-backend/persistence-admission.test.js",
+          "test/partition/partition-cdc-obligation.test.js",
+          "test/partition/committed-statement-outcome.test.js",
+          "test/partition/partition-cdc-generator.test.js",
+          "test/bootstrap/seed-registration-phase.test.js",
+          "test/bootstrap/seed-registration-election-scheduling.test.js",
+          "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+          "test/cdc/cdc-integration-service-mutations-and-epoch.test.js",
+          "test/cdc/cdc-integration-service.test.js",
+          "test/cdc/cdc-integration-service-time-seam.test.js",
+          "test/cdc/bootstrap-mode-routing.property.test.js",
+          "test/bootstrap/cluster-identity-mint.test.js",
+          "test/bootstrap/replication-target-authority.test.js",
+          "test/integration/managed-split-admission-reliability.integration.test.js",
+          "test/node/replica-lifecycle-durable-generation.test.js"
+        ]
+      }
+    }
+  }
+}

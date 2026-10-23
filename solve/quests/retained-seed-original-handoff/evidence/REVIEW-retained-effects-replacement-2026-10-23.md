@@ -1607,3 +1607,517 @@ confirming append-only custody. The 31-file selection hashes to
 the 3310-byte precommit capture hashes to
 `b68720f950334723199b0a875a06236ce94b715ec6dfdec0fc979da3398609a0`.
 
+## R4 exact-candidate static lab evidence, 2026-10-23
+
+Evidence verdict: **static PASS** for preserved candidate
+`c11c4ca266e78c815c9cd41954e351d20b182a41`. This closes the fresh static-lab
+condition of the R4 source-only verdict, within the checks listed below.
+Runtime #950, full Quest, original startup, activation, transfer, MG delivery,
+composed two-start acceptance and merge are not approved by this evidence.
+
+### Exact request, source and terminal custody
+
+I independently fetched original job
+[951](https://github.com/psvensson/lagrange-lab/issues/951), compared its issue
+body and sole payload-part comment byte-for-byte with
+`/tmp/retained-effects-r4-static-request.json`, decoded the payload and verified
+its byte length and digest. The request is
+`da47be1452ab499781f9f4dcee4f2a41`, controller
+`b4a2e06c193c44b09f1b67d02e8d80f4`, envelope SHA256
+`1e48bfe6d494386f07740cf0983ae39dea852470a203075cbc3fe0c365e87914`
+and payload SHA256
+`3372debd9cdd821037e46f079e6fad336a9e47ac0de2cd4c1175f781dccbf4f8`.
+The decoded source is the exact preserved candidate on
+`refs/heads/work/retained-effects-replacement-20261023`. Independently hashing
+all 41 committed HEAD blobs against the R4 manifest found zero mismatches.
+
+The controller claimed `lenovo-laptop`; the request's `tv-dator` value was
+only a preference, with no contradictory strict-host selector. The
+[terminal receipt](https://github.com/psvensson/lagrange-lab/issues/951#issuecomment-6359967884)
+at 07:37:55.971Z explicitly says PASS and exit 0, matching the exact source,
+request and payload. It reports source execution started, one worker receipt,
+scope_closed and execution_scope_closed. The worker says COMPLETE, exit 0,
+containers_closed, execution_scope_closed and thermal_scope_closed, without a
+failure reason or truncation. COMPLETE was not treated as synonymous with PASS.
+
+The worker's raw log is 2953 bytes, SHA256
+`4e9428a99d8ffb6ac989cf8693e530a9a08515a746a4767ad77524ae927e507d`.
+The controller's distinct 2970-byte combined tail and its digest are not used
+as a substitute for that original log.
+
+### Complete original log, not a terminal tail
+
+I submitted one read-only evidence query for this original job/host, without
+submitting or restarting source execution. Query
+[954](https://github.com/psvensson/lagrange-lab/issues/954), request
+`f414da3204bf4d629c9d4c2ef56776de`, envelope SHA256
+`0a2cadc6a35ccbd552d4528d976d212a7ed5b7f4c92270094ea40c543f52b83a`,
+returned its
+[complete evidence receipt](https://github.com/psvensson/lagrange-lab/issues/954#issuecomment-6359986883).
+It binds original job, host and stream
+`8c3ed433f1117c5e3c50572c8a56d382e655bb4a22383d3348a506ef2ddaeb3c`,
+offset 0, next offset 2953, returned/available/original size 2953, complete,
+EOF and no truncation. It states read_only:true and executed_source:false;
+the original job is terminal and had executed source.
+
+Decoded bytes independently hash to the same chunk, raw-chunk, original-log
+and terminal worker-log digest. Thus the full log is available and unchanged
+by the evidence transport, despite the generic redacted:true flag. Local
+custody is `/tmp/retained-effects-r4-static-worker.log`, with the full receipt
+at `/tmp/retained-effects-r4-static-evidence0.json` and source-job receipts at
+`/tmp/retained-effects-r4-static-terminal-receipts.json`. No second source run
+was needed for collection.
+
+The complete log shows Node v22.23.2, npm 10.9.8, dependency setup, metadata
+refresh and audit, and the exact static range
+`f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc..HEAD`. The checker examined 57 changed
+paths, including 35 JavaScript files. I parsed and checked the full set of
+fourteen explicit successful checks:
+
+- test:deps
+- audit:shards
+- test:metrics:scoped
+- eslint (35 changed files)
+- audit:runtime-grammar
+- audit:roadmap-authority
+- audit:doc-ascii
+- test:metadata-gateway:audit
+- audit:impact-contracts
+- audit:doc-audience
+- audit:current-capabilities
+- audit:cli-docs
+- audit:closure-ledger
+- audit:service-portability-claims
+
+The checker reports `fast-static: ok in 26030ms`. Primary, resource and
+subsystem classifications each account for 2443 tests, with 22 subsystems.
+The primary census is unit 2114, integration 109, bootstrap 213,
+convergence-probe 3 and packaging 4. The refreshed import-graph snapshot is
+`7b3217d3093775c040f3d60b58a52009da79d5723f72f744a89b09cb6f3f2da6`,
+matching the reviewed generated graph seal. The final machine-readable line
+reports metadata_refresh_exit:0, metadata_audit_exit:0, fast_static_exit:0 and
+tracked_tree_exit:0. In particular, metadata regeneration left no tracked diff
+from the exact source HEAD. This is classification/static evidence, not 2443
+executed runtime tests or a claim that unrelated inherited debt is cleared.
+
+### Physical cleanup observation and limits
+
+I also issued the read-only post-run fleet observation
+[955](https://github.com/psvensson/lagrange-lab/issues/955), request
+`ae7f917b4a09493eb04a2f47ef9cbfc4`, envelope SHA256
+`1a21759a3b89935b5e0c23151ae8a8909029433f92ad4d1616c4844f52479321`.
+Its [complete receipt](https://github.com/psvensson/lagrange-lab/issues/955#issuecomment-6359995613)
+binds the unchanged controller and collector source
+`53e262450fada3b4e706898201a3c732811ae4d0`; it reports no source execution.
+The fleet JSON bytes hash to its stated
+`4b160e50748d95203de90f8ef1d9509ff0101d041c96b89569b4a54959624d01`.
+The actual physical lenovo probe at 07:39:38.571Z-07:39:38.982Z reports its
+machine lock free and no error, under unchanged boot identity
+`18581133-d0d9-4dec-a3f8-266562235699`. All six observed fleet locks are free.
+This post-run observation corroborates cleanup; it is not an observation of
+every instant of the execution interval. The closed execution/container/
+thermal scopes are separately retained in the terminal worker receipt.
+
+The worker reports CPU 64C and an unavailable SSD thermal reading. That does
+not change these static exit results; this review makes no thermal/performance
+certification claim. Likewise no runtime progress, original continuation or
+publication grant is inferred from static success. Review the separately
+collected #950 result and complete failure/counter census before changing the
+runtime condition. Any new source or test bytes require fresh applicability.
+
+This reviewer only appended this evidence assessment. The previous
+102898-byte review prefix hashes to
+`ced3ea35ac842f168170c9f9f690fc09ed13a8fba77649a9e2062d54b819dae3`.
+
+## Deferred registration: finite test-contract decision, 2026-10-23
+
+Decision: **approve the proposed test-only contract correction, with the
+production startup custody gap explicitly retained for R1.** This is approval
+of a bounded repair plan before edits, not approval of unwritten tests or of
+runtime #950. Production must remain unchanged for this observer increment.
+
+The old component test calls `registerServices` again after activation defers,
+expecting its new registration to adopt the first STOPPED row. Independent
+source inspection finds that each invocation creates a new row owner and a
+new local `partitionRegistrationEvidenceByReplicaId` map
+(`seed-registration-phase.js:201-222`). `registerReplica` constructs a new
+birth before INSERT. The canonical `mintServiceRowCreatedAt` advances its
+process high-water even when the requested wall timestamp repeats. Therefore
+the second INSERT's expected birth differs from the durable first birth, and
+the authoritative readback correctly emits nonretryable
+REPLICA_IDENTITY_CONFLICT. Retrying with the same timestamp cannot repair it.
+
+This is the intentional boundary tightened by `76f98c3b7` and consumed through
+the shared birth owner by `72a7a7649`, before the verified base. The unchanged
+`partition-registration-readback-controls.test.js` explicitly refuses another
+birth, foreign/missing creation token, foreign group and changed lifecycle.
+The older whole-phase positive originated in `1aea11baf6`; its adoption
+expectation predates that corrected owner contract. Restoring a permissive
+birth matcher to satisfy it would reintroduce the recorded safety defect.
+
+The approved
+[owner correspondence](pre-source-owner-correspondence-2026-10-21.md)
+requires one consumed birth right to admit one INSERT, uncertainty to reuse
+exact readback, and activation to consume the same exact registration evidence.
+Its ordered-method refinement explicitly rejects replaying the whole ordinary
+phase. [R1](pre-source-r1-r2-correction-2026-10-21.md) requires the existing
+activation owner to retain exact source/foundation, native claim and effect
+section through ACTIVE, leader acknowledgment and TRANSFERRED. Neither
+contract authorizes reading any same-ID row as a substitute birth.
+
+The actual seed plan enters the phase through `executePhase`. The current
+bootstrap workflow passes `isRetryableFailure: () => false`; the pipeline
+records failure and propagates it, and `handleBootstrapFailure` synchronously
+revokes the original attempt before cleanup. There is no current automatic
+in-invocation whole-registration retry path. Ordinary registration and original
+startup continuation remain held by the observer's approved boundary. This
+does not erase the custody gap: the local partition evidence map is lost on
+throw, and manually retaining it in a test will not prove the seed caller
+retains or reconstructs it. Future R1 composition must own that obligation
+through its already specified exact birth/activation/handoff interaction.
+
+The permitted test correction has two separately named claims:
+
+1. Preserve the actual phase's first deferred result, durable STOPPED birth and
+   absence of successful completion. A fresh whole `registerServices` call
+   must show a distinct attempted birth, exact nonretryable identity conflict,
+   no second activation and unchanged original durable row. It must not claim
+   the second INSERT was never attempted; the negative proves that the fresh
+   attempt cannot adopt or mutate the first birth.
+2. Exercise the real PartitionServiceRowOwner and real ReplicaStateMachine
+   with the exact branded evidence returned by the first real registration.
+   Inject zero-row nonapply/readback at the actual activation CAS, then redrive
+   activation using the same evidence without registering again. Require one
+   INSERT total, unchanged birth, the exact stable ACTIVE destination and no
+   fabricated local transition on defer. Retain counterfeit/cross-identity or
+   newer-birth refusal and duplicate/lost-answer controls. A mocked activation
+   callback that writes ACTIVE cannot substitute for these owner paths.
+
+The positive is explicitly an owner-level same-evidence redrive, not seed
+phase retention, original recovery, public startup or post-revocation
+permission. Existing registered-activation witnesses at lines 205-255 and
+334 onward provide the actual owner fixture and exact generation controls.
+Keep the first-defer adversary and its safety assertions; do not remove that
+case or weaken the lifecycle Quest's durable-outcome/re-entry requirements
+merely to obtain a pass. Add the exact-birth/readback and actual activation
+owner regression files to the next applicable selection and review the frozen
+test bytes before running them.
+
+Authority/observation, recovery, owner interaction and harness fidelity are the
+material categories in this correction. The first negative preserves the
+birth boundary; the second positive demonstrates the existing owner's allowed
+retry. Neither creates a second semantic owner, an operational retry loop,
+new transport/ACK behavior, concurrency mechanism, formation release, sweep or
+timer budget. Unaffected prior dispositions remain unchanged. Production
+evidence retention/reconstruction, protected original activation and the
+composed startup witness require their separate R1 implementation/review gate;
+these tests do not close it.
+
+## R4 exact-candidate runtime evidence, 2026-10-23
+
+Evidence verdict: **runtime FAIL**, with measured passes in the bounded
+observer/native/owner scopes below. Original run #950 executed 31 selected
+files: 29 passed and two failed. The source is exactly
+`c11c4ca266e78c815c9cd41954e351d20b182a41`; no altered test, later repair or
+unexecuted owner witness is included in this result. Static #951 remains PASS
+for the same commit, and the earlier source-only review remains conditional;
+neither converts this runtime result to acceptance.
+
+### Complete evidence and cleanup custody
+
+I matched the original request packet
+`/tmp/retained-effects-r4-runtime-request.json` to its
+[terminal receipt](https://github.com/psvensson/lagrange-lab/issues/950#issuecomment-6359970017),
+including request `85d2a821765347bda455b0000a67847a`, controller
+`b4a2e06c193c44b09f1b67d02e8d80f4`, envelope SHA256
+`ec2ac7181c719e63e5e69088358353669c1857c81ca0ca920da0201304b945e5`,
+payload SHA256
+`33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9`,
+the exact source and the full 31-file selection. The physical worker was
+`local-workstation`. The terminal says FAIL, exit 1 and source execution
+started; outer scope/execution and worker execution/container/thermal scopes
+are closed. Worker state COMPLETE is execution completion, not success.
+
+The complete original worker log is 25517 bytes, independently hashed as
+`f82d7966d9653c732cc43a8336ae4ab3fe3d786ef4114d22cc00121b55d89913`.
+I verified the local file `/tmp/retained-effects-r4-runtime-worker.log` against
+all four custody chunks in
+`/tmp/retained-effects-r4-runtime-log-custody.json`, and fetched each original
+GitHub receipt to confirm it matches that custody record:
+
+- [953: bytes 0-8000](https://github.com/psvensson/lagrange-lab/issues/953#issuecomment-6359962528)
+- [956: bytes 8000-16000](https://github.com/psvensson/lagrange-lab/issues/956#issuecomment-6359999960)
+- [957: bytes 16000-24000](https://github.com/psvensson/lagrange-lab/issues/957#issuecomment-6360055177)
+- [958: bytes 24000-25517](https://github.com/psvensson/lagrange-lab/issues/958#issuecomment-6360057686)
+
+All use stream
+`267943701d10e75d6131c6ec3729081e19cc2a2cee3646f3a5d6b6f5328c8efa`,
+the same original job and host, and declare read-only collection with no
+source execution by the query. Chunk/raw hashes match the exact contiguous
+local slices. The first query observed a growing RUNNING log; the final three
+bind the terminal 25517-byte original hash, and the last is complete/EOF with
+no truncation. No bytes are missing, duplicated or substituted from another
+run. The controller's 8213-byte combined tail is not the complete raw log.
+
+The independently obtained post-run physical fleet receipt #955 also observes
+`local-workstation` free after this job, under boot identity
+`ffacc5f5-28f5-48a0-b6ef-25eec2ef1328`, with no probe error. This corroborates
+the worker's closed cleanup scopes. It is not proof of every instant of the
+execution interval. Run #912 used lenovo-laptop; no speed or regression
+conclusion is drawn from elapsed-time differences between these hosts.
+
+### Complete file census and measured passes
+
+I parsed all 31 unique final classified-runner file summaries and compared
+their exact path set with the submitted selection:
+
+| Lane | Files | Passed | Failed | Runner-reported assertions |
+| --- | ---: | ---: | ---: | ---: |
+| ordinary | 20 | 20 | 0 | 770 |
+| bootstrap | 9 | 8 | 1 | 303 |
+| exclusive | 2 | 1 | 1 | 24 |
+| total | 31 | 29 | 2 | 1097 |
+
+The 1097 are runner-reported counts, not 1097 successful assertions. Wholly
+passing files account for 1024. TAP's nested per-file counts are different
+from the classified runner's totals and are not substituted for the census.
+The generic driver's `completed_test_files:null` and empty counters do not
+erase the 31 explicit final file summaries in the complete log.
+
+All three new observer witness files pass: classification unit 166, native
+integration 3 and actual preparation/custody 9, totaling 178 runner-reported
+assertions. Thus the repaired transaction fixture and actual native SQL fault
+cut now engage their intended branches, including the read-only/schema/type/
+obligation/ACK correspondence tests and all three foundation-table replay
+cases. The native positive is still the narrowly reviewed RF1 public-native-
+port witness: ordinary write admission is first shown CUTOVER_PAUSED. It proves
+pending retention, cold observation, normal replay, outcome/owed-event and
+provisional cache/durable-retry behavior, not original startup release or the
+complete RF3 original cohort.
+
+The pre-existing participant-origin integration file also passes both native
+cases, including its RF1 cold ENABLE replay and RF3 uncommitted-to-committed-
+pending cut. All twenty ordinary files pass, including native durable
+store/Ready/restart/persistence admission, participant origin/decision/apply,
+committed outcome, CDC and durable lifecycle regressions. New component
+repairs pass in cluster identity (9), replication authority (21) and election
+scheduling (22); original attempt lifetime (21) and phase custody (1) also
+pass. These are real results for the named scopes, not replacement proofs for
+the failed cases.
+
+### Two failed files and exact engagement limits
+
+**Registration: 51 runner-reported assertions, one failed old positive.**
+The complete TAP body shows first activation defer, retained STOPPED birth
+and no completion all passing. The second whole `registerServices` call
+then throws exact REPLICA_IDENTITY_CONFLICT, `deferRetry:false`, from the
+actual row owner at the authoritative registration readback. The planned
+second activation and ACTIVE assertions do not run. Other component cases,
+including all five corrected exact-continuation-HOLD negatives, pass. TAP's
+leaf summary is total 40/pass 39/fail 1; the classified runner reports 51
+for the file because these are different counting surfaces.
+
+The preceding finite decision records the causal contract analysis: a fresh
+registration mints a new birth and cannot adopt the old row. The permitted
+test-contract repair must preserve first-defer safety, add the exact conflict
+negative and separately prove same-branded-evidence redrive through real
+owners. The phase's lost local partition-evidence map remains an actual R1
+custody obligation. It is not fixed by this failed test, by merely renaming
+it, or by a test retaining evidence on the caller's behalf.
+
+**Managed split: 22 runner-reported assertions, three full-startup cases
+unengaged.** Its repaired storage-refusal component passes all 15 leaf
+assertions: cleanup ownership, conflicting identity and missing authoritative
+admission retain exact typed refusals before storage access. The other three
+cases each log `original-allocation-directory-custody-unavailable` while
+bootstrap is still `not_started`, with zero services created. The owner
+rejects missing actual directory custody in original preparation. Their
+fixture then fails secondarily at `resolveCanonicalAdmissionOwner:108`,
+reading `storageAccountingService` from a null rebalance coordinator; it did
+not first stop on the failed bootstrap result.
+
+Accordingly, blocked split admission persistence, degraded publication/admin
+diagnostics and authoritative stale-readiness repair were not exercised.
+Neither those behaviors nor a later classification/continuation HOLD was the
+measured failure mechanism here. The log proves the earlier directory-custody
+refusal followed by the fixture's downstream TypeError. The TAP leaf summary
+is total 18/pass 15/fail 3; none of the three intended full-startup scenarios
+may be counted as passing because its new component sibling passed. Supplying
+fabricated custody or weakening original startup gates to force these cases
+through is not an authorized repair.
+
+### Remaining disposition
+
+Preserve this failed exact attempt alongside the passing static evidence and
+the now-engaged observer witnesses. Complete the independently approved
+test-only registration/actual-activation correction, freeze its bytes and
+metadata for review, then obtain applicable exact-candidate lab evidence.
+Separately record and route the managed-split fixture/startup prerequisites;
+do not silently drop the three failed behavioral obligations or describe them
+as verified regressions. The full integration/startup extent remains unproved.
+
+The bounded observer has meaningful measured implementation evidence now,
+but this 31-file candidate remains runtime FAIL. No full-Quest receipts,
+original birth recovery, protected activation, durable transfer, MG recipient
+correspondence, composed two-start acceptance or merge approval follows.
+This assessment only appends evidence for committed `c11c4ca`; authorized
+moving R5 test edits are outside it and require their own frozen review.
+
+## R5 initial frozen test review and bounded selection, 2026-10-23
+
+Verdict: **REVISE** the two-file frozen source set for one material import
+defect, R5-T1. The proposed bounded 36-file lab selection is approved in
+scope, with the explicit evidence limits below. This is not approval to run
+the rejected bytes, nor approval of full startup or of the previous failed
+31-file run.
+
+Initial and pre-append checks matched both files in
+`/tmp/retained-effects-test-repair-manifest-r5.json`, SHA256
+`80c670729759393bf3bb7b84930cd857458fa61a4c6f2fe83299fab6609cc92c`.
+Registration SHA256 is
+`4c546f184c1fb2862ab0fe621e0c1c7525db7d2b744d82f96613aa959f8fa5b9`;
+registered-activation SHA256 is
+`434b56aa4374c5b23f6177d7f0873de8a26508576cc98a0baabf5f5e856bfbf2`.
+Production remains unchanged from `c11c4ca`.
+
+**R5-T1: unavailable named import prevents the registration file from loading.**
+The new `PARTITION_SERVICE_ROW_OWNER_ERROR` import refers to a private constant
+in `src/partition/partition-service-row-owner.js`. That module exports only
+`PartitionServiceRowOwner` and `isPartitionRegistrationEvidence`. Thus the
+test cannot link before any assertion executes. This is a source finding;
+this reviewer ran no local test. Correct only the test by checking the public
+error-code value in the same manner as the existing registration readback
+controls. Do not add a production export solely to satisfy this test. Syntax
+and lint reports do not establish successful module linking.
+
+No other material finding was found in this two-file delta. The phase
+negative retains its first defer/STOPPED/no-completion assertions and counts
+the second attempted INSERT honestly, discriminates its changed birth from
+unchanged replica/status identity, then requires exact nonretryable conflict,
+unchanged original durable row and no second activation. Its comment explicitly
+does not claim phase evidence retention or recovery.
+
+The paired test calls the actual row owner and ReplicaStateMachine. The
+controlled writer refuses the first real CAS and returns the exact STOPPED
+readback; the test checks deferred classification and no local ACTIVE install.
+It rejects a byte-identical but unbranded copy before another CAS or point
+read, then redrives the actual branded evidence after permitting apply. Clock
+advance cannot change birth or causal ACTIVE destination. Duplicate evidence
+performs the same CAS/readback and retains identical source/destination bytes,
+one INSERT total and the in-lane handler checks. The strengthened existing
+same-ID recreation negative verifies an actual newly minted birth, zero-row
+old-generation CAS, authoritative observation, no additional registration or
+local ACTIVE installation, and no mutation of the newer row. These are owner
+component witnesses with a controlled writer, not physical storage, native
+consensus or seed-startup custody proof.
+
+### Selection approval and evidence reuse
+
+I compared `/tmp/retained-effects-runtime-tests-r5.json`, SHA256
+`d598ef4076a4a41a0961c75909644e7813ef6226217349c0802215bdf52caf5b`,
+with the previous selection. It contains 36 unique files. It removes only
+`managed-split-admission-reliability.integration.test.js` and adds six actual
+owner regression files: registered activation, partition exact birth,
+partition readback controls, MG exact birth, partition row owner and partition
+activation helper. Every one of the eleven tests named by the existing
+`original-retained-effects-correspondence` impact contract remains selected,
+as do all three witnesses of `original-foundation-producer-observation`.
+No observer-contract witness is removed or replaced by a narrower assertion.
+
+This is a separately named observer/activation-owner selection, not a rerun
+or passing reinterpretation of #950. The complete #950 31-file FAIL remains
+preserved. Its unchanged managed-split storage-refusal component has measured
+15 passing leaf assertions at `c11c4ca`; reuse is limited to those exact bytes
+and their unchanged production dependency cone, not a new execution claim.
+The three unengaged full-startup scenarios still require real startup/custody
+prerequisites and remain unproved. Excluding their whole file here avoids
+repeating that distinct, known incomplete startup setup; it neither waives
+their requirements nor makes full Quest/corpus/public startup green.
+
+Authority, recovery, owner interaction and harness fidelity remain the
+material categories. Real birth branding/CAS and source-bound controlled
+negatives retain those boundaries. Production transport/delivery,
+serialization, formation, retry/wake and sweep/timer behavior is unchanged;
+the tests introduce no operational fallback, new budget or release grant.
+After correcting R5-T1, freeze the new hashes and generated metadata for a
+bounded final source review, then obtain fresh static and selected runtime
+evidence. The original R1 phase-custody gap and all full-cutover gates remain.
+
+## R5 corrected source-only approval, 2026-10-23
+
+Verdict: **APPROVE, source only, conditional on fresh exact-candidate lab
+evidence**. R5-T1 is resolved. There are no remaining material findings in
+the corrected two-test delta. This permits non-main preservation of the
+reviewed bytes for the approved bounded 36-file observer/activation-owner
+selection; it is not runtime acceptance or Quest/merge approval.
+
+The final 42-file manifest is
+`MANIFEST-retained-effects-replacement-r5-2026-10-23.json`, SHA256
+`385fb003119140e755faa7754b8d6f4226d9dc48a3f35dfbcb8ff8743bfb634c`.
+The corrected two-test manifest is
+`MANIFEST-retained-effects-test-repair-r5-2026-10-23.json`, SHA256
+`2af7ff1c3b4439068ee6dae73a85ea10d6c8ab9d51af85e36a3691136f5a891b`.
+Both preserved evidence copies equal the supplied `/tmp` files byte for
+byte. All 42 entries matched independently before this append; the same
+entries are rechecked afterward. The reviewed files also equal the index.
+Registration SHA256 is now
+`4ea435c46864651cc1b7a73499e53747a604c2b68eb616698c412d7c098d3ed5`;
+registered-activation remains
+`434b56aa4374c5b23f6177d7f0873de8a26508576cc98a0baabf5f5e856bfbf2`.
+
+The correction removes the unavailable private named import and compares
+the actual public `REPLICA_IDENTITY_CONFLICT` error fields. No production
+export was added. There are now no added imports in either R5 test relative
+to `c11c4ca266e78c815c9cd41954e351d20b182a41`. I also read the actual export
+surfaces for both complete direct import lists, following the constants
+barrel to its owners. The named activation error enum, row owner, state
+machine, phase, fixture and supporting constants all exist at their imported
+paths. This is source inspection, not a claim that a local runtime test ran.
+
+The prior substantive review applies unchanged: the phase negative preserves
+its original STOPPED birth and refuses a fresh registration attempt; the
+paired real owner/state-machine witness retains branded evidence through
+defer, counterfeit refusal, apply and idempotent replay, with one registration
+INSERT. The separate newer-birth control retains the exact CAS fence. The
+writer remains a controlled component fixture, so this does not prove
+physical storage, native consensus, phase evidence custody or startup recovery.
+
+All nine review categories remain covered. Authority/observation, recovery/
+replay, owner interaction and harness fidelity are directly discriminated by
+those controls. Transport/delivery and concurrency/serialization receive no
+production changes. Formation circularity remains an explicit unmet startup
+boundary. Retry/re-drive is proved only at the existing lifecycle owner with
+the same evidence; whole-phase retry remains refused. Sweep/timer behavior
+is unchanged and no new operational budget, wakeup or fallback was introduced.
+
+Production has an empty diff from `c11c4ca` and retains the previously reviewed
+`68633168` source. Relative to the R4 manifest, the only new file in scope is
+the existing registered-activation test; changed existing entries are the
+registration test, generated owner-debt inventory and generated impact-graph
+seal. I read both generated deltas: source/input/snapshot identities refresh,
+with unchanged resolver identity and no baseline change. The inventory retains
+1811 complexity entries, 47 source/script clone groups and 1462 duplicated
+lines, and 701 test clone groups and 26618 duplicated lines. The preserved
+normal-hook output is 3310 bytes, SHA256
+`b68720f950334723199b0a875a06236ce94b715ec6dfdec0fc979da3398609a0`.
+Its inherited global ratchet excesses remain debt; the author's reported
+successful hook is not debt clearance or fresh locked-lab static acceptance.
+
+Selection SHA256 remains
+`d598ef4076a4a41a0961c75909644e7813ef6226217349c0802215bdf52caf5b`.
+The earlier explicit selection approval and evidence reuse limits are
+unchanged: all observer impact-contract and paired producer/observation
+witnesses remain, #950 stays a full 31-file FAIL, the unchanged managed-split
+component's 15 passing leaf assertions remain evidence at `c11c4ca`, and its
+three full-startup scenarios remain unproved. Their exclusion here does not
+waive directory custody, protected activation, durable transfer, MG delivery,
+composed two-start, eight Quest receipts, corpus, publication or merge gates.
+
+This append preserves the initial rejection and all prior evidence. Its
+pre-append prefix was 128472 bytes, SHA256
+`0a17df3eebb4f4efba858df5e4fd1f1981ba501b8fcd6f738679af194b74cb2f`.
+This reviewer made no source/test/metadata changes and ran no local runtime
+or lab workload. Preserve the exact candidate, verify its committed blobs,
+then obtain fresh locked static and selected runtime evidence before claiming
+the bounded increment is verified.
+

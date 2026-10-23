@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/950#issuecomment-6359923697",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "85d2a821765347bda455b0000a67847a",
+    "request_sha256": "ec2ac7181c719e63e5e69088358353669c1857c81ca0ca920da0201304b945e5",
+    "status": "CLAIMED",
+    "recorded_at": "2026-10-23T07:35:11.837Z",
+    "result": {
+      "hosts": [
+        "local-workstation"
+      ],
+      "operation": "lab-work",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/950#issuecomment-6359930485",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "85d2a821765347bda455b0000a67847a",
+    "request_sha256": "ec2ac7181c719e63e5e69088358353669c1857c81ca0ca920da0201304b945e5",
+    "status": "RUNNING",
+    "recorded_at": "2026-10-23T07:35:38.081Z",
+    "result": {
+      "hosts": [
+        "local-workstation"
+      ],
+      "operation": "lab-work",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/950#issuecomment-6359970017",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "85d2a821765347bda455b0000a67847a",
+    "request_sha256": "ec2ac7181c719e63e5e69088358353669c1857c81ca0ca920da0201304b945e5",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-23T07:38:09.541Z",
+    "result": {
+      "execution_scope_closed": true,
+      "exit_code": 1,
+      "finished_at": "2026-10-23T07:38:09.116Z",
+      "hosts": [
+        "local-workstation"
+      ],
+      "log_bytes": 8213,
+      "log_sha256": "e48f9eacb00d96183f1aa8475cc74da1d49a25dfeb56ec189cdc1e5f4f7f589a",
+      "logical_request_id": "85d2a821-7653-47bd-a455-b0000a67847a",
+      "logs_are_worker_tails": true,
+      "operation": "lab-work",
+      "outcome": "FAIL",
+      "payload_sha256": "33b47fc62a3c4f673c4b57f19a797c250b604843f1f993751bda82a9814773d9",
+      "reason": null,
+      "scope_closed": true,
+      "source_execution_started": true,
+      "source_sha": "c11c4ca266e78c815c9cd41954e351d20b182a41",
+      "worker_receipt_count": 1,
+      "worker_receipts_sha256": "dbe069f28e40bb2f66022846ba1d9c0817a7606110e7096a8dbcec287ffd1b9f",
+      "workers": {
+        "local-workstation": {
+          "containers_closed": true,
+          "driver_result": {
+            "completed_test_files": null,
+            "counters": {},
+            "exit_code": 1,
+            "selected_test_files": 31
+          },
+          "execution_scope_closed": true,
+          "exit_code": 1,
+          "last_thermals": {
+            "cpu": 64,
+            "missing": [],
+            "ssd": 43.85,
+            "ssd_aux": 67.85
+          },
+          "log_bytes": 25517,
+          "log_sha256": "f82d7966d9653c732cc43a8336ae4ab3fe3d786ef4114d22cc00121b55d89913",
+          "log_truncated": false,
+          "output_bytes": 25517,
+          "output_sha256": "f82d7966d9653c732cc43a8336ae4ab3fe3d786ef4114d22cc00121b55d89913",
+          "reason": null,
+          "source_execution_started": true,
+          "state": "COMPLETE",
+          "thermal_scope_closed": true
+        }
+      }
+    }
+  }
+]

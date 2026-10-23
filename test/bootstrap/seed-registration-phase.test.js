@@ -138,14 +138,17 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
     );
   });
 
-test('SeedRegistrationPhase does not complete while partition activation is ' +
-  'deferred and re-enters idempotently', async (t) => {
+test('SeedRegistrationPhase retains deferred STOPPED birth and rejects ' +
+  'whole-phase registration of a distinct birth', async (t) => {
   const continuation = createSeedPhaseContinuationFixture();
   let durableServiceRow = null;
   let activationAttempt = 0;
+  let readCount = 0;
+  const insertedRows = [];
   const logEvents = [];
   const writer = {
     async insertSystemTableRow(_tableName, row) {
+      insertedRows.push({...row});
       if (durableServiceRow) {
         return {
           success: true,
@@ -157,6 +160,7 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
       return {success: true, partitionResult: {affectedRows: 1}};
     },
     async readAuthoritativeRows() {
+      readCount += 1;
       return {success: true, rows: [{...durableServiceRow}]};
     },
     async updateSystemTableRow() {
@@ -186,21 +190,12 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
       }),
       getSystemTableWriter: () => writer,
       getReplicaStateMachine: () => ({
-        async activateRegisteredReplica(options) {
+        async activateRegisteredReplica() {
           activationAttempt += 1;
-          if (activationAttempt === 1) {
-            const error = new Error('activation owner deferred');
-            error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
-            error.deferRetry = true;
-            throw error;
-          }
-          durableServiceRow = {
-            ...durableServiceRow,
-            status: SERVICE_STATUS.ACTIVE,
-            state_entered_at: options.registrationEvidence.updated_at + 1,
-            updated_at: options.registrationEvidence.updated_at + 1,
-          };
-          return {...durableServiceRow};
+          const error = new Error('activation owner deferred');
+          error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
+          error.deferRetry = true;
+          throw error;
         },
       }),
       getNodeId: () => 'node-a',
@@ -215,23 +210,41 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
 
   await t.rejects(
     phase.registerServices(1234),
-    {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED'},
+    {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED', deferRetry: true},
     'seed registration must leave the phase incomplete while exact activation is debt',
   );
   t.equal(durableServiceRow.status, SERVICE_STATUS.STOPPED,
     'deferred activation must retain its durable STOPPED source generation');
   t.equal(logEvents.includes('Services registered'), false,
     'the seed phase must not report registration completion on defer');
+  const originalRow = {...durableServiceRow};
+  t.same(insertedRows, [originalRow],
+    'the first phase invocation inserts exactly its original STOPPED birth');
 
-  await phase.registerServices(5678);
+  // Whole-phase re-entry creates another registration attempt. The separately
+  // tested lifecycle-owner retry retains the first branded evidence; this
+  // phase test does not establish evidence retention or startup recovery.
+  await t.rejects(phase.registerServices(5678), {
+    code: 'REPLICA_IDENTITY_CONFLICT',
+    errorCode: 'REPLICA_IDENTITY_CONFLICT',
+    deferRetry: false,
+  }, 'the exact-birth creation owner must refuse a fresh birth over the original');
   t.equal(continuation.checks, 2, 'each registration attempt rechecks continuation authority');
-
-  t.equal(activationAttempt, 2,
-    'the existing workflow re-entry should retry the exact activation debt');
-  t.equal(durableServiceRow.status, SERVICE_STATUS.ACTIVE,
-    'workflow re-entry should complete the same registered incarnation');
-  t.equal(durableServiceRow.created_at < 5678, true,
-    're-entry must retain the original durable incarnation, not mint another');
+  t.equal(insertedRows.length, 2, 'whole-phase re-entry attempts registration again');
+  t.equal(insertedRows[1].created_at > originalRow.created_at, true,
+    'the second registration carries a distinct monotonically minted birth');
+  t.same({...insertedRows[1],
+    created_at: originalRow.created_at,
+    state_entered_at: originalRow.state_entered_at,
+    updated_at: originalRow.updated_at}, originalRow,
+  'the rejected attempt differs in birth generation, not replica identity or status');
+  t.equal(readCount, 1, 'the refused INSERT observes the original authoritative row');
+  t.same(durableServiceRow, originalRow,
+    'the original durable STOPPED row remains unchanged after refusal');
+  t.equal(activationAttempt, 1,
+    'the conflicting registration must not reach a second activation');
+  t.equal(logEvents.includes('Services registered'), false,
+    'whole-phase refusal must not report registration completion');
 });
 
 test('SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration',

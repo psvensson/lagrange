@@ -1,0 +1,4 @@
+{
+  "test/bootstrap/seed-registration-phase.test.js": "4ea435c46864651cc1b7a73499e53747a604c2b68eb616698c412d7c098d3ed5",
+  "test/node/replica-state-machine-registered-activation.test.js": "434b56aa4374c5b23f6177d7f0873de8a26508576cc98a0baabf5f5e856bfbf2"
+}
