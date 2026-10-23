@@ -1340,6 +1340,36 @@
         "test/bootstrap/seed-original-attempt-lifetime.test.js",
         "test/raft/raft-rs-original-allocation-cold-inspection.test.js"
       ]
+    },
+    "cdc-source-native-delivery": {
+      "description": "Durable source CDC retains its exact occurrence through the responsible subscriber, seed or joining bridge, topology wave and recipient native application. Canonical committed acceptance binds the full event vector to actual recipient group/index/term afterCommit; append, transport acknowledgement, provisional hydration and ordinary callback return cannot discharge source debt. Only the source CDC_DELIVERED application changes delivered state. The named witnesses begin with strict semantic vectors and real RF1/RF3 source-to-recipient custody; they do not by themselves certify the full bounded-delivery interaction, startup or retained-history classification.",
+      "owners": [
+        "src/cdc/cdc-event-envelope.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-delivery.js",
+        "src/partition/partition-cdc-obligation-delivery.js",
+        "src/partition/partition-cdc-obligation.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-service-cdc-stream-base.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+        "src/bootstrap/node-joining-publication-activation.js",
+        "src/topology/cdc-group-propagation-service.js",
+        "src/topology/cdc-group-propagation-delivery-methods.js",
+        "src/message-group/message-group-forwarding-owner-delivery-methods.js",
+        "src/message-group/message-group-forwarding-owner-routing-methods.js",
+        "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+        "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+        "src/message-group/message-group-service-raft-timing.js",
+        "src/message-group/message-group-service-raft-lifecycle.js",
+        "src/message-group/message-group-proposal-routing.js",
+        "src/transport/message-router-pending-response-ledger.js",
+        "src/transport/message-router-delivery-behaviors.js"
+      ],
+      "tests": [
+        "test/cdc/cdc-delivery-outcome.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2780,6 +2810,47 @@
         "test/bootstrap/seed-retained-effects.test.js",
         "test/bootstrap/seed-retained-effects.integration.test.js",
         "test/bootstrap/seed-retained-effects-preparation.test.js"
+      ]
+    },
+    "cdc-source-native-delivery": {
+      "description": "The durable source/propagation owners and recipient/transport owners preserve one source occurrence and distinguish native committed application from provisional or transport acceptance before source acknowledgement. Bound the exact interaction through the approved MG source-occurrence contract; test registration is not a passing result or package acceptance.",
+      "endpoints": [
+        {
+          "id": "source-and-propagation",
+          "owners": [
+            "src/cdc/cdc-event-envelope.js",
+            "src/cdc/cdc-delivery-outcome.js",
+            "src/partition/partition-cdc-delivery.js",
+            "src/partition/partition-cdc-obligation-delivery.js",
+            "src/partition/partition-cdc-obligation.js",
+            "src/partition/partition-cdc-obligation-ledger.js",
+            "src/partition/partition-service-cdc-stream-base.js",
+            "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+            "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+            "src/bootstrap/node-joining-publication-activation.js",
+            "src/topology/cdc-group-propagation-service.js",
+            "src/topology/cdc-group-propagation-delivery-methods.js"
+          ]
+        },
+        {
+          "id": "recipient-and-response",
+          "owners": [
+            "src/message-group/message-group-forwarding-owner-delivery-methods.js",
+            "src/message-group/message-group-forwarding-owner-routing-methods.js",
+            "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+            "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+            "src/message-group/message-group-service-raft-timing.js",
+            "src/message-group/message-group-service-raft-lifecycle.js",
+            "src/message-group/message-group-proposal-routing.js",
+            "src/transport/message-router-pending-response-ledger.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        }
+      ],
+      "contract": "cdc-source-native-delivery",
+      "witnessTests": [
+        "test/cdc/cdc-delivery-outcome.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js"
       ]
     }
   }

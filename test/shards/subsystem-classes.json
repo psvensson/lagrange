@@ -5,7 +5,7 @@
     "admin-diagnostics": 116,
     "architecture-governance": 21,
     "bootstrap-membership": 329,
-    "cdc-metadata": 63,
+    "cdc-metadata": 64,
     "cli-tooling": 96,
     "control-plane": 216,
     "convergence-topology": 82,
@@ -25,10 +25,10 @@
     "transport-messaging": 97,
     "wasm-toolchain": 74
   },
-  "censusSize": 2443,
-  "digest": "fnv1a32-48b237b8",
+  "censusSize": 2444,
+  "digest": "fnv1a32-0422fc97",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-99f83187",
+  "observationDigest": "fnv1a32-6251f7ec",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -345,6 +345,7 @@
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "cdc-metadata",
+    "test/cdc/cdc-delivery-outcome.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.property.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.test.js": "cdc-metadata",
     "test/cdc/cdc-event-delivery.property.test.js": "cdc-metadata",
@@ -3560,6 +3561,14 @@
     "test/cdc/cdc-delete-cache-absence-convergence.test.js": {
       "files": [
         "src/cdc/cdc-integration-service-cache-visibility-authority.js"
+      ]
+    },
+    "test/cdc/cdc-delivery-outcome.test.js": {
+      "files": [
+        "src/cdc/cdc-source-scope-evidence.js",
+        "src/message-group/constants.js",
+        "src/topology/cdc-group-propagation-constants.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/cdc/cdc-integration-service-authoritative-reads.test.js": {
@@ -8110,7 +8119,10 @@
         "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/partition/partition-cdc-obligation-constants.js",
         "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
         "src/raft/raft-operation-port-constants.js",

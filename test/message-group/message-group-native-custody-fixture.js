@@ -58,7 +58,9 @@ async function pump(f) {
   }
 }
 
-async function recipientFixture(t, key) {
+async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
+  assert.ok(replicaCount === 1 || replicaCount === REPLICAS.length);
+  const replicas = REPLICAS.slice(0, replicaCount);
   const f = {key, phase: 'setup', services: [], clocks: [], queue: [], held: [],
     events: [], holdEntries: false, isolateLeader: false, leaderPeer: null,
     directory: fs.mkdtempSync(path.join(os.tmpdir(), 'mg-native-custody-'))};
@@ -88,10 +90,10 @@ async function recipientFixture(t, key) {
     emit(f, 'transport-native-custody', item);
     return Promise.resolve({delivered: true});
   };
-  const addresses = REPLICAS.map((id) => `${NODE_ID}/message-group/${id}`);
-  for (const replicaId of REPLICAS) {
+  const addresses = replicas.map((id) => `${NODE_ID}/message-group/${id}`);
+  for (const replicaId of replicas) {
     const cache = new SystemTableCache();
-    for (const id of REPLICAS) {
+    for (const id of replicas) {
       cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
         [COLUMN.SERVICE_ID]: id, [COLUMN.NODE_ID]: NODE_ID,
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
@@ -101,7 +103,7 @@ async function recipientFixture(t, key) {
     const timeSource = new VirtualTimeSource({startMs: 1000});
     f.clocks.push(timeSource);
     const service = new MessageGroupService({groupId: GROUP_ID, replicaId,
-      replicaIds: REPLICAS, peerAddresses: addresses, nodeId: NODE_ID,
+      replicaIds: replicas, peerAddresses: addresses, nodeId: NODE_ID,
       transport: f.router, dbPath: path.join(f.directory, `${replicaId}.sqlite`),
       timeSource, nodeService: {getSystemTableCache: () => cache,
         getReadOnlySystemTableCache: () => cache}});
@@ -116,7 +118,7 @@ async function recipientFixture(t, key) {
     await pump(f);
     const statuses = f.services.map((service) => service.raft.readStatus());
     if (statuses[0].role === 'leader' && statuses.every((status) =>
-      status.leaderId === REPLICAS[0] && status.appliedIndex > 0)) {
+      status.leaderId === replicas[0] && status.appliedIndex > 0)) {
       f.leaderPeer = statuses[0].peerId;
       await pump(f);
       assert.equal(f.queue.length, 0);
@@ -127,7 +129,7 @@ async function recipientFixture(t, key) {
       return f;
     }
   }
-  assert.fail('setup seam: real message-group RF3 formation did not complete');
+  assert.fail(`setup seam: real message-group RF${replicaCount} formation did not complete`);
 }
 
 export {GROUP_ID, NODE_ID, emit, pump, recipientFixture, view};
