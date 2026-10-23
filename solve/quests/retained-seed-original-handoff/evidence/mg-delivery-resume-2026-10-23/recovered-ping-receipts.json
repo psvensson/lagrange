@@ -1,0 +1,7 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1187#issuecomment-6366252775",
+    "body": "<!-- lagrange-lab-result:fa1f0f6a650940fe8f44d4c3b46a9d8c:COMPLETE -->\n```json\n{\n  \"schema\": \"lagrange-lab-result/v1\",\n  \"controller_id\": \"b4a2e06c193c44b09f1b67d02e8d80f4\",\n  \"request_id\": \"fa1f0f6a650940fe8f44d4c3b46a9d8c\",\n  \"request_sha256\": \"8c1082085f700ef10bceb8ac45c45d150160a2dd085c249a038a9147c04e9778\",\n  \"status\": \"COMPLETE\",\n  \"recorded_at\": \"2026-10-23T13:40:46.641Z\",\n  \"result\": {\n    \"allowed_hosts\": [\n      \"adam-laptop\",\n      \"adams-gamla\",\n      \"carinas-windows\",\n      \"lenovo-laptop\",\n      \"local-workstation\",\n      \"tv-dator\"\n    ],\n    \"authorization\": {\n      \"expires_at\": null,\n      \"mode\": \"trusted-pool-actor\",\n      \"until_revoked\": true\n    },\n    \"executed_source\": false,\n    \"generic_work\": true,\n    \"paused\": false,\n    \"pool_id\": \"default\",\n    \"source_sha\": \"53e262450fada3b4e706898201a3c732811ae4d0\",\n    \"uncertain_execution\": false,\n    \"version\": \"0.2.2\"\n  }\n}\n```",
+    "id": 6366252775
+  }
+]
