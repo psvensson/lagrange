@@ -12,6 +12,8 @@ Use the shortest path that answers the question in front of you.
   - generated status authority for the checked-in implementation
 - [Migration and adoption](migration.md) - SQL portability, WASM deployment,
   hot-path extraction, data loading, cutover, rollback, and exit planning
+- [Developer adoption direction](developer-adoption-direction.md) - developer
+  outcomes, missing API capabilities, runtime parity, and acceptance gates
 - [Security](security.md) - current controls and trusted-network assumptions
 - [Operations readiness](operations-readiness.md) - topology, recovery,
   upgrades, backups, observability, and pilot drills

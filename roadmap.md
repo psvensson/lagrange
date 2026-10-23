@@ -12,6 +12,10 @@ This page describes direction, not current support. The checked-in status
 authority is [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
 Released changes belong in [CHANGELOG.md](CHANGELOG.md).
 
+The cross-cutting [Developer adoption direction](docs/developer-adoption-direction.md)
+sets out user-facing acceptance outcomes across these existing milestones.
+It does not add a competing feature sequence or change implementation ownership.
+
 ## Recently completed - 0.1 Internal Coherence
 
 The first phase established the database foundations and the split/merge

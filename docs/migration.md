@@ -4,6 +4,11 @@ Lagrange is easiest to adopt one operation at a time. The goal is not to move an
 entire system before learning whether data-local execution pays. The goal is to
 prove one useful path while preserving a clean rollback.
 
+The [developer adoption direction](developer-adoption-direction.md) describes
+planned end-to-end acceptance outcomes. It is not a statement of current
+support; use [Current capabilities and limitations](current-capabilities-and-limitations.md)
+for that.
+
 ## Start with the product boundary
 
 Lagrange owns the partitions on which its distributed functions run. It does
