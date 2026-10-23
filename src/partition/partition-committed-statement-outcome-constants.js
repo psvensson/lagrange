@@ -20,6 +20,7 @@
 // together with the rs-raft log by the snapshot/log-bound quest; until then
 // it grows one row per committed statement, exactly like the log.
 const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
+  TABLE: '_partition_statement_outcomes',
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS _partition_statement_outcomes (
         entry_key TEXT PRIMARY KEY,
@@ -37,6 +38,10 @@ const PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL = Object.freeze({
     'SELECT outcome, log_index, term, failure_code, failure_message, ' +
     'changes, last_insert_rowid, owner_result_text ' +
     'FROM _partition_statement_outcomes WHERE entry_key = ?',
+  SELECT_ALL:
+    'SELECT entry_key, outcome, log_index, term, failure_code, failure_message, ' +
+    'changes, last_insert_rowid, owner_result_text ' +
+    'FROM _partition_statement_outcomes ORDER BY log_index, entry_key',
   INSERT:
     'INSERT INTO _partition_statement_outcomes ' +
     '(entry_key, outcome, log_index, term, failure_code, failure_message, ' +

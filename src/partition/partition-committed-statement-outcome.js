@@ -59,6 +59,9 @@ import {
   PARTITION_SQLITE_RESULT_CODE,
 } from './partition-committed-statement-outcome-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
+  isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
+  './partition-retained-store-observation.js';
 import {
   PARTITION_STATEMENT_REFUSAL_CODE,
   refusalLayerFieldOf,
@@ -69,8 +72,47 @@ const {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_VALUE,
+  PARTITION_SERVICE_LITERAL,
+  STRING,
   buildDurableCommitWitness,
 } = PARTITION_SERVICE_SHARED;
+
+const NO_COMMITTED_STATEMENT_KEY = null;
+
+// The same identity is used by apply, replay answers and cold observation.
+function committedStatementEntryKey(command) {
+  if (!command) return NO_COMMITTED_STATEMENT_KEY;
+  if (command.entryId) return `entry:${command.entryId}`;
+  if (!command.sql) return NO_COMMITTED_STATEMENT_KEY;
+  const params = Array.isArray(command.params) ? JSON.stringify(command.params) : STRING.EMPTY;
+  return [command.proposedBy || STRING.EMPTY, String(command.proposedAt || 0),
+    command.timestamp || STRING.EMPTY, command.sql, params].join(PARTITION_SERVICE_LITERAL.VALUE);
+}
+
+// Exact read-only census. Positions/result integers never round through Number.
+function readCommittedStatementCensusIn(db) {
+  const sql = PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL;
+  const rows = readRetainedStoreRowsIn(db, {table: sql.TABLE,
+    select: sql.SELECT_ALL, create: sql.CREATE_TABLE});
+  for (const row of rows) {
+    if (typeof row.entry_key !== 'string' || row.entry_key.length === 0 ||
+        typeof row.outcome !== 'string' || !isStoredInteger(row.log_index, 1n) ||
+        !isStoredInteger(row.term, 1n) || !isStoredNullableInteger(row.changes, 0n) ||
+        !isStoredNullableInteger(row.last_insert_rowid) ||
+        !isStoredNullableText(row.failure_code) || !isStoredNullableText(row.failure_message) ||
+        !isStoredNullableText(row.owner_result_text)) {
+      throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, sql.TABLE);
+    }
+  }
+  return rows.map((row) => Object.freeze({
+    entryKey: row.entry_key, outcome: row.outcome,
+    logIndex: String(row.log_index), term: String(row.term),
+    failureCode: row.failure_code, failureMessage: row.failure_message,
+    changes: row.changes === null ? null : String(row.changes),
+    lastInsertRowid: row.last_insert_rowid === null ? null : String(row.last_insert_rowid),
+    ownerResultText: row.owner_result_text,
+  }));
+}
 
 /**
  * Create the outcome table (DDL; run once at partition initialization, after
@@ -351,6 +393,8 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 }
 
 export {
+  committedStatementEntryKey,
+  readCommittedStatementCensusIn,
   answerSettledStatement,
   createCommittedStatementOutcomeTable,
   isDeterministicStatementFailure,

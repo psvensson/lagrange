@@ -75,6 +75,8 @@ function buildPhaseExecutionDelegates(service) {
     assertOriginalSeedAttempt: () => self.assertOriginalSeedAttempt(),
     admitOriginalSeedReplica: (options) => self.admitOriginalSeedReplica(options),
     assertOriginalSeedContinuation: () => self.assertOriginalSeedContinuation(),
+    getOriginalSeedFoundationTimestamp: () =>
+      self.originalAllocationPreparation.foundationTimestamp(),
     getNodeId: () => self.nodeId,
     getNodeAddress: () => self.nodeAddress,
     getAdvertisedNodeWsAddress: () =>

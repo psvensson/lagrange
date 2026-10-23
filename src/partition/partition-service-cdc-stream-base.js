@@ -12,6 +12,7 @@ import {
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
+import {committedStatementEntryKey} from './partition-committed-statement-outcome.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -28,7 +29,6 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
-  STRING,
   SYSTEM_TABLE_NAME,
   fs,
 } = PARTITION_SERVICE_SHARED;
@@ -417,23 +417,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   getCommittedEntryKey(command) {
-    if (!command) {
-      return null;
-    }
-    if (command.entryId) {
-      return `entry:${command.entryId}`;
-    }
-    if (!command.sql) return null;
-    const params = Array.isArray(command.params) ?
-      JSON.stringify(command.params) :
-      STRING.EMPTY;
-    return [
-      command.proposedBy || STRING.EMPTY,
-      String(command.proposedAt || 0),
-      command.timestamp || STRING.EMPTY,
-      command.sql,
-      params,
-    ].join(PARTITION_SERVICE_LITERAL.VALUE);
+    return committedStatementEntryKey(command);
   }
   /**
    * Extract data from INSERT SQL by querying the inserted row.

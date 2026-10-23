@@ -7,6 +7,7 @@ import {deepFreeze} from './raft-operation-port.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {validateOriginalSeedDeclaration, originalSeedPeerAddresses} from
   '../bootstrap/seed-original-allocation-declaration.js';
+import {readOriginalSeedRetainedEffects} from '../bootstrap/seed-retained-effects.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations,
   deriveRaftRsPeerId} from
@@ -286,6 +287,40 @@ class RaftRsOriginalAllocationPreparation {
     this.#declaration = declaration;
     this.#openingMode = STATE.COLD_RECOVERY;
     this.#inspectApplicationHistory = inspectApplicationHistory;
+  }
+
+  // Diagnostic evidence only: never installs COLD_RECOVERY or mints openings.
+  // The live preparation retains each read handle until exact close succeeds.
+  observeRetainedEffects(declaration) {
+    this.#begin();
+    const observations = [];
+    try {
+      validateOriginalSeedDeclaration(declaration, this.#declarationIdentity);
+      for (const member of declaration.members) {
+        this.assertCurrent();
+        const db = this.#custody.open(member, {readonly: true, fileMustExist: true});
+        const record = inspectColdMember(db, declaration, member);
+        const observation = readOriginalSeedRetainedEffects({db, declaration, member});
+        this.assertCurrent();
+        if (!isDeepStrictEqual(record, inspectColdMember(db, declaration, member))) {
+          throw originalAllocationError(REASON.OBSERVATION, member.replicaId);
+        }
+        observations.push(observation);
+      }
+    } catch (error) {
+      this.#fail(error?.code === STATE.HOLD ? error :
+        originalAllocationError(REASON.OBSERVATION, null, error));
+    }
+    this.#finishRead();
+    return deepFreeze(observations);
+  }
+
+  foundationTimestamp() {
+    this.assertCurrent();
+    if (!Number.isSafeInteger(this.#declaration?.declaredAt) || this.#declaration.declaredAt < 0) {
+      throw originalAllocationError(REASON.IDENTITY);
+    }
+    return this.#declaration.declaredAt;
   }
 
   /**

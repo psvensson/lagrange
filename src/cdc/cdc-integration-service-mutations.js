@@ -1,5 +1,5 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
-import {buildSystemTableMutationSqlParts} from './cdc-system-table-mutation-sql-helpers.js';
+import {buildSystemTableMutationSqlParts, buildSystemTableUpsert} from './cdc-system-table-mutation-sql-helpers.js';
 import {TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
@@ -195,12 +195,7 @@ export async function upsertSystemTableRow(context, tableName, data, options = {
   });
   return context.runCoalescedMutation(singleFlightKey, async () => {
     try {
-      const {columns, placeholders, values} =
-        buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, upsertData);
-      // SQLite INSERT OR REPLACE
-      const sql =
-        `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
-        `${SQL.VALUES} (${placeholders})`;
+      const {sql, params: values} = buildSystemTableUpsert(tableName, upsertData);
       const result = await context.executeSQL(sql, values, {
         queryTimeoutMs: options?.queryTimeoutMs,
         cancellationToken: options?.cancellationToken || null,

@@ -12,6 +12,20 @@ import {createSeedOriginalAllocation, originalSeedAnchor} from
 
 const ABORT_EVENT = 'abort';
 
+function retainedClassificationHold(preparation, declaration) {
+  let observations;
+  try {
+    observations = preparation.observeRetainedEffects(declaration);
+  } catch (cause) {
+    // Preserve the exact inspection error, including its primary/cleanup
+    // aggregate. Preparation retains any handle whose close failed.
+    return originalAllocationError(REASON.CLASSIFICATION_UNAVAILABLE, null, cause);
+  }
+  // Observations are not replay/opening authority. R1/R2 exclusions and
+  // recipient/source correspondence still require their composed proof.
+  return originalAllocationError(REASON.CLASSIFICATION_UNAVAILABLE, observations);
+}
+
 function assertStartupStillOwnsAttempt(service) {
   if (service.isShuttingDown === true || service.startupAbortSignal?.aborted === true) {
     throw originalAllocationError(REASON.CLOSED);
@@ -48,9 +62,7 @@ async function initializeOriginalSeedAttempt(service) {
     assertStartupStillOwnsAttempt(service);
     const retained = preparation.readDeclaration(originalSeedAnchor(dataDir));
     if (retained.state === STATE.PRESENT) {
-      // The real retained-command classifier is the next implementation
-      // boundary. No permissive callback or reconstructed genesis enters here.
-      throw originalAllocationError(REASON.CLASSIFICATION_UNAVAILABLE);
+      throw retainedClassificationHold(preparation, retained.declaration);
     }
     if (!isFreshSeedMembershipOutcome(service.membershipOwnerOutcome)) {
       throw originalAllocationError(REASON.AUTHORITY);

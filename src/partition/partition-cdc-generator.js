@@ -48,6 +48,20 @@ const PARTITION_CDC_GENERATOR_LITERAL = Object.freeze({
   SUPPRESSING_CDC_EVENT_FOR_NO_OP_WRITE: 'Suppressing CDC event for no-op write',
 });
 
+function stampOriginHlc(data, originHlc) {
+  if (!data || typeof data !== 'object' ||
+      originHlc === null || typeof originHlc === 'undefined') return data;
+  return {...data, [COLUMN.UPDATED_AT_HLC]: String(originHlc)};
+}
+
+// Shared by normal committed capture and read-only correspondence. The row
+// must already be supplied by its owner; this function never reads or writes.
+function hydratePartitionCdcEvent(envelope, data, options = {}) {
+  const event = {...envelope, data: stampOriginHlc(data, envelope.timestamp)};
+  if (Number.isFinite(options.sequenceNumber)) event.sequenceNumber = options.sequenceNumber;
+  return event;
+}
+
 /**
  * Generates CDC events for partition write operations.
  * Handles event creation, formatting, and delivery to subscribers.
@@ -216,21 +230,9 @@ class PartitionCDCGenerator {
    * @return {Object} Built CDC event.
    */
   hydrateEventEnvelope(entry, envelopeResult, options = {}) {
-    const cdcEvent = {
-      ...envelopeResult.cdcEventEnvelope,
-      data: this.stampOriginHlc(
-        this.extractCDCData(
-          entry,
-          envelopeResult.entryType,
-          envelopeResult.cdcEventEnvelope.tableName,
-        ),
-        envelopeResult.cdcEventEnvelope.timestamp,
-      ),
-    };
-    if (Number.isFinite(options.sequenceNumber)) {
-      cdcEvent.sequenceNumber = options.sequenceNumber;
-    }
-    return cdcEvent;
+    return hydratePartitionCdcEvent(envelopeResult.cdcEventEnvelope,
+      this.extractCDCData(entry, envelopeResult.entryType,
+        envelopeResult.cdcEventEnvelope.tableName), options);
   }
 
   /**
@@ -251,11 +253,7 @@ class PartitionCDCGenerator {
    * @private
    */
   stampOriginHlc(data, originHlc) {
-    if (!data || typeof data !== 'object' ||
-        originHlc === null || typeof originHlc === 'undefined') {
-      return data;
-    }
-    return {...data, [COLUMN.UPDATED_AT_HLC]: String(originHlc)};
+    return stampOriginHlc(data, originHlc);
   }
 
   /**
@@ -685,6 +683,7 @@ class PartitionCDCGenerator {
 }
 
 export {
+  hydratePartitionCdcEvent,
   PARTITION_CDC_EVENT_BUILD_STATE,
   PartitionCDCGenerator,
 };

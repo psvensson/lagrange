@@ -18,6 +18,9 @@ import {RAFT_RS_RETAINED_ENTRY_KIND as ENTRY_KIND,
   RAFT_RS_RETAINED_HISTORY_COVERAGE as COVERAGE,
   RAFT_RS_STORE_ERROR_CODE as RAFT_ERROR} from '../raft/raft-rs-durable-store-constants.js';
 import {isCanonicalRetainedGenerationOrigin} from './partition-participant-transaction-bytes.js';
+import {RETAINED_STORE_ERROR, retainedStoreError, readRetainedStoreRowsIn,
+  isStoredInteger, isStoredNullableText, isStoredNullableInteger} from
+  './partition-retained-store-observation.js';
 import {
   PARTICIPANT_ORIGIN_HISTORY_REASON as ORIGIN_REASON,
   PARTICIPANT_ORIGIN_HISTORY_STATE as ORIGIN_STATE,
@@ -189,14 +192,52 @@ function readPartitionWriteOriginHistory(db, partitionId) {
   try {
     return db.transaction(() => {
       const history = RaftRsDurableStore.readRetainedHistoryIn(db, partitionId);
-      const row = db.prepare(SQL.SELECT_GENERATION).safeIntegers(true).get();
-      if (row === undefined) throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
-      return originHistoryOf(history, row, partitionId);
+      return readPartitionWriteOriginIn(db, partitionId, history);
     })();
   } catch (cause) {
-    return Object.freeze({state: cause.code === RAFT_ERROR.RETAINED_HISTORY_INVALID ?
+    return Object.freeze({state: cause.code === RAFT_ERROR.RETAINED_HISTORY_INVALID ||
+      cause.code === RETAINED_STORE_ERROR.SCHEMA_CONTRARY ||
+      cause.code === RETAINED_STORE_ERROR.ROW_CONTRARY ?
       ORIGIN_STATE.CONTRARY : ORIGIN_STATE.UNAVAILABLE, reason: ORIGIN_REASON.OBSERVATION, cause});
   }
+}
+
+// Compose with the native and other application owners in the caller's single
+// read snapshot. No connection stamp or initialization is permitted here.
+function readPartitionWriteOriginIn(db, partitionId, history) {
+  if (!db.inTransaction) throw new Error(ORIGIN_REASON.TRANSACTION);
+  const rows = readRetainedStoreRowsIn(db, {table: SQL.GENERATION_TABLE,
+    select: SQL.SELECT_ALL_GENERATION, create: SQL.CREATE_GENERATION_TABLE});
+  const row = rows[0];
+  if (row === undefined) throw new Error(STORE_ERROR.GENERATION_ROW_MISSING);
+  if (rows.length !== 1 || row.singleton !== 1n) {
+    throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, SQL.GENERATION_TABLE);
+  }
+  return originHistoryOf(history, row, partitionId);
+}
+
+function readParticipantTransactionCensusIn(db) {
+  if (!db.inTransaction) throw new Error(ORIGIN_REASON.TRANSACTION);
+  const rows = readRetainedStoreRowsIn(db, {table: SQL.TABLE,
+    select: SQL.SELECT_ALL_PARTICIPANTS, create: SQL.CREATE_TABLE,
+    indexes: [SQL.CREATE_STATE_INDEX]});
+  for (const row of rows) {
+    if (!validParticipantCensusRow(row)) {
+      throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, SQL.TABLE);
+    }
+  }
+  return deepFreeze(rows);
+}
+
+function validParticipantCensusRow(row) {
+  return [row.transaction_id, row.participant_id, row.commit_mode, row.state]
+    .every((value) => typeof value === 'string' && value.length > 0) &&
+    isStoredInteger(row.transaction_epoch, 0n) &&
+    [row.session_id, row.operations_text, row.validation_text, row.prepared_digest,
+      row.prepare_entry_id, row.decision, row.decision_digest, row.decision_entry_id,
+      row.refusal_cause, row.refusal_detail].every(isStoredNullableText) &&
+    [row.prepare_index, row.prepare_term, row.decision_index, row.decision_term]
+      .every((value) => isStoredNullableInteger(value, 1n));
 }
 
 /**
@@ -390,6 +431,8 @@ export {
   readPartitionWriteGeneration,
   readPartitionWriteOrigin,
   readPartitionWriteOriginHistory,
+  readPartitionWriteOriginIn,
+  readParticipantTransactionCensusIn,
   recordPartitionWriteOrigin,
   updateParticipantTransactionDecided,
 };

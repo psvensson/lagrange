@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2423,
+    "ordinary": 2426,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2440,
-  "digest": "fnv1a32-787a9daa",
+  "censusSize": 2443,
+  "digest": "fnv1a32-b1441642",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -264,6 +264,9 @@
     "test/bootstrap/seed-release-failure-custody.test.js": "ordinary",
     "test/bootstrap/seed-release-once-per-cohort.test.js": "ordinary",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "ordinary",
+    "test/bootstrap/seed-retained-effects-preparation.test.js": "ordinary",
+    "test/bootstrap/seed-retained-effects.integration.test.js": "ordinary",
+    "test/bootstrap/seed-retained-effects.test.js": "ordinary",
     "test/bootstrap/seed-startup-session-store.test.js": "ordinary",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "ordinary",
     "test/bootstrap/service-instance-table-schema.test.js": "ordinary",

@@ -1299,6 +1299,47 @@
         "test/partition/participant-origin-retained-history.integration.test.js",
         "test/bootstrap/seed-original-attempt-lifetime.test.js"
       ]
+    },
+    "original-retained-effects-correspondence": {
+      "description": "Read-only original foundation correspondence consumes actual registration/SQL producers and application owners in one native/application snapshot. Exact SQL/params/rows, first statement outcomes, generation and complete owed/delivered CDC census must agree; applied ACKs bind first delivery and pending source dependencies remain unavailable. Physical schema belongs to the actual partition opener; no native DDL producer is inferred. Strict MG content observation preserves both stamps without source-occurrence authority. Startup and continuation remain held; this observation grants no opening or publication right.",
+      "owners": [
+        "src/bootstrap/seed-foundation-rows.js",
+        "src/bootstrap/phases/seed-registration-phase.js",
+        "src/cdc/cdc-integration-service-insert-normalization.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/bootstrap/seed-retained-effects.js",
+        "src/bootstrap/seed-retained-effects-constants.js",
+        "src/bootstrap/seed-retained-foundation.js",
+        "src/bootstrap/seed-retained-partition-effects.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-table-bootstrap.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-cdc-generator.js",
+        "src/partition/partition-cdc-obligation.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/bootstrap/seed-original-allocation-startup.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/message-group/message-group-committed-command-admission.js",
+        "src/partition/partition-retained-store-observation.js"
+      ],
+      "tests": [
+        "test/bootstrap/seed-retained-effects.test.js",
+        "test/bootstrap/seed-retained-effects.integration.test.js",
+        "test/bootstrap/seed-retained-effects-preparation.test.js",
+        "test/partition/participant-origin-retained-history.test.js",
+        "test/partition/participant-origin-retained-history.integration.test.js",
+        "test/partition/partition-cdc-obligation.test.js",
+        "test/partition/committed-statement-outcome.test.js",
+        "test/partition/partition-cdc-generator.test.js",
+        "test/bootstrap/seed-registration-phase.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -2698,6 +2739,47 @@
         "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
         "test/partition/participant-origin-retained-history.test.js",
         "test/partition/participant-origin-retained-history.integration.test.js"
+      ]
+    },
+    "original-foundation-producer-observation": {
+      "description": "The retained observer matches the actual original foundation producers and normal applied SQL/outcome/CDC owners; pending work replays normally and no observation changes debt or opens startup.",
+      "endpoints": [
+        {
+          "id": "foundation-producers",
+          "owners": [
+            "src/bootstrap/seed-foundation-rows.js",
+            "src/bootstrap/phases/seed-registration-phase.js",
+            "src/cdc/cdc-integration-service-insert-normalization.js",
+            "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+            "src/cdc/cdc-integration-service-mutations.js"
+          ]
+        },
+        {
+          "id": "application-correspondence",
+          "owners": [
+            "src/bootstrap/seed-retained-effects.js",
+            "src/bootstrap/seed-retained-effects-constants.js",
+            "src/bootstrap/seed-retained-foundation.js",
+            "src/bootstrap/seed-retained-partition-effects.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-table-bootstrap.js",
+            "src/partition/partition-participant-transaction-store.js",
+            "src/partition/partition-committed-statement-outcome.js",
+            "src/partition/partition-committed-statement-outcome-constants.js",
+            "src/partition/partition-cdc-generator.js",
+            "src/partition/partition-cdc-obligation.js",
+            "src/partition/partition-cdc-obligation-ledger.js",
+            "src/partition/partition-cdc-obligation-constants.js",
+            "src/query/distributed/distributed-transaction-schema-enforcement.js",
+            "src/partition/partition-retained-store-observation.js"
+          ]
+        }
+      ],
+      "contract": "original-retained-effects-correspondence",
+      "witnessTests": [
+        "test/bootstrap/seed-retained-effects.test.js",
+        "test/bootstrap/seed-retained-effects.integration.test.js",
+        "test/bootstrap/seed-retained-effects-preparation.test.js"
       ]
     }
   }

@@ -18,7 +18,10 @@ import {
   PARTITION_CDC_OBLIGATION_BYTES as BYTES,
   PARTITION_CDC_OBLIGATION_MESSAGE as MESSAGE,
   PARTITION_CDC_OBLIGATION_SQL as SQL,
+  PARTITION_CDC_OBLIGATION_TABLE as TABLE,
 } from './partition-cdc-obligation-constants.js';
+import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, readRetainedStoreRowsIn,
+  isStoredInteger, isStoredNullableInteger} from './partition-retained-store-observation.js';
 
 const ONE_ROW = 1;
 const FIRST_POSITION = Object.freeze({logIndex: 0, ordinal: -1});
@@ -50,6 +53,35 @@ function ensureCdcObligationLedger(db) {
  */
 function cdcObligationLedgerExists(db) {
   return db.prepare(SQL.TABLE_EXISTS).get() !== undefined;
+}
+
+function validCdcCensusRow(row) {
+  return isNonEmptyString(row.event_key) && isNonEmptyString(row.entry_id) &&
+    isNonEmptyString(row.event_json) && isStoredInteger(row.log_index, 1n) &&
+    isStoredInteger(row.term, 1n) && isStoredInteger(row.ordinal, 0n) &&
+    (row.delivered === 0n || row.delivered === 1n) &&
+    isStoredNullableInteger(row.delivered_index, 1n) &&
+    isStoredNullableInteger(row.delivered_term, 1n);
+}
+
+// Observe lazy existence and ALL debt, including delivered rows. No DDL and
+// no coercion of a malformed flag to false or an exact index to Number.
+function readCdcObligationCensusIn(db) {
+  const exists = retainedStoreTableExistsIn(db, TABLE);
+  const raw = exists ? readRetainedStoreRowsIn(db, {table: TABLE,
+    select: SQL.SELECT_ALL, create: SQL.CREATE_TABLE, indexes: [SQL.CREATE_OWED_INDEX]}) : [];
+  for (const row of raw) {
+    if (!validCdcCensusRow(row)) {
+      throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, TABLE);
+    }
+  }
+  const rows = raw.map((row) =>
+    Object.freeze({eventKey: row.event_key, logIndex: String(row.log_index),
+      term: String(row.term), ordinal: String(row.ordinal), entryId: row.entry_id,
+      eventJson: row.event_json, delivered: String(row.delivered),
+      deliveredIndex: row.delivered_index === null ? null : String(row.delivered_index),
+      deliveredTerm: row.delivered_term === null ? null : String(row.delivered_term)}));
+  return Object.freeze({exists, rows: Object.freeze(rows)});
 }
 
 /**
@@ -343,6 +375,7 @@ function emptyAcknowledgedBytes() {
 }
 
 export {
+  DELIVERED_FLAG as PARTITION_CDC_DELIVERY_FLAG,
   acknowledgedBytesOf,
   acknowledgedGroupsOf,
   acknowledgedEventBytesOf,
@@ -357,6 +390,7 @@ export {
   isPinnedCdcAcknowledgementCommand,
   markCdcObligationDelivered,
   readCdcObligation,
+  readCdcObligationCensusIn,
   readCdcObligationsAtPosition,
   readOwedCdcObligations,
   readOwedCdcTail,

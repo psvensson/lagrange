@@ -7,10 +7,10 @@
  * The class receives required dependencies via constructor injection.
  */
 
-import {
-  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
-  DECLARED_REPLICA_COUNT_DEFAULT,
-} from '../replication-target-authority.js';
+import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
+  '../seed-foundation-rows.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../raft/raft-rs-original-allocation-constants.js';
 import {randomUUID} from 'node:crypto';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
@@ -38,7 +38,6 @@ import {
 import {
   BOOTSTRAP_EPOCH,
   BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_MESSAGE_GROUP,
   BOOTSTRAP_SQL,
 } from '../bootstrap-constants.js';
 import {
@@ -47,7 +46,6 @@ import {
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
-import {PARTITION_STATE} from '../../partition/partition-constants.js';
 import {
   COLUMN,
   SERVICE_STATUS,
@@ -108,7 +106,12 @@ class SeedRegistrationPhase {
     const d = this.delegates;
     d.assertOriginalSeedContinuation();
     const logger = d.getLogger();
-    const timestamp = resolveHostedNodeClock(this.delegates)();
+    const originalTimestamp = d.getOriginalSeedFoundationTimestamp;
+    const timestamp = originalTimestamp === undefined ?
+      resolveHostedNodeClock(this.delegates)() : originalTimestamp();
+    if (originalTimestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
+      throw originalAllocationError(ORIGINAL_ALLOCATION_REASON.IDENTITY);
+    }
 
     await this.waitForRequiredPartitionLeadership();
     const systemTableWriter = this.ensureSystemTableWriter();
@@ -170,19 +173,7 @@ class SeedRegistrationPhase {
     const leaderService = d.getLeaderMessageGroupService();
     const leaderNodeId = leaderService?.nodeId || d.getNodeId();
 
-    const groupData = {
-      group_id: INITIAL_MESSAGE_GROUP_ID,
-      group_name: BOOTSTRAP_MESSAGE_GROUP.NAME,
-      // The OWNING table's declaration. This was a restated literal 3 in
-      // BOOTSTRAP_MESSAGE_GROUP that agreed with MESSAGE_GROUPS_SCHEMA only
-      // by coincidence, so a change to the schema default would have left
-      // this seeded row behind.
-      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
-      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-      policy: JSON.stringify(BOOTSTRAP_MESSAGE_GROUP.POLICY),
-      created_at: now,
-      updated_at: now,
-    };
+    const groupData = seedMessageGroupRow(leaderNodeId, now);
 
     try {
       await systemTableWriter.upsertSystemTableRow(
@@ -407,20 +398,7 @@ class SeedRegistrationPhase {
       const tableName = schema.tableName;
       const partitionId = INITIAL_PARTITION_IDS[tableName];
 
-      const tableData = {
-        table_id: tableName,
-        table_name: tableName,
-        schema_definition: JSON.stringify(schema),
-        partition_key: schema.columns[0].name,
-        table_policies: JSON.stringify({}),
-        partition_count: 1,
-        active_partition_version: 1,
-        pending_partition_version: null,
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-        created_at: now,
-        updated_at: now,
-      };
+      const tableData = seedTableRow(schema, now);
 
       try {
         await systemTableWriter.upsertSystemTableRow(
@@ -435,20 +413,7 @@ class SeedRegistrationPhase {
         throw error;
       }
 
-      const partitionData = {
-        partition_id: partitionId,
-        table_id: tableName,
-        table_name: tableName,
-        partition_key_start: null,
-        partition_key_end: null,
-        partition_version: 1,
-        replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
-        size_bytes: 0,
-        leader_node_id: d.getNodeId(),
-        state: PARTITION_STATE.NORMAL,
-        created_at: now,
-        updated_at: now,
-      };
+      const partitionData = seedPartitionRow(schema, d.getNodeId(), now);
 
       try {
         await systemTableWriter.upsertSystemTableRow(

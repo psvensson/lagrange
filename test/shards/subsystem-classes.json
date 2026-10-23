@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 326,
+    "bootstrap-membership": 329,
     "cdc-metadata": 63,
     "cli-tooling": 96,
     "control-plane": 216,
@@ -25,10 +25,10 @@
     "transport-messaging": 97,
     "wasm-toolchain": 74
   },
-  "censusSize": 2440,
-  "digest": "fnv1a32-1d703973",
+  "censusSize": 2443,
+  "digest": "fnv1a32-48b237b8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-687520d5",
+  "observationDigest": "fnv1a32-6ca603d6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -284,6 +284,9 @@
     "test/bootstrap/seed-release-failure-custody.test.js": "bootstrap-membership",
     "test/bootstrap/seed-release-once-per-cohort.test.js": "bootstrap-membership",
     "test/bootstrap/seed-restart-recovery-gate.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-retained-effects-preparation.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-retained-effects.integration.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-retained-effects.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
     "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
@@ -3353,6 +3356,71 @@
       "files": [
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "src/partition/partition-participant-transaction-cutover-constants.js"
+      ]
+    },
+    "test/bootstrap/seed-retained-effects-preparation.test.js": {
+      "files": [
+        "src/bootstrap/seed-foundation-rows.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-original-allocation-startup.js",
+        "src/bootstrap/seed-retained-effects-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/diagnostics/runtime-build-provenance.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/bootstrap/seed-retained-effects-fixture.js"
+      ]
+    },
+    "test/bootstrap/seed-retained-effects.integration.test.js": {
+      "files": [
+        "src/bootstrap/seed-foundation-rows.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-retained-effects-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/bootstrap/seed-retained-effects-fixture.js",
+        "test/partition/partition-service-test-support.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/bootstrap/seed-retained-effects.test.js": {
+      "files": [
+        "src/bootstrap/seed-foundation-rows.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-retained-effects-constants.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/cdc/cdc-source-scope-evidence.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-transaction-bytes.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/raft/raft-rs-durable-store-constants.js",
+        "test/bootstrap/seed-retained-effects-fixture.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {

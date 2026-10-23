@@ -203,6 +203,8 @@ const PARTICIPANT_TRANSACTION_BYTES = Object.freeze({
 // carried by any image of the partition's database taken at an applied index
 // (design 8.2).
 const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
+  TABLE: '_participant_transactions',
+  GENERATION_TABLE: '_partition_write_generation',
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS _participant_transactions (
         transaction_id TEXT NOT NULL,
@@ -244,6 +246,16 @@ const PARTICIPANT_TRANSACTION_SQL = Object.freeze({
   SELECT_GENERATION:
     'SELECT generation, origin_index, origin_term ' +
     'FROM _partition_write_generation WHERE singleton = 1',
+  SELECT_ALL_PARTICIPANTS:
+    'SELECT transaction_id, participant_id, session_id, commit_mode, ' +
+    'transaction_epoch, state, operations_text, validation_text, ' +
+    'prepared_digest, prepare_entry_id, prepare_index, prepare_term, decision, ' +
+    'decision_digest, decision_entry_id, decision_index, decision_term, ' +
+    'refusal_cause, refusal_detail FROM _participant_transactions ' +
+    'ORDER BY transaction_id, participant_id',
+  SELECT_ALL_GENERATION:
+    'SELECT singleton, generation, origin_index, origin_term ' +
+    'FROM _partition_write_generation ORDER BY singleton',
   // The origin is recorded once: a later origin command changes nothing.
   RECORD_ORIGIN:
     'UPDATE _partition_write_generation SET generation = 0, ' +

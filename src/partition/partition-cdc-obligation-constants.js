@@ -81,6 +81,10 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
 // ledger does not claim a compaction policy of its own.
 const PARTITION_CDC_OBLIGATION_TABLE = '_cdc_obligations';
 const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
+  SELECT_ALL:
+    'SELECT event_key, log_index, term, ordinal, entry_id, event_json, delivered, ' +
+    `delivered_index, delivered_term FROM ${PARTITION_CDC_OBLIGATION_TABLE} ` +
+    'ORDER BY log_index, ordinal',
   CREATE_TABLE: `
       CREATE TABLE IF NOT EXISTS ${PARTITION_CDC_OBLIGATION_TABLE} (
         event_key TEXT PRIMARY KEY,
