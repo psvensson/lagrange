@@ -1,4 +1,9 @@
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
+import {applyDurableCdcBatch} from './message-group-cdc-committed-acceptance.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {assertCdcTerminalEvents, captureCdcForwardOptions} from
+  './message-group-forwarding-owner-native-delivery-methods.js';
 import {
   assertMessageGroupCommandAdmitted,
   routeMessageGroupCommand,
@@ -14,6 +19,15 @@ const MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL = {
   // A non-leader routes a CDC command to the leader over the forward path.
   LEADER_TARGET_SOURCE: 'forward_to_leader',
 };
+
+function forwardedCdcRelayDepth(command, attempt, options) {
+  const events = command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ?
+    command.events : [command];
+  if (hasDurableCdcEvents(events)) {
+    return options.relayDepth === undefined ? 0 : options.relayDepth;
+  }
+  return Number.isInteger(attempt) && attempt >= 1 ? attempt : 1;
+}
 
 function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
   const {
@@ -141,6 +155,9 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * @return {Promise<void>}
      */
     async applyCDCBatch(events, options = {}) {
+      options = captureCdcForwardOptions(this, options);
+      assertCdcTerminalEvents(events, options);
+      if (hasDurableCdcEvents(events)) return applyDurableCdcBatch(this, events, options);
       const applyStartMs = this.now();
       const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
       const skipReplication = options.skipReplication === true;
@@ -300,7 +317,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * @return {Promise<void>}
      * @private
      */
-    async proposeCDCCommand(cdcCommand) {
+    async proposeCDCCommand(cdcCommand, options = {}) {
       // A command the committed-command owner refuses is never proposed,
       // forwarded or retried.
       assertMessageGroupCommandAdmitted(cdcCommand);
@@ -313,14 +330,19 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         configuredRetryBudget,
       );
       try {
-        await routeMessageGroupCommand(this, cdcCommand, {
+        const routed = await routeMessageGroupCommand(this, cdcCommand, {
           maxAttempts: configuredRetryBudget,
           proposeTimeoutMs,
+          proposeCommand: options.proposeCommand,
+          assertCurrent: options.assertCurrent,
+          remainingMs: options.remainingMs,
           forwardToLeader: (command, routeContext) =>
-            this.forwardCDCCommandToLeader(command, routeContext.attempt),
+            this.forwardCDCCommandToLeader(command, routeContext.attempt, options),
           computeRetryDelayMs: (attempt) =>
             this.computeCdcForwardRetryDelayMs(attempt),
           onRetry: ({attempt, mode, retryDelayMs, error}) => {
+            options.assertCurrent?.();
+            if (options.remainingMs && retryDelayMs >= options.remainingMs()) throw error;
             this.logger.warn(
               MESSAGE_GROUP_SERVICE_LITERAL.RETRYING_RAFT_CDC_COMMAND,
               {
@@ -336,6 +358,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
             );
           },
         });
+        return routed.answer;
       } catch (error) {
         this.logger.error(
           MESSAGE_GROUP_SERVICE_LITERAL.RAFT_CDC_COMMAND_FAILED,
@@ -366,31 +389,29 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * Forward one CDC command to the group's leader over the application
      * forward (a follower's route to the log).
      * @param {Object} command - A CDC or CDC_BATCH command.
-     * @param {number} attempt - The routing attempt (its relay depth).
+     * @param {number} attempt - The routing attempt; durable relay depth is request context.
      * @return {Promise<void>}
      * @private
      */
-    async forwardCDCCommandToLeader(command, attempt) {
-      const relayDepth =
-        Number.isInteger(attempt) && attempt >= 1 ? attempt : 1;
+    async forwardCDCCommandToLeader(command, attempt, options = {}) {
+      const relayDepth = forwardedCdcRelayDepth(command, attempt, options);
       if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) {
-        await this.forwardCDCBatchToLeader(
+        return this.forwardCDCBatchToLeader(
           Array.isArray(command?.events) ? command.events : [],
           {
+            ...options,
             relayDepth,
             replayOnly: command?.replayOnly === true,
           },
         );
-        return;
       }
-      await this.forwardCDCEventToLeader(
+      return this.forwardCDCEventToLeader(
         command.tableName,
         command.operation,
         command.data,
         {
-          timestamp: command.timestamp,
-          causeId: command.causeId,
-          replayOnly: command.replayOnly === true,
+          ...options,
+          ...copyCdcEventMetadata(command),
           relayDepth,
         },
       );

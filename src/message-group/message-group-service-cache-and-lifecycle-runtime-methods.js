@@ -1,4 +1,5 @@
 import {closeMessageGroupConsensus} from './message-group-consensus-port.js';
+import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 
 const MESSAGE_GROUP_SERVICE_CACHE_AND_LIFECYCLE_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -148,6 +149,7 @@ function createMessageGroupServiceCacheAndLifecycleRuntimeMethods(deps = {}) {
       }
       this.isShutdown = true;
       this.initialized = false;
+      retireCdcCommitWaiters(this);
       const {promise, resolve, reject} = Promise.withResolvers();
       this.shutdownSettlement = promise;
       const release = async () => {

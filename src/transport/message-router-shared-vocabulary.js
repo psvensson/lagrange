@@ -1,10 +1,8 @@
-import {EventEmitter} from 'events';
-import WebSocket from 'ws';
+import {INPROC, InProcWebSocket, createInProcWebSocketPair} from './inproc-transport.js';
 import {
   CONNECTION_STATE,
   OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_MESSAGE_TYPE,
-  TRANSPORT_EVENT,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
@@ -244,63 +242,6 @@ const INLINE_ACK_PASSTHROUGH_KEYS = /* @__PURE__ */ new Set([
 ]);
 
 const EMPTY_ROUTER_REASON = '';
-
-const INPROC = (globalThis.__DDB_INPROC_MESSAGE_ROUTER__ ||= {
-  serversByPort: /* @__PURE__ */ new Map(),
-  // port -> {router, nodeId}
-});
-
-class InProcWebSocket extends EventEmitter {
-  constructor() {
-    super();
-    this.readyState = WebSocket.CONNECTING;
-    this._peer = null;
-  }
-  _setPeer(peer) {
-    this._peer = peer;
-  }
-  _open() {
-    this.readyState = WebSocket.OPEN;
-    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.OPEN));
-  }
-  send(data) {
-    if (this.readyState !== WebSocket.OPEN || !this._peer) {
-      return;
-    }
-    queueMicrotaskFn(() => {
-      if (this._peer.readyState === WebSocket.OPEN) {
-        this._peer.emit(TRANSPORT_EVENT.MESSAGE, data);
-      }
-    });
-  }
-  close() {
-    this.terminate();
-  }
-  terminate() {
-    if (this.readyState === WebSocket.CLOSED) {
-      return;
-    }
-    this.readyState = WebSocket.CLOSED;
-    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.CLOSE));
-    if (this._peer && this._peer.readyState !== WebSocket.CLOSED) {
-      this._peer.readyState = WebSocket.CLOSED;
-      queueMicrotaskFn(() => this._peer.emit(TRANSPORT_EVENT.CLOSE));
-    }
-  }
-}
-
-function createInProcWebSocketPair() {
-  const a = new InProcWebSocket();
-  const b = new InProcWebSocket();
-  a._setPeer(b);
-  b._setPeer(a);
-  a._open();
-  b._open();
-  return {
-    a,
-    b,
-  };
-}
 
 function normalizeIdentifier(value) {
   if (value === null || value === void LOCAL_NUM_ZERO) {

@@ -24,9 +24,10 @@ import {
 } from './constants.js';
 import {createMessageGroupForwardingOwnerDeliveryMethods} from
   './message-group-forwarding-owner-delivery-methods.js';
-import {defineMessageGroupForwardingOwnerRoutingMethods} from
+import {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwnerRoutingMethods} from
   './message-group-forwarding-owner-routing-methods.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
@@ -292,7 +293,15 @@ class MessageGroupForwardingOwner {
       });
     }
 
-    if (service.isCurrentRaftLeader()) {
+    const durable = hasDurableCdcEvents(logContext.events ?? [logContext]);
+    if (durable) {
+      const nativeDecision = this.resolveNativeCdcIngressDecision(logContext);
+      if (nativeDecision.state !==
+          MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE.CACHE_SELECTION_REQUIRED) {
+        return nativeDecision;
+      }
+    }
+    if (!durable && service.isCurrentRaftLeader()) {
       return this.buildCdcIngressDecision({
         action: MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL,
         state: MESSAGE_GROUP_CDC_INGRESS_STATE.LOCAL_RAFT_LEADER,
@@ -305,6 +314,7 @@ class MessageGroupForwardingOwner {
     }
 
     const selection = service.resolveCDCForwardSelection({
+      ...logContext,
       tableName,
       operation,
     });

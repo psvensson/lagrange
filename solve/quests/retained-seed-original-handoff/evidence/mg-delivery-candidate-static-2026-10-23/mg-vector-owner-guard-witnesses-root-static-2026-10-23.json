@@ -1,0 +1,29 @@
+[
+  {
+    "argv": [
+      "node",
+      "--check",
+      "test/message-group/message-group-cdc-input-guard.test.js"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "node",
+      "--check",
+      "test/message-group/message-group-native-application-membership.test.js"
+    ],
+    "exit": 0,
+    "output": ""
+  },
+  {
+    "argv": [
+      "node_modules/.bin/eslint",
+      "test/message-group/message-group-cdc-input-guard.test.js",
+      "test/message-group/message-group-native-application-membership.test.js"
+    ],
+    "exit": 0,
+    "output": ""
+  }
+]

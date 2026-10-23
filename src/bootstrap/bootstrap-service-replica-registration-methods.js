@@ -222,10 +222,11 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
                   selection,
                   errorOptions,
                 ),
-              propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
+              propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
                 this.seedRuntimeBridgeOwner.propagatePartitionCDCEvent(
                   messageGroupService,
                   cdcEvent,
+                  deliveryContext,
                 ),
               afterPropagation: async () => {
                 if (tableName === TABLES.CONFIG) {

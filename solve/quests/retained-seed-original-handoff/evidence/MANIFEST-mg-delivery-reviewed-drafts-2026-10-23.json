@@ -1,0 +1,1135 @@
+{
+  "purpose": "Exact immutable source/test revisions underlying independent reviews; historical rejections remain rejections; no runtime or acceptance claim",
+  "sourceBase": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a",
+  "archives": [
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-root-source-r1-20261023.tar.gz",
+      "sha256": "c9aebc1fe4a7143aa7510578930d701f1abe5d6c255fa63f5449feb6c58f388a",
+      "bytes": 102672,
+      "originalBundle": "/tmp/mg-delivery-root-source-r1-20261023",
+      "members": [
+        {
+          "path": "files/src/bootstrap/bootstrap-service-replica-registration-methods.js",
+          "bytes": 26207,
+          "sha256": "eed164d27cdc25f8a642d550102b2e0ca368b1c3de3a78587019d759ce84d22e"
+        },
+        {
+          "path": "files/src/bootstrap/bootstrap-service-seed-delegates.js",
+          "bytes": 19210,
+          "sha256": "fe661a9d39f60885d36891aeb67f3f8939b119b73706ab82d64e215d42b276f7"
+        },
+        {
+          "path": "files/src/bootstrap/node-joining-publication-activation.js",
+          "bytes": 27926,
+          "sha256": "84200103b6bf1c23180ca22f304c1fcb2a1ce8da961c8c3e211c91131aa28fb5"
+        },
+        {
+          "path": "files/src/bootstrap/owners/seed-runtime-bridge-owner.js",
+          "bytes": 7563,
+          "sha256": "2810695ed1ca4326262d69d615267f3956c82452a2b391355b3edaab6ac6a328"
+        },
+        {
+          "path": "files/src/bootstrap/phases/seed-cache-hydration-cdc-subscription.js",
+          "bytes": 4053,
+          "sha256": "e21ce1df9e4bdf6f1e3bc1b7dd26aa0e327170c85507460ed157bff0acf526dc"
+        },
+        {
+          "path": "files/src/bootstrap/phases/seed-cache-hydration-phase.js",
+          "bytes": 24603,
+          "sha256": "cab65589180531be81c46ae883ca49cef7cf499983dfce6a7d339d35d36e4491"
+        },
+        {
+          "path": "files/src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+          "bytes": 9772,
+          "sha256": "de52f294d0746f880215cfc9eb83bf28844afccede214a192d3af022e24bb243"
+        },
+        {
+          "path": "files/src/cdc/cdc-delivery-invocation.js",
+          "bytes": 7511,
+          "sha256": "227f1320c10c1a553e3b2f0bf8237d09932acfd13c856da47eeb8c1844211d21"
+        },
+        {
+          "path": "files/src/cdc/cdc-delivery-outcome.js",
+          "bytes": 11606,
+          "sha256": "a09abd1f0fd1ca94a6a675cbf8d3be4c4cb189418ae8da77e83a9b593961cac6"
+        },
+        {
+          "path": "files/src/cdc/cdc-event-envelope.js",
+          "bytes": 4275,
+          "sha256": "2b7d00242ced4cb627ba70e4e1456cc377058b97c49114e55259428dfef1716b"
+        },
+        {
+          "path": "files/src/cdc/cdc-propagation-progress.js",
+          "bytes": 4197,
+          "sha256": "f831679abc99cbb5af06094e8698c8cbc556980c6ed9cf891aa93cbe56ba41fb"
+        },
+        {
+          "path": "files/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 10097,
+          "sha256": "6c47d0e5b7c7e99934e499bb29d60dc1dd9b8e4d5f2c8e1098128a8d550925b4"
+        },
+        {
+          "path": "files/src/message-group/message-group-consensus-port.js",
+          "bytes": 9898,
+          "sha256": "1ac52797b4654c067358c04b82615650eb631696f5141746115cb7658c0eee81"
+        },
+        {
+          "path": "files/src/message-group/message-group-proposal-routing.js",
+          "bytes": 9377,
+          "sha256": "9223219f63154f22545827c7978e0a8a7215f99621cfae1a15de50e4c0d2b7d1"
+        },
+        {
+          "path": "files/src/message-group/message-group-service-cache-and-lifecycle-runtime-methods.js",
+          "bytes": 7273,
+          "sha256": "a68da6f777a88575935ed03c00622a86466ec8223de1f7822b32db9be5fe243a"
+        },
+        {
+          "path": "files/src/message-group/message-group-service-raft-timing.js",
+          "bytes": 8160,
+          "sha256": "02454ed3e4f4a8b1d7d0d16015b950538b9782a659387ca906ecbea01192dda7"
+        },
+        {
+          "path": "files/src/message-group/message-group-service-runtime-support.js",
+          "bytes": 12577,
+          "sha256": "371502c80d9d92445ccc7b910c0d8001ae514e3f6c1b4651941c5f52b07e3397"
+        },
+        {
+          "path": "files/src/message-group/message-group-service-state.js",
+          "bytes": 20037,
+          "sha256": "15ac50dc159c585ab5e24c8351afa797b4c3a8bc2b15719b0ed0d49fac95fbd4"
+        },
+        {
+          "path": "files/src/partition/partition-cdc-delivery.js",
+          "bytes": 32305,
+          "sha256": "b75ef5ef010b68524735c549389160f9f739f2e4ff23da7b5ea6e1afe170851e"
+        },
+        {
+          "path": "files/src/partition/partition-cdc-obligation-constants.js",
+          "bytes": 12385,
+          "sha256": "7a03324c2e9329e5d5a487ced32d6c8599bd205a2855dc0608c00dbd250248ac"
+        },
+        {
+          "path": "files/src/partition/partition-cdc-obligation-delivery.js",
+          "bytes": 27021,
+          "sha256": "ed2af6e5f1569e5b8bfda670f5caf2a3e9d3376edbae25d0988ed7579e716d53"
+        },
+        {
+          "path": "files/src/partition/partition-cdc-obligation-progress.js",
+          "bytes": 4101,
+          "sha256": "8dace6bd5df8783054cfa010cc0914537063d6cfcdb2835c060d0893f22b8fbf"
+        },
+        {
+          "path": "files/src/topology/cdc-group-propagation-constants.js",
+          "bytes": 3571,
+          "sha256": "884a109c07f44158ad07d6b0fb578c66f4cf9c344e7a3a3a1d1a7034a39a8e09"
+        },
+        {
+          "path": "files/src/topology/cdc-group-propagation-durable-delivery.js",
+          "bytes": 8247,
+          "sha256": "554ae07074a6d92b373ce7c9353cdda569513c76b2986fcbca00a4aaf0add9be"
+        },
+        {
+          "path": "files/src/topology/cdc-group-propagation-service.js",
+          "bytes": 27256,
+          "sha256": "f2b1e510d61b559afaeb649dadfc88f6fe3c777937fa9f2ca2e554fc561cd2b6"
+        },
+        {
+          "path": "files/src/transport/transport-semantic-outcome.js",
+          "bytes": 11723,
+          "sha256": "a793f1a62cfc4d8597c02971be67c02600122d0dec838b7e6e6598b0c2d3a3ff"
+        },
+        {
+          "path": "files/test/cdc/cdc-delivery-outcome.test.js",
+          "bytes": 10511,
+          "sha256": "36840c75759db3456132855cc1bbb239dd3f3c81d13d4da3c8d403ecd7bcacb1"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 3602,
+          "sha256": "e9fbf7cf28344d8f10bba5c0f6bb889d088d970168be22da89d7494d5b413137"
+        },
+        {
+          "path": "root-source.patch",
+          "bytes": 100086,
+          "sha256": "aa00dce781288ba0aed427b8d9b7352fa0120daa6e5781fecbb92c105f17c4f1"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-root-selection-topology-r2-20261023.tar.gz",
+      "sha256": "dd7d7362e4da2ef811ce8ae160f5c7fa79bd84337882538d678ae928b6010455",
+      "bytes": 95214,
+      "originalBundle": "/tmp/mg-root-selection-topology-r2-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 5494,
+          "sha256": "c4c541e597ab0d19ea310c4e16601b743fe7bfb4f11a05efa0e49a578eb804dc"
+        },
+        {
+          "path": "after/src/bootstrap/shared/message-group-selection.js",
+          "bytes": 14240,
+          "sha256": "c4b6dafc4cbb39c7bc83c90cb895e7500f303ce2cd6b70e813dabf147542df7a"
+        },
+        {
+          "path": "after/src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+          "bytes": 10262,
+          "sha256": "cac24307086ab9da6dc38758fdaa507d75002891ce2f857ca7b4e188f28470f7"
+        },
+        {
+          "path": "after/src/cdc/cdc-propagation-progress.js",
+          "bytes": 6522,
+          "sha256": "e29b62dc9abc1c88505ad815aad9a0606a65a5ed9788baee9811818411dc856e"
+        },
+        {
+          "path": "after/src/partition/partition-cdc-delivery.js",
+          "bytes": 32557,
+          "sha256": "1789927b3c87f700998ffa77c797e6c3db23bb000d74689e1d7251c5a342d24b"
+        },
+        {
+          "path": "after/src/partition/partition-cdc-obligation-delivery.js",
+          "bytes": 27206,
+          "sha256": "f3821b9850910c368ba1168fff7f8fcaf870448c5c6eec0c0c9eda4afbac7056"
+        },
+        {
+          "path": "after/src/partition/partition-cdc-obligation-progress.js",
+          "bytes": 4312,
+          "sha256": "63500b9dddb7493640559d21317a0f3123bb774d3884fac4ee639f82e3829779"
+        },
+        {
+          "path": "after/src/topology/cdc-group-propagation-durable-delivery.js",
+          "bytes": 7345,
+          "sha256": "7e2b1d0bfd40e3de7eb996ad13b970d3cfa1594c1d3e8d78340199b5f7d5bdfd"
+        },
+        {
+          "path": "after/src/topology/cdc-group-propagation-durable-plan.js",
+          "bytes": 1718,
+          "sha256": "63e2d39b6e73f45d48d6c2555c74404e11e0234f7d7c7174c995fd6a9ce66451"
+        },
+        {
+          "path": "after/src/topology/cdc-group-propagation-routing.js",
+          "bytes": 8188,
+          "sha256": "60653a2a63007d6ab2f979b9d023aa8b62f6d043f8082570b32ef08385ab96c0"
+        },
+        {
+          "path": "after-src_bootstrap_shared_message-group-selection.js.eslint.json",
+          "bytes": 36003,
+          "sha256": "818283d17a3b0da44e6d7f9270554d6e542a3e6adc4057082cb83c294ad8ca2e"
+        },
+        {
+          "path": "after-src_bootstrap_shared_partition-cdc-propagation-subscriber.js.eslint.json",
+          "bytes": 20492,
+          "sha256": "84219f1355c3ac46811341bc81fb968e305280410400822bf7e03f5c2eba6fb0"
+        },
+        {
+          "path": "after-src_cdc_cdc-propagation-progress.js.eslint.json",
+          "bytes": 20467,
+          "sha256": "7889135feb219434609c67af612316ba035637dda4de905afd04a118082b981a"
+        },
+        {
+          "path": "after-src_partition_partition-cdc-delivery.js.eslint.json",
+          "bytes": 54059,
+          "sha256": "7e1e0c4b200e998a76b67654873e65edafd91cb63c11821e549a02053e6f1efb"
+        },
+        {
+          "path": "after-src_partition_partition-cdc-obligation-delivery.js.eslint.json",
+          "bytes": 20482,
+          "sha256": "dd17389dfcaef057c4797acf0e60eaaaee7f3d907bb30e8c9ac2af50247a20b5"
+        },
+        {
+          "path": "after-src_partition_partition-cdc-obligation-progress.js.eslint.json",
+          "bytes": 20482,
+          "sha256": "0954aad59567d2348e0e19577246e9acc0dfa3bfca93112d566da407f53319da"
+        },
+        {
+          "path": "after-src_topology_cdc-group-propagation-durable-delivery.js.eslint.json",
+          "bytes": 20486,
+          "sha256": "522f80b4ed8d88083b6c9e6cd891a5818db28d8dd794f8dbf14200983b4d5f54"
+        },
+        {
+          "path": "after-src_topology_cdc-group-propagation-durable-plan.js.eslint.json",
+          "bytes": 20482,
+          "sha256": "13a91be7bf38abbe1f75383ce8f6b312589ca8755ee4102ba897f163399b9bbc"
+        },
+        {
+          "path": "after-src_topology_cdc-group-propagation-routing.js.eslint.json",
+          "bytes": 29388,
+          "sha256": "c15a2d87cc2626c0d9fd47a2ff4258d1d34fa9d131d9b2db7bcc437bec493e88"
+        },
+        {
+          "path": "before/src/bootstrap/shared/message-group-selection.js",
+          "bytes": 13160,
+          "sha256": "7d8f8558070c6b5460a7d51332e3457be04d8485364e09cbca733b615b58cdf0"
+        },
+        {
+          "path": "before/src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+          "bytes": 9772,
+          "sha256": "de52f294d0746f880215cfc9eb83bf28844afccede214a192d3af022e24bb243"
+        },
+        {
+          "path": "before/src/cdc/cdc-propagation-progress.js",
+          "bytes": 4197,
+          "sha256": "f831679abc99cbb5af06094e8698c8cbc556980c6ed9cf891aa93cbe56ba41fb"
+        },
+        {
+          "path": "before/src/partition/partition-cdc-delivery.js",
+          "bytes": 32305,
+          "sha256": "b75ef5ef010b68524735c549389160f9f739f2e4ff23da7b5ea6e1afe170851e"
+        },
+        {
+          "path": "before/src/partition/partition-cdc-obligation-delivery.js",
+          "bytes": 27021,
+          "sha256": "ed2af6e5f1569e5b8bfda670f5caf2a3e9d3376edbae25d0988ed7579e716d53"
+        },
+        {
+          "path": "before/src/partition/partition-cdc-obligation-progress.js",
+          "bytes": 4101,
+          "sha256": "8dace6bd5df8783054cfa010cc0914537063d6cfcdb2835c060d0893f22b8fbf"
+        },
+        {
+          "path": "before/src/topology/cdc-group-propagation-durable-delivery.js",
+          "bytes": 8247,
+          "sha256": "554ae07074a6d92b373ce7c9353cdda569513c76b2986fcbca00a4aaf0add9be"
+        },
+        {
+          "path": "before/src/topology/cdc-group-propagation-durable-plan.js",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "before/src/topology/cdc-group-propagation-routing.js",
+          "bytes": 7444,
+          "sha256": "47beca3b180b22bfe9f82946c672723bcdf5d67d1d0e136ee3e96c846344b737"
+        },
+        {
+          "path": "before-src_bootstrap_shared_message-group-selection.js.eslint.json",
+          "bytes": 34917,
+          "sha256": "8fde93a054c68142d56f0049b923113eadef5750cbedcc6df3ad3d37243abe89"
+        },
+        {
+          "path": "before-src_bootstrap_shared_partition-cdc-propagation-subscriber.js.eslint.json",
+          "bytes": 30821,
+          "sha256": "b73e203ec97a778897456a1165b0834db7ffca6d480a18916cb1f8f9f6a75b71"
+        },
+        {
+          "path": "before-src_cdc_cdc-propagation-progress.js.eslint.json",
+          "bytes": 20467,
+          "sha256": "7889135feb219434609c67af612316ba035637dda4de905afd04a118082b981a"
+        },
+        {
+          "path": "before-src_partition_partition-cdc-delivery.js.eslint.json",
+          "bytes": 54040,
+          "sha256": "c6341ab8a4a3be89acc8d98e84b7c84d5aeec7a460d5d2906594daa7a9b3a9a0"
+        },
+        {
+          "path": "before-src_partition_partition-cdc-obligation-delivery.js.eslint.json",
+          "bytes": 20482,
+          "sha256": "dd17389dfcaef057c4797acf0e60eaaaee7f3d907bb30e8c9ac2af50247a20b5"
+        },
+        {
+          "path": "before-src_partition_partition-cdc-obligation-progress.js.eslint.json",
+          "bytes": 20482,
+          "sha256": "0954aad59567d2348e0e19577246e9acc0dfa3bfca93112d566da407f53319da"
+        },
+        {
+          "path": "before-src_topology_cdc-group-propagation-durable-delivery.js.eslint.json",
+          "bytes": 20486,
+          "sha256": "522f80b4ed8d88083b6c9e6cd891a5818db28d8dd794f8dbf14200983b4d5f54"
+        },
+        {
+          "path": "before-src_topology_cdc-group-propagation-routing.js.eslint.json",
+          "bytes": 28629,
+          "sha256": "47355f7f96742fc5bff71837ceba718363baf4c9a5286d9f383436fdbd34ac2b"
+        },
+        {
+          "path": "complexity-comparison.json",
+          "bytes": 3037,
+          "sha256": "db67cd46da3de427a3b44283bfbe352b35415869ef2e2ebdffe6068b7482fd41"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 6985,
+          "sha256": "094fe3b3c23d4021dc39afeea72e777c5428158fe9778104585c30cc56aa0d9c"
+        },
+        {
+          "path": "normal-eslint.json",
+          "bytes": 184302,
+          "sha256": "1d3707f8f61f9889f28854e5b763ce5c699083042e5db63ae7608726a7b83f2b"
+        },
+        {
+          "path": "r2.patch",
+          "bytes": 30647,
+          "sha256": "14917e9a5e2726e0ab3a2e7d8b35f9c28ce5a0e0d31c520284d650a58614d8f7"
+        },
+        {
+          "path": "syntax.json",
+          "bytes": 1000,
+          "sha256": "451979bb89c2d20c8cf114b17439b4a7a18eac38b19c49ba7951ead9d35be98d"
+        },
+        {
+          "path": "whitespace.txt",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-custody-r1-r6-20261023.tar.gz",
+      "sha256": "01a0232f712a149e1db06cb67690a0b75786ead015925cc8e8d06cb22f96e808",
+      "bytes": 15559,
+      "originalBundle": "/tmp/mg-native-custody-r1-r6-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 9802,
+          "sha256": "a9c1026b6ad0eeaf0d95f5f8076bdf75ddb9cfda3589d76051a5f2b1e6d69e70"
+        },
+        {
+          "path": "after/src/cdc/cdc-delivery-invocation.js",
+          "bytes": 8993,
+          "sha256": "4abb2267aae8815c33b2aea453cceb41d83e480049e2e888dd7b7343c9de3774"
+        },
+        {
+          "path": "after/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 10666,
+          "sha256": "163a79709f1eb4f0a69818f4ba9884ab9d7561fddbad8de08d4ca317a72f1bd0"
+        },
+        {
+          "path": "after/src/partition/proposal-queue.js",
+          "bytes": 9719,
+          "sha256": "46f83d0ae76d47fc382a19490014267c60e83509ce6a216e5af5115fa9f3bc3c"
+        },
+        {
+          "path": "before/src/cdc/cdc-delivery-invocation.js",
+          "bytes": 7511,
+          "sha256": "227f1320c10c1a553e3b2f0bf8237d09932acfd13c856da47eeb8c1844211d21"
+        },
+        {
+          "path": "before/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 10097,
+          "sha256": "6c47d0e5b7c7e99934e499bb29d60dc1dd9b8e4d5f2c8e1098128a8d550925b4"
+        },
+        {
+          "path": "before/src/partition/proposal-queue.js",
+          "bytes": 7520,
+          "sha256": "dda5c9ebfbc66c62e25f5da76488fce1d3cf1e3fc2e2a89085d1f53fb078b08d"
+        },
+        {
+          "path": "complexity-comparison.json",
+          "bytes": 268,
+          "sha256": "d056068753a58c74dece94ff59128c2beb46addb6d742dbdd9dc5ffbaf5266ba"
+        },
+        {
+          "path": "custody-r1-r6.patch",
+          "bytes": 10963,
+          "sha256": "77b1fb3752ad324cfe16eaa2800e87b97b942ad30d8d8d9bfb26ccd2ae27d126"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 1841,
+          "sha256": "b12b52a4885a3dff2de1c9c867a13c43ced0650222ed4df4144c44da0077f046"
+        },
+        {
+          "path": "static-checks.json",
+          "bytes": 1078,
+          "sha256": "202e810411d1840137f9d0d32839954ee499e2f601a6e0d43221fd3ac7cd0b2b"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-delivery-transport-r2-20261023.tar.gz",
+      "sha256": "a2ee17023ba8e22b96084ab45c7d9a277876a0d18c26348cdcd4ae087d18afc9",
+      "bytes": 88833,
+      "originalBundle": "/tmp/mg-delivery-transport-r2-20261023",
+      "members": [
+        {
+          "path": "after/src/transport/message-router-ack-delivery.js",
+          "bytes": 7028,
+          "sha256": "55ff23f5ad6b47e200dbfe6ea124f1bb3aed3af3ee2c83fded7ddaef7174f307"
+        },
+        {
+          "path": "after/src/transport/message-router-connection-authority.js",
+          "bytes": 26074,
+          "sha256": "5c160ec241239b4cbf2dbded07bc9cfffde9ba7be80d81a7734a19dc83c2ecb8"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-behaviors.js",
+          "bytes": 18759,
+          "sha256": "6b4c267cdfc54a6bc6060e147a7e5a31960ab837b8d8c4ed5c18e7b9341e545d"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-delegation.js",
+          "bytes": 8149,
+          "sha256": "6ef00a78d076ff5450ad9bb9f10f5b317bc8bbe3f3fbbe5c32020fdfb80d7a0e"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-encoding.js",
+          "bytes": 4827,
+          "sha256": "7b0f339eefe5add8c329b266e060240f299d6840555823b612bd92ad5923b0c8"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-lifetime.js",
+          "bytes": 8746,
+          "sha256": "c757fbb689087402223900afd7dc729941f961003b99312b09acba3799a79007"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-pressure-routing.js",
+          "bytes": 13846,
+          "sha256": "ae5ec3c006a3db1cc017caa6bdd7a33e88bda352d6d03665c6e3f9c14ade22be"
+        },
+        {
+          "path": "after/src/transport/message-router-outbound-delivery-registry.js",
+          "bytes": 24651,
+          "sha256": "504b195c05f394b820f391b08672de33f63c7f0a22ec084ae4a9d5b61b856ad0"
+        },
+        {
+          "path": "after/src/transport/message-router-pending-response-ledger.js",
+          "bytes": 20411,
+          "sha256": "940d91837954bc3a1ea48c4cb738a380cf85a9de67c0956df14b13786b3096d3"
+        },
+        {
+          "path": "after/src/transport/message-router-reconnect-behaviors.js",
+          "bytes": 21192,
+          "sha256": "975d73d99cc901dc6c5afe33ef10624d291ef69633da5d286cb29c4e6b8eb11d"
+        },
+        {
+          "path": "after/src/transport/message-router-shared-vocabulary.js",
+          "bytes": 17605,
+          "sha256": "63c95f73e6b409f251a1dd4680b902d2aec4fcc737a1272c07bde40be871aa44"
+        },
+        {
+          "path": "after/src/transport/message-router-stats-shutdown.js",
+          "bytes": 9925,
+          "sha256": "8ccbb9844e69e2ca1e987d0b7364e9f56867df3fae7fae70ca4a4cdc5c4b141c"
+        },
+        {
+          "path": "before/src/transport/message-router-ack-delivery.js",
+          "bytes": 5707,
+          "sha256": "c71a10ddb292da7cb4c31227ebadc448a6589bc10721c5468429f382d2d38b4b"
+        },
+        {
+          "path": "before/src/transport/message-router-connection-authority.js",
+          "bytes": 25653,
+          "sha256": "10752e921d243caa3a5cac59b7c2ed0d700ca01d936803c52a3616351767eb36"
+        },
+        {
+          "path": "before/src/transport/message-router-delivery-behaviors.js",
+          "bytes": 18759,
+          "sha256": "6b4c267cdfc54a6bc6060e147a7e5a31960ab837b8d8c4ed5c18e7b9341e545d"
+        },
+        {
+          "path": "before/src/transport/message-router-delivery-delegation.js",
+          "bytes": 8149,
+          "sha256": "6ef00a78d076ff5450ad9bb9f10f5b317bc8bbe3f3fbbe5c32020fdfb80d7a0e"
+        },
+        {
+          "path": "before/src/transport/message-router-delivery-lifetime.js",
+          "bytes": 8029,
+          "sha256": "2519e53f634036193776a95da6b44d0bad045ef807f07f378fa11174eebecc9f"
+        },
+        {
+          "path": "before/src/transport/message-router-delivery-pressure-routing.js",
+          "bytes": 13846,
+          "sha256": "ae5ec3c006a3db1cc017caa6bdd7a33e88bda352d6d03665c6e3f9c14ade22be"
+        },
+        {
+          "path": "before/src/transport/message-router-outbound-delivery-registry.js",
+          "bytes": 24651,
+          "sha256": "504b195c05f394b820f391b08672de33f63c7f0a22ec084ae4a9d5b61b856ad0"
+        },
+        {
+          "path": "before/src/transport/message-router-pending-response-ledger.js",
+          "bytes": 20304,
+          "sha256": "458f84ac3528154a20d7759a49a36cb2f697cedce8210ab570434459e006d027"
+        },
+        {
+          "path": "before/src/transport/message-router-reconnect-behaviors.js",
+          "bytes": 21192,
+          "sha256": "975d73d99cc901dc6c5afe33ef10624d291ef69633da5d286cb29c4e6b8eb11d"
+        },
+        {
+          "path": "before/src/transport/message-router-shared-vocabulary.js",
+          "bytes": 16936,
+          "sha256": "0e7c72d2e9374dd77a2fc86b3228694f981343373fd5c2eb67c883ea8d770d1f"
+        },
+        {
+          "path": "before/src/transport/message-router-stats-shutdown.js",
+          "bytes": 9925,
+          "sha256": "8ccbb9844e69e2ca1e987d0b7364e9f56867df3fae7fae70ca4a4cdc5c4b141c"
+        },
+        {
+          "path": "cycles.json",
+          "bytes": 821,
+          "sha256": "82bfaf43acd2167f1a1373d03a6b1171e80a2c9125d4120f707ade0f1e8d8258"
+        },
+        {
+          "path": "dossier.md",
+          "bytes": 16438,
+          "sha256": "6e6969932f5c479722695f77fd1818321ef278bf682fc0a515ee5798ab5a8858"
+        },
+        {
+          "path": "file-hashes.json",
+          "bytes": 3426,
+          "sha256": "200dca80b58a1faedc7d32e2a3bc4a21ca7b7b25389500a17d520d9b7d94719d"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 6928,
+          "sha256": "fafe0b3e24b141c5ed3f14753548c143a696592a738f7f7a4a51177e23b663d8"
+        },
+        {
+          "path": "static-checks.json",
+          "bytes": 1777,
+          "sha256": "e0acb190e9f5c89c8a38e4fa3ef29ba13bd3f566b86b21f412cbb01978602781"
+        },
+        {
+          "path": "static-debt.json",
+          "bytes": 7042,
+          "sha256": "b0bab09b7222bb6ccd0c96fd304dc187d04b30398e93b9b1ff5c4ddfc33d98c1"
+        },
+        {
+          "path": "transport-r2.patch",
+          "bytes": 16966,
+          "sha256": "4000d92e88d076bfb13486d6787d254e1df042128eb069abb160d9d2c7ed5bd1"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-f3-forwarding-frozen-r3-20261023.tar.gz",
+      "sha256": "41ab076455fdce4e6e8ecd6bdc7e81aa73b4f335bef531727e8a7f8d037b97c3",
+      "bytes": 64760,
+      "originalBundle": "/tmp/mg-f3-forwarding-frozen-r3-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 10354,
+          "sha256": "f9c998162fcf4fe5aa593f1150bc591cef1c99137e06bf25f449b606dba977ab"
+        },
+        {
+          "path": "after/src/bootstrap/shared/message-group-transport-handler.js",
+          "bytes": 5958,
+          "sha256": "650cacdf21b59d6ff03a0b5f16c97e37422209b411441579a466acd53769a5bd"
+        },
+        {
+          "path": "after/src/cdc/cdc-delivery-budget.js",
+          "bytes": 2964,
+          "sha256": "b8531cb441c74bd51cf66bea23e64c68a09ca45272bc1f59dfbdac089d7ed27d"
+        },
+        {
+          "path": "after/src/message-group/message-group-forwarding-owner-constants.js",
+          "bytes": 6847,
+          "sha256": "fc88e3a5c9002a636f6cc70b1b15bd85be124d9319a0fa20131794ecb9b3b020"
+        },
+        {
+          "path": "after/src/message-group/message-group-forwarding-owner-delivery-methods.js",
+          "bytes": 28515,
+          "sha256": "56488a9b2f94065a148ba6627beb0cb9c14f988c4d4ed58de6ef2bbec4dc9a61"
+        },
+        {
+          "path": "after/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+          "bytes": 13278,
+          "sha256": "a27dc32303b06d2b44ef724e873cd1efc2bd9e3020bcd5dd13f75c86c0dbdb53"
+        },
+        {
+          "path": "after/src/message-group/message-group-forwarding-owner-routing-methods.js",
+          "bytes": 23129,
+          "sha256": "2d761655e4f517f2cf5cee3ef4e01a7216edf9bdbe86d9ed02463814c8e4de33"
+        },
+        {
+          "path": "after/src/message-group/message-group-forwarding-owner.js",
+          "bytes": 23853,
+          "sha256": "a8d724ec76ccbe33cb85cf5e79d584a6c81a674631bebde53a100ee9db08d167"
+        },
+        {
+          "path": "after/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+          "bytes": 12994,
+          "sha256": "ad397356fcbbd1058943a0e4fc4e874559b2426a2be3d692579a2c9a29e3baea"
+        },
+        {
+          "path": "after/src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+          "bytes": 18243,
+          "sha256": "8f1fece571068e8207b66c6afb0397ce39f22016467ba0f7f542d6b67dbd39e4"
+        },
+        {
+          "path": "after/src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+          "bytes": 10342,
+          "sha256": "4f2db5fce3e601e42d5cc4fa9ff470807f7e98a823e5d3f5e371dd64ed437796"
+        },
+        {
+          "path": "before/src/bootstrap/shared/message-group-transport-handler.js",
+          "bytes": 5958,
+          "sha256": "650cacdf21b59d6ff03a0b5f16c97e37422209b411441579a466acd53769a5bd"
+        },
+        {
+          "path": "before/src/cdc/cdc-delivery-budget.js",
+          "bytes": 2797,
+          "sha256": "4ac20d01cef7c97fc9928bebf339a9051460584e7990b799167fec77f7c84bc1"
+        },
+        {
+          "path": "before/src/message-group/message-group-forwarding-owner-constants.js",
+          "bytes": 6847,
+          "sha256": "fc88e3a5c9002a636f6cc70b1b15bd85be124d9319a0fa20131794ecb9b3b020"
+        },
+        {
+          "path": "before/src/message-group/message-group-forwarding-owner-delivery-methods.js",
+          "bytes": 28515,
+          "sha256": "56488a9b2f94065a148ba6627beb0cb9c14f988c4d4ed58de6ef2bbec4dc9a61"
+        },
+        {
+          "path": "before/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+          "bytes": 12683,
+          "sha256": "bd981bf8fbd3134f50a31310d8cea075e3c5aafb0106894adfbeac7fe3b34351"
+        },
+        {
+          "path": "before/src/message-group/message-group-forwarding-owner-routing-methods.js",
+          "bytes": 23129,
+          "sha256": "2d761655e4f517f2cf5cee3ef4e01a7216edf9bdbe86d9ed02463814c8e4de33"
+        },
+        {
+          "path": "before/src/message-group/message-group-forwarding-owner.js",
+          "bytes": 23853,
+          "sha256": "a8d724ec76ccbe33cb85cf5e79d584a6c81a674631bebde53a100ee9db08d167"
+        },
+        {
+          "path": "before/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+          "bytes": 12526,
+          "sha256": "24732f26862829adea6f83877efbf5106a7b1e74302959e3b993998c3b880945"
+        },
+        {
+          "path": "before/src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+          "bytes": 18243,
+          "sha256": "8f1fece571068e8207b66c6afb0397ce39f22016467ba0f7f542d6b67dbd39e4"
+        },
+        {
+          "path": "before/src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+          "bytes": 10342,
+          "sha256": "4f2db5fce3e601e42d5cc4fa9ff470807f7e98a823e5d3f5e371dd64ed437796"
+        },
+        {
+          "path": "complexity-comparison.json",
+          "bytes": 1898,
+          "sha256": "307bfb9fd604344032b3cef5d4bd2f4eed303873dda7e6465c61e03c1aec3fbc"
+        },
+        {
+          "path": "files.json",
+          "bytes": 3225,
+          "sha256": "938ad9fabeb0f584f45eed4997828d213a9c4c3611f52d5b6967ad5eaf37975f"
+        },
+        {
+          "path": "forwarding-r3.patch",
+          "bytes": 11040,
+          "sha256": "c8e5495e99410b73fb67656c21ca3438ce7b44a8d79d95ce2230b9c5892a536e"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 5791,
+          "sha256": "f1d72b0a2cd86f66f8dc225266427bde9625fd3d698014d351acbe87c78e05fa"
+        },
+        {
+          "path": "static-checks-pre-extension.json",
+          "bytes": 1347,
+          "sha256": "43fdf9554246a0fac20ff4dcc8fe2eff7a737d2748cd00a95a0838cf74d56d10"
+        },
+        {
+          "path": "static-checks.json",
+          "bytes": 2582,
+          "sha256": "b94bbecde837362b0a8ee7463d23dcfd2bec74923470b9102c9423886d4d9c99"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-complete-vector-r4-20261023.tar.gz",
+      "sha256": "2cd9423ed53a7a1710de9d6717bf218beee262a0b39d92e97c69684bc151af67",
+      "bytes": 37779,
+      "originalBundle": "/tmp/mg-complete-vector-r4-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 13091,
+          "sha256": "7ee8a1803883dc20f958fa2f22f622d0a2cb64348566551180dd890777337485"
+        },
+        {
+          "path": "after/src/cdc/cdc-delivery-outcome.js",
+          "bytes": 15678,
+          "sha256": "cc8c406bc09059ee12f8819f2b3aee0fe2e65e8807a6ce1117f393c39b22260c"
+        },
+        {
+          "path": "after/src/cdc/cdc-event-envelope.js",
+          "bytes": 6803,
+          "sha256": "77477cfc01232da5feec9bb77fb310290583911e1754953a7c893424f5f56660"
+        },
+        {
+          "path": "after/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 13532,
+          "sha256": "7bb0595056b206384a9128773b53291ddeef11b66c6b7921b6ce78f9837fb5ae"
+        },
+        {
+          "path": "before/src/cdc/cdc-delivery-outcome.js",
+          "bytes": 11606,
+          "sha256": "a09abd1f0fd1ca94a6a675cbf8d3be4c4cb189418ae8da77e83a9b593961cac6"
+        },
+        {
+          "path": "before/src/cdc/cdc-event-envelope.js",
+          "bytes": 4275,
+          "sha256": "2b7d00242ced4cb627ba70e4e1456cc377058b97c49114e55259428dfef1716b"
+        },
+        {
+          "path": "before/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 10666,
+          "sha256": "163a79709f1eb4f0a69818f4ba9884ab9d7561fddbad8de08d4ca317a72f1bd0"
+        },
+        {
+          "path": "before-manifest.json",
+          "bytes": 692,
+          "sha256": "86ca87403c38200e4250adb1291aea3966fe7e462b1f352e08ae74b03035b740"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 5633,
+          "sha256": "2265783f06d86df77e5d5bec61f27a141d2653f491bb7af817a1b22e2a081bbc"
+        },
+        {
+          "path": "pre-intrinsic/src/cdc/cdc-delivery-outcome.js",
+          "bytes": 14086,
+          "sha256": "9d0a0561a4b3f71d10298926028d46a6885b43ce9646c77236eda0ca6a3ce151"
+        },
+        {
+          "path": "pre-intrinsic/src/cdc/cdc-event-envelope.js",
+          "bytes": 5373,
+          "sha256": "4568862bc52d8b155a9988b3ffd02c6a99a5c30ce60f364a8db51ca9e36b1e8d"
+        },
+        {
+          "path": "pre-intrinsic/src/message-group/message-group-cdc-committed-acceptance.js",
+          "bytes": 12987,
+          "sha256": "caf5618c196f1b7652e01c9e360c1a44d2f3e9ce79b820dca6cb2adca734f466"
+        },
+        {
+          "path": "r4.patch",
+          "bytes": 36120,
+          "sha256": "31a64ec685a4c803c502c690012557c2dd3daebcc967ee90d4f7fda62445fe30"
+        },
+        {
+          "path": "static-checks-final.json",
+          "bytes": 2244,
+          "sha256": "f335e224775f265d10d2a8620c46ef255627e7f5c584d8211e4aea3cc75593c7"
+        },
+        {
+          "path": "static-checks-initial.json",
+          "bytes": 2397,
+          "sha256": "a190b79b8b5f52a084517140934e813b971f91a060c66cbc3bedbdd1122a0bee"
+        },
+        {
+          "path": "static-checks-intrinsics.json",
+          "bytes": 2244,
+          "sha256": "f335e224775f265d10d2a8620c46ef255627e7f5c584d8211e4aea3cc75593c7"
+        },
+        {
+          "path": "static-checks-r2.json",
+          "bytes": 3254,
+          "sha256": "64b5a872150706b4e4a497b3ab627e4ac4f4b9e3395f4c0e7aa6466df16d3e45"
+        },
+        {
+          "path": "static-checks.json",
+          "bytes": 2678,
+          "sha256": "048deace37f3fcc5f43d659a0c9402574b8c02392f592f289e861b4d05d3f9ab"
+        },
+        {
+          "path": "static-import-custody-checks-final.json",
+          "bytes": 14487,
+          "sha256": "c9e046fadc0e28e5d1085e7f88f08729e2f7ab7bc041c3ecd7cc12cdfe0af22a"
+        },
+        {
+          "path": "static-import-custody-checks.json",
+          "bytes": 12386,
+          "sha256": "04ceb2552b3d399cb63dbf54e1982d745d8cc47ae2ddc3f5deef80149dc476f2"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r1-20261023.tar.gz",
+      "sha256": "26cbae6465ac20563a9a84f5d171529ab6bfbbcecc5c69dd52637f9d8f785843",
+      "bytes": 5272,
+      "originalBundle": "/tmp/mg-currentness-witnesses-r1-20261023",
+      "members": [
+        {
+          "path": "test/bootstrap/cdc-propagation-source-owner-currentness.test.js",
+          "bytes": 4270,
+          "sha256": "65689b8ab9aa0c53a142da1e8c55a34b469e6fa4241bc5873372a8262459522a"
+        },
+        {
+          "path": "test/partition/partition-cdc-topology-progress-currentness.test.js",
+          "bytes": 7204,
+          "sha256": "c0e4b95531e93101a309b9116fbc64d09cadc7cc3a3811cfdbe67db5f5c372ea"
+        },
+        {
+          "path": "test/test-helpers/cdc-topology-progress-fixture.js",
+          "bytes": 7514,
+          "sha256": "ad71c1fdde8f1bdd70746b5cc30b6ad0e4f8d0527874b6d6b583f799c087045b"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-currentness-witnesses-r2-20261023.tar.gz",
+      "sha256": "b1d5ba6ecc0ecf571fbe39954ac025723dfcabbe5925d9deb99af4a23d49d617",
+      "bytes": 7798,
+      "originalBundle": "/tmp/mg-currentness-witnesses-r2-20261023",
+      "members": [
+        {
+          "path": "eslint.json",
+          "bytes": 61471,
+          "sha256": "cfa49e89151467e77a53c2fe65f4cbaf6fbac1cf4dd478ce41b85457739f95d4"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 910,
+          "sha256": "9fd9926778f4db36b8e1c1504db523008e1b1170d9e47dd1103180fc66ee05d6"
+        },
+        {
+          "path": "test/bootstrap/cdc-propagation-source-owner-currentness.test.js",
+          "bytes": 4703,
+          "sha256": "bd09ea41037440df8c173b834aa7b50c1578c60eff405a8499b38e5070345c6b"
+        },
+        {
+          "path": "test/partition/partition-cdc-topology-progress-currentness.test.js",
+          "bytes": 7403,
+          "sha256": "a769fc6d38892421f4e6d76c636ca4e981e79c53da74240f72a340bf0c134a37"
+        },
+        {
+          "path": "test/test-helpers/cdc-topology-progress-fixture.js",
+          "bytes": 7691,
+          "sha256": "5df5b96b221c5811167301374e13cb64a35d4a1589e7c49276912e3ae2ceeca9"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r3-20261023.tar.gz",
+      "sha256": "f1d1cbee48e381bdd24bf5fe14bcb573ff95abdc12d73b8bdb6c3b4d92935d9d",
+      "bytes": 35742,
+      "originalBundle": "/tmp/mg-native-fixture-candidate-r3-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 3533,
+          "sha256": "7faa11500f2df9888dcccabe629ce71d3bbfc1d8ae18ebe39c8214940c395eaf"
+        },
+        {
+          "path": "after/test/message-group/message-group-native-custody-handoff.test.js",
+          "bytes": 25009,
+          "sha256": "e0b0dbcd425c3a87aa15a19886c526d3b5033372521c675056aa4821e5598a6b"
+        },
+        {
+          "path": "after/test/message-group/message-group-native-provisional-route.test.js",
+          "bytes": 24240,
+          "sha256": "f977fc15f679f98b8b4de141ee6d8add85e56008bd3223fadb318d1e9efbb6cf"
+        },
+        {
+          "path": "approved-trace/test/message-group/message-group-native-custody-handoff.test.js",
+          "bytes": 23429,
+          "sha256": "7f4cf6984aadb9724b012bd1f32be53e3eda28d065a07a76a7cc5ff2f44cacb7"
+        },
+        {
+          "path": "approved-trace/test/message-group/message-group-native-provisional-route.test.js",
+          "bytes": 23824,
+          "sha256": "929c7514e785e8a25713d89a7c6e49bfabd6d8e7ccd0910f50a70700cab4d744"
+        },
+        {
+          "path": "before/test/message-group/message-group-native-custody-handoff.test.js",
+          "bytes": 19500,
+          "sha256": "cc50118621a0d150bf9726e7e01b72ef493f74042b48f92c32f0666c027286a4"
+        },
+        {
+          "path": "before/test/message-group/message-group-native-provisional-route.test.js",
+          "bytes": 21644,
+          "sha256": "128995ce2c8002b1266ba4eaad14c6f66c1919f43db89c274eba9465887543ab"
+        },
+        {
+          "path": "delta-from-approved-trace.patch",
+          "bytes": 5841,
+          "sha256": "a1ac9a7164325b9e322cbbca382936d7839cc272e9b61ae0bae285d8897c680e"
+        },
+        {
+          "path": "eslint.json",
+          "bytes": 40990,
+          "sha256": "cdbdf4d43df5d1eceda0605eeb8494bda5ba3cfe5575cb2096896b135bdc381a"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 743,
+          "sha256": "a73cbf5a44c9ef243004c5f0343a4e34935f17316580fb7f8b78903775ab2add"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-fixture-candidate-r4-20261023.tar.gz",
+      "sha256": "b380b8631b72878ace854e24f90705375807a798523b6779d5fc5edca7c82ad1",
+      "bytes": 10472,
+      "originalBundle": "/tmp/mg-native-fixture-candidate-r4-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 1331,
+          "sha256": "33fdaee89c860d6bbc54f99882ff5d7da887c1f585bd18ca85453cb8926a3d20"
+        },
+        {
+          "path": "after.test.js",
+          "bytes": 28046,
+          "sha256": "2413080c7eae679e3661d1f0a9f804ea0d6694d16187f24500aa5766132662ee"
+        },
+        {
+          "path": "before.test.js",
+          "bytes": 25009,
+          "sha256": "e0b0dbcd425c3a87aa15a19886c526d3b5033372521c675056aa4821e5598a6b"
+        },
+        {
+          "path": "delta.patch",
+          "bytes": 5090,
+          "sha256": "1673bc3475b5ff9965f19c3d26ad9cc144c8bb88d1da0933f2fe6bc88f816488"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 342,
+          "sha256": "e9f8522a0ce699b5db5151f8b211e4a0c9c45905455b3345090ab98bc224179a"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-native-mixed-vector-r2-20261023.tar.gz",
+      "sha256": "92d0fc6f9eec8302d0e3aabb8b6705b1096ba674190eb24efb2b95bd00a25ec9",
+      "bytes": 2925,
+      "originalBundle": "/tmp/mg-native-mixed-vector-r2-20261023",
+      "members": [
+        {
+          "path": "after.test.js",
+          "bytes": 7375,
+          "sha256": "cdac9bf0b0a0b00f68c2481f518d2bd0b4a245e31af2e5f873fc2f0c0554accb"
+        },
+        {
+          "path": "before.test.js",
+          "bytes": 7099,
+          "sha256": "38c50730400d3d427caa90ded1e9612c6da8a9d8cef7a7d40133ce54c4b83be4"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 248,
+          "sha256": "160d5d30f9d19c8bd4a4ef18723efc0fa35b64547beea35a15a4489626c4cb5f"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-transport-owner-static-r3-20261023.tar.gz",
+      "sha256": "8f07d65e616d8ef13929c39d486d1de8603c178d026529f0877aa62b6a2d3855",
+      "bytes": 36790,
+      "originalBundle": "/tmp/mg-transport-owner-static-r3-20261023",
+      "members": [
+        {
+          "path": "NOTES.md",
+          "bytes": 1264,
+          "sha256": "b713217acc126806ccfa3b214d6a2fec6349de7ca94a4990962daa99ad316911"
+        },
+        {
+          "path": "after/src/cdc/cdc-delivery-invocation.js",
+          "bytes": 9173,
+          "sha256": "5d02b240662e0784175006884effeb9bbf913a192fed300626f4c2a0464e2d84"
+        },
+        {
+          "path": "after/src/transport/inproc-transport.js",
+          "bytes": 5106,
+          "sha256": "41d9d98528ea92c98dd4364cd9f2f26c4e05914366272b9ecfba176d571309f8"
+        },
+        {
+          "path": "after/src/transport/message-router-ack-delivery.js",
+          "bytes": 7114,
+          "sha256": "705908af1b3b3dab58bd42e25078f15a5097c45d0d9dfe5ff51482207e5d0e43"
+        },
+        {
+          "path": "after/src/transport/message-router-delivery-lifetime.js",
+          "bytes": 8847,
+          "sha256": "23cdf9a752920671c6905b73af4d97717913026b88c281b1859c3ecaf586f7a7"
+        },
+        {
+          "path": "after/src/transport/message-router-outbound-delivery-registry.js",
+          "bytes": 24698,
+          "sha256": "9f7acfeea54a5fe9fe3b47ba41f9a3d5575c35544bae657ead2fc6cfd5df6184"
+        },
+        {
+          "path": "after/src/transport/message-router-shared-vocabulary.js",
+          "bytes": 15612,
+          "sha256": "5fec7f365ad2d1967c11b63fc866c6ed80b032a6a7dbcb4a1fcfc5477bdd6d69"
+        },
+        {
+          "path": "before/src/cdc/cdc-delivery-invocation.js",
+          "bytes": 8993,
+          "sha256": "4abb2267aae8815c33b2aea453cceb41d83e480049e2e888dd7b7343c9de3774"
+        },
+        {
+          "path": "before/src/transport/inproc-transport.js",
+          "bytes": 4301,
+          "sha256": "0ef9c707edc07d0399c53100417eed50970701e1b2664fd89d1b70e3539e2be9"
+        },
+        {
+          "path": "before/src/transport/message-router-ack-delivery.js",
+          "bytes": 7028,
+          "sha256": "55ff23f5ad6b47e200dbfe6ea124f1bb3aed3af3ee2c83fded7ddaef7174f307"
+        },
+        {
+          "path": "before/src/transport/message-router-delivery-lifetime.js",
+          "bytes": 8746,
+          "sha256": "c757fbb689087402223900afd7dc729941f961003b99312b09acba3799a79007"
+        },
+        {
+          "path": "before/src/transport/message-router-outbound-delivery-registry.js",
+          "bytes": 24651,
+          "sha256": "504b195c05f394b820f391b08672de33f63c7f0a22ec084ae4a9d5b61b856ad0"
+        },
+        {
+          "path": "before/src/transport/message-router-shared-vocabulary.js",
+          "bytes": 17605,
+          "sha256": "63c95f73e6b409f251a1dd4680b902d2aec4fcc737a1272c07bde40be871aa44"
+        },
+        {
+          "path": "delta.patch",
+          "bytes": 13321,
+          "sha256": "fc1865a51313188ec074f2a7d4b09f3fa109afc76a7c82c7c64174c859fa3e85"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 1464,
+          "sha256": "7673f64c3b5662b802ff7cdbc8b256a3718f658f752e8ae52b78c57163f6ae68"
+        },
+        {
+          "path": "paths.json",
+          "bytes": 306,
+          "sha256": "f9c987ac6288557256b5c86811830524fdf17ac27096dfa44ca8241d706ab22a"
+        }
+      ]
+    },
+    {
+      "archive": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-reviewed-drafts-2026-10-23/mg-invocation-notification-witness-r2-20261023.tar.gz",
+      "sha256": "ecba893ed6b7923bc9c142075acaa98a3d342d89353a5efd90c10e9482012d2a",
+      "bytes": 5575,
+      "originalBundle": "/tmp/mg-invocation-notification-witness-r2-20261023",
+      "members": [
+        {
+          "path": "after.test.js",
+          "bytes": 17942,
+          "sha256": "556f2519388645603e727e70a81ac40eb42fcb95dc791f17641642852c064772"
+        },
+        {
+          "path": "before.test.js",
+          "bytes": 15520,
+          "sha256": "5e9fc78dfb4a18a7b2e8332b8b93a52741594814f4fce63fbc3bfab8bbc82d3b"
+        },
+        {
+          "path": "delta.patch",
+          "bytes": 2961,
+          "sha256": "6aa7346ec9f91d82e81671be08e3d5e874cc3e8a9b416c2cb927cab34e601831"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 243,
+          "sha256": "8adc4beb988469c8d877b66fbdac99abc932b5214a0a487e6bfdcef7437eb2cc"
+        }
+      ]
+    }
+  ]
+}

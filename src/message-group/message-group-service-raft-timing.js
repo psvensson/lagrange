@@ -18,6 +18,9 @@ import {isMessageGroupCommandType} from
   './message-group-committed-command-admission.js';
 import {MESSAGE_GROUP_SERVICE_LITERAL} from
   './message-group-service-runtime-support.js';
+import {captureCdcEvents, copyCdcEvent} from '../cdc/cdc-event-envelope.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {registerCdcCommittedAcceptance} from './message-group-cdc-committed-acceptance.js';
 
 function isValidTimingConfig(timingConfig, hasTickInterval) {
   const tickIntervalMs = timingConfig.tickIntervalMs;
@@ -53,22 +56,22 @@ const COMMITTED_COMMAND_APPLICATION = Object.freeze({
   [MESSAGE_GROUP_COMMAND_TYPE.CDC]: (service, committed) => {
     const command = committed.command;
     applyCommittedCdcChange(service, {
-      tableName: command.tableName,
-      operation: command.operation,
-      data: command.data,
+      ...copyCdcEvent(command),
       timestamp: command.timestamp || service.hlcClock.now().toString(),
       causeId: normalizeCauseId(command.causeId),
     }, committed, command);
   },
   [MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH]: (service, committed) => {
-    const events = service.normalizeCDCBatchEvents(committed.command.events);
-    for (const event of events) {
+    const events = hasDurableCdcEvents(committed.command.events) ?
+      captureCdcEvents(committed.command.events) :
+      service.normalizeCDCBatchEvents(committed.command.events);
+    // Receipt registration below binds every captured member, so application
+    // must consume that exact membership without consulting an array iterator.
+    for (let eventIndex = 0; eventIndex < events.length; eventIndex += 1) {
+      const event = events[eventIndex];
       const causeId = normalizeCauseId(event.causeId);
       applyCommittedCdcChange(service, {
-        tableName: event.tableName,
-        operation: event.operation,
-        data: event.data,
-        timestamp: event.timestamp,
+        ...copyCdcEvent(event),
         causeId,
       }, committed, {
         tableName: event.tableName,
@@ -192,7 +195,7 @@ function assignRaftTiming(serviceClass) {
      * @param {Object} committed - {command, index, term, effects}.
      * @return {void}
      */
-    applyCommittedEntry(committed) {
+    applyCommittedEntry(committed, cdcCommitLifetime = null) {
       const type = committed.command?.type;
       if (!isMessageGroupCommandType(type)) {
         throw new Error(
@@ -200,6 +203,10 @@ function assignRaftTiming(serviceClass) {
           `${JSON.stringify(type ?? null)} at index ${committed.index}`);
       }
       COMMITTED_COMMAND_APPLICATION[type](this, committed);
+      if (type === MESSAGE_GROUP_COMMAND_TYPE.CDC ||
+          type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) {
+        registerCdcCommittedAcceptance(this, committed, cdcCommitLifetime);
+      }
     },
   });
 }

@@ -1,3 +1,5 @@
+import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
+import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
@@ -19,12 +21,12 @@ const {
 } = MESSAGE_ROUTER_SHARED;
 
 const PENDING_RESPONSE_WAIT = Object.freeze({
-  wait: 'MESSAGE_TIMEOUT_MS (SERVICE_RESPONSE after ACK)',
+  wait: 'MESSAGE_TIMEOUT_MS (remaining SERVICE_RESPONSE grant after ACK)',
   awaited: 'SERVICE_RESPONSE from the target node for an acknowledged message',
 });
 
 /**
- * A SERVICE_RESPONSE waiter spent its post-ACK bound: one wait_bound_spent
+ * A SERVICE_RESPONSE waiter spent its remaining delivery bound: one wait_bound_spent
  * ERROR naming the target and what the waiter was answering.
  * @param {Object} router - The message router.
  * @param {string} messageId - The correlated message.
@@ -36,7 +38,7 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
   reportWaitBoundSpent(router.logger, {
     ...PENDING_RESPONSE_WAIT,
     boundMs: timeoutMs,
-    elapsedMs: router.timeSource.now() - pending.armedAtMs,
+    elapsedMs: pending.clock.now() - pending.armedAtMs,
     lastObserved: () => ({
       targetConnectionState:
         router.nodeConnections?.get?.(pending.targetNodeId)?.state ?? null,
@@ -50,6 +52,25 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
       messageId,
     },
   });
+}
+
+const DUPLICATE_PENDING_RESPONSE = 'router_duplicate_pending_response';
+
+function remainingResponseMs(pending) {
+  if (pending.deliveryLifetime) {
+    return assertDeliveryOpen({deliveryLifetime: pending.deliveryLifetime});
+  }
+  if (!pending.budget) return null;
+  const remaining = getRemainingBudgetMs(pending.budget, {now: () => pending.clock.now()});
+  if (remaining <= 0) throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+  return remaining;
+}
+
+function clearPendingResponse(router, messageId, pending) {
+  if (pending.timeoutId !== null) pending.clock.clearTimeout(pending.timeoutId);
+  pending.timeoutId = null;
+  router.detachPendingResponseAbortSignal(pending);
+  if (router.pendingResponses.get(messageId) === pending) router.pendingResponses.delete(messageId);
 }
 
 /**
@@ -314,168 +335,142 @@ class MessageRouterPendingResponseLedger {
    * @private
    */
   registerPendingResponse(messageId, targetNodeId = null, options = {}) {
-    return new Promise((resolve, reject) => {
+    assertDeliveryOpen(options);
+    if (this.pendingResponses.has(messageId)) {
+      throw Object.assign(new Error(DUPLICATE_PENDING_RESPONSE), {
+        code: DUPLICATE_PENDING_RESPONSE,
+      });
+    }
+    const response = new Promise((resolve, reject) => {
       const pending = {
         abortListener: null,
-        abortSignal: null,
-        resolve,
-        reject,
+        abortSignal: options.signal || null,
         timeoutId: null,
+        clock: options.deliveryLifetime?.clock || this.timeSource,
+        deliveryLifetime: options.deliveryLifetime || null,
+        budget: null,
         targetNodeId,
-        deliverySource: normalizeIdentifier(options?.deliverySource) || null,
-        responseContext: normalizeIdentifier(options?.responseContext) || null,
+        deliverySource: normalizeIdentifier(options.deliverySource) || null,
+        responseContext: normalizeIdentifier(options.responseContext) || null,
       };
-      const signal = options?.signal;
-      if (
-        signal &&
-        typeof signal.addEventListener === TRANSPORT_TYPEOF.FUNCTION
-      ) {
-        pending.abortSignal = signal;
-        pending.abortListener = () => {
-          this.abortPendingResponse(messageId, signal.reason);
-        };
-      }
+      let settled = false;
+      const finish = (settle, value) => {
+        if (settled) return false;
+        settled = true;
+        clearPendingResponse(this, messageId, pending);
+        settle(value);
+        return true;
+      };
+      pending.acceptResponse = ({result, error}) => {
+        try {
+          remainingResponseMs(pending);
+          return error ? finish(reject, new Error(error)) : finish(resolve, result);
+        } catch (expired) {
+          // A parent refusal can synchronously retire this exact entry. Only
+          // the still-current waiter may install its own timeout marker.
+          if (this.pendingResponses.get(messageId) === pending) {
+            this.rememberRetiredPendingResponse(
+              messageId, pending, RETIRED_PENDING_RESPONSE_REASON.TIMEOUT,
+            );
+            finish(reject, expired);
+          }
+          return false;
+        }
+      };
+      pending.resolve = (value) => pending.acceptResponse({result: value});
+      pending.reject = (error) => finish(reject, error);
       this.pendingResponses.set(messageId, pending);
-      if (signal?.aborted) {
-        pending.abortListener();
-      } else if (pending.abortListener) {
-        signal.addEventListener(
-          TRANSPORT_EVENT.ABORT,
-          pending.abortListener,
-          {once: true},
+      if (pending.abortSignal) {
+        const signal = pending.abortSignal;
+        pending.abortListener = () => this.abortPendingResponse(
+          messageId, deliveryAbortReason(signal), pending,
         );
+        if (signal.aborted) pending.abortListener();
+        else signal.addEventListener(TRANSPORT_EVENT.ABORT, pending.abortListener, {once: true});
       }
     });
+    // The owner can cancel before its caller starts awaiting SERVICE_RESPONSE.
+    // Retain the rejected result, with a terminal handler from acquisition.
+    response.catch(() => {});
+    return response;
   }
 
-  /**
-   * Reject and retire one waiter when its delivery owner is cancelled.
-   * @param {string} messageId
-   * @param {*} reason
-   * @return {boolean} True when a waiter was aborted.
-   * @private
-   */
-  abortPendingResponse(messageId, reason = null) {
+  /** Reject only the waiter captured by the cancelling operation. */
+  abortPendingResponse(messageId, reason = null, expectedPending = null) {
     const pending = this.pendingResponses.get(messageId);
-    if (!pending) return false;
-    if (pending.timeoutId) {
-      this.timeSource.clearTimeout(pending.timeoutId);
-    }
-    this.detachPendingResponseAbortSignal(pending);
-    this.pendingResponses.delete(messageId);
+    if (!pending || (expectedPending && pending !== expectedPending)) return false;
+    const ownTimeout = pending.deliveryLifetime?.ownsTimeout(reason) === true;
     this.rememberRetiredPendingResponse(
-      messageId,
-      pending,
-      RETIRED_PENDING_RESPONSE_REASON.CANCELLED,
+      messageId, pending, ownTimeout ? RETIRED_PENDING_RESPONSE_REASON.TIMEOUT :
+        RETIRED_PENDING_RESPONSE_REASON.CANCELLED,
     );
-    pending.reject(
-      reason instanceof Error ?
-        reason :
-        new Error(ROUTER_ERROR_MSG.SHUTDOWN),
-    );
+    pending.reject(reason instanceof Error ? reason : new Error(ROUTER_ERROR_MSG.SHUTDOWN));
+    if (ownTimeout && pending.armedAtMs !== undefined) {
+      reportPendingResponseSpent(this, messageId, pending, pending.responseTimeoutMs);
+    }
     return true;
   }
-  /**
-   * Arm timeout for a pending SERVICE_RESPONSE waiter.
-   * Timeout is started after ACK to avoid premature rejection while still
-   * waiting for sender-side ACK.
-   * @param {string} messageId - Correlated message ID.
-   * @param {number} timeoutMs - Timeout in milliseconds.
-   * @return {boolean} True when timeout was armed.
-   * @private
-   */
-  armPendingResponseTimeout(messageId, timeoutMs) {
+
+  /** ACK leaves only the original grant's remainder for SERVICE_RESPONSE. */
+  armPendingResponseTimeout(messageId, timeoutMs, expectedPending = null) {
     const pending = this.pendingResponses.get(messageId);
-    if (!pending || pending.timeoutId) {
+    if (!pending || (expectedPending && pending !== expectedPending) ||
+        pending.timeoutId !== null) {
       return false;
     }
-    pending.armedAtMs = this.timeSource.now();
-    const timeoutId = this.timeSource.setTimeout(() => {
-      this.pendingResponses.delete(messageId);
-      reportPendingResponseSpent(this, messageId, pending, timeoutMs);
-      this.detachPendingResponseAbortSignal(pending);
-      this.rememberRetiredPendingResponse(
-        messageId,
-        pending,
-        RETIRED_PENDING_RESPONSE_REASON.TIMEOUT,
-      );
-      pending.reject(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT));
-    }, timeoutMs);
-    if (typeof timeoutId.unref === TRANSPORT_TYPEOF.FUNCTION) {
-      timeoutId.unref();
+    const {clock} = pending;
+    pending.armedAtMs = clock.now();
+    pending.responseTimeoutMs = timeoutMs;
+    if (!pending.deliveryLifetime) {
+      pending.budget = createTimeoutBudget({configuredBudgetMs: timeoutMs, now: () => clock.now()});
     }
-    pending.timeoutId = timeoutId;
-    return true;
+    const expire = (error) => {
+      if (this.pendingResponses.get(messageId) !== pending) return;
+      this.rememberRetiredPendingResponse(
+        messageId, pending, RETIRED_PENDING_RESPONSE_REASON.TIMEOUT,
+      );
+      pending.reject(error);
+      reportPendingResponseSpent(this, messageId, pending, timeoutMs);
+    };
+    const arm = () => {
+      try {
+        const remaining = remainingResponseMs(pending);
+        pending.timeoutId = clock.setTimeout(() => {
+          if (this.pendingResponses.get(messageId) !== pending) return;
+          arm();
+        }, remaining);
+        pending.timeoutId?.unref?.();
+      } catch (error) {
+        expire(error);
+      }
+    };
+    arm();
+    return this.pendingResponses.get(messageId) === pending;
   }
-  /**
-   * Settle pending SERVICE_RESPONSE waiter.
-   * @param {string} messageId - Correlated message ID.
-   * @param {Object} payload - Service response payload.
-   * @param {*} payload.result - Handler result.
-   * @param {string} payload.error - Handler error.
-   * @return {boolean} True when pending waiter was found.
-   * @private
-   */
+
+  /** Settle a response only while its original grant is still current. */
   settlePendingResponse(messageId, {result, error}) {
     const pending = this.pendingResponses.get(messageId);
-    if (!pending) {
-      return false;
-    }
-    if (pending.timeoutId) {
-      this.timeSource.clearTimeout(pending.timeoutId);
-    }
-    this.detachPendingResponseAbortSignal(pending);
-    this.pendingResponses.delete(messageId);
-    if (error) {
-      pending.reject(new Error(error));
-    } else {
-      pending.resolve(result);
-    }
-    return true;
+    return pending ? pending.acceptResponse({result, error}) : false;
   }
-  /**
-   * Remove pending SERVICE_RESPONSE waiter without settling it.
-   * @param {string} messageId - Correlated message ID.
-   * @return {boolean} True when a waiter was removed.
-   * @private
-   */
+
+  /** Close local response custody even when the caller will use the ACK. */
   cancelPendingResponse(messageId, options = {}) {
     const pending = this.pendingResponses.get(messageId);
-    if (!pending) {
-      return false;
+    if (!pending || (options.expectedPending && pending !== options.expectedPending)) return false;
+    if (options.ignoreLateResponse === true) {
+      this.rememberRetiredPendingResponse(messageId, pending,
+        options.retiredReason || RETIRED_PENDING_RESPONSE_REASON.CANCELLED);
     }
-    if (pending.timeoutId) {
-      this.timeSource.clearTimeout(pending.timeoutId);
-    }
-    this.detachPendingResponseAbortSignal(pending);
-    this.pendingResponses.delete(messageId);
-    if (options?.ignoreLateResponse === true) {
-      this.rememberRetiredPendingResponse(
-        messageId,
-        pending,
-        options?.retiredReason || RETIRED_PENDING_RESPONSE_REASON.CANCELLED,
-      );
-    }
+    pending.reject(new Error(RETIRED_PENDING_RESPONSE_REASON.CANCELLED));
     return true;
   }
-  /**
-   * Fail pending SERVICE_RESPONSE waiters for a target node.
-   * @param {string} nodeId - Target node ID.
-   * @param {Error} error - Failure reason.
-   * @private
-   */
+
   failPendingResponsesForNode(nodeId, error) {
     for (const [messageId, pending] of this.pendingResponses) {
       if (pending.targetNodeId === nodeId) {
-        if (pending.timeoutId) {
-          this.timeSource.clearTimeout(pending.timeoutId);
-        }
-        this.detachPendingResponseAbortSignal(pending);
-        this.pendingResponses.delete(messageId);
         this.rememberRetiredPendingResponse(
-          messageId,
-          pending,
-          RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE,
+          messageId, pending, RETIRED_PENDING_RESPONSE_REASON.NODE_FAILURE,
         );
         pending.reject(error);
       }
@@ -509,7 +504,7 @@ class MessageRouterPendingResponseLedger {
     if (!result || typeof result !== TRANSPORT_TYPEOF.OBJECT) {
       return {};
     }
-    const {acknowledged: _ack, type: handlerType, ...rest} = result;
+    const {type: handlerType, ...rest} = result;
     if (
       handlerType &&
       !Object.prototype.hasOwnProperty.call(
@@ -531,8 +526,14 @@ class MessageRouterPendingResponseLedger {
     const {messageId, acknowledged, error, type: _type, ...rest} = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
-      this.timeSource.clearTimeout(pending.timeout);
-      this.pendingMessages.delete(messageId);
+      try {
+        pending.assertOpen?.();
+      } catch (expired) {
+        pending.reject(expired);
+        return;
+      }
+      (pending.clock || this.timeSource).clearTimeout(pending.timeout);
+      if (this.pendingMessages.get(messageId) === pending) this.pendingMessages.delete(messageId);
       if (acknowledged) {
         const connection = this.nodeConnections.get(pending.targetNodeId);
         if (

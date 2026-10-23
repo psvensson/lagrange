@@ -25,8 +25,12 @@ import {
 import {
   isTableInternalCachePropagationEnabled,
 } from '../cache/cdc-table-policy.js';
+import {serializeJsonData} from '../utils/canonical-json-data.js';
+import {PARTITION_CDC_OBLIGATION_EVENT_FIELD} from './partition-cdc-obligation-constants.js';
 
 const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
+const objectHasOwn = Object.hasOwn;
+const objectAssign = Object.assign;
 
 /**
  * Build a deduplication identity string for a CDC event.
@@ -36,13 +40,13 @@ const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
  * @return {string} Identity string for deduplication.
  */
 function buildEventIdentity(cdcEvent) {
-  if (Object.hasOwn(cdcEvent, 'eventKey')) {
+  if (objectHasOwn(cdcEvent, PARTITION_CDC_OBLIGATION_EVENT_FIELD.EVENT_KEY)) {
     if (typeof cdcEvent.eventKey !== 'string' || cdcEvent.eventKey.length === 0 ||
         typeof cdcEvent.sourcePartition !== 'string' || cdcEvent.sourcePartition.length === 0) {
-      throw Object.assign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
+      throw objectAssign(new Error(CDC_EVENT_IDENTITY.INVALID_MESSAGE),
         {code: CDC_EVENT_IDENTITY.INVALID_CODE});
     }
-    return JSON.stringify([CDC_EVENT_IDENTITY.DURABLE_TAG,
+    return serializeJsonData([CDC_EVENT_IDENTITY.DURABLE_TAG,
       cdcEvent.sourcePartition, cdcEvent.eventKey]);
   }
   const pkField = getSystemCachePrimaryKeyFieldOrFallback(
@@ -60,7 +64,7 @@ function buildEventIdentity(cdcEvent) {
  * @return {string|null} Coalescing identity or null.
  */
 function buildInternalCoalescingIdentity(cdcEvent) {
-  if (Object.hasOwn(cdcEvent, 'eventKey')) {
+  if (objectHasOwn(cdcEvent, PARTITION_CDC_OBLIGATION_EVENT_FIELD.EVENT_KEY)) {
     return null;
   }
   if (!isTableInternalCachePropagationEnabled(cdcEvent?.tableName)) {
@@ -72,7 +76,7 @@ function buildInternalCoalescingIdentity(cdcEvent) {
   );
 
   if (!cdcEvent?.data ||
-      !Object.prototype.hasOwnProperty.call(cdcEvent.data, pkField)) {
+      !objectHasOwn(cdcEvent.data, pkField)) {
     return null;
   }
 

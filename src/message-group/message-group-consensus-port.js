@@ -28,6 +28,7 @@ import {
 import {committedMembershipRefusal} from
   '../raft/raft-rs-committed-membership-read.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
+import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 import {
   MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
@@ -90,7 +91,7 @@ function resolveConsensusPeerAddress(service, replicaIdentity) {
  * @param {Object} service - The message-group replica.
  * @return {Object} Its RAFT_OPERATION_PORT_REQUEST.
  */
-function messageGroupConsensusRequest(service) {
+function messageGroupConsensusRequest(service, cdcCommitLifetime) {
   return {
     [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: service.groupId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: service.replicaId,
@@ -132,7 +133,7 @@ function messageGroupConsensusRequest(service) {
       resolveConsensusPeerAddress(service, replicaIdentity),
     // Runs inside the transaction that also advances the applied state.
     [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
-      service.applyCommittedEntry(committed),
+      service.applyCommittedEntry(committed, cdcCommitLifetime),
   };
 }
 
@@ -146,13 +147,15 @@ function messageGroupConsensusRequest(service) {
  * @return {Object} The port, also held as service.raft.
  */
 function openMessageGroupConsensusPort(service) {
+  retireCdcCommitWaiters(service);
   fs.mkdirSync(path.dirname(service.dbPath), {recursive: true});
   service.db = new Database(service.dbPath);
   service.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
   service.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
+  service.cdcCommitLifetime = Object.freeze({});
   try {
     service.raft = service.createOperationPort(
-      messageGroupConsensusRequest(service));
+      messageGroupConsensusRequest(service, service.cdcCommitLifetime));
   } catch (error) {
     if (!isRaftOpeningFailure(error)) {
       throw error;
@@ -207,6 +210,8 @@ function readMessageGroupCommittedMembership(service) {
  * @return {Promise<void>}
  */
 function closeMessageGroupConsensus(service) {
+  retireCdcCommitWaiters(service);
+  service.cdcCommitLifetime = null;
   if (service.consensusCloseSettlement) {
     return service.consensusCloseSettlement;
   }

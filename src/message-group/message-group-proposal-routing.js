@@ -132,22 +132,30 @@ async function proposeMessageGroupCommand(service, command) {
  * @param {Function} onSpent - Called once when the deadline expires.
  * @return {Promise<*>} The proposal's answer.
  */
-function withinProposalDeadline(proposal, timeoutMs, timers, onSpent) {
+function withinProposalDeadline(operation, timeoutMs, timers, onSpent) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return proposal;
+    return Promise.resolve().then(operation);
   }
+  const now = () => timers.now();
+  const deadlineMs = now() + timeoutMs;
   return new Promise((resolve, reject) => {
-    const timeoutHandle = timers.setTimeout(() => {
+    let spent = false;
+    const expire = () => {
+      if (spent) return;
+      spent = true;
       onSpent();
       reject(new Error(
         `${MESSAGE_GROUP_CDC_ERROR_MSG.PROPOSE_TIMEOUT} after ${timeoutMs}ms`));
-    }, timeoutMs);
-    proposal.then((answer) => {
+    };
+    const timeoutHandle = timers.setTimeout(expire, timeoutMs);
+    Promise.resolve().then(operation).then((answer) => {
       timers.clearTimeout(timeoutHandle);
-      resolve(answer);
+      if (now() >= deadlineMs) expire();
+      else resolve(answer);
     }, (error) => {
       timers.clearTimeout(timeoutHandle);
-      reject(error);
+      if (now() >= deadlineMs) expire();
+      else reject(error);
     });
   });
 }
@@ -161,21 +169,29 @@ function routeRetryDelayMs(options, attempt, error) {
 }
 
 function routeAttempt(service, command, attempt, options) {
+  options.assertCurrent?.();
+  const invoke = (operation) => {
+    options.assertCurrent?.();
+    return operation();
+  };
   if (service.isCurrentRaftLeader()) {
+    const timeoutMs = options.remainingMs ?
+      Math.min(options.proposeTimeoutMs, options.remainingMs()) : options.proposeTimeoutMs;
     return {
       mode: MESSAGE_GROUP_PROPOSAL_ROUTE.PROPOSE,
       settled: withinProposalDeadline(
-        proposeMessageGroupCommand(service, command),
-        options.proposeTimeoutMs, options.timers,
+        () => invoke(() => options.proposeCommand ? options.proposeCommand(command) :
+          proposeMessageGroupCommand(service, command)),
+        timeoutMs, options.timers,
         () => reportProposalDeadlineSpent(
-          service, command, attempt, options.proposeTimeoutMs)),
+          service, command, attempt, timeoutMs)),
     };
   }
   const mode = MESSAGE_GROUP_PROPOSAL_ROUTE.FORWARD;
   return {
     mode,
-    settled: Promise.resolve().then(() =>
-      options.forwardToLeader(command, {attempt, mode})),
+    settled: Promise.resolve().then(() => invoke(() =>
+      options.forwardToLeader(command, {attempt, mode}))),
   };
 }
 
@@ -194,14 +210,16 @@ function routeAttempt(service, command, attempt, options) {
  */
 async function routeMessageGroupCommand(service, command, options) {
   assertMessageGroupCommandAdmitted(command);
-  const timers = service.providedTimeSource || {setTimeout, clearTimeout};
+  const timers = service.timeSource || service.providedTimeSource ||
+    {setTimeout, clearTimeout, now: Date.now};
   const routing = {...options, timers};
   let routed = null;
   const outcome = await service.commandRetryHandler.executeWithRetry(
     async (_target, _message, attemptIndex) => {
       routed = routeAttempt(service, command, attemptIndex + 1, routing);
-      await routed.settled;
-      return {success: true};
+      const answer = await routed.settled;
+      options.assertCurrent?.();
+      return {success: true, answer};
     },
     {
       message: command,
@@ -220,7 +238,7 @@ async function routeMessageGroupCommand(service, command, options) {
   if (outcome.status !== RetryStatus.SUCCESS) {
     throw outcome.lastError;
   }
-  return {attempt: outcome.attempt + 1, mode: routed.mode};
+  return {attempt: outcome.attempt + 1, mode: routed.mode, answer: outcome.result.answer};
 }
 
 export {

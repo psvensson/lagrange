@@ -1,0 +1,59 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] 390cb11c86fc49ed9465e13f1439f1d5",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T08:33:56.032Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"390cb11c-86fc-49ed-9465-e13f1439f1d5\",\"sha256\":\"033e960ce9e8241943b3231d5e8f3193994fb959319b0df41763ada427790e72\",\"totalBytes\":1063},\"expires_at\":\"2026-10-23T10:33:56.032Z\",\"operation\":\"lab-work\",\"request_id\":\"390cb11c86fc49ed9465e13f1439f1d5\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc1MTYzNjAzMiwiaXNzdWVkQXRNcyI6MTc5Mjc0NDQzNjAzMiwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiIzOTBjYjExYy04NmZjLTQ5ZWQtOTQ2NS1lMTNmMTQzOWYxZDUiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJsZW5vdm8tbGFwdG9wIl0sInJlcXVpcmVtZW50cyI6WyJub2RlIiwic2hlbGwiXX0sInNvdXJjZSI6eyJyZWYiOiJyZWZzL2hlYWRzL3dvcmsvbWctc291cmNlLW9jY3VycmVuY2UtZGVsaXZlcnktMjAyNjEwMjMiLCJyZXBvIjoicHN2ZW5zc29uL2xhZ3JhbmdlIiwic2hhIjoiMjFjZmQ5MTdkOGNlYjJmMGMxNDM1Y2FkZTExN2MwYzQ0YTkxYTAzYSJ9LCJzcGVjIjp7ImFyZ3YiOlsiL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbmV4ZWMgbnBtIHJ1biB0ZXN0OmZpbGUgLS0gXCIkQFwiXG4iLCJyZXRhaW5lZC1lZmZlY3RzIl0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaVxuIl1dLCJ0ZXN0cyI6WyJ0ZXN0L2NkYy9jZGMtZGVsaXZlcnktb3V0Y29tZS50ZXN0LmpzIiwidGVzdC9tZXNzYWdlLWdyb3VwL21lc3NhZ2UtZ3JvdXAtbmF0aXZlLWN1c3RvZHktaGFuZG9mZi50ZXN0LmpzIl19LCJ0aW1lb3V0U2Vjb25kcyI6MzYwMH19Cg==\",\"index\":0,\"sha256\":\"033e960ce9e8241943b3231d5e8f3193994fb959319b0df41763ada427790e72\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"390cb11c-86fc-49ed-9465-e13f1439f1d5\",\"sha256\":\"033e960ce9e8241943b3231d5e8f3193994fb959319b0df41763ada427790e72\"}"
+  ],
+  "request_id": "390cb11c86fc49ed9465e13f1439f1d5",
+  "request_sha256": "0a4ee54eacae842a987556eb39ce461f23c69d6c032e9260979643e5d779ca54",
+  "source_execution_by_generator": false,
+  "payload_sha256": "033e960ce9e8241943b3231d5e8f3193994fb959319b0df41763ada427790e72",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "390cb11c-86fc-49ed-9465-e13f1439f1d5",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792744436032,
+    "expiresAtMs": 1792751636032,
+    "work": {
+      "driver": "tests",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/mg-source-occurrence-delivery-20261023",
+        "sha": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "lenovo-laptop"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 3600,
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci\n"
+          ]
+        ],
+        "argv": [
+          "/bin/bash",
+          "-c",
+          "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"\n",
+          "retained-effects"
+        ],
+        "tests": [
+          "test/cdc/cdc-delivery-outcome.test.js",
+          "test/message-group/message-group-native-custody-handoff.test.js"
+        ]
+      }
+    }
+  }
+}

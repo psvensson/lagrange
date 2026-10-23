@@ -60,7 +60,7 @@ function sortCoordinatorCandidates(services) {
   });
 }
 
-function resolveCoordinatorAddress(options = {}) {
+function resolveCoordinatorService(options = {}) {
   const services = resolveActiveMessageGroupServices({
     systemTableCache: options.systemTableCache,
     predicate: (serviceRow) => serviceRow?.[COLUMN.NODE_ID] === options.coordinatorNodeId,
@@ -69,7 +69,20 @@ function resolveCoordinatorAddress(options = {}) {
     return null;
   }
   const sorted = sortCoordinatorCandidates(services);
-  return sorted[0]?.[COLUMN.ADDRESS] || null;
+  return sorted[0] ?? null;
+}
+
+function observedServiceRoute(service, systemTableCache) {
+  const node = systemTableCache.get(TABLES.NODES, service[COLUMN.NODE_ID]);
+  // These are existing owner-published lifetime facts, not a cache revision
+  // or a guessed lease. Missing remote facts cannot establish a replacement.
+  return {
+    serviceId: service[COLUMN.SERVICE_ID] ?? null,
+    replicaId: service[COLUMN.REPLICA_ID] ?? null,
+    serviceCreatedAt: service[COLUMN.CREATED_AT] ?? null,
+    createAttemptToken: service.create_attempt_token ?? null,
+    nodeBootIncarnation: node?.[COLUMN.BOOT_INCARNATION] ?? null,
+  };
 }
 
 function resolveMessageGroupId(serviceRow, options = {}) {
@@ -126,6 +139,7 @@ function buildSafeTargets(options = {}) {
       groupId,
       coordinatorNodeId: selectedService[COLUMN.NODE_ID] || null,
       address: selectedService[COLUMN.ADDRESS],
+      ...observedServiceRoute(selectedService, options.systemTableCache),
     });
   }
   return targets;
@@ -204,11 +218,11 @@ function buildGroupedContext(options = {}) {
         CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_NODE,
       );
     }
-    const address = resolveCoordinatorAddress({
+    const service = resolveCoordinatorService({
       coordinatorNodeId,
       systemTableCache: options.systemTableCache,
     });
-    if (!address) {
+    if (!service) {
       return buildGroupedContextResult(
         sourceGroupId,
         [],
@@ -218,7 +232,8 @@ function buildGroupedContext(options = {}) {
     targets.push({
       groupId,
       coordinatorNodeId,
-      address,
+      address: service[COLUMN.ADDRESS],
+      ...observedServiceRoute(service, options.systemTableCache),
     });
   }
 

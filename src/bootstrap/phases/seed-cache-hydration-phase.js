@@ -723,11 +723,12 @@ class SeedCacheHydrationPhase {
    * @return {Promise<Object>}
    */
   async propagatePartitionCDCEvent(
-    messageGroupService, cdcEvent,
+    messageGroupService, cdcEvent, deliveryContext = null,
   ) {
     return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
       messageGroupService,
       cdcEvent,
+      deliveryContext,
     );
   }
 

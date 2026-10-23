@@ -111,13 +111,22 @@ function deliveryConnectionMatches(router, connection, ws, identity) {
 class RouterConnectionAuthorityOwner {
   // Rotated at shutdown, never a per-request ledger. Old local deliveries
   // cannot resurrect if the same router object is initialized again.
-  #deliveryLifetime = objectFreeze({});
+  #deliveryLifetime = new AbortController();
 
   constructor(router) {
     this.router = router;
   }
   invalidateDeliveries() {
-    this.#deliveryLifetime = objectFreeze({});
+    const retired = this.#deliveryLifetime;
+    this.#deliveryLifetime = new AbortController();
+    retired.abort();
+  }
+  // A deadline can be acquired before initialize(). It consumes this owner's
+  // shutdown lifetime without borrowing connection or membership authority.
+  captureDeliveryLifetime() {
+    const lifetime = this.#deliveryLifetime;
+    return objectFreeze({signal: lifetime.signal,
+      isCurrent: () => lifetime === this.#deliveryLifetime});
   }
   captureLocalDelivery() {
     const {nodeId, bootIncarnation} = this.router;

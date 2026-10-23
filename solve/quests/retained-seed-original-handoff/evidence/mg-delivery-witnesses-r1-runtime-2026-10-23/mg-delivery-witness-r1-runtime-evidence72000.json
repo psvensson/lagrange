@@ -1,0 +1,39 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1005#issuecomment-6360987766",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "85e256eec02b4c75bee0959ba5e9f8f9",
+    "request_sha256": "a003a56f40bdb793f02b1a89b3f871e26cb74bcab06558eeceb60595cad12140",
+    "status": "RUNNING",
+    "recorded_at": "2026-10-23T08:39:51.080Z",
+    "result": {
+      "operation": "evidence",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1005#issuecomment-6360999389",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "85e256eec02b4c75bee0959ba5e9f8f9",
+    "request_sha256": "a003a56f40bdb793f02b1a89b3f871e26cb74bcab06558eeceb60595cad12140",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-23T08:39:52.924Z",
+    "result": {
+      "complete": false,
+      "error_type": "Refused",
+      "executed_source": false,
+      "host": "lenovo-laptop",
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "job_id": "390cb11c86fc49ed9465e13f1439f1d5",
+      "log_state": "UNAVAILABLE",
+      "offset": 72000,
+      "read_only": true,
+      "reason": "COMMAND_FAILED:ssh:255",
+      "source": "original-worker-log"
+    }
+  }
+]

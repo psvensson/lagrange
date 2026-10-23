@@ -1,0 +1,53 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1058#issuecomment-6362559476",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "96327aeae42c4682be10382f0cea34d8",
+    "request_sha256": "4f992be11811970a4ba6ae0feb53765664f91416c6d4155907f586c1598987c0",
+    "status": "RUNNING",
+    "recorded_at": "2026-10-23T10:12:01.166Z",
+    "result": {
+      "operation": "evidence",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1058#issuecomment-6362562717",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "96327aeae42c4682be10382f0cea34d8",
+    "request_sha256": "4f992be11811970a4ba6ae0feb53765664f91416c6d4155907f586c1598987c0",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-23T10:12:02.932Z",
+    "result": {
+      "available_bytes": 59196,
+      "chunk_sha256": "ee170109f643b34001331fac711a2df32a95cb3841d9128ade4cffcd04d8523e",
+      "complete": true,
+      "data_base64": "cnRSb3dpZCI6MSwicGFydGl0aW9uSWQiOiJzZXJ2aWNlcy1wcm92aXNpb25hbC1yb3V0ZSIsImxvZ0luZGV4Ijo1LCJvcmlnaW5IbGMiOiIxNzkyNzQ5OTQ2NjQ5LTAtc2VydmljZXMtcHJvdmlzaW9uYWwtcm91dGUtcjEiLCJkdXJhYmxlQ29tbWl0V2l0bmVzcyI6eyJwYXJ0aXRpb25JZCI6InNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlIiwibGVhZGVyTm9kZUlkIjoibWctcHJvdmlzaW9uYWwtcm91dGUtbm9kZSIsImxlYWRlclJlcGxpY2FJZCI6InNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlLXIxIiwidGVybSI6MSwibG9nSW5kZXgiOjUsImVudHJ5SWQiOiJwcm92aXNpb25hbC1yb3V0ZS1hIn0sImFjY2VwdGluZ05vZGVJZCI6Im1nLXByb3Zpc2lvbmFsLXJvdXRlLW5vZGUiLCJhY2tub3dsZWRnZWRBdE1zIjoxNzkyNzQ5OTQ2Njc1fSwiZGVidCI6eyJldmVudEtleSI6ImVudHJ5OnByb3Zpc2lvbmFsLXJvdXRlLWEiLCJsb2dJbmRleCI6NSwidGVybSI6MSwib3JkaW5hbCI6MCwiZW50cnlJZCI6InByb3Zpc2lvbmFsLXJvdXRlLWEiLCJldmVudEpzb24iOiJ7XFwidGFibGVOYW1lXFwiOlxcInNlcnZpY2VzXFwiLFxcIm9wZXJhdGlvblxcIjpcXCJJTlNFUlRcXCIsXFwidGltZXN0YW1wXFwiOlxcIjE3OTI3NDk5NDY2NDktMC1zZXJ2aWNlcy1wcm92aXNpb25hbC1yb3V0ZS1yMVxcIixcXCJzb3VyY2VQYXJ0aXRpb25cXCI6XFwic2VydmljZXMtcHJvdmlzaW9uYWwtcm91dGVcXCIsXFwic291cmNlUmVwbGljYVxcIjpcXCJzZXJ2aWNlcy1wcm92aXNpb25hbC1yb3V0ZS1yMVxcIixcXCJkYXRhXFwiOntcXCJzZXJ2aWNlX2lkXFwiOlxcIm1nLXByb3Zpc2lvbmFsLXNvdXJjZS1yMVxcIixcXCJzZXJ2aWNlX3R5cGVcXCI6XFwibWVzc2FnZV9ncm91cFxcIixcXCJub2RlX2lkXFwiOlxcIm1nLXByb3Zpc2lvbmFsLXJvdXRlLW5vZGVcXCIsXFwicGFydGl0aW9uX2lkXFwiOm51bGwsXFwiZ3JvdXBfaWRcXCI6XFwibWctcHJvdmlzaW9uYWwtc291cmNlXFwiLFxcInJlcGxpY2FfaWRcXCI6XFwibWctcHJvdmlzaW9uYWwtc291cmNlLXIxXFwiLFxcInJhZnRfcm9sZVxcIjpcXCJsZWFkZXJcXCIsXFwic3RhdHVzXFwiOlxcInN0b3BwZWRcXCIsXFwic3RhdGVfZW50ZXJlZF9hdFxcIjoyLFxcInByZXZpb3VzX3N0YXRlXFwiOm51bGwsXFwidHJpZ2dlcl9yZWFzb25cXCI6bnVsbCxcXCJlcnJvcl9tZXNzYWdlXFwiOm51bGwsXFwiY2xlYW51cF90b2tlblxcIjpudWxsLFxcImNyZWF0ZV9hdHRlbXB0X3Rva2VuXFwiOm51bGwsXFwiYWRkcmVzc1xcIjpcXCJtZy1wcm92aXNpb25hbC1yb3V0ZS1ub2RlL21lc3NhZ2UtZ3JvdXAvbWctcHJvdmlzaW9uYWwtc291cmNlLXIxXFwiLFxcImNyZWF0ZWRfYXRcXCI6MixcXCJ1cGRhdGVkX2F0XFwiOjIsXFwidXBkYXRlZF9hdF9obGNcXCI6XFwiMTc5Mjc0OTk0NjY0OS0wLXNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlLXIxXFwifX0ifX0KIyB7InN0YWdlIjoic2V0dXAtcmVsZWFzZWQtc2VydmljZXMtcXVlcnktYW5kLWV4YWN0LWRlYnQiLCJhbnN3ZXIiOnsic3VjY2VzcyI6dHJ1ZSwiY2hhbmdlcyI6MSwibGFzdEluc2VydFJvd2lkIjoyLCJwYXJ0aXRpb25JZCI6InNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlIiwibG9nSW5kZXgiOjYsIm9yaWdpbkhsYyI6IjE3OTI3NDk5NDY2OTAtMC1zZXJ2aWNlcy1wcm92aXNpb25hbC1yb3V0ZS1yMSIsImR1cmFibGVDb21taXRXaXRuZXNzIjp7InBhcnRpdGlvbklkIjoic2VydmljZXMtcHJvdmlzaW9uYWwtcm91dGUiLCJsZWFkZXJOb2RlSWQiOiJtZy1wcm92aXNpb25hbC1yb3V0ZS1ub2RlIiwibGVhZGVyUmVwbGljYUlkIjoic2VydmljZXMtcHJvdmlzaW9uYWwtcm91dGUtcjEiLCJ0ZXJtIjoxLCJsb2dJbmRleCI6NiwiZW50cnlJZCI6InByb3Zpc2lvbmFsLXJvdXRlLWIifSwiYWNjZXB0aW5nTm9kZUlkIjoibWctcHJvdmlzaW9uYWwtcm91dGUtbm9kZSIsImFja25vd2xlZGdlZEF0TXMiOjE3OTI3NDk5NDY3MjF9LCJkZWJ0Ijp7ImV2ZW50S2V5IjoiZW50cnk6cHJvdmlzaW9uYWwtcm91dGUtYiIsImxvZ0luZGV4Ijo2LCJ0ZXJtIjoxLCJvcmRpbmFsIjowLCJlbnRyeUlkIjoicHJvdmlzaW9uYWwtcm91dGUtYiIsImV2ZW50SnNvbiI6IntcXCJ0YWJsZU5hbWVcXCI6XFwic2VydmljZXNcXCIsXFwib3BlcmF0aW9uXFwiOlxcIklOU0VSVFxcIixcXCJ0aW1lc3RhbXBcXCI6XFwiMTc5Mjc0OTk0NjY5MC0wLXNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlLXIxXFwiLFxcInNvdXJjZVBhcnRpdGlvblxcIjpcXCJzZXJ2aWNlcy1wcm92aXNpb25hbC1yb3V0ZVxcIixcXCJzb3VyY2VSZXBsaWNhXFwiOlxcInNlcnZpY2VzLXByb3Zpc2lvbmFsLXJvdXRlLXIxXFwiLFxcImRhdGFcXCI6e1xcInNlcnZpY2VfaWRcXCI6XFwibWctcHJvdmlzaW9uYWwtdGFyZ2V0LWxcXCIsXFwic2VydmljZV90eXBlXFwiOlxcIm1lc3NhZ2VfZ3JvdXBcXCIsXFwibm9kZV9pZFxcIjpcXCJtZy1wcm92aXNpb25hbC1yb3V0ZS1ub2RlXFwiLFxcInBhcnRpdGlvbl9pZFxcIjpudWxsLFxcImdyb3VwX2lkXFwiOlxcIm1nLXByb3Zpc2lvbmFsLXRhcmdldFxcIixcXCJyZXBsaWNhX2lkXFwiOlxcIm1nLXByb3Zpc2lvbmFsLXRhcmdldC1sXFwiLFxcInJhZnRfcm9sZVxcIjpcXCJsZWFkZXJcXCIsXFwic3RhdHVzXFwiOlxcInN0b3BwZWRcXCIsXFwic3RhdGVfZW50ZXJlZF9hdFxcIjozLFxcInByZXZpb3VzX3N0YXRlXFwiOm51bGwsXFwidHJpZ2dlcl9yZWFzb25cXCI6bnVsbCxcXCJlcnJvcl9tZXNzYWdlXFwiOm51bGwsXFwiY2xlYW51cF90b2tlblxcIjpudWxsLFxcImNyZWF0ZV9hdHRlbXB0X3Rva2VuXFwiOm51bGwsXFwiYWRkcmVzc1xcIjpcXCJtZy1wcm92aXNpb25hbC1yb3V0ZS1ub2RlL21lc3NhZ2UtZ3JvdXAvbWctcHJvdmlzaW9uYWwtdGFyZ2V0LWxcXCIsXFwiY3JlYXRlZF9hdFxcIjozLFxcInVwZGF0ZWRfYXRcXCI6MyxcXCJ1cGRhdGVkX2F0X2hsY1xcIjpcXCIxNzkyNzQ5OTQ2NjkwLTAtc2VydmljZXMtcHJvdmlzaW9uYWwtcm91dGUtcjFcXCJ9fSJ9fQoxLi4xCiMgdGVzdHMgMQojIHN1aXRlcyAwCiMgcGFzcyAwCiMgZmFpbCAxCiMgY2FuY2VsbGVkIDAKIyBza2lwcGVkIDAKIyB0b2RvIDAKIyBkdXJhdGlvbl9tcyA0NjM1LjI4Mjc5NQojIHRpbWU9NjQxOG1zCiMgdGVzdC1maWxlcyB0b3RhbD0xIHBhc3M9MCBmYWlsPTEgYXNzZXJ0aW9ucz0xCg==",
+      "eof": true,
+      "executed_source": false,
+      "host": "lenovo-laptop",
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "job_id": "72bf9d0adf044252bee68e98d7a160d8",
+      "job_source_execution_started": true,
+      "job_state": "COMPLETE",
+      "job_terminal": true,
+      "log_state": "DATA",
+      "log_truncated": false,
+      "next_offset": 59196,
+      "offset": 56000,
+      "original_log_bytes": 59196,
+      "original_log_sha256": "2826f710e7a1e3a3b22ccdc4ebeb8896c13011e62aa45e7eb8a8b06ef3a88884",
+      "raw_chunk_sha256": "ee170109f643b34001331fac711a2df32a95cb3841d9128ade4cffcd04d8523e",
+      "read_only": true,
+      "redacted": true,
+      "returned_bytes": 3196,
+      "source": "original-worker-log",
+      "stream_id": "48ed131278748255b73454b24e6dcee453c4b6955c1ac538f4f9b4edec091348",
+      "text": "rtRowid\":1,\"partitionId\":\"services-provisional-route\",\"logIndex\":5,\"originHlc\":\"1792749946649-0-services-provisional-route-r1\",\"durableCommitWitness\":{\"partitionId\":\"services-provisional-route\",\"leaderNodeId\":\"mg-provisional-route-node\",\"leaderReplicaId\":\"services-provisional-route-r1\",\"term\":1,\"logIndex\":5,\"entryId\":\"provisional-route-a\"},\"acceptingNodeId\":\"mg-provisional-route-node\",\"acknowledgedAtMs\":1792749946675},\"debt\":{\"eventKey\":\"entry:provisional-route-a\",\"logIndex\":5,\"term\":1,\"ordinal\":0,\"entryId\":\"provisional-route-a\",\"eventJson\":\"{\\\\\"tableName\\\\\":\\\\\"services\\\\\",\\\\\"operation\\\\\":\\\\\"INSERT\\\\\",\\\\\"timestamp\\\\\":\\\\\"1792749946649-0-services-provisional-route-r1\\\\\",\\\\\"sourcePartition\\\\\":\\\\\"services-provisional-route\\\\\",\\\\\"sourceReplica\\\\\":\\\\\"services-provisional-route-r1\\\\\",\\\\\"data\\\\\":{\\\\\"service_id\\\\\":\\\\\"mg-provisional-source-r1\\\\\",\\\\\"service_type\\\\\":\\\\\"message_group\\\\\",\\\\\"node_id\\\\\":\\\\\"mg-provisional-route-node\\\\\",\\\\\"partition_id\\\\\":null,\\\\\"group_id\\\\\":\\\\\"mg-provisional-source\\\\\",\\\\\"replica_id\\\\\":\\\\\"mg-provisional-source-r1\\\\\",\\\\\"raft_role\\\\\":\\\\\"leader\\\\\",\\\\\"status\\\\\":\\\\\"stopped\\\\\",\\\\\"state_entered_at\\\\\":2,\\\\\"previous_state\\\\\":null,\\\\\"trigger_reason\\\\\":null,\\\\\"error_message\\\\\":null,\\\\\"cleanup_token\\\\\":null,\\\\\"create_attempt_token\\\\\":null,\\\\\"address\\\\\":\\\\\"mg-provisional-route-node/message-group/mg-provisional-source-r1\\\\\",\\\\\"created_at\\\\\":2,\\\\\"updated_at\\\\\":2,\\\\\"updated_at_hlc\\\\\":\\\\\"1792749946649-0-services-provisional-route-r1\\\\\"}}\"}}\n# {\"stage\":\"setup-released-services-query-and-exact-debt\",\"answer\":{\"success\":true,\"changes\":1,\"lastInsertRowid\":2,\"partitionId\":\"services-provisional-route\",\"logIndex\":6,\"originHlc\":\"1792749946690-0-services-provisional-route-r1\",\"durableCommitWitness\":{\"partitionId\":\"services-provisional-route\",\"leaderNodeId\":\"mg-provisional-route-node\",\"leaderReplicaId\":\"services-provisional-route-r1\",\"term\":1,\"logIndex\":6,\"entryId\":\"provisional-route-b\"},\"acceptingNodeId\":\"mg-provisional-route-node\",\"acknowledgedAtMs\":1792749946721},\"debt\":{\"eventKey\":\"entry:provisional-route-b\",\"logIndex\":6,\"term\":1,\"ordinal\":0,\"entryId\":\"provisional-route-b\",\"eventJson\":\"{\\\\\"tableName\\\\\":\\\\\"services\\\\\",\\\\\"operation\\\\\":\\\\\"INSERT\\\\\",\\\\\"timestamp\\\\\":\\\\\"1792749946690-0-services-provisional-route-r1\\\\\",\\\\\"sourcePartition\\\\\":\\\\\"services-provisional-route\\\\\",\\\\\"sourceReplica\\\\\":\\\\\"services-provisional-route-r1\\\\\",\\\\\"data\\\\\":{\\\\\"service_id\\\\\":\\\\\"mg-provisional-target-l\\\\\",\\\\\"service_type\\\\\":\\\\\"message_group\\\\\",\\\\\"node_id\\\\\":\\\\\"mg-provisional-route-node\\\\\",\\\\\"partition_id\\\\\":null,\\\\\"group_id\\\\\":\\\\\"mg-provisional-target\\\\\",\\\\\"replica_id\\\\\":\\\\\"mg-provisional-target-l\\\\\",\\\\\"raft_role\\\\\":\\\\\"leader\\\\\",\\\\\"status\\\\\":\\\\\"stopped\\\\\",\\\\\"state_entered_at\\\\\":3,\\\\\"previous_state\\\\\":null,\\\\\"trigger_reason\\\\\":null,\\\\\"error_message\\\\\":null,\\\\\"cleanup_token\\\\\":null,\\\\\"create_attempt_token\\\\\":null,\\\\\"address\\\\\":\\\\\"mg-provisional-route-node/message-group/mg-provisional-target-l\\\\\",\\\\\"created_at\\\\\":3,\\\\\"updated_at\\\\\":3,\\\\\"updated_at_hlc\\\\\":\\\\\"1792749946690-0-services-provisional-route-r1\\\\\"}}\"}}\n1..1\n# tests 1\n# suites 0\n# pass 0\n# fail 1\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 4635.282795\n# time=6418ms\n# test-files total=1 pass=0 fail=1 assertions=1\n"
+    }
+  }
+]

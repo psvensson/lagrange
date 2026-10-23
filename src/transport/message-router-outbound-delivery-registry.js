@@ -1,10 +1,105 @@
+import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {
   ROUTER_ERROR_MSG,
   TRANSPORT_DEFAULT,
+  TRANSPORT_EVENT,
   TRANSPORT_NUM,
 } from '../constants/transport.js';
 import {EMPTY_DELIVERY_SOURCE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OutboundDeliveryPriority, TRANSPORT_PRESSURE_SUMMARY_FIELD, createQueueWaitHistogram, normalizeIdentifier, recordQueueWaitDuration, resolvePendingReplacementKey} from './message-router-shared-vocabulary.js';
 import {adjustInFlightCriticalSourceReserveCount, adjustInFlightPriorityCount, adjustInFlightReadinessReserveCount, adjustInFlightSourceCount, buildPendingSourceAdmission, buildPendingSourceSummary, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightBySource, countInFlightReadinessReserve, countPendingByPriority, dequeueNextPendingItem, isOutboundNodeBackpressured, normalizeOutboundDeliveryPriority, peekNextPendingItem, resolveBackgroundPendingLimit, resolveCriticalInFlightSourceLimit, resolveCriticalPendingCeiling, resolveDeliverySource, resolveDeliverySourceAdmissionKey, resolveQueuedDeliverySourceAdmissionKey, resolveReadinessReserveInFlightLimit, takeCriticalPendingItemForSourceReserve} from './message-router-outbound-queue-admission.js';
+
+// A queued item's listener ends at dequeue; its in-flight slot ends only when
+// the actual deliverFn settles. Public cancellation never releases raw work.
+function createPendingItem(owner, nodeId, queue, properties, options) {
+  const signal = options.signal;
+  let settled = false;
+  const item = {
+    ...properties,
+    assertOpen: () => assertDeliveryOpen(options),
+    detachAbort: () => signal?.removeEventListener(TRANSPORT_EVENT.ABORT, cancel),
+  };
+  const finish = (settle, value) => {
+    if (settled) return;
+    settled = true;
+    item.detachAbort();
+    settle(value);
+  };
+  item.resolve = (value) => finish(properties.resolve, value);
+  item.reject = (error) => finish(properties.reject, error);
+  function cancel() {
+    const index = queue.pending.indexOf(item);
+    if (index < 0) return;
+    queue.pending.splice(index, 1);
+    item.reject(deliveryAbortReason(signal));
+    owner.process(nodeId);
+  }
+  item.watchCancellation = () => {
+    if (signal?.aborted) cancel();
+    else signal?.addEventListener(TRANSPORT_EVENT.ABORT, cancel, {once: true});
+  };
+  return item;
+}
+
+function removeExpiredPending(queue) {
+  // The existing bounded queue is the only retained collection. Inspect even
+  // entries behind a blocked head when delayed timer callbacks have not run.
+  for (const item of [...queue.pending]) {
+    try {
+      item.assertOpen?.();
+    } catch (error) {
+      const index = queue.pending.indexOf(item);
+      if (index >= 0) queue.pending.splice(index, 1);
+      item.reject(error);
+    }
+  }
+}
+
+function acquireInFlight(queue, item) {
+  if (item.priority === OutboundDeliveryPriority.CRITICAL) {
+    queue.lastCriticalDeliverySource =
+      resolveQueuedDeliverySourceAdmissionKey(item);
+  }
+  if (
+    item.priority === OutboundDeliveryPriority.READINESS &&
+    queue.inFlight >= queue.maxConcurrent
+  ) {
+    item.readinessReserveInFlight = true;
+  }
+  queue.inFlight += TRANSPORT_NUM.ONE;
+  adjustInFlightPriorityCount(queue, item.priority, TRANSPORT_NUM.ONE);
+  if (item.priority === OutboundDeliveryPriority.CRITICAL) {
+    adjustInFlightSourceCount(
+      queue,
+      resolveQueuedDeliverySourceAdmissionKey(item),
+      TRANSPORT_NUM.ONE,
+    );
+  }
+  if (item.criticalSourceReserve === true) {
+    adjustInFlightCriticalSourceReserveCount(
+      queue,
+      TRANSPORT_NUM.ONE,
+    );
+  }
+  if (item.readinessReserveInFlight === true) {
+    adjustInFlightReadinessReserveCount(queue, TRANSPORT_NUM.ONE);
+  }
+}
+
+function releaseInFlight(queue, item) {
+  queue.inFlight -= TRANSPORT_NUM.ONE;
+  adjustInFlightPriorityCount(queue, item.priority, -TRANSPORT_NUM.ONE);
+  if (item.priority === OutboundDeliveryPriority.CRITICAL) {
+    adjustInFlightSourceCount(
+      queue, resolveQueuedDeliverySourceAdmissionKey(item), -TRANSPORT_NUM.ONE,
+    );
+  }
+  if (item.criticalSourceReserve === true) {
+    adjustInFlightCriticalSourceReserveCount(queue, -TRANSPORT_NUM.ONE);
+  }
+  if (item.readinessReserveInFlight === true) {
+    adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
+  }
+}
 
 const NODE_STATE_UPDATE_DELIVERY_SOURCE =
   `${MESSAGE_ROUTER_LITERAL.STRING_MESSAGE}:` +
@@ -264,7 +359,9 @@ class OutboundDeliveryRegistryOwner {
     return false;
   }
   enqueue(nodeId, deliverFn, options = {}) {
+    assertDeliveryOpen(options);
     const queue = this.getOutboundQueue(nodeId);
+    const clock = options.deliveryLifetime?.clock || this.router.timeSource;
     const deliveryPriority = normalizeOutboundDeliveryPriority(
       options.deliveryPriority,
       options.targetAddress,
@@ -293,16 +390,20 @@ class OutboundDeliveryRegistryOwner {
           existingPendingItem.resolve(
             buildSupersededPendingResult(existingPendingItem),
           );
-          queue.pending[existingPendingIndex] = {
+          const replacement = createPendingItem(this, nodeId, queue, {
             deliverFn,
             resolve,
             reject,
-            queuedAt: this.router.timeSource.now(),
+            queuedAt: clock.now(),
+            clock,
             priority: deliveryPriority,
             deliverySource,
             deliverySourceAdmissionKey,
             replacePendingKey,
-          };
+          }, options);
+          queue.pending[existingPendingIndex] = replacement;
+          replacement.watchCancellation();
+          this.process(nodeId);
           return;
         }
       }
@@ -460,124 +561,61 @@ class OutboundDeliveryRegistryOwner {
         reject(error);
         return;
       }
-      queue.pending.push({
+      const item = createPendingItem(this, nodeId, queue, {
         deliverFn,
         resolve,
         reject,
-        queuedAt: this.router.timeSource.now(),
+        queuedAt: clock.now(),
+        clock,
         priority: deliveryPriority,
         deliverySource,
         deliverySourceAdmissionKey:
           pendingSourceAdmission.deliverySourceAdmissionKey,
         replacePendingKey,
         criticalSourceReserve: criticalSourceReserveAdmission,
-      });
+      }, options);
+      queue.pending.push(item);
+      item.watchCancellation();
       this.process(nodeId);
     });
   }
   process(nodeId) {
     const queue = this.router.outboundQueues.get(nodeId);
-    if (!queue) {
+    if (!queue || queue.processing) {
       return;
     }
-    while (queue.pending.length > TRANSPORT_NUM.ZERO) {
-      promoteAggregateCriticalReserveCandidate(queue);
-      const nextItem = peekNextPendingItem(queue);
-      if (!canDispatchPendingItem(queue, nextItem)) {
-        return;
-      }
-      const item = dequeueNextPendingItem(queue);
-      if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
-        queue.lastCriticalDeliverySource =
-          resolveQueuedDeliverySourceAdmissionKey(item);
-      }
-      if (
-        item?.priority === OutboundDeliveryPriority.READINESS &&
-        queue.inFlight >= queue.maxConcurrent
-      ) {
-        item.readinessReserveInFlight = true;
-      }
-      queue.inFlight += TRANSPORT_NUM.ONE;
-      adjustInFlightPriorityCount(queue, item?.priority, TRANSPORT_NUM.ONE);
-      if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
-        adjustInFlightSourceCount(
-          queue,
-          resolveQueuedDeliverySourceAdmissionKey(item),
-          TRANSPORT_NUM.ONE,
+    queue.processing = true;
+    try {
+      removeExpiredPending(queue);
+      while (queue.pending.length > TRANSPORT_NUM.ZERO) {
+        promoteAggregateCriticalReserveCandidate(queue);
+        const nextItem = peekNextPendingItem(queue);
+        if (!canDispatchPendingItem(queue, nextItem)) {
+          return;
+        }
+        const item = dequeueNextPendingItem(queue);
+        item.detachAbort?.();
+        acquireInFlight(queue, item);
+        const queueWaitMs = Math.max(
+          TRANSPORT_NUM.ZERO,
+          (item.clock || this.router.timeSource).now() - item.queuedAt,
+        );
+        recordQueueWaitDuration(queue, queueWaitMs);
+        const complete = (settle, value) => {
+          releaseInFlight(queue, item);
+          settle(value);
+          if (this.router.outboundQueues.get(nodeId) === queue) this.process(nodeId);
+        };
+        Promise.resolve().then(() => {
+          item.assertOpen?.();
+          return item.deliverFn();
+        }).then(
+          (result) => complete(item.resolve, {result, queueWaitMs}),
+          (error) => complete(item.reject, error),
         );
       }
-      if (item?.criticalSourceReserve === true) {
-        adjustInFlightCriticalSourceReserveCount(
-          queue,
-          TRANSPORT_NUM.ONE,
-        );
-      }
-      if (item?.readinessReserveInFlight === true) {
-        adjustInFlightReadinessReserveCount(queue, TRANSPORT_NUM.ONE);
-      }
-      const queueWaitMs = Math.max(
-        TRANSPORT_NUM.ZERO,
-        this.router.timeSource.now() -
-          (item?.queuedAt || this.router.timeSource.now()),
-      );
-      recordQueueWaitDuration(queue, queueWaitMs);
-      Promise.resolve()
-        .then(() => item.deliverFn())
-        .then((result) => {
-          queue.inFlight -= TRANSPORT_NUM.ONE;
-          adjustInFlightPriorityCount(
-            queue,
-            item?.priority,
-            -TRANSPORT_NUM.ONE,
-          );
-          if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
-            adjustInFlightSourceCount(
-              queue,
-              resolveQueuedDeliverySourceAdmissionKey(item),
-              -TRANSPORT_NUM.ONE,
-            );
-          }
-          if (item?.criticalSourceReserve === true) {
-            adjustInFlightCriticalSourceReserveCount(
-              queue,
-              -TRANSPORT_NUM.ONE,
-            );
-          }
-          if (item?.readinessReserveInFlight === true) {
-            adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
-          }
-          item.resolve({
-            result,
-            queueWaitMs,
-          });
-          this.process(nodeId);
-        })
-        .catch((error) => {
-          queue.inFlight -= TRANSPORT_NUM.ONE;
-          adjustInFlightPriorityCount(
-            queue,
-            item?.priority,
-            -TRANSPORT_NUM.ONE,
-          );
-          if (item?.priority === OutboundDeliveryPriority.CRITICAL) {
-            adjustInFlightSourceCount(
-              queue,
-              resolveQueuedDeliverySourceAdmissionKey(item),
-              -TRANSPORT_NUM.ONE,
-            );
-          }
-          if (item?.criticalSourceReserve === true) {
-            adjustInFlightCriticalSourceReserveCount(
-              queue,
-              -TRANSPORT_NUM.ONE,
-            );
-          }
-          if (item?.readinessReserveInFlight === true) {
-            adjustInFlightReadinessReserveCount(queue, -TRANSPORT_NUM.ONE);
-          }
-          item.reject(error);
-          this.process(nodeId);
-        });
+    } finally {
+      queue.processing = false;
     }
   }
   fail(nodeId, error) {

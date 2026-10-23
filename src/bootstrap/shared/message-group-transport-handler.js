@@ -25,9 +25,9 @@ const CREATE_CLEANUP_REQUIRED_CODE = 'MESSAGE_GROUP_CREATE_CLEANUP_REQUIRED';
  */
 function registerMessageGroupTransportHandler(messageGroup, registration) {
   const onEnvelope = registration.onEnvelope;
-  const handler = (envelope) => {
+  const handler = (envelope, connectionDelivery, localDelivery) => {
     if (onEnvelope) onEnvelope(envelope);
-    return messageGroup.receiveMessage(envelope);
+    return messageGroup.receiveMessage(envelope, connectionDelivery, localDelivery);
   };
   messageGroup.transportHandler = handler;
   messageGroup.resolveHandlerRetirementLane =

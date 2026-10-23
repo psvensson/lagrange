@@ -341,6 +341,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
           messageId,
           message,
           correlationId,
+          options,
         );
       }
       const queryResult = await this.resolveQueryTransportDeliveryOutcome(
@@ -360,6 +361,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         messageId,
         message,
         correlationId,
+        options,
       );
     }
     return this.deliverRemote(
@@ -406,8 +408,8 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
   failPendingMessagesForNode(nodeId, error) {
     for (const [messageId, pending] of this.pendingMessages) {
       if (pending.targetNodeId === nodeId) {
-        this.timeSource.clearTimeout(pending.timeout);
-        this.pendingMessages.delete(messageId);
+        (pending.clock || this.timeSource).clearTimeout(pending.timeout);
+        if (this.pendingMessages.get(messageId) === pending) this.pendingMessages.delete(messageId);
         pending.reject(error);
       }
     }

@@ -12,6 +12,9 @@ import {
 } from './cdc-group-propagation-retry-wait-report.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
 import {
+  CDC_GROUP_FOREGROUND_CONTINUATION,
+  CDC_GROUP_FOREGROUND_DELIVERY_STATE,
+  CDC_GROUP_FOREGROUND_RETRY_STATE,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
@@ -49,18 +52,98 @@ function stableSerialize(value) {
   return JSON.stringify(sortObjectKeys(value));
 }
 
+function answeredForegroundDelivery(answer) {
+  return {state: CDC_GROUP_FOREGROUND_DELIVERY_STATE.ANSWERED, answer};
+}
+
+function foregroundRetryState(owner, attempt, maxAttempts) {
+  return owner.isPropagationStopped() ? CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED :
+    attempt >= maxAttempts ? CDC_GROUP_FOREGROUND_RETRY_STATE.ATTEMPTS_EXHAUSTED :
+      CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE;
+}
+
+function prepareOrdinaryForegroundWave(owner, options, events, deliveryLabel) {
+  let pendingTargets = Array.isArray(options.targets) ? [...options.targets] : [];
+  let answer = [];
+  return {
+    state: CDC_GROUP_FOREGROUND_DELIVERY_STATE.READY,
+    continuation: CDC_GROUP_FOREGROUND_CONTINUATION.BACKGROUND_RETRY,
+    deliveryLabel,
+    hasPending: () => pendingTargets.length > 0,
+    complete: () => answer.length === 0,
+    result: () => answer,
+    failureCount: () => answer.length,
+    deliver: async () => {
+      answer = await owner.deliverToTargets({...options, events, targets: pendingTargets});
+    },
+    stopped: () => owner.buildStoppedFailures(owner.convertFailuresToRetryTargets(answer)),
+    prepareWait: (retryDelayMs) => ({state: CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE,
+      retryDelayMs}),
+    wait: (delayMs) => owner.sleep(delayMs),
+    afterWait: () => {
+      pendingTargets = owner.convertFailuresToRetryTargets(answer);
+    },
+    onSpent: (attempt) => owner.scheduleDeferredDeliveryEvents(events,
+      {...options, targets: owner.convertFailuresToRetryTargets(answer)}, attempt),
+  };
+}
+
 class CDCGroupPropagationDeliveryMethods {
   /**
    * Deliver CDC payload to targets with bounded retry on failed destinations.
    * @param {Object} options
-   * @return {Promise<Array<Object>>}
+   * @param {Object} [preparedWave] private durable operation, before ordinary preparation
+   * @return {Promise<Array<Object>|Object>}
    * @private
-   */ async deliverToTargetsWithRetry(options) {
+   */ async deliverToTargetsWithRetry(options, preparedWave) {
+    const wave = preparedWave ?? this.prepareOrdinaryForegroundDelivery(options);
+    if (wave.state === CDC_GROUP_FOREGROUND_DELIVERY_STATE.ANSWERED) return wave.answer;
+    let attempt = 1;
+    const maxAttempts = Math.max(1, this.deliveryRetryMaxAttempts);
+    let retry = {state: CDC_GROUP_FOREGROUND_RETRY_STATE.ATTEMPTS_EXHAUSTED};
+    while (wave.hasPending() && attempt <= maxAttempts) {
+      await wave.deliver();
+      if (wave.complete()) return wave.result();
+      retry = await this.waitForForegroundRetry(wave, attempt, maxAttempts);
+      if (retry.state === CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED ||
+          this.isPropagationStopped()) return wave.stopped();
+      if (retry.state !== CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) break;
+      attempt += 1;
+    }
+    if (wave.failureCount() > 0) {
+      reportCdcPropagationForegroundRetrySpent(this, {
+        ...wave.deliveryLabel, attempt, maxAttempts, failureCount: wave.failureCount(),
+        stopReason: retry.state, continuation: wave.continuation,
+        retryDelayMs: retry.retryDelayMs, remainingMs: retry.remainingMs,
+      });
+      wave.onSpent?.(maxAttempts + 1);
+    }
+    return wave.result();
+  }
+
+  async waitForForegroundRetry(wave, attempt, maxAttempts) {
+    const state = foregroundRetryState(this, attempt, maxAttempts);
+    if (state !== CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) return {state};
+    const retryDelayMs = this.computeRetryDelayMs(attempt);
+    const wait = wave.prepareWait(retryDelayMs);
+    if (wait.state !== CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) return wait;
+    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
+      nodeId: this.nodeId, ...wave.deliveryLabel, attempt, retryDelayMs,
+      failureCount: wave.failureCount(),
+    });
+    await wave.wait(retryDelayMs);
+    const observed = this.isPropagationStopped() ?
+      {state: CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED} : wait;
+    if (observed.state === CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) wave.afterWait?.();
+    return observed;
+  }
+
+  prepareOrdinaryForegroundDelivery(options) {
     const events = this.normalizeDeliveryEvents(options);
     const deliveryLabel = this.describeDeliveryEvents(events);
     const retryKey = !options?.events ? this.buildBackgroundRetryKey(options) : null;
     if (this.isPropagationStopped()) {
-      return this.buildStoppedFailures(options.targets);
+      return answeredForegroundDelivery(this.buildStoppedFailures(options.targets));
     }
     const allowDeferToExistingRetry = options?.allowDeferToExistingRetry !== false;
     const trafficGate = this.resolvePropagationTrafficGate(events, {
@@ -68,71 +151,16 @@ class CDCGroupPropagationDeliveryMethods {
     });
     if (allowDeferToExistingRetry && retryKey && this.backgroundRetryEntriesByKey.has(retryKey)) {
       this.scheduleDeferredDeliveryEvents(events, options, 1);
-      return this.buildDeferredFailures(options.targets);
+      return answeredForegroundDelivery(this.buildDeferredFailures(options.targets));
     }
     if (trafficGate.state === CDC_GROUP_PROPAGATION_TRAFFIC_GATE_STATE.DEFER_RETRY_WAVE) {
       this.scheduleDeferredDeliveryEvents(events, options, 1);
-      return this.buildDeferredFailures(options.targets);
+      return answeredForegroundDelivery(this.buildDeferredFailures(options.targets));
     }
     if (this.shouldBatchImmediateDelivery(options)) {
-      return this.enqueueImmediateBatch(options);
+      return answeredForegroundDelivery(this.enqueueImmediateBatch(options));
     }
-    let pendingTargets = Array.isArray(options.targets) ? [...options.targets] : [];
-    let deliveryFailures = [];
-    let attempt = 1;
-    const maxAttempts = Math.max(1, this.deliveryRetryMaxAttempts);
-    while (pendingTargets.length > 0 && attempt <= maxAttempts) {
-      deliveryFailures = await this.deliverToTargets({
-        ...options,
-        events,
-        targets: pendingTargets,
-      });
-      if (deliveryFailures.length === 0) {
-        return [];
-      }
-      // Stopped while the attempt was in flight: answer now, arm no delay.
-      if (this.isPropagationStopped()) {
-        return this.buildStoppedFailures(
-          this.convertFailuresToRetryTargets(deliveryFailures));
-      }
-      if (attempt >= maxAttempts) {
-        break;
-      }
-      const retryDelayMs = this.computeRetryDelayMs(attempt);
-      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
-        nodeId: this.nodeId,
-        tableName: deliveryLabel.tableName,
-        operation: deliveryLabel.operation,
-        eventCount: deliveryLabel.eventCount,
-        attempt,
-        retryDelayMs,
-        failureCount: deliveryFailures.length,
-      });
-      await this.sleep(retryDelayMs);
-      if (this.isPropagationStopped()) {
-        return this.buildStoppedFailures(
-          this.convertFailuresToRetryTargets(deliveryFailures));
-      }
-      pendingTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-      attempt += 1;
-    }
-    if (deliveryFailures.length > 0) {
-      reportCdcPropagationForegroundRetrySpent(this, {
-        tableName: deliveryLabel.tableName,
-        operation: deliveryLabel.operation,
-        attempt: maxAttempts,
-        maxAttempts,
-        failureCount: deliveryFailures.length,
-        eventCount: deliveryLabel.eventCount,
-      });
-      const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-      this.scheduleDeferredDeliveryEvents(
-        events,
-        {...options, targets: retryTargets},
-        maxAttempts + 1,
-      );
-    }
-    return deliveryFailures;
+    return prepareOrdinaryForegroundWave(this, options, events, deliveryLabel);
   }
   /**
    * Describe one delivery wave for diagnostics.

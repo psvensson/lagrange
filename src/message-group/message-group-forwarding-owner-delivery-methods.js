@@ -1,5 +1,9 @@
 import {createMessageGroupForwardingOwnerTargetMethods} from
   './message-group-forwarding-owner-target-methods.js';
+import {captureCdcForwardOptions,
+  createMessageGroupForwardingOwnerNativeDeliveryMethods, requiresDurableCdcForwarding} from
+  './message-group-forwarding-owner-native-delivery-methods.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const buildForwardTopologyRepairReadOptions =
@@ -36,6 +40,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
   return {
     ...createMessageGroupForwardingOwnerTargetMethods(options),
+    ...createMessageGroupForwardingOwnerNativeDeliveryMethods(),
 
     shouldRepairForwardTopology(errorMessage) {
       return typeof errorMessage === typeofToken.STRING &&
@@ -128,6 +133,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const readOptions = buildForwardTopologyRepairReadOptions(
         service,
         workloadProfile,
+        context.remainingMs ?? null,
       );
       const [groupResult, serviceResult] = await Promise.all([
         gateway.executeRead(
@@ -191,7 +197,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               messageGroupForwardingOwnerLiteral
                 .MESSAGE_DASH_GROUP_DASH_SERVICE,
           },
-          readOptions,
+          buildForwardTopologyRepairReadOptions(
+            service, workloadProfile, context.remainingMs ?? null),
         );
         if (nodeResult?.success === true && Array.isArray(nodeResult.rows)) {
           nodeRows = nodeResult.rows;
@@ -199,12 +206,15 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       }
 
       let repairedRowCount = num.ZERO;
+      context.remainingMs?.();
       repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
         tables.MESSAGE_GROUPS,
         groupRows,
       );
+      context.remainingMs?.();
       repairedRowCount +=
         await service.reconcileAuthoritativeForwardServiceRows(serviceRows);
+      context.remainingMs?.();
       repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
         tables.NODES,
         nodeRows,
@@ -354,6 +364,14 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
     async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
       const service = this.service;
+      options = captureCdcForwardOptions(service, options);
+      const original = {tableName, operation, data, ...copyCdcEventMetadata(options)};
+      if (requiresDurableCdcForwarding([original], options)) {
+        return this.forwardDurableCdcPayload({
+          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION,
+          ...original, sourceNodeId: service.nodeId,
+        }, options);
+      }
       const eventTimestamp =
         typeof options.timestamp === typeofToken.STRING &&
         options.timestamp.length > num.ZERO ?
@@ -388,6 +406,13 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
     async forwardCDCBatchToLeader(events, options = {}) {
       const service = this.service;
+      options = captureCdcForwardOptions(service, options);
+      if (requiresDurableCdcForwarding(events, options)) {
+        return this.forwardDurableCdcPayload({
+          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION_BATCH,
+          events, sourceNodeId: service.nodeId,
+        }, options);
+      }
       const replayOnly = options.replayOnly === true;
       const relayDepth =
         Number.isInteger(options.relayDepth) &&
@@ -501,6 +526,12 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
     },
 
     async forwardCDCPayloadToLeader(payload, logContext = {}) {
+      payload = captureCdcForwardOptions(this.service, payload);
+      logContext = captureCdcForwardOptions(this.service, logContext);
+      const events = Array.isArray(payload.events) ? payload.events : [payload];
+      if (requiresDurableCdcForwarding(events, logContext, payload)) {
+        return this.forwardDurableCdcPayload(payload, logContext);
+      }
       const service = this.service;
       const tableName = logContext.tableName || null;
       const operation = logContext.operation || null;

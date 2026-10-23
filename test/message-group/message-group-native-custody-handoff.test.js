@@ -17,7 +17,8 @@ import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
+import {cdcCommitWaitIdentity, isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {readOwedCdcObligations, readCdcObligation} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_CDC_COMMAND} from
@@ -29,7 +30,10 @@ import {resolveOperationalMessageGroupSelection,
   '../../src/bootstrap/shared/message-group-selection.js';
 import {SeedRuntimeBridgeOwner} from '../../src/bootstrap/owners/seed-runtime-bridge-owner.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
+import {CDC_GROUP_PROPAGATION_STATE} from
+  '../../src/topology/cdc-group-propagation-constants.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
+import {LATENCY_TREE_STATE} from '../../src/topology/latency-tree-constants.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {emit, pump, recipientFixture, view, NODE_ID, GROUP_ID} from
@@ -39,6 +43,10 @@ const KEY = 'native_cdc_custody_witness';
 const PARTITION_ID = 'config-custody-native';
 const BUDGET_MS = 10000;
 const LOSS_ROUNDS = 200;
+// Explicit fixture timing, including the native tick unit. The real replica
+// jitter remains enabled; its derived randomized election range must fit the
+// existing 200-round loss schedule. No role, vote or status is manufactured.
+const NATIVE_TICK_INTERVAL_MS = 100;
 const MEMBERS = [1, 2, 3].map((n) => [`${PARTITION_ID}-r${n}`, NODE_ID]);
 const WRITE_SQL = 'INSERT INTO config (config_key, config_value, value_type, ' +
   'default_value, created_at) VALUES (?, ?, ?, ?, ?)';
@@ -54,7 +62,8 @@ async function producerFixture(t) {
   LoggingService.resetInstance();
   ConfigurationManager.getInstance().initialize({node: {id: NODE_ID},
     logging: {level: 'fatal'}, raft: {heartbeatIntervalMs: 20,
-      electionTimeoutMinMs: 150, electionTimeoutMaxMs: 300}});
+      electionTimeoutMinMs: 150, electionTimeoutMaxMs: 300,
+      tickIntervalMs: NATIVE_TICK_INTERVAL_MS}});
   LoggingService.getInstance().initialize({level: 'fatal'});
   const group = await formAdmittedGroup({partitionId: PARTITION_ID, members: MEMBERS,
     tempPrefix: 'mg-custody-producer-', budgetMs: BUDGET_MS,
@@ -215,34 +224,181 @@ function report(t, f, producer, stage, extra = {}) {
   return result;
 }
 
-function subscribe(f, producer) {
+function observePendingNativeDelivery(f, producer) {
+  const invocation = producer.leader.cdcDelivery.activeCdcInvocation;
+  const key = cdcCommitWaitIdentity([f.event]);
+  const queue = f.services[0].cdcCommitWaiters;
+  const wait = queue.get(key);
+  assert.ok(invocation, 'the source retains its actual uncommitted invocation');
+  assert.ok(wait, 'the recipient retains the exact native operation');
+  const observed = {invocation, key, queue, wait, cleanupComplete: false};
+  invocation.context.cleanup.then(() => {
+    observed.cleanupComplete = true;
+  });
+  return observed;
+}
+
+async function closeExpiredNativeDelivery(t, f, producer, observed) {
+  const {invocation, key, queue, wait} = observed;
+  // The source uses its real creating clock. Wait for its existing deadline
+  // inside the unchanged fixture budget; do not invoke retire/resolve by hand.
+  assert.equal(await producer.group.waitFor(() => invocation.context.signal.aborted), true,
+    'the existing source response deadline retires this invocation');
+  assert.equal(producer.leader.cdcDelivery.activeCdcInvocation, invocation,
+    'source response expiry retains its original raw-child slot');
+  assert.equal(observed.cleanupComplete, false,
+    'a stationary recipient clock has not closed the actual native wait');
+  assert.equal(queue.get(key), wait, 'the original recipient queue entry still owns cleanup');
+  const before = report(t, f, producer, 'source-expired-before-recipient-clock-closure', {
+    recipientClock: {now: wait.clock.now(), budget: wait.budget},
+  });
+  assert.ok(before.producer.every((peer) => peer.obligation.delivered !== true),
+    'source response expiry cannot authorize a source ACK');
+
+  // Advancing this replica's creating clock also runs its real native timers.
+  // Keep all resulting packets in the fixture schedule and pump them normally;
+  // no timer, role, waiter or retained entry is removed or manufactured.
+  f.phase = 'recipient-owned-deadline-and-raw-cleanup';
+  const advanceMs = Math.max(0, wait.budget.deadlineMs - wait.clock.now());
+  wait.clock.advance(advanceMs);
+  await pump(f);
+  assert.equal(await producer.group.waitFor(() => observed.cleanupComplete), true,
+    'actual recipient completion releases the old source raw-child custody');
+  assert.equal(queue.has(key), false, 'the exact retired native wait releases its queue slot');
+  assert.equal(producer.leader.cdcDelivery.activeCdcInvocation, null,
+    'cleanup has closed before the explicitly requested new source attempt');
+  const closed = report(t, f, producer, 'recipient-clock-closed-before-source-redrive', {
+    advanceMs, recipientClockNow: wait.clock.now(), cleanupComplete: observed.cleanupComplete,
+  });
+  assert.ok(closed.producer.every((peer) => peer.obligation.delivered !== true),
+    'recipient deadline and cleanup also leave the durable source obligation owed');
+}
+
+function ownerErrorIdentity(error) {
+  return {
+    name: error?.name ?? null, message: error?.message ?? String(error),
+    code: error?.code ?? null, stack: error?.stack ?? null,
+  };
+}
+
+function observeSurvivorTiming(t, survivors) {
+  const observed = survivors.map((survivor) => ({replicaId: survivor.replicaId,
+    configured: structuredClone(survivor.raftTimingConfig),
+    native: tuningOf(survivor.raftTimingConfig)}));
+  t.diagnostic(json({stage: 'post-loss-native-timing-prerequisite', survivorTiming: observed,
+    tickIntervalEnvironment: process.env.RAFT_TICK_INTERVAL_MS ?? null,
+    roundLimit: LOSS_ROUNDS}));
+  for (const timing of observed) {
+    assert.equal(timing.configured.tickIntervalMs, NATIVE_TICK_INTERVAL_MS);
+    assert.ok(timing.native.electionTick * 2 < LOSS_ROUNDS,
+      'the existing finite schedule covers each configured native random election range');
+  }
+  return observed;
+}
+
+async function tickSurvivors(survivors, round, answers) {
+  for (const survivor of survivors) {
+    const answer = await survivor.raft.tick();
+    answers.push({round, replicaId: survivor.replicaId, answer});
+  }
+}
+
+function ownerErrorDisposition(error) {
+  return {
+    isCritical: error?.isCritical === true,
+    ownerNotReady: error?.ownerNotReady === true,
+    deferRetry: error?.deferRetry === true,
+    retryAfterMs: error?.retryAfterMs ?? null,
+    cause: error?.cause ?? null,
+  };
+}
+
+function recordOwnerFailure(f, boundary, error) {
+  // Keep the actual thrown object as well as portable diagnostics. Observation
+  // does not replace the error consumed by the source delivery owner.
+  f.ownerFailures ??= [];
+  f.ownerFailures.push({boundary, error});
+  emit(f, 'actual-owner-failure', {boundary, error: {
+    ...ownerErrorIdentity(error), ...ownerErrorDisposition(error),
+  }});
+}
+
+async function observeOwnerCall(f, boundary, operation) {
+  emit(f, 'actual-owner-entered', {boundary});
+  try {
+    const result = await operation();
+    emit(f, 'actual-owner-returned', {boundary,
+      selectedReplicaId: result?.service?.replicaId ?? null,
+      ready: result?.ready ?? null});
+    return result;
+  } catch (error) {
+    recordOwnerFailure(f, boundary, error);
+    throw error;
+  }
+}
+
+function subscribe(t, f, producer) {
   const service = f.services[0];
+  const latencyTreeService = new LatencyTreeService({nodeId: NODE_ID,
+    systemTableCache: service.systemTableCache});
   const topology = {cdcGroupPropagationService: new CDCGroupPropagationService({
     nodeId: NODE_ID, systemTableCache: service.systemTableCache,
-    messageRouter: f.router,
-    latencyTreeService: new LatencyTreeService({nodeId: NODE_ID,
-      systemTableCache: service.systemTableCache})})};
+    messageRouter: f.router, latencyTreeService})};
+  t.after(async () => {
+    const stops = await Promise.allSettled([
+      Promise.resolve().then(() => topology.cdcGroupPropagationService.stop()),
+      Promise.resolve().then(() => latencyTreeService.stop()),
+    ]);
+    const failures = stops.filter((result) => result.status === 'rejected')
+      .map((result) => result.reason);
+    if (failures.length > 0) throw new AggregateError(failures, 'topology cleanup failed');
+  });
+  // The same component lifecycle used by LatencyTopologySetup's create/start.
+  latencyTreeService.initialize();
+  topology.cdcGroupPropagationService.initialize();
+  latencyTreeService.start({recomputeImmediately: true});
+  topology.cdcGroupPropagationService.start();
+  assert.equal(latencyTreeService.getStats().state, LATENCY_TREE_STATE.RUNNING);
+  assert.equal(topology.cdcGroupPropagationService.getStats().state,
+    CDC_GROUP_PROPAGATION_STATE.RUNNING);
+  emit(f, 'setup-topology-running');
   const bridge = new SeedRuntimeBridgeOwner({delegates: {getLatencyTopology: () => topology}});
-  const subscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
+  const actualSubscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
     partitionId: PARTITION_ID, replicaId: producer.leader.replicaId,
     resolveOperationalMessageGroupSelection: (options) =>
       resolveOperationalMessageGroupSelection(f.services, options),
     resolveOperationalMessageGroupSelectionAsync: (options) =>
-      resolveOperationalMessageGroupSelectionAsync(f.services, options),
+      observeOwnerCall(f, 'async-selection', () =>
+        resolveOperationalMessageGroupSelectionAsync(f.services, options)),
     buildMessageGroupOwnerNotReadyError,
     beforePropagation: (event) => {
       f.event = structuredClone(event);
       emit(f, 'producer-durable-event-entered-subscriber', {event: f.event,
         obligation: readCdcObligation(producer.leader.db, event.eventKey)});
     },
-    propagatePartitionCDCEvent: async (...args) => {
+    propagatePartitionCDCEvent: (...args) => observeOwnerCall(f, 'seed-bridge', async () => {
       const result = await Reflect.apply(bridge.propagatePartitionCDCEvent, bridge, args);
+      // Capture the frontier at the same real bridge-return continuation as
+      // before tracing; the observer's later settlement must not move this cut.
       emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1]),
         recipient: view(f)});
       return result;
-    },
+    }),
     afterPropagation: () => emit(f, 'subscriber-after-propagation'),
   });
+  const subscriber = (event, deliveryContext) => observeOwnerCall(f, 'subscriber', () =>
+    actualSubscriber(event, deliveryContext));
+  subscriber.getCDCPropagationService = () => actualSubscriber.getCDCPropagationService();
+  subscriber.canAcceptCDCEvent = (event) => {
+    try {
+      const readiness = actualSubscriber.canAcceptCDCEvent(event);
+      emit(f, 'actual-subscriber-readiness', {readiness});
+      return readiness;
+    } catch (error) {
+      recordOwnerFailure(f, 'subscriber-readiness', error);
+      throw error;
+    }
+  };
   return {subscriber, topology};
 }
 
@@ -251,8 +407,7 @@ test('released executeQuery debt requires actual RF1 native receipt through the 
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-rf1-write');
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
-    const {subscriber, topology} = subscribe(f, producer);
-    t.after(() => topology.cdcGroupPropagationService.stop());
+    const {subscriber} = subscribe(t, f, producer);
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
       {subscriberId: 'native-rf1-message-group-custody'});
     await pump(f);
@@ -271,8 +426,7 @@ test('native CDC producer retains custody until message-group committed applicat
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-custody-write');
     const f = await recipientFixture(t, KEY);
-    const {subscriber, topology} = subscribe(f, producer);
-    t.after(() => topology.cdcGroupPropagationService.stop());
+    const {subscriber} = subscribe(t, f, producer);
     f.holdEntries = true;
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
       {subscriberId: 'native-message-group-custody'});
@@ -295,19 +449,38 @@ test('native CDC producer retains custody until message-group committed applicat
     assert.ok(cut.recipient.slice(1).every((peer) =>
       recipientEntries(peer).length === 0 && peer.row === null));
 
+    const pendingDelivery = observePendingNativeDelivery(f, producer);
+
     // Controlled native recipient leader loss followed by native rejoin and
     // suffix replacement. No database, cache or event row is deleted.
     f.phase = 'post-cut-recipient-loss';
     f.isolateLeader = true;
+    const survivors = f.services.slice(1);
+    const survivorTiming = observeSurvivorTiming(t, survivors);
+    const nativeTickAnswers = [];
     let elected = false;
+    let lossRounds = 0;
+    let survivorStatus = [];
     for (let round = 0; round < LOSS_ROUNDS; round += 1) {
-      await f.services[1].raft.tick();
+      // Both survivors heard the old leader. Each native election clock must
+      // advance so pre-vote/check-quorum cannot retain an unticked lease.
+      await tickSurvivors(survivors, round, nativeTickAnswers);
       await pump(f);
-      if (f.services[1].raft.readStatus().role === 'leader') {
-        elected = true;
-        break;
-      }
+      lossRounds = round + 1;
+      // Native status reads belong to this explicit election schedule: the
+      // read may process inbound work. Diagnostics only serialize its answers.
+      survivorStatus = survivors.map((survivor) => ({replicaId: survivor.replicaId,
+        status: survivor.raft.readStatus()}));
+      elected = survivorStatus.some(({status}) => status.role === RAFT_ROLE.LEADER);
+      if (elected) break;
     }
+    t.diagnostic(json({stage: 'post-loss-native-election-before-assertion',
+      elected, lossRounds, roundLimit: LOSS_ROUNDS,
+      survivorReplicaIds: survivors.map((survivor) => survivor.replicaId),
+      nativeStatus: survivorStatus, survivorTiming, nativeTickAnswers,
+      recipient: view(f), queued: structuredClone(f.queue),
+      held: structuredClone(f.held), events: structuredClone(f.events),
+    }));
     assert.equal(elected, true, 'actual remaining recipient quorum elects a leader');
     await pump(f);
     f.phase = 'recipient-rejoin-and-suffix-replacement';
@@ -322,6 +495,7 @@ test('native CDC producer retains custody until message-group committed applicat
       'the newly elected quorum never applied the uncommitted event');
     // The old leader cache may retain its precommit apply. Preserve that fact
     // in the vector; do not normalize it into a committed application.
+    await closeExpiredNativeDelivery(t, f, producer, pendingDelivery);
     f.phase = 'source-canonical-redrive';
     let replay = {settlement: 'pending'};
     const redrive = producer.leader.cdcDelivery.driveCdcObligations('native-loss-replay');

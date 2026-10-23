@@ -170,7 +170,7 @@ class MessageRouterStatsShutdown {
     // dialed bulk sockets plus the token-bucket drain timer.
     this.bulkChannelRegistry?.closeAll();
     for (const [, pending] of this.pendingMessages) {
-      this.timeSource.clearTimeout(pending.timeout);
+      (pending.clock || this.timeSource).clearTimeout(pending.timeout);
       pending.resolve({
         messageId: pending.messageId,
         acknowledged: false,
@@ -181,7 +181,7 @@ class MessageRouterStatsShutdown {
     this.pendingMessages.clear();
     const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     for (const [, pending] of this.pendingResponses) {
-      this.timeSource.clearTimeout(pending.timeoutId);
+      (pending.clock || this.timeSource).clearTimeout(pending.timeoutId);
       this.detachPendingResponseAbortSignal(pending);
       pending.reject(shutdownError);
     }

@@ -3,6 +3,7 @@
  */
 
 const CDC_GROUP_PROPAGATION_SUBSYSTEM = 'cdc-group-propagation';
+const CDC_MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 
 const CDC_GROUP_PROPAGATION_STATE = Object.freeze({
   CREATED: 'created',
@@ -20,6 +21,7 @@ const CDC_GROUP_PROPAGATION_REASON = Object.freeze({
   CONFIG_GROUPED_MODE: 'config_grouped_mode',
   CONFIG_SAFE_MODE: 'config_safe_mode',
   MISSING_LOCAL_GROUP: 'missing_local_group',
+  SOURCE_GROUP_MISMATCH: 'source_group_mismatch',
   MISSING_ACTIVE_GROUPS: 'missing_active_groups',
   MISSING_COORDINATOR_NODE: 'missing_coordinator_node',
   MISSING_COORDINATOR_ADDRESS: 'missing_coordinator_address',
@@ -34,6 +36,23 @@ const CDC_GROUP_PROPAGATION_REASON = Object.freeze({
 const CDC_GROUP_PROPAGATION_DELIVERY_ERROR = Object.freeze({
   BACKGROUND_RETRY_PENDING: 'background_retry_pending',
   PROPAGATION_STOPPED: 'propagation_stopped',
+});
+
+// Private foreground operation preparation. Both ordinary delivery and a
+// context-bound durable wave use the existing foreground attempt owner.
+const CDC_GROUP_FOREGROUND_DELIVERY_STATE = Object.freeze({
+  ANSWERED: 'answered',
+  READY: 'ready',
+});
+const CDC_GROUP_FOREGROUND_RETRY_STATE = Object.freeze({
+  ADVANCE: 'advance',
+  ATTEMPTS_EXHAUSTED: 'attempts_exhausted',
+  INSUFFICIENT_DURATION: 'insufficient_duration',
+  STOPPED: 'stopped',
+});
+const CDC_GROUP_FOREGROUND_CONTINUATION = Object.freeze({
+  BACKGROUND_RETRY: 'background_retry',
+  SOURCE_OWNER: 'source_owner',
 });
 
 const CDC_GROUP_PROPAGATION_STATUS = Object.freeze({
@@ -87,6 +106,9 @@ const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
 });
 
 export {
+  CDC_GROUP_FOREGROUND_CONTINUATION,
+  CDC_GROUP_FOREGROUND_DELIVERY_STATE,
+  CDC_GROUP_FOREGROUND_RETRY_STATE,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
@@ -98,4 +120,5 @@ export {
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
+  CDC_MESSAGE_GROUP_REPLICA_SUFFIX,
 };

@@ -19,6 +19,8 @@ const TRANSPORT_DELIVERY_OUTCOME_STATE = Object.freeze({
   FAILED: 'failed',
 });
 
+const TRANSPORT_COMPLETED_STATUS = 'completed';
+
 const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD = Object.freeze({
   DELIVERY_STATE: 'deliveryState',
   DEFER_RETRY: 'deferRetry',
@@ -224,7 +226,7 @@ function buildTransportDeliveryOutcome(options = {}) {
   const noHandler = options.noHandler === true;
   const acknowledged = options.acknowledged === true;
   const claimedDeliveryState = normalizeOptionalString(options.deliveryState);
-  const completedWithError = options.status === 'completed' &&
+  const completedWithError = options.status === TRANSPORT_COMPLETED_STATUS &&
     normalizeOptionalString(options.error ?? options.message) !== null;
   const {delivered, deferred, deliveryState} =
     classifyTransportDeliveryState({
@@ -354,6 +356,7 @@ function isDeferredTransportDeliveryOutcome(outcome = null) {
 }
 
 export {
+  TRANSPORT_COMPLETED_STATUS,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,

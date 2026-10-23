@@ -1,4 +1,7 @@
-
+import {CDC_COMPLETION, hasDurableCdcEvents,
+  isCommittedCdcOutcome, isProvisionalCdcOutcome} from
+  '../../cdc/cdc-delivery-outcome.js';
+import {assertCdcDeliveryInvocation} from '../../cdc/cdc-delivery-invocation.js';
 const LOCAL_STR_OPERATIONAL_MESSAGE_GROUP_INGRESS_NOT_RE = 'Operational message-group ingress not ready ';
 
 const CDC_PROPAGATION_SUBSCRIBER_REASON = Object.freeze({
@@ -153,6 +156,39 @@ function buildPropagationOwnerNotReadyMessage(tableName) {
     `for ${tableName} ${CDC_PROPAGATION_SUBSCRIBER_MESSAGE.PROPAGATION}`;
 }
 
+function acceptsPropagationTable(cdcEvent, tableName) {
+  if (cdcEvent?.tableName === tableName) return true;
+  if (hasDurableCdcEvents([cdcEvent])) {
+    throw Object.assign(new Error(CDC_COMPLETION.INVALID), {code: CDC_COMPLETION.INVALID});
+  }
+  return false;
+}
+
+function logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId) {
+  if (logger && typeof logger.debug === 'function' && eventLogMessage) {
+    logger.debug(eventLogMessage, {tableName: cdcEvent.tableName,
+      operation: cdcEvent.operation, partitionId, replicaId});
+  }
+}
+
+function requirePropagationService(selection, cdcEvent, requiredTables, deferredError) {
+  const service = selection?.service || null;
+  if (!service) throw deferredError(selection);
+  const readiness = resolveSelectionBackedServiceReadiness(
+    service, selection, cdcEvent, requiredTables);
+  if (readiness.ready !== true) throw deferredError(readiness);
+  return service;
+}
+
+function propagationIsProvisional(answer, cdcEvent, groupId) {
+  if (!hasDurableCdcEvents([cdcEvent]) ||
+      isCommittedCdcOutcome(answer, [cdcEvent], groupId)) return false;
+  if (isProvisionalCdcOutcome(answer, [cdcEvent], groupId)) return true;
+  throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {
+    code: CDC_COMPLETION.UNKNOWN, cause: answer, deferRetry: true,
+  });
+}
+
 function buildPartitionCdcPropagationSubscriber(options = {}) {
   const tableName = options.tableName || null;
   const partitionId = options.partitionId || null;
@@ -181,51 +217,46 @@ function buildPartitionCdcPropagationSubscriber(options = {}) {
     return resolvePropagationServiceReadiness(service, cdcEvent, requiredTables);
   };
 
-  const subscriber = async (cdcEvent = {}) => {
-    if (cdcEvent?.tableName !== tableName) {
-      return;
-    }
-
-    if (logger && typeof logger.debug === 'function' && eventLogMessage) {
-      logger.debug(eventLogMessage, {
-        tableName: cdcEvent.tableName,
-        operation: cdcEvent.operation,
-        partitionId,
-        replicaId,
-      });
-    }
+  const subscriber = async (cdcEvent = {}, deliveryContext = null) => {
+    if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
+    const wait = (operation) => deliveryContext === null ? operation() :
+      deliveryContext.run(operation);
+    if (!acceptsPropagationTable(cdcEvent, tableName)) return;
+    logPropagationEvent(logger, eventLogMessage, cdcEvent, partitionId, replicaId);
 
     if (typeof beforePropagation === 'function') {
-      await beforePropagation(cdcEvent);
+      await wait(() => beforePropagation(cdcEvent));
     }
 
-    const selection = await resolveOperationalMessageGroupSelectionAsync(
-      buildPropagationSelectionOptions(requiredTables, preferredService),
-    );
-    const propagationMessageGroupService = selection?.service || null;
-    if (!propagationMessageGroupService) {
-      throw resolveDeferredSelectionError(selection);
-    }
+    const selection = await wait(() => resolveOperationalMessageGroupSelectionAsync(
+      buildPropagationSelectionOptions(requiredTables, preferredService)));
+    const propagationMessageGroupService = requirePropagationService(
+      selection, cdcEvent, requiredTables, resolveDeferredSelectionError);
 
-    const readiness = resolveSelectionBackedServiceReadiness(
-      propagationMessageGroupService,
-      selection,
-      cdcEvent,
-      requiredTables,
-    );
-    if (readiness.ready !== true) {
-      throw resolveDeferredSelectionError(readiness);
-    }
-
-    await propagatePartitionCDCEvent(
+    const answer = await wait(() => propagatePartitionCDCEvent(
       propagationMessageGroupService,
       cdcEvent,
-    );
+      deliveryContext,
+    ));
 
+    // The source delivery owner consumes this exact answer. In particular,
+    // provisional ingress cannot run completion hooks or become an ACK merely
+    // because this callback returned without throwing.
+    if (propagationIsProvisional(answer, cdcEvent, propagationMessageGroupService.groupId)) {
+      return answer;
+    }
     if (typeof afterPropagation === 'function') {
-      await afterPropagation(cdcEvent);
+      await wait(() => afterPropagation(cdcEvent));
     }
+    return answer;
   };
+
+  if (typeof resolveOperationalMessageGroupSelection === 'function') {
+    // The source continuation consumes this selector's current object binding;
+    // equal group text never makes a replacement service the old owner.
+    subscriber.getCDCPropagationService = () => resolveOperationalMessageGroupSelection(
+      buildPropagationSelectionOptions(requiredTables, preferredService))?.service ?? null;
+  }
 
   subscriber.canAcceptCDCEvent = (cdcEvent = {}) => {
     if (cdcEvent?.tableName !== tableName) {

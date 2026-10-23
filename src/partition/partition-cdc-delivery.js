@@ -14,7 +14,11 @@ import {
 } from '../constants/cdc-lifecycle-constants.js';
 import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
 import {buildEventIdentity} from './cdc-event-buffer.js';
-import {isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
+import {hasDurableCdcEvents, isCommittedCdcOutcome,
+  isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
+import {assertCdcDeliveryInvocation, beginCdcDeliveryInvocation} from
+  '../cdc/cdc-delivery-invocation.js';
+import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_CDC,
@@ -48,6 +52,42 @@ const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([SYSTEM_TABLE_NAME.LO
 const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
 const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event';
 const CDC_SUBSCRIBER_REFUSED_CODE = 'cdc_subscriber_refused';
+
+async function deliverCapturedCdcEvent(delivery, subscriber, cdcEvent) {
+  const {owner} = delivery;
+  const tenure = owner.leadershipTenure;
+  const subscriptionEpoch = owner.cdcSubscriptionEpoch;
+  const context = beginCdcDeliveryInvocation(delivery, () =>
+    owner.isLeader && owner.leadershipTenure === tenure &&
+    owner.cdcSubscriptionEpoch === subscriptionEpoch);
+  try {
+    const captured = Object.freeze({...cdcEvent, ...captureCdcEvents([cdcEvent])[0]});
+    return await delivery.deliverCDCEventToSubscriber(subscriber, captured, context);
+  } finally {
+    context.finish();
+  }
+}
+
+function assertSubscriberReadiness(readiness) {
+  if (readiness.ready === true) return;
+  const error = new Error(readiness.reason || CDC_SUBSCRIBER_NOT_READY_MSG);
+  error.ownerNotReady = true;
+  if (readiness.retryAfterMs > 0) error.retryAfterMs = readiness.retryAfterMs;
+  throw error;
+}
+
+function assertSubscriberAcceptance(answer, cdcEvent) {
+  if (isProvisionalCdcOutcome(answer, [cdcEvent])) return;
+  const refused = hasDurableCdcEvents([cdcEvent]) ?
+    !isCommittedCdcOutcome(answer, [cdcEvent]) : answer?.success === false;
+  if (!refused) return;
+  const error = new Error(CDC_SUBSCRIBER_REFUSED_MSG);
+  error.code = CDC_SUBSCRIBER_REFUSED_CODE;
+  error.cause = answer;
+  error.retryAfterMs = answer?.retryAfterMs;
+  throw error;
+}
+
 function incrementBoundedOwnerCounter(owner, fieldName, delta = 1) {
   if (!owner || typeof fieldName !== 'string' || fieldName.length === 0) {
     return;
@@ -124,6 +164,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {Object} owner - The PartitionService instance that owns CDC state.
    */ constructor(owner) {
     this.owner = owner;
+    this.activeCdcInvocation = null;
     this.obligationLane = createCdcObligationLane();
     if (typeof owner.on === PARTITION_SERVICE_TYPE.FUNCTION) {
       owner.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, () => {
@@ -131,6 +172,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
         this.driveCdcObligations(PARTITION_CDC_OBLIGATION_REASON.LEADER_ELECTED);
       });
       owner.on(PARTITION_SERVICE_EVENT.SHUTDOWN, () => resetCdcObligationLane(this));
+      owner.on(PARTITION_SERVICE_EVENT.SHUTDOWN_STARTED, () => {
+        this.activeCdcInvocation?.retire();
+        resetCdcObligationLane(this);
+      });
     }
   }
   /**
@@ -439,25 +484,18 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {Function|Object} subscriber - Subscriber callback/object.
    * @param {Object} cdcEvent - Event payload.
    * @return {Promise<void>}
-   */ async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
+   */ async deliverCDCEventToSubscriber(subscriber, cdcEvent, deliveryContext = null) {
+    if (hasDurableCdcEvents([cdcEvent]) && deliveryContext === null) {
+      return deliverCapturedCdcEvent(this, subscriber, cdcEvent);
+    }
+    if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
     const readiness = this.resolveCDCSubscriberReadiness(subscriber, cdcEvent);
-    if (readiness.ready !== true) {
-      const error = new Error(readiness.reason || CDC_SUBSCRIBER_NOT_READY_MSG);
-      error.ownerNotReady = true;
-      if (readiness.retryAfterMs > 0) {
-        error.retryAfterMs = readiness.retryAfterMs;
-      }
-      throw error;
-    }
-    const answer = typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION ?
-      await subscriber(cdcEvent) : await subscriber.handleCDCEvent(cdcEvent);
-    if (answer?.success === false && !isProvisionalCdcOutcome(answer, [cdcEvent])) {
-      const error = new Error(CDC_SUBSCRIBER_REFUSED_MSG);
-      error.code = CDC_SUBSCRIBER_REFUSED_CODE;
-      error.cause = answer;
-      error.retryAfterMs = answer.retryAfterMs;
-      throw error;
-    }
+    assertSubscriberReadiness(readiness);
+    const invoke = () => typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION ?
+      subscriber(cdcEvent, deliveryContext) :
+      subscriber.handleCDCEvent(cdcEvent, deliveryContext);
+    const answer = deliveryContext === null ? await invoke() : await deliveryContext.run(invoke);
+    assertSubscriberAcceptance(answer, cdcEvent);
     return answer;
   }
   /**
@@ -466,17 +504,19 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {Object} subscriptionState - Mutable state for this subscriber.
    * @return {Function} Wrapper callback.
    */ buildCDCSubscriberWrapper(subscriber, subscriptionState) {
-    return async (cdcEvent) => {
+    return async (cdcEvent, deliveryContext = null) => {
       const sequencedEvent = Number.isFinite(cdcEvent.sequenceNumber) ?
         cdcEvent :
         {...cdcEvent, sequenceNumber: this.nextCDCEventSequenceNumber()};
-      const decoratedEvent = {
+      const decoratedEvent = Object.freeze({
         ...sequencedEvent,
         streamMode: subscriptionState.streamMode,
         subscriberId: subscriptionState.subscriberId,
         subscriptionEpoch: subscriptionState.subscriptionEpoch,
-      };
-      const answer = await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+      });
+      const answer = await this.deliverCDCEventToSubscriber(
+        subscriber, decoratedEvent, deliveryContext);
+      if (deliveryContext !== null) assertCdcDeliveryInvocation(deliveryContext);
       if (isProvisionalCdcOutcome(answer, [cdcEvent])) return answer;
       this.owner.cdcEventBuffer.recordDelivered(cdcEvent);
       subscriptionState.lastDeliveredSequenceNumber = decoratedEvent.sequenceNumber;

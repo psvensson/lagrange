@@ -55,8 +55,8 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   most one acknowledgement entry per second per partition, and the events a
 //   crash can make the consumer see twice are those acknowledged within the
 //   last second (at most ACK_BATCH_MAX_EVENTS of them).
-// - DRIVE_PAGE_ROWS: how many owed rows one read of the ledger returns; the
-//   driver pages in log order until the ledger is drained.
+// - DRIVE_PAGE_ROWS: how many owed rows one drive visits before yielding; each
+//   ledger read hydrates only the current row, in log order.
 const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   ACK_BATCH_MAX_EVENTS: NUM.TWO_HUNDRED_FIFTY_SIX,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,

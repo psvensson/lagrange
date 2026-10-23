@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 import {
@@ -319,8 +320,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
               ),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-          propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
-            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
+          propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
+            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
         });
         const handshake = await partition.subscribeToCDCWithHandshake(
           cdcSubscriber,
@@ -715,16 +716,15 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @return {Promise<Object>}
    * @private
    */
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
     const topologyOwners = assertCritical(
       this.latencyTopology,
       JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      data: cdcEvent.data,
+      ...copyCdcEvent(cdcEvent),
       sourceMessageGroupService: messageGroupService,
+      deliveryContext,
     });
   }
 }

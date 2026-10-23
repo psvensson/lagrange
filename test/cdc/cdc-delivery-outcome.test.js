@@ -13,6 +13,7 @@ import {
   isCommittedCdcDelivery,
   isProvisionalCdcOutcome,
   isProvisionalCdcDelivery,
+  observeCdcCoverage,
 } from '../../src/cdc/cdc-delivery-outcome.js';
 import {copyCdcEventMetadata} from '../../src/cdc/cdc-event-envelope.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
@@ -53,9 +54,8 @@ function fixture() {
 }
 
 function zeroTarget(event, sourceAnswer) {
-  return completeCdcPropagation(event, sourceAnswer, [], {
-    sourceGroupId: GROUP_ID, targetGroupCount: 0, deliveryFailures: [],
-  });
+  return completeCdcPropagation([event], observeCdcCoverage(sourceAnswer, [event], GROUP_ID),
+    [], GROUP_ID);
 }
 
 test('canonical local committed acceptance needs no transport ACK', () => {

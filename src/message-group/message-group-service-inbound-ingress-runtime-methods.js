@@ -111,7 +111,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @param {Object} message - Incoming message.
      * @return {Promise<Object>} Processing result.
      */
-    async receiveMessage(message) {
+    async receiveMessage(message, connectionDelivery, localDelivery) {
       if (!this.initialized) {
         throw new Error(
           MESSAGE_GROUP_SERVICE_LITERAL.MESSAGEGROUPSERVICE_NOT_INITIALIZED,
@@ -126,7 +126,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
       }
       // Handle application messages
       // Requirements: 2.3, 5.3
-      return this.handleApplicationMessage(message);
+      return this.handleApplicationMessage(message, connectionDelivery, localDelivery);
     }
     /**
      * Handle application messages (non-Raft messages).
@@ -134,7 +134,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @param {Object} message - Application message
      * @return {Promise<Object>} Processing result
      */
-    async handleApplicationMessage(message) {
+    async handleApplicationMessage(message, _connectionDelivery, localDelivery) {
       const {messageId, payload, sourceGroup, sourceReplica} = message;
       this.logger.debug(
         MESSAGE_GROUP_SERVICE_LITERAL.RECEIVED_APPLICATION_MESSAGE,
@@ -181,7 +181,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           payload.type ===
             MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION
         ) {
-          return this.handleLatencyCdcPropagationMessage(messageId, payload);
+          return this.handleLatencyCdcPropagationMessage(messageId, payload, localDelivery);
         }
         if (
           payload &&
@@ -191,6 +191,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           return this.handleLatencyCdcPropagationBatchMessage(
             messageId,
             payload,
+            localDelivery,
           );
         }
         const applicationEvent = {
@@ -223,12 +224,13 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @return {Promise<Object>}
      * @private
      */
-    async handleLatencyCdcPropagationMessage(messageId, payload) {
+    async handleLatencyCdcPropagationMessage(messageId, payload, localDelivery) {
       return runHandleLatencyMessage(
         this,
         cdcPropagationRuntimeDeps,
         messageId,
         payload,
+        localDelivery,
       );
     }
     /**
@@ -238,12 +240,13 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @return {Promise<Object>}
      * @private
      */
-    async handleLatencyCdcPropagationBatchMessage(messageId, payload) {
+    async handleLatencyCdcPropagationBatchMessage(messageId, payload, localDelivery) {
       return runHandleLatencyBatchMessage(
         this,
         cdcPropagationRuntimeDeps,
         messageId,
         payload,
+        localDelivery,
       );
     }
     /**

@@ -1,0 +1,19 @@
+{
+  "id": "retained-seed-original-handoff",
+  "uploaded": {
+    "sha256": "c0eb799e1651a8feb0a3f4d349ed5d25d88ca83432ebe38348115167ee0656c6",
+    "bytes": 732117,
+    "asset": "retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz"
+  },
+  "entry": {
+    "ts": "2026-10-23T13:05:27.558Z",
+    "type": "finding",
+    "kind": "evidence",
+    "text": "Preserve exact prior and revised message-group delivery source/test drafts plus reviewed collector and static evidence. Archive member manifest sha256:0d123850ed400f9d5d1c386986176eadc4b4c00ca3b43c27bd64caeacfa406f6. Source base21cfd917d8ceb2f0c1435cade117c0c44a91a03a. Rejected revisions remain rejected; pure-vector R2 review and final composition/runtime pending. This is preservation only, not delivery package or rs-raft acceptance.",
+    "evidence": "sha256:c0eb799e1651a8feb0a3f4d349ed5d25d88ca83432ebe38348115167ee0656c6",
+    "asset": "retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "bytes": 732117
+  }
+}

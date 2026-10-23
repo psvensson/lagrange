@@ -345,45 +345,11 @@ function normalizeMessageDeliveryMode(deliveryMode) {
   return MESSAGE_DELIVERY_MODE.AUTO;
 }
 
-function buildLatencyCdcPropagationResult({
-  messageId,
-  status,
-  acknowledged = true,
-  success,
-  error,
-  deferRetry,
-  retryAfterMs,
-  tableName,
-  operation,
-  eventCount,
-}) {
-  const result = {
-    messageId,
-    status,
-    acknowledged,
-  };
-  if (typeof success === 'boolean') {
-    result.success = success;
-  }
-  if (typeof error === 'string' && error.length > 0) {
-    result.error = error;
-  }
-  if (deferRetry === true) {
-    result.deferRetry = true;
-  }
-  if (Number.isFinite(retryAfterMs)) {
-    result.retryAfterMs = retryAfterMs;
-  }
-  if (typeof tableName === 'string' && tableName.length > 0) {
-    result.tableName = tableName;
-  }
-  if (typeof operation === 'string' && operation.length > 0) {
-    result.operation = operation;
-  }
-  if (Number.isInteger(eventCount) && eventCount >= 0) {
-    result.eventCount = eventCount;
-  }
-  return result;
+function buildLatencyCdcPropagationResult(result) {
+  // A response wrapper records receipt of this application request. It must
+  // preserve the owner's full semantic answer, including contradictory fields
+  // which the canonical CDC validator must refuse at its consumer.
+  return {acknowledged: true, ...result};
 }
 
 export {

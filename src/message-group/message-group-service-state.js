@@ -7,6 +7,7 @@
  * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 import {EventEmitter} from 'events';
+import {ProposalQueue} from '../partition/proposal-queue.js';
 import {
   ENTITY_TYPE,
   NUM,
@@ -138,6 +139,8 @@ class MessageGroupService extends EventEmitter {
     // with the clock.
     this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
+    this.cdcCommitWaiters = new ProposalQueue({timeSource: this.timeSource});
+    this.cdcCommitLifetime = null;
     this.now =
       typeof options.now === 'function' ?
         options.now :

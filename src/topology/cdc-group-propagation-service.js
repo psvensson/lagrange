@@ -7,6 +7,8 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NUM} from '../constants/index.js';
+import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {propagateDurableCdcEvent} from './cdc-group-propagation-durable-delivery.js';
 import {
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -34,9 +36,9 @@ import {
   CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
+  CDC_MESSAGE_GROUP_REPLICA_SUFFIX as MESSAGE_GROUP_REPLICA_SUFFIX,
 } from './cdc-group-propagation-constants.js';
 const CDC_GROUP_PROPAGATION_MESSAGE = Object.freeze({STATUS_DELIVERED: 'delivered'});
-const MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 const PUBLICATION_TRANSITION_HISTORY_LIMIT = 10;
 const IMMEDIATE_BATCH_DELAY_MS = NUM.TEN;
 const IMMEDIATE_BATCH_MAX_EVENTS = NUM.SIXTY_FOUR;
@@ -67,6 +69,8 @@ class CDCGroupPropagationService extends EventEmitter {
       loggingService.forSubsystem(CDC_GROUP_PROPAGATION_SUBSYSTEM) :
       console;
     this.state = CDC_GROUP_PROPAGATION_STATE.CREATED;
+    this.activeDurablePropagation = null;
+    this.durablePropagationLifetime = Object.freeze({});
     this.stats = {
       groupedCount: 0,
       safeCount: 0,
@@ -128,6 +132,8 @@ class CDCGroupPropagationService extends EventEmitter {
    * Initialize dependencies.
    * @param {Object} options
    */ initialize(options = {}) {
+    this.activeDurablePropagation?.context.retire();
+    this.durablePropagationLifetime = Object.freeze({});
     if (options.nodeId) {
       this.nodeId = options.nodeId;
     }
@@ -164,6 +170,7 @@ class CDCGroupPropagationService extends EventEmitter {
    */ start() {
     this.ensureInitialized();
     this.refreshConfig();
+    this.durablePropagationLifetime = Object.freeze({});
     this.state = CDC_GROUP_PROPAGATION_STATE.RUNNING;
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STARTED, {
       nodeId: this.nodeId,
@@ -174,6 +181,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * Stop propagation lifecycle.
    */ stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
+    this.activeDurablePropagation?.context.retire();
     this.clearBackgroundRetryTimers();
     this.clearImmediateBatchTimers();
     for (const releaseSleep of [...this.retrySleepReleases]) {
@@ -201,6 +209,7 @@ class CDCGroupPropagationService extends EventEmitter {
     if (this.isPropagationStopped()) {
       return this.buildStoppedPropagationResult(sourceMessageGroupService);
     }
+    if (hasDurableCdcEvents([options])) return propagateDurableCdcEvent(this, options);
     this.refreshConfig();
     if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
       this.setPublicationMode(

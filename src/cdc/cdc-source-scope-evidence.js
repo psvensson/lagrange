@@ -1,14 +1,29 @@
-import {digest} from '../utils/canonical-json-data.js';
+import {digest, isRecord} from '../utils/canonical-json-data.js';
 
-const CDC_SOURCE_SCOPE_AUTHORITY = Object.freeze({
+const objectFreeze = Object.freeze;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const numberFrom = Number;
+const numberIsSafeInteger = Number.isSafeInteger;
+const setHas = Function.call.bind(Set.prototype.has);
+
+const CDC_SOURCE_SCOPE_AUTHORITY = objectFreeze({
   BOOTSTRAP_GENESIS: 'bootstrap-genesis',
   REPLICA_CREATE_WORKFLOW: 'replica-create-workflow',
 });
 const AUTHORITIES = new Set(Object.values(CDC_SOURCE_SCOPE_AUTHORITY));
+const SCOPE_FIELDS = objectFreeze([
+  'authority', 'partitionId', 'tableId', 'tableName', 'rangeStart', 'rangeEnd',
+  'partitionVersion', 'activePartitionVersion', 'descriptorDigest', 'scopeId',
+]);
+
+function isPositiveVersion(value) {
+  return numberIsSafeInteger(value) && value > 0;
+}
 
 function positiveVersion(value) {
-  const version = Number(value);
-  return Number.isSafeInteger(version) && version > 0 ? version : null;
+  const version = numberFrom(value);
+  return isPositiveVersion(version) ? version : null;
 }
 
 function nonEmpty(value) {
@@ -23,7 +38,7 @@ function buildCdcSourceScopeEvidence(options = {}) {
   const authority = options.authority;
   const partition = options.partitionDescriptor || {};
   const table = options.tableDescriptor || {};
-  if (!AUTHORITIES.has(authority)) return null;
+  if (!setHas(AUTHORITIES, authority)) return null;
   const partitionId = nonEmpty(descriptorField(
     partition, 'partition_id', 'partitionId'));
   const tableId = nonEmpty(descriptorField(partition, 'table_id', 'tableId'));
@@ -41,12 +56,23 @@ function buildCdcSourceScopeEvidence(options = {}) {
     rangeEnd: descriptorField(partition, 'partition_key_end', 'partitionKeyEnd'),
     partitionVersion, activePartitionVersion};
   const descriptorDigest = digest(fields);
-  return Object.freeze({...fields, descriptorDigest,
+  return objectFreeze({...fields, descriptorDigest,
     scopeId: digest({partitionId, descriptorDigest})});
 }
 
+function isCanonicalScopeEvidence(value) {
+  if (!isRecord(value) || objectKeys(value).length !== SCOPE_FIELDS.length) return false;
+  for (let index = 0; index < SCOPE_FIELDS.length; index += 1) {
+    if (!objectHasOwn(value, SCOPE_FIELDS[index])) return false;
+  }
+  // Descriptor inputs may be normalized by the builder. Its emitted evidence
+  // already owns numeric versions; validation must not invoke coercion hooks.
+  return isPositiveVersion(value.partitionVersion) &&
+    isPositiveVersion(value.activePartitionVersion);
+}
+
 function isCdcSourceScopeEvidence(value) {
-  if (!value || !AUTHORITIES.has(value.authority)) return false;
+  if (!isCanonicalScopeEvidence(value) || !setHas(AUTHORITIES, value.authority)) return false;
   const rebuilt = buildCdcSourceScopeEvidence({authority: value.authority,
     partitionDescriptor: {partition_id: value.partitionId,
       table_id: value.tableId, partition_key_start: value.rangeStart,

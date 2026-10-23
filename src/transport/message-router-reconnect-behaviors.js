@@ -1,3 +1,5 @@
+import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
+  from './message-router-delivery-lifetime.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 
 const {
@@ -444,61 +446,70 @@ export async function tryDeliverAfterReconnect(
   targetNodeId,
   correlationId,
   timeoutMs = null,
+  options = {},
 ) {
-  if (router.shouldDeferColdReconnectForDeliveryBudget(timeoutMs)) {
-    const reconnectBudgetFailure = router.buildColdReconnectBudgetFailure(
+  return withDeliveryLifetime(router, {
+    ...options, timeoutMs: timeoutMs ?? options.timeoutMs,
+  }, async (options) => {
+    assertDeliveryOpen(options);
+    timeoutMs = remainingDeliveryMs(options, timeoutMs);
+    if (router.shouldDeferColdReconnectForDeliveryBudget(timeoutMs)) {
+      const reconnectBudgetFailure = router.buildColdReconnectBudgetFailure(
+        targetNodeId,
+        reconnectAddress,
+        messageId,
+        correlationId,
+      );
+      if (reconnectBudgetFailure) {
+        return reconnectBudgetFailure;
+      }
+    }
+    const connection = await router.ensureNodeConnection(
       targetNodeId,
       reconnectAddress,
-      messageId,
-      correlationId,
     );
-    if (reconnectBudgetFailure) {
-      return reconnectBudgetFailure;
+    assertDeliveryOpen(options);
+    if (!connection || connection.state !== ConnectionState.CONNECTED) {
+      const reconnectInProgress = router.buildReconnectInProgressFailure(
+        targetNodeId,
+        messageId,
+        correlationId,
+      );
+      if (reconnectInProgress) {
+        return reconnectInProgress;
+      }
+      router.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
+        messageId,
+        targetAddress,
+        targetNodeId,
+        localNodeId: router.nodeId,
+        connectionExists: !!connection,
+        connectionState: connection?.state,
+        availableConnections: Array.from(router.nodeConnections.keys()),
+        reconnectAddress,
+        recoveredViaResolver: true,
+      });
+      return router.buildDeferredDeliveryFailure(
+        messageId,
+        correlationId,
+        ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
+        {
+          errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
+          retryAfterMs: router.reconnectIntervalMs,
+        },
+      );
     }
-  }
-  const connection = await router.ensureNodeConnection(
-    targetNodeId,
-    reconnectAddress,
-  );
-  if (!connection || connection.state !== ConnectionState.CONNECTED) {
-    const reconnectInProgress = router.buildReconnectInProgressFailure(
-      targetNodeId,
-      messageId,
-      correlationId,
-    );
-    if (reconnectInProgress) {
-      return reconnectInProgress;
-    }
-    router.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
-      messageId,
+    return router.sendMessage(
+      connection,
       targetAddress,
-      targetNodeId,
-      localNodeId: router.nodeId,
-      connectionExists: !!connection,
-      connectionState: connection?.state,
-      availableConnections: Array.from(router.nodeConnections.keys()),
-      reconnectAddress,
-      recoveredViaResolver: true,
-    });
-    return router.buildDeferredDeliveryFailure(
       messageId,
+      payload,
+      targetNodeId,
       correlationId,
-      ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
-      {
-        errorCode: ROUTER_NO_CONNECTION_ERROR_CODE,
-        retryAfterMs: router.reconnectIntervalMs,
-      },
+      remainingDeliveryMs(options, timeoutMs),
+      options,
     );
-  }
-  return router.sendMessage(
-    connection,
-    targetAddress,
-    messageId,
-    payload,
-    targetNodeId,
-    correlationId,
-    timeoutMs,
-  );
+  });
 }
 
 export function scheduleRetiredSocketTermination(router, staleWs) {
