@@ -1,0 +1,137 @@
+{
+  "source_setup": [
+    [
+      {
+        "replica": "config-custody-native-r1",
+        "entryId": "native-cdc-rf1-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565205-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      },
+      {
+        "replica": "config-custody-native-r2",
+        "entryId": "native-cdc-rf1-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565205-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      },
+      {
+        "replica": "config-custody-native-r3",
+        "entryId": "native-cdc-rf1-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565205-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      }
+    ],
+    [
+      {
+        "replica": "config-custody-native-r1",
+        "entryId": "native-cdc-custody-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565905-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      },
+      {
+        "replica": "config-custody-native-r2",
+        "entryId": "native-cdc-custody-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565905-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      },
+      {
+        "replica": "config-custody-native-r3",
+        "entryId": "native-cdc-custody-write",
+        "index": 5,
+        "term": 1,
+        "hlc": "1792747565905-0-config-custody-native-r1",
+        "physical_row": true,
+        "settled_applied": true,
+        "owed": true
+      }
+    ]
+  ],
+  "rf1": {
+    "inner_return_result": {
+      "success": true,
+      "strategy": "direct_fanout",
+      "mode": "safe",
+      "status": "delivered",
+      "sourceGroupId": "mg-custody-native",
+      "targetGroupCount": 0,
+      "deliveryFailures": [],
+      "fallbackReason": "config_safe_mode",
+      "timestamp": 1792747565327
+    },
+    "native_commit": 1,
+    "native_applied": 1,
+    "native_cdc_entries": 0,
+    "cache_row_present": true,
+    "all_source_peers_owed_at_report": true,
+    "first_failure": "RF1_ACCEPTANCE_REQUIRES_NATIVE_AFTER_COMMIT",
+    "later_source_ack_path_unexecuted": true
+  },
+  "rf3": {
+    "source_leader_ack_index": 6,
+    "source_leader_ack_term": 1,
+    "source_leader_commit": 6,
+    "source_leader_applied": 6,
+    "source_leader_owed": 0,
+    "ack_digest_and_entry_id_verified": true,
+    "source_followers_owed": [
+      1,
+      1
+    ],
+    "recipient_leader_cdc_index": 2,
+    "recipient_leader_cdc_term": 1,
+    "recipient_all_commit": [
+      1,
+      1,
+      1
+    ],
+    "recipient_all_applied": [
+      1,
+      1,
+      1
+    ],
+    "recipient_follower_rows_absent": true,
+    "recipient_follower_cdc_entries_absent": true,
+    "recipient_command_source_identity_dropped": true,
+    "recipient_command_timestamp_reminted": "1000-1-mg-custody-native-r1",
+    "first_failure": "actual remaining recipient quorum elects a leader",
+    "suffix_replacement_redrive_unexecuted": true
+  },
+  "runner": {
+    "selected_files": 1,
+    "completed_files": 1,
+    "files_pass": 0,
+    "files_fail": 1,
+    "reported_assertions": 2,
+    "child_tests": 2,
+    "child_pass": 0,
+    "child_fail": 2,
+    "cancelled": 0,
+    "skipped": 0,
+    "todo": 0
+  },
+  "diagnostic_lines": {
+    "setup-real-release-complete": 90,
+    "setup-ordinary-query-and-durable-debt": 91,
+    "rf1-actual-propagation-return": 64,
+    "source-flush-recipient-uncommitted": 92
+  }
+}

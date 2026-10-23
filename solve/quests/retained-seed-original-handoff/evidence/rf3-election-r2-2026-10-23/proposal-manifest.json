@@ -1,0 +1,37 @@
+{
+  "revision": "R2",
+  "baseCommit": "4ce8fbd31b7c44129a3431752313b2e9c0ae19ab",
+  "target": "test/message-group/message-group-native-custody-handoff.test.js",
+  "baseBlob": "c50ce6247241e749f325bb5f8ae7d42126223a07",
+  "historyCommit": "9f7c915bb55968bcf0c84c9d19878a9c8f6c8e50",
+  "preservedR1Directory": "/tmp/mg-delivery-rf3-native-election-fixture-correction-4ce8fbd31-20261023",
+  "preservedR1ManifestSha256": "2a4b3288176ee8482476287e01ecd6e23622e903c9afa0a4eb6011854c127362",
+  "unchangedPrefixBytes": 19214,
+  "unchangedSuffixBytesIncludingElectionAssertion": 2979,
+  "lossRounds": 200,
+  "staticChecks": {
+    "nodeCheck": "PASS",
+    "repositoryESLintViaStdin": "PASS",
+    "gitApplyCheck": "PASS"
+  },
+  "runtimeExecuted": false,
+  "appliedToWorktree": false,
+  "artifacts": {
+    "README.md": {
+      "bytes": 3521,
+      "sha256": "e69aa7bcc3abc60f38997cdeaed40248c2e89d59b379b66d06b65e243846bef8"
+    },
+    "message-group-native-custody-handoff.base.test.js": {
+      "bytes": 22453,
+      "sha256": "0c5225055f319df6440cc56028d178a7f16fffd406f169dac6d9e27f6b7a7e9b"
+    },
+    "message-group-native-custody-handoff.proposed.test.js": {
+      "bytes": 23429,
+      "sha256": "7f4cf6984aadb9724b012bd1f32be53e3eda28d065a07a76a7cc5ff2f44cacb7"
+    },
+    "native-survivor-election.patch": {
+      "bytes": 1884,
+      "sha256": "52d2f27805ab91a8890346f67b132f377ec6f6005bd3263cb5a03c6b954b2e36"
+    }
+  }
+}

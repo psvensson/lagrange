@@ -198,12 +198,51 @@ function assertOwedWithoutAck(source, debts) {
   }
 }
 
+function pendingRouteSnapshot(f) {
+  const topology = f.topology;
+  const lane = f.producerLeader.cdcDelivery.obligationLane;
+  const eventKinds = {};
+  for (const event of f.events) eventKinds[event.kind] = (eventKinds[event.kind] ?? 0) + 1;
+  return {
+    phase: f.phase, eventKinds,
+    // Already captured data only. In particular, no readStatus, laneOf,
+    // readiness/selection, pump or diagnostic-owner call occurs at this cut.
+    applicationEvents: f.events.filter((event) => event.kind.startsWith('application-') ||
+      event.kind.startsWith('actual-') || event.kind === 'registered-handler' ||
+      event.kind === 'held-b-before-dispatch'),
+    nativeQueued: f.native.length, nativeHeld: f.heldNative.length,
+    applicationsHeld: f.heldApplications.length,
+    applicationSettlements: f.applicationSettlements.size,
+    sourceLane: {tenureCurrent: lane.tenure === f.producerLeader.leadershipTenure,
+      inFlight: lane.inFlight, rerun: lane.rerun, scan: structuredClone(lane.scan),
+      pending: lane.pending.size, commands: lane.commands.size,
+      retryArmed: lane.retryTimer !== null, flushArmed: lane.flushTimer !== null,
+      lastDrive: lane.lastDrive, lastFlush: lane.lastFlush},
+    topology: {state: topology.state, immediateTimers: topology.immediateBatchTimers.size,
+      backgroundTimers: topology.backgroundRetryTimers.size,
+      backgroundEntries: topology.backgroundRetryEntriesByKey.size,
+      retrySleeps: topology.retrySleepReleases.size,
+      immediateEntries: [...topology.immediateBatchEntriesByKey].map(([key, entry]) => ({
+        key, sourceGroupId: entry.sourceGroupId, targets: structuredClone(entry.targets),
+        timerPresent: entry.timer !== null, resolvers: entry.resolvers.length,
+        pendingEvents: [...entry.pendingEventsByKey.values()].map((event) => ({
+          eventKey: event.eventKey, tableName: event.tableName, operation: event.operation,
+          serviceId: event.data?.service_id,
+        })),
+      }))},
+  };
+}
+
 function requireReturn(f, replicaId, debt, predicate, label, afterOrdinal = -1) {
   const serviceId = JSON.parse(debt.eventJson).data.service_id;
   const candidates = f.events.filter((event) => event.kind === 'application-return' &&
     event.ordinal > afterOrdinal && event.address === addressOf(replicaId) &&
     cdcEvents(event.envelope).some((item) => item.data?.service_id === serviceId));
   const errors = f.events.filter((event) => event.kind === 'application-error');
+  if (candidates.length === 0) {
+    f.report({stage: 'missing-application-return-before-assertion', label, replicaId,
+      eventKey: debt.eventKey, snapshot: pendingRouteSnapshot(f)});
+  }
   assert.ok(candidates.length > 0, `${label}: actual registered handler returned; ${json(errors)}`);
   const result = candidates.find((candidate) => predicate(candidate.result,
     cdcEvents(candidate.envelope), TARGET_GROUP));

@@ -374,15 +374,30 @@ test('native CDC producer retains custody until message-group committed applicat
     // suffix replacement. No database, cache or event row is deleted.
     f.phase = 'post-cut-recipient-loss';
     f.isolateLeader = true;
+    const survivors = f.services.slice(1);
     let elected = false;
+    let lossRounds = 0;
+    let survivorStatus = [];
     for (let round = 0; round < LOSS_ROUNDS; round += 1) {
-      await f.services[1].raft.tick();
+      // Both survivors heard the old leader. Each native election clock must
+      // advance so pre-vote/check-quorum cannot retain an unticked lease.
+      for (const survivor of survivors) await survivor.raft.tick();
       await pump(f);
-      if (f.services[1].raft.readStatus().role === 'leader') {
-        elected = true;
-        break;
-      }
+      lossRounds = round + 1;
+      // Native status reads belong to this explicit election schedule: the
+      // read may process inbound work. Diagnostics only serialize its answers.
+      survivorStatus = survivors.map((survivor) => ({replicaId: survivor.replicaId,
+        status: survivor.raft.readStatus()}));
+      elected = survivorStatus.some(({status}) => status.role === RAFT_ROLE.LEADER);
+      if (elected) break;
     }
+    t.diagnostic(json({stage: 'post-loss-native-election-before-assertion',
+      elected, lossRounds, roundLimit: LOSS_ROUNDS,
+      survivorReplicaIds: survivors.map((survivor) => survivor.replicaId),
+      nativeStatus: survivorStatus,
+      recipient: view(f), queued: structuredClone(f.queue),
+      held: structuredClone(f.held), events: structuredClone(f.events),
+    }));
     assert.equal(elected, true, 'actual remaining recipient quorum elects a leader');
     await pump(f);
     f.phase = 'recipient-rejoin-and-suffix-replacement';
