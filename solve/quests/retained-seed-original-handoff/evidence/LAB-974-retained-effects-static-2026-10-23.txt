@@ -1,0 +1,62 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 41s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:metadata:refresh
+> node scripts/generate-test-primary-classes.js && node scripts/generate-test-resource-classes.js && node scripts/generate-test-subsystem-classes.js && node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
+
+wrote test/shards/primary-classes.json: 2443 tests, digest fnv1a32-1508ee04
+wrote test/shards/resource-classes.json — 2443 tests, digest fnv1a32-b1441642
+wrote test/shards/subsystem-classes.json — 2443 tests, 22 subsystems, digest fnv1a32-48b237b8
+{"snapshotDigest":"b9c4cdf11428dc3b28680a080ade0b27b8d9c8ec5faae2635b24c17d7f177185","graphByteDigest":"92d7f53e5241e70bb1e73da156a47cf05d045f8ce03a97773b17c7cb37e2fb3b","sealByteDigest":"5096e4bff82f0db24e66787a6af9303f5f9e27c06e829c0fe165b4d54e2cc7ce"}
+
+> lagrange-server@0.2.6 audit:shards
+> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check
+
+curated test shards: current
+primary classification OK: 2443 tests (unit=2114 integration=109 bootstrap=213 convergence-probe=3 packaging=4)
+resource classification OK — 2443 tests, digest fnv1a32-b1441642
+subsystem classification OK — 2443 tests, 22 subsystems, digest fnv1a32-48b237b8
+proof range: f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc..HEAD (flag)
+changed paths: 73 (36 JavaScript)
+  ok  15043ms  test:deps
+  ok   3423ms  audit:shards
+  ok   2488ms  test:metrics:scoped
+  ok   2090ms  eslint(36 changed)
+  ok    700ms  audit:runtime-grammar
+  ok    467ms  audit:roadmap-authority
+  ok    351ms  audit:doc-ascii
+  ok    300ms  test:metadata-gateway:audit
+  ok    296ms  audit:impact-contracts
+  ok    233ms  audit:doc-audience
+  ok    221ms  audit:current-capabilities
+  ok    204ms  audit:cli-docs
+  ok    197ms  audit:closure-ledger
+  ok    178ms  audit:service-portability-claims
+fast-static: ok in 26191ms
+{"metadata_refresh_exit":0,"metadata_audit_exit":0,"fast_static_exit":0,"tracked_tree_exit":0}

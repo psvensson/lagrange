@@ -1,0 +1,93 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] 3d488129c7d94a9e98cd3be7ab629645",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T08:14:46.247Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"3d488129-c7d9-4a9e-98cd-3be7ab629645\",\"sha256\":\"5922c72bf3aaeb002cc7b5c228ef3802e24acaccb88cb0aef098eba2adb9e195\",\"totalBytes\":3055},\"expires_at\":\"2026-10-23T10:14:46.247Z\",\"operation\":\"lab-work\",\"request_id\":\"3d488129c7d94a9e98cd3be7ab629645\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc1MDQ4NjI0NywiaXNzdWVkQXRNcyI6MTc5Mjc0MzI4NjI0NywicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiIzZDQ4ODEyOS1jN2Q5LTRhOWUtOThjZC0zYmU3YWI2Mjk2NDUiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL3JldGFpbmVkLWVmZmVjdHMtcmVwbGFjZW1lbnQtMjAyNjEwMjMiLCJyZXBvIjoicHN2ZW5zc29uL2xhZ3JhbmdlIiwic2hhIjoiODY4MjAzN2RhYjIzNTAzMWQ4NWM2MjMyMWJjN2NhOTdmMmEwZmQ5NiJ9LCJzcGVjIjp7ImFyZ3YiOlsiL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbmV4ZWMgbnBtIHJ1biB0ZXN0OmZpbGUgLS0gXCIkQFwiXG4iLCJyZXRhaW5lZC1lZmZlY3RzIl0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaVxuIl1dLCJ0ZXN0cyI6WyJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLXJldGFpbmVkLWVmZmVjdHMudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3NlZWQtcmV0YWluZWQtZWZmZWN0cy5pbnRlZ3JhdGlvbi50ZXN0LmpzIiwidGVzdC9ib290c3RyYXAvc2VlZC1yZXRhaW5lZC1lZmZlY3RzLXByZXBhcmF0aW9uLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aWNpcGFudC1vcmlnaW4tcmV0YWluZWQtaGlzdG9yeS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGljaXBhbnQtb3JpZ2luLXJldGFpbmVkLWhpc3RvcnkuaW50ZWdyYXRpb24udGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvZHVyYWJsZS1zdG9yZS1jb21taXR0ZWQtZW50cmllcy50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtb3JpZ2luYWwtYWxsb2NhdGlvbi1jb2xkLWluc3BlY3Rpb24udGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLW9yaWdpbmFsLW9wZW5pbmctYXV0aG9yaXR5LnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLW9yaWdpbmFsLWF0dGVtcHQtbGlmZXRpbWUudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi1wYXJ0aWNpcGFudC10cmFuc2FjdGlvbi1hcHBseS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGl0aW9uLXBhcnRpY2lwYW50LXRyYW5zYWN0aW9uLXN0YWdpbmcudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpY2lwYW50LWRlY2lzaW9uLWNhbm9uaWNhbC1yZWNvcmQudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi11bnJlYWRhYmxlLWR1cmFibGUtcmVjb3JkLnRlc3QuanMiLCJ0ZXN0L3JhZnQvcmFmdC1ycy1iYWNrZW5kL2R1cmFibGUtcmVhZHktbG9vcC50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9vcGVyYXRpb24tcG9ydC1yZWFkeS1yZWNvdmVyeS50ZXN0LmpzIiwidGVzdC9yYWZ0L3JhZnQtcnMtYmFja2VuZC9yZXN0YXJ0LWZyb20tZHVyYWJsZS1yZWNvcmQudGVzdC5qcyIsInRlc3QvcmFmdC9yYWZ0LXJzLWJhY2tlbmQvcGVyc2lzdGVuY2UtYWRtaXNzaW9uLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tY2RjLW9ibGlnYXRpb24udGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL2NvbW1pdHRlZC1zdGF0ZW1lbnQtb3V0Y29tZS50ZXN0LmpzIiwidGVzdC9wYXJ0aXRpb24vcGFydGl0aW9uLWNkYy1nZW5lcmF0b3IudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3NlZWQtcmVnaXN0cmF0aW9uLXBoYXNlLnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9zZWVkLXJlZ2lzdHJhdGlvbi1lbGVjdGlvbi1zY2hlZHVsaW5nLnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9waXBlbGluZS9zZWVkLXJlZ2lzdHJhdGlvbi1waGFzZS1jdXN0b2R5LnRlc3QuanMiLCJ0ZXN0L2NkYy9jZGMtaW50ZWdyYXRpb24tc2VydmljZS1tdXRhdGlvbnMtYW5kLWVwb2NoLnRlc3QuanMiLCJ0ZXN0L2NkYy9jZGMtaW50ZWdyYXRpb24tc2VydmljZS50ZXN0LmpzIiwidGVzdC9jZGMvY2RjLWludGVncmF0aW9uLXNlcnZpY2UtdGltZS1zZWFtLnRlc3QuanMiLCJ0ZXN0L2NkYy9ib290c3RyYXAtbW9kZS1yb3V0aW5nLnByb3BlcnR5LnRlc3QuanMiLCJ0ZXN0L2Jvb3RzdHJhcC9jbHVzdGVyLWlkZW50aXR5LW1pbnQudGVzdC5qcyIsInRlc3QvYm9vdHN0cmFwL3JlcGxpY2F0aW9uLXRhcmdldC1hdXRob3JpdHkudGVzdC5qcyIsInRlc3Qvbm9kZS9yZXBsaWNhLWxpZmVjeWNsZS1kdXJhYmxlLWdlbmVyYXRpb24udGVzdC5qcyIsInRlc3Qvbm9kZS9yZXBsaWNhLXN0YXRlLW1hY2hpbmUtcmVnaXN0ZXJlZC1hY3RpdmF0aW9uLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tcmVnaXN0cmF0aW9uLWV4YWN0LWJpcnRoLnRlc3QuanMiLCJ0ZXN0L3BhcnRpdGlvbi9wYXJ0aXRpb24tcmVnaXN0cmF0aW9uLXJlYWRiYWNrLWNvbnRyb2xzLnRlc3QuanMiLCJ0ZXN0L21lc3NhZ2UtZ3JvdXAvbWVzc2FnZS1ncm91cC1yZWdpc3RyYXRpb24tZXhhY3QtYmlydGgudGVzdC5qcyIsInRlc3QvcGFydGl0aW9uL3BhcnRpdGlvbi1zZXJ2aWNlLXJvdy1vd25lci50ZXN0LmpzIiwidGVzdC9ib290c3RyYXAvcGFydGl0aW9uLXNlcnZpY2UtYWN0aXZhdGlvbi50ZXN0LmpzIl19LCJ0aW1lb3V0U2Vjb25kcyI6MzYwMH19Cg==\",\"index\":0,\"sha256\":\"5922c72bf3aaeb002cc7b5c228ef3802e24acaccb88cb0aef098eba2adb9e195\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"3d488129-c7d9-4a9e-98cd-3be7ab629645\",\"sha256\":\"5922c72bf3aaeb002cc7b5c228ef3802e24acaccb88cb0aef098eba2adb9e195\"}"
+  ],
+  "request_id": "3d488129c7d94a9e98cd3be7ab629645",
+  "request_sha256": "831cae4a62e00414e777834a1bd7014f5930d1df11812f216a5a0a48fc4a9502",
+  "source_execution_by_generator": false,
+  "payload_sha256": "5922c72bf3aaeb002cc7b5c228ef3802e24acaccb88cb0aef098eba2adb9e195",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "3d488129-c7d9-4a9e-98cd-3be7ab629645",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792743286247,
+    "expiresAtMs": 1792750486247,
+    "work": {
+      "driver": "tests",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/retained-effects-replacement-20261023",
+        "sha": "8682037dab235031d85c62321bc7ca97f2a0fd96"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 3600,
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci\n"
+          ]
+        ],
+        "argv": [
+          "/bin/bash",
+          "-c",
+          "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"\n",
+          "retained-effects"
+        ],
+        "tests": [
+          "test/bootstrap/seed-retained-effects.test.js",
+          "test/bootstrap/seed-retained-effects.integration.test.js",
+          "test/bootstrap/seed-retained-effects-preparation.test.js",
+          "test/partition/participant-origin-retained-history.test.js",
+          "test/partition/participant-origin-retained-history.integration.test.js",
+          "test/raft/raft-rs-backend/durable-store-committed-entries.test.js",
+          "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+          "test/raft/raft-rs-original-opening-authority.test.js",
+          "test/bootstrap/seed-original-attempt-lifetime.test.js",
+          "test/partition/partition-participant-transaction-apply.test.js",
+          "test/partition/partition-participant-transaction-staging.test.js",
+          "test/partition/participant-decision-canonical-record.test.js",
+          "test/partition/partition-unreadable-durable-record.test.js",
+          "test/raft/raft-rs-backend/durable-ready-loop.test.js",
+          "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
+          "test/raft/raft-rs-backend/restart-from-durable-record.test.js",
+          "test/raft/raft-rs-backend/persistence-admission.test.js",
+          "test/partition/partition-cdc-obligation.test.js",
+          "test/partition/committed-statement-outcome.test.js",
+          "test/partition/partition-cdc-generator.test.js",
+          "test/bootstrap/seed-registration-phase.test.js",
+          "test/bootstrap/seed-registration-election-scheduling.test.js",
+          "test/bootstrap/pipeline/seed-registration-phase-custody.test.js",
+          "test/cdc/cdc-integration-service-mutations-and-epoch.test.js",
+          "test/cdc/cdc-integration-service.test.js",
+          "test/cdc/cdc-integration-service-time-seam.test.js",
+          "test/cdc/bootstrap-mode-routing.property.test.js",
+          "test/bootstrap/cluster-identity-mint.test.js",
+          "test/bootstrap/replication-target-authority.test.js",
+          "test/node/replica-lifecycle-durable-generation.test.js",
+          "test/node/replica-state-machine-registered-activation.test.js",
+          "test/partition/partition-registration-exact-birth.test.js",
+          "test/partition/partition-registration-readback-controls.test.js",
+          "test/message-group/message-group-registration-exact-birth.test.js",
+          "test/partition/partition-service-row-owner.test.js",
+          "test/bootstrap/partition-service-activation.test.js"
+        ]
+      }
+    }
+  }
+}

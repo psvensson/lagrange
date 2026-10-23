@@ -1,0 +1,53 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] caf7e523ac2b4e55b9836900a5654929",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T08:14:46.247Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"caf7e523-ac2b-4e55-b983-6900a5654929\",\"sha256\":\"b1a752b65059b6dffdb033e4ca5c84db9e5221efe89a317ecfb9b64b0f8ba0ac\",\"totalBytes\":1612},\"expires_at\":\"2026-10-23T10:14:46.247Z\",\"operation\":\"lab-work\",\"request_id\":\"caf7e523ac2b4e55b9836900a5654929\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc1MDQ4NjI0NywiaXNzdWVkQXRNcyI6MTc5Mjc0MzI4NjI0NywicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiJjYWY3ZTUyMy1hYzJiLTRlNTUtYjk4My02OTAwYTU2NTQ5MjkiLCJ3b3JrIjp7ImRyaXZlciI6InNoZWxsIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL3JldGFpbmVkLWVmZmVjdHMtcmVwbGFjZW1lbnQtMjAyNjEwMjMiLCJyZXBvIjoicHN2ZW5zc29uL2xhZ3JhbmdlIiwic2hhIjoiODY4MjAzN2RhYjIzNTAzMWQ4NWM2MjMyMWJjN2NhOTdmMmEwZmQ5NiJ9LCJzcGVjIjp7ImN3ZCI6Ii4iLCJlbnYiOnsiTk9ERV9PUFRJT05TIjoiLS1tYXgtb2xkLXNwYWNlLXNpemU9NjE0NCJ9LCJzY3JpcHQiOiJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbnNldCArZVxubnBtIHJ1biB0ZXN0Om1ldGFkYXRhOnJlZnJlc2hcbnJldGFpbmVkX3JlZnJlc2hfc3RhdHVzPSQ/XG5ucG0gcnVuIGF1ZGl0OnNoYXJkc1xucmV0YWluZWRfbWV0YWRhdGFfc3RhdHVzPSQ/XG5ub2RlIHNjcmlwdHMvY2hlY2stZmFzdC1zdGF0aWMuanMgLS1iYXNlIGY1ZmIzMTdiZWJjM2RjMDc0ZjNkOGQ0MTAyMTIyYmE0ZGRiOTRlY2MgLS1leHBsYWluXG5yZXRhaW5lZF9zdGF0aWNfc3RhdHVzPSQ/XG5naXQgZGlmZiAtLWV4aXQtY29kZSBIRUFEXG5yZXRhaW5lZF90cmVlX3N0YXR1cz0kP1xucHJpbnRmICd7XCJtZXRhZGF0YV9yZWZyZXNoX2V4aXRcIjolZCxcIm1ldGFkYXRhX2F1ZGl0X2V4aXRcIjolZCxcImZhc3Rfc3RhdGljX2V4aXRcIjolZCxcInRyYWNrZWRfdHJlZV9leGl0XCI6JWR9XFxuJyBcIiRyZXRhaW5lZF9yZWZyZXNoX3N0YXR1c1wiIFwiJHJldGFpbmVkX21ldGFkYXRhX3N0YXR1c1wiIFwiJHJldGFpbmVkX3N0YXRpY19zdGF0dXNcIiBcIiRyZXRhaW5lZF90cmVlX3N0YXR1c1wiXG50ZXN0IFwiJHJldGFpbmVkX3JlZnJlc2hfc3RhdHVzXCIgLWVxIDAgJiYgdGVzdCBcIiRyZXRhaW5lZF9tZXRhZGF0YV9zdGF0dXNcIiAtZXEgMCAmJiB0ZXN0IFwiJHJldGFpbmVkX3N0YXRpY19zdGF0dXNcIiAtZXEgMCAmJiB0ZXN0IFwiJHJldGFpbmVkX3RyZWVfc3RhdHVzXCIgLWVxIDBcbiIsInNldHVwIjpbWyIvYmluL2Jhc2giLCItYyIsInNldCAtZXVcbnJldGFpbmVkX25vZGVfYmluPVwiJEhPTUUvLm52bS92ZXJzaW9ucy9ub2RlL3YyMi4yMy4yL2JpblwiXG50ZXN0IC14IFwiJHJldGFpbmVkX25vZGVfYmluL25vZGVcIlxuZXhwb3J0IFBBVEg9XCIkcmV0YWluZWRfbm9kZV9iaW46JFBBVEhcIlxubm9kZSAtLXZlcnNpb25cbm5wbSAtLXZlcnNpb25cbmV4ZWMgbnBtIGNpXG4iXV19LCJ0aW1lb3V0U2Vjb25kcyI6MzYwMH19Cg==\",\"index\":0,\"sha256\":\"b1a752b65059b6dffdb033e4ca5c84db9e5221efe89a317ecfb9b64b0f8ba0ac\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"caf7e523-ac2b-4e55-b983-6900a5654929\",\"sha256\":\"b1a752b65059b6dffdb033e4ca5c84db9e5221efe89a317ecfb9b64b0f8ba0ac\"}"
+  ],
+  "request_id": "caf7e523ac2b4e55b9836900a5654929",
+  "request_sha256": "a80b08299c16d3f787e6d556e28cd1227e2091e0c051e2b592b4f023b8a88daa",
+  "source_execution_by_generator": false,
+  "payload_sha256": "b1a752b65059b6dffdb033e4ca5c84db9e5221efe89a317ecfb9b64b0f8ba0ac",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "caf7e523-ac2b-4e55-b983-6900a5654929",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792743286247,
+    "expiresAtMs": 1792750486247,
+    "work": {
+      "driver": "shell",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/retained-effects-replacement-20261023",
+        "sha": "8682037dab235031d85c62321bc7ca97f2a0fd96"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 3600,
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci\n"
+          ]
+        ],
+        "env": {
+          "NODE_OPTIONS": "--max-old-space-size=6144"
+        },
+        "script": "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nset +e\nnpm run test:metadata:refresh\nretained_refresh_status=$?\nnpm run audit:shards\nretained_metadata_status=$?\nnode scripts/check-fast-static.js --base f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc --explain\nretained_static_status=$?\ngit diff --exit-code HEAD\nretained_tree_status=$?\nprintf '{\"metadata_refresh_exit\":%d,\"metadata_audit_exit\":%d,\"fast_static_exit\":%d,\"tracked_tree_exit\":%d}\\n' \"$retained_refresh_status\" \"$retained_metadata_status\" \"$retained_static_status\" \"$retained_tree_status\"\ntest \"$retained_refresh_status\" -eq 0 && test \"$retained_metadata_status\" -eq 0 && test \"$retained_static_status\" -eq 0 && test \"$retained_tree_status\" -eq 0\n"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "source_sha": "8682037dab235031d85c62321bc7ca97f2a0fd96",
+  "selected_files": 36,
+  "completed_unique_files": 36,
+  "runner_reported_assertions": 1270,
+  "query_receipt": {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/983#issuecomment-6360803271",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "1b7e46cb25464b66b0c84390cc2f264b",
+    "request_sha256": "98e3d40f87f97935e704db8ca2bbd3a300c4202865f6d5a693293ecb0ee35e09",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-23T08:29:06.867Z"
+  },
+  "stream": {
+    "available_bytes": 6491,
+    "chunk_sha256": "d7228ad643b480691e774fa064956cb06c8790217e4e2acffa2e0ddfab5f2126",
+    "complete": true,
+    "eof": true,
+    "executed_source": false,
+    "host": "lenovo-laptop",
+    "hosts": [
+      "lenovo-laptop"
+    ],
+    "job_id": "7c6b2276aba94d53ba4fb2f405a213dd",
+    "job_source_execution_started": true,
+    "job_state": "COMPLETE",
+    "job_terminal": true,
+    "log_state": "DATA",
+    "log_truncated": false,
+    "next_offset": 6491,
+    "offset": 0,
+    "original_log_bytes": 6491,
+    "original_log_sha256": "d7228ad643b480691e774fa064956cb06c8790217e4e2acffa2e0ddfab5f2126",
+    "raw_chunk_sha256": "d7228ad643b480691e774fa064956cb06c8790217e4e2acffa2e0ddfab5f2126",
+    "read_only": true,
+    "redacted": true,
+    "returned_bytes": 6491,
+    "source": "original-worker-log",
+    "stream_id": "4ccbbdaaae5b7c82f45dd765ce3d916b83a3f8a79f40184523df826bc5343fe6"
+  }
+}

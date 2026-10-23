@@ -1,0 +1,53 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 44s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects.integration.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js test/partition/partition-cdc-obligation.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-cdc-generator.test.js test/bootstrap/seed-registration-phase.test.js test/bootstrap/seed-registration-election-scheduling.test.js test/bootstrap/pipeline/seed-registration-phase-custody.test.js test/cdc/cdc-integration-service-mutations-and-epoch.test.js test/cdc/cdc-integration-service.test.js test/cdc/cdc-integration-service-time-seam.test.js test/cdc/bootstrap-mode-routing.property.test.js test/bootstrap/cluster-identity-mint.test.js test/bootstrap/replication-target-authority.test.js test/node/replica-lifecycle-durable-generation.test.js test/node/replica-state-machine-registered-activation.test.js test/partition/partition-registration-exact-birth.test.js test/partition/partition-registration-readback-controls.test.js test/message-group/message-group-registration-exact-birth.test.js test/partition/partition-service-row-owner.test.js test/bootstrap/partition-service-activation.test.js
+
+# test-files planned=36
+classified lane ordinary: 25 file(s), jobs=4
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 51C (nvme/Sensor 1)
+ok test/cdc/cdc-integration-service-time-seam.test.js (11 assertions, 587ms)
+ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 1008ms)
+ok test/message-group/message-group-registration-exact-birth.test.js (18 assertions, 493ms)
+ok test/node/replica-state-machine-registered-activation.test.js (82 assertions, 922ms)
+ok test/cdc/cdc-integration-service-mutations-and-epoch.test.js (150 assertions, 2854ms)
+ok test/node/replica-lifecycle-durable-generation.test.js (194 assertions, 1862ms)
+ok test/partition/participant-decision-canonical-record.test.js (8 assertions, 248ms)
+ok test/partition/participant-origin-retained-history.test.js (35 assertions, 319ms)
+ok test/partition/partition-cdc-generator.test.js (40 assertions, 402ms)
+ok test/cdc/cdc-integration-service.test.js (128 assertions, 5953ms)
+ok test/partition/partition-cdc-obligation.test.js (20 assertions, 3305ms)
+ok test/partition/committed-statement-outcome.test.js (18 assertions, 4518ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 3357ms)
+ok test/partition/partition-registration-readback-controls.test.js (9 assertions, 437ms)
+ok test/partition/partition-registration-exact-birth.test.js (12 assertions, 494ms)
+ok test/partition/partition-service-row-owner.test.js (34 assertions, 578ms)
+ok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 258ms)
+ok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 1344ms)

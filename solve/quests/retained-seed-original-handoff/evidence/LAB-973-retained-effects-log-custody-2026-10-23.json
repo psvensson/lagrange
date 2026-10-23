@@ -1,0 +1,27 @@
+{
+  "available_bytes": 4626,
+  "chunk_sha256": "2108953edf4fb1197edae918ddd0816811464068800b3284ae82d9c6d3e7b387",
+  "complete": true,
+  "eof": true,
+  "executed_source": false,
+  "host": "tv-dator",
+  "hosts": [
+    "tv-dator"
+  ],
+  "job_id": "3d488129c7d94a9e98cd3be7ab629645",
+  "job_source_execution_started": true,
+  "job_state": "COMPLETE",
+  "job_terminal": true,
+  "log_state": "DATA",
+  "log_truncated": false,
+  "next_offset": 4626,
+  "offset": 0,
+  "original_log_bytes": 4626,
+  "original_log_sha256": "2108953edf4fb1197edae918ddd0816811464068800b3284ae82d9c6d3e7b387",
+  "raw_chunk_sha256": "2108953edf4fb1197edae918ddd0816811464068800b3284ae82d9c6d3e7b387",
+  "read_only": true,
+  "redacted": true,
+  "returned_bytes": 4626,
+  "source": "original-worker-log",
+  "stream_id": "347622dc72bd250b26bf0296e5261228c4a1462c578672e727be0a34f53d7790"
+}

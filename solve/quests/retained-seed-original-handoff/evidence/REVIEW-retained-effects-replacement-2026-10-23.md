@@ -2121,3 +2121,266 @@ or lab workload. Preserve the exact candidate, verify its committed blobs,
 then obtain fresh locked static and selected runtime evidence before claiming
 the bounded increment is verified.
 
+## R5 exact-candidate static lab evidence, 2026-10-23
+
+Verdict: **PASS for the requested static scope** at
+`8682037dab235031d85c62321bc7ca97f2a0fd96`. This disposition is independently
+bound to the complete original worker log and terminal receipt. It does not
+approve runtime, original-startup recovery, the full Quest or merge.
+
+I independently matched all 42 manifest entries against committed blobs at
+this SHA and confirmed its production diff from `68633168` is empty. The
+source request in issue #974 names this exact SHA and preserved branch
+`refs/heads/work/retained-effects-replacement-20261023`. Its original request
+ID is `caf7e523ac2b4e55b9836900a5654929`; envelope SHA256 is
+`a80b08299c16d3f787e6d556e28cd1227e2091e0c051e2b592b4f023b8a88daa`.
+The issue contains one payload part; its decoded length is 1612 bytes and
+SHA256 is
+`b1a752b65059b6dffdb033e4ca5c84db9e5221efe89a317ecfb9b64b0f8ba0ac`.
+Envelope, part and decoded intent request identities agree. Preferred host
+`tv-dator` is a preference, not an exclusive selector; the permitted worker
+was `lenovo-laptop`.
+
+[Terminal receipt](https://github.com/psvensson/lagrange-lab/issues/974#issuecomment-6360633505)
+at `2026-10-23T08:18:52.700Z` reports explicit PASS/exit 0, exact source SHA,
+matching payload hash, one worker and source execution started. Both outer
+scope fields and the worker execution/container/thermal scope fields are
+closed, with no worker reason. I did not substitute generic COMPLETE for
+PASS. The 2970-byte controller combined tail is a different artifact from
+the complete 2953-byte original worker log below.
+
+I submitted one authorized read-only evidence query, #976, for the original
+job and host, not another source workload. Its request ID is
+`2bfd45bf7fd641dd943f502343b84a7b`; envelope SHA256 is
+`9c0bdd77410124c8a0ade619fc0cc7ca0dd6b8d0b012a1feb0f57e7f04f3e241`.
+[The complete evidence receipt](https://github.com/psvensson/lagrange-lab/issues/976#issuecomment-6360648007)
+binds stream
+`d463a26eac7cf907b4c785a84b32120bbc60ea5bc6bf10fd2fd62ec96bce7623`,
+offset 0 through next offset 2953, with available/returned/original lengths
+all 2953, EOF and complete true, and no truncation. It reports `read_only:
+true` and `executed_source: false`; the underlying original job is terminal.
+Decoded bytes, text, chunk/raw/original hashes and terminal worker log/output
+hashes all agree independently on SHA256
+`12a204a3bd1c57fd174f9e81f8785a11b02ad67fbe56dbfd69cb8cd08fd6cb8c`.
+The generic redaction flag therefore did not change these retrieved bytes.
+The original log is preserved at
+`/tmp/retained-effects-r5-static-worker.log`, with the full receipt and request
+in matching `-evidence0.json` and `-evidence0-request.json` files.
+
+The complete log reports Node 22.23.2/npm 10.9.8 and all fourteen explicit
+fast-static checks passing: `test:deps`, `audit:shards`,
+`test:metrics:scoped`, `eslint(36 changed)`, `audit:runtime-grammar`,
+`audit:roadmap-authority`, `audit:doc-ascii`, `test:metadata-gateway:audit`,
+`audit:impact-contracts`, `audit:doc-audience`, `audit:current-capabilities`,
+`audit:cli-docs`, `audit:closure-ledger` and
+`audit:service-portability-claims`. Proof range is
+`f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc..HEAD`, 73 changed paths including
+36 JavaScript paths; fast-static reports 26191 ms. This timing is descriptive,
+not a performance or regression comparison.
+
+Metadata refresh and audit both cover 2443 tests and 22 subsystems. Primary
+classes are 2114 unit, 109 integration, 213 bootstrap, 3 convergence-probe
+and 4 packaging tests. Snapshot digest
+`b9c4cdf11428dc3b28680a080ade0b27b8d9c8ec5faae2635b24c17d7f177185`
+matches the committed R5 seal. The final worker status record explicitly
+reports metadata refresh 0, metadata audit 0, fast-static 0 and tracked-tree
+diff 0. The final check is cleanliness of tracked bytes against HEAD; it is
+not a claim about every ignored or untracked file.
+
+Fresh trusted-controller ping #971 and pre-fleet #972 precede this job.
+The authorized read-only post-fleet #977 uses request
+`dc7cf02fd734476b84419e3a69902cc2`, envelope SHA256
+`83d0f2b039a14beb76f2a2b1df4ce72126ded0aab50ebd5a9595d77c30122a64`.
+[Its complete receipt](https://github.com/psvensson/lagrange-lab/issues/977#issuecomment-6360650759)
+reports no source execution and fleet SHA256
+`71572a36a366ce905c07bb50918d50b2ff78630a4af26944feb278c9ae08b74d`,
+which I independently recomputed. The static worker's probe interval is
+`08:19:48.005Z` through `08:19:48.497Z`; its physical machine lock is free,
+with no probe error and unchanged boot identity
+`18581133-d0d9-4dec-a3f8-266562235699` from pre-fleet #972. All node-capable
+worker locks are free at this observation; unrelated `adams-gamla` is busy.
+Do not generalize this to all six locks being free. Static terminal CPU was
+63 C and the SSD sensor was unavailable; this is not thermal certification.
+
+Full source, terminal, evidence and pre/post-fleet receipts are preserved
+under `/tmp/retained-effects-r5-static-*` for the parent's evidence copy.
+The only external requests from this reviewer were read-only #976 and #977;
+no source execution was resubmitted, no runtime was run locally, and no
+source/test/metadata files were changed. The prior 133240-byte review prefix,
+SHA256 `040a36c163358cd14920ceb88188f41b3ced614e0a7c8352dcc57b2f68ab60fa`,
+is preserved. Runtime #973 and any later runtime attempt require their own
+complete source-bound disposition. Prior failed runtime attempts, the
+bounded-selection exclusions and all full-cutover obligations remain.
+
+## R5 runtime #973 thermal abort, 2026-10-23
+
+Disposition: **FAIL / THERMAL_ABORT, incomplete runtime evidence; no source
+correctness verdict**. The stopped attempt is retained as its own result.
+Its partial passing files do not constitute completion of the 36-file
+selection, and this thermal refusal does not by itself demonstrate a source
+defect.
+
+Original request `3d488129c7d94a9e98cd3be7ab629645` is source-bound to
+`8682037dab235031d85c62321bc7ca97f2a0fd96`. I checked the original local packet's
+envelope SHA256
+`831cae4a62e00414e777834a1bd7014f5930d1df11812f216a5a0a48fc4a9502`,
+payload SHA256
+`5922c72bf3aaeb002cc7b5c228ef3802e24acaccb88cb0aef098eba2adb9e195`,
+exact source and exact ordered 36-file selection against the terminal
+receipt and approved selection. Independently fetched GitHub #973 and #979
+receipts equal the parent's preserved receipts in all fields.
+
+[The terminal receipt](https://github.com/psvensson/lagrange-lab/issues/973#issuecomment-6360616397)
+at `2026-10-23T08:17:49.311Z` reports outcome FAIL, outer exit 1 and reason
+`THERMAL_ABORT`; worker `tv-dator` exited -15. Its last CPU observation is
+81 C, SSD 39.85 C and auxiliary SSD 58.85 C. Source execution began, and
+outer scope/execution plus worker container/execution/thermal scopes all
+closed. This is distinct from the earlier ordinary test failures in #950.
+Post-fleet #977 subsequently observes `tv-dator`'s physical lock free,
+unchanged boot identity `9c9e76b2-708e-4aa0-b920-34d36843d261`, no probe
+error and CPU 64 C during `08:19:48.006Z` through `08:19:48.357Z`.
+
+[Read-only original evidence #979](https://github.com/psvensson/lagrange-lab/issues/979#issuecomment-6360664327)
+uses request `a35c06cfdda2403889ab950a150e4b30`, envelope SHA256
+`19ccace377d8b6df4cb316e47aca2fc71db0d137ea70d8ab1626fd7244822b77`,
+and stream
+`347622dc72bd250b26bf0296e5261228c4a1462c578672e727be0a34f53d7790`.
+The complete original log is 4626 bytes, offset 0 to next offset 4626,
+EOF/complete true, not truncated. I independently decoded and compared the
+chunk with the parent's full worker file and text; returned/available/
+original lengths agree and chunk/raw/original/terminal worker hashes all
+equal SHA256
+`2108953edf4fb1197edae918ddd0816811464068800b3284ae82d9c6d3e7b387`.
+The query reports read-only true, executed-source false, and the original
+job terminal. Its custody metadata equals the complete receipt with only
+the byte/text payload fields removed. The 4638-byte combined controller
+tail is not substituted for this original log.
+
+The original log starts the ordinary lane with 25 planned files/jobs 4,
+then records 18 unique passing per-file summaries totaling 837
+runner-reported assertions before termination. There is no completed lane
+summary or final selection census. These summaries include the actual
+registered-activation owner file (82 assertions), partition exact birth
+(12), partition readback controls (9), MG exact birth (18) and partition row
+owner (34). The corrected seed-registration phase and all three observer
+files have no completion summary in this attempt. The other 18 selected
+files therefore remain unmeasured by #973; they must not inherit completion
+from this partial log or from a later attempt.
+
+The original worker, evidence, terminal receipts and log-custody metadata
+remain under `/tmp/retained-effects-r5-runtime-*`. A separately identified
+same-source attempt may gather the missing complete evidence after observing
+available host conditions, while retaining all thermal controls and this
+failed result. No runtime thresholds, source, tests, budgets or selection
+were changed by this review. Any subsequent #980 result requires its own
+full log, custody and terminal assessment; no runtime acceptance is inferred
+here from the already passing static job.
+
+## R5 bounded observer runtime #980, 2026-10-23
+
+Verdict: **PASS for the approved 36-file observer/activation-owner selection**
+at `8682037dab235031d85c62321bc7ca97f2a0fd96`. Source-only approval now has
+matching complete static #974 and selected runtime #980 evidence at the
+same exact candidate. This verifies the bounded observer increment within
+the source-reviewed proof limits; it does not complete original startup,
+all classification/replay owners, the full Quest or the rs-raft merge.
+
+This is the separately identified same-source attempt after #973's thermal
+abort. Original request ID is `7c6b2276aba94d53ba4fb2f405a213dd`, envelope
+SHA256 `5e73fb08d2575316e4786908803112a8327d7c14909e22e1454aeac634af6fe5`,
+and payload SHA256
+`2104b81b2da3fa3d99077f63c9a8dd8db2ebdeeb9f9f2bf2c0209ec7b8356869`.
+I independently decoded the single 3060-byte payload part, verified both
+hashes against the fetched terminal receipt, and matched its exact source
+and ordered test list to the approved 36-file selection. All 42 manifest
+entries match committed blobs at this SHA; production is unchanged from
+the approved `68633168` observer source. No source or test change was made
+to obtain a cooler run, and this review did not change thermal controls.
+
+[Terminal #980](https://github.com/psvensson/lagrange-lab/issues/980#issuecomment-6360800602)
+at `2026-10-23T08:29:03.504Z` explicitly reports PASS/exit 0 on
+`lenovo-laptop`, exact source/payload identities, one worker and source
+execution started. The worker also reports exit 0 and 36 selected/36
+completed files; its generic counter object is empty, so assertion totals
+below come from the complete runner log. Outer scope/execution and worker
+container/execution/thermal scopes are all closed, with no reason. Last
+worker CPU was 45 C and SSD unavailable. Neither that sensor observation nor
+timings from this host establish a performance or thermal certification.
+
+[Original evidence #983](https://github.com/psvensson/lagrange-lab/issues/983#issuecomment-6360803271)
+uses request `1b7e46cb25464b66b0c84390cc2f264b`, envelope SHA256
+`98e3d40f87f97935e704db8ca2bbd3a300c4202865f6d5a693293ecb0ee35e09`,
+and stream
+`4ccbbdaaae5b7c82f45dd765ce3d916b83a3f8a79f40184523df826bc5343fe6`.
+I independently fetched #980/#983 and compared every receipt field with the
+parent's files. The complete original worker log is 6491 bytes, offset 0 to
+next offset 6491, EOF/complete true and not truncated. Decoded bytes equal
+the preserved worker file and text. Returned/available/original lengths and
+chunk/raw/original/terminal worker output hashes all match SHA256
+`d7228ad643b480691e774fa064956cb06c8790217e4e2acffa2e0ddfab5f2126`.
+The query is read-only with no source execution and the underlying job
+terminal. Its stream fields equal the parent's custody metadata. The
+6508-byte combined controller tail is a separate artifact.
+
+I parsed every per-file result and all three final lane summaries. The
+launch list equals the approved selection in order; there are 36 unique
+completed files, with neither an extra nor a missing selected file:
+
+| Lane | Files | Passed | Failed | Runner-reported assertions |
+| --- | ---: | ---: | ---: | ---: |
+| Ordinary | 25 | 25 | 0 | 925 |
+| Bootstrap | 10 | 10 | 0 | 343 |
+| Exclusive | 1 | 1 | 0 | 2 |
+| Total | 36 | 36 | 0 | 1270 |
+
+The 36 per-file assertion counts independently sum to the same 1270. The
+three observer files contribute 166 unit, 3 native-integration and 9
+preparation assertions (178 total). The corrected registration phase file
+reports 60, and the actual registered-activation owner file reports 82.
+All six selected activation/exact-birth/row-owner regression files pass,
+as do the existing participant/native durability and CDC regressions,
+including the two retained-origin integration assertions. No aborted-run
+counts are combined with this run.
+
+The earlier source-reviewed boundaries still apply: the observer is
+read-only and does not grant opening or clear the original-startup HOLD.
+The native retained-SQL fixture uses the admitted native operation port
+after first proving the ordinary admission refusal; it is not a complete
+original-cohort release witness. Same-branded-evidence activation is an
+existing owner component proof with a controlled writer, not physical
+storage or phase evidence-custody recovery. Missing MG source-occurrence
+authority remains explicitly unavailable; these passes do not supply it.
+
+I submitted only the authorized read-only post-fleet #984, request
+`85cd82a95e9941498f33d283645ff05e`, envelope SHA256
+`35033c95d9f89730c6cbbd834565c3df1596e5978d13931ac49564a6458b238a`.
+[Its complete receipt](https://github.com/psvensson/lagrange-lab/issues/984#issuecomment-6360831979)
+reports no source execution and fleet SHA256
+`27587b5bae18f01effa68b0c8e15dbb5a70b644ce5643ecea4e81151b03cfeab`,
+which I independently recomputed. The runtime host probe ran from
+`08:30:51.857Z` through `08:30:52.240Z`; its physical lock is free, with no
+error and unchanged boot identity
+`18581133-d0d9-4dec-a3f8-266562235699` from the pre-run #977 observation.
+All node-capable hosts are free at #984; unrelated `adams-gamla` remains
+busy. Full post-fleet receipts and the request are preserved under
+`/tmp/retained-effects-r5-retry-runtime-post-fleet*` for reuse by the parent.
+
+Earlier #912 and #950 FAIL results and #973 THERMAL_ABORT remain preserved
+without reinterpretation. In particular, #950's three managed-split full
+startup scenarios stopped before their intended target logic and remain
+unproved. Its unchanged 15 passing storage-refusal component assertions
+remain scoped to that earlier exact run. The approved exclusion of the
+full managed-split file here does not waive those scenarios or the genuine
+directory-custody/startup prerequisites.
+
+The evidence supports this bounded increment only. Original phase evidence
+custody, complete retained classification/replay, protected activation,
+durable transfer, MG recipient correspondence, composed two-start acceptance,
+the eight Quest closure receipts, full corpus, publication and merge gates
+remain separate. This reviewer executed no local runtime, submitted no
+source workload, and changed no source/test/metadata. The previous
+142570-byte review prefix, SHA256
+`1ba8c90cc57cf26eb6e7a58f254c92121b242c4af656561637f216e022c047cf`,
+is preserved; final committed-manifest and worker-log hashes are rechecked
+after this append.
+

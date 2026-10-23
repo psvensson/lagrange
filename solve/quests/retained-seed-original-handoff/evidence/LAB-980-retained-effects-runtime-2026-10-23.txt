@@ -1,0 +1,78 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 29s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects.integration.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js test/partition/partition-cdc-obligation.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-cdc-generator.test.js test/bootstrap/seed-registration-phase.test.js test/bootstrap/seed-registration-election-scheduling.test.js test/bootstrap/pipeline/seed-registration-phase-custody.test.js test/cdc/cdc-integration-service-mutations-and-epoch.test.js test/cdc/cdc-integration-service.test.js test/cdc/cdc-integration-service-time-seam.test.js test/cdc/bootstrap-mode-routing.property.test.js test/bootstrap/cluster-identity-mint.test.js test/bootstrap/replication-target-authority.test.js test/node/replica-lifecycle-durable-generation.test.js test/node/replica-state-machine-registered-activation.test.js test/partition/partition-registration-exact-birth.test.js test/partition/partition-registration-readback-controls.test.js test/message-group/message-group-registration-exact-birth.test.js test/partition/partition-service-row-owner.test.js test/bootstrap/partition-service-activation.test.js
+
+# test-files planned=36
+classified lane ordinary: 25 file(s), jobs=4
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+ok test/cdc/cdc-integration-service-time-seam.test.js (11 assertions, 1036ms)
+ok test/message-group/message-group-registration-exact-birth.test.js (18 assertions, 773ms)
+ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 1920ms)
+ok test/node/replica-state-machine-registered-activation.test.js (82 assertions, 1538ms)
+ok test/cdc/cdc-integration-service-mutations-and-epoch.test.js (150 assertions, 4353ms)
+ok test/partition/participant-decision-canonical-record.test.js (8 assertions, 383ms)
+ok test/partition/participant-origin-retained-history.test.js (35 assertions, 471ms)
+ok test/node/replica-lifecycle-durable-generation.test.js (194 assertions, 3388ms)
+ok test/partition/partition-cdc-generator.test.js (40 assertions, 559ms)
+ok test/cdc/cdc-integration-service.test.js (128 assertions, 6954ms)
+ok test/partition/partition-cdc-obligation.test.js (20 assertions, 7120ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 7100ms)
+ok test/partition/partition-registration-exact-birth.test.js (12 assertions, 694ms)
+ok test/partition/committed-statement-outcome.test.js (18 assertions, 9799ms)
+ok test/partition/partition-registration-readback-controls.test.js (9 assertions, 674ms)
+ok test/partition/partition-service-row-owner.test.js (34 assertions, 1060ms)
+ok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 419ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 9533ms)
+ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 4857ms)
+ok test/raft/raft-rs-backend/persistence-admission.test.js (4 assertions, 3581ms)
+ok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 7453ms)
+ok test/raft/raft-rs-backend/restart-from-durable-record.test.js (4 assertions, 6825ms)
+ok test/partition/partition-unreadable-durable-record.test.js (6 assertions, 16491ms)
+ok test/raft/raft-rs-original-allocation-cold-inspection.test.js (24 assertions, 57378ms)
+ok test/raft/raft-rs-original-opening-authority.test.js (24 assertions, 117638ms)
+# test-files total=25 pass=25 fail=0 assertions=925
+classified lane bootstrap: 10 file(s), jobs=2
+thermal: ok cpu 45C (coretemp/Package id 0) nvme unmeasured
+ok test/bootstrap/partition-service-activation.test.js (31 assertions, 772ms)
+ok test/bootstrap/cluster-identity-mint.test.js (9 assertions, 943ms)
+ok test/bootstrap/pipeline/seed-registration-phase-custody.test.js (1 assertions, 1289ms)
+ok test/bootstrap/replication-target-authority.test.js (21 assertions, 7657ms)
+ok test/bootstrap/seed-registration-election-scheduling.test.js (22 assertions, 1512ms)
+ok test/bootstrap/seed-registration-phase.test.js (60 assertions, 978ms)
+ok test/bootstrap/seed-retained-effects-preparation.test.js (9 assertions, 39501ms)
+ok test/bootstrap/seed-retained-effects.integration.test.js (3 assertions, 2668ms)
+ok test/bootstrap/seed-retained-effects.test.js (166 assertions, 3253ms)
+ok test/bootstrap/seed-original-attempt-lifetime.test.js (21 assertions, 182483ms)
+# test-files total=10 pass=10 fail=0 assertions=343
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 45C (coretemp/Package id 0) nvme unmeasured
+ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 4666ms)
+# test-files total=1 pass=1 fail=0 assertions=2

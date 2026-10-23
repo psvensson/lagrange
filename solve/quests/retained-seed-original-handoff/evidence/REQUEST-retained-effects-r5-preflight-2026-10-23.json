@@ -1,0 +1,96 @@
+{
+  "ping": {
+    "request": {
+      "repository_full_name": "psvensson/lagrange-lab",
+      "title": "[lab-job] 2bc395ca04a04d7cba3d0ae505ea0047",
+      "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T08:13:57.745Z\",\"expires_at\":\"2026-10-23T10:13:57.745Z\",\"operation\":\"ping\",\"request_id\":\"2bc395ca04a04d7cba3d0ae505ea0047\",\"schema\":\"lagrange-lab-job/v1\"}",
+      "comments": [],
+      "request_id": "2bc395ca04a04d7cba3d0ae505ea0047",
+      "request_sha256": "e4bde1d09c6a851ced01346c449ab3f549dc0b3d4bbd2f2fcab1b75e3d25caf4",
+      "source_execution_by_generator": false
+    },
+    "issue": 971,
+    "receipts": [
+      {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/971#issuecomment-6360555581",
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "2bc395ca04a04d7cba3d0ae505ea0047",
+        "request_sha256": "e4bde1d09c6a851ced01346c449ab3f549dc0b3d4bbd2f2fcab1b75e3d25caf4",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T08:14:13.368Z",
+        "result": {
+          "allowed_hosts": [
+            "adam-laptop",
+            "adams-gamla",
+            "carinas-windows",
+            "lenovo-laptop",
+            "local-workstation",
+            "tv-dator"
+          ],
+          "authorization": {
+            "expires_at": null,
+            "mode": "trusted-pool-actor",
+            "until_revoked": true
+          },
+          "executed_source": false,
+          "generic_work": true,
+          "paused": false,
+          "pool_id": "default",
+          "source_sha": "53e262450fada3b4e706898201a3c732811ae4d0",
+          "uncertain_execution": false,
+          "version": "0.2.2"
+        }
+      }
+    ]
+  },
+  "fleet": {
+    "request": {
+      "repository_full_name": "psvensson/lagrange-lab",
+      "title": "[lab-job] 97971f51185549d59c41735c2081f04d",
+      "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T08:13:57.746Z\",\"expires_at\":\"2026-10-23T10:13:57.746Z\",\"operation\":\"lab-fleet-observe\",\"request_id\":\"97971f51185549d59c41735c2081f04d\",\"schema\":\"lagrange-lab-job/v1\"}",
+      "comments": [],
+      "request_id": "97971f51185549d59c41735c2081f04d",
+      "request_sha256": "d2691eaf9ce2dd1dcdbe6e22a0280ce2e140e65ad6c1dea9f308e8077eaaf092",
+      "source_execution_by_generator": false
+    },
+    "issue": 972,
+    "receipts": [
+      {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/972#issuecomment-6360555100",
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "97971f51185549d59c41735c2081f04d",
+        "request_sha256": "d2691eaf9ce2dd1dcdbe6e22a0280ce2e140e65ad6c1dea9f308e8077eaaf092",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T08:14:13.353Z",
+        "result": {
+          "operation": "lab-fleet-observe",
+          "source_execution_started": false
+        }
+      },
+      {
+        "url": "https://github.com/psvensson/lagrange-lab/issues/972#issuecomment-6360557754",
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "97971f51185549d59c41735c2081f04d",
+        "request_sha256": "d2691eaf9ce2dd1dcdbe6e22a0280ce2e140e65ad6c1dea9f308e8077eaaf092",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T08:14:15.169Z",
+        "result": {
+          "collector_runtime": "python",
+          "collector_runtime_sha256": "a2f33a6e006989270f4340528eb61f8f97366e00a5d1b602ac8672ea44fc56ae",
+          "collector_source_sha": "53e262450fada3b4e706898201a3c732811ae4d0",
+          "fleet_json": "[{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"a60faf43-3629-4ec0-8c83-cae6cf186de3\",\"clockBasis\":\"controller-probe-interval\",\"cores\":8,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16217216,\"probeCompletedAt\":1792743253980,\"probeDurationMs\":624.4942530756816,\"probeStartedAt\":1792743253355,\"probedAt\":1792743253355,\"thermal\":{\"cpu\":46.0,\"missing\":[],\"ssd\":18.85,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":287.5,\"workerProbedAt\":1792743253955},\"controller\":false,\"error\":null,\"name\":\"adam-laptop\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"d7288037-0a8a-4144-a3c4-80101d565062\",\"clockBasis\":\"controller-probe-interval\",\"cores\":4,\"machineLock\":{\"state\":\"busy\"},\"memKiB\":16315860,\"probeCompletedAt\":1792743254041,\"probeDurationMs\":684.9901230307296,\"probeStartedAt\":1792743253356,\"probedAt\":1792743253356,\"thermal\":{\"cpu\":32.0,\"missing\":[\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":161.5,\"workerProbedAt\":1792743253860},\"controller\":false,\"error\":null,\"name\":\"adams-gamla\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\"],\"capability\":{\"bootId\":\"dd35bc97-4d4c-4672-b788-3afadfff26cf\",\"clockBasis\":\"controller-probe-interval\",\"cores\":12,\"machineLock\":{\"state\":\"free\"},\"memKiB\":7819920,\"probeCompletedAt\":1792743254010,\"probeDurationMs\":653.822761029005,\"probeStartedAt\":1792743253356,\"probedAt\":1792743253356,\"thermal\":{\"cpu\":null,\"missing\":[\"cpu\",\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":10899.0,\"workerProbedAt\":1792743264582},\"controller\":false,\"error\":null,\"name\":\"carinas-windows\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\",\"nvidia-gpu\"],\"capability\":{\"bootId\":\"18581133-d0d9-4dec-a3f8-266562235699\",\"clockBasis\":\"controller-probe-interval\",\"cores\":8,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16282476,\"probeCompletedAt\":1792743253744,\"probeDurationMs\":384.01728705503047,\"probeStartedAt\":1792743253360,\"probedAt\":1792743253360,\"thermal\":{\"cpu\":48.0,\"missing\":[\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":171.0,\"workerProbedAt\":1792743253723},\"controller\":false,\"error\":null,\"name\":\"lenovo-laptop\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\",\"nvidia-gpu\"],\"capability\":{\"bootId\":\"ffacc5f5-28f5-48a0-b6ef-25eec2ef1328\",\"clockBasis\":\"controller-probe-interval\",\"cores\":20,\"machineLock\":{\"state\":\"free\"},\"memKiB\":32664788,\"probeCompletedAt\":1792743253415,\"probeDurationMs\":54.3287560576573,\"probeStartedAt\":1792743253360,\"probedAt\":1792743253360,\"thermal\":{\"cpu\":48.0,\"missing\":[],\"ssd\":33.85,\"ssd_aux\":67.85},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":20.5,\"workerProbedAt\":1792743253408},\"controller\":true,\"error\":null,\"name\":\"local-workstation\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"9c9e76b2-708e-4aa0-b920-34d36843d261\",\"clockBasis\":\"controller-probe-interval\",\"cores\":12,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16127896,\"probeCompletedAt\":1792743253692,\"probeDurationMs\":329.5028689317405,\"probeStartedAt\":1792743253363,\"probedAt\":1792743253363,\"thermal\":{\"cpu\":64.0,\"missing\":[],\"ssd\":28.85,\"ssd_aux\":42.85},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":140.5,\"workerProbedAt\":1792743253668},\"controller\":false,\"error\":null,\"name\":\"tv-dator\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}}]",
+          "fleet_sha256": "1463988162d52025fc0554be09af150d15a6d74192456aaaf12604a8fc507599",
+          "observation_complete": true,
+          "observed_completed_at": "2026-10-23T08:14:14.042Z",
+          "observed_started_at": "2026-10-23T08:14:13.355Z",
+          "operation": "lab-fleet-observe",
+          "protocol": "lagrange-lab-fleet-observation-v2",
+          "source_execution_started": false
+        }
+      }
+    ]
+  }
+}
