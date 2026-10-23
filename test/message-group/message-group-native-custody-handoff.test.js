@@ -29,7 +29,10 @@ import {resolveOperationalMessageGroupSelection,
   '../../src/bootstrap/shared/message-group-selection.js';
 import {SeedRuntimeBridgeOwner} from '../../src/bootstrap/owners/seed-runtime-bridge-owner.js';
 import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagation-service.js';
+import {CDC_GROUP_PROPAGATION_STATE} from
+  '../../src/topology/cdc-group-propagation-constants.js';
 import {LatencyTreeService} from '../../src/topology/latency-tree-service.js';
+import {LATENCY_TREE_STATE} from '../../src/topology/latency-tree-constants.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {emit, pump, recipientFixture, view, NODE_ID, GROUP_ID} from
@@ -215,34 +218,108 @@ function report(t, f, producer, stage, extra = {}) {
   return result;
 }
 
-function subscribe(f, producer) {
+function ownerErrorIdentity(error) {
+  return {
+    name: error?.name ?? null, message: error?.message ?? String(error),
+    code: error?.code ?? null, stack: error?.stack ?? null,
+  };
+}
+
+function ownerErrorDisposition(error) {
+  return {
+    isCritical: error?.isCritical === true,
+    ownerNotReady: error?.ownerNotReady === true,
+    deferRetry: error?.deferRetry === true,
+    retryAfterMs: error?.retryAfterMs ?? null,
+    cause: error?.cause ?? null,
+  };
+}
+
+function recordOwnerFailure(f, boundary, error) {
+  // Keep the actual thrown object as well as portable diagnostics. Observation
+  // does not replace the error consumed by the source delivery owner.
+  f.ownerFailures ??= [];
+  f.ownerFailures.push({boundary, error});
+  emit(f, 'actual-owner-failure', {boundary, error: {
+    ...ownerErrorIdentity(error), ...ownerErrorDisposition(error),
+  }});
+}
+
+async function observeOwnerCall(f, boundary, operation) {
+  emit(f, 'actual-owner-entered', {boundary});
+  try {
+    const result = await operation();
+    emit(f, 'actual-owner-returned', {boundary,
+      selectedReplicaId: result?.service?.replicaId ?? null,
+      ready: result?.ready ?? null});
+    return result;
+  } catch (error) {
+    recordOwnerFailure(f, boundary, error);
+    throw error;
+  }
+}
+
+function subscribe(t, f, producer) {
   const service = f.services[0];
+  const latencyTreeService = new LatencyTreeService({nodeId: NODE_ID,
+    systemTableCache: service.systemTableCache});
   const topology = {cdcGroupPropagationService: new CDCGroupPropagationService({
     nodeId: NODE_ID, systemTableCache: service.systemTableCache,
-    messageRouter: f.router,
-    latencyTreeService: new LatencyTreeService({nodeId: NODE_ID,
-      systemTableCache: service.systemTableCache})})};
+    messageRouter: f.router, latencyTreeService})};
+  t.after(async () => {
+    const stops = await Promise.allSettled([
+      Promise.resolve().then(() => topology.cdcGroupPropagationService.stop()),
+      Promise.resolve().then(() => latencyTreeService.stop()),
+    ]);
+    const failures = stops.filter((result) => result.status === 'rejected')
+      .map((result) => result.reason);
+    if (failures.length > 0) throw new AggregateError(failures, 'topology cleanup failed');
+  });
+  // The same component lifecycle used by LatencyTopologySetup's create/start.
+  latencyTreeService.initialize();
+  topology.cdcGroupPropagationService.initialize();
+  latencyTreeService.start({recomputeImmediately: true});
+  topology.cdcGroupPropagationService.start();
+  assert.equal(latencyTreeService.getStats().state, LATENCY_TREE_STATE.RUNNING);
+  assert.equal(topology.cdcGroupPropagationService.getStats().state,
+    CDC_GROUP_PROPAGATION_STATE.RUNNING);
+  emit(f, 'setup-topology-running');
   const bridge = new SeedRuntimeBridgeOwner({delegates: {getLatencyTopology: () => topology}});
-  const subscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
+  const actualSubscriber = buildPartitionCdcPropagationSubscriber({tableName: TABLES.CONFIG,
     partitionId: PARTITION_ID, replicaId: producer.leader.replicaId,
     resolveOperationalMessageGroupSelection: (options) =>
       resolveOperationalMessageGroupSelection(f.services, options),
     resolveOperationalMessageGroupSelectionAsync: (options) =>
-      resolveOperationalMessageGroupSelectionAsync(f.services, options),
+      observeOwnerCall(f, 'async-selection', () =>
+        resolveOperationalMessageGroupSelectionAsync(f.services, options)),
     buildMessageGroupOwnerNotReadyError,
     beforePropagation: (event) => {
       f.event = structuredClone(event);
       emit(f, 'producer-durable-event-entered-subscriber', {event: f.event,
         obligation: readCdcObligation(producer.leader.db, event.eventKey)});
     },
-    propagatePartitionCDCEvent: async (...args) => {
+    propagatePartitionCDCEvent: (...args) => observeOwnerCall(f, 'seed-bridge', async () => {
       const result = await Reflect.apply(bridge.propagatePartitionCDCEvent, bridge, args);
+      // Capture the frontier at the same real bridge-return continuation as
+      // before tracing; the observer's later settlement must not move this cut.
       emit(f, 'actual-propagation-return', {result, event: structuredClone(args[1]),
         recipient: view(f)});
       return result;
-    },
+    }),
     afterPropagation: () => emit(f, 'subscriber-after-propagation'),
   });
+  const subscriber = (event) => observeOwnerCall(f, 'subscriber', () =>
+    actualSubscriber(event));
+  subscriber.canAcceptCDCEvent = (event) => {
+    try {
+      const readiness = actualSubscriber.canAcceptCDCEvent(event);
+      emit(f, 'actual-subscriber-readiness', {readiness});
+      return readiness;
+    } catch (error) {
+      recordOwnerFailure(f, 'subscriber-readiness', error);
+      throw error;
+    }
+  };
   return {subscriber, topology};
 }
 
@@ -251,8 +328,7 @@ test('released executeQuery debt requires actual RF1 native receipt through the 
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-rf1-write');
     const f = await recipientFixture(t, KEY, {replicaCount: 1});
-    const {subscriber, topology} = subscribe(f, producer);
-    t.after(() => topology.cdcGroupPropagationService.stop());
+    const {subscriber} = subscribe(t, f, producer);
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
       {subscriberId: 'native-rf1-message-group-custody'});
     await pump(f);
@@ -271,8 +347,7 @@ test('native CDC producer retains custody until message-group committed applicat
     const producer = await producerFixture(t);
     const debt = await writeSource(t, producer, 'native-cdc-custody-write');
     const f = await recipientFixture(t, KEY);
-    const {subscriber, topology} = subscribe(f, producer);
-    t.after(() => topology.cdcGroupPropagationService.stop());
+    const {subscriber} = subscribe(t, f, producer);
     f.holdEntries = true;
     await producer.leader.subscribeToCDCWithHandshake(subscriber,
       {subscriberId: 'native-message-group-custody'});

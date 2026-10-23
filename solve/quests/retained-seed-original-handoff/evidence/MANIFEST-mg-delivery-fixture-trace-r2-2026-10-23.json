@@ -1,0 +1,26 @@
+{
+  "base": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a",
+  "scope": "test fixture lifecycle and diagnostics only; production unchanged",
+  "files": [
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "63b195eacdeca829925872f489d88a29b02f562b0f5c486d6c23aab330867e0a",
+      "bytes": 134953
+    },
+    {
+      "path": "test/message-group/message-group-native-custody-handoff.test.js",
+      "sha256": "0c5225055f319df6440cc56028d178a7f16fffd406f169dac6d9e27f6b7a7e9b",
+      "bytes": 22453
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "65dac9ad8944b0f5feb0e484e23eb09477aaa736680b00b6f74c4ace9fb725d5",
+      "bytes": 452
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "sha256": "6a155444b6d829540dcfe0a077d37bda6c2122c0967c87992108b8d11dc4d477",
+      "bytes": 791246
+    }
+  ]
+}
