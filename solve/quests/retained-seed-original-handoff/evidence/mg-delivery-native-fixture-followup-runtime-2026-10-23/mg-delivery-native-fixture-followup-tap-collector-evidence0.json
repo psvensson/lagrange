@@ -1,0 +1,60 @@
+{
+  "issue": 1127,
+  "receipts": [
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1127#issuecomment-6363722531",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "dc882ca330db4dae898981e2bed2c552",
+        "request_sha256": "97c02c7dffccb2d2ddef02cdf7b71ac769fbf4bcbc168f208d59284e5270fe4b",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T11:21:38.323Z",
+        "result": {
+          "operation": "evidence",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1127#issuecomment-6363724815",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "dc882ca330db4dae898981e2bed2c552",
+        "request_sha256": "97c02c7dffccb2d2ddef02cdf7b71ac769fbf4bcbc168f208d59284e5270fe4b",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T11:21:40.173Z",
+        "result": {
+          "available_bytes": 707,
+          "chunk_sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+          "complete": true,
+          "data_base64": "ZmF0YWw6IGNhbm5vdCBjaGFuZ2UgdG8gJy9ob21lL3BldGVyLy5sb2NhbC9zdGF0ZS9sYWdyYW5nZS1sYWItd29ya2VyL2dlbmVyaWMvcnVucy84OTBiYmZhYS01MGZmLTRmZjctODY3Yy04ZGVmYzUxMjA0MGQvd29yay9zb3VyY2UnOiBObyBzdWNoIGZpbGUgb3IgZGlyZWN0b3J5ClRyYWNlYmFjayAobW9zdCByZWNlbnQgY2FsbCBsYXN0KToKICBGaWxlICI8c3RyaW5nPiIsIGxpbmUgNSwgaW4gPG1vZHVsZT4KICBGaWxlICIvdXNyL2xpYi9weXRob24zLjEwL3N1YnByb2Nlc3MucHkiLCBsaW5lIDQyMSwgaW4gY2hlY2tfb3V0cHV0CiAgICByZXR1cm4gcnVuKCpwb3BlbmFyZ3MsIHN0ZG91dD1QSVBFLCB0aW1lb3V0PXRpbWVvdXQsIGNoZWNrPVRydWUsCiAgRmlsZSAiL3Vzci9saWIvcHl0aG9uMy4xMC9zdWJwcm9jZXNzLnB5IiwgbGluZSA1MjYsIGluIHJ1bgogICAgcmFpc2UgQ2FsbGVkUHJvY2Vzc0Vycm9yKHJldGNvZGUsIHByb2Nlc3MuYXJncywKc3VicHJvY2Vzcy5DYWxsZWRQcm9jZXNzRXJyb3I6IENvbW1hbmQgJ1snZ2l0JywgJy1DJywgJy9ob21lL3BldGVyLy5sb2NhbC9zdGF0ZS9sYWdyYW5nZS1sYWItd29ya2VyL2dlbmVyaWMvcnVucy84OTBiYmZhYS01MGZmLTRmZjctODY3Yy04ZGVmYzUxMjA0MGQvd29yay9zb3VyY2UnLCAncmV2LXBhcnNlJywgJ0hFQUQnXScgcmV0dXJuZWQgbm9uLXplcm8gZXhpdCBzdGF0dXMgMTI4Lgo=",
+          "eof": true,
+          "executed_source": false,
+          "host": "tv-dator",
+          "hosts": [
+            "tv-dator"
+          ],
+          "job_id": "a50cb2e06f794053b56d72d8af6fd0bd",
+          "job_source_execution_started": true,
+          "job_state": "COMPLETE",
+          "job_terminal": true,
+          "log_state": "DATA",
+          "log_truncated": false,
+          "next_offset": 707,
+          "offset": 0,
+          "original_log_bytes": 707,
+          "original_log_sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+          "raw_chunk_sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+          "read_only": true,
+          "redacted": true,
+          "returned_bytes": 707,
+          "source": "original-worker-log",
+          "stream_id": "3ceacabbfe1c11b410339dc82f794ebe2755150b7eff7d2c844a9d8fdb5cb7c0",
+          "text": "fatal: cannot change to '/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source': No such file or directory\nTraceback (most recent call last):\n  File \"<string>\", line 5, in <module>\n  File \"/usr/lib/python3.10/subprocess.py\", line 421, in check_output\n    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,\n  File \"/usr/lib/python3.10/subprocess.py\", line 526, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['git', '-C', '/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source', 'rev-parse', 'HEAD']' returned non-zero exit status 128.\n"
+        }
+      }
+    }
+  ]
+}

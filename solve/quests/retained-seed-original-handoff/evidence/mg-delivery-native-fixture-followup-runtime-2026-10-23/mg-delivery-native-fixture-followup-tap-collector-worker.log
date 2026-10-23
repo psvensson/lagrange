@@ -1,0 +1,8 @@
+fatal: cannot change to '/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source': No such file or directory
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "/usr/lib/python3.10/subprocess.py", line 421, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+  File "/usr/lib/python3.10/subprocess.py", line 526, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', '-C', '/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source', 'rev-parse', 'HEAD']' returned non-zero exit status 128.

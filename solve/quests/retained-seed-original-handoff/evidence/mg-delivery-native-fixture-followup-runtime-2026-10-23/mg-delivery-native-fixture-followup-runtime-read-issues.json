@@ -1,0 +1,28 @@
+{
+  "evidence0": {
+    "issue": 1094,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1094",
+    "request": {
+      "repository_full_name": "psvensson/lagrange-lab",
+      "title": "[lab-job] 3e13be5211cb404481f2c26787968ff2",
+      "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T11:01:58.723Z\",\"expires_at\":\"2026-10-23T13:01:58.723Z\",\"host\":\"tv-dator\",\"job_id\":\"890bbfaa50ff4ff7867c8defc512040d\",\"length\":8000,\"offset\":0,\"operation\":\"evidence\",\"request_id\":\"3e13be5211cb404481f2c26787968ff2\",\"schema\":\"lagrange-lab-job/v1\"}",
+      "comments": [],
+      "request_id": "3e13be5211cb404481f2c26787968ff2",
+      "request_sha256": "c5e6162ee6b2c4ee4c5747ac5b29200636e48f783ab626fca05be9909ce45af5",
+      "source_execution_by_generator": false
+    }
+  },
+  "post-fleet": {
+    "issue": 1095,
+    "url": "https://github.com/psvensson/lagrange-lab/issues/1095",
+    "request": {
+      "repository_full_name": "psvensson/lagrange-lab",
+      "title": "[lab-job] 7fe2ed00a01b4211992ee87e318ed6be",
+      "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T11:01:58.746Z\",\"expires_at\":\"2026-10-23T13:01:58.746Z\",\"operation\":\"lab-fleet-observe\",\"request_id\":\"7fe2ed00a01b4211992ee87e318ed6be\",\"schema\":\"lagrange-lab-job/v1\"}",
+      "comments": [],
+      "request_id": "7fe2ed00a01b4211992ee87e318ed6be",
+      "request_sha256": "e371343629dfbb5db2b7992854f28d3eb2e0a5f52db769e256d90c93663bbe90",
+      "source_execution_by_generator": false
+    }
+  }
+}

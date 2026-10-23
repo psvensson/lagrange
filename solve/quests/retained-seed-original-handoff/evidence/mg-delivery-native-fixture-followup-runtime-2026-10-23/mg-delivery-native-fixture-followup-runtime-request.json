@@ -1,0 +1,59 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] 890bbfaa50ff4ff7867c8defc512040d",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T10:54:04.435Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"890bbfaa-50ff-4ff7-867c-8defc512040d\",\"sha256\":\"220373924b4a7d7b3745dfbf7015cefb9656503b7b8be55c996394fe1edbd955\",\"totalBytes\":1082},\"expires_at\":\"2026-10-23T12:54:04.435Z\",\"operation\":\"lab-work\",\"request_id\":\"890bbfaa50ff4ff7867c8defc512040d\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc2MDA0NDQzNSwiaXNzdWVkQXRNcyI6MTc5Mjc1Mjg0NDQzNSwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiI4OTBiYmZhYS01MGZmLTRmZjctODY3Yy04ZGVmYzUxMjA0MGQiLCJ3b3JrIjp7ImRyaXZlciI6InRlc3RzIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsibm9kZSIsInNoZWxsIl19LCJzb3VyY2UiOnsicmVmIjoicmVmcy9oZWFkcy93b3JrL21nLWRlbGl2ZXJ5LWZpeHR1cmUtdHJhY2UtMjAyNjEwMjMiLCJyZXBvIjoicHN2ZW5zc29uL2xhZ3JhbmdlIiwic2hhIjoiMDM2ZGMwMDE5YTVjNDcxMWMxZWM5ZDlmNmM1OTE0MjZmY2IxZTRiMiJ9LCJzcGVjIjp7ImFyZ3YiOlsiL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbmV4ZWMgbnBtIHJ1biB0ZXN0OmZpbGUgLS0gXCIkQFwiXG4iLCJyZXRhaW5lZC1lZmZlY3RzIl0sImN3ZCI6Ii4iLCJzZXR1cCI6W1siL2Jpbi9iYXNoIiwiLWMiLCJzZXQgLWV1XG5yZXRhaW5lZF9ub2RlX2Jpbj1cIiRIT01FLy5udm0vdmVyc2lvbnMvbm9kZS92MjIuMjMuMi9iaW5cIlxudGVzdCAteCBcIiRyZXRhaW5lZF9ub2RlX2Jpbi9ub2RlXCJcbmV4cG9ydCBQQVRIPVwiJHJldGFpbmVkX25vZGVfYmluOiRQQVRIXCJcbm5vZGUgLS12ZXJzaW9uXG5ucG0gLS12ZXJzaW9uXG5leGVjIG5wbSBjaVxuIl1dLCJ0ZXN0cyI6WyJ0ZXN0L21lc3NhZ2UtZ3JvdXAvbWVzc2FnZS1ncm91cC1uYXRpdmUtY3VzdG9keS1oYW5kb2ZmLnRlc3QuanMiLCJ0ZXN0L21lc3NhZ2UtZ3JvdXAvbWVzc2FnZS1ncm91cC1uYXRpdmUtcHJvdmlzaW9uYWwtcm91dGUudGVzdC5qcyJdfSwidGltZW91dFNlY29uZHMiOjM2MDB9fQo=\",\"index\":0,\"sha256\":\"220373924b4a7d7b3745dfbf7015cefb9656503b7b8be55c996394fe1edbd955\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"890bbfaa-50ff-4ff7-867c-8defc512040d\",\"sha256\":\"220373924b4a7d7b3745dfbf7015cefb9656503b7b8be55c996394fe1edbd955\"}"
+  ],
+  "request_id": "890bbfaa50ff4ff7867c8defc512040d",
+  "request_sha256": "6cd4bbf4c0bfce4bec495380c09ae85f50abe5a0ac864614fbc3bb32faaf401a",
+  "source_execution_by_generator": false,
+  "payload_sha256": "220373924b4a7d7b3745dfbf7015cefb9656503b7b8be55c996394fe1edbd955",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "890bbfaa-50ff-4ff7-867c-8defc512040d",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792752844435,
+    "expiresAtMs": 1792760044435,
+    "work": {
+      "driver": "tests",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/mg-delivery-fixture-trace-20261023",
+        "sha": "036dc0019a5c4711c1ec9d9f6c591426fcb1e4b2"
+      },
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "node",
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 3600,
+      "spec": {
+        "cwd": ".",
+        "setup": [
+          [
+            "/bin/bash",
+            "-c",
+            "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nnode --version\nnpm --version\nexec npm ci\n"
+          ]
+        ],
+        "argv": [
+          "/bin/bash",
+          "-c",
+          "set -eu\nretained_node_bin=\"$HOME/.nvm/versions/node/v22.23.2/bin\"\ntest -x \"$retained_node_bin/node\"\nexport PATH=\"$retained_node_bin:$PATH\"\nexec npm run test:file -- \"$@\"\n",
+          "retained-effects"
+        ],
+        "tests": [
+          "test/message-group/message-group-native-custody-handoff.test.js",
+          "test/message-group/message-group-native-provisional-route.test.js"
+        ]
+      }
+    }
+  }
+}

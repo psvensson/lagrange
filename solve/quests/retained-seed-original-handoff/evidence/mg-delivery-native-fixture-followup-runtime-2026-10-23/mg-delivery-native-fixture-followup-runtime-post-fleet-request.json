@@ -1,0 +1,9 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] 7fe2ed00a01b4211992ee87e318ed6be",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T11:01:58.746Z\",\"expires_at\":\"2026-10-23T13:01:58.746Z\",\"operation\":\"lab-fleet-observe\",\"request_id\":\"7fe2ed00a01b4211992ee87e318ed6be\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [],
+  "request_id": "7fe2ed00a01b4211992ee87e318ed6be",
+  "request_sha256": "e371343629dfbb5db2b7992854f28d3eb2e0a5f52db769e256d90c93663bbe90",
+  "source_execution_by_generator": false
+}

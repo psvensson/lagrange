@@ -1,0 +1,81 @@
+{
+  "issue": 1126,
+  "receipts": [
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1126#issuecomment-6363648064",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "a50cb2e06f794053b56d72d8af6fd0bd",
+        "request_sha256": "c3bdab36faa0c26c95670da9d27127ca9b2de915cae7fc5445c0407823feb306",
+        "status": "CLAIMED",
+        "recorded_at": "2026-10-23T11:17:03.245Z",
+        "result": {
+          "hosts": [
+            "tv-dator"
+          ],
+          "operation": "lab-work",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1126#issuecomment-6363650310",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "a50cb2e06f794053b56d72d8af6fd0bd",
+        "request_sha256": "c3bdab36faa0c26c95670da9d27127ca9b2de915cae7fc5445c0407823feb306",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T11:17:10.134Z",
+        "result": {
+          "execution_scope_closed": true,
+          "exit_code": 1,
+          "finished_at": "2026-10-23T11:17:10.020Z",
+          "hosts": [
+            "tv-dator"
+          ],
+          "log_bytes": 719,
+          "log_sha256": "0e26092b441e2b55e47d02e938ef5dafe2fe853fdfc6cbe225b4df0a5c9bbaf1",
+          "logical_request_id": "a50cb2e0-6f79-4053-b56d-72d8af6fd0bd",
+          "logs_are_worker_tails": true,
+          "operation": "lab-work",
+          "outcome": "FAIL",
+          "payload_sha256": "6c7ad7eab5bffb449862136910439fc422862f6cc2a8b59e899edd41548be398",
+          "reason": null,
+          "scope_closed": true,
+          "source_execution_started": true,
+          "source_sha": null,
+          "worker_receipt_count": 1,
+          "worker_receipts_sha256": "1a454a3c73a73e490aff643d49ab6b73bd137a7f3fb9dbf57bb1d2bc846da243",
+          "workers": {
+            "tv-dator": {
+              "containers_closed": true,
+              "driver_result": {
+                "counters": {},
+                "exit_code": 1
+              },
+              "execution_scope_closed": true,
+              "exit_code": 1,
+              "last_thermals": {
+                "cpu": 49,
+                "missing": [],
+                "ssd": 29.85,
+                "ssd_aux": 46.85
+              },
+              "log_bytes": 707,
+              "log_sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+              "log_truncated": false,
+              "output_bytes": 707,
+              "output_sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+              "reason": null,
+              "source_execution_started": true,
+              "state": "COMPLETE",
+              "thermal_scope_closed": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}

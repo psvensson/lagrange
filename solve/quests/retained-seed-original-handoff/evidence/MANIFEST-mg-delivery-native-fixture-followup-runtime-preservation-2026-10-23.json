@@ -1,0 +1,564 @@
+{
+  "source_sha": "036dc0019a5c4711c1ec9d9f6c591426fcb1e4b2",
+  "issue": 1092,
+  "result": "FAIL",
+  "purpose": "non-main preservation of original measurement and failed artifact recovery; no source acceptance",
+  "workerLog": {
+    "bytes": 230186,
+    "sha256": "5a594842a01fe52637e50046cdaf56ea60d347af15017402af417d4ce94010d8",
+    "completeTransportStream": true,
+    "internallyElidedChildTapBytes": 72546
+  },
+  "collector": {
+    "issue": 1126,
+    "result": "FAIL",
+    "reason": "original source/work removed by installed retention; read-only collector reran no tests"
+  },
+  "limits": [
+    "partial.txt is an incomplete intermediate concatenation, not the complete worker log",
+    "diagnostics are derived observations; raw worker.log and receipts remain authority",
+    "failed evidence reads #1098 and #1109 plus successful exact-offset retries #1124 and #1125 are retained",
+    "full child TAP was unavailable; no reconstruction or later passing result replaces that gap"
+  ],
+  "files": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-pre-fleet-request.json",
+      "bytes": 593,
+      "sha256": "dbb634c341b7bec54c59fc5910879a73b77cd64caca84bc64e1a25626ddaea66",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-pre-fleet-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-pre-fleet.json",
+      "bytes": 6080,
+      "sha256": "53add867b1bee5049fe0815a727a7719be474f36d80fa245641b824058871e57",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-pre-fleet.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-chunk-issues.json",
+      "bytes": 7298,
+      "sha256": "b055e130159d539a5f39e68c5305e0103710e1fd6a877528edf9d38d051ce23b",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-chunk-issues.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-chunk0.bin",
+      "bytes": 8000,
+      "sha256": "f058f0f4b04f985a47cae760ef1978c6672cf729685e46a50ccc87638e3a0353",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-chunk0.bin"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-diagnostics.json",
+      "bytes": 247464,
+      "sha256": "a8754378ebfbc12857fc64d29fb75de048096130a2d6f4e3d24af64e7cd752f9",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-diagnostics.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence0-request.json",
+      "bytes": 683,
+      "sha256": "1bcb3fe4e4f7cb43cbd404215fac778aef5207261c9f433dd86e7013d50377f5",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence0-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence0.json",
+      "bytes": 21535,
+      "sha256": "b20880e77279cc92e644ecf218e1167c49be28a4dbadc799fde18639b19e6aa5",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence0.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence104000-request.json",
+      "bytes": 771,
+      "sha256": "2c0f938459c5eb1ddc35201fc7115ddd6417eac8fb36d65d751899212c258f76",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence104000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence104000.json",
+      "bytes": 21850,
+      "sha256": "6ccbc21607dd0669ffbc63dafb3cb98d38b5465242a0f736fe4b5109cf79dfa1",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence104000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence112000-issue1109-failed.json",
+      "bytes": 1548,
+      "sha256": "87edadc04a4bd647787a58c8be665f4b11ec1039eafb0bb7d5f2a2033fbc49fe",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence112000-issue1109-failed.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence112000-request.json",
+      "bytes": 771,
+      "sha256": "2b89d87e633bc2d0ed4e217968ad65f2be2ff9aa6c3b164c64affe9db5cab301",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence112000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence112000-retry1-request.json",
+      "bytes": 771,
+      "sha256": "4759a03eb3597a3d3c589b92cfa19696d024693b1577aebd08cd961a616ea717",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence112000-retry1-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence112000.json",
+      "bytes": 21868,
+      "sha256": "c8b99654b64c87399091d3ebc3c85643c5ea813a1c8a042949cc91bad5e9855a",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence112000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence120000-request.json",
+      "bytes": 771,
+      "sha256": "343777af8906fd4e100394cebde4424bef3e471e374bdfc5db499679748bc132",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence120000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence120000.json",
+      "bytes": 22103,
+      "sha256": "984ab60ea178a3df2034b8e2f5f8106eb4cc5e90b33016d61993a26351787fdc",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence120000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence128000-request.json",
+      "bytes": 771,
+      "sha256": "caad7669e4fe168c27e9f6695fcda0610e850fd907c198f955254eec6e423724",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence128000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence128000.json",
+      "bytes": 21476,
+      "sha256": "b4317031e7c2353ba5a9edb852fbc9b4e7d2c78e33e9d8cf87252ba048f28650",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence128000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence136000-request.json",
+      "bytes": 771,
+      "sha256": "3f305645eb2f63423c8f0f4079c1a21158d1763c452ff9b27e7454d2f804c3f5",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence136000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence136000.json",
+      "bytes": 21891,
+      "sha256": "7c4fe36e1d748a0388bba17c2e28ea0fb6701796fce01d241eb0f6e78cb55338",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence136000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence144000-request.json",
+      "bytes": 771,
+      "sha256": "401189c43e6dbb26dceaedd82036cd72c159cb0bf3dc938922b0c6eaf439dfaf",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence144000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence144000.json",
+      "bytes": 21913,
+      "sha256": "b0322e912baccbb92b673cdeadc4b146fee7b0e61e48a9fb0e326ac0c5ae1def",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence144000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence152000-request.json",
+      "bytes": 771,
+      "sha256": "d2412b94c0ff2f1e3ad8c14162244a101c96f30669312be7791430b33687eca6",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence152000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence152000.json",
+      "bytes": 22104,
+      "sha256": "6c3c89d6ba818b6836cc603ee2491cfc59b9f351cbf0c9ffd52eff37834a9df1",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence152000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence16000-request.json",
+      "bytes": 770,
+      "sha256": "a15d251470bfc6c0422e712a80970ee1928c9e0b542871a3f47e097876370000",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence16000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence16000.json",
+      "bytes": 21800,
+      "sha256": "54cb1bbf45bd9f81aaf95cc770b28503d531d72453346177b2b917558bb1524a",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence16000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence160000-request.json",
+      "bytes": 771,
+      "sha256": "03b5416ec23ab60fe1f9645e5862433be249ca2086156102788b67856a5a2c33",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence160000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence160000.json",
+      "bytes": 22013,
+      "sha256": "158ed247f3810c025224823dee75a4ca656cd0470f015f634ed231e0138c34ff",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence160000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence168000-request.json",
+      "bytes": 771,
+      "sha256": "327db1560429f591e7fd662409d2006e991d9f344425240ca855d1ddaf7ba516",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence168000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence168000.json",
+      "bytes": 21774,
+      "sha256": "0e6f6000b1271801b88acfad0a2cbb6846a237b5b6ac2b83c9189f73c96ca0ec",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence168000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence176000-request.json",
+      "bytes": 771,
+      "sha256": "b1b029f5f3c89d48377c5b974304fd9b99d27411d0e71b863dfcb30235f5b1d5",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence176000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence176000.json",
+      "bytes": 21974,
+      "sha256": "9bcbad85f4c21c18ba71abf69885a0969d9ba59b12628fb6ff64d7d36384728b",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence176000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence184000-request.json",
+      "bytes": 771,
+      "sha256": "5396a7a1df186a1f1c514386db1668ae10aa99aea026dfa73625e997d3dba48b",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence184000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence184000.json",
+      "bytes": 21804,
+      "sha256": "e73e31611759803db12f7f634cb508d1dc20e156bea81ab4d9d56b1e1eb48e87",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence184000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence192000-request.json",
+      "bytes": 771,
+      "sha256": "fd2eb4e87ad74ae8e4f26252feee8b21e4a6a2e8fcff2b29b7ed49b71b61d95d",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence192000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence192000.json",
+      "bytes": 21724,
+      "sha256": "4f9175db51549aac8631d00d3167e926528f9f145fdee4cfcba7b414f8dcb3c2",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence192000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence200000-request.json",
+      "bytes": 771,
+      "sha256": "e9a654cceb9eaaf4daaf7417779500ea28eb8f222874da187905754cc8db6b38",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence200000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence200000.json",
+      "bytes": 21903,
+      "sha256": "163da2e7dd2a1c4510211e80d4423ff9ed23f3d1292a0ed67155bb39b9f9536e",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence200000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence208000-request.json",
+      "bytes": 771,
+      "sha256": "6c6e746a7d266ec4267e95939dc6164c264e52a6df3f3765ca96b0163d74000e",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence208000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence208000.json",
+      "bytes": 21820,
+      "sha256": "d71972efb0c133ecaf9e031a88f8c45c807e903ccfa58c942a3a8b45083c0a0c",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence208000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence216000-request.json",
+      "bytes": 771,
+      "sha256": "007db285a82848f9f21144632cf603fa82efdd4c37c7b519dd2e3f5311aec85f",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence216000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence216000.json",
+      "bytes": 21790,
+      "sha256": "51096370f18c22546c16b494a617d7711ef0d8895767f67ae3d6fc9cca09a550",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence216000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence224000-request.json",
+      "bytes": 771,
+      "sha256": "e2f0fb8118957705103af049ab4627167a66b8151cbfde5ae1070ad17988e369",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence224000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence224000.json",
+      "bytes": 17293,
+      "sha256": "11dd82b96c91560fc87109b52597930ab6ec352a70efdadd458b53282c439e15",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence224000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence24000-issue1098-failed.json",
+      "bytes": 1547,
+      "sha256": "ada547d45645eb77727a8f189e517b326015b3545ba8c7d1aa9735938adea072",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence24000-issue1098-failed.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence24000-request.json",
+      "bytes": 770,
+      "sha256": "90b3b6b305b3647b6d7b92caaf6fdba4808ece3ab98d6cef662376f24f279522",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence24000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence24000-retry1-request.json",
+      "bytes": 770,
+      "sha256": "3e5f94496fa5f1a9a91c36a9a71f2ef1cbf1acd5276cf12d5539cbd4600f1728",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence24000-retry1-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence24000.json",
+      "bytes": 21792,
+      "sha256": "91d3a7877521efb40750da6947420c3714741ff65a0ced5f0d53b5e3b96e2b71",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence24000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence32000-request.json",
+      "bytes": 770,
+      "sha256": "b09b765a6179aea0af1cd4448f7e59ae1f8615bb557dc5e9ceae15b77ef3920e",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence32000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence32000.json",
+      "bytes": 21800,
+      "sha256": "502bbed42400d89aa85fc1b3a849f7ac1a3e88d4a22a527df6553f4653e5ad37",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence32000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence40000-request.json",
+      "bytes": 770,
+      "sha256": "3d2f645ca77426d2a5c3614824418eae7975f2966001afed7cc886571fb61b72",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence40000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence40000.json",
+      "bytes": 21806,
+      "sha256": "14ddd1b57a7a7170d3a2f3ef9be72168fddbde4b46c52ec890cd723a8adb91fb",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence40000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence48000-request.json",
+      "bytes": 770,
+      "sha256": "0f7c5575090507682b1ac620310b0c502bfc5269ee89395a0d10e994739f3bf7",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence48000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence48000.json",
+      "bytes": 21863,
+      "sha256": "b7f753b5d593e60529de4eb84771576917333ad0f2153e3aceb445a5f566afd6",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence48000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence56000-request.json",
+      "bytes": 770,
+      "sha256": "1bb164cadb37eb0c00925eef07bd645c38be5cc552eb9d44568e798d9db371a5",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence56000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence56000.json",
+      "bytes": 22096,
+      "sha256": "e16a8aa2eeebf2f4b262b78b577bd56ff4cdf65a1089197bd2a3c80711a3e749",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence56000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence64000-request.json",
+      "bytes": 770,
+      "sha256": "c2b87c6c3951ecc6dbc8a5fe55eb0b406b39f331e2370a1b1127cc51ed8ee209",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence64000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence64000.json",
+      "bytes": 21859,
+      "sha256": "e0d93eabe65306353e73394d675872eeb3f7953c02ecb3a2cd9e8a2f79c79b2e",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence64000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence72000-request.json",
+      "bytes": 770,
+      "sha256": "076e360b4e059e3ba6e1140f9db627b0f8272ed938a9efb1f5bbb57541af23f6",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence72000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence72000.json",
+      "bytes": 21892,
+      "sha256": "374b4b3bfa8ff1c6c433ebd855da308c71942648d14e079c2b4f73ca94c46e05",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence72000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence8000-request.json",
+      "bytes": 769,
+      "sha256": "0c3f6b91b22eb5e65e440f669d7b7d87a1e3bda6b005f50544e4c4f682c6b237",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence8000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence8000.json",
+      "bytes": 21748,
+      "sha256": "ffe2773ead392dcfe7ad3ede920f3352bd889ad62794dd0487521af0e1a4eea1",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence8000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence80000-request.json",
+      "bytes": 770,
+      "sha256": "c2c4055772ebea26d3a0cf506907760cce2caede57f3d58a9d30a3c2f3edeed3",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence80000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence80000.json",
+      "bytes": 21802,
+      "sha256": "d9fb013e323ee4e8e5e0292a5a5c919153da319e5d7dd745aed8959b172d3a9e",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence80000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence88000-request.json",
+      "bytes": 770,
+      "sha256": "44ab4548c80036879ded8b9dd3089392c72d33e1d649b3fccc7e83958d6e9973",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence88000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence88000.json",
+      "bytes": 21855,
+      "sha256": "489e9f91db5881d1890495c60c6f8962d56c8c3960a92bbab2aec16d0ffe775f",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence88000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence96000-request.json",
+      "bytes": 770,
+      "sha256": "8c75053b6d6fad9c222dc099137fd605101039bcb2b7350fe3a64a2a47ddbc23",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence96000-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-evidence96000.json",
+      "bytes": 21912,
+      "sha256": "5ff3fe80aef79404aaee72c4f40f5f954d897e8dbf92b91fe6bf402faf9e59f2",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-evidence96000.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-failed-read-issues.json",
+      "bytes": 524,
+      "sha256": "777ea2397655913d44217d3fd48ad45d76f885c7f171ac96c72d86e95b7b0a32",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-failed-read-issues.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-independent-custody-verification.json",
+      "bytes": 801,
+      "sha256": "09076580ea3aeccfb2d873d6effcc00b48475a5d194291c72d86cda70e391d53",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-independent-custody-verification.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-issue.json",
+      "bytes": 315,
+      "sha256": "552f099fd72886ae190f61b7e9629abcdd7cda005d2d619277f132cb94f4d9d8",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-issue.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-log-custody.json",
+      "bytes": 5164,
+      "sha256": "b7ca24af3a84240c05a2f583f3c5083c91ce2254ff0fb43c625aa87af10d93c6",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-log-custody.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-partial.txt",
+      "bytes": 214235,
+      "sha256": "d88df33b593456b5b34dd861b7876c06ca4d008f94b0294241453f17bd16fb8d",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-partial.txt"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-post-fleet-request.json",
+      "bytes": 593,
+      "sha256": "6d410078f4d50ea30e076302c506d9a42ea48235fcc248befc5838e4aa7eeebf",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-post-fleet-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-post-fleet.json",
+      "bytes": 6080,
+      "sha256": "f082b8b0f4cd16c2eb6ca46e5fb6b9661a5984ac7e5d5600f7145d5443c33a87",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-post-fleet.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-read-issues.json",
+      "bytes": 1592,
+      "sha256": "5e25a94fb14eb5c5b7a41fdbd8181dcf7e96741b2badaff74c1207a717cc0b95",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-read-issues.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-request.json",
+      "bytes": 4166,
+      "sha256": "8368d3e57c37e6cf0a2c63429bf2a527b11c4c854beba3aa3dfaebd606377d06",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-retry-read-issues.json",
+      "bytes": 524,
+      "sha256": "e856cf9e8abcdf7e58ea0a0edca35b6902043437b753311117eaa5b7501524f1",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-retry-read-issues.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-s2-diagnostic-tail.json",
+      "bytes": 1678,
+      "sha256": "bdf17ebda58cab95fe607bc26dcd11deb1a7d816cabc38623b5d971372ff0260",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-s2-diagnostic-tail.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-terminal-receipts.json",
+      "bytes": 3924,
+      "sha256": "d029373f463d8364e55e1334cd0fff760ef5dd1ffb4421fda845eb35807ec15f",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-terminal-receipts.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-tests.json",
+      "bytes": 143,
+      "sha256": "e72bff1cc855cbb9810cfaced1b9e567c84811b1031fda880dbdd0a3d8a4a27b",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-tests.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-runtime-worker.log",
+      "bytes": 230186,
+      "sha256": "5a594842a01fe52637e50046cdaf56ea60d347af15017402af417d4ce94010d8",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-runtime-worker.log"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-evidence0-issue.json",
+      "bytes": 138,
+      "sha256": "fe686fb6d995b9b496c8b906ec6893cb9b4cbfb9c2a1188bf0b1b1f8fbdd1935",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-evidence0-issue.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-evidence0-request.json",
+      "bytes": 683,
+      "sha256": "2b8969348c7206915239602f292877b8a5f36b521092c3869a3837015a92f7f4",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-evidence0-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-evidence0.json",
+      "bytes": 3888,
+      "sha256": "d7b611663e53efe369c5c2553a16ccb76f724b4f9ddf370f55c0c64d6b16ea6d",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-evidence0.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-issue.json",
+      "bytes": 417,
+      "sha256": "04716e6ade80b9381baf1d04000a40931a9e8c14dc6a5aff50b5570efd408c8a",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-issue.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-request.json",
+      "bytes": 4944,
+      "sha256": "96c00d68ac306eab7933051f19b3f7d22cd5625c1c2b1e3075d4f9225cf1ccca",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-request.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-terminal-receipts.json",
+      "bytes": 2955,
+      "sha256": "0b30d1c8e45df9c1563f03e003e06b1ffef9b163f2a7e56168511997684f4571",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-terminal-receipts.json"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector-worker.log",
+      "bytes": 707,
+      "sha256": "60d3244c0533ccc21d8728f5ec67b44ca1db5d015eaea57b0995cd09c4bfc616",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector-worker.log"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-native-fixture-followup-runtime-2026-10-23/mg-delivery-native-fixture-followup-tap-collector.py",
+      "bytes": 1114,
+      "sha256": "14a1302ba923d6f150197153e126111245f207bee3990f444af7e7187b2120fc",
+      "sourcePath": "/tmp/mg-delivery-native-fixture-followup-tap-collector.py"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/LAB-REVIEW-mg-delivery-native-fixture-followup-2026-10-23.md",
+      "bytes": 24062,
+      "sha256": "c6ab55c2b97c61117e46aaa63dd7c0803d280d268313ab2b2133454d48d30e18"
+    }
+  ]
+}

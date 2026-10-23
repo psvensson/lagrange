@@ -1,0 +1,46 @@
+{
+  "source": "036dc0019a5c4711c1ec9d9f6c591426fcb1e4b2",
+  "job": "890bbfaa50ff4ff7867c8defc512040d",
+  "stream": "797bf81ea51c39ff42545789c24c7855aca2c7a513f5bc34d5fcdddfd7627d33",
+  "bytes": 230186,
+  "sha256": "5a594842a01fe52637e50046cdaf56ea60d347af15017402af417d4ce94010d8",
+  "chunks": 29,
+  "verified_issues": [
+    1094,
+    1096,
+    1097,
+    1124,
+    1099,
+    1100,
+    1101,
+    1102,
+    1103,
+    1104,
+    1105,
+    1106,
+    1107,
+    1108,
+    1125,
+    1110,
+    1111,
+    1112,
+    1113,
+    1114,
+    1115,
+    1116,
+    1117,
+    1118,
+    1119,
+    1120,
+    1121,
+    1122,
+    1123
+  ],
+  "worker_log_complete": true,
+  "internally_elided_diagnostics": [
+    {
+      "line": 64,
+      "reason": "Unterminated string starting at: line 1 column 7729 (char 7728)"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "issue": 1098,
+  "receipts": [
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1098#issuecomment-6363433228",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "2684e522bab04fe9aa7cb4663293291a",
+        "request_sha256": "eb3ef95742f20cd57ed206152620afdb9f428a29f126e6b411deab39d6a094cd",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T11:03:44.918Z",
+        "result": {
+          "operation": "evidence",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1098#issuecomment-6363440792",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "2684e522bab04fe9aa7cb4663293291a",
+        "request_sha256": "eb3ef95742f20cd57ed206152620afdb9f428a29f126e6b411deab39d6a094cd",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T11:03:46.764Z",
+        "result": {
+          "complete": false,
+          "error_type": "Refused",
+          "executed_source": false,
+          "host": "tv-dator",
+          "hosts": [
+            "tv-dator"
+          ],
+          "job_id": "890bbfaa50ff4ff7867c8defc512040d",
+          "log_state": "UNAVAILABLE",
+          "offset": 24000,
+          "read_only": true,
+          "reason": "COMMAND_FAILED:ssh:255",
+          "source": "original-worker-log"
+        }
+      }
+    }
+  ]
+}

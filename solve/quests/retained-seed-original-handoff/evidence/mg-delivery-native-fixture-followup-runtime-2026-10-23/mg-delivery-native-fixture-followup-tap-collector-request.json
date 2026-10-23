@@ -1,0 +1,42 @@
+{
+  "repository_full_name": "psvensson/lagrange-lab",
+  "title": "[lab-job] a50cb2e06f794053b56d72d8af6fd0bd",
+  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T11:16:57.348Z\",\"delivery\":{\"partCount\":1,\"protocol\":\"harnessd-lab-work-delivery-v1\",\"requestId\":\"a50cb2e0-6f79-4053-b56d-72d8af6fd0bd\",\"sha256\":\"6c7ad7eab5bffb449862136910439fc422862f6cc2a8b59e899edd41548be398\",\"totalBytes\":1492},\"expires_at\":\"2026-10-23T13:16:57.348Z\",\"operation\":\"lab-work\",\"request_id\":\"a50cb2e06f794053b56d72d8af6fd0bd\",\"schema\":\"lagrange-lab-job/v1\"}",
+  "comments": [
+    "{\"part\":{\"data\":\"eyJleHBpcmVzQXRNcyI6MTc5Mjc2MTQxNzM0OCwiaXNzdWVkQXRNcyI6MTc5Mjc1NDIxNzM0OCwicG9vbElkIjoiZGVmYXVsdCIsInByaW5jaXBhbElkIjoiZ2l0aHViOnBzdmVuc3NvbiIsInByb3RvY29sIjoiaGFybmVzc2QtbGFiLXdvcmstdjEiLCJyZXF1ZXN0SWQiOiJhNTBjYjJlMC02Zjc5LTQwNTMtYjU2ZC03MmQ4YWY2ZmQwYmQiLCJ3b3JrIjp7ImRyaXZlciI6InNoZWxsIiwiaG9zdHMiOnsiY291bnQiOjEsInByZWZlciI6WyJ0di1kYXRvciJdLCJyZXF1aXJlbWVudHMiOlsic2hlbGwiXX0sInNvdXJjZSI6bnVsbCwic3BlYyI6eyJhcmd2IjpbInB5dGhvbjMiLCItYyIsImltcG9ydCBiYXNlNjQsZ3ppcCxoYXNobGliLGpzb24sb3MscGF0aGxpYixzdWJwcm9jZXNzXG5hc3NlcnQgb3MuZW52aXJvblsnTEFCX0hPU1QnXT09J3R2LWRhdG9yJywnb3JpZ2luYWwgYXJ0aWZhY3QgbGl2ZXMgb24gdHYtZGF0b3InXG5yb290PXBhdGhsaWIuUGF0aCgnL2hvbWUvcGV0ZXIvLmxvY2FsL3N0YXRlL2xhZ3JhbmdlLWxhYi13b3JrZXIvZ2VuZXJpYy9ydW5zLzg5MGJiZmFhLTUwZmYtNGZmNy04NjdjLThkZWZjNTEyMDQwZC93b3JrL3NvdXJjZScpXG5leHBlY3RlZD0nMDM2ZGMwMDE5YTVjNDcxMWMxZWM5ZDlmNmM1OTE0MjZmY2IxZTRiMidcbmFzc2VydCBzdWJwcm9jZXNzLmNoZWNrX291dHB1dChbJ2dpdCcsJy1DJyxzdHIocm9vdCksJ3Jldi1wYXJzZScsJ0hFQUQnXSx0ZXh0PVRydWUpLnN0cmlwKCk9PWV4cGVjdGVkLCdvcmlnaW5hbCBzb3VyY2UgaWRlbnRpdHkgY2hhbmdlZCdcbnJlbGF0aXZlPScudGFwL3Rlc3QtcmVzdWx0cy90ZXN0L21lc3NhZ2UtZ3JvdXAvbWVzc2FnZS1ncm91cC1uYXRpdmUtcHJvdmlzaW9uYWwtcm91dGUudGVzdC5qcy50YXAnXG5wPXJvb3QvcmVsYXRpdmVcbmFzc2VydCBwLmlzX2ZpbGUoKSBhbmQgbm90IHAuaXNfc3ltbGluaygpLCdvcmlnaW5hbCBUQVAgYXJ0aWZhY3QgaXMgdW5hdmFpbGFibGUnXG5kYXRhPXAucmVhZF9ieXRlcygpOyBwYWNrZWQ9Z3ppcC5jb21wcmVzcyhkYXRhLG10aW1lPTApXG5wcmludChqc29uLmR1bXBzKHsnc2NoZW1hJzoncnMtcmFmdC1vcmlnaW5hbC10YXAtYXJ0aWZhY3QvdjEnLCdvcmlnaW5hbF9qb2InOic4OTBiYmZhYTUwZmY0ZmY3ODY3YzhkZWZjNTEyMDQwZCcsJ29yaWdpbmFsX2hvc3QnOid0di1kYXRvcicsJ29yaWdpbmFsX3NvdXJjZV9zaGEnOmV4cGVjdGVkLCdhcnRpZmFjdCc6cmVsYXRpdmUsJ29yaWdpbmFsX2J5dGVzJzpsZW4oZGF0YSksJ29yaWdpbmFsX3NoYTI1Nic6aGFzaGxpYi5zaGEyNTYoZGF0YSkuaGV4ZGlnZXN0KCksJ2d6aXBfYnl0ZXMnOmxlbihwYWNrZWQpLCdnemlwX3NoYTI1Nic6aGFzaGxpYi5zaGEyNTYocGFja2VkKS5oZXhkaWdlc3QoKSwnZW5jb2RpbmcnOidnemlwLWJhc2U2NCcsJ2RhdGEnOmJhc2U2NC5iNjRlbmNvZGUocGFja2VkKS5kZWNvZGUoKX0pKVxuIl0sImN3ZCI6Ii4ifSwidGltZW91dFNlY29uZHMiOjMwMH19Cg==\",\"index\":0,\"sha256\":\"6c7ad7eab5bffb449862136910439fc422862f6cc2a8b59e899edd41548be398\"},\"protocol\":\"harnessd-lab-work-part-v1\",\"requestId\":\"a50cb2e0-6f79-4053-b56d-72d8af6fd0bd\",\"sha256\":\"6c7ad7eab5bffb449862136910439fc422862f6cc2a8b59e899edd41548be398\"}"
+  ],
+  "request_id": "a50cb2e06f794053b56d72d8af6fd0bd",
+  "request_sha256": "c3bdab36faa0c26c95670da9d27127ca9b2de915cae7fc5445c0407823feb306",
+  "payload_sha256": "6c7ad7eab5bffb449862136910439fc422862f6cc2a8b59e899edd41548be398",
+  "intent": {
+    "protocol": "harnessd-lab-work-v1",
+    "requestId": "a50cb2e0-6f79-4053-b56d-72d8af6fd0bd",
+    "poolId": "default",
+    "principalId": "github:psvensson",
+    "issuedAtMs": 1792754217348,
+    "expiresAtMs": 1792761417348,
+    "work": {
+      "driver": "shell",
+      "source": null,
+      "hosts": {
+        "count": 1,
+        "prefer": [
+          "tv-dator"
+        ],
+        "requirements": [
+          "shell"
+        ]
+      },
+      "timeoutSeconds": 300,
+      "spec": {
+        "cwd": ".",
+        "argv": [
+          "python3",
+          "-c",
+          "import base64,gzip,hashlib,json,os,pathlib,subprocess\nassert os.environ['LAB_HOST']=='tv-dator','original artifact lives on tv-dator'\nroot=pathlib.Path('/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source')\nexpected='036dc0019a5c4711c1ec9d9f6c591426fcb1e4b2'\nassert subprocess.check_output(['git','-C',str(root),'rev-parse','HEAD'],text=True).strip()==expected,'original source identity changed'\nrelative='.tap/test-results/test/message-group/message-group-native-provisional-route.test.js.tap'\np=root/relative\nassert p.is_file() and not p.is_symlink(),'original TAP artifact is unavailable'\ndata=p.read_bytes(); packed=gzip.compress(data,mtime=0)\nprint(json.dumps({'schema':'rs-raft-original-tap-artifact/v1','original_job':'890bbfaa50ff4ff7867c8defc512040d','original_host':'tv-dator','original_source_sha':expected,'artifact':relative,'original_bytes':len(data),'original_sha256':hashlib.sha256(data).hexdigest(),'gzip_bytes':len(packed),'gzip_sha256':hashlib.sha256(packed).hexdigest(),'encoding':'gzip-base64','data':base64.b64encode(packed).decode()}))\n"
+        ]
+      }
+    }
+  },
+  "source_execution_by_generator": false
+}

@@ -1,0 +1,108 @@
+{
+  "issue": 1092,
+  "receipts": [
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1092#issuecomment-6363262678",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "890bbfaa50ff4ff7867c8defc512040d",
+        "request_sha256": "6cd4bbf4c0bfce4bec495380c09ae85f50abe5a0ac864614fbc3bb32faaf401a",
+        "status": "CLAIMED",
+        "recorded_at": "2026-10-23T10:54:12.196Z",
+        "result": {
+          "hosts": [
+            "tv-dator"
+          ],
+          "operation": "lab-work",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1092#issuecomment-6363288880",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "890bbfaa50ff4ff7867c8defc512040d",
+        "request_sha256": "6cd4bbf4c0bfce4bec495380c09ae85f50abe5a0ac864614fbc3bb32faaf401a",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T10:55:44.469Z",
+        "result": {
+          "hosts": [
+            "tv-dator"
+          ],
+          "operation": "lab-work",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1092#issuecomment-6363301898",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "890bbfaa50ff4ff7867c8defc512040d",
+        "request_sha256": "6cd4bbf4c0bfce4bec495380c09ae85f50abe5a0ac864614fbc3bb32faaf401a",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T10:56:33.526Z",
+        "result": {
+          "execution_scope_closed": true,
+          "exit_code": 1,
+          "finished_at": "2026-10-23T10:56:33.432Z",
+          "hosts": [
+            "tv-dator"
+          ],
+          "log_bytes": 8204,
+          "log_sha256": "9d72675ced4fdfa3d56095c199e0aa87f03f602fe49c40aaffd2d9ce3c213bd2",
+          "logical_request_id": "890bbfaa-50ff-4ff7-867c-8defc512040d",
+          "logs_are_worker_tails": true,
+          "operation": "lab-work",
+          "outcome": "FAIL",
+          "payload_sha256": "220373924b4a7d7b3745dfbf7015cefb9656503b7b8be55c996394fe1edbd955",
+          "reason": null,
+          "scope_closed": true,
+          "source_execution_started": true,
+          "source_sha": "036dc0019a5c4711c1ec9d9f6c591426fcb1e4b2",
+          "worker_receipt_count": 1,
+          "worker_receipts_sha256": "b1a1fc103015e7f39ef9ec3cf2a6fd938c9862ade07e9b252dde09004ca5baa2",
+          "workers": {
+            "tv-dator": {
+              "containers_closed": true,
+              "driver_result": {
+                "completed_test_files": null,
+                "counters": {
+                  "cancelled": 0,
+                  "fail": 2,
+                  "pass": 0,
+                  "skipped": 0,
+                  "tests": 2,
+                  "todo": 0
+                },
+                "exit_code": 1,
+                "selected_test_files": 2
+              },
+              "execution_scope_closed": true,
+              "exit_code": 1,
+              "last_thermals": {
+                "cpu": 56,
+                "missing": [],
+                "ssd": 33.85,
+                "ssd_aux": 51.85
+              },
+              "log_bytes": 230186,
+              "log_sha256": "5a594842a01fe52637e50046cdaf56ea60d347af15017402af417d4ce94010d8",
+              "log_truncated": false,
+              "output_bytes": 230186,
+              "output_sha256": "5a594842a01fe52637e50046cdaf56ea60d347af15017402af417d4ce94010d8",
+              "reason": null,
+              "source_execution_started": true,
+              "state": "COMPLETE",
+              "thermal_scope_closed": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}

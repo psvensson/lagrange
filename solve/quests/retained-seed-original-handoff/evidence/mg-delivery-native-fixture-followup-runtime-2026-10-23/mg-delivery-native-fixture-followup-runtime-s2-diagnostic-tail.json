@@ -1,0 +1,63 @@
+{
+  "provenance": "Exact retained suffix only; original TAP required for elided complete snapshot",
+  "line": 66,
+  "snapshotTail": {
+    "nativeQueued": 0,
+    "nativeHeld": 2,
+    "applicationsHeld": 0,
+    "applicationSettlements": 0,
+    "sourceLane": {
+      "tenureCurrent": true,
+      "inFlight": true,
+      "rerun": false,
+      "scan": {
+        "cursor": null,
+        "through": {
+          "logIndex": 6,
+          "ordinal": 0
+        },
+        "provisional": false
+      },
+      "pending": 0,
+      "commands": 0,
+      "retryArmed": false,
+      "flushArmed": false,
+      "lastDrive": {
+        "state": "no_subscribers",
+        "reason": "committed_entry",
+        "delivered": 0
+      },
+      "lastFlush": null
+    },
+    "topology": {
+      "state": "running",
+      "immediateTimers": 1,
+      "backgroundTimers": 0,
+      "backgroundEntries": 0,
+      "retrySleeps": 0,
+      "immediateEntries": [
+        {
+          "key": "mg-provisional-source|mg-provisional-target",
+          "sourceGroupId": "mg-provisional-source",
+          "targets": [
+            {
+              "groupId": "mg-provisional-target",
+              "coordinatorNodeId": "mg-provisional-route-node",
+              "address": "mg-provisional-route-node/message-group/mg-provisional-target-f1"
+            }
+          ],
+          "timerPresent": true,
+          "resolvers": 1,
+          "pendingEvents": [
+            {
+              "eventKey": "services|INSERT|mg-provisional-source-r1",
+              "tableName": "services",
+              "operation": "INSERT",
+              "serviceId": "mg-provisional-source-r1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

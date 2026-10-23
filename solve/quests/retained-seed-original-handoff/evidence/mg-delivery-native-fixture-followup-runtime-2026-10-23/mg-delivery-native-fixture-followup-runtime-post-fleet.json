@@ -1,0 +1,44 @@
+{
+  "issue": 1095,
+  "receipts": [
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1095#issuecomment-6363396961",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "7fe2ed00a01b4211992ee87e318ed6be",
+        "request_sha256": "e371343629dfbb5db2b7992854f28d3eb2e0a5f52db769e256d90c93663bbe90",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T11:02:10.191Z",
+        "result": {
+          "operation": "lab-fleet-observe",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "url": "https://github.com/psvensson/lagrange-lab/issues/1095#issuecomment-6363399983",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "7fe2ed00a01b4211992ee87e318ed6be",
+        "request_sha256": "e371343629dfbb5db2b7992854f28d3eb2e0a5f52db769e256d90c93663bbe90",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T11:02:11.992Z",
+        "result": {
+          "collector_runtime": "python",
+          "collector_runtime_sha256": "a2f33a6e006989270f4340528eb61f8f97366e00a5d1b602ac8672ea44fc56ae",
+          "collector_source_sha": "53e262450fada3b4e706898201a3c732811ae4d0",
+          "fleet_json": "[{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"a60faf43-3629-4ec0-8c83-cae6cf186de3\",\"clockBasis\":\"controller-probe-interval\",\"cores\":8,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16217216,\"probeCompletedAt\":1792753330861,\"probeDurationMs\":669.0899799577892,\"probeStartedAt\":1792753330192,\"probedAt\":1792753330192,\"thermal\":{\"cpu\":45.0,\"missing\":[],\"ssd\":18.85,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":311.5,\"workerProbedAt\":1792753330838},\"controller\":false,\"error\":null,\"name\":\"adam-laptop\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"d7288037-0a8a-4144-a3c4-80101d565062\",\"clockBasis\":\"controller-probe-interval\",\"cores\":4,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16315860,\"probeCompletedAt\":1792753331066,\"probeDurationMs\":872.5879519479349,\"probeStartedAt\":1792753330193,\"probedAt\":1792753330193,\"thermal\":{\"cpu\":36.0,\"missing\":[\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":292.5,\"workerProbedAt\":1792753330922},\"controller\":false,\"error\":null,\"name\":\"adams-gamla\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"docker\",\"oci\"],\"capability\":{\"bootId\":\"dd35bc97-4d4c-4672-b788-3afadfff26cf\",\"clockBasis\":\"controller-probe-interval\",\"cores\":12,\"machineLock\":{\"state\":\"free\"},\"memKiB\":7819920,\"probeCompletedAt\":1792753330793,\"probeDurationMs\":599.7619630070403,\"probeStartedAt\":1792753330194,\"probedAt\":1792753330194,\"thermal\":{\"cpu\":null,\"missing\":[\"cpu\",\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":false},\"workerClockDeltaMs\":353.5,\"workerProbedAt\":1792753330847},\"controller\":false,\"error\":null,\"name\":\"carinas-windows\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\",\"nvidia-gpu\"],\"capability\":{\"bootId\":\"18581133-d0d9-4dec-a3f8-266562235699\",\"clockBasis\":\"controller-probe-interval\",\"cores\":8,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16282476,\"probeCompletedAt\":1792753330560,\"probeDurationMs\":364.9954389547929,\"probeStartedAt\":1792753330195,\"probedAt\":1792753330195,\"thermal\":{\"cpu\":48.0,\"missing\":[\"ssd\"],\"ssd\":null,\"ssd_aux\":null},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":164.5,\"workerProbedAt\":1792753330542},\"controller\":false,\"error\":null,\"name\":\"lenovo-laptop\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\",\"nvidia-gpu\"],\"capability\":{\"bootId\":\"ffacc5f5-28f5-48a0-b6ef-25eec2ef1328\",\"clockBasis\":\"controller-probe-interval\",\"cores\":20,\"machineLock\":{\"state\":\"free\"},\"memKiB\":32664788,\"probeCompletedAt\":1792753330249,\"probeDurationMs\":52.28732095565647,\"probeStartedAt\":1792753330197,\"probedAt\":1792753330197,\"thermal\":{\"cpu\":49.0,\"missing\":[],\"ssd\":34.85,\"ssd_aux\":67.85},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":19.0,\"workerProbedAt\":1792753330242},\"controller\":true,\"error\":null,\"name\":\"local-workstation\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}},{\"capabilities\":[\"command\",\"shell\",\"node\",\"tests\",\"docker\",\"oci\",\"gpu\"],\"capability\":{\"bootId\":\"9c9e76b2-708e-4aa0-b920-34d36843d261\",\"clockBasis\":\"controller-probe-interval\",\"cores\":12,\"machineLock\":{\"state\":\"free\"},\"memKiB\":16127896,\"probeCompletedAt\":1792753330571,\"probeDurationMs\":373.18402098026127,\"probeStartedAt\":1792753330198,\"probedAt\":1792753330198,\"thermal\":{\"cpu\":60.0,\"missing\":[],\"ssd\":28.85,\"ssd_aux\":45.85},\"tools\":{\"docker\":true,\"git\":true,\"node\":true},\"workerClockDeltaMs\":161.5,\"workerProbedAt\":1792753330546},\"controller\":false,\"error\":null,\"name\":\"tv-dator\",\"readiness\":{\"gaps\":[],\"missing\":[],\"ready\":null}}]",
+          "fleet_sha256": "0cabec5ea0a82055db176e271961d551356f64d7328cc4cf41f9bbef826b9f12",
+          "observation_complete": true,
+          "observed_completed_at": "2026-10-23T11:02:11.067Z",
+          "observed_started_at": "2026-10-23T11:02:10.192Z",
+          "operation": "lab-fleet-observe",
+          "protocol": "lagrange-lab-fleet-observation-v2",
+          "source_execution_started": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 41s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/message-group/message-group-native-custody-handoff.test.js test/message-group/message-group-native-provisional-route.test.js
+
+# test-files planned=2
+classified lane ordinary: 2 file(s), jobs=4
+thermal: ok cpu 69C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+not ok test/message-group/message-group-native-provisional-route.test.js (1 assertions, 3049ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: SERVICES scan releases provisional relay to the real native leader
+not ok 1 - SERVICES scan releases provisional relay to the real native leader
+  ---
+  duration_ms: 1935.0322
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source/test/message-group/message-group-native-provisional-route.test.js:290:1'
+  failureType: 'testCodeFailure'
+  error: 'S2_PROVISIONAL_A: actual registered handler returned; []'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    requireReturn (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source/test/message-group/message-group-native-provisional-route.test.js:246:10)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/890bbfaa-50ff-4ff7-867c-8defc512040d/work/source/test/message-group/message-group-native-provisional-route.test.js:304:23)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# {"stage":"setup-services-actual-cut-over","release":{"outcome":"cut_over","releaseId":"17d14cdd6ea49432c1dbbea9f72ae1a52f385bcb29b2887b2e59bc3d342b5ddb","partitionId":"services-provisional-route","phase":"release","release":{"partitionId":"services-provisional-route","protocolVersion":1,"targetBuildDigest":"29fd887fc37af0b35fcb5fc044b47bfc89bb3b61439bf65634e9cd04694602a0","configurationKey":"[[\\"1103418858842517533\\",\\"1798031323852027177\\",\\"2265390020730485423\\"],[],[],[],false]","membershipGenerationIndex":3,"releaseId":"17d14cdd6ea49432c1dbbea9f72ae1a52f385bcb29b2887b2e59bc3d342b5ddb"},"census":[{"outcome":"observed","partitionId":"services-provisional-route","generation":{"nodeId":"mg-provisional-route-node","ownerIncarnation":1,"replicaId":"services-provisional-route-r1","lifecycleIncarnation":"003e5b17-48ed-4f10-a37b-3e1f77fe0e9b","runtimeGeneration":1,"connectionGeneration":1,"admissionGeneration":1},"buildDigest":"29fd887fc37af0b35fcb5fc044b47bfc89bb3b61439bf65634e9cd04694602a0","membership":{"kind":"committed","voters":["1103418858842517533","1798031323852027177","2265390020730485423"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":4,"configurationKey":"[[\\"1103418858842517533\\",\\"1798031323852027177\\",\\"2265390020730485423\\"],[],[],[],false]","membershipGenerationIndex":3,"commitIndex":4,"term":1,"leaderId":"services-provisional-route-r1","gateOpen":true,"identities":{"1103418858842517533":"services-provisional-route-r3","1798031323852027177":"services-provisional-route-r2","2265390020730485423":"services-provisional-route-r1"}},"leaderReplicaId":"services-provisional-route-r1","leaderAddress":"mg-provisional-route-node/partition/services-provisional-route-r1","role":"leader","confChangePending":false,"peers":[{"peerId":"1798031323852027177","replicaIdentity":"services-provisional-route-r2","address":"mg-provisional-route-node/partition/services-provisional-route-r2","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}},{"peerId":"1103418858842517533","replicaIdentity":"services-provisional-route-r3","address":"mg-provisional-route-node/partition/services-provisional-route-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}}],"origin":{"originIndex":4,"originTerm":1},"connection":{"generation":1,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":4,"commitIndex":4,"lastIndex":4},"topology":null,"queryCensus":null},{"outcome":"observed","partitionId":"services-provisional-route","generation":{"nodeId":"mg-provisional-route-node","ownerIncarnation":1,"replicaId":"services-provisional-route-r2","lifecycleIncarnation":"5fbcf9e4-2488-41bd-b5ff-30f6bbc9ba7d","runtimeGeneration":1,"connectionGeneration":2,"admissionGeneration":3},"buildDigest":"29fd887fc37af0b35fcb5fc044b47bfc89bb3b61439bf65634e9cd04694602a0","membership":{"kind":"committed","voters":["1103418858842517533","1798031323852027177","2265390020730485423"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":4,"configurationKey":"[[\\"1103418858842517533\\",\\"1798031323852027177\\",\\"2265390020730485423\\"],[],[],[],false]","membershipGenerationIndex":3,"commitIndex":4,"term":1,"leaderId":"services-provisional-route-r1","gateOpen":true,"identities":{"1103418858842517533":"services-provisional-route-r3","1798031323852027177":"services-provisional-route-r2","2265390020730485423":"services-provisional-route-r1"}},"leaderReplicaId":"services-provisional-route-r1","leaderAddress":"mg-provisional-route-node/partition/services-provisional-route-r1","role":"follower","confChangePending":false,"peers":[{"peerId":"2265390020730485423","replicaIdentity":"services-provisional-route-r1","address":"mg-provisional-route-node/partition/services-provisional-route-r1","addressStatus":"resolved","learner":false,"delivery":{"outcome":"delivered","consecutiveFailures":0}},{"peerId":"1103418858842517533","replicaIdentity":"services-provisional-route-r3","address":"mg-provisional-route-node/partition/services-provisional-route-r3","addressStatus":"resolved","learner":false,"delivery":{"outcome":"none-observed"}}],"origin":{"originIndex":4,"originTerm":1},"connection":{"generation":2,"servedLegacy":false},"paused":true,"rowid":{"kind":"rowid","maximum":null,"belowCeiling":true},"work":{"sqliteTransactionOpen":false,"participantStaging":false,"participantPrepared":0,"proposals":0,"pendingOutcomes":0,"appliedIndex":4,"commitIndex":4,"lastIndex":4},"topology":null,"queryCensus":null},{"outcome":"observed","partitionId":"services-provisional-route","generation":{"nodeId":"mg-provisional-route-node","ownerIncarnation":1,"replicaId":"services-provisional-route-r3","lifecycleIncarnation":"7bc0469f-b4be-4934-82dd-fce31307a44a","runtimeGeneration":1,"connectionGeneration":3,"admissionGeneration":4},"buildDigest":"29fd887fc37af0b35fcb5fc044b47bfc89bb3b61439bf65634e9cd04694602a0","membership":{"kind":"committed","voters":["1103418858842517533","1798031323852027177","2265390020730485423"],"votersOutgoing":[],"learners":[],"learnersNext":[],"appliedIndex":4,"configurationKey":"[[\\"1103418858842517533\\",\\"1798031323852027177\\",\\"2265390020730485423\\"],[],[],[],fal
