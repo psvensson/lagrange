@@ -5,7 +5,8 @@ import Database from 'better-sqlite3';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
-import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
+import {decodeCommittedProposal, encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
+import {applyCommittedEntryTransaction} from '../../src/raft/raft-rs-application-transaction-owner.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
 import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
@@ -106,33 +107,42 @@ function fixture(t, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
   store.putBootstrapAppliedState(member.groupId, confState,
     {bootstrapIndex: '0', admissionIndex: '0'});
   store.putHardState(member.groupId, {term: TERM, vote: member.peerId, commit: '0'});
-  if (tableName === null) return {db, store, declaration, member, confState};
-  const service = createApplicationOwners(db, declaration, member);
-  return {db, store, declaration, member, confState, service};
+  const service = tableName === null ? undefined : createApplicationOwners(db, declaration, member);
+  return {db, store, declaration, member, confState, service, afterCommitBatches: []};
+}
+
+function applyRetainedEntry(f, entry) {
+  const result = applyCommittedEntryTransaction({store: f.store, groupId: f.member.groupId,
+    entry, confState: f.confState,
+    applyCommittedEntry: f.service ? (bytes, {index, term, effects}) => {
+      const afterCommit = [];
+      const applied = f.service.applyCommittedEntry({command: decodeCommittedProposal(bytes),
+        index: Number(index), term: Number(term),
+        effects: {afterCommit, afterRollback: effects.afterRollback}});
+      assert.ok([PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+        PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED].includes(applied),
+      `fixture must engage successful real application: ${applied}`);
+      // This storage fixture holds delivery/notification work for inspection.
+      // The real transaction owner admits that work only after durable apply;
+      // rollback must never publish a deferred batch. Native tests run the full host.
+      effects.afterCommit.push(() =>
+        f.afterCommitBatches.push({index, term, effects: afterCommit}));
+      return applied;
+    } : undefined});
+  assert.equal(result.escapedEffectFailures, 0, 'fixture effect capture must settle after commit');
 }
 
 function retain(f, commands, {applied = commands.length, commit = commands.length} = {}) {
-  const {store, member, db, service, confState} = f;
-  store.appendEntries(member.groupId, commands.map((command, ordinal) => ({
+  const {store, member} = f;
+  const entries = commands.map((command, ordinal) => ({
     index: String(ordinal + 1), term: TERM, entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
     ...(command === undefined ? {} :
       {data: Buffer.from(encodeProposal(command)).toString('base64')}),
-  })));
+  }));
+  store.appendEntries(member.groupId, entries);
   store.putHardState(member.groupId,
     {term: TERM, vote: member.peerId, commit: String(commit)});
-  db.transaction(() => {
-    for (let ordinal = 0; ordinal < applied; ordinal++) {
-      const command = commands[ordinal];
-      if (service && command !== undefined) {
-        const result = service.applyCommittedEntry({command, index: ordinal + 1,
-          term: Number(TERM), effects: {afterCommit: [], afterRollback: []}});
-        assert.ok([PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
-          PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED].includes(result),
-        `fixture must engage successful real application: ${result}`);
-      }
-    }
-    store.putAppliedState(member.groupId, String(applied), confState);
-  })();
+  for (let ordinal = 0; ordinal < applied; ordinal++) applyRetainedEntry(f, entries[ordinal]);
   return f;
 }
 

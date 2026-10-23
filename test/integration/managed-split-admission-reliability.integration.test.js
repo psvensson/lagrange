@@ -2,6 +2,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {SeedPartitionsPhase} from
   '../../src/bootstrap/phases/seed-partitions-phase.js';
+import {createBootstrapServiceSeedDelegateMethods} from
+  '../../src/bootstrap/bootstrap-service-seed-delegates.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
@@ -439,11 +441,23 @@ test('managed split seed fixture refuses cleanup-owned and conflicting ' +
   ];
   for (const refusalCase of refusalCases) {
     let storageOpened = false;
+    let originalAdmissionChecks = 0;
+    const replicaOptions = Object.freeze({replicaId, partitionId});
+    // Substitute only the prior admission decision through its real adapter.
+    // These identity-only options grant no original opening capability; this
+    // component negative must still stop at the durable-storage refusal.
+    const {admitOriginalSeedReplica} = createBootstrapServiceSeedDelegateMethods()
+      ._buildPhaseExecutionDelegates.call({admitOriginalSeedReplica(options) {
+        originalAdmissionChecks += 1;
+        t.equal(options, replicaOptions, 'the adapter preserves the exact requested options');
+        return options;
+      }});
     const phase = new SeedPartitionsPhase({delegates: {
+      admitOriginalSeedReplica,
       getLogger: () => ({debug() {}}),
       getNodeId: () => FIXTURE_NODE_ID,
       getStartupServicesAdmission: () => refusalCase.admission,
-      resolveBootstrapReplicaOptions: () => ({replicaId, partitionId}),
+      resolveBootstrapReplicaOptions: () => replicaOptions,
       getPartitionServices: () => {
         storageOpened = true;
         return new Map();
@@ -456,6 +470,8 @@ test('managed split seed fixture refuses cleanup-owned and conflicting ' +
     );
     t.equal(rejection.code, refusalCase.code,
       `${refusalCase.label} preserves its typed refusal`);
+    t.equal(originalAdmissionChecks, 1,
+      `${refusalCase.label} consults the prior owner before durable-storage admission`);
     t.equal(storageOpened, false,
       `${refusalCase.label} refuses before partition storage access`);
   }

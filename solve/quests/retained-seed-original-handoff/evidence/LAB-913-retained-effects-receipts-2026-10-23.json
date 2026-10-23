@@ -1,0 +1,134 @@
+{
+  "issue_url": "https://github.com/psvensson/lagrange-lab/issues/913",
+  "expected": {
+    "request_id": "3f3fd0be17bf4128afdee9ed4b3c319f",
+    "request_sha256": "a92dd977d3e8253793ed93edd7eea7e4d89fb48d9ea02f8de9cf9f49937c79b7",
+    "payload_sha256": "45193dbd9807ad7accd8d3e1972e65739ff13208b8d598cd32aba3d9dfa280f9",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "source_sha": "68633168ef17759fec954e6ef66b4ccb0d671bc7",
+    "claimed_host": "local-workstation"
+  },
+  "receipts": [
+    {
+      "comment_id": 6359204736,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/913#issuecomment-6359204736",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "3f3fd0be17bf4128afdee9ed4b3c319f",
+        "request_sha256": "a92dd977d3e8253793ed93edd7eea7e4d89fb48d9ea02f8de9cf9f49937c79b7",
+        "status": "CLAIMED",
+        "recorded_at": "2026-10-23T06:47:31.479Z",
+        "result": {
+          "hosts": [
+            "local-workstation"
+          ],
+          "operation": "lab-work",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "comment_id": 6359214729,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/913#issuecomment-6359214729",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "3f3fd0be17bf4128afdee9ed4b3c319f",
+        "request_sha256": "a92dd977d3e8253793ed93edd7eea7e4d89fb48d9ea02f8de9cf9f49937c79b7",
+        "status": "RUNNING",
+        "recorded_at": "2026-10-23T06:48:12.717Z",
+        "result": {
+          "hosts": [
+            "local-workstation"
+          ],
+          "operation": "lab-work",
+          "source_execution_started": false
+        }
+      }
+    },
+    {
+      "comment_id": 6359224376,
+      "url": "https://github.com/psvensson/lagrange-lab/issues/913#issuecomment-6359224376",
+      "receipt": {
+        "schema": "lagrange-lab-result/v1",
+        "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+        "request_id": "3f3fd0be17bf4128afdee9ed4b3c319f",
+        "request_sha256": "a92dd977d3e8253793ed93edd7eea7e4d89fb48d9ea02f8de9cf9f49937c79b7",
+        "status": "COMPLETE",
+        "recorded_at": "2026-10-23T06:48:52.258Z",
+        "result": {
+          "execution_scope_closed": true,
+          "exit_code": 0,
+          "finished_at": "2026-10-23T06:48:52.060Z",
+          "hosts": [
+            "local-workstation"
+          ],
+          "log_bytes": 2973,
+          "log_sha256": "5706b4303e7992f097749edca954ab4c982edd95e8513c30e7123540552851c1",
+          "logical_request_id": "3f3fd0be-17bf-4128-afde-e9ed4b3c319f",
+          "logs_are_worker_tails": true,
+          "operation": "lab-work",
+          "outcome": "PASS",
+          "payload_sha256": "45193dbd9807ad7accd8d3e1972e65739ff13208b8d598cd32aba3d9dfa280f9",
+          "reason": null,
+          "scope_closed": true,
+          "source_execution_started": true,
+          "source_sha": "68633168ef17759fec954e6ef66b4ccb0d671bc7",
+          "worker_receipt_count": 1,
+          "worker_receipts_sha256": "877018dd267156b2d9764f155527a8acc73e0591f2611e7ec8530d4c609d61bb",
+          "workers": {
+            "local-workstation": {
+              "containers_closed": true,
+              "driver_result": {
+                "counters": {},
+                "exit_code": 0
+              },
+              "execution_scope_closed": true,
+              "exit_code": 0,
+              "last_thermals": {
+                "cpu": 71,
+                "missing": [],
+                "ssd": 38.85,
+                "ssd_aux": 67.85
+              },
+              "log_bytes": 2952,
+              "log_sha256": "da3abe1234685f81059a45a4c05515c0e3c93afad31a0a6d978ae9a1f54de47a",
+              "log_truncated": false,
+              "output_bytes": 2952,
+              "output_sha256": "da3abe1234685f81059a45a4c05515c0e3c93afad31a0a6d978ae9a1f54de47a",
+              "reason": null,
+              "source_execution_started": true,
+              "state": "COMPLETE",
+              "thermal_scope_closed": true
+            }
+          }
+        }
+      }
+    }
+  ],
+  "assessment": {
+    "terminal_comment_url": "https://github.com/psvensson/lagrange-lab/issues/913#issuecomment-6359224376",
+    "receipt_identity_matches": true,
+    "source_matches": true,
+    "payload_matches": true,
+    "host_matches": true,
+    "status": "COMPLETE",
+    "outcome": "PASS",
+    "exit_code": 0,
+    "source_execution_started": true,
+    "scope_closed": true,
+    "execution_scope_closed": true,
+    "worker_state": "COMPLETE",
+    "worker_exit_code": 0,
+    "worker_execution_scope_closed": true,
+    "worker_containers_closed": true,
+    "worker_thermal_scope_closed": true,
+    "reason": null,
+    "worker_reason": null,
+    "worker_log_truncated": false,
+    "log_content_inspected": false,
+    "limits": "Receipt confirms exact-source static PASS and cleanup. Per-command stdout/log content is not included in filtered JSON receipts or inspected here; no runtime, startup, Quest or merge acceptance."
+  }
+}
+

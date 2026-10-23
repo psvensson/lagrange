@@ -13,6 +13,7 @@ import {
   CLUSTER_ID_CONFIG_KEY,
 } from '../../src/bootstrap/cluster-identity-constants.js';
 import {COLUMN} from '../../src/constants/index.js';
+import {createSeedPhaseContinuationFixture} from './seed-phase-continuation-fixture.js';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -41,11 +42,13 @@ function createConfigLeaderPartition(existingRows = []) {
 }
 
 function createPhase({writer, configPartition}) {
+  const continuation = createSeedPhaseContinuationFixture();
   const partitionServices = new Map(
     configPartition ? [['config-p1-r1', configPartition]] : [],
   );
-  return new SeedRegistrationPhase({
+  const phase = new SeedRegistrationPhase({
     delegates: {
+      ...continuation.delegates,
       getLogger: () => ({
         debug() {},
         info() {},
@@ -57,17 +60,20 @@ function createPhase({writer, configPartition}) {
       getPartitionServices: () => partitionServices,
     },
   });
+  return {phase, continuation};
 }
 
 test('persistClusterIdIfMissing mints a randomUUID CONFIG-row singleton at ' +
   'first bootstrap', async (t) => {
   const writer = createWriterRecorder();
-  const phase = createPhase({
+  const {phase, continuation} = createPhase({
     writer,
     configPartition: createConfigLeaderPartition(),
   });
 
   await phase.persistClusterIdIfMissing();
+  t.equal(continuation.checks, 1,
+    'the component consults the substituted continuation owner before writer access');
 
   const mint = writer.calls.find(
     (call) => call.row[COLUMN.CONFIG_KEY] === CLUSTER_ID_CONFIG_KEY,
@@ -93,7 +99,7 @@ test('persistClusterIdIfMissing mints a randomUUID CONFIG-row singleton at ' +
 test('persistClusterIdIfMissing never re-mints over an existing identity',
   async (t) => {
     const writer = createWriterRecorder();
-    const phase = createPhase({
+    const {phase, continuation} = createPhase({
       writer,
       configPartition: createConfigLeaderPartition([
         {[COLUMN.CONFIG_KEY]: CLUSTER_ID_CONFIG_KEY},
@@ -101,6 +107,8 @@ test('persistClusterIdIfMissing never re-mints over an existing identity',
     });
 
     await phase.persistClusterIdIfMissing();
+    t.equal(continuation.checks, 0,
+      'an existing identity returns before the guarded writer path');
 
     t.equal(
       writer.calls.filter(

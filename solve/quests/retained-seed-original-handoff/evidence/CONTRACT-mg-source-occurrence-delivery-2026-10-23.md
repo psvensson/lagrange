@@ -681,3 +681,483 @@ retained ranges, final cohort revalidation and honest unavailable historical
 provenance. Protected activation, R1 durable ACTIVE/TRANSFERRED custody, R2
 callback/sink fencing, two-start public acceptance and the remaining release/
 publication gates remain separate and unsatisfied.
+
+## Residual F2 correction: bound concurrent custody, preserve the accepted domain
+
+Status: **PROPOSED FOR INDEPENDENT F2 DELTA REVIEW**. This append answers the
+review at SHA256
+`76f9e6b1a79af7a8f0727b8b183fcc7c55a21d8f15a73110b24d73fd4af6069e`.
+Its source observations were rechecked at
+`68633168ef17759fec954e6ef66b4ccb0d671bc7`. It supersedes F2's proposed 1 MiB
+wave/recipient ceiling, 64-event input ceiling, 64-total-target ceiling and
+fixed-byte memory claim. F1's response deadlines and cleanup, F3's native
+forwarding transition, F4's canonical result rule and all original identity/
+native cuts remain in force. No code, runtime result or approval is supplied.
+
+### Applicable source domain and the separate transport limit
+
+There is no established ordinary-SQL admission bound corresponding to those
+three borrowed capacities:
+
+- `partition-cdc-obligation.js:123-135` serializes the actual ordinary statement
+  event; `partition-cdc-obligation-constants.js:88-103` stores it in an unrestricted
+  `event_json TEXT` column. Neither applies the participant session's 1 MiB
+  operation-replay bound. The proposal codec at
+  `raft/raft-rs-proposal-codec.js:34-50` likewise supplies no such payload cap.
+- `topology/cdc-group-propagation-routing.js:96-139,165-235` constructs targets
+  from the applicable topology population, without a total-64 limit. Router
+  pending capacity bounds queued calls, not the required target population.
+- The immediate 64-event setting is a batching trigger, not proof that an
+  already accepted durable vector can be rejected at delivery. This correction
+  adds no event-count cap and never drops or splits off a vector member and
+  then reports the original vector complete.
+
+The existing source and wire domains are themselves not proven equal. Ordinary
+router server/dial paths omit `maxPayload`
+(`transport/message-router-server-lifecycle.js:104-110`,
+`transport/message-router-connection-lifecycle-methods.js:314`), while the
+installed `ws` implementation defaults to 104857600 received bytes per complete
+message (`node_modules/ws/lib/websocket-server.js:74` and
+`node_modules/ws/lib/websocket.js:675`). Ordinary sends serialize a complete
+SERVICE_MESSAGE (`transport/message-router-delivery-behaviors.js:689`). That is
+a bound on the full encoded wire message, not a 100 MiB row-data allowance:
+envelopes and the native peer representation also occupy bytes; the native
+binding base64-encodes entry data (`vendor/raft-rs-wasm/src/lib.rs:1179-1184`).
+The separate bulk-transfer channel does not carry ordinary CDC requests.
+
+Record this as the distinct **accepted-source / wire-domain owner finding** for
+the partition admission and transport owners. No source-bound end-to-end payload
+domain has been established merely by SQLite's compiled maximum, V8's maximum
+string size, or a successful source commit. This package must retain an event
+whose actual transport/native path cannot carry it and report the actual
+unavailable/unknown outcome; it cannot call immutable oversize temporary queue
+pressure, grant success, truncate it or change its identity. Universal delivery
+of every SQLite-sized accepted row is explicitly unproved. Resolving that
+pre-existing mismatch requires its own owner decision and proof; this correction
+does not change transport limits, producer admission, timers or wire protocols.
+
+### Corrected concurrent-custody policy
+
+Keep one active durable topology wave, one attached caller, zero pending waves,
+zero shared callers, and zero durable immediate/background retry entries per
+topology service. Reserve that slot synchronously before copying an input,
+capturing targets, awaiting selection or proposing to the source MG. Refuse a
+second caller as temporary BACKPRESSURE without retaining it. Its release
+condition is the first wave's actual local cleanup, not a change to immutable
+payload bytes or deletion of required targets.
+
+An admitted wave borrows one owner-captured immutable event/vector; each target
+envelope references that same local value. It captures the complete required
+target set, including the existing safe-fallback obligations, once for that
+operation. Neither the vector size nor total target count is compared against
+1 MiB or 64. A malformed vector remains invalid as a whole under the envelope
+owner's existing data/identity contract. There is no smaller original-only
+delivery domain selected by `sourceScope` or by a seed fixture fitting a cap.
+
+Dispatch targets through a finite window no larger than the actual router's
+`outboundQueueMaxConcurrent` (default 32), subject to its existing per-node
+admission. Create each encoded request only after a window slot is available;
+never pre-encode one payload for every target. Preserve each required group ID
+while resolving a current address. A safe route may repair an address; it cannot
+erase an unresolved captured group. No target is marked complete by being
+outside the current dispatch window. F1 still bounds each admitted invocation
+and all foreground retry/backoff within it.
+
+The correct memory statement is parameterized by accepted work: one captured
+input and its representation costs, at most the dispatch-window count of active
+encoded request/reply working sets, and metadata for the actual captured target
+population. It is **not a uniform fixed-byte bound independent of input size or
+fanout**. Account the source string, decoded immutable value, canonical digest
+working set, native codec copy and transport-owned copies where their actual
+owners retain them. Reuse the immutable capture and semantic binding within a
+wave instead of serializing it for every comparison. Receipt/diagnostic state
+stores validated bindings and finite typed failure information, not arbitrary
+reply payloads or repeated event bodies. Actual target/identity string lengths
+remain part of the charge, not an assumed fixed-size metadata unit.
+
+The recipient's existing ProposalQueue bounds the number of admitted waiters;
+the previously proposed 1 MiB recipient input ceiling is withdrawn. Queue
+reservation precedes immutable capture. Each admitted waiter's actual vector/
+codec working set remains charged until its real finalizers close it. No new
+uniform recipient-memory claim follows from a count-only queue. Allocation or
+encoding failure is retaining failure, never a successful partial vector.
+Source/native accepted work and native history are not freed by retiring the
+response waiter.
+
+The source lane must also stop preloading up to 256 complete `event_json` values
+across delivery awaits. `readOwedCdcObligations` currently uses `.all` with that
+page size (`partition-cdc-obligation-ledger.js:124-139`). Reuse its positional
+read with one payload at a time, releasing the SQLite read before awaiting a
+subscriber. Keep the existing 256-row scheduling quantum, finite captured tail,
+log/ordinal cursor, provisional scan and retry cadence. A drive can visit that
+many rows without retaining that many payloads simultaneously. Do not keep a
+SQLite iterator/transaction open across network waits or create a new source
+payload cache. A lost local response can reread the unchanged durable event.
+
+All F1/F2 cleanup rules still apply: an expired caller does not free retained
+raw-send callbacks, queued closures or native waiters. The topology slot is
+released only after its locally owned children settle or close; exact entry
+identity fences old finalizers. There is no background topology redrive after
+release and no detached payload tail whose custody is unaccounted.
+
+### Large fanout progresses across bounded source invocations
+
+Windowing alone is insufficient if every 5s attempt starts again at target one.
+The source owner therefore retains **one current-obligation progress cell in
+its existing tenure-bound lane**, not a topology retry map or a durable receipt
+store. This is a proposed addition to `createCdcObligationLane`, whose current
+single-flight and tenure reset are at
+`partition-cdc-obligation-delivery.js:83-107,119-155,590-613`. The sole persistent
+authority remains `_cdc_obligations` and the existing committed CDC_DELIVERED.
+
+The cell holds the existing exact event/vector binding, source lane tenure,
+responsible subscriber identities, selected source group, captured required
+groups, validated native receipts and a fair cursor over unfinished work. It
+does not hold event JSON, caller resolvers, promises, an independent timer or a
+new wire identity. Its count is at most one per existing live source lane;
+metadata size follows that obligation's actual subscriber/target population.
+Completed subscriber answers may be retained under the same exact binding, so
+the shared response budget does not force a retry to repeat a completed earlier
+subscriber before reaching later ones. A changed responsible subscriber set or
+ended tenure invalidates that transient progress and replays from the ledger.
+
+Carry private progress operations alongside the F1 invocation context through
+the actual subscriber factory and seed/join bridges. They are local operations
+owned by the source lane; they are not fields in an event, digest, native command
+or remote request. All production durable-ledger paths in the original census
+must carry them. An external caller cannot create ACK eligibility by supplying
+an event property or claiming an original source scope. Direct MG calls still
+return their complete canonical vector outcome and own no source ACK.
+
+The transition is exact:
+
+1. A fresh source invocation verifies the current owed row and binding, obtains
+   its unchanged F1 budget, and acquires the topology wave. Capture the source
+   group/required target identities before the first native effect. On resume,
+   reuse that captured obligation set; a new routing projection cannot shrink
+   it. Actual topology membership changes remain with their existing owner.
+2. Dispatch unfinished targets fairly within the window and remaining budget.
+   A failed/provisional target does not monopolize the first slot of every
+   attempt while later required targets remain unvisited. Address changes keep
+   the group binding. Each delivered target result is validated in full by F4
+   before extracting its exact native receipt into the source-owned cell.
+3. Record progress only while that invocation's original deadline, source
+   tenure, subscriber and operation identity are current. Late valid receipts
+   remain unknown for the expired attempt and do not update the cell. Partial
+   committed receipts observed while it was live may survive its later expiry;
+   they are actual historical native facts, not an extension of its caller.
+   Unknown, merely acknowledged and provisional results never complete a target.
+4. At budget exhaustion, settle that caller unknown, cancel/close locally owned
+   work, then release the topology wave. Retain only the cell's binding/receipt/
+   scheduling metadata. The existing source retry timer later starts a **new**
+   invocation for the same debt. It rereads the full event once and resumes
+   unfinished work. Neither the old deadline nor a remote grant is renewed.
+5. A live invocation may return canonical committed success only after its
+   selected source MG, every captured required target and every responsible
+   subscriber have exact validated committed evidence. It rechecks lane,
+   subscriber set and deadline before ACK eligibility. A partial window never
+   answers full-vector success. Only then does the event enter the unchanged
+   pending ACK batch; the progress cell can be released because that existing
+   owner now holds its ACK custody. Only actual CDC_DELIVERED apply changes the
+   ledger's delivered flag.
+
+F1 remains a bound on each response/dispatch invocation, not on the persistent
+debt's total delivery lifetime. For a stable finite target set whose individual
+complete deliveries fit a live invocation after temporary pressure ends,
+validated progress prevents repeated prefixes from permanently consuming every
+budget. This conditional progress claim is source-bound; it does not assume
+that an arbitrarily large single native/transport operation completes in 5s.
+Continuous topology churn, unavailable recipients, or the wire-domain mismatch
+above do not satisfy its premise and are not reported delivered.
+
+The cell consumes **no topology capacity between invocations**. It must not
+prevent the existing canonical provisional outcome from advancing the scan to
+later formation metadata. On such an outcome discard the current cell's
+optimization and preserve the existing provisional rescan; its debt stays owed.
+Unvisited/unknown targets cannot be reclassified provisional to make that scan
+advance. Provisional hydration and the later native route remain F3's distinct
+steps. The actual original-seed witness must show that later required metadata
+still reaches those steps while this progress mechanism is enabled.
+
+On shutdown, replacement or tenure loss, drop the transient progress only after
+fencing its private callbacks; keep any unclosed active child custody with its
+existing owner. A new tenure/restart reconstructs owed work from the source
+ledger, recaptures the existing topology/subscriber obligations and may produce
+duplicate actual recipient native occurrences. This supplies no historical
+target-membership ledger and no proof about target requirements across a lost
+tenure; those remain the original contract's explicit exclusions. An old cell
+cannot clear a successor's wave or turn a new binding into completion.
+
+### Finite proof additions and dependency order
+
+The independent implementation/native witnesses must add the following paired
+cases to the existing F1/F3/F4 and identity tests:
+
+- Commit ordinary SQL that produces actual owed CDC payloads below and above
+  the withdrawn 1 MiB limit, both within the exercised real wire/native domain.
+  Deliver the unchanged events through the actual source/subscriber/router/MG
+  owners and prove source ACK apply. Restoring the rejected hard-cap predicate
+  must strand the larger positive and fail the same acceptance assertion.
+- Capture more than 64 actual required target identities and more than one
+  dispatch window. Hold temporary pressure, then release it without altering
+  the event or deleting targets. Measure active copies/dispatches and complete
+  every required target. Include a finite fanout deliberately taking multiple
+  source invocation budgets, so starting every retry from the first target fails
+  while the source-owned progress reaches the final ACK.
+- Expire a partially completed wave with timer callbacks delayed. Only receipts
+  observed before actual expiry may survive; late native effects remain unknown.
+  Verify no caller/payload/transport closure is retained in the between-attempt
+  cell and no topology background entries/timers are created.
+- Preserve a failed target across safe fallback and a route projection that
+  omits it. Exercise responsible-subscriber change, tenure change, restart and
+  service replacement; drop transient progress and replay exact ledger debt.
+  Whole-vector receipt validation and source ACK must remain mandatory.
+- Keep the addressed follower provisional witness engaged while later formation
+  metadata is owed. Verify provisional scan/retry remains reachable, then obtain
+  actual native receipts after F3's owned leader observation changes. A progress
+  cell holding topology capacity between attempts is a negative control.
+- Bound source hydration to one full event at a time while the drive visits its
+  unchanged finite page, and account real codec/transport copies while slow
+  sends are owned. Exercise an over-64 valid input vector at the canonical MG
+  boundary; no member may disappear under the old flush threshold.
+
+Review this F2 correction with the accepted F1/F3/F4 wording before production
+edits. Implement source context/progress and one-at-a-time hydration together
+with topology window/copy accounting, then compose the already required native
+completion and strict result gates. Independent witness construction and source
+review can proceed in parallel under distinct file ownership. Exact-candidate
+locked-lab proof follows source approval; no proof here resolves the distinct
+wire-domain finding, historical cross-member classification, R1/R2 activation/
+transfer exclusions, composed two-start acceptance, Quest closure or release.
+
+## F2-P correction: aggregate provisional coverage solely to release the scan
+
+Status: **PROPOSED FOR INDEPENDENT F2-P DELTA REVIEW**. This append answers the
+complete residual finding at review SHA256
+`dc4d7ce541fd479e37430969ed5cec2129f5f88eb133b99f369e5093ecd31061`.
+It supplements the source-owned progress cell above; the previous 931 lines,
+SHA256 `8da8cd11afe98640e422dca314cb7d204088dbae488222fd2557db446f73426f`,
+are preserved. The accepted hard-cap withdrawal, representation accounting,
+dispatch windows, F1/F3/F4 and native/ACK cuts remain binding. This is a proposed
+design correction, with no production/test edit or runtime proof.
+
+### One cell, two different predicates
+
+The existing source lane's one current-obligation cell also retains **typed
+provisional coverage**. This is evidence that the exact recipient/subscriber
+accepted provisional ingress during a live invocation; it is not a native
+receipt, a claim that a remote cache is still populated, or delivery completion.
+It exists only to decide whether the existing scan may move past this still-owed
+event and deliver the later metadata that native completion needs.
+
+For each responsible subscriber, the cell tracks its actual object/callback and
+wrapper lifetime, not just its textual subscriber ID. The topology subscriber's
+branch contains its selected source-MG group and the complete captured required
+target-group set. An unvisited subscriber, an unselected source service or an
+uncaptured target set is explicitly uncovered; absence of a branch is not an
+empty successful population. Its obligations are the source-MG result and each
+captured target result for the **entire exact event vector**. Another subscriber
+is covered only by its own canonical full-vector outcome, never by a different
+subscriber's group result or by the fact that it was called.
+
+Each such leaf has exactly one of these states in the same source-owned cell:
+
+| State | Evidence required | May authorize source ACK? |
+| --- | --- | --- |
+| UNCOVERED | No accepted evidence; includes unvisited, unknown, timeout, mismatch, generic success, noHandler and ACK-only. | No. |
+| PROVISIONAL_COVERAGE | The existing canonical provisional validator accepted the complete exact vector and intended recipient/subscriber binding while that invocation was live. | No. |
+| NATIVE_COMMITTED | The existing canonical committed validator accepted the complete exact vector and actual native group/index/term receipts while that invocation was live. | Only as part of complete native coverage of every obligation. |
+
+This replaces no native predicate. The previous statement that provisional
+results never complete a target means **never complete it for native delivery
+or ACK**. They now cover it for the weaker, separate scan-release predicate.
+A native observation may replace a provisional tag only after actual native
+afterCommit evidence passes the full existing validator. No cursor position,
+elapsed time, complete provisional set or later cache contents promotes a tag.
+
+Store a tag and its binding to the cell's existing vector/obligation identity,
+plus the already specified native receipts where present. Do not store raw
+responses, event bodies, repeated binding arrays for every attempt, timestamps
+as authority, callers, promises or a history of observations. There is at most
+one current tag per captured leaf and one derived state per responsible
+subscriber, in the same one-obligation cell. Its metadata cost follows the
+actual captured subscriber/target population already accounted in F2. There is
+no second map of owed events, independent timer, expiry lease or durable store.
+
+### Validation, currentness and invalidation
+
+Use `cdc/cdc-delivery-outcome.js` as the sole semantic validation/composition
+owner. A local provisional call uses its local predicate and needs no fabricated
+transport ACK. A remote provisional observation also passes the existing
+transport-aware provisional predicate. F4's rejection of contradictory
+committed/provisional/error claims applies before extracting the tag. A partial,
+extra, duplicate, wrong-event or wrong-digest vector supplies no coverage.
+
+Bind each target observation to the exact outstanding dispatch and captured
+group, not to whichever array slot happens to be visited. Preserve the actual
+recipient's existing `groupId` result metadata from the MG owner and validate it
+against that expected group in the existing provisional semantic owner; never
+fill it with the caller's expected value after receipt. The local source result
+is bound to its actual selected service/group. This requires preserving and
+checking existing group metadata through the same MG result builder and relay
+paths as native outcomes. It adds no source identity field or new response
+protocol. A wrong or missing group binding is uncovered, even if its event
+binding otherwise matches. For non-topology subscribers, the exact invoking
+subscriber/lifetime supplies the responsible-consumer binding; it cannot claim
+another subscriber's coverage.
+
+The cell and every private update operation are bound to the exact source
+delivery owner and lane tenure, event/vector binding, responsible subscriber
+objects/lifetimes, topology owner, selected source-MG service/group and captured
+required group set. Before accepting an observation, check that context and
+the **creating invocation's** F1 remaining-time/currentness operation. Check it
+again before consuming a complete coverage set. Timer callback delay does not
+extend this condition. An answer observed after actual expiry supplies no tag,
+cannot update a successor's cell and cannot revise its expired caller's UNKNOWN.
+
+A provisional observation accepted while its invocation was live may remain in
+the cell after that caller expires, just as a pre-expiry native receipt may.
+This preserves a historical ingress observation for a later bounded invocation;
+it does not renew the caller or assert a continuing remote cache lease. There
+is no attempt-duration TTL on accumulated coverage that would force an
+arbitrarily large finite set to fit one response budget after all.
+
+Source tenure loss, shutdown or replacement; replacement of the responsible
+subscriber/wrapper, local topology owner or selected source-MG owner; changed
+event binding; or an authoritative change of the captured obligation set
+invalidates reuse of its provisional coverage. Same-text IDs are insufficient.
+Fence old private operations synchronously. A route projection omitting a
+required group neither authorizes a smaller set nor covers that group. Address
+repair preserves its obligation identity; an observed target service/route
+lifetime replacement invalidates that leaf's weak coverage and requires a new
+valid observation from the newly selected route. It does not erase the group.
+
+Remote replacement not exposed by the existing owners cannot be inferred from
+a timestamp or a foreign clock. Accordingly, complete weak coverage asserts
+only that the required provisional ingress observations occurred in this
+source-owned operation, not that every remote incarnation remains alive at the
+scan-release instant. Observed replacement is invalidated as above; unobserved
+remote loss cannot become ACK authority because weak coverage is never a native
+receipt and is discarded at scan release. Normal owed-debt replay must obtain
+new actual native results. No extra remote lease, polling or recovery protocol
+is introduced to claim a stronger property.
+
+Invalidating the cell does **not** release child custody. F1's actual cleanup
+guard belongs to the existing delivery owner and spans lane resets: a new
+tenure cannot hydrate a replacement event or start an overlapping owned callback
+while the old local send/selection/subscriber work is still unclosed. The old
+operation is fenced and charged until its responsible owner settles/closes it;
+only then may a new lane acquire the next invocation. Discarded optimization
+state is never mistaken for cancellation of a native or remote effect.
+
+### Exact aggregation and source-scan transition
+
+Private source context carries the cell's observation/update operations through
+the actual subscriber and seed/join bridges. The semantic owner creates and
+composes validated coverage; the source lane alone stores it. These are local
+operations, not caller-supplied `cdcProvisional` event properties or a new wire
+continuation token. The existing `completeCdcPropagation` and source subscriber
+composition must consume this exact source-owned coverage instead of demanding
+that every required provisional answer arrive in one invocation.
+
+1. Each fresh invocation rereads the unchanged owed event and checks the cell's
+   current context. Fair scheduling prioritizes **uncovered** leaves and
+   responsible subscribers across attempts. Already validated weak coverage
+   need not be re-obtained before an unvisited branch can run. In particular,
+   the source must not restart every attempt at a partially covered first
+   subscriber while later subscribers remain unvisited. All dispatch remains
+   under the existing one-wave/window/F1 response and cleanup bounds.
+2. Incomplete coverage remains UNKNOWN, including a partial set consisting
+   entirely of valid provisional answers. Before its expiry, record each exact
+   validated leaf; after expiry, retire that caller UNKNOWN, close its local
+   children and release topology capacity. Only metadata remains for the
+   existing source retry. Never infer that undispatched groups are provisional.
+3. For a topology subscriber, every source/target leaf must be either
+   PROVISIONAL_COVERAGE or NATIVE_COMMITTED before the subscriber is covered.
+   If all are native, its ordinary committed result remains available; if any
+   are provisional, it is covered **only provisionally**. Aggregate the actual
+   responsible subscriber set by the same rule. An uncovered subscriber makes
+   the whole source event UNKNOWN, regardless of other subscribers' results.
+4. A **live** invocation with complete coverage and at least one provisional
+   obligation may construct the existing canonical provisional result for the
+   complete event/vector via `buildProvisionalCdcOutcome`. Recheck deadline,
+   current cell, subscriber set and bindings immediately before returning it.
+   Use the existing source retry policy/hint; old remote hints are not new
+   deadlines. If the previous caller expired after collecting the last valid
+   observation but before this transition, only a new live invocation may
+   perform it. The expired caller stays UNKNOWN. No new network await or full
+   recipient re-poll is required merely to compose already validated coverage.
+5. That canonical provisional result enters the existing `DRIVE.PROVISIONAL`
+   path: set the scan's provisional flag, advance its log/ordinal cursor and
+   permit later owed metadata in the unchanged finite scan to run. Count this
+   as a visited row under the existing 256-row work quantum, not as a delivered
+   row. Do not increment native-delivered tracking, run completion-only hooks,
+   enqueue a source ACK, or change `delivered` in SQLite.
+6. At that scan-release transition, fence the cell's remaining operations and
+   discard **all** of that event's optimization state, including weak tags and
+   any native receipts accumulated alongside them. Actual local child cleanup
+   must finish before the next event hydrates; no topology slot is held between
+   completed invocations. The original event remains owed. At the captured
+   tail, the existing provisional retry/rescan starts from the durable ledger
+   with a fresh cell; it does not resume old weak coverage.
+7. After later metadata makes F3's owned native route usable, this fresh redrive
+   must obtain actual source and target native receipts. Only complete native
+   coverage of every responsible subscriber can enter the existing pending ACK
+   owner, and only committed CDC_DELIVERED apply marks the source row delivered.
+   A provisional scan pass never manufactures a receipt or changes this cut.
+
+This supplies a finite release for the review's stable finite provisional
+population: if each uncovered branch can return its canonical provisional
+observation in a live invocation, bounded fair attempts eventually cover the
+whole captured set without requiring it to fit one budget. The source can then
+reach later metadata while keeping the first occurrence owed. This is a scan
+progress claim under those stated conditions, not a new durable-delivery owner
+or a promise of native completion while a recipient remains unavailable.
+
+### One composite paired witness
+
+The required witness is a single source-owned operation sequence, through the
+real source ledger, subscriber factory, topology, forwarding, canonical outcome
+and native application owners:
+
+1. Commit first owed occurrence A and later required formation metadata B in
+   the same source scan. Use more captured targets than one dispatch window
+   and enough controlled, individually live provisional deliveries to require
+   more than one unchanged source invocation budget. Include several actual
+   responsible subscribers so the last one cannot be reached by repeatedly
+   restarting the first. Keep an addressed recipient FOLLOWER whose native
+   route is not yet usable and which needs provisional hydration before B.
+2. Across multiple attempts, obtain real canonical provisional coverage for
+   every required source/target/subscriber binding. Assert each expired caller
+   remains UNKNOWN, active waves/copies obey their bounds, topology has no
+   background entries, and A remains owed with zero source ACK proposals.
+   Then observe a new live invocation produce the canonical aggregate
+   PROVISIONAL result, release the source cursor and discard the entire cell.
+3. Observe B delivered through that released source scan. Expose F3's actual
+   owned native leader/peer route while the addressed recipient remains
+   FOLLOWER; keep stale cache hints and the pressure/safe-fallback controls
+   engaged. Redrive A from its unchanged ledger identity with fresh progress,
+   obtain complete actual native afterCommit receipts, and only then observe
+   the source CDC_DELIVERED command apply and set A delivered.
+4. In the same composed setup, remove only the weak-coverage accumulation/
+   aggregation transition. Every bounded partial attempt must stay UNKNOWN,
+   B must remain unreachable behind A, and the final native/source-ACK
+   acceptance assertion must fail. Small provisional and separate large native
+   positives do not substitute for this negative.
+
+Paired boundary negatives additionally withhold one required target or final
+subscriber, return the right event from a wrong group, change a vector member,
+and deliver a valid provisional answer after actual expiry while its timer
+callback is delayed. None may fill the missing leaf, release the scan or ACK.
+Restore each exact live binding and obtain scan release without changing A or
+removing a target. Replace a subscriber with the same textual ID, replace the
+selected source/topology service, and change tenure while cleanup is held:
+coverage must invalidate, old callbacks must not mutate a new cell, and no new
+hydration may overlap the retained old local work. Include a valid local
+provisional answer with no transport ACK and its real-router counterpart.
+
+Independent review remains the next gate. The source changes and composite
+native witnesses above are unimplemented and unexecuted here. All accepted
+F1/F3/F4 provisions, the distinct wire-domain finding, cross-member historical
+classification, R1/R2 exclusions and remaining startup/release gates stay
+separate; this append grants none of their approvals.

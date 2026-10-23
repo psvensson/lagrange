@@ -1,6 +1,8 @@
-// Actual RF1 native persistence and ordinary committed application. The
-// observer is supplied the complete original declaration; this RF1 witness
-// does NOT prove original RF3 cohort admission, publication or startup.
+// Actual RF1 native persistence and ordinary committed application. A direct
+// public native-port proposal supplies retained-history bytes only: this test
+// first proves the ordinary write path remains CUTOVER_PAUSED. The observer
+// receives the complete original declaration; this RF1 witness does NOT prove
+// original RF3 cohort admission, write release, publication or startup.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -13,6 +15,9 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {getSystemCachePrimaryKeyField} from '../../src/cache/system-cache-key-descriptor.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
+import {buildPartitionWriteEntry, PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
 import {readCdcObligationCensusIn} from '../../src/partition/partition-cdc-obligation-ledger.js';
@@ -129,14 +134,37 @@ for (const tableName of FOUNDATION_TABLES) {
     assert.equal(enabled.success, true, 'actual ENABLE applies before the held statement');
     const before = inspect(declaration, member);
     assert.equal(before.rows.length, 0);
+    const refused = await first.executeQuery(mutation.sql, mutation.params, {entryId});
+    assert.equal(refused.success, false, describe(refused));
+    assert.equal(refused.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+      'ENABLE alone does not open ordinary write admission for this standalone service');
+    assert.equal(refused.deferRetry, true);
+    assert.deepEqual(inspect(declaration, member), before,
+      'the ordinary refusal leaves native entries, frontiers and all application owners unchanged');
     const resources = {db: first.db, port: first.raft, handler: first.transportHandler};
+    // The regular write-entry producer supplies the current service HLC and
+    // proposer identity. Native history/application is the sole positive claim;
+    // no release state or complete-cohort authority is fabricated here.
+    const command = buildPartitionWriteEntry({type: PARTITION_SERVICE_OPERATION.QUERY,
+      sql: mutation.sql, params: mutation.params, entryId,
+      operationId: null, idempotencyKey: null, splitMirrorOrigin: null},
+    {timestamp: first.hlcClock.now(), proposedBy: first.replicaId,
+      proposedAt: first.timeSource.now()});
     const fault = holdStatementApplication(first, entryId);
-    const writing = first.executeQuery(mutation.sql, mutation.params, {entryId});
+    let proposalOutcome = null;
+    const writing = Promise.resolve().then(() => first.raft.propose(command)).then(
+      (answer) => (proposalOutcome = {status: 'fulfilled', answer}),
+      (error) => (proposalOutcome = {status: 'rejected', error}));
     pending.push(writing);
-    void writing.catch(() => undefined);
-    assert.equal(await waitForCondition(() => fault.failures() > 0, GROUP_BUDGET_MS), true,
-      'actual native commit reached the held SQL application callback');
+    assert.equal(await waitForCondition(() => fault.failures() > 0 || proposalOutcome !== null,
+      GROUP_BUDGET_MS), true, 'native application or a typed proposal answer must become observable');
+    assert.ok(fault.failures() > 0,
+      `proposal answered before the held SQL callback: ${describe(proposalOutcome, {depth: 8})}`);
     const actual = await fault.reached;
+    const proposal = await writing;
+    assert.equal(proposal.status, 'fulfilled', describe(proposal));
+    assert.equal(proposal.answer.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+      'the injected application failure is a typed native host failure, never proposal success');
     const held = inspect(declaration, member);
     const retained = held.history.entries.find((entry) => entry.command?.entryId === entryId);
     assert.ok(retained, 'native history holds the actual proposal');
@@ -144,6 +172,7 @@ for (const tableName of FOUNDATION_TABLES) {
     assert.equal(retained.index, String(actual.index));
     assert.equal(retained.term, String(actual.term));
     assert.deepEqual(retained.command, actual.command);
+    assert.deepEqual(retained.command, command);
     assert.deepEqual(retained.command.params, mutation.params);
     assert.equal(retained.command.sql, mutation.sql);
     assert.equal(held.rows.length, 0);
@@ -151,7 +180,7 @@ for (const tableName of FOUNDATION_TABLES) {
     assert.deepEqual(held.obligations, {exists: false, rows: []});
     const durableEntries = held.history.record.entries;
     await first.shutdown();
-    await writing.catch(() => undefined);
+    await writing;
     fault.restore();
     assert.equal(resources.db.open, false);
     assert.equal(resources.port.readStatus().outcome, RAFT_OPERATION_OUTCOME.CORE_REFUSED);

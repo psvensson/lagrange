@@ -14,7 +14,7 @@ import {SeedRegistrationPhase} from '../../src/bootstrap/phases/seed-registratio
 import {readOriginalSeedRetainedEffects} from '../../src/bootstrap/seed-retained-effects.js';
 import {SEED_RETAINED_EFFECT_STATE as STATE, SEED_RETAINED_EFFECT_REASON as REASON} from
   '../../src/bootstrap/seed-retained-effects-constants.js';
-import {RAFT_RS_RETAINED_ENTRY_PHASE as PHASE, RAFT_RS_TABLE} from
+import {RAFT_RS_RETAINED_ENTRY_PHASE as PHASE, RAFT_RS_TABLE, RAFT_RS_STORE_ERROR_CODE} from
   '../../src/raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME} from
   '../../src/partition/partition-service-constants.js';
@@ -80,6 +80,53 @@ function expect(f, state, reason) {
   if (reason !== undefined) assert.equal(result.reason, reason);
   return result;
 }
+
+test('retained fixture uses store-owned application transactions and preserves caller refusal', (t) => {
+  const f = fixture(t);
+  const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
+  f.db.exec('BEGIN');
+  try {
+    const before = f.db.serialize();
+    assert.throws(() => retain(f, [origin(f), command]),
+      {code: RAFT_RS_STORE_ERROR_CODE.USER_TRANSACTION_OPEN});
+    assert.equal(f.db.inTransaction, true, 'the caller still owns its transaction');
+    assert.deepEqual(f.db.serialize(), before, 'no native or application write enters caller custody');
+    assert.deepEqual(f.afterCommitBatches, []);
+  } finally {
+    f.db.exec('ROLLBACK');
+  }
+  retain(f, [origin(f), command]);
+  const result = expect(f, STATE.ACCEPTED);
+  assert.equal(result.history.appliedIndex, '2');
+  assert.deepEqual(f.afterCommitBatches.map(({index}) => index), ['1', '2']);
+  assert.equal(result.obligations.rows[0].delivered, '0',
+    'committed storage does not fabricate recipient delivery');
+});
+
+test('retained fixture rolls application effects back when the actual applied frontier write fails',
+  (t) => {
+    const f = fixture(t);
+    const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
+    f.db.exec(`CREATE TRIGGER fixture_fail_frontier BEFORE INSERT ON ${RAFT_RS_TABLE.APPLIED_STATE}
+      WHEN NEW.applied_index = 2 BEGIN SELECT RAISE(ABORT, 'fixture frontier failure'); END`);
+    assert.throws(() => retain(f, [origin(f), command]), /fixture frontier failure/u);
+    assert.equal(f.store.readDurableRecord(f.member.groupId).appliedIndex, '1',
+      'the prior committed origin remains applied, but the failing SQL frontier does not advance');
+    assert.equal(f.db.prepare(`SELECT COUNT(*) FROM ${f.member.tableName}`).pluck().get(), 0);
+    assert.deepEqual(census(f.db, readCommittedStatementCensusIn), []);
+    assert.deepEqual(census(f.db, readCdcObligationCensusIn), {exists: false, rows: []});
+    assert.equal(readPartitionWriteOriginHistory(f.db, f.member.groupId).generation, '0');
+    assert.deepEqual(f.afterCommitBatches.map(({index}) => index), ['1'],
+      'rollback cannot release SQL notification, result or delivery callbacks');
+    f.db.exec('DROP TRIGGER fixture_fail_frontier');
+    retain(f, [origin(f), command]);
+    const result = expect(f, STATE.ACCEPTED);
+    assert.equal(result.history.appliedIndex, '2');
+    assert.equal(result.outcomes.length, 1);
+    assert.equal(result.obligations.rows.length, 1);
+    assert.equal(result.origin.generation, '1');
+    assert.equal(f.afterCommitBatches.filter(({index}) => index === '2').length, 1);
+  });
 
 test('original producer SQL is observed in each native range without applying pending work',
   async (t) => {

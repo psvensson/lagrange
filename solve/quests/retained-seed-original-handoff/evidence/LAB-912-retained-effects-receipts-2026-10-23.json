@@ -1,0 +1,101 @@
+[
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/912#issuecomment-6359201269",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "c139d76b7d274493bfc8103657827173",
+    "request_sha256": "1fb584d6aaa70376ed22fa6ef31d1df5644779a8e7b9f6248e83334d837aab00",
+    "status": "CLAIMED",
+    "recorded_at": "2026-10-23T06:47:16.515Z",
+    "result": {
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "operation": "lab-work",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/912#issuecomment-6359218029",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "c139d76b7d274493bfc8103657827173",
+    "request_sha256": "1fb584d6aaa70376ed22fa6ef31d1df5644779a8e7b9f6248e83334d837aab00",
+    "status": "RUNNING",
+    "recorded_at": "2026-10-23T06:48:22.396Z",
+    "result": {
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "operation": "lab-work",
+      "source_execution_started": false
+    }
+  },
+  {
+    "url": "https://github.com/psvensson/lagrange-lab/issues/912#issuecomment-6359304028",
+    "schema": "lagrange-lab-result/v1",
+    "controller_id": "b4a2e06c193c44b09f1b67d02e8d80f4",
+    "request_id": "c139d76b7d274493bfc8103657827173",
+    "request_sha256": "1fb584d6aaa70376ed22fa6ef31d1df5644779a8e7b9f6248e83334d837aab00",
+    "status": "COMPLETE",
+    "recorded_at": "2026-10-23T06:54:16.358Z",
+    "result": {
+      "execution_scope_closed": true,
+      "exit_code": 1,
+      "finished_at": "2026-10-23T06:54:16.301Z",
+      "hosts": [
+        "lenovo-laptop"
+      ],
+      "log_bytes": 8209,
+      "log_sha256": "bb67f2dc0d0b06f5574d82f3bc83972fd284eb53f0b98a75e2f700632c9a537b",
+      "logical_request_id": "c139d76b-7d27-4493-bfc8-103657827173",
+      "logs_are_worker_tails": true,
+      "operation": "lab-work",
+      "outcome": "FAIL",
+      "payload_sha256": "dba72b260409181347a90fb7b9ddcfd1a277217f6e11a1043ec729fde38165f0",
+      "reason": null,
+      "scope_closed": true,
+      "source_execution_started": true,
+      "source_sha": "68633168ef17759fec954e6ef66b4ccb0d671bc7",
+      "worker_receipt_count": 1,
+      "worker_receipts_sha256": "7544b13e9377e1b347d7cd7fe21efb6789174d36b4a64721280722e0a2c6593b",
+      "workers": {
+        "lenovo-laptop": {
+          "containers_closed": true,
+          "driver_result": {
+            "completed_test_files": null,
+            "counters": {
+              "cancelled": 0,
+              "fail": 149,
+              "pass": 5,
+              "skipped": 0,
+              "tests": 154,
+              "todo": 0
+            },
+            "exit_code": 1,
+            "selected_test_files": 27
+          },
+          "execution_scope_closed": true,
+          "exit_code": 1,
+          "last_thermals": {
+            "cpu": 56,
+            "missing": [
+              "ssd"
+            ],
+            "ssd": null,
+            "ssd_aux": null
+          },
+          "log_bytes": 157961,
+          "log_sha256": "0ebbea165efc53bd6160d746927b1c06810405ddd9702f023308d63fc31bf715",
+          "log_truncated": false,
+          "output_bytes": 157961,
+          "output_sha256": "0ebbea165efc53bd6160d746927b1c06810405ddd9702f023308d63fc31bf715",
+          "reason": null,
+          "source_execution_started": true,
+          "state": "COMPLETE",
+          "thermal_scope_closed": true
+        }
+      }
+    }
+  }
+]

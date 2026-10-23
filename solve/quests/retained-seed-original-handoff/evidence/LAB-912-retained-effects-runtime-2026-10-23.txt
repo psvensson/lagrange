@@ -1,0 +1,2134 @@
+v22.23.2
+10.9.8
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+
+> lagrange-server@0.2.6 prepare
+> node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"
+
+[hooks] Installed repo hooks at .githooks
+
+added 1057 packages, and audited 1058 packages in 28s
+
+223 packages are looking for funding
+  run `npm fund` for details
+
+33 vulnerabilities (10 moderate, 21 high, 2 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.8 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects.integration.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/partition/participant-origin-retained-history.test.js test/partition/participant-origin-retained-history.integration.test.js test/raft/raft-rs-backend/durable-store-committed-entries.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-opening-authority.test.js test/bootstrap/seed-original-attempt-lifetime.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/participant-decision-canonical-record.test.js test/partition/partition-unreadable-durable-record.test.js test/raft/raft-rs-backend/durable-ready-loop.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/persistence-admission.test.js test/partition/partition-cdc-obligation.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-cdc-generator.test.js test/bootstrap/seed-registration-phase.test.js test/bootstrap/seed-registration-election-scheduling.test.js test/bootstrap/pipeline/seed-registration-phase-custody.test.js test/cdc/cdc-integration-service-mutations-and-epoch.test.js test/cdc/cdc-integration-service.test.js test/cdc/cdc-integration-service-time-seam.test.js test/cdc/bootstrap-mode-routing.property.test.js
+
+# test-files planned=27
+classified lane ordinary: 19 file(s), jobs=4
+thermal: ok cpu 52C (coretemp/Package id 0) nvme unmeasured
+ok test/cdc/cdc-integration-service-time-seam.test.js (11 assertions, 967ms)
+ok test/cdc/bootstrap-mode-routing.property.test.js (11 assertions, 1835ms)
+ok test/partition/participant-decision-canonical-record.test.js (8 assertions, 446ms)
+ok test/partition/participant-origin-retained-history.test.js (35 assertions, 501ms)
+ok test/partition/partition-cdc-generator.test.js (40 assertions, 509ms)
+ok test/cdc/cdc-integration-service-mutations-and-epoch.test.js (150 assertions, 4385ms)
+ok test/cdc/cdc-integration-service.test.js (128 assertions, 6941ms)
+ok test/partition/partition-cdc-obligation.test.js (20 assertions, 7273ms)
+ok test/partition/committed-statement-outcome.test.js (18 assertions, 9907ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 6803ms)
+ok test/raft/raft-rs-backend/durable-store-committed-entries.test.js (33 assertions, 435ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 9029ms)
+ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 4388ms)
+ok test/raft/raft-rs-backend/durable-ready-loop.test.js (7 assertions, 7900ms)
+ok test/raft/raft-rs-backend/persistence-admission.test.js (4 assertions, 3664ms)
+ok test/raft/raft-rs-backend/restart-from-durable-record.test.js (4 assertions, 6844ms)
+ok test/partition/partition-unreadable-durable-record.test.js (6 assertions, 15500ms)
+ok test/raft/raft-rs-original-allocation-cold-inspection.test.js (24 assertions, 55928ms)
+ok test/raft/raft-rs-original-opening-authority.test.js (24 assertions, 113051ms)
+# test-files total=19 pass=19 fail=0 assertions=576
+classified lane bootstrap: 7 file(s), jobs=2
+thermal: ok cpu 45C (coretemp/Package id 0) nvme unmeasured
+ok test/bootstrap/pipeline/seed-registration-phase-custody.test.js (1 assertions, 1360ms)
+not ok test/bootstrap/seed-registration-election-scheduling.test.js (16 assertions, 1779ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: seed elections start the registration dependency cohort before the remainder
+    not ok 1 - unrelated election work stays held while the direct-write cut elects
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,15 +1,1 @@
+        -Array [
+        -  "start:required-1-r1",
+        -  "start:required-1-r2",
+        -  "start:required-1-r3",
+        -  "start:required-2-r1",
+        -  "start:required-2-r2",
+        -  "start:required-2-r3",
+        -  "start:required-3-r1",
+        -  "start:required-3-r2",
+        -  "start:required-3-r3",
+        -  "start:required-4-r1",
+        -  "start:required-4-r2",
+        -  "start:required-4-r3",
+        -  "wait:registration-required",
+        -]
+        +Array []
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 112
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:112:7)
+      source: |2
+      
+            await Promise.resolve();
+            t.same(fixture.events, [
+        ------^
+              ...requiredReplicaStartEvents(),
+              'wait:registration-required',
+      ...
+    
+    not ok 2 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedPartitionsPhase.startDeferredBootstrapReplicaElections
+        (src/bootstrap/phases/seed-partitions-phase.js:388:7)
+      
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:109:38)
+      at:
+        fileName: src/bootstrap/phases/seed-partitions-phase.js
+        lineNumber: 388
+        columnNumber: 7
+        typeName: SeedPartitionsPhase
+        methodName: startDeferredBootstrapReplicaElections
+        functionName: SeedPartitionsPhase.startDeferredBootstrapReplicaElections
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          async startDeferredBootstrapReplicaElections() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            const logger = d.getLogger();
+            const messageGroupReplicas = d.getMessageGroupReplicas();
+      ...
+    
+    1..2
+not ok 1 - seed elections start the registration dependency cohort before the remainder # time=48.899ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 106
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('seed elections start the registration dependency cohort before the
+    remainder',
+  
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: dependency failure releases the remaining elections before propagating
+    not ok 1 - the dependency failure remains the bootstrap outcome
+      ---
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 135
+        columnNumber: 13
+        typeName: Test
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,3 @@
+        -Error: registration dependency did not elect
+        +TypeError: d.assertOriginalSeedContinuation is not a function {
+        +  "name": "TypeError",
+        +}
+      source: |2
+            await Promise.resolve();
+            fixture.leadership.reject(expected);
+            await t.rejects(scheduling, expected,
+        ------------^
+              'the dependency failure remains the bootstrap outcome');
+            t.same(fixture.events.slice(-2), [
+      ...
+    
+    not ok 2 - an active bootstrap does not strand the remaining cohort
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,1 @@
+        -Array [
+        -  "start:ordinary-a-r1",
+        -  "start:ordinary-b-r1",
+        -]
+        +Array []
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 137
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:137:7)
+      source: |2
+            await t.rejects(scheduling, expected,
+              'the dependency failure remains the bootstrap outcome');
+            t.same(fixture.events.slice(-2), [
+        ------^
+              'start:ordinary-a-r1',
+              'start:ordinary-b-r1',
+      ...
+    
+    1..2
+not ok 2 - dependency failure releases the remaining elections before propagating # time=11.177ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 127
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('dependency failure releases the remaining elections before propagating',
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: shutdown during the dependency wait does not restart stopped work
+    not ok 1 - the interrupted dependency wait stays visible
+      ---
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 152
+        columnNumber: 13
+        typeName: Test
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,3 @@
+        -Error: bootstrap stopped
+        +TypeError: d.assertOriginalSeedContinuation is not a function {
+        +  "name": "TypeError",
+        +}
+      source: |2
+            fixture.setShuttingDown(true);
+            fixture.leadership.reject(expected);
+            await t.rejects(scheduling, expected,
+        ------------^
+              'the interrupted dependency wait stays visible');
+            t.equal(fixture.events.some((event) => event.includes('ordinary')), false,
+      ...
+    
+    ok 2 - shutdown cleanup remains the only owner of the unstarted cohort
+    1..2
+not ok 3 - shutdown during the dependency wait does not restart stopped work # time=5.035ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 143
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('shutdown during the dependency wait does not restart stopped work',
+    ^
+      async (t) => {
+        const fixture = createSchedulingFixture();
+  ...
+
+# Subtest: shutdown during message-group leadership starts no partition election
+    not ok 1 - partition elections remain behind message-group leadership
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,1 @@
+        -Array [
+        -  "start:message-group-r1",
+        -  "wait:message-group",
+        -]
+        +Array []
+      at:
+        fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+        lineNumber: 165
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:165:7)
+      source: |2
+      
+            await Promise.resolve();
+            t.same(fixture.events, [
+        ------^
+              'start:message-group-r1',
+              'wait:message-group',
+      ...
+    
+    not ok 2 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedPartitionsPhase.startDeferredBootstrapReplicaElections
+        (src/bootstrap/phases/seed-partitions-phase.js:388:7)
+      
+        Test.<anonymous>
+        (test/bootstrap/seed-registration-election-scheduling.test.js:162:38)
+      at:
+        fileName: src/bootstrap/phases/seed-partitions-phase.js
+        lineNumber: 388
+        columnNumber: 7
+        typeName: SeedPartitionsPhase
+        methodName: startDeferredBootstrapReplicaElections
+        functionName: SeedPartitionsPhase.startDeferredBootstrapReplicaElections
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          async startDeferredBootstrapReplicaElections() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            const logger = d.getLogger();
+            const messageGroupReplicas = d.getMessageGroupReplicas();
+      ...
+    
+    1..2
+not ok 4 - shutdown during message-group leadership starts no partition election # time=10.922ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-election-scheduling.test.js
+    lineNumber: 158
+    columnNumber: 1
+    isToplevel: true
+  source: |2
+      });
+  
+    test('shutdown during message-group leadership starts no partition election',
+    ^
+      async (t) => {
+        const messageGroupLeadership = createDeferred();
+  ...
+
+# Subtest: registration owns the exact dependency cut and spends its gate once
+    ok 1 - the registration owner publishes its four direct-write dependencies
+    ok 2 - both consumers reuse the partition owner's one existing wait budget
+    ok 3 - registration keeps no duplicate satisfaction authority
+    1..3
+ok 5 - registration owns the exact dependency cut and spends its gate once # time=3.994ms
+
+1..5
+# { total: 11, pass: 4, fail: 7 }
+# time=102.932ms
+not ok test/bootstrap/seed-registration-phase.test.js (11 assertions, 916ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: SeedRegistrationPhase registers partition rows as stopped before activation
+    not ok 1 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedRegistrationPhase.ensureSystemTableWriter
+        (src/bootstrap/phases/seed-registration-phase.js:653:7)
+      
+        SeedRegistrationPhase.registerServices
+        (src/bootstrap/phases/seed-registration-phase.js:204:36)
+      
+        Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:95:17)
+      at:
+        fileName: src/bootstrap/phases/seed-registration-phase.js
+        lineNumber: 653
+        columnNumber: 7
+        typeName: SeedRegistrationPhase
+        methodName: ensureSystemTableWriter
+        functionName: SeedRegistrationPhase.ensureSystemTableWriter
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          ensureSystemTableWriter() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            let systemTableWriter = d.getSystemTableWriter();
+            if (!systemTableWriter) {
+      ...
+    
+    1..1
+not ok 1 - SeedRegistrationPhase registers partition rows as stopped before activation # time=32.136ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 28
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    }
+  
+  
+    test('SeedRegistrationPhase registers partition rows as stopped before
+    activation',
+  
+    ^
+      async (t) => {
+        const writer = createWriterRecorder();
+  ...
+
+# Subtest: SeedRegistrationPhase does not complete while partition activation is deferred and re-enters idempotently
+    not ok 1 - seed registration must leave the phase incomplete while exact activation is debt
+      ---
+      at:
+        fileName: test/bootstrap/seed-registration-phase.test.js
+        lineNumber: 207
+        columnNumber: 11
+        typeName: Test
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,2 @@
+        -(no name): (no message) {
+        -  "code": "REPLICA_ACTIVATION_DURABILITY_DEFERRED",
+        +TypeError: d.assertOriginalSeedContinuation is not a function {
+         }
+      source: |2
+          });
+      
+          await t.rejects(
+        ----------^
+            phase.registerServices(1234),
+            {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED'},
+      ...
+    
+    not ok 2 - Cannot read properties of null (reading 'status')
+      ---
+      stack: |
+        Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:212:29)
+      at:
+        fileName: test/bootstrap/seed-registration-phase.test.js
+        lineNumber: 212
+        columnNumber: 29
+        typeName: Test
+        methodName: <anonymous>
+        functionName: Test.<anonymous>
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: >2
+            'seed registration must leave the phase incomplete while exact activation is debt',
+          );
+          t.equal(durableServiceRow.status, SERVICE_STATUS.STOPPED,
+        ----------------------------^
+            'deferred activation must retain its durable STOPPED source generation');
+          t.equal(logEvents.includes('Services registered'), false,
+      ...
+    
+    1..2
+not ok 2 - SeedRegistrationPhase does not complete while partition activation is deferred and re-enters idempotently # time=11.021ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 134
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('SeedRegistrationPhase does not complete while partition activation is '
+    +
+  
+    ^
+      'deferred and re-enters idempotently', async (t) => {
+      let durableServiceRow = null;
+  ...
+
+# Subtest: SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration
+    not ok 1 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedRegistrationPhase.ensureSystemTableWriter
+        (src/bootstrap/phases/seed-registration-phase.js:653:7)
+      
+        SeedRegistrationPhase.registerMetaServiceDefinitions
+        (src/bootstrap/phases/seed-registration-phase.js:324:36)
+      
+        Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:251:17)
+      at:
+        fileName: src/bootstrap/phases/seed-registration-phase.js
+        lineNumber: 653
+        columnNumber: 7
+        typeName: SeedRegistrationPhase
+        methodName: ensureSystemTableWriter
+        functionName: SeedRegistrationPhase.ensureSystemTableWriter
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          ensureSystemTableWriter() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            let systemTableWriter = d.getSystemTableWriter();
+            if (!systemTableWriter) {
+      ...
+    
+    1..1
+not ok 3 - SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration # time=4.842ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 227
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('SeedRegistrationPhase projects local meta service endpoints into cache
+    during bootstrap registration',
+  
+    ^
+      async (t) => {
+        const writer = createWriterRecorder();
+  ...
+
+# Subtest: SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration
+    not ok 1 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedRegistrationPhase.phaseRegistration
+        (src/bootstrap/phases/seed-registration-phase.js:107:7)
+      
+        Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:316:17)
+      at:
+        fileName: src/bootstrap/phases/seed-registration-phase.js
+        lineNumber: 107
+        columnNumber: 7
+        typeName: SeedRegistrationPhase
+        methodName: phaseRegistration
+        functionName: SeedRegistrationPhase.phaseRegistration
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          async phaseRegistration() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            const logger = d.getLogger();
+            const originalTimestamp = d.getOriginalSeedFoundationTimestamp;
+      ...
+    
+    1..1
+not ok 4 - SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration # time=4.192ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 265
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('SeedRegistrationPhase waits only for cache-hydration leader partitions
+    before bootstrap-direct registration',
+  
+    ^
+      async (t) => {
+        const waitedForPartitionLeadership = [];
+  ...
+
+# Subtest: SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected
+    not ok 1 - d.assertOriginalSeedContinuation is not a function
+      ---
+      stack: >
+        SeedRegistrationPhase.ensureSystemTableWriter
+        (src/bootstrap/phases/seed-registration-phase.js:653:7)
+      
+        SeedRegistrationPhase.persistCurrentEpochIfMissing
+        (src/bootstrap/phases/seed-registration-phase.js:588:36)
+      
+        Test.<anonymous> (test/bootstrap/seed-registration-phase.test.js:360:17)
+      at:
+        fileName: src/bootstrap/phases/seed-registration-phase.js
+        lineNumber: 653
+        columnNumber: 7
+        typeName: SeedRegistrationPhase
+        methodName: ensureSystemTableWriter
+        functionName: SeedRegistrationPhase.ensureSystemTableWriter
+      type: TypeError
+      tapCaught: returnedPromiseRejection
+      source: |2
+          ensureSystemTableWriter() {
+            const d = this.delegates;
+            d.assertOriginalSeedContinuation();
+        ------^
+            let systemTableWriter = d.getSystemTableWriter();
+            if (!systemTableWriter) {
+      ...
+    
+    1..1
+not ok 5 - SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected # time=4.612ms
+  ---
+  at:
+    fileName: test/bootstrap/seed-registration-phase.test.js
+    lineNumber: 339
+    columnNumber: 1
+    isToplevel: true
+  source: >2
+      });
+  
+    test('SeedRegistrationPhase persists bootstrap epoch directly when config
+    leader is not yet elected',
+  
+    ^
+      async (t) => {
+        const writer = createWriterRecorder();
+  ...
+
+1..5
+# { total: 6, pass: 0, fail: 6 }
+# time=77.309ms
+ok test/bootstrap/seed-retained-effects-preparation.test.js (9 assertions, 39876ms)
+not ok test/bootstrap/seed-retained-effects.integration.test.js (3 assertions, 32224ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: message_groups: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+not ok 1 - message_groups: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+  ---
+  duration_ms: 10362.885248
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:106:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    actual native commit reached the held SQL application callback
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:137:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: tables: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+not ok 2 - tables: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+  ---
+  duration_ms: 10253.49299
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:106:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    actual native commit reached the held SQL application callback
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:137:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: partitions: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+not ok 3 - partitions: real committed original SQL stays pending cold, then ordinary replay retains one outcome and owed event visible through SystemTableCache
+  ---
+  duration_ms: 10277.396297
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:106:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    actual native commit reached the held SQL application callback
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.integration.test.js:137:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 0
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 30901.918832
+# time=32224ms
+not ok test/bootstrap/seed-retained-effects.test.js (154 assertions, 1900ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: original producer SQL is observed in each native range without applying pending work
+    # Subtest: message_groups: applied
+    not ok 1 - message_groups: applied
+      ---
+      duration_ms: 24.152606
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: message_groups: committed-pending
+    not ok 2 - message_groups: committed-pending
+      ---
+      duration_ms: 6.987672
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: message_groups: local-uncommitted
+    not ok 3 - message_groups: local-uncommitted
+      ---
+      duration_ms: 4.321121
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: tables: applied
+    not ok 4 - tables: applied
+      ---
+      duration_ms: 6.335048
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: tables: committed-pending
+    not ok 5 - tables: committed-pending
+      ---
+      duration_ms: 5.095908
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: tables: local-uncommitted
+    not ok 6 - tables: local-uncommitted
+      ---
+      duration_ms: 4.845279
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: partitions: applied
+    not ok 7 - partitions: applied
+      ---
+      duration_ms: 6.061776
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: partitions: committed-pending
+    not ok 8 - partitions: committed-pending
+      ---
+      duration_ms: 5.182683
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: partitions: local-uncommitted
+    not ok 9 - partitions: local-uncommitted
+      ---
+      duration_ms: 9.972368
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:91:17'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:95:11)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..9
+not ok 1 - original producer SQL is observed in each native range without applying pending work
+  ---
+  duration_ms: 75.249694
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:84:1'
+  failureType: 'subtestsFailed'
+  error: '9 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: first outcome and CDC obligation survive deduplicated SQL and repeated origin
+not ok 2 - first outcome and CDC obligation survive deduplicated SQL and repeated origin
+  ---
+  duration_ms: 5.796954
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:116:1'
+  failureType: 'testCodeFailure'
+  error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+  code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+  stack: |-
+    RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+    RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+    sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+    retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:120:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: first origin resets legacy generation while later origin preserves successful effects
+not ok 3 - first origin resets legacy generation while later origin preserves successful effects
+  ---
+  duration_ms: 6.98465
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:130:1'
+  failureType: 'testCodeFailure'
+  error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+  code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+  stack: |-
+    RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+    RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+    sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+    retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:135:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: one statement identity cannot authorize a different canonical foundation row
+not ok 4 - one statement identity cannot authorize a different canonical foundation row
+  ---
+  duration_ms: 4.849408
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:143:1'
+  failureType: 'testCodeFailure'
+  error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+  code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+  stack: |-
+    RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+    RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+    sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+    retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:149:3)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: recognizing QUERY or ENABLE cannot hide a nonoriginal command effect
+    # Subtest: noncanonical SQL
+    not ok 1 - noncanonical SQL
+      ---
+      duration_ms: 3.839292
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: changed immutable row identity
+    not ok 2 - changed immutable row identity
+      ---
+      duration_ms: 3.483176
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: changed creation stamp
+    not ok 3 - changed creation stamp
+      ---
+      duration_ms: 3.432016
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: missing parameters
+    not ok 4 - missing parameters
+      ---
+      duration_ms: 3.747675
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: extra parameter
+    not ok 5 - extra parameter
+      ---
+      duration_ms: 3.421481
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: foreign proposer
+    not ok 6 - foreign proposer
+      ---
+      duration_ms: 4.033701
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: malformed timestamp
+    not ok 7 - malformed timestamp
+      ---
+      duration_ms: 3.591205
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: foreign but valid timestamp identity
+    not ok 8 - foreign but valid timestamp identity
+      ---
+      duration_ms: 3.589074
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: negative proposed time
+    not ok 9 - negative proposed time
+      ---
+      duration_ms: 3.77117
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: session work
+    not ok 10 - session work
+      ---
+      duration_ms: 9.089439
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: transaction work
+    not ok 11 - transaction work
+      ---
+      duration_ms: 3.599078
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: split mirror work
+    not ok 12 - split mirror work
+      ---
+      duration_ms: 3.317369
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: transaction command
+    not ok 13 - transaction command
+      ---
+      duration_ms: 3.062573
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: ENABLE carrying SQL
+    not ok 14 - ENABLE carrying SQL
+      ---
+      duration_ms: 3.017532
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:174:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:177:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..14
+not ok 5 - recognizing QUERY or ENABLE cannot hide a nonoriginal command effect
+  ---
+  duration_ms: 56.575345
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:153:1'
+  failureType: 'subtestsFailed'
+  error: '14 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: original source stamps bind the actual proposer while preserving forwarded command bytes
+    # Subtest: ENABLE: valid HLC from a different producer is contrary
+    not ok 1 - ENABLE: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 3.218801
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:186:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:194:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: QUERY: valid HLC from a different producer is contrary
+    not ok 2 - QUERY: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 3.155383
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:186:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:194:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: CDC_DELIVERED: valid HLC from a different producer is contrary
+    not ok 3 - CDC_DELIVERED: valid HLC from a different producer is contrary
+      ---
+      duration_ms: 4.492534
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:186:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:194:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: another declared founder stamps a forwarded original command
+    not ok 4 - another declared founder stamps a forwarded original command
+      ---
+      duration_ms: 3.041031
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:198:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:207:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..4
+not ok 6 - original source stamps bind the actual proposer while preserving forwarded command bytes
+  ---
+  duration_ms: 14.430724
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:183:1'
+  failureType: 'subtestsFailed'
+  error: '4 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: catalog identity and unused publication rights do not admit service or config work
+    # Subtest: services
+    not ok 1 - services
+      ---
+      duration_ms: 3.117052
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:217:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:219:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: config
+    not ok 2 - config
+      ---
+      duration_ms: 3.234232
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:217:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:219:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: substituted member incarnation
+    not ok 3 - substituted member incarnation
+      ---
+      duration_ms: 3.054337
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:224:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:226:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.sta
+# ... 138249 byte(s) elided; full output in .tap/test-results/test/bootstrap/seed-retained-effects.test.js.tap ...
+103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:760:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: unowned trigger on _partition_statement_outcomes
+    not ok 3 - unowned trigger on _partition_statement_outcomes
+      ---
+      duration_ms: 3.109078
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:774:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:776:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: unowned trigger on _participant_transactions
+    not ok 4 - unowned trigger on _participant_transactions
+      ---
+      duration_ms: 3.001464
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:774:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:776:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: unowned trigger on _partition_write_generation
+    not ok 5 - unowned trigger on _partition_write_generation
+      ---
+      duration_ms: 3.212061
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:774:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:776:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: unowned trigger on _cdc_obligations
+    not ok 6 - unowned trigger on _cdc_obligations
+      ---
+      duration_ms: 2.956259
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:774:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:776:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: generation singleton constraint cannot be widened
+    not ok 7 - generation singleton constraint cannot be widened
+      ---
+      duration_ms: 3.600919
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:788:11'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:790:5)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..7
+not ok 24 - internal owner indexes and effect surfaces remain required even without rows
+  ---
+  duration_ms: 25.562705
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:754:1'
+  failureType: 'subtestsFailed'
+  error: '7 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: the generation owner rejects a second persisted singleton under unchanged canonical DDL
+not ok 25 - the generation owner rejects a second persisted singleton under unchanged canonical DDL
+  ---
+  duration_ms: 3.234478
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:804:1'
+  failureType: 'testCodeFailure'
+  error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+  code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+  stack: |-
+    RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+    RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+    sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+    retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:807:5)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+  ...
+# Subtest: actual old-owner ALTER upgrades retain schema compatibility for the read-only observer
+    # Subtest: _partition_statement_outcomes
+    not ok 1 - _partition_statement_outcomes
+      ---
+      duration_ms: 2.962244
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:846:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:848:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: _partition_write_generation
+    not ok 2 - _partition_write_generation
+      ---
+      duration_ms: 2.799212
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:846:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:848:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..2
+not ok 26 - actual old-owner ALTER upgrades retain schema compatibility for the read-only observer
+  ---
+  duration_ms: 6.138905
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:837:1'
+  failureType: 'subtestsFailed'
+  error: '2 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: outcome and CDC censuses reject malformed raw SQLite types before coercion
+    # Subtest: _partition_statement_outcomes.log_index: BLOB
+    not ok 1 - _partition_statement_outcomes.log_index: BLOB
+      ---
+      duration_ms: 4.0074
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _partition_statement_outcomes.term: BLOB
+    not ok 2 - _partition_statement_outcomes.term: BLOB
+      ---
+      duration_ms: 3.787199
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _partition_statement_outcomes.changes: BLOB
+    not ok 3 - _partition_statement_outcomes.changes: BLOB
+      ---
+      duration_ms: 3.529469
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _partition_statement_outcomes.last_insert_rowid: BLOB
+    not ok 4 - _partition_statement_outcomes.last_insert_rowid: BLOB
+      ---
+      duration_ms: 6.546914
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _partition_statement_outcomes.log_index: number
+    not ok 5 - _partition_statement_outcomes.log_index: number
+      ---
+      duration_ms: 4.030006
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _partition_statement_outcomes.term: string
+    not ok 6 - _partition_statement_outcomes.term: string
+      ---
+      duration_ms: 4.001746
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.log_index: BLOB
+    not ok 7 - _cdc_obligations.log_index: BLOB
+      ---
+      duration_ms: 4.0103
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.term: BLOB
+    not ok 8 - _cdc_obligations.term: BLOB
+      ---
+      duration_ms: 3.860415
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.ordinal: BLOB
+    not ok 9 - _cdc_obligations.ordinal: BLOB
+      ---
+      duration_ms: 3.966884
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.delivered: BLOB
+    not ok 10 - _cdc_obligations.delivered: BLOB
+      ---
+      duration_ms: 3.722152
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.ordinal: number
+    not ok 11 - _cdc_obligations.ordinal: number
+      ---
+      duration_ms: 3.738621
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: _cdc_obligations.delivered: string
+    not ok 12 - _cdc_obligations.delivered: string
+      ---
+      duration_ms: 3.764802
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:894:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:896:19)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: BLOB JSON cannot masquerade as a TEXT source event
+    not ok 13 - BLOB JSON cannot masquerade as a TEXT source event
+      ---
+      duration_ms: 3.782499
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:911:11'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:912:15)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+      ...
+    # Subtest: delivered ACK delivered_index rejects BLOB decimal bytes
+    not ok 14 - delivered ACK delivered_index rejects BLOB decimal bytes
+      ---
+      duration_ms: 4.389338
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:921:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:924:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: delivered ACK delivered_term rejects BLOB decimal bytes
+    not ok 15 - delivered ACK delivered_term rejects BLOB decimal bytes
+      ---
+      duration_ms: 4.050684
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:921:13'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:924:7)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..15
+not ok 27 - outcome and CDC censuses reject malformed raw SQLite types before coercion
+  ---
+  duration_ms: 62.969372
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:878:1'
+  failureType: 'subtestsFailed'
+  error: '15 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: owner censuses retain exact large INTEGER positions and results without Number rounding
+not ok 28 - owner censuses retain exact large INTEGER positions and results without Number rounding
+  ---
+  duration_ms: 3.864673
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:937:1'
+  failureType: 'testCodeFailure'
+  error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+  code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+  stack: |-
+    RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+    RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+    file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+    sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+    retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+    appliedFoundation (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:69:3)
+    TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:939:15)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+  ...
+# Subtest: participant census validates raw integer/text fields and re-reads restored valid rows
+    # Subtest: transaction_epoch
+    not ok 1 - transaction_epoch
+      ---
+      duration_ms: 5.795144
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: prepare_index
+    not ok 2 - prepare_index
+      ---
+      duration_ms: 3.158153
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: prepare_term
+    not ok 3 - prepare_term
+      ---
+      duration_ms: 3.191443
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: decision_index
+    not ok 4 - decision_index
+      ---
+      duration_ms: 3.43265
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: decision_term
+    not ok 5 - decision_term
+      ---
+      duration_ms: 3.17922
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: operations_text
+    not ok 6 - operations_text
+      ---
+      duration_ms: 2.962666
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    # Subtest: session_id
+    not ok 7 - session_id
+      ---
+      duration_ms: 2.91175
+      type: 'test'
+      location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:974:15'
+      failureType: 'testCodeFailure'
+      error: 'the rs-raft store refuses to write while its connection is inside a transaction the store did not open'
+      code: 'RAFT_RS_STORE_USER_TRANSACTION_OPEN'
+      stack: |-
+        RaftRsDurableStore.admitWrite (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:400:9)
+        RaftRsDurableStore.putAppliedState (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/src/raft/raft-rs-durable-store.js:514:10)
+        file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:134:11
+        sqliteTransaction (/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/node_modules/better-sqlite3/lib/methods/transaction.js:65:24)
+        retain (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects-fixture.js:135:5)
+        TestContext.<anonymous> (file:///home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:976:9)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+      ...
+    1..7
+not ok 29 - participant census validates raw integer/text fields and re-reads restored valid rows
+  ---
+  duration_ms: 25.477775
+  type: 'test'
+  location: '/home/peter/.local/state/lagrange-lab-worker/generic/runs/c139d76b-7d27-4493-bfc8-103657827173/work/source/test/bootstrap/seed-retained-effects.test.js:965:1'
+  failureType: 'subtestsFailed'
+  error: '7 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..29
+# tests 154
+# suites 0
+# pass 5
+# fail 149
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 660.875362
+# time=1900ms
+ok test/bootstrap/seed-original-attempt-lifetime.test.js (21 assertions, 184406ms)
+# test-files total=7 pass=3 fail=4 assertions=215
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 46C (coretemp/Package id 0) nvme unmeasured
+ok test/partition/participant-origin-retained-history.integration.test.js (2 assertions, 1962ms)
+# test-files total=1 pass=1 fail=0 assertions=2

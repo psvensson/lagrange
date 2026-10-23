@@ -1069,3 +1069,541 @@ The preserved pre-addendum review prefix hashes to
 `e29eb60abeb4dfbb21aedba3d09b9c7d0aa7d1dc4e6c3252965ad16d5bcae8b9`,
 confirming this reviewer only appended to the existing review evidence.
 
+## Exact-candidate static lab evidence, 2026-10-23
+
+The static evidence condition now has an independently inspected PASS for
+source commit `68633168ef17759fec954e6ef66b4ccb0d671bc7`, against base
+`f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc`. This supplements the source-only R2
+approval; it does not approve runtime behavior, full Quest closure, original
+startup, activation, durable transfer, MG delivery, two-start acceptance,
+merge or publication. Runtime job #912 is outside this static verdict.
+
+The [original static terminal receipt](https://github.com/psvensson/lagrange-lab/issues/913#issuecomment-6359224376)
+reports explicit PASS, exit 0, source execution started and the exact source
+SHA. Its request `3f3fd0be17bf4128afdee9ed4b3c319f`, controller
+`b4a2e06c193c44b09f1b67d02e8d80f4`, envelope digest
+`a92dd977d3e8253793ed93edd7eea7e4d89fb48d9ea02f8de9cf9f49937c79b7`
+and payload digest
+`45193dbd9807ad7accd8d3e1972e65739ff13208b8d598cd32aba3d9dfa280f9`
+match the submitted packet. The actual host is `local-workstation`. Both
+execution scope flags are closed; its worker reports exit 0 and closed
+execution, container and thermal scopes, with no failure reason.
+
+The [complete worker-log retrieval receipt](https://github.com/psvensson/lagrange-lab/issues/916#issuecomment-6359270969)
+is a read-only evidence query for that same original job and host, not another
+source execution. I independently checked the local log bytes against its
+decoded base64 and text, original worker receipt, chunk digest and raw log
+digest. All match: 2952 bytes, offset 0, next offset 2952, complete/eof true,
+no truncation, SHA256
+`da3abe1234685f81059a45a4c05515c0e3c93afad31a0a6d978ae9a1f54de47a`.
+The inspected local artifacts are `/tmp/retained-effects-static-worker.log`,
+`/tmp/retained-effects-static-evidence0.json` and the filtered original
+receipts `/tmp/retained-effects-static-receipts.json`. The digest and durable
+receipt links identify the evidence independently of those temporary paths.
+
+The log confirms Node v22.23.2 and npm 10.9.8, metadata refresh and audit for
+2443 tests, and 22 subsystem classifications. Primary classification counts
+are unit 2114, integration 109, bootstrap 213, convergence-probe 3 and packaging
+4. The refreshed primary/resource/subsystem digests are respectively
+`fnv1a32-1508ee04`, `fnv1a32-b1441642` and `fnv1a32-48b237b8`, matching the
+reviewed generated census. The graph snapshot digest is
+`4765461cbc1309ee2b55f3559ab1ff297d37c5e66495695ae06fbaf494cc0546`.
+
+All fourteen fast-static checks explicitly report `ok`:
+
+1. `test:deps`
+2. `audit:shards`
+3. `test:metrics:scoped`
+4. `audit:runtime-grammar`
+5. `eslint(27 changed)`
+6. `audit:current-capabilities`
+7. `audit:doc-ascii`
+8. `test:metadata-gateway:audit`
+9. `audit:impact-contracts`
+10. `audit:roadmap-authority`
+11. `audit:doc-audience`
+12. `audit:cli-docs`
+13. `audit:service-portability-claims`
+14. `audit:closure-ledger`
+
+Fast-static reports success in 12029 ms for the stated proof range, with 39
+changed paths and 27 JavaScript paths. The final script result explicitly
+reports `metadata_refresh_exit: 0`, `metadata_audit_exit: 0`,
+`fast_static_exit: 0` and `tracked_tree_exit: 0`. Thus refresh reproduced the
+tracked metadata, its audit passed, all selected static checks passed, and
+the worker's final `git diff --exit-code HEAD` found no tracked changes.
+This is measured static evidence for the exact preserved source, not an
+inference from COMPLETE alone and not a substitute for runtime witnesses.
+
+Only this review addendum was written by the reviewer; no source, test,
+submission, retry or lab execution was performed during evidence inspection.
+
+## Exact-candidate runtime failure evidence, 2026-10-23
+
+**Runtime verdict: FAIL; acceptance remains open.** I independently inspected
+the complete source-bound log and receipt chain for source
+`68633168ef17759fec954e6ef66b4ccb0d671bc7`. The source-only R2 review and static
+PASS above remain evidence for their stated scopes; neither converts this
+runtime failure into acceptance. No moving test repair was reviewed in this
+pass, and no production/source/test change or runtime execution was performed
+by this reviewer.
+
+### Receipt and full-log custody
+
+The [original runtime terminal receipt](https://github.com/psvensson/lagrange-lab/issues/912#issuecomment-6359304028)
+reports FAIL, exit 1, source execution started, and the exact source SHA. Its
+request `c139d76b7d274493bfc8103657827173`, controller
+`b4a2e06c193c44b09f1b67d02e8d80f4`, request digest
+`1fb584d6aaa70376ed22fa6ef31d1df5644779a8e7b9f6248e83334d837aab00`
+and payload digest
+`dba72b260409181347a90fb7b9ddcfd1a277217f6e11a1043ec729fde38165f0`
+match the submitted runtime packet. The actual host is `lenovo-laptop`.
+Execution/scope, worker execution, container and thermal cleanup all report
+closed. The worker has no separate infrastructure-failure reason and reports
+an untruncated original log. SSD thermal measurement is absent; cleanup closure
+does not constitute a broader thermal or performance certification.
+
+The inspected full worker log is 157961 bytes, SHA256
+`0ebbea165efc53bd6160d746927b1c06810405ddd9702f023308d63fc31bf715`.
+I independently hashed the complete file and each of the 21 contiguous chunks
+in `/tmp/retained-effects-runtime-log-custody.json`, verifying offset continuity
+from 0 through 157961, each returned byte count/raw/chunk digest, one original
+job/host/stream identity, final complete/eof and no truncation. The stream is
+`26de7bedb37cfa50e2422416e82b8e1dc024bee18719a7b5267b301161f3e0c1`.
+This matches the original worker log/output digests in #912; the controller's
+short combined worker-tail digest is not substituted for the full log.
+
+The [failed retrieval #921](https://github.com/psvensson/lagrange-lab/issues/921#issuecomment-6359386451)
+reports read-only UNAVAILABLE at offset 28037 with COMMAND_FAILED:ssh:255 and
+executed_source false. The [reconciled retrieval #939](https://github.com/psvensson/lagrange-lab/issues/939#issuecomment-6359429322)
+supplies exactly bytes 28037 through 36037 of the same stream, whose hash I
+checked against the assembled file. All successful chunk receipts identify
+read-only retrieval of the original worker log with executed_source false.
+The failed evidence transport is preserved and was not a duplicate source run.
+
+### Complete classified census
+
+The packet selects 27 files and the complete log contains 27 unique final
+file summaries. Its classified-runner totals are:
+
+| Lane | Files | Passed | Failed | Runner-reported assertions |
+| --- | ---: | ---: | ---: | ---: |
+| ordinary | 19 | 19 | 0 | 576 |
+| bootstrap | 7 | 3 | 4 | 215 |
+| exclusive | 1 | 1 | 0 | 2 |
+| total | 27 | 23 | 4 | 793 |
+
+These are the runner's assertion counts, not 793 successful assertions. The
+23 wholly passing files account for 609 reported assertions. The generic
+worker driver's `tests:154, pass:5, fail:149` describes only the final failed
+Node TAP file, `seed-retained-effects.test.js`; it is not the job census.
+`completed_test_files:null` in that generic driver does not erase the 27
+explicit final classified file summaries in the complete original log.
+
+The nineteen ordinary passes include the existing origin history, native
+durable store/Ready/persistence/restart, committed statement, participant,
+CDC obligation/generator and CDC mutation regression files. The bootstrap
+passes are `seed-registration-phase-custody.test.js` (1), the new
+`seed-retained-effects-preparation.test.js` (9), and
+`seed-original-attempt-lifetime.test.js` (21). The exclusive origin-history
+integration file reports 2. Their successes are real evidence for their
+individual scopes, not proof of the failing new classification/native cuts.
+
+### Failure mechanisms and exact proof gaps
+
+1. **New classification fixture violates native transaction custody.**
+   `test/bootstrap/seed-retained-effects.test.js` reports 154, with its Node
+   TAP summary pass 5/fail 149. Repeated leaf failures are
+   RAFT_RS_STORE_USER_TRANSACTION_OPEN at the shared fixture's
+   `retain`/`store.putAppliedState` call. I inspected the immutable source
+   fixture at `68633168`: it opens `db.transaction` at lines 123-135 and then
+   asks the native store to write its applied state. The native owner's
+   `persistenceAdmission`/`admitWrite` at `raft-rs-durable-store.js:385-403`
+   intentionally forbids writes under a transaction it did not open. This is
+   one systematic fixture/owner-boundary defect across the affected cases,
+   not dozens of measured classifier regressions. Most exact classification,
+   schema, type, obligation, ACK and restoration assertions never reached their
+   intended observation cut. Fixing the fixture must retain the native owner's
+   transaction authority; this failure supplies no reason to weaken that guard.
+2. **Two older component fixtures omit required continuation authority.**
+   `seed-registration-election-scheduling.test.js` reports 16 and
+   `seed-registration-phase.test.js` reports 11. Their failures include
+   `d.assertOriginalSeedContinuation is not a function`, before intended
+   election/writer/registration effects. The expected downstream event/failure
+   comparisons consequently also fail. I inspected base `f5fb317b`: both
+   production continuation guards already exist there, and both test files
+   are unchanged between that base and `68633168`. This establishes the source
+   applicability of the fixture omission, not a measured same-host predecessor
+   result. The run does not prove those election, activation-deferred or epoch
+   registration assertions. The mandatory production guard remains in force.
+3. **All three new native SQL witnesses stop before fault engagement.**
+   `seed-retained-effects.integration.test.js` reports 3 failures: message_groups,
+   tables and partitions each fail the assertion that actual native commit
+   reached the held SQL callback at line 137, after their 10000ms wait. The
+   log does not show a held native SQL entry, post-crash ordinary SQL replay,
+   canonical foundation outcome/event, provisional cache delivery or final
+   duplicate-answer assertion. It therefore cannot prove loss at any of those
+   later cuts or count them as successful witnesses.
+
+   Subsequent immutable-source inspection supports the identified prerequisite
+   error: `partition-participant-transaction-pause.js:191-215` creates CLOSED
+   admission for a standalone service, and
+   `partition-service-raft-write-commit.js:441-455` returns the typed paused
+   answer before proposing an ordinary write. ENABLE uses the separate
+   `startPartitionRaftWriteCommit` path in
+   `partition-participant-transaction-request.js:724-727`; applying ENABLE is
+   not a release grant for ordinary writes. These production owners are
+   unchanged from the base. The failed test swallowed the ordinary write
+   answer while waiting for a callback, so that typed refusal is a source
+   diagnosis here, not a runtime outcome captured by this log.
+
+The successful preparation test supplies the real diagnostic startup/custody
+evidence it exercised, including hold behavior and exact failed-close custody.
+It does not replace the blocked unit correspondence cases or native SQL replay
+witness. The new native cases reached their setup/ENABLE/pre-SQL observation,
+but failed before the foundation SQL mechanism under test; that is the literal
+engagement boundary for this attempt.
+
+### Required next evidence
+
+Preserve this exact failed attempt. Freeze and independently review the fixture
+repairs before rerunning the applicable classified cone on an exact preserved
+candidate. A narrowed test that asserts ordinary CUTOVER_PAUSED first and then
+uses a real native proposal may prove retained classification/native replay;
+it must explicitly remain outside original startup/public-write release proof.
+No fabricated admission release, guard change, skipped negative or enlarged
+deadline follows from this evidence review. The moving repair and that narrowed
+witness have not been approved here.
+
+Re-execution must actually engage the repaired transaction boundary, component
+continuation delegates and all three held native SQL callbacks, then prove the
+remaining read-only/replay/CDC/outcome/ACK assertions. Compare predecessor on
+the same host before attributing a runtime regression when needed; source
+inspection alone is not that comparison. Static success and the 23 passing
+files do not settle the remaining runtime condition. Full Quest receipts,
+MG completion, R1/R2 activation/transfer, composed two-start acceptance and
+release gates remain outside this failed candidate's evidence.
+
+## R3 frozen test-repair source review, 2026-10-23
+
+Verdict: **REVISE**, for the single material fixture defect R3-T1 below.
+This is a source review of the six frozen test/helper repairs after failed
+runtime #912. It neither approves a new runtime candidate nor changes the
+earlier production source-only disposition. No production, test, metadata,
+runtime or lab work was performed by this reviewer.
+
+The reviewed six-file manifest is
+[MANIFEST-retained-effects-test-repair-r3-2026-10-23.json](MANIFEST-retained-effects-test-repair-r3-2026-10-23.json)
+(local request `/tmp/retained-effects-test-repair-manifest-r3.json`), SHA256
+`c08e24cd7c1310b160b00511d6188e14f69e0d09023758b4971657b33e250ce9`.
+All six files matched both at initial inspection and at the final audit before
+this append. The full 36-file source/test/generated manifest
+[MANIFEST-retained-effects-replacement-r3-2026-10-23.json](MANIFEST-retained-effects-replacement-r3-2026-10-23.json),
+SHA256 `fcc07b389328f2fe8ba110e9224076f6d3fa248f37e4e2ca77f976ecd58879b3`,
+also matched with zero mismatches at both checks. Production has no diff from
+`68633168ef17759fec954e6ef66b4ccb0d671bc7`. The generated changes observed
+are import-graph/inventory fingerprints and subsystem observation paths;
+their 2443-file census and inherited aggregate debt counts do not grant test
+acceptance or clear existing debt. Root reports the normal staged hook passed;
+this is not a reviewer-executed runtime or static-lab result.
+
+### Finite material finding
+
+**R3-T1: the registration refusal fixture does not faithfully reach every
+guard it claims to prove.** In frozen
+`test/bootstrap/seed-registration-phase.test.js:389-413`, the shared negative
+loop supplies no `getEpochManager`, while asserting that no logger or clock
+dependency may be read before the refusal. Actual
+`src/bootstrap/phases/seed-registration-phase.js:201-204` and `:321-324`
+read the logger before `ensureSystemTableWriter` consults continuation. Thus
+the service/meta cases receive the correct refusal but fail their empty-read
+expectation. `persistCurrentEpochIfMissing` at `:563-588` first obtains the
+epoch manager, looks for the config leader, serializes the current epoch and
+reads the hosted clock. Its new fixture instead throws a missing-delegate
+TypeError before it can reach the continuation guard. This is a deterministic
+source finding, not a claim that these newly written tests were executed.
+
+Correct the component fixture by providing valid read-only prerequisites for
+the actual path and separating allowed prerequisite observations from
+protected writer acquisition/publication, mutation, CDC and activation effects.
+Keep the exact original typed refusal and guard-call count assertions. The
+phase-entry and direct writer cases can still assert that no prerequisites
+are read; lower-level methods must reflect their actual guard location. Do
+not move or weaken production guards merely to make a fixture expectation true.
+Root and the census author independently identified this same defect and are
+repairing the one test file plus separately enumerated adjacent fixtures. Those
+moving/supplemental files are outside this frozen disposition and require new
+fingerprints before approval.
+
+### Unaffected repairs and proof limits
+
+- The shared storage fixture now calls the actual
+  `applyCommittedEntryTransaction` with `RaftRsDurableStore.transaction` and
+  the actual partition committed-entry callback. The owner at
+  `src/raft/raft-rs-application-transaction-owner.js` advances application and
+  native applied state in one store-owned transaction. The fixture captures
+  the actual deferred callback batch only through that owner's after-commit
+  release; it deliberately does not execute delivery/notification callbacks.
+  Its MG storage-only fixture continues to have no application callback and
+  makes no native MG application claim.
+- The new paired storage controls retain USER_TRANSACTION_OPEN under a
+  caller-owned BEGIN and verify no native/application bytes change. A trigger
+  faults the actual applied-state write after SQL application, then verifies
+  rollback of row, statement outcome, lazy CDC ledger and generation, with no
+  SQL batch released. Removing the fault and replaying through the same owner
+  restores one outcome, one owed occurrence and generation one. This directly
+  attacks the transaction boundary that failed #912; a raw caller transaction
+  shortcut cannot satisfy the restored positive path. Written assertions
+  remain unexecuted in this review.
+- `seed-phase-continuation-fixture.js` uses the real
+  `createBootstrapServiceSeedDelegateMethods()._buildPhaseExecutionDelegates`
+  adapter and explicitly substitutes the component decision. Positive checks
+  measure forwarding/call counts; they do not establish original-startup
+  authority. The election refusal preserves the exact owner error and starts
+  no election or wait. The unchanged real BootstrapService continuation-HOLD
+  test in `seed-original-attempt-lifetime.test.js:404-430` remains the separate
+  authority witness; it passed in #912. R3-T1 must be repaired before treating
+  the new registration negative as equivalent evidence.
+- The native RF1 fixture first exercises ordinary `executeQuery`, asserting
+  exact CUTOVER_PAUSED/deferRetry and unchanged native/application observation.
+  It then uses the existing `buildPartitionWriteEntry` with the actual service
+  HLC, replica and clock, and the public native operation port to propose the
+  intended retained bytes. It changes no admission/release state. The runtime
+  proposal owner drains Ready and returns its application HOST_FAILURE, so the
+  held-callback/typed-failure assertions correspond to the actual path rather
+  than mistaking an answered proposal for successful application.
+- The resulting native witness is narrowly about real persistence, pending
+  SQL, cold unchanged storage and ordinary durable-record replay. Its exact
+  command/index/term, row/outcome/owed-event, provisional cache delivery and
+  durable same-entry answer assertions remain meaningful for each of the three
+  foundation tables. The direct native proposal is an explicitly bounded
+  fixture entry point; it does not prove public write release, original RF3
+  cohort admission, original startup continuation or publication. No later
+  assertion is a passed witness until the new preserved candidate runs.
+
+### Category-complete delta coverage
+
+1. **Authority/observation:** production classification and continuation
+   authority are unchanged. The real delegate adapter forwards one decision;
+   R3-T1 concerns where the fixture observes that decision, not a new grant.
+2. **Recovery/replay:** the actual transactional apply owner replaces the
+   rejected foreign transaction. Rollback and restored replay are paired;
+   native cold replay retains exact occurrences and settled outcomes.
+3. **Owner interaction:** native durability, application, participant origin,
+   outcome and CDC owners retain their decisions. The test never accepts a
+   forged release. Generated observation paths track the changed helper and
+   builder imports; the production interaction contract remains unchanged.
+4. **Harness fidelity:** R3-T1 is the sole material finding in this six-file
+   delta. The remaining fixtures explicitly separate storage/component/native
+   proof from complete original-cohort proof and preserve the real fault cut.
+5. **Transport/delivery:** deferred storage callbacks are not recipient ACKs;
+   the native provisional cache result leaves the exact source debt owed.
+   Full MG source-occurrence/recipient proof remains outside the observer.
+6. **Concurrency/serialization:** the store owns transaction depth and rollback;
+   native callbacks fail inside the actual apply transaction. Shutdown still
+   verifies closed database/port/handler before cold reopen, and a failed close
+   preserves the directory rather than erasing custody.
+7. **Formation circularity:** the direct native proposal is a test-only route
+   to retained history with ordinary admission explicitly held. It is not an
+   implementation solution to the original release/startup dependency.
+8. **Retry/re-drive:** replay follows the ordinary durable opening, and same
+   entry retry uses the durable outcome before admission. No new occurrence,
+   timer, release loop or production fallback is introduced by these repairs.
+9. **Sweep/timer:** existing 30000ms test and 10000ms group budgets remain;
+   callback or typed proposal outcome is observed rather than extending a
+   timeout. No timing, load or full startup success is inferred from source.
+
+### Preserved lab references and next gate
+
+The prior complete evidence now has repository artifacts:
+[LAB-912-retained-effects-runtime-2026-10-23.txt](LAB-912-retained-effects-runtime-2026-10-23.txt)
+is exactly 157961 bytes, SHA256
+`0ebbea165efc53bd6160d746927b1c06810405ddd9702f023308d63fc31bf715`;
+[LAB-913-retained-effects-static-2026-10-23.txt](LAB-913-retained-effects-static-2026-10-23.txt)
+is exactly 2952 bytes, SHA256
+`da3abe1234685f81059a45a4c05515c0e3c93afad31a0a6d978ae9a1f54de47a`.
+Both preserved files were independently rehashed here. The associated
+[runtime custody](LAB-912-retained-effects-log-custody-2026-10-23.json),
+[runtime receipts](LAB-912-retained-effects-receipts-2026-10-23.json) and
+[static receipts](LAB-913-retained-effects-receipts-2026-10-23.json) preserve the
+already reviewed custody chain. #912 remains FAIL with 27 files, 23 passed,
+4 failed and 793 runner-reported assertions; #913 remains the exact old
+candidate's static PASS. Neither applies as a passing execution of these
+new test bytes.
+
+Freeze R3-T1's correction and the separately scoped adjacent test repairs,
+regenerate exact metadata, and review that delta before preserving the next
+lab candidate. Conditional source approval of the unaffected repairs is not
+an approval of this rejected six-file set. New exact-candidate runtime and
+static evidence are still required; full Quest, MG completion, activation,
+transfer, composed two-start acceptance and merge remain excluded.
+
+At this review boundary all six and all 36 manifest hashes still matched.
+The previous 81815-byte review prefix hashes to
+`f438bf5a4c37987e34a09c9dedf767fe760ca1e62b9591d634d97787792d2134`;
+this addendum is append-only.
+
+Post-append custody check: root had explicitly released only
+`seed-registration-phase.test.js` for R3-T1 repair while this addendum was
+being written. That file now differs from the rejected R3 manifest; the
+other five repair files and other 35 full-manifest files still match, and
+production remains byte-unchanged from `68633168`. This is the authorized
+next repair, not part of the R3 findings or an approved substitution. Its
+new bytes await a new frozen manifest and bounded review.
+
+## R4 frozen repair approval, 2026-10-23
+
+Verdict: **APPROVE, source-only and conditional on fresh exact-candidate lab
+evidence.** R3-T1 is resolved in the revised registration fixture. No additional
+material source finding remains in the combined eleven test/support files or
+their refreshed metadata. This permits preservation of the reviewed non-main
+candidate for the proposed lab run. It is not runtime acceptance, Quest
+closure, startup/activation/transfer/MG proof, composed two-start acceptance,
+publication or merge approval.
+
+I independently verified all eleven files against
+[MANIFEST-retained-effects-test-repair-r4-2026-10-23.json](MANIFEST-retained-effects-test-repair-r4-2026-10-23.json),
+SHA256 `84fe267689a4cfbc96f7798d7742cf30a8b5cb0126478484ef0803d3801dc0ef`,
+before and after inspection. I also verified all 41 source/test/generated
+files in
+[MANIFEST-retained-effects-replacement-r4-2026-10-23.json](MANIFEST-retained-effects-replacement-r4-2026-10-23.json),
+SHA256 `20ed417b3815b092ca2253cce64773bbc913feb1b1f53e93fdad8935e3b14cfe`.
+Both repository copies equal the supplied `/tmp` manifests. Production has
+zero diff from `68633168ef17759fec954e6ef66b4ccb0d671bc7`; the five unaffected
+R3 repair files retain their reviewed hashes. Test working bytes equal staged
+bytes. Only this review evidence was written by this reviewer; no source,
+tests, metadata, lab submissions or local runtime execution were performed.
+
+### Finite disposition of the correction and adjacent census
+
+- **R3-T1 resolved.** Registration test SHA256
+  `d3e479f7aa74ef41745cd6d153392889582783ecac74c99e77a7887ead89b955`
+  explicitly separates allowed observations from forbidden effects. Direct
+  phase/writer calls read no prerequisites; service/meta registration reads
+  its logger. The epoch case supplies the actual leader lookup prerequisites,
+  an empty successful epoch SELECT, epoch serialization and a hosted clock.
+  Its expected read sequence matches `SeedRegistrationRuntimeOwner` and
+  `resolveHostedNodeClock`; it then requires the exact original continuation
+  error, one guard consultation and no writer acquisition/publication,
+  mutation, CDC acquisition, leadership or activation effect. No production
+  guard was moved or weakened.
+- **Cluster identity component repaired.** `cluster-identity-mint.test.js`
+  uses the previously reviewed real delegate adapter. The missing-identity
+  case reaches writer continuation once; the existing-identity case returns
+  from the real read path before the writer and consults continuation zero
+  times. The tests retain their identity-format, attribution, default-value
+  and no-remint assertions. This component decision substitution grants no
+  original-startup authority.
+- **Storage refusal components repaired.** The managed-split negative and
+  durable-generation negative pass frozen identity-only options through the
+  real `admitOriginalSeedReplica` delegate adapter to a scoped prior-decision
+  double. They assert exact option-object forwarding and one consultation.
+  `SeedPartitionsPhase.createBootstrapPartitionReplica:212-223` then invokes
+  the unchanged actual storage-admission owner before touching the partition
+  map. The tests require the intended CLEANUP_IN_PROGRESS or
+  CREATE_OWNER_DEFERRED outcome and zero acquisition. The durable-generation
+  case still starts with a real SQLite cleanup row and preserves its token in
+  the actual startup snapshot. The double supplies no original opening token,
+  membership, database path, current-generation grant or constructed replica;
+  its only claimed purpose is reaching the independently owned negative.
+- **Replication-policy census remains non-vacuous.** The structural helper
+  now includes the actual extracted row owner. The test pins the original
+  registration phase to zero inline writes, `seed-foundation-rows.js` to its
+  exact two declared-default identifiers, and create-message-group to one.
+  It preserves identifier-expression checks, exact per-file sets and total
+  three, plus the existing behavioral/schema-drift witnesses. Actual source
+  has that distribution, and the registration phase consumes the two row
+  constructors. Moving a write or adding an inline override cannot pass by
+  merely maintaining the aggregate count.
+- **Systematic scope is finite and checked.** I independently searched `test`
+  and found the stated sixteen direct constructor occurrences across seven
+  files, including the three embedded child-script occurrences. Inspected
+  leadership-only scheduling and writer-substituted replication witnesses
+  reach no continuation gate; the retained timestamp witness already has its
+  explicit spy. The other direct paths are covered by the repaired adapters
+  or negatives. Commit `7fa4d79ae` exists for the prior original-lifetime
+  guard; the named older supplemental fixtures and SeedPartitionsPhase have
+  no diff from base `f5fb317b` to `68633168`. This supports the recorded
+  inherited omission diagnosis, not a measured predecessor pass. The
+  structural stale-location assertion follows the candidate's row extraction.
+
+The earlier R3 favorable dispositions remain applicable to the unchanged
+store-owned apply/rollback fixture, actual delegate adapter, election HOLD and
+narrow native RF1 witness. The latter first proves ordinary CUTOVER_PAUSED,
+then uses the public native proposal port to create the retained-history cut;
+its direct proposal remains explicitly outside original public-write release
+and full-cohort startup proof. No test claim silently widens that scope.
+
+### Category-complete final delta check
+
+1. **Authority/observation:** original continuation, original replica opening
+   and storage admission remain separate owners. Test doubles name their
+   bounded component role and grant no actual opening capability. The exact
+   real BootstrapService HOLD witness remains selected.
+2. **Recovery/replay:** store-owned application, rollback restoration and
+   ordinary native cold replay are unchanged from reviewed R3. Identity
+   absence/existence in the cluster-mint component retains its actual path;
+   no absence becomes a recovery completion grant.
+3. **Owner interaction:** R3-T1 now reaches the genuine guarded seam with
+   valid prerequisites. Storage tests retain exact first admission forwarding
+   followed by the actual durable refusal, rather than replacing that second
+   decision. Producer/consumer extraction remains pinned by the census.
+4. **Harness fidelity:** known fixture omissions are repaired without guard
+   bypass in production, skipped tests or weakened negative expectations.
+   The new component roles, direct native witness scope and no-acquisition
+   observations are explicit. All written assertions still need execution.
+5. **Transport/delivery:** no transport, recipient receipt or ACK source
+   changes occur. Provisional cache visibility still cannot clear owed debt;
+   MG source-occurrence authority remains the separately designed increment.
+6. **Concurrency/serialization:** actual store transaction ownership and
+   failed-frontier rollback stay paired. Supplemental negatives stop before
+   resources are acquired. Original shutdown/failed-close custody is unchanged.
+7. **Formation circularity:** component doubles are not an alternative startup
+   path. The full integration file may still encounter the existing original
+   startup HOLD; its other cases remain unproved and must report honestly in
+   the next run. No readiness projection or test success grants release.
+8. **Retry/re-drive:** no deadlines, production retries, wake mechanisms or
+   generation/ACK resets change. Corrected negative setup avoids an earlier
+   TypeError while retaining the same owner refusal and later-entry boundary.
+9. **Sweep/timer:** no new sweep, timeout increase or age-derived authority
+   appears. Existing native/component budgets remain; no runtime latency or
+   convergence result is inferred from this source review.
+
+### Metadata, validation and remaining gate
+
+I inspected the refreshed inventory, graph seal and subsystem observation
+diffs. The census remains 2443; aggregate inherited debt remains 1811
+complexity findings, 47 source-duplication groups/1462 duplicated lines and
+701 test-duplication groups/26618 lines. No baseline increase is in this
+repair. These unchanged debt counts are not a claim that inherited debt has
+passed its ratchets. The preserved
+[ordinary precommit capture](STATIC-retained-effects-r4-precommit-2026-10-23.txt)
+shows the normal inventory/metadata regeneration; root reports its exit was
+zero. That local hook result is not a fresh locked-lab static receipt.
+
+The proposed `/tmp/retained-effects-runtime-tests-r4.json` contains 31 unique
+files, all represented in primary, resource and subsystem metadata. Its
+primary census is 9 bootstrap, 20 unit and 2 integration files. It retains
+the prior 27-file selection and adds the four complete supplemental executable
+test files, not only their newly repaired subcases. Consequently a new run
+must reconcile all file and assertion counters, every failure and cleanup
+custody; it cannot infer broad success from the local negative repairs.
+
+Preserve the exact reviewed blobs, then obtain fresh runtime and static lab
+evidence for that exact commit. Original #912 remains a preserved failed
+attempt, and #913 remains static evidence for `68633168`; neither is a pass
+for the new test bytes. The approved observer still grants no opening mode
+or continuation right, and none of the eight full-Quest receipts, protected
+activation, durable transfer, MG completion, composed two-start or merge gates
+is satisfied by this source-only verdict. Any subsequent source/test change
+requires its own bounded fingerprint and review.
+
+Final R4 recheck after this append: all eleven repair files and all 41
+full-manifest files still match, with zero mismatches; production diff from
+`68633168` remains empty. The prior 92625-byte review prefix hashes to
+`f2275c4680d3bc1a061bf5964d442b317fecca55e46a6c01fd8eccd4be58d61a`,
+confirming append-only custody. The 31-file selection hashes to
+`6fd941f29e0c21310d2a0c8f273df9802020edee3b798007f5cc2d47a4e08173`;
+the 3310-byte precommit capture hashes to
+`b68720f950334723199b0a875a06236ce94b715ec6dfdec0fc979da3398609a0`.
+

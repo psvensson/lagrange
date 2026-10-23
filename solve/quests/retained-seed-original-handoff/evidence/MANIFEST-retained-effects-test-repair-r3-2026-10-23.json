@@ -1,0 +1,8 @@
+{
+  "test/bootstrap/seed-registration-election-scheduling.test.js": "fbc4d5ce4d28921215e286f09edd5301404d25bf68be76e877691cb6d05ae873",
+  "test/bootstrap/seed-registration-phase.test.js": "6c680bc8a43ac70ea95b51e01a3a47daae4f3d8b75352166d362467a3a669a09",
+  "test/bootstrap/seed-retained-effects-fixture.js": "104d69db98e14d504d4bdfc8bb7f952464adcad08a86d93f70cdf5623ae6f4b2",
+  "test/bootstrap/seed-retained-effects.test.js": "75113227262b6b420363ef371baf2b06e9bc252026f388bba4356921eb7d69c2",
+  "test/bootstrap/seed-retained-effects.integration.test.js": "35e84ee88211321a5ad0c93aee2f8c8d66756acf1200437a8a07db9168662ef9",
+  "test/bootstrap/seed-phase-continuation-fixture.js": "2ac8f5de3c74ee2fd912faf246443bceee78aac010b59c907a96537d438e12e6"
+}

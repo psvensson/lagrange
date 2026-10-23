@@ -7,6 +7,9 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
+import {createSeedPhaseContinuationFixture} from './seed-phase-continuation-fixture.js';
 
 const REQUIRED_PARTITION_IDS = Object.freeze([
   INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS],
@@ -48,6 +51,7 @@ function createReplica(replicaId, partitionId, events) {
 
 function createSchedulingFixture(options = {}) {
   const events = [];
+  const continuation = createSeedPhaseContinuationFixture({refusal: options.continuationRefusal});
   const leadership = createDeferred();
   const messageGroupLeadership = options.messageGroupLeadership || null;
   let shuttingDown = false;
@@ -69,6 +73,7 @@ function createSchedulingFixture(options = {}) {
   }] : [];
   const phase = new SeedPartitionsPhase({
     delegates: {
+      ...continuation.delegates,
       getLogger: () => ({info() {}, debug() {}}),
       getNodeId: () => 'seed-a',
       getMessageGroupReplicas: () => messageGroupReplicas,
@@ -93,6 +98,7 @@ function createSchedulingFixture(options = {}) {
     },
   });
   return {
+    continuation,
     events,
     leadership,
     messageGroupLeadership,
@@ -109,6 +115,8 @@ test('seed elections start the registration dependency cohort before the remaind
     const scheduling = fixture.phase.startDeferredBootstrapReplicaElections();
 
     await Promise.resolve();
+    t.equal(fixture.continuation.checks, 1,
+      'the phase consults the actual continuation delegate before scheduling');
     t.same(fixture.events, [
       ...requiredReplicaStartEvents(),
       'wait:registration-required',
@@ -123,6 +131,17 @@ test('seed elections start the registration dependency cohort before the remaind
       'start:ordinary-b-r1',
     ], 'each dependency and remaining replica starts once');
   });
+
+test('continuation refusal starts no seed election or leadership wait', async (t) => {
+  const refusal = originalAllocationError(ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE);
+  const fixture = createSchedulingFixture({continuationRefusal: refusal,
+    messageGroupLeadership: createDeferred()});
+  const failure = await fixture.phase.startDeferredBootstrapReplicaElections().then(
+    () => null, (error) => error);
+  t.equal(failure, refusal, 'the owner refusal propagates unchanged through the real delegate');
+  t.equal(fixture.continuation.checks, 1, 'continuation authority is consulted once');
+  t.same(fixture.events, [], 'neither message-group nor partition work escapes the held boundary');
+});
 
 test('dependency failure releases the remaining elections before propagating',
   async (t) => {

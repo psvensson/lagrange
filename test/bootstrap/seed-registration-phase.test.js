@@ -5,6 +5,10 @@ import {
   SERVICE_STATUS,
   TABLES,
 } from '../../src/constants/index.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
+import {createSeedPhaseContinuationFixture} from './seed-phase-continuation-fixture.js';
+import {INITIAL_REPLICA_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 function createWriterRecorder() {
   const calls = [];
@@ -28,6 +32,7 @@ function createWriterRecorder() {
 test('SeedRegistrationPhase registers partition rows as stopped before activation',
   async (t) => {
     const writer = createWriterRecorder();
+    const continuation = createSeedPhaseContinuationFixture();
     const lifecycleActivations = [];
     const messageGroupServices = new Map([
       ['mg-1-r1', {
@@ -56,6 +61,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
     ]);
     const phase = new SeedRegistrationPhase({
       delegates: {
+        ...continuation.delegates,
         getLogger: () => ({
           debug() {},
           error() {},
@@ -93,6 +99,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
     });
 
     await phase.registerServices(1234);
+    t.equal(continuation.checks, 1, 'service registration consults continuation authority');
 
     const partitionInsert = writer.calls.find(
       (call) => call.type === 'insert' &&
@@ -133,6 +140,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
 
 test('SeedRegistrationPhase does not complete while partition activation is ' +
   'deferred and re-enters idempotently', async (t) => {
+  const continuation = createSeedPhaseContinuationFixture();
   let durableServiceRow = null;
   let activationAttempt = 0;
   const logEvents = [];
@@ -166,6 +174,7 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
   ]);
   const phase = new SeedRegistrationPhase({
     delegates: {
+      ...continuation.delegates,
       getLogger: () => ({
         debug(message) {
           logEvents.push(message);
@@ -215,6 +224,7 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
     'the seed phase must not report registration completion on defer');
 
   await phase.registerServices(5678);
+  t.equal(continuation.checks, 2, 'each registration attempt rechecks continuation authority');
 
   t.equal(activationAttempt, 2,
     'the existing workflow re-entry should retry the exact activation debt');
@@ -227,9 +237,11 @@ test('SeedRegistrationPhase does not complete while partition activation is ' +
 test('SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration',
   async (t) => {
     const writer = createWriterRecorder();
+    const continuation = createSeedPhaseContinuationFixture();
     const projected = [];
     const phase = new SeedRegistrationPhase({
       delegates: {
+        ...continuation.delegates,
         getLogger: () => ({
           debug() {},
           error() {},
@@ -249,6 +261,7 @@ test('SeedRegistrationPhase projects local meta service endpoints into cache dur
     });
 
     await phase.registerMetaServiceDefinitions();
+    t.equal(continuation.checks, 1, 'meta registration consults continuation authority');
 
     const projectedEndpoints = projected.filter((entry) =>
       entry.tableName === TABLES.SERVICE_ENDPOINTS,
@@ -264,6 +277,7 @@ test('SeedRegistrationPhase projects local meta service endpoints into cache dur
 
 test('SeedRegistrationPhase waits only for cache-hydration leader partitions before bootstrap-direct registration',
   async (t) => {
+    const continuation = createSeedPhaseContinuationFixture();
     const waitedForPartitionLeadership = [];
     const events = [];
     const writer = {
@@ -273,6 +287,7 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
     };
     const phase = new SeedRegistrationPhase({
       delegates: {
+        ...continuation.delegates,
         getLogger: () => ({
           debug() {},
           error() {},
@@ -314,6 +329,7 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
     };
 
     await phase.phaseRegistration();
+    t.equal(continuation.checks, 2, 'both the phase and writer acquisition retain their gates');
 
     t.same(waitedForPartitionLeadership, [{
       partitionIds: [
@@ -339,8 +355,10 @@ test('SeedRegistrationPhase waits only for cache-hydration leader partitions bef
 test('SeedRegistrationPhase persists bootstrap epoch directly when config leader is not yet elected',
   async (t) => {
     const writer = createWriterRecorder();
+    const continuation = createSeedPhaseContinuationFixture();
     const phase = new SeedRegistrationPhase({
       delegates: {
+        ...continuation.delegates,
         getSystemTableWriter: () => writer,
         getEpochManager: () => ({
           getCurrentEpoch() {
@@ -358,6 +376,7 @@ test('SeedRegistrationPhase persists bootstrap epoch directly when config leader
     });
 
     await phase.persistCurrentEpochIfMissing();
+    t.equal(continuation.checks, 1, 'epoch persistence consults continuation authority');
 
     t.equal(writer.calls.length, 1,
       'bootstrap epoch should be written directly when no config leader exists yet');
@@ -367,3 +386,53 @@ test('SeedRegistrationPhase persists bootstrap epoch directly when config leader
     t.equal(writer.calls[0]?.row?.config_key, 'current_epoch',
       'bootstrap epoch should write the authoritative epoch config row');
   });
+
+test('continuation refusal precedes registration, writer access and activation effects', async (t) => {
+  const cases = [
+    ['phaseRegistration', []],
+    ['ensureSystemTableWriter', []],
+    ['registerServices', ['logger']],
+    ['registerMetaServiceDefinitions', ['logger']],
+    ['persistCurrentEpochIfMissing', ['epoch-manager', 'partition-services', 'epoch-query',
+      'current-epoch', 'serialize-epoch', 'clock-owner', 'clock-now']],
+  ];
+  for (const [method, expectedReads] of cases) {
+    await t.test(method, async (t) => {
+      const refusal = originalAllocationError(ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE);
+      const continuation = createSeedPhaseContinuationFixture({refusal});
+      const effects = [];
+      const record = (effect) => () => effects.push(effect);
+      const reads = [];
+      const observe = (name, value) => () => {
+        reads.push(name);
+        return value;
+      };
+      // The real epoch path observes the existing leader and epoch before
+      // reaching the writer guard. These are reads, not registration effects.
+      const epoch = {toJSON: observe('serialize-epoch', {epoch: 1})};
+      const configPartition = {isLeader: true, async executeQuery() {
+        reads.push('epoch-query');
+        return {success: true, rows: []};
+      }};
+      const partitions = new Map([[INITIAL_REPLICA_IDS[TABLES.CONFIG][0], configPartition]]);
+      const phase = new SeedRegistrationPhase({delegates: {
+        ...continuation.delegates,
+        getLogger: observe('logger', {debug: record('log'), error: record('log-error')}),
+        getEpochManager: observe('epoch-manager', {getCurrentEpoch: observe('current-epoch', epoch)}),
+        getPartitionServices: observe('partition-services', partitions),
+        getSystemTableWriter: record('read-writer'),
+        ensureBootstrapCdcIntegrationService: record('acquire-cdc'),
+        setSystemTableWriter: record('publish-writer'),
+        getReplicaStateMachine: record('activation'),
+        getTimeSource: observe('clock-owner', {now: observe('clock-now', 1234)}),
+        waitForPartitionLeadership: record('leadership'),
+      }});
+      const failure = await Promise.resolve().then(() => phase[method]()).then(
+        () => null, (error) => error);
+      t.equal(failure, refusal, 'the real delegate preserves the exact continuation refusal');
+      t.equal(continuation.checks, 1, 'the guarded boundary consults its owner exactly once');
+      t.same(reads, expectedReads, 'only the real entry path\'s declared pre-guard reads occur');
+      t.same(effects, [], 'no writer acquisition, publication, mutation, leadership or activation escapes');
+    });
+  }
+});

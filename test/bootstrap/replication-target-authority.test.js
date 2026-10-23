@@ -96,7 +96,10 @@ const EXPECTED_CREATION_WRITES = Object.freeze({
   'src/bootstrap/phases/create-message-group-phase.js': [
     'DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT',
   ],
-  'src/bootstrap/phases/seed-registration-phase.js': [
+  // The phase consumes the row constructors. Pin its empty write set too,
+  // so a new inline override cannot escape the creation-boundary census.
+  'src/bootstrap/phases/seed-registration-phase.js': [],
+  'src/bootstrap/seed-foundation-rows.js': [
     'DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT',
     'DECLARED_REPLICA_COUNT_DEFAULT',
   ],
@@ -928,7 +931,7 @@ test('creation-writes-declared-policy-not-identity-count', async () => {
   // constant tracks its owning schema, the pair is a complete proof of the
   // creation clause rather than a list of ruled-out variants.
   // The SET, not just a count. Pinning only the total let a write move between
-  // the two creation files, or be deleted and a different one added, without
+  // the creation files, or be deleted and a different one added, without
   // anything noticing; pinning per file WITH the declared default each site
   // must consume also catches a site being re-pointed at the other table's
   // declaration, which is the cross-table leak this contract closes.
@@ -936,9 +939,9 @@ test('creation-writes-declared-policy-not-identity-count', async () => {
   let totalWrites = 0;
   for (const relativePath of CREATION_SITE_FILES) {
     const writes = persistedReplicaCountWrites(relativePath);
-    assert.ok(writes.length > 0,
-      `${relativePath} must still contain a persisted replica_count write; ` +
-      'a moved or renamed write would make this check silently vacuous');
+    assert.equal(writes.length, EXPECTED_CREATION_WRITES[relativePath].length,
+      `${relativePath} must retain its exact declared creation-write count; ` +
+      'moving a write or adding an inline override requires review');
     totalWrites += writes.length;
     for (const write of writes) {
       assert.equal(write.valueType, 'Identifier',

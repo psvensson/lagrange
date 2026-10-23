@@ -19,6 +19,8 @@ import {writeAtomicDurable} from
   '../../src/runtime/oci-host-agent-durable-files.js';
 import {SeedPartitionsPhase} from
   '../../src/bootstrap/phases/seed-partitions-phase.js';
+import {createBootstrapServiceSeedDelegateMethods} from
+  '../../src/bootstrap/bootstrap-service-seed-delegates.js';
 import {readDurableServicesIdentitySnapshot} from
   '../../src/bootstrap/rejoin-hints-durable-evidence.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -1386,15 +1388,31 @@ test('seed storage opens require durable virgin or live-generation proof',
       cleanup_token: 'startup-token',
     }, 'the exact cleanup token survives the real SQLite startup snapshot');
 
+    let originalAdmissionChecks = 0;
+    let storageAccesses = 0;
+    const replicaOptions = Object.freeze({
+      replicaId: 'services-p1-r1', partitionId: 'services-p1',
+    });
+    // Substitute only the prior admission decision through its real adapter.
+    // Identity-only options contain no original opening capability; the real
+    // durable-storage admission must refuse before any storage acquisition.
+    const {admitOriginalSeedReplica} = createBootstrapServiceSeedDelegateMethods()
+      ._buildPhaseExecutionDelegates.call({admitOriginalSeedReplica(options) {
+        originalAdmissionChecks += 1;
+        t.equal(options, replicaOptions, 'the adapter preserves the exact requested options');
+        return options;
+      }});
     const phase = new SeedPartitionsPhase({
       delegates: {
+        admitOriginalSeedReplica,
         getLogger: () => ({debug() {}}),
         getNodeId: () => NODE_ID,
         getStartupServicesAdmission: () => snapshot,
-        resolveBootstrapReplicaOptions: () => ({
-          replicaId: 'services-p1-r1',
-          partitionId: 'services-p1',
-        }),
+        resolveBootstrapReplicaOptions: () => replicaOptions,
+        getPartitionServices: () => {
+          storageAccesses += 1;
+          throw new Error('marker-owned storage must not be accessed');
+        },
       },
     });
     const rejection = await t.rejects(
@@ -1406,4 +1424,7 @@ test('seed storage opens require durable virgin or live-generation proof',
     );
     t.equal(rejection.code, 'CLEANUP_IN_PROGRESS',
       'marker ownership remains a typed retryable seed refusal');
+    t.equal(originalAdmissionChecks, 1,
+      'the component consults the prior owner before durable-storage admission');
+    t.equal(storageAccesses, 0, 'cleanup ownership refuses before storage acquisition');
   });

@@ -28,7 +28,7 @@
   "censusSize": 2443,
   "digest": "fnv1a32-48b237b8",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6ca603d6",
+  "observationDigest": "fnv1a32-99f83187",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2870,6 +2870,11 @@
         "src/bootstrap/pipeline/startup-pipeline-runner.js"
       ]
     },
+    "test/bootstrap/cluster-identity-mint.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-service-seed-delegates.js"
+      ]
+    },
     "test/bootstrap/cluster-identity.test.js": {
       "files": [
         "test/test-helpers/boot-incarnation-fixture.js"
@@ -3259,6 +3264,7 @@
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/phases/seed-registration-phase.js",
         "src/bootstrap/replication-target-authority.js",
+        "src/bootstrap/seed-foundation-rows.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/message-group/message-group-service-state.js",
         "src/partition/partition-service-core-base.js",
@@ -3334,8 +3340,16 @@
     },
     "test/bootstrap/seed-registration-election-scheduling.test.js": {
       "files": [
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
         "src/bootstrap/phases/seed-partitions-phase.js",
-        "src/bootstrap/phases/seed-registration-phase.js"
+        "src/bootstrap/phases/seed-registration-phase.js",
+        "src/raft/raft-rs-original-allocation-constants.js"
+      ]
+    },
+    "test/bootstrap/seed-registration-phase.test.js": {
+      "files": [
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
+        "src/raft/raft-rs-original-allocation-constants.js"
       ]
     },
     "test/bootstrap/seed-release-failure-custody.test.js": {
@@ -3392,6 +3406,7 @@
         "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-write-kernel.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -7562,6 +7577,7 @@
     },
     "test/integration/managed-split-admission-reliability.integration.test.js": {
       "files": [
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
@@ -8716,6 +8732,7 @@
     },
     "test/node/replica-lifecycle-durable-generation.test.js": {
       "files": [
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints-durable-evidence.js",
         "src/cdc/cdc-integration-service-mutations.js",
