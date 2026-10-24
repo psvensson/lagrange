@@ -2,6 +2,8 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {RaftRole} from '../../src/partition/partition-service.js';
+import {forwardHandlerRegistry} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LOG_MSG,
@@ -242,8 +244,7 @@ function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
     requests,
     listeners,
     messageTimeoutMs: ROUTER_TIMEOUT_MS,
-    register: (address, handler) => inner.register(address, handler),
-    unregister: (address) => inner.unregister(address),
+    ...forwardHandlerRegistry(inner),
     deliver: async (address, payload, options) => {
       if (payload?.type !== PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {
         return inner.deliver(address, payload, options);
