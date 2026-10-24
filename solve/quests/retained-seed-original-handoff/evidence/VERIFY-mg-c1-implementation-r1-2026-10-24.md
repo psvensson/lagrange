@@ -516,3 +516,131 @@ expectation.
   implementer's duplication outputs are identical at base and final).
 - Not reviewed: C2, the source-side F2 progress cell, classification, activation, two-start
   acceptance. This verdict covers the C1 staged tree only and does not authorize `land`.
+
+---
+
+## Re-verification r2 (append-only), 2026-10-24: snapshot `refs/wip/lab-c1-3` = 4406547c
+
+Subject: the STAGED tree in the same worktree (HEAD still `bed8c6354`); `git write-tree` =
+`79ada53000c6aa2a2a093d5c578145e9bd02569a` = `4406547c^{tree}`; REP, both test files and
+`impact-contracts.json` `cmp`-identical to `4406547c`; index-only (no unstaged or untracked files).
+Bounded to `git diff 26fc0a13 4406547c`: REP (+15/-12), TEST (+112, cases 15-16), new
+`test/message-group/message-group-cdc-public-defer-repair.test.js` (97 lines), impact-contracts
+(+1 test in both lists), regenerated metadata. ACC, RCV, NDM unchanged since r1 (the brief's "REP +
+NDM" for C4 is REP only). All three run-3 lab logs name placement worktree `4406547c3d1e-...`.
+
+### Verdict r2: REQUIRED CHANGES before commit (naming 4406547c)
+
+| # | Required change | Why |
+|---|---|---|
+| r2-RC-1 (C4, one version) | **Move the relay-depth increment into the send owner for both input kinds and delete the durability branch.** The concept "the next send carries this hop's depth + 1" is implemented at FOUR sites in TWO conventions: NDM:181 (`relayDepth: options.relayDepth + 1`, durable send owner increments; callers pass the hop depth) versus REP:44-47 `forwardedCdcRelayDepth` (`hasDurable ? hopDepth : hopDepth + 1`), RCV:145 and RCV:271 (`relayDepth: relayDepth + 1`), all three CALLERS of the ordinary send incrementing while FDM's ordinary send (`forwardCDCEventToLeader` FDM:365-404, `forwardCDCBatchToLeader` FDM:407-460, `forwardCDCPayloadToLeader` FDM:528-...) puts the caller's value on the wire unchanged. C4 ADDED the third caller-side increment and the branch whose only purpose is to reconcile the two conventions: that is two versions of one concept (owner directive 2026-10-24, one version of any logic), introduced by this change. Required shape: (a) REP `forwardedCdcRelayDepth` returns `options.relayDepth ?? 0` (the hop depth) for every command, no `hasDurableCdcEvents` branch; (b) the ordinary send owner increments at its send exactly as NDM:181 does (set the wire `relayDepth` to hop + 1 where FDM builds the payload, FDM:381-395 and FDM:440-455), both send sites consuming ONE helper (e.g. `cdcRelaySendDepth(hopDepth)` next to `CDC_FORWARD_MAX_RELAY_DEPTH`'s owner); (c) RCV:145 and RCV:271 pass `relayDepth` (the hop) instead of `relayDepth + 1`; RCV:139/267's `>= MAX` guards stay (they guard the hop). Wire-observable depths are unchanged by construction (receiver hop = sender hop + 1 in both conventions today), so case 16 and the existing non-durable depth assertions (`cdc-non-leader-propagation`, `strict-cdc-forward-routing`) must stay as they are. **Alternative compliant path:** drop C4 from this commit (restore REP to the 26fc0a13 form) and record the attempt-as-depth defect (base REP:23-30, pre-existing since before C1) as an R17 finding for the forwarding owner; C1 + RC-V1/RC-V2 do not depend on C4. Either path is acceptable to me; (a)-(c) is the systemic fix. |
+| r2-RC-2 (W-E) | **Tighten the single-flight assertion**: `assert.ok(repairs.length >= 1, 'C1_PUBLIC_DEFER_REACHES_REPAIR')` -> `assert.equal(repairs.length, 2, ...)` (both public receives must request the repair) so that `reads.length === 1` is a proof of single-flight and not vacuous. As written, one receive reaching the repair and the other never requesting it also satisfies `>= 1` and `=== 1`. I ran the tightened copy at 4406547c: GREEN (`scratchpad/v/r3/WE-tight.tap`), so the claim is true in fact and the change is one line. |
+
+Everything else in the round-3 delta is approved: case 15 is my RC-V1 witness in substance and pins
+the RC-1 branch (MV3 reds exactly case 15); the DEFER test covers the NM cell I named (with r2-RC-2);
+C4 is a correct fix of a real pre-existing defect (its location is what r2-RC-1 objects to, not its
+semantics); registration and metadata are canonical; lab run 3 is 106 base reds + the lab-only timing
+red, C1 16/16 and DEFER 1/1 green on adams-gamla. After r2-RC-1 (either path) and r2-RC-2 are applied
+and case 16 + the two non-durable depth witnesses re-measured, I would APPROVE for commit; W-E was the
+last open item from r1 and is now covered.
+
+### (1) RC-V1 -> case 15 (TEST:735-786)
+
+Assertions present, in substance mine: `success === false` (`C1_RC1_RETIRED_PARENT_NEVER_SUCCESS`),
+`error === UNKNOWN`, `deferRetry === true`, `isCommittedCdcOutcome(answer.cause, [event], GROUP_ID)`,
+no own `cdcVectorDigest`, `queue.size === 1` and `isResponsePending(key) === false` while the reply
+is held, `size === 0` after `hold.release()`, `hold.calls.length === 1`; setup cuts `committedSettlements
+=== 1` and `hold.response` present; the controlled parent grant throws `cdcDeliveryBudgetError()`
+imported from BUD (TEST:16-17), set `retired` synchronously inside a wrapper around the real
+`queue.resolve` (TEST:748-756) exactly as my witness did. My runs at 4406547c: C1 file 16/16
+(`v/r3/c1.tap`); MV3 (`return settled` at ACC:283-284) -> 15 pass / 1 fail, red only case 15
+(`v/r3/MV3.tap`), matching `c1/mutation-MV3.txt`.
+
+### (2) RC-V2 -> `message-group-cdc-public-defer-repair.test.js`
+
+- Owners real: the fixture (`message-group-native-provisional-route-fixture.js`, header: real released
+  SERVICES producer, RF1 source MG, RF5 target MG, real `MessageRouter`; the only fault is transport
+  custody) reopens the follower with no bootstrap address hints (fixture:204-223, `peerAddresses ===
+  []`), so `leaderAddressStatus === UNAVAILABLE` (test:49-51) is the real port's observation, not a
+  status double. `maybeRepairAuthoritativeForwardTopology` and `repairAuthoritativeForwardTopology`
+  are wrapped only to record `context.remainingMs()` / call count and `Reflect.apply` to the real
+  methods (test:62-71): the single-flight (FDM:68-70), cooldown (FDM:72-78) and the control-plane read
+  all run. Owners stay real.
+- Coverage of the NM cell: public `receiveMessage` (LATENCY_CDC_PROPAGATION_BATCH, test:35-43) with a
+  durable SERVICES occurrence -> decision `DEFER` / `DEFER_STRICT_TARGET_UNKNOWN` /
+  `shouldRepairAuthoritativeTopology` (test:54-58) -> repair reached with `0 < remainingMs <= 5000`
+  (`C1_PUBLIC_DEFER_REACHES_REPAIR`, the ACC/NDM `remainingMs` handed to FDM at NDM:160-161, which
+  bounds the read via `min(1500, remainingMs())`) -> exactly one read across two concurrent receives
+  (`C1_PUBLIC_DEFER_REPAIR_SINGLE_FLIGHT`) -> re-decision to a valid provisional outcome per vector
+  (`C1_PUBLIC_DEFER_RE_DECIDES_TO_PROVISIONAL`, `isProvisionalCdcOutcome` with the target group) ->
+  zero application sends, `cdcCommitWaiters.size === 0`, route still UNAVAILABLE. This is the cell I
+  named in r1 (public DEFER_STRICT_TARGET_UNKNOWN -> repair + re-decide, NDM:264-269), now executed
+  from the public entry. Not asserted vs the vet's W-E text: `queryTimeoutMs <= remainingMs()`
+  directly (owner code, unchanged) and "relay depth unchanged" (no send happens, so moot).
+- Single-flight: NOT proven as written (r2-RC-2); proven in fact by my tightened run (both receives
+  request the repair, one read).
+- Negatives, mine at 4406547c: repair never requested (NDM:265 `if (false)`) -> red at
+  `C1_PUBLIC_DEFER_REACHES_REPAIR` (`v/r3/WE-norepair.tap`); DEFER test on base sources -> red at
+  the same cut (`v/r3/WE-base.tap`; the base receiver arm returns immediate UNKNOWN, the vet's
+  controlled negative). Both match `c1/mutation-WE-*.txt`. Green twice at 4406547c (`v/r3/defer-{1,2}.tap`).
+
+### (3) C4 relay depth
+
+- Code: REP:44-47 `forwardedCdcRelayDepth(command, options)`; REP:272 ordinary `applyCDCBatch` now
+  passes `{relayDepth}` (its parsed hop depth, REP:181-184, default 0) to `proposeCDCCommand`;
+  REP:357-361 `forwardToLeader: (command) => forwardCDCCommandToLeader(command, options)`;
+  REP:418-419 signature `(command, options = {})`. Grep: the only caller is REP:360 and it passes
+  `options`; no test calls it; no caller passes an attempt. Base REP:23-30 returned `attempt` for
+  ordinary input (attempt 3 -> depth 3 -> `readCdcForwardContext` INVALID at NDM:82-85 via
+  `captureCdcForwardOptions` FDM:367/409): a real pre-existing defect that made every ordinary
+  follower forward's third attempt fail `cdc_committed_acceptance_invalid`.
+- One-version attack: see r2-RC-1. Trace of the two send sites: durable NDM:174-197
+  (`relayDepth: options.relayDepth + 1` at :181, `options.relayDepth` = hop); ordinary FDM:365-404 /
+  407-460 build `payload.relayDepth = options.relayDepth` unchanged and `forwardCDCPayloadToLeader`
+  (FDM:528-...) sends it, using `logContext.relayDepth` only for selection/logging (FDM:548-550). The
+  "+1" for ordinary therefore lives in every caller (REP:46, RCV:145, RCV:271). Two conventions, four
+  increment sites; the increment belongs in exactly one place, the send owner, for both inputs.
+- Case 16 (TEST:788-842): three attempts of one hop admitted (`attempts === 3`,
+  `C4_THIRD_ATTEMPT_IS_ADMITTED`; final error not INVALID), every send at depth 1 or 2
+  (`C4_RETRIES_OF_ONE_HOP_KEEP_ITS_DEPTH`, >= 3 depth-1 sends), a genuine depth-2 input refused
+  INVALID before any transport call (`C4_THIRD_HOP_REFUSED`, `forward.calls.length` unchanged). The
+  controlled answers are a `Proxy` over the answers array (TEST:800-801) returning a retryable
+  refusal while `attempts < 3`, then passing through to the real router; the real
+  `forwardCDCCommandToLeader` runs under a counting wrapper. My C4 negative (REP from 26fc0a13 in the
+  4406547c tree) -> 15 pass / 1 fail, red only case 16 with `Raft CDC replication failed:
+  cdc_committed_acceptance_invalid` (`v/r3/C4-base-rep.tap`), matching `c1/mutation-C4-base-rep.txt`.
+- "Cluster-M1 lost the relay signature": from the implementer's `c1/cmp/{base,c4}-*.tap` leaf names,
+  `cdc_committed_acceptance_invalid` leaves go 2 -> 0 in `cdc-non-leader-propagation` and 1 -> 0 in
+  `message-group-service-raft-replication-and-cdc` (0 -> 0 in the other two); remaining leaves there
+  are `Unable to resolve unified peer address ...` / `leader address is unavailable` (PEER_UNRESOLVED)
+  plus parent-suite names and, in `message-group-service.test.js`, six live-leader/bootstrap-hint
+  routing leaves (status-double shaped). I did not reproduce the "14 -> 0, 6 -> 0" figures (they are
+  not leaf counts; probably nested occurrence counts). My own runs: `cdc-non-leader-propagation` base
+  22 red subtests / 40 leaves -> snapshot 21 / 39; the base-only leaves are the INVALID message plus
+  two subtests that now PASS ("does not fall back to bootstrap peer hints for steady-state forwarding",
+  "steady-state forwarding should fail closed when only bootstrap peer hints remain"), i.e. C4 also
+  unmasked their intended fail-closed error; snapshot-only leaves are two PEER_UNRESOLVED messages
+  replacing the INVALID one. `strict-cdc-forward-routing` 1 red (same leaf as base),
+  `raft-replication-and-cdc` 1 red (same parent; leaf now PEER_UNRESOLVED instead of INVALID).
+
+### (4) Lab run 3
+
+Final per-file status with lane precedence (run3 ordinary 866 files/72 red, run3b bootstrap 213/20,
+run3c exclusive 47/24; the main log's `fail=216` counts lane-reassigned files): 1010 files, 107 reds
+= `run3-all-reds.txt` = the 106 local-base reds + `cdc-group-propagation-foreground-boundary`
+(lab-only timing red, as in r1). C1 `ok (16 assertions)`, DEFER `ok (1 assertions)` on adams-gamla.
+Spot check of red files' failing leaves (lab run 3 vs `reds-local-base.tap`): identical first leaf
+and leaf sets for `config/code-path-uniqueness.property` (3), `cdc/cdc-shutdown-terminal-owner-write`
+(1), `message-group/message-group-proposal-deadline-wait-bound-spent` (8),
+`partition/partition-cdc-delivery-progress` (1), `raft/raft-rs-backend/operation-port-boundary` (1),
+`bootstrap/seed-infrastructure-phase` (3), `bootstrap/retained-seed-original-handoff.integration` (1),
+`integration/cdc-propagation.integration` (14), `rebalancer/replica-operation-membership-epoch-binding`
+(3). `cdc-non-leader-propagation` differs by exactly the removed INVALID leaf (39 vs 40), the expected
+C4 effect.
+
+### Statics r2 (at 4406547c, `v/r3/`)
+
+`node --check` + eslint clean for REP and both test files; `audit:impact-contracts` PASS (71/44,
+sha256 `2febffec...`); scoped complexity on REP: 1 inherited (`applyCDCBatch` 31), none new;
+`test:metadata:refresh` zero drift. Scratch worktrees `v/wt3` (4406547c) and `v/wt3base` (bed8c6354)
+removed after the runs.
