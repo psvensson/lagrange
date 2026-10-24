@@ -30,7 +30,7 @@ function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-opening-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: 'original-node', buildDigest: 'test-build'};
-  const declaration = createSeedOriginalAllocation({...identity, now: 1234});
+  const draft = createSeedOriginalAllocation({...identity, now: 1234});
   const preparation = new RaftRsOriginalAllocationPreparation({directoryOwner, ...identity});
   const resources = [];
   t.after(() => {
@@ -43,7 +43,13 @@ function fixture(t) {
     directoryOwner.release();
     fs.rmSync(dataDir, {recursive: true, force: true});
   });
-  return {identity, directoryOwner, declaration, preparation, resources};
+  const f = {identity, directoryOwner, draft, declaration: null, preparation, resources};
+  // The issued declaration carries the stamps the lifecycle owner minted.
+  f.prepare = () => {
+    f.declaration = preparation.prepare(draft);
+    return f.declaration;
+  };
+  return f;
 }
 
 function requestFor(f, member, extra = {}) {
@@ -70,7 +76,7 @@ for (const [name, grant] of [
 ]) {
   test(`native opening refuses ${name} original authority before core or storage effects`, (t) => {
     const f = fixture(t);
-    f.preparation.prepare(f.declaration);
+    f.prepare();
     const member = f.declaration.members[0];
     const {request, resource} = requestFor(f, member, {[ORIGINAL_OPENING]: grant});
     const before = resource.db.prepare('SELECT name, sql FROM sqlite_master ORDER BY name').all();
@@ -89,7 +95,7 @@ for (const [name, grant] of [
 
 test('ordinary port requests retain the existing constructor path', (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const {request, resource} = requestFor(f, member);
   resource.port = createRaftRsOperationPort(request);

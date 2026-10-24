@@ -8,8 +8,8 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {decodeCommittedProposal, encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
 import {applyCommittedEntryTransaction} from '../../src/raft/raft-rs-application-transaction-owner.js';
 import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js';
-import {createSeedOriginalAllocation} from
-  '../../src/bootstrap/seed-original-allocation-declaration.js';
+import {ownerStampedSeedDeclaration} from
+  '../test-helpers/original-allocation-declaration-fixture.js';
 import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
   '../../src/bootstrap/seed-foundation-rows.js';
 import {SYSTEM_TABLE_NAME, getSchemaByTableName} from
@@ -38,8 +38,8 @@ const TERM = '3';
 const LOGGER = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 
 function originalDeclaration(dataDir = '/retained-foundation-fixture') {
-  return createSeedOriginalAllocation({dataDir, nodeId: NODE_ID,
-    buildDigest: 'retained-foundation-fixture-build', now: DECLARED_AT});
+  return ownerStampedSeedDeclaration({dataDir, nodeId: NODE_ID,
+    buildDigest: 'retained-foundation-fixture-build'}, DECLARED_AT);
 }
 
 function memberOf(declaration, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
