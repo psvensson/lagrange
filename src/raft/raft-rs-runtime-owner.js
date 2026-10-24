@@ -1061,11 +1061,6 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
       return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
         membershipContext};
     }
-    const before = invokeCoreAt(
-      group, expectedGeneration, CORE_OPERATION.CONF_STATE);
-    if (!before.ok) {
-      return before;
-    }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
@@ -1076,8 +1071,7 @@ function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
     if (!set.ok) {
       return set;
     }
-    return {...applied, decoded: decoded.value, membershipContext,
-      membershipBeforeConfState: before.value};
+    return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
@@ -1119,13 +1113,6 @@ function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
       applyCommittedEntry: group.applyCommittedEntry,
       admitted,
       committedMembershipContext: resolvedConfState.membershipContext || null,
-      committedMembershipApplication:
-        resolvedConfState.membershipBeforeConfState === undefined ? null : Object.freeze({
-          beforeConfState: resolvedConfState.membershipBeforeConfState,
-          beforeMembershipGenerationIndex: String(group.membershipGenerationIndex),
-          afterConfState: resolvedConfState.value,
-          afterMembershipGenerationIndex: String(nextMembershipGeneration),
-        }),
       applyCommittedMembershipContext:
         group.applyCommittedMembershipContext,
       runApplySlice: group.runApplySlice,
@@ -1931,7 +1918,6 @@ function createRuntimeDispatcher(request) {
     applyCommittedEntry: request.applyCommittedEntry,
     applyCommittedMembershipContext: request.applyCommittedMembershipContext,
     readLearnerOriginEvidence: request.readLearnerOriginEvidence,
-    readPromotionAdmission: request.readPromotionAdmission,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
     runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
