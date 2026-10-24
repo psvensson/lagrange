@@ -28,7 +28,7 @@
   "censusSize": 2468,
   "digest": "fnv1a32-ecdc514c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-aafbab91",
+  "observationDigest": "fnv1a32-b8b53c49",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -16572,7 +16572,9 @@
         "package.json",
         "scripts/solve.js",
         "solve/epics/solve-v2/steering-disposition.json",
-        "solve/epics/solve-v2/steering-inventory.json"
+        "solve/epics/solve-v2/steering-inventory.json",
+        "test/guidelines/proof-ladders.md",
+        "test/guidelines/regression-policy.md"
       ],
       "directories": [
         "architecture",

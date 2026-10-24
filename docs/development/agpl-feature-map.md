@@ -51,8 +51,9 @@ linked spec or architecture document that makes the intended behavior concrete.
 
 Rows that a Quest needs to cite carry a stable id in an `Id` column, of the form
 `RM-<phase>-<slug>` (e.g. `RM-0.1-fs-rolling-restart`). A Quest links to a row by
-putting that id in its `links.roadmapRow`; the roadmap authority check (`--row
-RM-...` and `npm run overview` then join the row to the Quests advancing it.
+putting that id in its `links.roadmapRow` or citing the epic's `roadmapRow`.
+`npm run audit:roadmap-authority` checks these scope references; the Solver board
+shows the work advancing them.
 
 Two rules keep the ids durable:
 
@@ -65,7 +66,7 @@ Two rules keep the ids durable:
   may omit the column until they need it; this is intentional, not drift.
 
 This roadmap still does not certify proof; for an id'd row in flight, the live
-status is the linked Quest report and the closure ledger, not the row's symbol.
+status is the linked Quest record and retained evidence, not the row's symbol.
 
 ## Live Truth Pointers
 
@@ -73,11 +74,12 @@ Use these documents for mutable execution and readiness state:
 
 | Question | Source of truth |
 | --- | --- |
-| Current active Quest, frontier, latest probe, and next action | `npm run quest:context` |
-| Quest reports / closure projection | `solve/report/*.md` |
-| Durable attempts, findings, and terminal state | `solve/log/*.ndjson` |
-| Authored Quest goals and frontiers | `solve/quests/*.json` |
-| Archived pre-Quest packages and sprint material | `_legacy_work/` |
+| Open epics and Quests | `node scripts/solve.js board` |
+| Current milestone, integration owner, first blocker and next action | The active epic's current summary, linked to Quest records and receipts |
+| A Quest's latest measured acceptance | `node scripts/solve.js probe --id <id>` |
+| Durable attempts, findings, verifications and terminal state | `solve/quests/<id>/log.ndjson` |
+| Authored statement, sealed acceptance and constraints | `solve/quests/<id>/quest.json` |
+| Historical packages and sprint material | Git history and retained Solver evidence; not current instructions |
 
 ---
 

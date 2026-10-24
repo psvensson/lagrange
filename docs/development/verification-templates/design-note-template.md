@@ -1,38 +1,56 @@
-# Design-Note Template: Pre-Vet Structure
+# Design-Note Template: Scoped Review
 
-Authoring structure for a Quest design note BEFORE the design-vet
-subagent runs. On the raft-snapshot-transfer-install epic (S1–S6,
-2026-07-26) the design verifier's round-1 refutations fell into the same
-four categories on all six rungs; a design note that satisfies these
-sections up front pre-empts most of that round.
+Use this structure when a repair needs a design note. It belongs in the existing
+Quest evidence or owned design document; it does not require a separate design
+stage or a new authority file for every repair. The author and independent
+reviewer use the same bounded causal question.
 
-Required sections:
+## Claim, Scope, And Current Evidence
 
-1. **Consumed surfaces — cite or it doesn't exist.** Every function,
-   event, config key, table, or seam the design consumes gets a
-   `file:line` citation from the CURRENT tree. "The dispatcher calls X"
-   without a citation is the S3/S4/S6 failure mode (assumed pressure
-   owner, assumed injection path, missed second production factory). A
-   surface you cannot cite is a surface the design must create — say so
-   explicitly.
-2. **Typed failure edges.** Enumerate every failure edge of the new
-   mechanism and give each a TYPED outcome (refusal code, decision-table
-   row, marker state) — not prose. State for each edge whether it fails
-   closed, and what a caller observes. Include the "input is absent /
-   empty / already-satisfied" edges: S4's `catchup_range_empty` had to be
-   distinguishable from corruption.
-3. **Cached-view audit.** List every cache, memo, staged copy, or
-   read-through view the mechanism touches or introduces. For each: what
-   invalidates it, what happens when it is stale at the read site, and why
-   staleness cannot resurrect a closed livelock/laundering path (S5's
-   boundary cache adopted refresh-on-row-miss after exactly this
-   refutation).
-4. **Identity anchoring.** Every artifact or decision the design produces
-   must name the identity fields that pin it: term, epoch, generation,
-   cluster id, content digest — and where each is sourced from
-   (cite per section 1). State what happens when the anchor moves
-   mid-operation (epoch change during transfer aborts; a proof anchored to
-   a foreign term must not compact the local log).
+Name the invariant, failing witness, affected interaction, real entry path, and
+independently complete repair claim. Distinguish that claim from the originating
+service scenario and full release acceptance. State what is currently observed,
+what follows from source or contract analysis, and what remains a hypothesis.
+Record the first failing artifact and the next discriminating check.
 
-Vet instruction: the design verifier attacks each section separately and
-reports ALL refutations per section, not the first found.
+If the proposal narrows capability, compare completing the existing mechanism
+with safe exclusion. Inspect public, internal, and background callers, admission,
+retained obligations, and restart behavior before claiming a path unreachable.
+Prefer an existing useful configuration when it suffices. A new product mode or
+parallel authority is not justified merely to simplify a test.
+
+## Contract And Failure Analysis
+
+1. **Consumed surfaces.** Cite the current function, event, configuration key,
+   table, factory, or seam the design consumes. An uncited surface is unknown
+   until checked; say whether it is an unresolved dependency or a proposed
+   addition. Do not silently invent it or treat historical design text as
+   current wiring.
+2. **Typed failure edges.** Follow the bounded operation from trigger and
+   admission through durable effect, response, loss, retry, and recovery. Give
+   each relevant failure edge the owner-defined typed outcome and caller
+   behavior, including absent, empty, and already-satisfied inputs. State which
+   owner retains obligations after cancellation or deadline expiry.
+3. **Cached views.** For each touched cache, memo, staged copy, or read-through
+   view, name its authority, invalidation, stale-read behavior, and recovery
+   path. Show why stale observations cannot resurrect a closed operation or
+   permanently veto progress after fresh evidence arrives.
+4. **Identity and representation.** Name the relevant term, epoch, generation,
+   cluster, principal, operation, and content identity, with its source. Show
+   what happens when an anchor changes mid-operation. Legitimate adapters and
+   representations must preserve authorization, provenance, identity, deadlines,
+   and durable obligations; they must not make a second semantic decision.
+
+## Evidence And Closure
+
+State safety, recovery progress under finite-failure assumptions, and resource
+bounds separately. Name the deterministic, native, and physical evidence needed
+for the actual claim, and which can be reused through the current proof owner.
+A helper-only test is insufficient when production never reaches the helper.
+An unavailable execution or invalid fixture cannot count as a product pass.
+
+The verifier reports all concrete findings within the scoped categories in one
+pass, each with an invariant, reachable path, and evidence. Route unrelated
+findings to an owner; block this repair only when its correctness, proof, or safe
+integration depends on them. Repeated refutation of the same assumption prompts
+reassessment by the existing roles, not an automatic new stage or broader task.

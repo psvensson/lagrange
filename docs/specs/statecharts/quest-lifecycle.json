@@ -5,7 +5,7 @@
   "states": [
     {
       "id": "authored",
-      "description": "solve/quests/steering-diet/quest.json exists with a statement, an owning epic and one binary doneWhen probe, and has not been sealed."
+      "description": "solve/quests/steering-diet/quest.json exists with a statement, an owning epic or class fix, and one binary doneWhen probe, and has not been sealed."
     },
     {
       "id": "sealed",
@@ -54,7 +54,7 @@
       "from": "authored",
       "event": "seal_against_a_red_probe",
       "to": "sealed",
-      "evidence": "node scripts/solve.js start --id steering-diet validates the record and its epic, measures doneWhen, refuses unless it is red, then records sealedAt and the seal-time metric."
+      "evidence": "node scripts/solve.js start --id steering-diet validates the record and applicable epic, measures doneWhen, refuses unless it is red, then records sealedAt and the seal-time metric."
     },
     {
       "from": "sealed",
@@ -96,7 +96,7 @@
       "from": "attempted",
       "event": "record_blocking_owner",
       "to": "blocked",
-      "evidence": "node scripts/solve.js note --id steering-diet --blocked \"why\" names the owner who must decide."
+      "evidence": "node scripts/solve.js note --id steering-diet --blocked \"why\" --next-owner judgment names the required responsibility; verification or authorization are the other supported values. An assigned agent may supply judgment or verification within existing authority."
     },
     {
       "from": "blocked",
@@ -170,7 +170,7 @@
       "from": "blocked",
       "event": "land_while_blocked",
       "to": "solved",
-      "reason": "A blocked quest names an owner who must decide; landing waits for that decision."
+      "reason": "A blocked quest names the next responsibility; landing waits for its recorded resolution. A human decision is needed only when the requested scope or action lacks authority."
     },
     {
       "from": "attempted",

@@ -51,12 +51,27 @@ A scalable distributed database where:
    for topology workflows. Non-propagated tables remain queryable from their
    owning partition via SQL.
 4. **Message Router for All Communication** - All messages (local and remote) route through MessageRouter
-5. **No Fallback Code Paths** - Single code path for any given logic; no legacy or alternative mechanisms
+5. **No Fallback Code Paths** - One authoritative path for each semantic decision; unavailable owners produce explicit outcomes, never replacement authority in a caller
 6. **System Cache Read Policy** - The system cache is strictly read-only from
    the consumer perspective (updated only by CDC events). Components may read
    directly from the cache for performance-critical paths. No component may
    write to the cache outside the CDC event path (plus bootstrap hydration).
-7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one owning component
+7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one semantic owner
+
+An owner is a responsibility boundary, not a requirement for a new class,
+service, queue or asynchronous handoff. Functions and modules may implement
+separate responsibilities within an existing owner. Removing duplicate decisions,
+state or handoffs is useful when their equivalence is demonstrated; moving code
+or adding a component does not by itself improve ownership.
+
+Protocol adapters and encodings may normalize requests and project owner
+outcomes. They preserve meaning, identity and generation domains, original
+deadlines, typed unavailability and retained durable obligations. They cannot
+manufacture authority or choose a competing semantic execution path. The SQL,
+admin and WASM ingress adapters below follow this distinction. Diagnose the first
+causal divergence before assigning a failure to an owner or interaction; a broken
+fixture or observation is not evidence of a runtime architecture defect by itself.
+
 ## Single-Path Contract
 
 To prevent overlap and contradictory runtime behavior:

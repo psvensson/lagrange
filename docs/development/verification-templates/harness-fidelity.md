@@ -34,6 +34,16 @@ binds to the live mechanism. Each item requires an evidence path.
 5. **Vacuous assertions.** For each assertion, name the fixture state that
    could make it pass trivially (single-replica role flips are ignored by
    design; empty services tables admit everything) and show it is excluded.
-6. **Live binding.** For demo-line/runtime classes: the closure claim
-   names the LIVE observable (which run, which log line) — a green DT plus
-   red-on-revert proves test-code binding, not live-mechanism binding.
+6. **Entry-path and owner fidelity.** Name the real public or internal entry
+   path, production factories, decision owners, and durable effects the fixture
+   reaches. A green test of an injected helper does not prove production reaches
+   it; distinguish source reachability from measured engagement.
+7. **Evidence ceiling.** State which dependencies, runtime, network, hosts, and
+   storage paths are real and which are substituted. Native and physical service
+   claims need their own immutable run witnesses. Multiple containers on one
+   host do not establish independent physical failure domains.
+8. **Failure and progress fidelity.** Distinguish product, fixture, verifier,
+   and execution-unavailable failures, and retain the first artifact. Show
+   safety, recovery progress after finite faults clear, and bounded resources
+   separately when the contract promises them. Keep a target-not-reached verdict
+   separate from the outer scenario failure.

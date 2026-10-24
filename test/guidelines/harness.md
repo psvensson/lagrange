@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Test execution strategy, harness rules, output management. Index: [`INDEX.md`](INDEX.md).
@@ -14,14 +14,16 @@ last_reviewed: 2026-07-10
 
 When a validation run fails with unrelated TAP child-worker crashes such as
 `SIGILL`, `SIGSEGV`, or `1..0 # no tests found`, treat the problem as a shared
-runner-boundary concern until proven otherwise.
+runner-boundary hypothesis to investigate. Preserve the first failing artifacts
+before changing runner settings or retrying; a startup crash is not itself proof
+of a product defect.
 
 Required workflow:
 
 1. Confirm whether the failing files are unrelated in domain behavior.
 2. Prefer a shared runner or bootstrap fix before editing individual suites.
-3. If the crash traces point to Node/V8 startup or worker initialization,
-   harden the shared TAP worker configuration first.
+3. If the crash traces establish a Node/V8 startup or worker initialization
+   cause, repair the shared TAP worker boundary.
 4. Only return to suite-local fixes after the shared runner boundary is shown
    stable.
 
@@ -31,16 +33,18 @@ series of unrelated test bugs.
 ## Runner Parallelism Budget Policy
 
 When isolated subsystem or shard runs pass, but the aggregate TAP gate fails
-only when all suites run together, treat the problem as a shared runner
-parallelism-budget concern until proven otherwise.
+only when all suites run together, investigate shared runner capacity alongside
+possible product contention. Passing in isolation does not refute a concurrency
+defect.
 
 Required workflow:
 
 1. Confirm that the same suites pass in smaller grouped or isolated bail runs.
 2. Check shared machine budget signals such as available RAM, swap pressure,
    and TAP worker count before editing individual suites.
-3. Prefer lowering the shared TAP `jobs` budget or other runner-wide worker
-   concurrency settings before chasing late aggregate-only assertions.
+3. If measured resource exhaustion prevents valid execution, correct the shared
+   TAP `jobs` budget or worker placement. Retain the failure and distinguish
+   runner capacity from product behavior under the required load.
 4. Only restore higher parallelism after the aggregate gate is proven stable at
    the new boundary.
 
@@ -68,6 +72,11 @@ election, lease, retry or caller deadlines; alter asserted ordering/budgets;
 turn test timeouts, hangs, missing output or unengaged cases into passes; or
 waive correctness, resource, audit or independent review requirements. Test
 runner kill timeouts are unchanged unless separately justified and reviewed.
+
+Beyond that tolerance, retain the failure and identify the product, fixture,
+runtime or host cause. Do not accept it as passing or raise the limit to hide
+that cause. Use the runner's existing machine-budget handling where applicable
+and keep the required workload unchanged.
 
 Identify the root cause by looking for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation. Resolve it by mocking time-based behavior instead of waiting for real time, clearing all timers in `finally` blocks, disabling background features (speculative execution, intervals) in unit tests, and using `Promise.resolve()` or immediate callbacks instead of delays.
 
@@ -108,16 +117,18 @@ try {
 
 ## Timeout Budget and Classification Policy
 
-Timeouts in control-plane logic are hard correctness bugs and must be tested as
-typed outcomes, not generic strings.
+Control-plane timeout behavior must be tested against its owner-defined budget
+and typed outcome. Unexpected watchdog failures are not interchangeable with a
+legal caller deadline, safe refusal, or unavailable execution.
 
 Required behavior:
 
 1. Add tests that assert remaining-budget derivation for nested operations
    rather than fresh full-budget resets.
 2. Add tests that assert timeout classification payloads, not only error text.
-3. Treat exact-boundary timeout clusters (for example exactly 4s/6s/30s/60s)
-   as hard failures requiring deterministic regression coverage before closure.
+3. Investigate exact-boundary timeout clusters (for example 4s/6s/30s/60s)
+   through the responsible budget owner and a deterministic witness when the
+   mechanism can be reproduced there; do not dismiss them as flakes.
 4. Include timeout class and budget context in integration or harness failure
    artifacts used for diagnosis.
 
@@ -139,10 +150,12 @@ When running tests during task execution:
    the change-proof orchestrator and silently ignores extra arguments, so those
    forms prove the change rather than the file you named.
 
-This targeted-run guidance governs *iteration*. It does NOT relax the closure bar:
-before closing a Quest or task, the static-guardrail and owner-boundary audits in
-[`proof-ladders.md`](proof-ladders.md) remain mandatory even when the focused unit
-and integration tests pass.
+This targeted-run guidance governs iteration. The scoped static guardrails and
+closure review in [`proof-ladders.md`](proof-ladders.md) still apply. Preserve
+existing evidence when the current selector and provenance establish that it
+remains applicable; unchanged path names alone do not establish reuse when
+callers, contracts, dependencies, configuration, tests, or environment changed.
+Final landing, publication, and release checks retain their exact-candidate bar.
 
 ## What The Four Commands Prove
 
@@ -160,7 +173,7 @@ reason code rather than proving a convenient subset.
 | `npm run publish` | the pre-push gate: static stages, then `npm test` against the remote base, or `test:all` when the change proof cannot stand for it |
 
 Only run the complete suite (`npm run check:release`) at:
-- Checkpoint tasks explicitly marked in the active Quest's `doneWhen` or frontier list
+- Checkpoints explicitly required by the active Quest or epic's acceptance
 - Final integration verification
 - When explicitly requested by the user
 - When `npm test` refuses with `RELEASE_PROOF_REQUIRED`
@@ -193,6 +206,20 @@ Command examples live in `test/README.local.md`.
 
 Used for lifelike testing scenarios with multiple nodes and for efficiency testing.
 See `test/distributed/README.local.md`.
+
+Choose the layer that measures the claim. Deterministic owner tests, native
+execution, and actual host/network/storage failures have different evidence
+ceilings; see [`release-gate.md`](release-gate.md). The representative public WASI
+service workload needs its real entry path and declared distributed topology.
+A smoke pass or container count alone does not supply that evidence.
+
+For remote work, follow [`home-lab.md`](../../docs/development/home-lab.md).
+Record actual submission, admission/queue, execution, terminal artifact, and
+cleanup facts as the runner exposes them. A blocked run must name the request,
+result source, and actual continuation owner or resumption mechanism. Ending an
+agent turn is not background monitoring. Existing lab authorization carries
+through ordinary execution and result collection; missing capacity is a test
+service issue to route, not grounds to invent an unsupported command.
 
 ## External Testing Procedures and Resources
 

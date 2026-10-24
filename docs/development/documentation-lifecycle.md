@@ -18,7 +18,7 @@ The repository derives a document class from its location. Frontmatter may state
 | Class | Home | Content contract |
 | --- | --- | --- |
 | `current` | Root guides plus maintained Markdown under `architecture/`, `charts/`, `ci/`, `docs/`, `examples/`, `src/`, and `test/` | Behavior, operations, architecture, integration, and development process implemented by the current tree |
-| `planning` | Human root roadmaps, `solve/epics/`, and `solve/specs/` | Unresolved intent linked to active or draft work |
+| `planning` | Human root roadmaps, `solve/epics/`, and `solve/specs/` | Intent linked to active or draft work, including the current epic coordination summary |
 | `steering` | Canonical sources under `docs/steering/` | Current rules and stable scope/sequence maps that bind repository work |
 | `generated` | Generated steering packs and indexes | Rebuilt from canonical sources; never hand-edited |
 | `evidence` | Solver logs, changes, artifacts, retained reports, explicit case studies, and formal-model narratives under `models/` | Proof or execution provenance; never presented as runtime-current guidance. Mutable formal-model narratives still receive link and repository-path validation. |
@@ -30,6 +30,32 @@ classes. Root `roadmap.md` is a planning narrative for product direction.
 `docs/development/agpl-feature-map.md` is a stable steering contract whose row
 identities constrain implementation scope; it does not record active execution
 state. Active goals and evidence remain owned by the Solver.
+
+## Current Summaries And Steering Revisions
+
+An active epic has one mutable current summary, maintained by the agent holding
+the integration role. It records the governing rule-set revision and source
+commit, last-checked time, current unit, first demonstrated blocker, next action
+and continuation owner. Link to the authoritative contract and immutable evidence
+for each claim. Unknown or unmeasured state is explicit. The summary is an index,
+not a second acceptance ledger, capability declaration or replacement for logs.
+Update it when work integrates, the blocker changes or responsibility hands off.
+
+Recorded attempts, findings, verdicts, receipts and terminal entries remain
+immutable. Correct them with a new record. Current explanatory documents and
+planning summaries can be edited to reflect present authority; changed sealed
+acceptance is explicitly superseded under R09. Historical claims retain the
+source and outcome actually observed.
+
+When revising steering, update all affected active instructions, routed owner
+documents, templates and enforcement/help surfaces together. Record a coverage
+checklist and any preserved historical exceptions in the existing review or epic
+record. Publish an identifiable rule-set revision and source commit. At resume
+or handoff, agents reconcile their local instructions and pending work with that
+revision; do not overwrite another worktree or silently retarget sealed claims.
+Retain standing rules separately from dated operating heuristics and hypotheses
+that still need measurement. A policy update never establishes a new product
+capability; generated capability facts change only with their own evidence.
 
 ## Graduation Rules
 

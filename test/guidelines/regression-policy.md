@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Bug-fix regression policies and owner-path regression rules. Index: [`INDEX.md`](INDEX.md).
@@ -22,14 +22,26 @@ Before implementing any fix for a reported bug or error:
    - Use minimal setup to isolate the bug
 
 2. **VERIFY** - Run the test to confirm it fails as expected
-   - The failure message should match the reported error
-   - Document the root cause in test comments if known
+   - The named behavioral assertion must fail through the reported mechanism;
+     matching error text or an exit code alone is insufficient
+   - Preserve the first failure, command, source, configuration, and artifact
+   - Label an inferred root cause as a hypothesis until the witness supports it
 
 3. **FIX** - Only after the test fails, implement the fix
    - The fix should make the failing test pass
    - No other tests should break
 
 4. **CONFIRM** - Run the test again to verify the fix works
+   - Exercise the real production owner and entry path
+   - Keep safety, recovery after the finite failure clears, and resource bounds
+     distinct; add the dimensions the changed contract promises
+   - Retain the regression in the ordinary proof selected for that boundary
+
+Use the smallest faithful fixture. If a failure requires a native dependency or
+physical fault domain that cannot be reproduced deterministically, preserve the
+actual failing witness and record that ceiling; a synthetic substitute must not
+be reported as proof of the missing layer. The required scenario or release
+claim remains open until its own evidence exists.
 
 This ensures:
 - Bugs are properly understood before fixing
@@ -53,11 +65,10 @@ This applies to both the fix itself and the test that reproduces it.
    it instead of building a one-off solution.
 3. **Combine before creating** - If two existing pieces almost solve the
    problem, combine them. Do not create a third piece that reimplements both.
-4. **Pause and zoom out** - Periodically step back and ask whether the bug is a
-   symptom of a higher-level architectural issue. If a broader fix at a higher
-   layer would prevent an entire class of bugs, prefer that over a narrow
-   patch at the symptom site. Flag the broader opportunity even if the
-   immediate fix is scoped smaller.
+4. **Check the cause** - Ask whether repeated failures share a causal
+   assumption or duplicated decision. Compare a bounded repair with a broader
+   change using actual reachability, risk, and proof cost. Record broader
+   opportunities without automatically making them prerequisites for this fix.
 
 ### When writing the reproduction test
 
@@ -69,30 +80,26 @@ This applies to both the fix itself and the test that reproduces it.
 3. **Leverage existing assertion patterns** - Follow the conventions already
    established in nearby tests for asserting ownership, lifecycle, and state.
 
-### Periodic architecture check
+### Reassess Repeated Causal Failures
 
-This check is anchored to existing machinery rather than an unenforceable
-"pause at least once": for Quest work it is satisfied by the mandatory
-`reflect --altitude` turn in the Quest loop (see solver-quests.md "Mandatory
-Step-Back Reflection Turn"); for non-Quest work it applies once, before
-commit. At that point, consider:
+When repeated failures refute the same causal assumption, the author,
+independent reviewer, and integration owner reassess the current theory before
+another equivalent patch. Name the shared boundary, cite the failures, check
+existing contracts and mechanisms, and choose a discriminating next action.
+A missing prerequisite, fixture error, verifier error, and product defect need
+different actions. A second bug at the same boundary is evidence to investigate,
+not an automatic requirement to consolidate owners or add a new Quest.
 
-- Is the current problem a repeated pattern? If so, is there a shared
-  abstraction that should exist but does not?
-- Would a small refactor at a higher level eliminate the need for the current
-  fix entirely?
-- Are multiple recent bugs clustering around the same boundary or component?
-  That may indicate a design-level issue worth addressing instead of patching
-  each symptom individually.
+Prefer a broader repair only when it addresses the demonstrated cause within an
+explicit scope. Keep sound bounded repairs independently complete; record wider
+work with its owner. Use the existing altitude-check and findings in
+[`solver-quests.md`](../../docs/steering/workflow-guidelines/solver-quests.md).
+The current tool's required checks still apply; this policy adds no review count,
+mandatory architecture stage, or request for user approval.
 
-Document these observations in commit messages or PR descriptions so the team
-can evaluate broader changes.
+### Existing Soft-Warning Enforcement
 
-## Two-Strikes Escalation Tripwires
-
-Two mechanical stop-and-reframe rules. They are cheap to check and exist
-because persistence down a wrong path is the most expensive failure mode of
-autonomous work — the tripwire converts it into a bounded cost.
+The existing soft-warning corpus guard remains a distinct enforcement rule:
 
 1. **Soft-warning two-strikes.** The SAME soft warning (a load-flake, a
    tolerated timeout, a "known transient") appearing in two consecutive runs
@@ -109,37 +116,9 @@ autonomous work — the tripwire converts it into a bounded cost.
    `npm run analyze:soft-warning-strikes` (optionally
    `-- --scenario <id>`): it scans the run-report corpus and exits nonzero
    naming each striking code+scenario.
-2. **Live-refutation two-strikes.** When live/measured evidence contradicts
-   a sealed statement or a fix claim TWICE, the framing — not the next patch
-   — is what must change: EXHAUST and re-author, widen the class, or
-   escalate altitude (affinity-demo runs 25/26: two live refutations of
-   green-DT closures exposed a mechanism the framing had missed).
-
-## Bug-Cluster Escalation Policy
-
-When the second correctness bug appears at the same architectural boundary in
-one work cycle, the response must escalate from a local patch to boundary
-consolidation.
-
-Examples of a boundary:
-
-- metadata mutation ingress
-- metadata read ingress
-- bootstrap-to-runtime handoff
-- CDC dissemination
-- readiness classification
-- transport admission
-
-Required workflow:
-
-1. Name the shared boundary explicitly in the failing test or task notes.
-2. Add a targeted regression for the current symptom.
-3. Add or update an architectural task/spec that reduces the number of runtime
-   paths across that boundary.
-4. Do not close the second bug with only a local patch if the porous boundary
-   remains unchanged.
-5. The next regression in that area must prove the reduced boundary, not only
-   the immediate symptom.
+A repeated live refutation remains immutable evidence. It requires the causal
+reassessment above, not automatic exhaustion or a larger claim. If the sealed
+premise must change, explicitly supersede it through the existing lifecycle.
 
 ## Owner-Path Regression Policy
 
@@ -311,8 +290,8 @@ Required coverage:
 
 ## Availability Under Pressure Test Policy
 
-System guideline §9 (Load May Slow The System, Not Break It) requires that all
-subsystems remain correct under load.
+[`rules.md`](../../docs/steering/rules.md) requires preserved correctness and
+retained obligations under pressure.
 Tests MUST verify this property at the unit and integration layers, not only in
 the distributed harness.
 
@@ -327,9 +306,11 @@ For any component that:
 
 ### Required coverage patterns
 
-1. **Slow-dependency resilience** — inject artificial latency into a dependency
-   (mock that resolves after a delay) and prove the component does not fail,
-   corrupt state, or drop work. It may be slower, but it must remain correct.
+1. **Slow-dependency resilience** - inject controlled dependency delay and
+   prove the owner preserves safety and retained obligations. An owner-defined
+   refusal or deadline outcome remains legal when the contract permits it.
+   Under stated finite-failure assumptions, clear the delay and prove recovery
+   and useful progress through the same owner path.
 2. **Concurrent-caller correctness** — submit multiple concurrent requests to
    the same component and prove no race conditions, lost updates, or duplicate
    side effects occur.
@@ -354,8 +335,8 @@ For any component that:
 
 ### Idempotency regression coverage
 
-For any state-mutating operation path (system guideline §11, Mutations Are
-Idempotent), add at least
+For any state-mutating operation path governed by the idempotency rule in
+[`rules.md`](../../docs/steering/rules.md), add at least
 one test that:
 
 1. Executes the operation once and records the resulting state.
@@ -364,27 +345,31 @@ one test that:
 
 This applies to row creation, lifecycle transitions, workflow step advances,
 and any CDC-propagated mutation.
-## Fix Failing Tests Immediately
+## Preserve And Disposition Every Failure
 
-Failures discovered in the touched area, or discovered by the test runs chosen
-for the current change, must be resolved before the task closes.
+A failed test is a signal requiring investigation, not an automatic statement
+that the product is broken or that the current repair owns every cause.
 
-When you discover failing or timing-out tests you must address each failure with this remediation sequence rather than ignoring or deferring it:
+1. Retain the first failing command, source, configuration, assertion, and
+   immutable output before rerunning. Preserve each later result as well.
+2. Classify the cause as product, fixture/harness, verifier, or execution
+   unavailable, with evidence. A retry that passes does not erase a valid
+   earlier failure; use the existing runner's reported and bounded retry policy.
+3. Repair introduced regressions and causes within the named causal boundary.
+   Correct a fixture only against the real contract; never weaken its assertion
+   to accept a product defect.
+4. Route unrelated failures to an owner with their next action and effect on
+   scenario or release acceptance. They block this repair when they invalidate
+   its claim, required proof, or safe integration, not merely because a broad
+   exploratory run happened to encounter them.
+5. Verify corrections at the layer that failed. Missing execution is
+   inconclusive and cannot satisfy a required gate.
 
-1. **Do not ignore a failing test.** A failing test indicates broken functionality and must be treated as a stop-the-line signal for the touched area.
-2. **Do not defer the failure.** When the failure is in the touched area, or was surfaced by the runs you chose to perform, you must resolve it before closing the current task.
-3. **Investigate the root cause.** Determine whether the test itself is incorrect, the implementation is broken, or a race condition or timing issue is at fault.
-4. **Apply the fix.** Update the test if it is checking the wrong behavior, fix the implementation if it is broken, or fix timing issues and clean up resources properly.
-5. **Verify by re-running.** Re-run the test to confirm it passes before closing the task.
-
-A test that fails because behavior *regressed* MUST be fixed (in the code or the
-test), and MUST NEVER be deleted or skipped to make the suite green; deletion is
-reserved for behavior that was *intentionally removed*. See the "No Skipped Tests
-Policy" in [`fixtures.md`](fixtures.md) for the same rule stated from the
-remove-vs-fix angle.
-
-**Rationale:** Broken tests erode confidence in the suite. Work must not close
-while the touched area remains red.
+A test that fails because behavior regressed must not be deleted or skipped to
+make the suite green. Removal is reserved for intentionally removed behavior,
+with the contract and reachability change proved. See
+[`fixtures.md`](fixtures.md) for the no-skipped-tests rule. Required landing and
+release gates remain fail-closed; failure disposition does not turn them green.
 
 ## Baseline-Discovered Bug Closure Policy
 
@@ -406,15 +391,17 @@ distributed baseline:
    Closure requires a stable targeted regression in the normal development
    loop.
 6. If a baseline failure cannot yet be reproduced below the full harness,
-   record that gap explicitly and keep the issue open until the deterministic
-   layer exists.
-7. Treat timeouts as hard correctness failures by default. Do not raise product,
-   harness, or scenario timeouts as a fix until a deterministic root-cause
-   reproduction exists.
+   record the gap and its reason. Keep unproved claims open; where native or
+   physical behavior is irreducible, use a bounded faithful witness at that
+   layer rather than manufacturing deterministic proof.
+7. Investigate timeouts against the actual owner contract and budget. A
+   watchdog failure, typed caller deadline, fixture failure, and unavailable
+   execution have different meanings. Do not raise a timeout to hide a defect;
+   any budget correction requires a causal witness and measured justification.
 8. For each timeout failure, add or refine diagnostics that identify the owning
    subsystem (for example queue depth, in-flight work, and backpressure/admission
    signals) before rerunning broad harness scenarios.
-9. If two baseline failures cluster at the same architectural boundary, record
-   the boundary and open a consolidation task/spec before continuing with more
-   local fixes.
+9. If baseline failures share the same causal assumption, use the reassessment
+   above. Consolidation is an engineering choice justified by that evidence,
+   not a gate triggered by a bug count.
 

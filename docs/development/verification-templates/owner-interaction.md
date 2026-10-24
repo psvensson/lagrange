@@ -15,7 +15,8 @@ test, model, or immutable run artifact).
 
 1. **Single semantic question owner**
    - Name the semantic question the interaction answers.
-   - Identify the one component allowed to make that decision.
+   - Identify the module, function, or component that owns that decision;
+     ownership does not require another class or service.
    - Prove diagnostics, harnesses, retained views, caches, and participants do
      not independently derive an equivalent verdict from lower-level evidence.
 
@@ -25,7 +26,10 @@ test, model, or immutable run artifact).
    - Show the typed contract that crosses the seam and the component that
      adjudicates its meaning.
    - Reject aliases, boolean option bags, or local fallback logic that create a
-     second interpretation of the same interaction.
+     second interpretation of the same interaction. Legitimate representations
+     and adapters may preserve the owner's meaning; check authorization,
+     provenance, identity, generation, deadlines, and durable obligations across
+     the conversion instead of rejecting conversion itself.
 
 3. **Paired-invariant / ping-pong attack**
    - Name the invariants on both sides that historically pull in opposite
@@ -56,8 +60,10 @@ test, model, or immutable run artifact).
      satisfiable.
    - Prove that transition re-drives or invalidates the consumer through the
      canonical owner queue/path.
-   - Polling/timers may remain recovery fallbacks; they must not be the sole
-     correctness progression mechanism.
+   - Preserve the contract's canonical wake and recovery paths. If the
+     contract requires event-driven progression, a timer-only substitute does
+     not satisfy it. Show progress once finite failures clear, and bound retry
+     work and retained resources separately from safety.
 
 7. **Projection-authority attack**
    - Enumerate diagnostic and presentation projections that expose related
@@ -91,6 +97,6 @@ test, model, or immutable run artifact).
 ## Verdict bar
 
 Approve only when the same candidate preserves both participant invariants,
-keeps a single semantic decision owner, and has a reachable event-driven release
-path under pressure. A local fix that merely moves the failure to the adjacent
+keeps a single semantic decision owner, and has the contract's reachable release
+and recovery path under pressure. A local fix that merely moves the failure to the adjacent
 owner is a rejection even when its focused unit test is green.

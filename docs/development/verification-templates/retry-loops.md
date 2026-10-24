@@ -16,9 +16,10 @@ re-drive lanes. Each item requires an evidence path.
 2. **Bound from frozen evidence.** If the loop's stop decision reads the
    operation/row, what bounds it when the row is UNREADABLE? Snapshots must
    carry timestamps; degenerate evidence must stop loudly, not loop.
-3. **Every stop is loud.** Enumerate all exits (terminal, ineligible,
-   budget, degenerate); each must log a typed reason. Silent self-cancel is
-   the run-26 class.
+3. **Every stop is observable.** Enumerate exits (terminal, ineligible,
+   budget, degenerate); each must produce an owner-defined typed outcome or
+   retained diagnostic. Bound repeated logging. Silent self-cancel is the
+   run-26 class.
 4. **Mutual suppression / livelock.** Does A defer to B while B defers to
    A? Show the tick where progress is guaranteed.
 5. **Retry storm ceiling.** Cadence x max-duration x concurrent instances:
@@ -30,3 +31,7 @@ re-drive lanes. Each item requires an evidence path.
 7. **Reset semantics.** What resets attempt counters — and can a
    success-that-wasn't (transport ACK without processing) reset them
    forever?
+8. **Recovery after finite failure.** Show the same owner resumes useful work
+   when the named failure clears. State what retains admitted obligations after
+   the caller's budget ends; a bounded caller wait must not silently abandon
+   them. Prove safety, progress, and resource bounds independently.
