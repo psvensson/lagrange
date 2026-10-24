@@ -143,6 +143,7 @@ function createNode(nodeId, role, options = {}) {
   return {
     id: nodeId,
     role,
+    updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
     query: async (sql) => {
       const statement = String(sql);
       if (statement === 'SELECT 1') {
@@ -158,9 +159,6 @@ function createNode(nodeId, role, options = {}) {
         return {
           rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}],
         };
-      }
-      if (statement.startsWith('UPDATE partitions SET table_name')) {
-        return {rows: [], changes: 1};
       }
       if (statement.includes('FROM partitions')) {
         return {rows: [{partition_id: 'p1'}]};

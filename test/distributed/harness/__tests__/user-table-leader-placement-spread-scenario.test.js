@@ -23,6 +23,11 @@ const NODE_COUNT = 3;
 const QUIESCENCE_POLLS = 2;
 const HOLD_FIRST_READ = QUIESCENCE_POLLS + 7;
 
+const STUB_TABLE_POLICY_APPLIED = Object.freeze({
+  success: true,
+  outcome: 'applied',
+});
+
 function partitionRow(partitionId, leaderNodeId, version, keyStart, keyEnd) {
   return {
     leader_node_id: leaderNodeId,
@@ -65,8 +70,7 @@ const CO_LOCATED_SERVICE_ROWS = Object.freeze([
 function buildQueryHandler(state) {
   return async (sql) => {
     if (stringStartsWith(sql, 'CREATE TABLE') ||
-        stringStartsWith(sql, 'INSERT') ||
-        stringStartsWith(sql, 'UPDATE tables')) {
+        stringStartsWith(sql, 'INSERT')) {
       return {rows: []};
     }
     if (stringStartsWith(sql, 'SELECT table_id FROM tables')) {
@@ -103,6 +107,7 @@ function buildStubCluster(state) {
       id: `node-${index}`,
       ip: `10.0.0.${index}`,
       query,
+      updateTablePolicy: async () => STUB_TABLE_POLICY_APPLIED,
       role: index === 1 ? 'seed' : 'member',
     });
   }

@@ -9,7 +9,7 @@
     "cli-tooling": 97,
     "control-plane": 217,
     "convergence-topology": 78,
-    "distributed-harness": 177,
+    "distributed-harness": 178,
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2471,
-  "digest": "fnv1a32-330f7ef5",
+  "censusSize": 2472,
+  "digest": "fnv1a32-02842211",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-0d3dab02",
+  "observationDigest": "fnv1a32-072ad60c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -933,6 +933,7 @@
     "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/postgres-baseline-diagnostics.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/progress-wait.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "distributed-harness",
@@ -6720,6 +6721,15 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js"
       ]
     },
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": {

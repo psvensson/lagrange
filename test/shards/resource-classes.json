@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2454,
+    "ordinary": 2455,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2471,
-  "digest": "fnv1a32-fc0211d2",
+  "censusSize": 2472,
+  "digest": "fnv1a32-a22896e8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -913,6 +913,7 @@
     "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js": "ordinary",
     "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js": "ordinary",
     "test/distributed/harness/__tests__/postgres-baseline-diagnostics.test.js": "ordinary",
+    "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js": "ordinary",
     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "ordinary",
     "test/distributed/harness/__tests__/progress-wait.test.js": "ordinary",
     "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "ordinary",

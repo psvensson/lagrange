@@ -621,26 +621,6 @@ function buildBenchmarkPartitionLookupByTableIdSql(tableId) {
   );
 }
 
-function buildBenchmarkPartitionRepairSql(tableName, tableId) {
-  return (
-    'UPDATE partitions SET table_name = \'' +
-    escapeSqlLiteral(tableName) +
-    '\' WHERE table_id = \'' +
-    escapeSqlLiteral(tableId) +
-    '\''
-  );
-}
-
-function buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies = {}) {
-  return (
-    'UPDATE tables SET table_policies = \'' +
-    escapeSqlLiteral(JSON.stringify(benchmarkTablePolicies)) +
-    '\' WHERE table_id = \'' +
-    escapeSqlLiteral(tableId) +
-    '\''
-  );
-}
-
 function buildSutTableProbeSql(tableName) {
   return SUT_TABLE_PROBE_SQL_PREFIX + tableName + SUT_TABLE_PROBE_SQL_SUFFIX;
 }
@@ -1399,8 +1379,6 @@ export const POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE = {
   buildBenchmarkPartitionLookupSql,
   buildBenchmarkTableLookupSql,
   buildBenchmarkPartitionLookupByTableIdSql,
-  buildBenchmarkPartitionRepairSql,
-  buildBenchmarkTablePolicySql,
   buildSutTableProbeSql,
   firstStringField,
   extractRequiredSchemaVersionFromRows,

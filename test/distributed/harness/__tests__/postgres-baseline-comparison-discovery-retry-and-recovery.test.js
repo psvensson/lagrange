@@ -57,9 +57,6 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};
           }
@@ -226,9 +223,6 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
-          }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};
@@ -429,9 +423,6 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};
           }
@@ -624,9 +615,6 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
-          }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};

@@ -236,8 +236,9 @@ const RATCHET_TARGETS = [
     // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
     // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
     // STW C1: tightened 679/25717 -> 678/25664 (NodeLifecycleService tests deleted).
-    baselineCloneGroupCount: 678,
-    baselineDuplicatedLineCount: 25664,
+    // STW C3: tightened 678/25664 -> 675/25566 (harness repair stubs deleted).
+    baselineCloneGroupCount: 675,
+    baselineDuplicatedLineCount: 25566,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
