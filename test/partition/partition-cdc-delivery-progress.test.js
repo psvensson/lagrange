@@ -16,7 +16,7 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND,
   PARTITION_CDC_OBLIGATION_SQL} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {TABLE, applyCommitted, awaitProposal, clearFixtureSingletons, committedQueryOf,
+import {CDC_TABLE as TABLE, applyCommitted, awaitProposal, clearFixtureSingletons, committedQueryOf,
   resetFixtureSingletons, settleTicks, shutdownAll, startLeader, track} from
   '../test-helpers/participant-transaction-fixture.js';
 
@@ -84,7 +84,9 @@ function addSubscriber(f, index) {
 
 async function fixture(t, {rows = ['A', 'B'], subscribers = 3} = {}) {
   const clock = delayedClock();
-  const {leader, proposed} = await startLeader({timeSource: clock});
+  // The source partition holds a CDC-carrying table (decision D2: only a
+  // propagated table records an obligation).
+  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
   t.after(() => shutdownAll(leader));
   leader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
   const f = {clock, leader, proposed, ready: false, calls: [], hooks: [], subscribers: [],
