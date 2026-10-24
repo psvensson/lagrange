@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2141,
+    "unit": 2142,
     "integration": 109,
     "bootstrap": 215,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2472,
-  "digest": "fnv1a32-11f8c264",
+  "censusSize": 2473,
+  "digest": "fnv1a32-39486ac2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1547,6 +1547,7 @@
     "test/query/sql-query-engine-routing-overlay-state.test.js": "unit",
     "test/query/sql-query-engine-split-ingress-adapter.test.js": "unit",
     "test/query/sql-query-engine-system-table-local-read.test.js": "unit",
+    "test/query/sql-query-engine-system-table-write-admission.test.js": "unit",
     "test/query/sql-query-engine-transaction-owned-commit-mode.test.js": "unit",
     "test/query/sql-query-engine.test.js": "unit",
     "test/query/sql-query-pbt.test.js": "unit",

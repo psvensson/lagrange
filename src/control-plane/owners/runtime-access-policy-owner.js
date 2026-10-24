@@ -2,6 +2,8 @@ import {TABLES} from '../../constants/index.js';
 import {deriveRequestServiceDefinitionId} from
   './request-binding-service-definition-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+import {isSystemTableName} from
+  '../../bootstrap/system-table-schema-shared-constants.js';
 
 const RUNTIME_ACCESS_POLICY_OWNER_NAME = 'runtime-access-policy-owner';
 const RUNTIME_ACCESS_POLICY_SCHEMA_VERSION = 1;
@@ -22,9 +24,7 @@ const RUNTIME_ACCESS_POLICY_TABLE_PATTERN =
   /^table:global\.[a-z_][a-z0-9_]*$/u;
 const RUNTIME_ACCESS_POLICY_BINDING_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const RUNTIME_ACCESS_POLICY_SERVICE_ID_PATTERN = /^[a-z0-9-]{1,256}$/u;
-const SYSTEM_TABLE_IDENTITIES = new Set(
-  Object.values(TABLES).map((table) => `table:global.${table}`),
-);
+const RUNTIME_ACCESS_POLICY_TABLE_IDENTITY_PREFIX = 'table:';
 
 const RUNTIME_ACCESS_OPERATION = Object.freeze({
   READ: 'read',
@@ -208,7 +208,8 @@ function normalizePolicyTables(tables, path = RUNTIME_ACCESS_POLICY_PATH.TABLES)
         slots.has(entry.slot) ||
         typeof entry.table !== 'string' ||
         !RUNTIME_ACCESS_POLICY_TABLE_PATTERN.test(entry.table) ||
-        SYSTEM_TABLE_IDENTITIES.has(entry.table) ||
+        isSystemTableName(entry.table.slice(
+          RUNTIME_ACCESS_POLICY_TABLE_IDENTITY_PREFIX.length)) ||
         tableNames.has(entry.table)) {
       fail(
         RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,

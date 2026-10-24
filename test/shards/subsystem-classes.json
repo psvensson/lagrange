@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 185,
+    "query-sql": 186,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 150,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2472,
-  "digest": "fnv1a32-02842211",
+  "censusSize": 2473,
+  "digest": "fnv1a32-54031ef0",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-072ad60c",
+  "observationDigest": "fnv1a32-94bd22d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1566,6 +1566,7 @@
     "test/query/sql-query-engine-routing-overlay-state.test.js": "query-sql",
     "test/query/sql-query-engine-split-ingress-adapter.test.js": "query-sql",
     "test/query/sql-query-engine-system-table-local-read.test.js": "query-sql",
+    "test/query/sql-query-engine-system-table-write-admission.test.js": "query-sql",
     "test/query/sql-query-engine-transaction-owned-commit-mode.test.js": "query-sql",
     "test/query/sql-query-engine.test.js": "query-sql",
     "test/query/sql-query-pbt.test.js": "query-sql",
@@ -11169,6 +11170,17 @@
     "test/query/sql-query-engine-system-table-local-read.test.js": {
       "files": [
         "src/control-plane/control-plane-system-table-gateway.js"
+      ]
+    },
+    "test/query/sql-query-engine-system-table-write-admission.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-service-remote-query-methods.js",
+        "src/query/application-database-statement-policy.js",
+        "src/query/pg/postgres-wire-adapter.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js"
       ]
     },
     "test/query/sql-query-engine-transaction-owned-commit-mode.test.js": {

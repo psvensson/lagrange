@@ -83,6 +83,10 @@ const QUERY_ERROR_CODE = Object.freeze({
     'TABLE_PARTITION_PROVISIONING_RETRYABLE',
   DISTRIBUTED_PARTICIPANT_FAILURE: 'DISTRIBUTED_PARTICIPANT_FAILURE',
   RUNTIME_ACCESS_DENIED: 'RUNTIME_ACCESS_DENIED',
+  // A client-originated INSERT/UPDATE/DELETE on a system table (or a client
+  // write whose target cannot be resolved): system tables are written only
+  // by their owners. Nothing executes.
+  SYSTEM_TABLE_WRITE_REFUSED: 'SYSTEM_TABLE_WRITE_REFUSED',
   SYNTAX_ERROR: 'SYNTAX_ERROR',
   // A query text holding more than one statement is refused whole (nothing
   // executes); an empty query text (only whitespace, `;` or comments) holds
@@ -108,6 +112,9 @@ const QUERY_ERROR_CODE = Object.freeze({
 });
 
 const QUERY_ERROR_MSG = Object.freeze({
+  SYSTEM_TABLE_WRITE_REFUSED:
+    'System tables are written only by their owners; ' +
+    'client SQL may not insert, update or delete them',
   UNSUPPORTED_STATEMENT_PREFIX: 'Unsupported statement type: ',
   MULTIPLE_STATEMENTS_UNSUPPORTED:
     'multiple statements in one query are not supported; ' +

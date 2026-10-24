@@ -66,7 +66,40 @@ const SYSTEM_TABLE_NAME = {
   ARTIFACT_PAYLOAD_CHUNKS: TABLES.ARTIFACT_PAYLOAD_CHUNKS,
 };
 
+const SYSTEM_TABLE_NAMES = new Set(Object.values(SYSTEM_TABLE_NAME));
+const SYSTEM_TABLE_NAMESPACE_PREFIX = 'global.';
+const LOCAL_STR_STRING = 'string';
+
+/**
+ * The one canonical form of a table name for the system-table predicate:
+ * the optional global namespace is dropped and the name lower-cased
+ * (SQLite identifiers are case-insensitive). Non-names answer null.
+ * @param {*} tableName
+ * @return {string|null}
+ */
+function canonicalSystemTableName(tableName) {
+  if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0) {
+    return null;
+  }
+  const lowerCased = tableName.toLowerCase();
+  return lowerCased.startsWith(SYSTEM_TABLE_NAMESPACE_PREFIX) ?
+    lowerCased.slice(SYSTEM_TABLE_NAMESPACE_PREFIX.length) :
+    lowerCased;
+}
+
+/**
+ * The one system-table predicate: whether a table name (in any spelling the
+ * canonical form folds) names one of the system tables.
+ * @param {*} tableName
+ * @return {boolean}
+ */
+function isSystemTableName(tableName) {
+  const canonical = canonicalSystemTableName(tableName);
+  return canonical !== null && SYSTEM_TABLE_NAMES.has(canonical);
+}
+
 export {
   COLUMN_TYPE,
   SYSTEM_TABLE_NAME,
+  isSystemTableName,
 };

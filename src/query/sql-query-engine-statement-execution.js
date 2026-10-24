@@ -1,3 +1,4 @@
+import {resolveClientStatementRefusal} from './sql-statement-ingress.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
   SQLQueryEngineServiceLifecycleExecution,
@@ -6,7 +7,6 @@ import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../control-plane/owners/runtime-access-policy-owner.js';
 import {
   enforceApplicationDatabaseExplainPolicy,
-  enforceApplicationDatabaseStatementPolicy,
 } from './application-database-statement-policy.js';
 import {
   STATEMENT_ADMISSION,
@@ -445,10 +445,10 @@ class SQLQueryEngineStatementExecution extends
     const parseEndMs = Date.now();
     cancellationToken?.throwIfCancelled?.();
 
-    const applicationStatementDecision =
-      enforceApplicationDatabaseStatementPolicy(ast, options);
-    if (applicationStatementDecision.allowed !== true) {
-      return applicationStatementDecision.failure;
+    const clientStatementRefusal = resolveClientStatementRefusal(ast,
+      options);
+    if (clientStatementRefusal !== null) {
+      return clientStatementRefusal;
     }
     const admission = admitParsedStatement(this.transactionCoordinator,
       sessionId, ast, options.expectedTransactionId);

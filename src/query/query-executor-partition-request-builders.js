@@ -1,3 +1,4 @@
+import {STATEMENT_INGRESS_FIELD} from './sql-statement-ingress.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QUERY_RESULT_REQUEST_FIELD} from './query-result-budget.js';
 import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
@@ -103,6 +104,9 @@ function createDefaultPartitionRequestBuilder({
       request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
         executionOptions.splitMirrorOrigin;
     }
+    stampOptionalStringField(
+      request, STATEMENT_INGRESS_FIELD,
+      executionOptions[STATEMENT_INGRESS_FIELD]);
     stampMigrationIdentityFields(request, executionOptions);
     // Write-path epoch fencing: carry the partition epoch the write was
     // planned against so the partition boundary can reject stale-epoch
