@@ -6,7 +6,7 @@
       {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418802,
-        "sha256": "ed9ee71456a45d1d9a7669aa4f9fdcf7a35884317edfb4b4d329b23b1b12fd6d"
+        "sha256": "be85eb661ed99bfd75311f94bdbf12b074179a404eb993c19b05c23f1673177e"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "200e6ca514ded57983de6963b77c36ac9848e3dcc733dddf8ae59796970b09a3"
+        "sha256": "438efcf11c95c406ee56fb5567e10fd6c1cd7b0bc58e79917d9be28a26f36756"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "27f491b93cff08850b1f9658c5fa84276b9672e1367bd68c3be05f14ad0b50ef"
+    "inputDigest": "c9004ea5a23832f5c4890f8f826a2e933232f63b5d32c806804ca07056a08b54"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
         "bytes": 418802,
-        "sha256": "ed9ee71456a45d1d9a7669aa4f9fdcf7a35884317edfb4b4d329b23b1b12fd6d"
+        "sha256": "be85eb661ed99bfd75311f94bdbf12b074179a404eb993c19b05c23f1673177e"
       },
       "declaredCount": 1773,
       "observedCount": 1773,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "200e6ca514ded57983de6963b77c36ac9848e3dcc733dddf8ae59796970b09a3"
+          "sha256": "438efcf11c95c406ee56fb5567e10fd6c1cd7b0bc58e79917d9be28a26f36756"
         },
         "cloneGroups": 46,
         "duplicatedLines": 1439,
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2502,
     "assignedSignalCount": 2502,
     "uniqueAssignmentCount": 2502,
-    "digest": "cc18405fb2e82dc2a1a510bac1756adcaae6a7a235a8e7a437c2b273237f4844"
+    "digest": "f74f71e2c0a8295a36b81e9c2b30981deed9b6922e5c8f023b4e785622bac57d"
   },
   "signalCounts": {
     "cognitive": 151,
