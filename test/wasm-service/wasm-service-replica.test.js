@@ -10,6 +10,8 @@ import {
   MESSAGE_OP,
 } from '../../src/wasm-service/wasm-service-replica.js';
 import {SessionKVStore} from '../../src/wasm-service/session-kv-store.js';
+import {applyCommandThroughApplicationOwner} from
+  '../test-helpers/controllable-consensus-port.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {WASM_SERVICE_COMMAND_REFUSAL} from
@@ -106,11 +108,22 @@ function createReplica(options) {
 
 const BASE64 = 'base64';
 
-// Mirror the application-transaction owner's deferred-effects interface, not an
-// obsolete array. Test owners must decide when the successful commit fires.
-function committedRecord(command, index = 1) {
-  return {command, index, term: 1,
-    effects: {afterCommit: [], afterRollback: []}};
+// A committed command reaches the replica only through the production
+// proposal codec and application-transaction owner, which builds the
+// committed record and its deferred effects and fires them on commit or
+// rollback; no suite restates that record's shape. `observe` sees the record
+// inside the transaction, before its successful-commit effects ran.
+function applyCommitted(replica, command,
+  {index = 1, observe = () => {}} = {}) {
+  let result;
+  applyCommandThroughApplicationOwner({database: replica.kvStore.db,
+    groupId: replica.serviceDefinitionId, index, term: 1, command,
+    applyCommittedEntry: (committed) => {
+      result = replica.applyCommittedEntry(committed);
+      observe(committed);
+      return result;
+    }});
+  return result;
 }
 
 function kvSet(sessionId, key, text) {
@@ -330,8 +343,8 @@ describe('WasmServiceReplica', () => {
   describe('applyCommittedEntry', () => {
     it('should apply KV_SET records to kvStore', () => {
       const replica = createReplica(defaultOpts());
-      const result = replica.applyCommittedEntry(
-        committedRecord(kvSet('sess-1', 'mykey', 'hello')));
+      const result = applyCommitted(replica,
+        kvSet('sess-1', 'mykey', 'hello'));
       assert.equal(result.accepted, true);
       const val = replica.kvStore.get('sess-1', 'mykey');
       assert.deepStrictEqual(val, Buffer.from('hello'));
@@ -343,11 +356,11 @@ describe('WasmServiceReplica', () => {
       replica.kvStore.applySet(
         'sess-1', 'mykey', Buffer.from('data'),
       );
-      replica.applyCommittedEntry(committedRecord({
+      applyCommitted(replica, {
         type: ENTRY_TYPE.KV_DELETE,
         sessionId: 'sess-1',
         key: 'mykey',
-      }));
+      });
       const val = replica.kvStore.get('sess-1', 'mykey');
       assert.equal(val, null);
       replica.kvStore.close();
@@ -361,10 +374,10 @@ describe('WasmServiceReplica', () => {
       replica.kvStore.applySet(
         'sess-1', 'k2', Buffer.from('v2'),
       );
-      replica.applyCommittedEntry(committedRecord({
+      applyCommitted(replica, {
         type: ENTRY_TYPE.KV_DELETE_SESSION,
         sessionId: 'sess-1',
-      }));
+      });
       const all = replica.kvStore.getAll('sess-1');
       assert.equal(all.size, 0);
       replica.kvStore.close();
@@ -374,7 +387,7 @@ describe('WasmServiceReplica', () => {
       const replica = createReplica(defaultOpts());
       for (const command of [null, {foo: 'bar'}, {type: 'unknown_type'}]) {
         assert.throws(
-          () => replica.applyCommittedEntry(committedRecord(command)),
+          () => applyCommitted(replica, command),
           {message: new RegExp(
             WASM_SERVICE_ERROR_MSG.UNKNOWN_COMMITTED_COMMAND)},
         );
@@ -384,16 +397,21 @@ describe('WasmServiceReplica', () => {
 
     it('advances the safety interval applied index from the record', () => {
       const replica = createReplica(defaultOpts());
-      const committed = committedRecord(kvSet('s1', 'k1', 'v1'), 42);
       const beforeCommit = replica.safetyInterval.localAppliedIndex;
-      replica.applyCommittedEntry(committed);
+      let observed = 0;
+      applyCommitted(replica, kvSet('s1', 'k1', 'v1'), {index: 42,
+        observe: (committed) => {
+          observed += 1;
+          assert.deepStrictEqual(
+            replica.kvStore.get('s1', 'k1'), Buffer.from('v1'));
+          assert.equal(replica.safetyInterval.localAppliedIndex, beforeCommit,
+            'APPLIED_INDEX_PUBLISHED_BEFORE_COMMITTED_TRANSACTION_SETTLED');
+          assert.equal(committed.effects.afterCommit.length, 1,
+            'the application registered exactly one successful-commit effect');
+        }});
+      assert.equal(observed, 1, 'the owner applied the committed record once');
       assert.deepStrictEqual(
         replica.kvStore.get('s1', 'k1'), Buffer.from('v1'));
-      assert.equal(replica.safetyInterval.localAppliedIndex, beforeCommit,
-        'APPLIED_INDEX_PUBLISHED_BEFORE_COMMITTED_TRANSACTION_SETTLED');
-      assert.equal(committed.effects.afterCommit.length, 1,
-        'the application registered exactly one successful-commit effect');
-      for (const effect of committed.effects.afterCommit) effect();
       assert.equal(
         replica.safetyInterval.localAppliedIndex, 42,
       );

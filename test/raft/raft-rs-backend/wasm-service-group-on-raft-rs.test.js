@@ -22,6 +22,14 @@ import {WASM_SERVICE_ERROR_MSG} from
   '../../../src/wasm-service/wasm-service-constants.js';
 import {WASM_SERVICE_COMMAND_REFUSAL} from
   '../../../src/wasm-service/wasm-service-committed-command-admission.js';
+import {WasmServiceLifecycle} from
+  '../../../src/wasm-service/wasm-service-lifecycle.js';
+import {
+  WASM_WRITER_PROFILE,
+  WRITER_ACTION,
+  WRITER_ENCODING,
+  WRITER_STATUS,
+} from '../../../src/wasm-service/wasm-writer-profile.js';
 import {MessageRouter} from '../../../src/transport/message-router.js';
 import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
@@ -47,6 +55,20 @@ const NODE_ID = 'wasm-rs-witness-node';
 const REPLICAS = ['wsr-0', 'wsr-1', 'wsr-2'];
 const SESSION = 'session-1';
 const BUDGET_MS = 10000;
+// A strong write uses the v1 writer delivery shape (wasm-writer-slots-v1
+// DESIGN.md "Exact v1 boundary shapes"). Manual INIT and ENROLL on this
+// unbound group is NOT the protocol: production INIT comes from the bound
+// creation genesis, and unbound production formation is dead at prepare.
+// This is the owner-retained test surface whose only live users are tests;
+// the witness migrates to the bound creation fixture when the deletion unit
+// for the unbound path lands.
+const WRITER = Object.freeze({
+  incarnation: '11'.repeat(32),
+  initNonce: '22'.repeat(32),
+  enrollNonce: '33'.repeat(32),
+  slot: 0,
+  generation: 1,
+});
 const POLL_MS = 10;
 const DELETED_WORKER_PATH = Object.freeze([
   'src/worker',
@@ -157,6 +179,47 @@ async function openGroup(host) {
   return replicas;
 }
 
+function writerCommand(action, fields) {
+  return {type: WASM_WRITER_PROFILE.type, profile: WASM_WRITER_PROFILE.id,
+    action, serviceId: SERVICE_ID, incarnation: WRITER.incarnation,
+    ...fields};
+}
+
+function assertRecorded(response, label) {
+  assert.equal(response.status, WRITER_STATUS.RECORDED, label);
+  assert.equal(response.accepted, true, label);
+}
+
+// INIT and ENROLL as actual lifecycle-admin requests on the elected leader,
+// applied by the group, never seeded rows. The lifecycle here composes only
+// its hosted-replica registry with the real replica (as the v1 native
+// fixture does); it claims no module or port deployment.
+async function enrollWriter(host, leader) {
+  const lifecycle = new WasmServiceLifecycle({messageRouter: host.router,
+    nodeId: NODE_ID});
+  lifecycle.activeReplicas.set(SERVICE_ID, leader);
+  try {
+    assertRecorded(await lifecycle.administerWriter(SERVICE_ID,
+      writerCommand(WRITER_ACTION.INIT, {nonce: WRITER.initNonce})),
+    'the writer state is initialized through the group');
+    assertRecorded(await lifecycle.administerWriter(SERVICE_ID,
+      writerCommand(WRITER_ACTION.ENROLL, {slot: WRITER.slot,
+        expectedGeneration: 0, expectedCompletedSequence: 0,
+        expectedReceiptDigest: null, newGeneration: WRITER.generation,
+        nonce: WRITER.enrollNonce})),
+    'the writer slot is enrolled through the group');
+  } finally {
+    lifecycle.activeReplicas.delete(SERVICE_ID);
+  }
+}
+
+function strongWrite(key, value, sequence = 1) {
+  return {payload: {operation: 'write',
+    requestId: {serviceId: SERVICE_ID, incarnation: WRITER.incarnation,
+      slot: WRITER.slot, generation: WRITER.generation, sequence},
+    ack: null, sessionId: SESSION, key, value}};
+}
+
 function leaderOf(replicas) {
   const leaders = replicas.filter((replica) => {
     const status = replica.raft.readStatus();
@@ -227,15 +290,16 @@ test('wasm service group commits and applies kv writes through raft-rs',
       const follower = replicas.find((replica) => replica !== leader);
       assert.equal(await waitFor(() => follower.leaderId === leader.replicaId),
         true, 'the follower publishes the port-announced leader');
-      assert.deepEqual(await follower.handleMessage({payload: {
-        operation: 'write', sessionId: SESSION, key: 'k', value: 'v'}}),
-      {forwarded: true, leaderId: leader.replicaId},
-      'a follower forwards writes to the leader the port announced');
+      assert.deepEqual(await follower.handleMessage(strongWrite('k', 'v')),
+        {forwarded: true, leaderId: leader.replicaId},
+        'a follower forwards writes to the leader the port announced');
 
+      await enrollWriter(host, leader);
       const value = Buffer.from([0, 1, 2, 250, 255]);
-      const written = await leader.handleMessage({payload: {
-        operation: 'write', sessionId: SESSION, key: 'bytes', value}});
-      assert.equal(written.accepted, true);
+      const written = await leader.handleMessage(strongWrite('bytes', value));
+      assertRecorded(written, 'the strong write is recorded after application');
+      assert.equal(written.async, false);
+      assert.deepEqual(written.receipt.outcome, {accepted: true, error: null});
       for (const replica of replicas) {
         assert.equal(await waitFor(() =>
           replica.kvStore.get(SESSION, 'bytes')?.equals(value) === true),
@@ -243,9 +307,11 @@ test('wasm service group commits and applies kv writes through raft-rs',
       }
       const committed = RaftRsDurableStore.readCommittedEntriesIn(
         follower.db, SERVICE_ID);
-      assert.ok(committed.some((entry) => entry.command?.type === 'kv_set' &&
-        entry.command.valueEncoding === 'base64'),
-      'the durable log holds the JSON kv command');
+      assert.ok(committed.some((entry) =>
+        entry.command?.type === WASM_WRITER_PROFILE.type &&
+        entry.command.action === WRITER_ACTION.WRITE &&
+        entry.command.valueEncoding === WRITER_ENCODING),
+      'the durable log holds the JSON v1 write command');
 
       const before = leader.raft.readStatus().commitIndex;
       await assert.rejects(leader.proposeEntry({type: 'not_a_command'}),
@@ -263,9 +329,11 @@ test('wasm service replica restart preserves kv and consensus state',
     try {
       const replicas = await openGroup(host);
       assert.equal(await waitFor(() => leaderOf(replicas) !== null), true);
+      const leader = leaderOf(replicas);
+      await enrollWriter(host, leader);
       const value = Buffer.from('durable');
-      await leaderOf(replicas).handleMessage({payload: {
-        operation: 'write', sessionId: SESSION, key: 'kept', value}});
+      assertRecorded(await leader.handleMessage(strongWrite('kept', value)),
+        'the strong write is recorded before restart');
       for (const replica of replicas) {
         assert.equal(await waitFor(() =>
           replica.kvStore.get(SESSION, 'kept')?.equals(value) === true), true);

@@ -262,11 +262,14 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
     fs.writeFileSync(path.join(raft,
       'raft-rs-replica-lifecycle-owner.js'), 'export const owner = true;\n');
     fs.writeFileSync(path.join(raft, 'raft-rs-lifecycle-administration.js'),
-      'export function retireReplica() {}\n');
-    fs.writeFileSync(path.join(node,
-      'replica-handler-remove-execution-methods.js'),
-    'import {retireReplica} from \'../raft/raft-rs-lifecycle-administration.js\';\n' +
-      'retireReplica();\n');
+      'export const raftRsLifecycleAdministration = ' +
+      'Object.freeze({retireReplica() {}});\n');
+    const coordinator = path.join(node,
+      'replica-handler-remove-execution-methods.js');
+    const administrationImport = 'import {raftRsLifecycleAdministration} from ' +
+      '\'../raft/raft-rs-lifecycle-administration.js\';\n';
+    fs.writeFileSync(coordinator, administrationImport +
+      'raftRsLifecycleAdministration.retireReplica(id, reason, {runtime});\n');
     fs.writeFileSync(path.join(raft, 'binding-bypass.js'),
       'import {loadRaftRsCore} from \'./raft-rs-core.js\';\n' +
       'export const escaped = loadRaftRsCore();\n');
@@ -289,15 +292,49 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
     fs.writeFileSync(path.join(raft, 'lifecycle-bypass.js'),
       'const table = \'_raft_rs_\' + \'replica_lifecycle\';\n' +
       'db.prepare(`UPDATE ${table} SET state = ?`).run(\'retired\');\n');
+    // Native retirement is found by its administration binding, renamed or
+    // aliased; another owner's own retireReplica is not a lifecycle write.
+    fs.writeFileSync(path.join(node, 'native-retirement-bypass.js'),
+      'import {raftRsLifecycleAdministration as admin} from ' +
+      '\'../raft/raft-rs-lifecycle-administration.js\';\n' +
+      'const alias = admin;\n' +
+      'alias.retireReplica(id, reason, {runtime});\n');
+    fs.writeFileSync(path.join(node, 'wasm-creation-retirement-caller.js'),
+      'export const retire = (lifecycle, origin) => ' +
+      'lifecycle.retireReplica(origin);\n');
     try {
-      const codes = new Set(auditRaftRsOperationBoundary({root: fixture})
-        .map((entry) => entry.code));
+      const audited = auditRaftRsOperationBoundary({root: fixture});
+      assert.deepEqual(audited.filter((entry) =>
+        entry.code === 'lifecycle-write-outside-owner'), [{
+        file: 'src/node/native-retirement-bypass.js',
+        code: 'lifecycle-write-outside-owner',
+        detail: 'retireReplica',
+      }], 'only the bound native retirement outside the writers is reported');
+      assert.deepEqual(audited.filter((entry) =>
+        entry.code === 'lifecycle-writer-binding-escape'), [],
+      'the coordinator\'s own direct retirement is allowed');
+      const codes = new Set(audited.map((entry) => entry.code));
       assert.equal(codes.has('binding-import-outside-owner'), true);
       assert.equal(codes.has('binding-owner-import-bypass'), true);
       assert.equal(codes.has('core-invocation-outside-owner'), true);
       assert.equal(codes.has('core-alias-invocation-outside-owner'), true);
       assert.equal(codes.has('direct-binding-import'), true);
       assert.equal(codes.has('lifecycle-sql-outside-owner'), true);
+
+      // A writer that hands its administration binding to a helper hides the
+      // helper's retirement from the census, so the writer itself fails.
+      fs.writeFileSync(coordinator, administrationImport +
+        'import {helper} from \'./retirement-helper.js\';\n' +
+        'helper(raftRsLifecycleAdministration);\n');
+      fs.writeFileSync(path.join(node, 'retirement-helper.js'),
+        'export function helper(admin) {\n' +
+        '  return admin.retireReplica(id, reason, {runtime});\n}\n');
+      assert.deepEqual(auditRaftRsOperationBoundary({root: fixture})
+        .filter((entry) => entry.code === 'lifecycle-writer-binding-escape'), [{
+        file: 'src/node/replica-handler-remove-execution-methods.js',
+        code: 'lifecycle-writer-binding-escape',
+        detail: 'lifecycle administration binding escapes direct invocation',
+      }], 'an escape from a lifecycle writer fails closed');
     } finally {
       fs.rmSync(fixture, {recursive: true, force: true});
     }

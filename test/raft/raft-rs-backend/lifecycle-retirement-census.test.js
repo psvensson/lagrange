@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
-import {inspectLifecycleRetirements} from './lifecycle-retirement-census.js';
+import {inspectLifecycleRetirements} from
+  '../../../scripts/checks/raft-rs-lifecycle-retirement-census.js';
 
 const file = '/project/src/node/consumer.js';
 const ownerFile = '/project/src/raft/raft-rs-lifecycle-administration.js';
