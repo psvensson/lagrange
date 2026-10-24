@@ -143,9 +143,8 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
       }
       const type = captured.kind === DISPATCH_KIND.RELEASE ? PARTICIPANT_RELEASE_TYPE :
         captured.type;
-      // Release reads/pause/recovery stay available during bootstrap. The
-      // reopen action still asks retained-storage admission before closing
-      // anything; this does not authorize create/remove/storage shortcuts.
+      // Release reads/pause/recovery stay available during bootstrap; this
+      // does not authorize create/remove/storage shortcuts.
       if (type === PARTICIPANT_RELEASE_TYPE) {
         const {request, refusal, observationValidated} = captured;
         const response = refusal ??

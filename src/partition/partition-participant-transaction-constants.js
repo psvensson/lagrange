@@ -124,8 +124,8 @@ const PARTICIPANT_TRANSACTION_FAILURE_CODE = Object.freeze({
   REMOVAL_FENCED: 'participant_transaction_removal_fenced',
   UNREPLICATED_LOCAL_MUTATION:
     'participant_transaction_unreplicated_local_mutation',
-  // Enabling admission on a connection that served a legacy session since
-  // its open (0.0.14, the L6 clause): the cutover reopens it first.
+  // Enabling admission on a connection the lifecycle owner's open hook never
+  // stamped (0.0.14, the L6 clause): it is refused, and nothing reopens it.
   CONNECTION_SERVED_LEGACY: 'participant_transaction_connection_served_legacy',
   // The cutover sequence paused new mutation admission on this partition
   // (0.0.15; owner ruling 2026-10-11, pause before drain): a legacy BEGIN or
