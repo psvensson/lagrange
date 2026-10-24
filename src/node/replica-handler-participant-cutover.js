@@ -5,7 +5,6 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {TABLES} from '../constants/tables.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
-import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
 import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../partition/partition-participant-transaction-pause.js';
@@ -236,9 +235,11 @@ async function reopenCohort(handler, service, request, release, attempt, census)
     const successor = census.find((facts) => facts.generation.replicaId !== service.replicaId &&
       voterIds.includes(facts.generation.replicaId) && facts.connection.servedLegacy === false);
     if (!successor) return attemptRefusal(request, OUTCOME.REOPEN_REQUIRED);
-    const transfer = await service.requestLeadershipTransfer({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: successor.generation.replicaId});
+    // The leader handoff owner asks the partition's one transfer issuer and
+    // answers its typed result: requested, a role no-op (leadership already
+    // left), or refused with the port's record (nothing changed).
+    const transfer = await handler.requestTrackedPartitionLeaderHandoff(
+      service.replicaId, null, successor.generation.replicaId);
     return attemptRefusal(request, OUTCOME.STALE, {transfer});
   }
   const reopened = await askParticipantRelease(handler, handler.nodeId,

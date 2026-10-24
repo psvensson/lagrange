@@ -17,6 +17,14 @@
 // loopback transport), the real rs-raft port. The election timeout is the
 // tuning owner's derivation of the partition's own timing; the handoff reasons
 // and response vocabulary are the owners'.
+//
+// The source-side handoff to a named successor (W4 named) is the same one
+// transfer: the leader hands leadership to the voter named, and a successor
+// the core cannot take - an identity with no reserved raft id, or a
+// reserved one outside the configuration (the core's one transferable-voter
+// predicate, which also excludes learners) - is REFUSED with the port's
+// record and moves nothing. The participant release cutover consumes this
+// owner for its dirty-leader transfer (no own issuer; witness W5).
 
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -32,6 +40,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import * as handoffMethods from
   '../../src/node/replica-handler-leader-handoff-methods.js';
+import {reservePartitionRaftPeerIdentity} from
+  '../../src/partition/partition-service-raft-membership-administration.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import * as portConstants from
   '../../src/raft/raft-operation-port-constants.js';
@@ -54,6 +64,8 @@ const GROUP_TIMING = Object.freeze({
   electionTimeoutMaxMs: 300,
 });
 const BRANCH = handoffMethods.REPLICA_HANDLER_LEADER_HANDOFF_BRANCH;
+const STATE = handoffMethods.REPLICA_HANDLER_LEADER_HANDOFF_STATE;
+const TRANSFER_REASON = portConstants.RAFT_LEADERSHIP_TRANSFER_REASON;
 
 function quietEnvironment() {
   ConfigurationManager.resetInstance();
@@ -232,6 +244,66 @@ test('W4 already-leader: a replacement that already leads is a named ' +
     await sleep(window);
     const after = leader.raft.readStatus();
     assert.equal(after.role, RAFT_ROLE.LEADER, 'it still leads');
+    assert.equal(after.term, before.term, 'no term moved');
+  });
+});
+
+test('W4 named: the source-side handoff to a named voter moves leadership ' +
+  'to that voter within one election timeout', {timeout: TEST_TIMEOUT_MS},
+async () => {
+  const partitionId = 'w4-named';
+  await withGroup(partitionId, async ({services, handler}) => {
+    const source = leaderOf(services);
+    assert.ok(source, 'setup: the group has a leader');
+    const named = services.find((service) => service !== source);
+    const before = source.raft.readStatus();
+    const window = recoveryRetryWindowMsOf(source.raftTimingConfig);
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
+      source.replicaId, null, named.replicaId);
+    assert.equal(result.state, STATE.COMPLETED,
+      `the handoff is accepted (${JSON.stringify(result)})`);
+    assert.equal(result.branch, BRANCH.TRANSFER_REQUESTED);
+    assert.equal(result.trackedRole, RAFT_ROLE.LEADER);
+    const elapsed = await elapsedUntil(() =>
+      named.raft.readStatus().role === RAFT_ROLE.LEADER &&
+      source.raft.readStatus().leaderId === named.replicaId, window);
+    assert.notEqual(elapsed, null,
+      'the named voter leads, and the source follows it, within one ' +
+      `election timeout (${window} ms)`);
+    assert.ok(named.raft.readStatus().term > before.term,
+      'leadership moved in a later term');
+  });
+});
+
+test('W4 named: a successor the core cannot take is REFUSED with the ' +
+  'port\'s record and moves nothing', {timeout: TEST_TIMEOUT_MS}, async () => {
+  const partitionId = 'w4-named-refused';
+  await withGroup(partitionId, async ({services, handler}) => {
+    const source = leaderOf(services);
+    assert.ok(source, 'setup: the group has a leader');
+    const before = source.raft.readStatus();
+    const outsider = `${partitionId}-outsider`;
+    reservePartitionRaftPeerIdentity(source, outsider);
+    for (const [successor, reason] of [
+      [`${partitionId}-unknown`, TRANSFER_REASON.TARGET_UNRESERVED],
+      [outsider, TRANSFER_REASON.TARGET_NOT_VOTER],
+    ]) {
+      const result = await handler.requestTrackedPartitionLeaderHandoff(
+        source.replicaId, null, successor);
+      assert.equal(result.state, STATE.REFUSED, `${successor}: refused`);
+      assert.equal(result.branch, BRANCH.TRANSFER_REFUSED);
+      assert.equal(result.transfer.outcome,
+        portConstants.RAFT_OPERATION_OUTCOME.CORE_REFUSED);
+      assert.equal(result.transfer.reason, reason,
+        'the port\'s typed reason is carried');
+    }
+    const self = await handler.requestTrackedPartitionLeaderHandoff(
+      source.replicaId, null, source.replicaId);
+    assert.equal(self.state, STATE.REFUSED, 'naming itself is refused');
+    assert.equal(self.branch, BRANCH.NAMED_SUCCESSOR_REFUSED);
+    await sleep(recoveryRetryWindowMsOf(source.raftTimingConfig));
+    const after = source.raft.readStatus();
+    assert.equal(after.role, RAFT_ROLE.LEADER, 'the source still leads');
     assert.equal(after.term, before.term, 'no term moved');
   });
 });

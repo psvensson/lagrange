@@ -183,3 +183,61 @@ t.test('a tracked service with no transfer authority is NOT_SUPPORTED',
     t.equal(result.branch,
       REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.PROVIDER_UNSUPPORTED);
   });
+
+// The source-side handoff to a named successor (the participant release
+// cutover hands a leader whose connection served the legacy path to a clean
+// voter): one NAMED transfer from a tracked leader; a successor that is the
+// replica itself, or one named for the replacement election, is refused by
+// the owner and nothing is asked; a source that no longer leads asks for
+// nothing. Whether the successor is a transferable voter is the port's
+// answer (witnessed on real partitions).
+const NAMED_SUCCESSOR_ID = 'replica_operations-p1-r6';
+
+t.test('source-side handoff of a tracked leader to a named successor asks ' +
+  'for that successor, once', async (t) => {
+  const {handler, transfers} = buildHandlerHost(RAFT_ROLE.LEADER,
+    portAnswer(RAFT_OPERATION_OUTCOME.CORE_OK,
+      RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED));
+  const result = await handler.requestTrackedPartitionLeaderHandoff(
+    TEST_REPLICA_ID, null, NAMED_SUCCESSOR_ID);
+  t.strictSame(transfers, [{
+    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
+    replicaIdentity: NAMED_SUCCESSOR_ID,
+  }], 'one transfer, naming the successor');
+  t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED);
+  t.equal(result.branch,
+    REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED);
+});
+
+t.test('a named successor that is the replica itself, or one named for ' +
+  'the replacement election, is refused and asks for nothing', async (t) => {
+  for (const [reason, successor] of [
+    [null, TEST_REPLICA_ID],
+    [ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF, TEST_REPLICA_ID],
+    [ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+      NAMED_SUCCESSOR_ID],
+  ]) {
+    const {handler, transfers} = buildHandlerHost(RAFT_ROLE.LEADER,
+      portAnswer(RAFT_OPERATION_OUTCOME.CORE_OK,
+        RAFT_LEADERSHIP_TRANSFER_REASON.TRANSFER_REQUESTED));
+    const result = await handler.requestTrackedPartitionLeaderHandoff(
+      TEST_REPLICA_ID, reason, successor);
+    t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.REFUSED,
+      `${reason}/${successor}: refused`);
+    t.equal(result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.NAMED_SUCCESSOR_REFUSED);
+    t.equal(result.trackedRole, RAFT_ROLE.LEADER);
+    t.strictSame(transfers, [], 'nothing is asked of the issuer');
+  }
+});
+
+t.test('a source that no longer leads asks no named successor for ' +
+  'anything', async (t) => {
+  const {handler, transfers} = buildHandlerHost(RAFT_ROLE.FOLLOWER);
+  const result = await handler.requestTrackedPartitionLeaderHandoff(
+    TEST_REPLICA_ID, null, NAMED_SUCCESSOR_ID);
+  t.equal(result.state, REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED);
+  t.equal(result.branch,
+    REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.SOURCE_DEMOTION_ROLE_NO_OP);
+  t.strictSame(transfers, []);
+});
