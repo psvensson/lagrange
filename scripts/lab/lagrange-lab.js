@@ -26,6 +26,7 @@ import {
 } from '../run-classified-test-files.js';
 import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
+import {resolvedCheckBaseCommit} from '../checks/changed-paths.js';
 import {execGitAsync} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
@@ -507,6 +508,8 @@ async function commandTest(profile, args) {
       plan,
       costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
       commit,
+      // The base the cone was selected from is the one its history walks use.
+      checkBase: resolvedCheckBaseCommit(request.baseSha, process.env, commit.gitRoot),
       on: request.on,
       split: request.split,
       root: FLEET_REPO_ROOT,

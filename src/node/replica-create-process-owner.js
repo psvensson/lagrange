@@ -224,14 +224,11 @@ function hasReplicaCreatePhysicalWorkerForGeneration(owner, generation) {
 export {
   advanceReplicaCreatePhysicalWorker,
   claimReplicaCreateDurablePhysicalWorker,
-  claimReplicaCreatePhysicalWorker,
   commitReplicaCreateSnapshotInstall,
   hasReplicaCreatePhysicalWorkerForGeneration,
   releaseReplicaCreatePhysicalWorker,
   requireReplicaCreateRotationWorkerClaim,
   revalidateReplicaCreatePhysicalWorker,
-  replicaCreatePhysicalWorkerEvidence,
-  runReplicaCreatePhysicalCommit,
   runReplicaCreateExclusive,
   snapshotReplicaCreateInstallAuthority,
 };

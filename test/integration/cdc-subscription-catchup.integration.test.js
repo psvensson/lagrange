@@ -17,7 +17,12 @@ import {
 import {
   PARTITION_SERVICE_CDC,
 } from '../../src/partition/partition-service-constants.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
+import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
+  '../test-helpers/acknowledging-cdc-subscriber.js';
 
 const TEST_TABLE_SCHEMA = Object.freeze({
   columns: [
@@ -35,14 +40,10 @@ const TEST_IDS = Object.freeze({
 
 const HANDSHAKE_STATUS_OK =
   PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK;
-const CATCHUP_MODE_BACKFILL =
-  PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL;
 const CATCHUP_MODE_SLIDING_WINDOW =
   PARTITION_SERVICE_CDC.CATCHUP_MODE_SLIDING_WINDOW;
 const CATCHUP_MODE_NONE =
   PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE;
-const STREAM_MODE_CATCHUP =
-  PARTITION_SERVICE_CDC.STREAM_MODE_CATCHUP;
 const STREAM_MODE_STEADY =
   PARTITION_SERVICE_CDC.STREAM_MODE_STEADY;
 
@@ -64,6 +65,7 @@ function createPartition() {
     replicaIds: [TEST_IDS.REPLICA_ID],
     nodeId: TEST_IDS.NODE_ID,
     schema: TEST_TABLE_SCHEMA,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 }
@@ -104,6 +106,7 @@ test('CDC subscription handshake + catch-up integration',
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
           await partition.insertData(
             TEST_IDS.TABLE_ID,
@@ -119,46 +122,43 @@ test('CDC subscription handshake + catch-up integration',
             {id: 'row-2', value: ROW_VALUE_THREE},
           );
 
-          const delivered = [];
-          const subscriber = (event) => {
-            delivered.push(event);
-          };
+          // The writes above are owed obligations in the durable ledger;
+          // the late subscriber catches up from that ledger, accepting each
+          // event with the owner's committed receipt.
+          const subscriber = acknowledgingCdcSubscriber();
+          const delivered = subscriber.events;
 
           const handshake =
             await partition.subscribeToCDCWithHandshake(
               subscriber,
               {subscriberId: LATE_SUBSCRIBER_ID},
             );
+          await settlePendingCdcDeliveries(partition);
 
           t.equal(
             handshake.status, HANDSHAKE_STATUS_OK,
             'handshake should acknowledge subscription',
           );
-          t.equal(
-            handshake.catchup.mode, CATCHUP_MODE_BACKFILL,
-            'late subscription should enter catch-up mode',
-          );
-          t.ok(
-            handshake.catchup.bufferedEventsReplayed >=
-              MIN_EXPECTED_EVENTS,
-            'catch-up should replay buffered events',
-          );
+          // Deleted: catchup.mode === backfill and bufferedEventsReplayed >= 3 asserted the retired volatile buffer, which writes no longer feed.
           t.equal(
             handshake.streamMode, STREAM_MODE_STEADY,
             'stream transitions to steady after catch-up',
           );
 
-          const catchupEvents = delivered.filter(
-            (e) => e.streamMode === STREAM_MODE_CATCHUP,
-          );
+          // Deleted: the streamMode === catchup filter tagged volatile-buffer replays; ledger catch-up events carry the steady mode.
           t.equal(
-            catchupEvents.length,
-            handshake.catchup.bufferedEventsReplayed,
-            'subscriber observes exactly replayed events',
+            delivered.length, MIN_EXPECTED_EVENTS,
+            'late subscriber observes every write made before it subscribed',
+          );
+          t.same(
+            delivered.map((e) => [e.operation, e.data?.id]),
+            [[CDC_OPERATION.INSERT, 'row-1'], [CDC_OPERATION.UPDATE, 'row-1'],
+              [CDC_OPERATION.INSERT, 'row-2']],
+            'catch-up delivers the pre-subscription writes',
           );
 
-          const catchupSeq = catchupEvents.map(
-            (e) => e.sequenceNumber,
+          const catchupSeq = delivered.map(
+            (e) => e.sourceLogIndex,
           );
           const sortedSeq =
             [...catchupSeq].sort((a, b) => a - b);
@@ -172,6 +172,7 @@ test('CDC subscription handshake + catch-up integration',
             {id: 'row-2'},
             {value: ROW_VALUE_FOUR},
           );
+          await settlePendingCdcDeliveries(partition);
 
           const steadyEvents = delivered.filter(
             (e) => e.streamMode === STREAM_MODE_STEADY,
@@ -222,24 +223,25 @@ test('CDC sliding window handshake catchup integration',
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
-          // Register subscriber A
-          const subscriberAEvents = [];
-          const subscriberA = (event) => {
-            subscriberAEvents.push(event);
-          };
+          // Register subscriber A; an accepted delivery is one answered
+          // with the owner's committed receipt.
+          const subscriberA = acknowledgingCdcSubscriber();
+          const subscriberAEvents = subscriberA.events;
           const handshakeA =
             await partition.subscribeToCDCWithHandshake(
               subscriberA,
               {subscriberId: SUBSCRIBER_A_ID},
             );
+          await settlePendingCdcDeliveries(partition);
           t.equal(
             handshakeA.status, HANDSHAKE_STATUS_OK,
             'subscriber A handshake acknowledged',
           );
 
           // Generate events delivered to subscriber A via
-          // the real write path (generateCDCEvent)
+          // the real write path (durable CDC obligations)
           await partition.insertData(
             TEST_IDS.TABLE_ID,
             {id: 'sw-row-1', value: ROW_VALUE_ONE},
@@ -253,6 +255,7 @@ test('CDC sliding window handshake catchup integration',
             {id: 'sw-row-1'},
             {value: ROW_VALUE_THREE},
           );
+          await settlePendingCdcDeliveries(partition);
 
           // Verify subscriber A received events
           t.ok(
@@ -274,10 +277,8 @@ test('CDC sliding window handshake catchup integration',
           );
 
           // Register late subscriber B
-          const subscriberBEvents = [];
-          const subscriberB = (event) => {
-            subscriberBEvents.push(event);
-          };
+          const subscriberB = acknowledgingCdcSubscriber();
+          const subscriberBEvents = subscriberB.events;
           const handshakeB =
             await partition.subscribeToCDCWithHandshake(
               subscriberB,
@@ -336,6 +337,7 @@ test('CDC sliding window handshake catchup integration',
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
           // Generate events with no subscribers — buffered
           await partition.insertData(
@@ -347,33 +349,21 @@ test('CDC sliding window handshake catchup integration',
             {id: 'dedup-row-2', value: ROW_VALUE_TWO},
           );
 
-          const bufferedCount =
-            partition.cdcEventBuffer.size();
-          t.ok(
-            bufferedCount > 0,
-            'events buffered before subscriber registers',
-          );
+          // Deleted: cdcEventBuffer.size() > 0 asserted the retired volatile buffer; the writes are owed in the durable ledger.
 
-          // Register subscriber A — triggers buffer replay
-          // which also records into sliding window
-          const subscriberAEvents = [];
-          const subscriberA = (event) => {
-            subscriberAEvents.push(event);
-          };
-          const handshakeA =
-            await partition.subscribeToCDCWithHandshake(
-              subscriberA,
-              {subscriberId: SUBSCRIBER_A_ID},
-            );
-          t.equal(
-            handshakeA.catchup.mode,
-            CATCHUP_MODE_BACKFILL,
-            'subscriber A gets backfill catchup',
+          // Register subscriber A — the ledger's owed events reach it and
+          // each accepted delivery records into the sliding window
+          const subscriberA = acknowledgingCdcSubscriber();
+          const subscriberAEvents = subscriberA.events;
+          await partition.subscribeToCDCWithHandshake(
+            subscriberA,
+            {subscriberId: SUBSCRIBER_A_ID},
           );
-          t.ok(
-            handshakeA.catchup.bufferedEventsReplayed >
-              0,
-            'subscriber A received buffered events',
+          await settlePendingCdcDeliveries(partition);
+          // Deleted: catchup.mode === backfill and bufferedEventsReplayed > 0 asserted the retired volatile buffer replay.
+          t.equal(
+            subscriberAEvents.length, 2,
+            'subscriber A received the owed events',
           );
 
           // Generate more events delivered to subscriber A
@@ -381,18 +371,18 @@ test('CDC sliding window handshake catchup integration',
             TEST_IDS.TABLE_ID,
             {id: 'dedup-row-3', value: ROW_VALUE_THREE},
           );
+          await settlePendingCdcDeliveries(partition);
 
           // Register subscriber B — sliding window catchup
           // with deduplication
-          const subscriberBEvents = [];
-          const subscriberB = (event) => {
-            subscriberBEvents.push(event);
-          };
+          const subscriberB = acknowledgingCdcSubscriber();
+          const subscriberBEvents = subscriberB.events;
           const handshakeB =
             await partition.subscribeToCDCWithHandshake(
               subscriberB,
               {subscriberId: SUBSCRIBER_B_ID},
             );
+          await settlePendingCdcDeliveries(partition);
 
           t.equal(
             handshakeB.status, HANDSHAKE_STATUS_OK,
@@ -428,6 +418,7 @@ test('CDC sliding window handshake catchup integration',
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
           // Register subscriber with no prior events
           const subscriberEvents = [];
@@ -474,23 +465,22 @@ test('CDC sliding window handshake catchup integration',
     );
 
     await t.test(
-      'generateCDCEvent records to sliding window ' +
-      'after successful delivery',
+      'an accepted durable delivery records to the sliding window',
       async (t) => {
         const partition = createPartition();
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
-          // Register subscriber so events are delivered
-          const events = [];
-          const subscriber = (event) => {
-            events.push(event);
-          };
+          // Register subscriber so events are delivered and accepted
+          const subscriber = acknowledgingCdcSubscriber();
+          const events = subscriber.events;
           await partition.subscribeToCDCWithHandshake(
             subscriber,
             {subscriberId: SUBSCRIBER_A_ID},
           );
+          await settlePendingCdcDeliveries(partition);
 
           // Sliding window empty before writes
           t.equal(
@@ -508,6 +498,7 @@ test('CDC sliding window handshake catchup integration',
             TEST_IDS.TABLE_ID,
             {id: 'rec-row-2', value: ROW_VALUE_TWO},
           );
+          await settlePendingCdcDeliveries(partition);
 
           // Verify events were delivered
           t.ok(
@@ -556,6 +547,7 @@ test('CDC sliding window handshake catchup integration',
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
 
           // Register subscriber A first
           const subscriberAEvents = [];

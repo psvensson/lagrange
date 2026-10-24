@@ -204,8 +204,8 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  shouldDeferColdReconnectForDeliveryBudget(timeoutMs) {
-    return shouldDeferColdReconnectForDeliveryBudget(this, timeoutMs);
+  shouldDeferColdReconnectForDeliveryBudget(remainingMs) {
+    return shouldDeferColdReconnectForDeliveryBudget(this, remainingMs);
   }
 
   buildColdReconnectBudgetFailure(
@@ -223,8 +223,8 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  async ensureNodeConnection(targetNodeId, address) {
-    return ensureNodeConnection(this, targetNodeId, address);
+  async ensureNodeConnection(targetNodeId, address, connectBudgetMs) {
+    return ensureNodeConnection(this, targetNodeId, address, connectBudgetMs);
   }
 
   async tryDeliverAfterReconnect(

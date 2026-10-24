@@ -1,6 +1,8 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
+import {classifyTransportDeliveryOutcome, isDeferredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -54,7 +56,6 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     buildDeferredDeliveryError,
     normalizeMessageDeliveryMode,
     resolveTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
     uuidv4,
   } = deps;
 
@@ -239,7 +240,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
               ...result,
             };
           }
-          if (shouldDeferImmediateDeliveryRetry(result)) {
+          if (isDeferredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result))) {
             return {
               delivered: false,
               attempt: attempt + 1,
@@ -360,7 +361,8 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           },
         );
         if (!deliveryResult.delivered) {
-          throw shouldDeferImmediateDeliveryRetry(deliveryResult) ?
+          throw isDeferredTransportDeliveryOutcome(
+            classifyTransportDeliveryOutcome(deliveryResult)) ?
             buildDeferredDeliveryError(deliveryResult) :
             new Error(deliveryResult.error || failureDescription);
         }

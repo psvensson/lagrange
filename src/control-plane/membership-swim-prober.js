@@ -16,6 +16,8 @@
 import {resolveTimeSource} from '../time/time-source.js';
 import {resolveRandomSource} from '../random/random-source.js';
 import {SWIM_DETECTOR_DEFAULTS} from './membership-swim-detector.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 const SWIM_RELAY_SERVICE = 'swim-relay';
 const SWIM_PING_SERVICE = 'swim-ping';
@@ -111,7 +113,8 @@ function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} =
       } catch (_error) {
         return null;
       }
-      if (resolved && resolved.acknowledged === true && resolved.alive === true) {
+      if (isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(resolved)) &&
+          resolved.alive === true) {
         return {
           alive: true,
           incarnation: resolved.incarnation,
@@ -135,8 +138,7 @@ function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} =
         return null;
       }
       if (
-        resolved &&
-        resolved.acknowledged === true &&
+        isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(resolved)) &&
         typeof resolved.reachable === 'boolean'
       ) {
         return resolved.reachable;

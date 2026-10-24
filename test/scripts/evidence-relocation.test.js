@@ -8,12 +8,12 @@
  */
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {execGit} from '../../scripts/checks/git-invocation.js';
 import {evidenceRelocate} from '../../scripts/solve/commands.js';
 import {
   MEMBER_MISMATCH, RELOCATION, RELOCATION_REFUSAL, bundleBasename, parsePathsList,
@@ -35,8 +35,8 @@ const BULK = Object.freeze({
 });
 
 function git(root, args) {
-  return execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com',
-    ...args], {cwd: root, encoding: 'utf8'});
+  return execGit(['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args],
+    {cwd: root, encoding: 'utf8'});
 }
 
 function write(root, relative, content) {

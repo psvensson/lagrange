@@ -1,6 +1,11 @@
 import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {
+  TIMEOUT_BUDGET_DEFAULT,
+  createTimeoutBudget,
+  getRemainingBudgetMs,
+} from '../control-plane/timeout-budget.js';
 
 const {
   ConnectionState,
@@ -253,16 +258,50 @@ export function armReconnectAfterConnectFailure(
   return connection;
 }
 
-export function shouldDeferColdReconnectForDeliveryBudget(router, timeoutMs) {
-  if (
-    !Number.isFinite(timeoutMs) ||
-    timeoutMs <= TRANSPORT_NUM.ZERO ||
-    !Number.isFinite(router.connectTimeoutMs) ||
-    router.connectTimeoutMs <= TRANSPORT_NUM.ZERO
-  ) {
-    return false;
+// A cold dial started for a delivery is a child of that delivery's grant: it
+// is attempted with min(connect limit, remaining grant) (the dial owner applies
+// the bound) and deferred only when the remaining grant is below the minimum
+// operation budget. The argument is the debited remainder, so it is never
+// compared with the undebited connect limit.
+export function shouldDeferColdReconnectForDeliveryBudget(router, remainingMs) {
+  return Number.isFinite(remainingMs) &&
+    remainingMs < TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS;
+}
+
+// Every candidate dial of one delivery-triggered connection attempt shares the
+// grant's deadline, so the attempt cannot outlive the delivery that started
+// it. Without a finite grant the dial owner's own connect limit applies.
+function createDialGrant(router, connectBudgetMs) {
+  if (!Number.isFinite(connectBudgetMs)) {
+    return () => Number.POSITIVE_INFINITY;
   }
-  return Math.floor(timeoutMs) < Math.floor(router.connectTimeoutMs);
+  const now = () => router.timeSource.now();
+  const budget = createTimeoutBudget({configuredBudgetMs: connectBudgetMs, now});
+  return () => getRemainingBudgetMs(budget, {now});
+}
+
+function recordReconnectCandidateFailure(router, failure) {
+  const {targetNodeId, reconnectAddress, reconnectCandidate, error} = failure;
+  if (router.shouldSuppressReconnectAddress(error)) {
+    router.suppressReconnectAddress(targetNodeId, reconnectAddress);
+    failure.appendFreshReconnectCandidates();
+  }
+  router.transportPressureMetrics[
+    TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
+  ] += TRANSPORT_NUM.ONE;
+  router.logger.warn(
+    ROUTER_LOG_MSG.RECONNECT_BEFORE_DELIVERY_FAILED,
+    {
+      targetNodeId,
+      address: reconnectAddress,
+      candidateSource: reconnectCandidate.candidateSource,
+      candidateSources: reconnectCandidate.candidateSources,
+      candidateIndex: failure.candidateIndex,
+      candidateCount: failure.candidateCount,
+      localNodeId: router.nodeId,
+      error: error?.message || String(error),
+    },
+  );
 }
 
 export function buildColdReconnectBudgetFailure(
@@ -302,7 +341,12 @@ export function buildColdReconnectBudgetFailure(
   );
 }
 
-export async function ensureNodeConnection(router, targetNodeId, address) {
+export async function ensureNodeConnection(
+  router,
+  targetNodeId,
+  address,
+  connectBudgetMs,
+) {
   const existing = router.nodeConnections.get(targetNodeId);
   if (existing && existing.state === ConnectionState.CONNECTED) {
     return existing;
@@ -361,6 +405,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
     };
     let lastError = null;
     let lastReconnectAddress = null;
+    const remainingDialGrantMs = createDialGrant(router, connectBudgetMs);
     try {
       for (
         let candidateIndex = TRANSPORT_NUM.ZERO;
@@ -372,10 +417,17 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
         if (attemptedCandidateAddresses.has(reconnectAddress)) {
           continue;
         }
+        const candidateConnectBudgetMs = remainingDialGrantMs();
+        if (shouldDeferColdReconnectForDeliveryBudget(
+          router, candidateConnectBudgetMs)) {
+          break;
+        }
         attemptedCandidateAddresses.add(reconnectAddress);
         lastReconnectAddress = reconnectAddress;
         try {
-          await router.connectToNode(targetNodeId, reconnectAddress);
+          await router.connectToNode(targetNodeId, reconnectAddress, {
+            connectBudgetMs: candidateConnectBudgetMs,
+          });
           router.clearReconnectAddressSuppression(
             targetNodeId,
             reconnectAddress,
@@ -384,26 +436,15 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
           break;
         } catch (error) {
           lastError = error;
-          if (router.shouldSuppressReconnectAddress(error)) {
-            router.suppressReconnectAddress(targetNodeId, reconnectAddress);
-            appendFreshReconnectCandidates();
-          }
-          router.transportPressureMetrics[
-            TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
-          ] += TRANSPORT_NUM.ONE;
-          router.logger.warn(
-            'Failed to reconnect target node before delivery',
-            {
-              targetNodeId,
-              address: reconnectAddress,
-              candidateSource: reconnectCandidate.candidateSource,
-              candidateSources: reconnectCandidate.candidateSources,
-              candidateIndex,
-              candidateCount: reconnectCandidates.length,
-              localNodeId: router.nodeId,
-              error: error?.message || String(error),
-            },
-          );
+          recordReconnectCandidateFailure(router, {
+            targetNodeId,
+            reconnectAddress,
+            reconnectCandidate,
+            candidateIndex,
+            candidateCount: reconnectCandidates.length,
+            error,
+            appendFreshReconnectCandidates,
+          });
         }
       }
     } finally {
@@ -420,7 +461,7 @@ export async function ensureNodeConnection(router, targetNodeId, address) {
         router.transportPressureMetrics[
           TRANSPORT_PRESSURE_SUMMARY_FIELD.RECONNECT_BEFORE_DELIVERY_FAILURE_COUNT
         ] += TRANSPORT_NUM.ONE;
-        router.logger.warn('Failed to reconnect target node before delivery', {
+        router.logger.warn(ROUTER_LOG_MSG.RECONNECT_BEFORE_DELIVERY_FAILED, {
           targetNodeId,
           address: null,
           localNodeId: router.nodeId,
@@ -467,6 +508,7 @@ export async function tryDeliverAfterReconnect(
     const connection = await router.ensureNodeConnection(
       targetNodeId,
       reconnectAddress,
+      timeoutMs,
     );
     assertDeliveryOpen(options);
     if (!connection || connection.state !== ConnectionState.CONNECTED) {

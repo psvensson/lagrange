@@ -41,6 +41,8 @@ import {
 } from './partition-service-test-support.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
+import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
+  '../test-helpers/acknowledging-cdc-subscriber.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -128,17 +130,23 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
+      systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
     }));
 
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     partition.isLeader = true;
     partition.role = RaftRole.LEADER;
-    partition.generateCDCEvent = async () => {
+    // Replaced: the generateCDCEvent override hooked the retired volatile emitter; the CDC failure is now the durable lane's subscriber throwing.
+    let failedDeliveries = 0;
+    await partition.subscribeToCDCWithHandshake(acknowledgingCdcSubscriber({onEvent: () => {
+      failedDeliveries += 1;
       throw new Error('forced-cdc-failure');
-    };
+    }}));
+    await settlePendingCdcDeliveries(partition);
 
     let unhandledReason = null;
     const onUnhandledRejection = (reason) => {
@@ -146,19 +154,17 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
     };
     process.once('unhandledRejection', onUnhandledRejection);
 
-    // Committed through the partition's own port: the lone rs-raft leader
-    // applies it and emits its CDC from the post-commit effects.
-    await partition.raft.propose({
-      type: 'INSERT',
-      sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
-      params: ['leader-failure-1', 7],
-      timestamp: String(Date.now()),
-      proposedBy: 'other-replica',
-    });
+    // Committed through the partition's write owner: the lone rs-raft leader
+    // applies it and records its CDC obligation, which the lane delivers.
+    // (Was: a hand-built raw propose without an entryId, which the durable
+    // recorder now refuses as an application failure.)
+    await partition.insertData('cdc_test', {id: 'leader-failure-1', value: 7});
 
+    await settlePendingCdcDeliveries(partition);
     await new Promise((resolve) => setTimeout(resolve, 0));
     process.removeListener('unhandledRejection', onUnhandledRejection);
 
+    t.ok(failedDeliveries > 0, 'the committed entry\'s CDC delivery reached the failing subscriber');
     t.equal(
       unhandledReason,
       null,
@@ -184,20 +190,23 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
+      systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
     }));
 
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     let shouldFailDelivery = true;
-    const delivered = [];
-    const subscriber = async (event) => {
+    // The failure refuses the delivery; once recovered the subscriber answers
+    // the owner's committed receipt, so the redelivered event is accepted.
+    const subscriber = acknowledgingCdcSubscriber({onEvent: () => {
       if (shouldFailDelivery) {
         throw new Error('forced-subscriber-failure');
       }
-      delivered.push(event);
-    };
+    }});
+    const delivered = subscriber.events;
 
     await partition.subscribeToCDCWithHandshake(subscriber, {
       subscriberId: 'cdc-retry-subscriber',
@@ -208,8 +217,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
 
     t.equal(delivered.length, 0,
       'event should not be delivered while subscriber is failing');
-    t.equal(partition.cdcEventBuffer.size(), 1,
-      'failed delivery should be preserved in retry buffer');
+    // Deleted: cdcEventBuffer.size() === 1 asserted the retired volatile retry buffer; the durable ledger now holds the refused event.
 
     shouldFailDelivery = false;
 
@@ -218,7 +226,8 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       const pollMs = 25;
       const startedAt = Date.now();
       while (Date.now() - startedAt < timeoutMs) {
-        if (delivered.length >= 1 && partition.cdcEventBuffer.size() === 0) {
+        // Retired volatile-buffer drain check removed; the redelivery is the property.
+        if (delivered.length >= 1) {
           return true;
         }
         await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -795,22 +804,31 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica should become leader immediately
   await Promise.resolve();
 
-  const cdcEvents = [];
-  const subscriber = (event) => cdcEvents.push(event);
+  // Durable delivery is asynchronous and accepted only on the owner's
+  // committed receipt, so each write's delivery is awaited before counting.
+  const subscriber = acknowledgingCdcSubscriber();
+  const cdcEvents = subscriber.events;
 
   partition.subscribeToCDC(subscriber);
+  // The subscription's own drive settles first: a write committed while a
+  // drive is in flight joins it and is delivered on the owner's retry timer.
+  await settlePendingCdcDeliveries(partition);
   await partition.insertData('unsub_test', {id: 'item-1'});
+  await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1);
 
   partition.unsubscribeFromCDC(subscriber);
   await partition.insertData('unsub_test', {id: 'item-2'});
+  await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1); // No new events after unsubscribe
 
   await partition.shutdown();

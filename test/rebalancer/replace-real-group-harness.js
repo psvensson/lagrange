@@ -36,7 +36,7 @@
 
 import {EventEmitter} from 'node:events';
 
-import {PartitionNodeCluster} from
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from
   '../raft/raft-rs-backend/partition-node-cluster.js';
 import {
   durableAppliedState,
@@ -264,7 +264,7 @@ class RealGroup {
         }
         cluster.replica(capDeliveryTo).inbox.push({...packet,
           message: this.cappedMessage(packet.message)});
-        return null;
+        return DELIVERED_TO_PEER;
       },
     });
     this.cluster = cluster;

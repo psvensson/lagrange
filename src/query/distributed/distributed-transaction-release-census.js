@@ -5,9 +5,16 @@ import {readParticipantSet} from './distributed-transaction-participant-manifest
 import {decisionRecordOfRow, RECORDED_DECISION_STATE} from './distributed-transaction-decision-record.js';
 import {readTransactionSchemaEnforcement, TRANSACTION_SCHEMA_ENFORCEMENT_STATE} from
   './distributed-transaction-schema-enforcement.js';
+import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
+  '../../partition/partition-participant-transaction-constants.js';
+import {TRANSACTION_STATUS} from './distributed-transaction-coordinator-constants.js';
 
-const TRANSACTION_RELEASE_SCHEMA_VERSION = 2;
 const TRANSACTION_RELEASE_SEMANTIC_VERSION = 'tx1-query-set-v1';
+// The one terminal status a released transaction reaches for its decision.
+const TRANSACTION_RELEASE_TERMINAL_STATUS = Object.freeze({
+  [DECISION.COMMIT]: TRANSACTION_STATUS.COMMITTED,
+  [DECISION.ROLLBACK]: TRANSACTION_STATUS.ROLLED_BACK,
+});
 const TRANSACTION_RELEASE_CENSUS_STATE = Object.freeze({
   CLEAR: 'clear', HELD: 'held', UNAVAILABLE: 'unavailable',
   EMPTY_LEGACY_SCHEMA: 'empty_legacy_schema',
@@ -63,4 +70,4 @@ function readTransactionReleaseCensus(database) {
 }
 
 export {readTransactionReleaseCensus, TRANSACTION_RELEASE_CENSUS_STATE,
-  TRANSACTION_RELEASE_SCHEMA_VERSION, TRANSACTION_RELEASE_SEMANTIC_VERSION};
+  TRANSACTION_RELEASE_TERMINAL_STATUS};

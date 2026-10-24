@@ -191,12 +191,8 @@ test('partition write kernel separates commit/apply from replayable side effects
     t.same(
       sideEffectPlan,
       {
-        emitCdcEntry: {
-          type: 'UPDATE',
-          sql: 'UPDATE test_table SET value = ? WHERE id = ?',
-          params: ['b', 'r1'],
-          changes: 1,
-        },
+        // Rewritten: the volatile emission is retired; the write's CDC is the durable obligation of committed apply.
+        emitCdcEntry: null,
         splitReplicationEntry: {
           type: 'UPDATE',
           sql: 'UPDATE test_table SET value = ? WHERE id = ?',

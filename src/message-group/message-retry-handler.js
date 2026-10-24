@@ -281,7 +281,7 @@ class MessageRetryHandler extends EventEmitter {
         // Attempt delivery
         const result = await deliveryFn(currentTarget, message, attempt);
 
-        if (result && (result.acknowledged || result.success)) {
+        if (result && result.success) {
           attemptRecord.status = LOCAL_STR_SUCCESS;
           attemptHistory.push(attemptRecord);
 

@@ -32,6 +32,7 @@ import path from 'node:path';
 import {execFileSync, spawnSync} from 'node:child_process';
 
 import {ACTION, authorizeAction, isAuthorized} from '../action-authority.js';
+import {GIT_OUTPUT_BOUND, spawnGit} from '../checks/git-invocation.js';
 import {LOG_FILE, QUEST_FILE} from './schema.js';
 
 const EVIDENCE_RELEASE_TAG = 'solve-evidence';
@@ -206,7 +207,6 @@ const MEMBER_MISMATCH = Object.freeze({
   MANIFEST: 'bytes differ from the manifest',
   SOURCE: 'bytes differ from the source-commit blob',
 });
-const GIT_BINARY = 'git';
 const TAR_BINARY = 'tar';
 const BUNDLE_DIR = 'bundle';
 const EXTRACT_DIR = 'extract';
@@ -233,12 +233,22 @@ const GIT_RM_FROM_STDIN = Object.freeze(['rm', '--quiet', '--pathspec-from-file=
 const TAR_EXTRACT = Object.freeze(['--no-same-owner', '--no-same-permissions',
   '-xzf']);
 
-function spawnOrThrow(binary, args, options = {}) {
-  const result = spawnSync(binary, args, {maxBuffer: SPAWN_MAX_BUFFER, ...options});
+function stdoutOrThrow(command, result) {
   if (result.status !== 0) {
-    throw new Error(`${binary} ${args[0]} failed: ${String(result.stderr || '')}`);
+    throw new Error(`${command} failed: ${String(result.stderr || '')}`);
   }
   return result.stdout;
+}
+
+function spawnOrThrow(binary, args, options = {}) {
+  return stdoutOrThrow(`${binary} ${args[0]}`,
+    spawnSync(binary, args, {maxBuffer: SPAWN_MAX_BUFFER, ...options}));
+}
+
+// Git starts only through the git-invocation owner, under one of its named
+// output bounds; output past the bound is its GitOutputTooLargeError.
+function gitOrThrow(args, options) {
+  return stdoutOrThrow(`git ${args[0]}`, spawnGit(args, options));
 }
 
 function sha256OfBuffer(buffer) {
@@ -301,7 +311,8 @@ function parseBatchHeader(output, offset) {
  */
 function sourceBlobs(root, commit, paths) {
   const input = paths.map((file) => `${commit}:${file}${LINE_SEPARATOR}`).join('');
-  const output = spawnOrThrow(GIT_BINARY, ['cat-file', '--batch'], {cwd: root, input});
+  const output = gitOrThrow(['cat-file', '--batch'],
+    {cwd: root, input, bound: GIT_OUTPUT_BOUND.HISTORY_BLOB_BATCH});
   const blobs = new Map();
   let offset = 0;
   for (const file of paths) {
@@ -329,9 +340,9 @@ function sourceBlobs(root, commit, paths) {
 function addingCommits(root, commit, paths) {
   const wanted = new Set(paths);
   const directories = [...new Set(paths.map((file) => path.posix.dirname(file)))];
-  const output = String(spawnOrThrow(GIT_BINARY, ['log', '--diff-filter=A',
+  const output = String(gitOrThrow(['log', '--diff-filter=A',
     '--name-only', ADDED_FORMAT, commit, '--', ...directories],
-  {cwd: root, encoding: TEXT_ENCODING}));
+  {cwd: root, encoding: TEXT_ENCODING, bound: GIT_OUTPUT_BOUND.COMMAND}));
   const adds = new Map();
   let current = null;
   for (const line of output.split(LINE_SEPARATOR)) {
@@ -594,8 +605,8 @@ function recordRelocation({recordsRoot, shard, verification, verifiedAt}) {
  */
 function removeRelocated(root, paths) {
   if (paths.length === 0) return 0;
-  spawnOrThrow(GIT_BINARY, [...GIT_RM_FROM_STDIN],
-    {cwd: root, input: paths.join(ADDED_MARKER)});
+  gitOrThrow([...GIT_RM_FROM_STDIN],
+    {cwd: root, input: paths.join(ADDED_MARKER), bound: GIT_OUTPUT_BOUND.COMMAND});
   return paths.length;
 }
 

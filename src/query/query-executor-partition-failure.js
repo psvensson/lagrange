@@ -1,5 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
+import {classifyTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
@@ -28,18 +29,15 @@ function resolveRetryableLeaderFailureRetryAfterMs({
   ) {
     return null;
   }
+  const outcome = classifyTransportDeliveryOutcome(failure);
   const errorMessage =
-    typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      failure.error :
-      typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.message :
-        QUERY_EXECUTOR_LITERAL.STRING_VALUE;
+    typeof outcome.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+      outcome.error :
+      QUERY_EXECUTOR_LITERAL.STRING_VALUE;
   const errorCode =
-    typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      failure.errorCode :
-      typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.code :
-        null;
+    typeof outcome.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+      outcome.errorCode :
+      null;
   if (!executor.isLeaderUnavailable(errorMessage, errorCode)) {
     return null;
   }
@@ -75,7 +73,9 @@ function buildQueryPartitionCandidateFailureDetails({
     // The failed answer's typed fields (its code, its entryId) travel with
     // it to the delivery's failure result.
     ...pickTypedWriteAnswer(failure),
-    errorCode: failure?.errorCode || failure?.code,
+    // A router answer or a thrown router error: the transport owner's one
+    // conversion names its code.
+    errorCode: classifyTransportDeliveryOutcome(failure).errorCode,
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,
       failure,

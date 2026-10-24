@@ -21,7 +21,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from './partition-node-cluster.js';
 import {
   bindingWireNumbers,
   durableAppliedState,
@@ -85,7 +85,7 @@ function openCluster(t, {capTo = null} = {}) {
         message.commit = String(Math.min(Number(message.commit), cap.value));
       }
       cluster.replica(capTo).inbox.push({...packet, message});
-      return null;
+      return DELIVERED_TO_PEER;
     },
   });
   t.after(() => cluster.dispose());

@@ -287,6 +287,8 @@ const ROUTER_LOG_MSG = Object.freeze({
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',
+  RECONNECT_BEFORE_DELIVERY_FAILED:
+    'Failed to reconnect target node before delivery',
   HANDLER_REGISTERED: 'Registered handler',
   HANDLER_UNREGISTERED: 'Unregistered handler',
   NO_TARGET_CONNECTION: 'No connection to target node for message delivery',
