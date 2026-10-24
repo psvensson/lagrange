@@ -153,3 +153,104 @@ The thermal gate (scripts/checks/wait-for-thermal-headroom.js) ran before each t
 - The claim-cache integration test fails at bootstrap in both trees, so it gives no behavioural coverage of the owner-claim path. That path's equivalence rests on the boolean proof above plus the passing branch-authorization test.
 - I did not run the full local corpus.
 - UNKNOWN: whether any non-JS consumer (for example a Python quest-evidence script that imports by string) relies on a de-exported name. git grep found none outside solve/ evidence logs.
+
+---
+
+# Re-verification r2 (delta a7220fe70 -> 26741cf4f, commit a95df4adf)
+
+## Verdict: APPROVE keeping a95df4adf
+
+No required changes.
+
+## Identity
+- HEAD a95df4adf ("ratchet(src): G5/G6/G7 structure-only repairs and staged-guideline fixes"); its parent is 8c51246e2.
+- HEAD^{tree} is 26741cf4f10c83c2b957628c7a40972bc3554d88, and the working tree is clean. All runs below are at the committed tree.
+- The delta covers 10 files, +131/-108:
+  - 8 src files;
+  - solve/changes/global-owner-debt-inventory/inventory.json and test/shards/impact-graph-seal.json, which are generated digests, byte counts and import counts only.
+- In total the commit changes 25 files against base, 23 of them .js.
+
+## (1) The 16 + 4 hook findings existed at base and were never baselined: CONFIRMED
+I ran the hook's own commands (.githooks/pre-commit:109-115, `node scripts/check-guideline-<x>.js <the 23 js files>`) on the base copy at 8c51246e2 and on the committed tree. Logs are in `verify-r2/base-*.txt` and `verify-r2/committed-*.txt`.
+
+| Check | Base 8c51246e2 | Committed |
+|---|---|---|
+| literals | 13 new (+3 inherited) | 0 new (3 inherited, unchanged) |
+| decision-boundaries | 5 | 0 |
+| silent-catch | 2 | 0 |
+| ambient-intrinsics | 0 | 0 |
+
+Base findings per file:
+- **literals:** participant-release-contract 4, settlement 4, schema-enforcement 3, release-settlement 1, owner-claim 1.
+- **decision-boundaries:** release-settlement 3, runtime-owner 2.
+- **silent-catch:** owner-claim 2.
+
+13 + 5 + 2 = 20. That is the 16 the hook flagged on the r1 staged files (12 + 2 + 2) plus the 4 in release-settlement (1 literal + 3 decision-boundary), which the fix brought into the commit.
+
+No guideline baseline file is in the delta, so nothing was baselined. Each per-file count matches a fixed hunk:
+- participant-release-contract: 'COMMIT', 'COMMITTED', 'ROLLBACK', 'ROLLED_BACK'.
+- settlement: 3 field names and the literal 3.
+- schema-enforcement: 'sha256', 'hex', the refusal message.
+- release-settlement: 'COMMITTED'.
+- owner-claim: ' AND '.
+
+The checker prints counts only, not lines, so the line-level match is by inspecting the diff.
+
+## (2) Each fix preserves behaviour
+- **One owned terminal-status map (TRANSACTION_RELEASE_TERMINAL_STATUS).** It is defined at distributed-transaction-release-census.js:14-17 as `{[DECISION.COMMIT]: TRANSACTION_STATUS.COMMITTED, [DECISION.ROLLBACK]: TRANSACTION_STATUS.ROLLED_BACK}`. The constants resolve to the old literals: partition-participant-transaction-constants.js:46-47 gives 'COMMIT'/'ROLLBACK', and coordinator-constants.js:8,10 gives 'COMMITTED'/'ROLLED_BACK'. The release-settlement copy it replaces was the identical expression, so release-settlement :191 and :232 compute the same values as before.
+- **partition-participant-release-contract.js:50-51, old vs new check.**
+  - Old: `(d==='COMMIT' && t==='COMMITTED') || (d==='ROLLBACK' && t==='ROLLED_BACK')`.
+  - New: `Object.keys(MAP).includes(d) && t === MAP[d]`.
+  - `Object.keys` returns exactly ['COMMIT', 'ROLLBACK'], and `includes` uses SameValueZero without coercion. So a number, object, null, undefined, a boxed String, or an inherited key such as 'constructor' or '__proto__' fails, just as the old `===` did.
+  - `MAP[d]` is read only when d is one of the two own keys, so no prototype lookup can leak.
+  - For d='COMMIT' the new check is t==='COMMITTED'; for d='ROLLBACK' it is t==='ROLLED_BACK'. Equivalent for every input type.
+  - The only side effect, in both versions, is reading `entry.decision` and `entry.terminalStatus` (both reads, on an `exactRecord`-checked plain record).
+- **Cycles.** The census now imports partition-participant-transaction-constants and coordinator-constants. `test:cycles` reports 0/0.
+- **NO_STATUS_OBSERVATION / NO_REPLACEMENT_FAILURE** (both `null`, runtime-owner.js:115-117).
+  - `statusObservation` is written at :602 (invalidate) and :1947 (init) using the name, compared at :1476 using the name, and otherwise only assigned `observed.value` (:1433) and read (:1487).
+  - `runtimeRecovery.failure` is reset at :797/:799 using the name (the `??=` initialiser literal and the per-attempt reset), compared at :757 using the name, and otherwise only assigned objects (:386, :611).
+  - The remaining bare `null`s, at :587 (`?? null` output field), :814 (report payload) and :858 (group recovery default), are different fields and keep their meaning.
+  - The `??=` semantics are unchanged because the sentinel is literally `null`.
+- **NO_RELEASE_AUTHORITY = null** (release-settlement).
+  - It replaces each `return null` in readAuthority's catch, ensureFrozen (2 sites) and ensureDecision (2 sites). The comparison `authority === NO_RELEASE_AUTHORITY` replaces `=== null`.
+  - `!authority` in ensureDecision still treats it as falsy.
+  - The `applySettlement(...) === null` comparisons are left unchanged; they test another function's result.
+- **SETTLEMENT_RESULT_FIELDS** (settlement.js:74): a frozen list of the same 3 names, `.length === 3`, with the same `every(key in data)` check and the same order of tests.
+- **DIGEST_ALGORITHM / DIGEST_ENCODING** are 'sha256' / 'hex'. **MIGRATION_REFUSAL_MESSAGE** is byte-identical to the old literal (checked in the diff).
+- **SQL_PREDICATE_JOIN** is ' AND ', the same separator.
+- **PARTICIPANT_COMMIT_OUTCOME.COMMITTED** is 'COMMITTED' (src/constants/transactions.js:21).
+
+## (3) noteUncertainMembershipWrite: one definition, log-only
+- It is defined once, at owner-claim.js:30-33, and exported at :285.
+- The authorization module imports it (authorization.js:27) and its local copy is deleted. Its existing call sites at :162, :268 and :497 are unchanged.
+- The body is `repository.logger?.debug?.(MEMBERSHIP_WRITE_UNCERTAIN, {nodeId, operationId, error: error?.message || String(error)})`. It logs at debug level only and returns undefined.
+- The new calls at owner-claim.js:215 and :277 sit inside the catch, the catch still falls through to the exact read-back, and nothing is returned from the catch. Control flow and return values are unchanged.
+- Theoretical residual, not a finding: a throwing logger, or an error whose `message` getter or `toString` throws, would now escape a catch that used to be silent. The authorization module's three existing call sites already accept the same risk.
+
+## (4) Owner suites on the committed tree vs base: IDENTICAL
+- I ran the same 127-file list as r1 (`verify-r2/tests.txt`). The release-census, release-settlement, schema-enforcement, participant-release-protocol, seed-retained-effects and learner tests were already in it.
+- Committed: total=127 pass=110 fail=17 assertions=1864. The r1 base run had the same numbers.
+- `files-committed.txt` is identical to r1 `files-base.txt`, and the 55 failing leaves are identical (`leaves-fail-committed.txt` vs r1 `leaves-fail-base.txt`).
+- These pass: transaction-release-census, transaction-release-settlement, transaction-schema-enforcement, participant-release-protocol, message-group-membership-branch-authorization, the 3 learner integration tests, runtime-trap-and-restore, and runtime-replacement-review.
+
+## (5) Ratchets at the committed tree (`verify-r2/`)
+| Check | Result |
+|---|---|
+| unused exports | 1427 (exit 1 vs baseline 1416; this debt predates the change, same as r1) |
+| complexity | 1800 (exit 1 vs 1755, same debt); against base, exactly the 5 functions removed and 0 added |
+| cognitive | OK 152/152 |
+| duplication [src+scripts] | OK 46/46, 1439/1439 |
+| duplication [test] | red, unchanged from base |
+| test:cycles | 0/0 |
+| audit:file-size | 0 |
+| raft-rs-operation-boundary-audit | 0 |
+| eslint on the 23 js files | 0 |
+| node --check on the 23 js files | all ok |
+| hook staged guideline checks (literals / decision-boundaries / ambient-intrinsics / silent-catch) | 0 / 0 / 0 / 0 |
+
+Inventory freshness: by mistake I ran `node scripts/generate-global-owner-debt-inventory.js --help`, and that does a non-refresh run. It rewrote nothing (`git status` stayed clean), which shows the committed inventory and seal are fresh.
+
+## Limits
+- The guideline checkers report counts, not lines.
+- The base results for (4) are reused from r1. Base is unchanged since then: same 8c51246e2 copy, blob-checked.
+- No lab run in r2.
