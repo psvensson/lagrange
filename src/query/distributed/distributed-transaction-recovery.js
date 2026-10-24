@@ -13,6 +13,7 @@ import {redriveAuthoritativeRecovery, TRANSACTION_AUTHORITY_STATE} from
   './distributed-transaction-recovery-authority.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
+import {RECOVERED_WORKFLOW_BINDING} from '../../workflow/workflow-constants.js';
 import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
@@ -24,6 +25,7 @@ import {
   RECOVERY_SWEEP_DEFER_MAX_MS,
   RECOVERY_SWEEP_LOG_MSG,
   TERMINAL_TRANSACTION_STATUS,
+  TRANSACTION_RECOVERY_OWNER_KEY,
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
@@ -105,12 +107,14 @@ const distributedTransactionRecoveryMethods = {
   /**
    * A discovered obligation belongs to this recovery owner until its
    * re-drive restores the authoritative row, validates its decision state
-   * (validateRecoveredTransactionDecision) and ends it. A session stage on
-   * it - a statement, COMMIT or ROLLBACK - would run on restored state that
-   * no validator has seen and let a client own a recovered decision
+   * (validateRecoveredTransactionDecision) and ends it: one recovered from
+   * rows is held under TRANSACTION_RECOVERY_OWNER_KEY, and a live one whose
+   * participant-set answer was lost stays with its session. A client stage
+   * on it - a statement, COMMIT or ROLLBACK - would run on restored state
+   * that no validator has seen and let a client own a recovered decision
    * (Invariant 0); it is answered in doubt, naming the last authority read
    * state (NOT_READ before the first re-drive), and changes nothing.
-   * @param {Object} tx - The session's held transaction.
+   * @param {Object} tx - The transaction the stage names.
    * @param {?string} operation - The refused stage's operation.
    * @return {Object|null} The in-doubt answer, or null when the session owns tx.
    */
@@ -119,6 +123,48 @@ const distributedTransactionRecoveryMethods = {
       {...this.buildDecisionInDoubtResult(tx), operation,
         decisionReadState: tx.decisionReadState ??
           TRANSACTION_AUTHORITY_STATE.NOT_READ} : null;
+  },
+
+  /**
+   * The obligation this recovery owner holds under the transaction ID: a
+   * transaction discovered from durable rows, owned by recovery (never bound
+   * to a session, so no session reads it as its own transaction).
+   * @param {?string} transactionId - Transaction ID.
+   * @return {Object|null} The held obligation's state, or null.
+   * @private
+   */
+  heldRecoveryObligation(transactionId) {
+    const tx = typeof transactionId === 'string' ?
+      this.workflowCoordinator.getWorkflowById(transactionId) : null;
+    return tx?.ownerKey === TRANSACTION_RECOVERY_OWNER_KEY &&
+      tx.recoveryDiscovered === true ? tx : null;
+  },
+
+  /**
+   * The recovery owner's answer to a COMMIT or ROLLBACK that names a
+   * recovered obligation's exact ID: in doubt while recovery holds it (the
+   * client never decides it, Invariant 0), or null when recovery holds no
+   * such obligation (the stage is answered as for any transaction the
+   * session does not hold).
+   * @param {?string} transactionId - The stage's expected transaction.
+   * @param {string} operation - COMMIT or ROLLBACK.
+   * @return {Object|null}
+   */
+  recoveryObligationAnswer(transactionId, operation) {
+    const tx = this.heldRecoveryObligation(transactionId);
+    return tx ? this.recoveryObligationStageRefusal(tx, operation) : null;
+  },
+
+  /**
+   * Metadata of an obligation the recovery owner holds, by transaction ID
+   * (the one reader of a recovered obligation; getTransaction(sessionId)
+   * never reports one).
+   * @param {string} transactionId - Transaction ID.
+   * @return {Object|null}
+   */
+  getRecoveryObligation(transactionId) {
+    const tx = this.heldRecoveryObligation(transactionId);
+    return tx ? this.transactionMetadataOf(tx) : null;
   },
 
   recover(rows) {
@@ -504,7 +550,12 @@ const distributedTransactionRecoveryMethods = {
       }
     }
 
+    // A discovered obligation is owned by recovery under its own key and
+    // retained by transaction ID only: it never occupies the session map, so
+    // a session that did not begin it (the default session after a restart,
+    // a new client reusing an old row's session id) holds no transaction.
     const recoveryOutcome = this.workflowCoordinator.recover({
+      binding: RECOVERED_WORKFLOW_BINDING.WORKFLOW_ID_ONLY,
       workflows: transactionRows,
       participants: participantRows.filter((row) =>
         !knownIds.has(row.transaction_id || row.transactionId)),
@@ -524,7 +575,7 @@ const distributedTransactionRecoveryMethods = {
         const updatedAt = row.updated_at || row.updatedAt || this.now();
         return {
           sessionId,
-          ownerKey: sessionId,
+          ownerKey: TRANSACTION_RECOVERY_OWNER_KEY,
           transactionId,
           workflowId: transactionId,
           status,

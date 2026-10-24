@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2435,
+    "ordinary": 2436,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2452,
-  "digest": "fnv1a32-a437b9ab",
+  "censusSize": 2453,
+  "digest": "fnv1a32-0cda2082",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1550,6 +1550,7 @@
     "test/query/transaction-owned-commit-mode-guard.test.js": "ordinary",
     "test/query/transaction-participant-set-authority.test.js": "ordinary",
     "test/query/transaction-recovery-decision-validation.test.js": "ordinary",
+    "test/query/transaction-recovery-owner-key.test.js": "ordinary",
     "test/query/transaction-recovery-ownership.test.js": "ordinary",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "ordinary",
     "test/query/transaction-release-census.test.js": "ordinary",

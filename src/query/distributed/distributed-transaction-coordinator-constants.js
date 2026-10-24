@@ -35,6 +35,12 @@ const PARTICIPANT_RETRY_DEFAULT = Object.freeze({
   MAX_DELAY_MS: 250,
 });
 
+// The owner key of every obligation recovery discovers from durable rows:
+// the recovery owner holds it by transaction ID, never in the session map.
+// Its re-drives still run on its row's session request FIFO (accepted R2
+// design), which orders work and grants no session any state.
+const TRANSACTION_RECOVERY_OWNER_KEY = 'transaction-recovery';
+
 const PARTICIPANT_RETRY_LOG_MSG = 'Distributed transaction participant retry';
 const RECOVERY_SWEEP_LOG_MSG = 'Distributed transaction recovery sweep failed';
 const RECOVERY_SWEEP_DEFAULT_INTERVAL_MS = 1000;
@@ -114,6 +120,7 @@ export {
   TRANSACTION_DECISION_RECORDING,
   TRANSACTION_ID_COLLISION_CODE,
   TRANSACTION_ID_MINT_ATTEMPTS,
+  TRANSACTION_RECOVERY_OWNER_KEY,
   TRANSACTION_STATUS,
   WRITE_OPERATION_STATUS,
 };

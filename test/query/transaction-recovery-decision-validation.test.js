@@ -6,66 +6,40 @@
  * every identified row, and the re-drive restores the authoritative row and
  * validates it with validateRecoveredTransactionDecision before it freezes,
  * decides or fans out (a malformed one is held INVALID). Since 4151a3ab4 the
- * restored obligation is also bound to its session, and a session COMMIT,
+ * restored obligation was also bound to its session, and a session COMMIT,
  * ROLLBACK or statement ran straight on the unvalidated restored state: an
  * invalid recovered row (a retired commit mode, a frozen set with no
  * selected mode, a count that is not the admitted set, an unknown mode or
  * set state) was frozen, decided and fanned out, and even a valid recovered
  * transaction was decided by the client instead of by recovery (Invariant
- * 0). These witnesses feed each shape through the real entries and require
- * the typed in-doubt answer with no mutation, the obligation retained, and a
- * valid recovered row still applied by the recovery owner.
+ * 0). A recovered obligation is now owned by recovery under its own key and
+ * no session holds it; these witnesses feed each shape through the real
+ * entries with the obligation's exact ID and require the recovery owner's
+ * typed in-doubt answer on COMMIT and ROLLBACK, a refused statement, no
+ * mutation, the obligation retained, and a valid recovered row still
+ * applied by the recovery owner.
  */
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {DistributedTransactionCoordinator} from
   '../../src/query/distributed/distributed-transaction-coordinator.js';
-import {buildTransactionDecisionRecord} from
-  '../../src/query/distributed/distributed-transaction-decision.js';
-import {participantSetTextOf} from
-  '../../src/query/distributed/distributed-transaction-participant-manifest.js';
-import {participantIdOf} from
-  '../../src/query/distributed/distributed-transaction-identity.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+import {recoveryDecisionColumns, recoveryRowsOf} from
+  '../test-helpers/transaction-recovery-rows-fixture.js';
 
 const TRANSACTION_ID = 'a'.repeat(32);
 const SESSION_ID = 'recovered-session';
-const PREPARED = Object.freeze({prepared_digest: 'b'.repeat(64),
-  prepare_index: 3, prepare_term: 1});
-
-function participantRow(transactionId, partitionId) {
-  return {transaction_id: transactionId,
-    participant_id: participantIdOf(transactionId, partitionId),
-    partition_id: partitionId, status: 'PREPARED', ...PREPARED,
-    created_at: 1, updated_at: 1};
-}
 
 // A canonical FROZEN, prepared, undecided row over `partitions`, then the
 // shape under test.
 function recoveryRows(overrides = {}, {partitions = ['p1'],
-  participantPartitions = partitions, transactionId = TRANSACTION_ID,
-  sessionId = SESSION_ID} = {}) {
-  return {
-    transactions: [{transaction_id: transactionId, session_id: sessionId,
-      status: 'PREPARED', transaction_epoch: 7, timeout_deadline: 1,
-      transaction_mode: 'EXPLICIT', participant_set_state: 'FROZEN',
-      participant_set_text: participantSetTextOf(transactionId, partitions),
-      commit_mode: 'TWO_PHASE_COMMIT', frozen_participant_count: partitions.length,
-      created_at: 1, updated_at: 2, ...overrides}],
-    participants: participantPartitions.map((partitionId) =>
-      participantRow(transactionId, partitionId)),
-    writeOperations: [],
-  };
+  participantPartitions = partitions} = {}) {
+  return recoveryRowsOf({transactionId: TRANSACTION_ID, sessionId: SESSION_ID,
+    partitions, participantPartitions, overrides});
 }
 
 function decisionColumns(partitions, decision = 'COMMIT') {
-  const record = buildTransactionDecisionRecord({transactionId: TRANSACTION_ID,
-    participants: new Map(partitions.map((partitionId) => [partitionId, {
-      partitionId, preparedDigest: PREPARED.prepared_digest,
-      prepareIndex: PREPARED.prepare_index, prepareTerm: PREPARED.prepare_term}]))},
-  decision);
-  return {decision: record.decision, decision_text: record.decisionText,
-    decision_digest: record.decisionDigest};
+  return recoveryDecisionColumns(TRANSACTION_ID, partitions, decision);
 }
 
 // Every mutation the coordinator can perform, in order.
@@ -127,22 +101,27 @@ const INVALID_RECOVERED_SHAPES = Object.freeze([
       decision_digest: 'f'.repeat(64)})},
 ]);
 
-// Every session stage a client can send for its session's transaction.
+// Every stage a client can send naming the recovered obligation's exact ID.
 async function sessionStages(coordinator) {
+  const exact = {expectedTransactionId: TRANSACTION_ID};
   return {
-    commit: await coordinator.commit(SESSION_ID),
-    rollback: await coordinator.rollback(SESSION_ID),
+    commit: await coordinator.commit(SESSION_ID, exact),
+    rollback: await coordinator.rollback(SESSION_ID, exact),
     statement: await coordinator.executeWriteStatement(SESSION_ID,
       {operationId: 'op-1', statementType: 'UPDATE', partitionIds: ['p1']},
-      async () => ({success: true})),
+      async () => ({success: true}), TRANSACTION_ID),
   };
 }
 
+// COMMIT and ROLLBACK reach the recovery owner's in-doubt answer; a
+// statement is refused, since no session holds the obligation.
 function assertHeldInDoubt(stages) {
   for (const [stage, answer] of Object.entries(stages)) {
     assert.equal(answer.success, false, stage);
-    assert.equal(answer.errorCode, QUERY_ERROR_CODE.TRANSACTION_DECISION_IN_DOUBT,
-      `${stage} is answered in doubt`);
+    assert.equal(answer.errorCode, stage === 'statement' ?
+      QUERY_ERROR_CODE.NO_TRANSACTION :
+      QUERY_ERROR_CODE.TRANSACTION_DECISION_IN_DOUBT,
+    `${stage} is answered by the recovery owner, never adopted`);
   }
 }
 
@@ -218,7 +197,8 @@ async () => {
   const rows = recoveryRows({...decisionColumns(['p1'])});
   const {coordinator, mutations} = recordingCoordinator(() => rows);
   coordinator.recoverFromSystemTables(rows);
-  const commit = await coordinator.commit(SESSION_ID);
+  const commit = await coordinator.commit(SESSION_ID,
+    {expectedTransactionId: TRANSACTION_ID});
   assert.equal(commit.errorCode, QUERY_ERROR_CODE.TRANSACTION_DECISION_IN_DOUBT);
   assert.equal(Object.hasOwn(commit, 'commitPointReached'), false,
     'the outcome is unknown to the session, never "not committed"');

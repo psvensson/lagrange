@@ -208,10 +208,12 @@ test(
     t.equal(firstSweep.results.length, 1);
     t.equal(firstSweep.results[0].deferred, true);
     t.equal(
-      coordinator.hasActiveTransaction('recover-session-1'),
+      coordinator.getRecoveryObligation('tx-recover-1') !== null,
       true,
       'retryable recovery failures should remain eligible for a later sweep',
     );
+    t.equal(coordinator.hasActiveTransaction('recover-session-1'), false,
+      'the recovered obligation never occupies its row\'s session');
 
     const secondSweep = await coordinator.runRecoverySweep();
 
@@ -534,7 +536,7 @@ test('DistributedTransactionCoordinator - recovery replay only commits pending p
     coordinator.recoverFromSystemTables({
       transactions: [{
         transaction_id: 'tx-recover-commit-2',
-      ...recordedCommit('tx-recover-commit-2', ['p1', 'p2']),
+        ...recordedCommit('tx-recover-commit-2', ['p1', 'p2']),
         session_id: 'recover-commit-2',
         status: TRANSACTION_STATUS.COMMITTING,
         ...frozenTransactionDecision(2),

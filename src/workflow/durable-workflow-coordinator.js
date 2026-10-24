@@ -1,5 +1,6 @@
 import {
   PROTOTYPE_CONSTRUCTOR_METHOD,
+  RECOVERED_WORKFLOW_BINDING,
   WORKFLOW_ERROR_MSG,
   WORKFLOW_TRANSITION_FIELD,
   buildTransitionIdempotencyKey,
@@ -410,6 +411,8 @@ class DurableWorkflowCoordinator {
    * @param {Function} payload.loadWorkflow - Workflow row loader.
    * @param {Function} [payload.loadParticipant] - Participant row loader.
    * @param {Function} [payload.isTerminalWorkflow] - Terminal-state predicate.
+   * @param {string} [payload.binding] - RECOVERED_WORKFLOW_BINDING of every
+   *   restored workflow (default OWNER_KEY).
    */
   recover(payload = {}) {
     const workflowRows = Array.isArray(payload.workflows) ? payload.workflows : [];
@@ -419,6 +422,7 @@ class DurableWorkflowCoordinator {
     const loadWorkflow = payload.loadWorkflow;
     const loadParticipant = payload.loadParticipant;
     const isTerminalWorkflow = payload.isTerminalWorkflow;
+    const binding = payload.binding ?? RECOVERED_WORKFLOW_BINDING.OWNER_KEY;
 
     const restoredWorkflowIds = new Set();
     for (const row of workflowRows) {
@@ -426,6 +430,7 @@ class DurableWorkflowCoordinator {
         row,
         loadWorkflow,
         isTerminalWorkflow,
+        binding,
       );
       if (restored) {
         restoredWorkflowIds.add(restored.workflowId);
@@ -597,10 +602,12 @@ class DurableWorkflowCoordinator {
    * participant BEGIN that way, and the coordinator then committed against
    * the empty set. Recovery exists to restore state after a restart
    * (nothing known); terminal records cannot be resurrected by stale rows.
+   * A WORKFLOW_ID_ONLY restore is retained by ID and never bound to its
+   * owner key.
    * @return {Object|null} The restored workflow, or null when skipped.
    * @private
    */
-  restoreRecoveredWorkflowRow(row, loadWorkflow, isTerminalWorkflow) {
+  restoreRecoveredWorkflowRow(row, loadWorkflow, isTerminalWorkflow, binding) {
     const workflowRecord = typeof loadWorkflow === 'function' ?
       loadWorkflow(row) :
       row;
@@ -618,6 +625,9 @@ class DurableWorkflowCoordinator {
     // including one whose terminal state has not reached the cache yet.
     if (existingWorkflow) return null;
     const workflow = this.createWorkflowRecord(workflowRecord);
+    if (binding === RECOVERED_WORKFLOW_BINDING.WORKFLOW_ID_ONLY) {
+      return this.retainWorkflowById(workflow);
+    }
     const owner = this.workflowsByOwnerKey.get(workflow.ownerKey);
     this.setWorkflowState(workflow);
     // Retain the old durable obligation by ID, without replacing a newer
@@ -636,8 +646,19 @@ class DurableWorkflowCoordinator {
    * @private
    */
   setWorkflowState(workflow) {
-    this.workflowsById.set(workflow.workflowId, workflow);
+    this.retainWorkflowById(workflow);
     this.workflowsByOwnerKey.set(workflow.ownerKey, workflow);
+    return workflow;
+  }
+
+  /**
+   * Store a workflow by its ID, with its committed transitions.
+   * @param {Object} workflow - Workflow state.
+   * @return {Object} Workflow state.
+   * @private
+   */
+  retainWorkflowById(workflow) {
+    this.workflowsById.set(workflow.workflowId, workflow);
     for (const transition of workflow.transitionHistory || []) {
       if (transition?.[WORKFLOW_TRANSITION_FIELD.NEXT_STEP]) {
         this.markTransitionCommitted(

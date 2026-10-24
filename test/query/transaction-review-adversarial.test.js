@@ -358,13 +358,18 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
   const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'advanced'});
   await commitEntered.promise;
   const before = gateway.rows('sql_transactions');
-  const heldAfterBegin = engine.transactionCoordinator.getTransaction('advanced');
+  // The refused BEGIN leaves its session without a transaction; the advanced
+  // row is the recovery owner's obligation, read by its exact ID.
+  const sessionAfterBegin =
+    engine.transactionCoordinator.getTransaction('advanced');
+  const heldAfterBegin =
+    engine.transactionCoordinator.getRecoveryObligation(insertedId);
   releaseCommit.resolve();
   const replay = await engine.waitForDistributedTransactionRecoveryReplay();
   const after = gateway.rows('sql_transactions');
   const participantAfter = gateway.rows('sql_transaction_participants')[0];
   assert.deepEqual({beginSuccess: begun.success,
-    beginError: begun.errorCode, insertedId,
+    beginError: begun.errorCode, insertedId, sessionAfterBegin,
     heldAfterBegin: heldAfterBegin && [heldAfterBegin.transactionId,
       heldAfterBegin.status],
     rowsBefore: before.map((row) => [row.transaction_id, row.status, row.decision,
@@ -379,7 +384,7 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
     inserts: gateway.mutations.filter((entry) =>
       entry.tableName === 'sql_transactions' && entry.operation === 'insert').length},
   {beginSuccess: false, beginError: 'TRANSACTION_RECOVERY_INCOMPLETE', insertedId,
-    heldAfterBegin: [insertedId, 'COMMITTING'],
+    sessionAfterBegin: null, heldAfterBegin: [insertedId, 'COMMITTING'],
     rowsBefore: [[insertedId, 'COMMITTING', 'COMMIT', 1]],
     replay: {resumed: 1, failed: 0},
     rowsAfter: [[insertedId, 'COMMITTED', 'COMMIT', 1]],
