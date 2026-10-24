@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2450,
+    "ordinary": 2452,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-bdaa0c93",
+  "censusSize": 2469,
+  "digest": "fnv1a32-41e03dbc",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -253,6 +253,7 @@
     "test/bootstrap/return-value-completeness.property.test.js": "ordinary",
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "ordinary",
     "test/bootstrap/schema-operations-table-schema.test.js": "ordinary",
+    "test/bootstrap/seed-cache-hydration-handoff.test.js": "ordinary",
     "test/bootstrap/seed-delegate-bundles.test.js": "ordinary",
     "test/bootstrap/seed-infrastructure-phase.test.js": "ordinary",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "ordinary",
@@ -1244,6 +1245,7 @@
     "test/partition/cdc-event-buffer.property.test.js": "ordinary",
     "test/partition/cdc-event-buffer.test.js": "ordinary",
     "test/partition/cdc-generation.property.test.js": "ordinary",
+    "test/partition/cdc-hydration-live-handoff.test.js": "ordinary",
     "test/partition/cdc-sliding-window-catchup.exploration.test.js": "ordinary",
     "test/partition/cdc-sliding-window-catchup.preservation.test.js": "ordinary",
     "test/partition/cdc-subscriber-registration-timing.test.js": "ordinary",

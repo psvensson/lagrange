@@ -10,6 +10,8 @@ import {PARTITION_SERVICE_REMOVAL_SERVING_METHODS} from
   './partition-service-removal-serving-methods.js';
 import {PARTITION_SERVICE_REMOTE_QUERY_METHODS} from
   './partition-service-remote-query-methods.js';
+import {PARTITION_SERVICE_HYDRATION_IMAGE_METHODS} from
+  './partition-service-hydration-image-methods.js';
 import {PARTITION_SERVICE_LEADER_ACTIVATION_METHODS} from
   './partition-service-leader-activation-methods.js';
 import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
@@ -46,6 +48,7 @@ Object.assign(
   PARTITION_SERVICE_PARTICIPANT_TRANSACTION_CADENCE_METHODS,
   PARTITION_SERVICE_REMOVAL_SERVING_METHODS,
   PARTITION_SERVICE_REMOTE_QUERY_METHODS,
+  PARTITION_SERVICE_HYDRATION_IMAGE_METHODS,
   PARTITION_SERVICE_LEADER_ACTIVATION_METHODS,
   createPartitionServiceLifecycleMethods(),
   createPartitionServiceLeadershipTransferMethods(),
