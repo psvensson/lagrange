@@ -1,0 +1,74 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 66C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/node/replica-handler-leadership-transfer.test.js (6 assertions, 5384ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: W4 target: STEP_DOWN_REPLICA asking a follower replacement to lead moves leadership to it within one election timeout
+ok 1 - W4 target: STEP_DOWN_REPLICA asking a follower replacement to lead moves leadership to it within one election timeout
+  ---
+  duration_ms: 1118.120946
+  type: 'test'
+  ...
+# Subtest: W4 source: STEP_DOWN_REPLICA asking the leader to hand off moves leadership to another voter within one election timeout
+ok 2 - W4 source: STEP_DOWN_REPLICA asking the leader to hand off moves leadership to another voter within one election timeout
+  ---
+  duration_ms: 929.29778
+  type: 'test'
+  ...
+# Subtest: W4 already-leader: a replacement that already leads is a named no-op that moves no term
+ok 3 - W4 already-leader: a replacement that already leads is a named no-op that moves no term
+  ---
+  duration_ms: 565.205664
+  type: 'test'
+  ...
+# Subtest: W4 named: the source-side handoff to a named voter moves leadership to that voter within one election timeout
+ok 4 - W4 named: the source-side handoff to a named voter moves leadership to that voter within one election timeout
+  ---
+  duration_ms: 369.181936
+  type: 'test'
+  ...
+# Subtest: W4 named: a successor the core cannot take is REFUSED with the port's record and moves nothing
+ok 5 - W4 named: a successor the core cannot take is REFUSED with the port's record and moves nothing
+  ---
+  duration_ms: 495.301807
+  type: 'test'
+  ...
+# Subtest: W4 named: the participant release cutover hands a dirty leader's leadership to a clean voter through the handoff owner
+not ok 6 - W4 named: the participant release cutover hands a dirty leader's leadership to a clean voter through the handoff owner
+  ---
+  duration_ms: 1316.650339
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/leadership-transfer-one-issuer-20261024/test/node/replica-handler-leadership-transfer.test.js:325:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the attempt restarts from the new leader ({"outcome":"release_fact_unavailable","missingFact":"current_replica_generation","reason":null})
+    + actual - expected
+    
+    + 'release_fact_unavailable'
+    - 'release_generation_changed'
+               ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'release_generation_changed'
+  actual: 'release_fact_unavailable'
+  operator: 'strictEqual'
+  stack: |-
+    file:///mnt/data/peter/projects/.worktrees/leadership-transfer-one-issuer-20261024/test/node/replica-handler-leadership-transfer.test.js:344:14
+    async withGroup (file:///mnt/data/peter/projects/.worktrees/leadership-transfer-one-issuer-20261024/test/node/replica-handler-leadership-transfer.test.js:155:5)
+    async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/leadership-transfer-one-issuer-20261024/test/node/replica-handler-leadership-transfer.test.js:329:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 5
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4797.325931
+# time=5384ms
+# test-files total=1 pass=0 fail=1 assertions=6
