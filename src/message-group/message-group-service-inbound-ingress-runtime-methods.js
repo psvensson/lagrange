@@ -18,12 +18,16 @@ async function completeApplicationMessage(
     service.applicationMessageCompletionHandlers.get(
       applicationEvent.payload?.type,
     );
+  // The answer is MG's own: the message was received and its application
+  // acknowledgement is still pending (acknowledgeMessage). It is not a
+  // transport refusal, so it never uses the router's `acknowledged` name
+  // (decision D2, finding F-B).
   if (typeof completionHandler === 'function') {
     const completion = await completionHandler(applicationEvent);
     return {
       messageId: applicationEvent.messageId,
       status: applicationStatus.RECEIVED,
-      acknowledged: false,
+      applicationAcknowledged: false,
       ...(completion && typeof completion === 'object' ? completion : {}),
     };
   }
@@ -31,7 +35,7 @@ async function completeApplicationMessage(
   return {
     messageId: applicationEvent.messageId,
     status: applicationStatus.RECEIVED,
-    acknowledged: false,
+    applicationAcknowledged: false,
   };
 }
 

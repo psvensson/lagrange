@@ -1463,6 +1463,31 @@
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js"
       ]
+    },
+    "router-delivery-envelope": {
+      "description": "The router alone computes a delivery's transport outcome, from its own facts: an answer cannot change the acknowledgement (decision D2), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on the LOCAL and the remote path alike (D1), and a no-handler reply is a frame-level router fact with no answer slot. Q6 stages 1-2 keep the flat shape; the {transport, answer} envelope cutover restates the approved C2 roundtrip and forwarding-hop witnesses and widens W-ENV-1 to every transport field.",
+      "owners": [
+        "src/transport/transport-semantic-outcome.js",
+        "src/transport/transport-error-codes.js",
+        "src/transport/message-router-delivery-behaviors.js",
+        "src/transport/message-router-outbound-queue-admission.js",
+        "src/transport/message-router-pending-response-ledger.js",
+        "src/transport/message-router-inbound-dispatch.js",
+        "src/transport/message-router-reconnect-behaviors.js",
+        "src/transport/message-router-connection-close-reconnect.js",
+        "src/transport/message-router-delivery-pressure-routing.js",
+        "src/transport/message-router-outbound-delivery-registry.js",
+        "src/message-group/message-group-service-inbound-ingress-runtime-methods.js"
+      ],
+      "tests": [
+        "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js",
+        "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js",
+        "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js",
+        "test/transport/router-envelope-w-env-4-no-handler-frame.test.js",
+        "test/transport/transport-semantic-outcome.test.js",
+        "test/transport/message-router-cdc-outcome-roundtrip.test.js",
+        "test/transport/transport-outcome-forwarding-hop.test.js"
+      ]
     }
   },
   "coupledPairs": {

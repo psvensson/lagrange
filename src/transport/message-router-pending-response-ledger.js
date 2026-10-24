@@ -2,7 +2,7 @@ import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeou
 import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-
+import {buildHandlerFailedError} from './transport-semantic-outcome.js';
 
 const {
   INLINE_ACK_PASSTHROUGH_KEYS,
@@ -55,6 +55,15 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
 }
 
 const DUPLICATE_PENDING_RESPONSE = 'router_duplicate_pending_response';
+
+// A SERVICE_RESPONSE that carries no answer settles its waiter as the router
+// fact it states: the target router had no handler (frame-level noHandler),
+// or the target handler threw (frame-level error text, decision D1).
+function unansweredServiceResponseError({error, noHandler}) {
+  return noHandler === true ?
+    Object.assign(new Error(error), {noHandler: true}) :
+    buildHandlerFailedError(error);
+}
 
 function remainingResponseMs(pending) {
   if (pending.deliveryLifetime) {
@@ -361,10 +370,12 @@ class MessageRouterPendingResponseLedger {
         settle(value);
         return true;
       };
-      pending.acceptResponse = ({result, error}) => {
+      pending.acceptResponse = ({result, error, noHandler}) => {
         try {
           remainingResponseMs(pending);
-          return error ? finish(reject, new Error(error)) : finish(resolve, result);
+          return error || noHandler === true ?
+            finish(reject, unansweredServiceResponseError({error, noHandler})) :
+            finish(resolve, result);
         } catch (expired) {
           // A parent refusal can synchronously retire this exact entry. Only
           // the still-current waiter may install its own timeout marker.
@@ -448,9 +459,9 @@ class MessageRouterPendingResponseLedger {
   }
 
   /** Settle a response only while its original grant is still current. */
-  settlePendingResponse(messageId, {result, error}) {
+  settlePendingResponse(messageId, {result, error, noHandler}) {
     const pending = this.pendingResponses.get(messageId);
-    return pending ? pending.acceptResponse({result, error}) : false;
+    return pending ? pending.acceptResponse({result, error, noHandler}) : false;
   }
 
   /** Close local response custody even when the caller will use the ACK. */

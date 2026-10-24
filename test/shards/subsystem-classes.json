@@ -22,13 +22,13 @@
     "storage-raft": 144,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 112,
+    "transport-messaging": 116,
     "wasm-toolchain": 74
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-44281bcf",
+  "censusSize": 2471,
+  "digest": "fnv1a32-26ce4e99",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-220ee4db",
+  "observationDigest": "fnv1a32-c44c436a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2384,6 +2384,10 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-4-no-handler-frame.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",
@@ -17308,6 +17312,11 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
+    "test/transport/delivery-semantics.property.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/transport/endpoint-priority-selection.property.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
@@ -17392,6 +17401,24 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": {
       "files": [
         "test/test-helpers/endpoint-incarnation-fixture.js"
+      ]
+    },
+    "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/control-plane/control-plane-constants.js",
+        "src/message-group/message-group-service-runtime-support.js",
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": {
+      "files": [
+        "src/transport/transport-error-codes.js"
+      ]
+    },
+    "test/transport/routing-correctness.property.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/transport/rpc-client.test.js": {

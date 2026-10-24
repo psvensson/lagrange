@@ -18,6 +18,8 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 // Initialize configuration and logging for tests (module level)
 ConfigurationManager.resetInstance();
@@ -149,9 +151,10 @@ test('Property 5: Delivery Semantics', async (t) => {
             // Deliver message
             const result = await router.deliver(targetAddress, message);
 
-            // Result must have acknowledged: true with noHandler flag
-            return result.acknowledged === true &&
-                   result.noHandler === true &&
+            // The target router's frame-level no-handler fact: FAILED/no_handler.
+            return result.noHandler === true &&
+                   classifyTransportDeliveryOutcome(result).reasonCode ===
+                     TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER &&
                    typeof result.messageId === 'string';
           } finally {
             await router.shutdown();

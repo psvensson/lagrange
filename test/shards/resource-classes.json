@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2450,
+    "ordinary": 2454,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-bdaa0c93",
+  "censusSize": 2471,
+  "digest": "fnv1a32-bff9353d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2364,6 +2364,10 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "ordinary",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "ordinary",
     "test/transport/owner-retry-budget.test.js": "ordinary",
+    "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "ordinary",
+    "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "ordinary",
+    "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "ordinary",
+    "test/transport/router-envelope-w-env-4-no-handler-frame.test.js": "ordinary",
     "test/transport/router-server-manager.test.js": "ordinary",
     "test/transport/routing-correctness.property.test.js": "ordinary",
     "test/transport/rpc-client.test.js": "ordinary",

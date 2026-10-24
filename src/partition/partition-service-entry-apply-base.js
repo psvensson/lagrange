@@ -293,6 +293,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (payload === null) {
       return {
         acknowledged: false,
+        success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
       };
     }
@@ -326,6 +327,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     if (!payload || !payload.type) {
       return {
         acknowledged: false,
+        success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
       };
     }
@@ -406,6 +408,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       }
       return {
         acknowledged: false,
+        success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE,
       };
     case PARTITION_SERVICE_MESSAGE_TYPE.SYSTEM_TABLE_WRITE:
@@ -429,6 +432,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       });
       return {
         acknowledged: false,
+        success: false,
         error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
       };
     }
@@ -526,6 +530,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       default:
         return {
           acknowledged: false,
+          success: false,
           error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
         };
       }
