@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2442,
+    "ordinary": 2444,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2459,
-  "digest": "fnv1a32-48203f78",
+  "censusSize": 2461,
+  "digest": "fnv1a32-b21cf766",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2146,6 +2146,8 @@
     "test/scripts/distributed-matrix-cli.test.js": "ordinary",
     "test/scripts/dt-prove.test.js": "ordinary",
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": "ordinary",
+    "test/scripts/evidence-relocation-acceptance.test.js": "ordinary",
+    "test/scripts/evidence-relocation.test.js": "ordinary",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "exclusive",
     "test/scripts/examples-build-upload-run.test.js": "ordinary",
     "test/scripts/formation-health.test.js": "ordinary",
