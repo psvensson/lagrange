@@ -6,7 +6,10 @@ import {
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS} from './transport-semantic-outcome.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
+  TRANSPORT_DELIVERY_OUTCOME_STATE,
+} from './transport-semantic-outcome.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
@@ -55,7 +58,6 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
   STRING_RESPONSETYPE: 'responseType',
   STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT:
     'Ignoring stale connection close event',
-  STRING_ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
   STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY:
     'Outbound queue saturated for node delivery',
   STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY:
@@ -222,10 +224,20 @@ const QUERY_TRANSPORT_SELECTION = Object.freeze({
   SELECTION_SERVICE: 'selection_service',
 });
 
+// The query transport hands an acknowledged answer to its consumer as is
+// (SUCCESS: the router's envelope and the handler's answer are one flat
+// object, so an acknowledged answer's own deferral is the application's);
+// an unacknowledged failure takes the transport owner's state, mapped here.
 const QUERY_TRANSPORT_DELIVERY_STATE = Object.freeze({
   SUCCESS: 'success',
   DEFER_RETRY: 'defer_retry',
   HARD_FAILURE: 'hard_failure',
+});
+
+const QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE = Object.freeze({
+  [TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED]: QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS,
+  [TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED]: QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY,
+  [TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED]: QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE,
 });
 
 const INLINE_ACK_RESULT_FIELD = Object.freeze({
@@ -470,6 +482,7 @@ export {
   OutboundDeliveryPriority,
   QUERY_DATA_PLANE_MESSAGE_TYPE,
   QUERY_TRANSPORT_DELIVERY_STATE,
+  QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE,
   QUERY_TRANSPORT_SELECTION,
   QUEUE_WAIT_BUCKETS,
   QUEUE_WAIT_BUCKET_OVERFLOW,

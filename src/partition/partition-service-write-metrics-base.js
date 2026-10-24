@@ -28,6 +28,8 @@ import {
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
 import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 import {transactionSchemaWriteRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 
@@ -473,6 +475,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
           forwardDeliverStartMs,
         );
         const durationMs = this.timeSource.now() - proposeStartMs;
+        const forwardOutcome = classifyTransportDeliveryOutcome(result);
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
             partitionId: this.partitionId,
@@ -483,7 +486,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
             requestId: correlation.requestId,
             correlationId: correlation.correlationId,
             acknowledged: result?.acknowledged === true,
-            error: result?.acknowledged === true ? null : result?.error || null,
+            deliveryState: forwardOutcome.deliveryState,
+            error: isDeliveredTransportDeliveryOutcome(forwardOutcome) ?
+              null :
+              result?.error || null,
             writePhaseTimingMs: this.buildWritePhaseTimingPayload(
               phaseTimings,
               durationMs,

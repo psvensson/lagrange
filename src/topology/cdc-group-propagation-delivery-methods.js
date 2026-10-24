@@ -13,6 +13,8 @@ import {
 } from './cdc-group-propagation-retry-wait-report.js';
 import {waitForForegroundRetry} from './cdc-group-propagation-foreground-retry.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 import {
   CDC_GROUP_FOREGROUND_CONTINUATION,
   CDC_GROUP_FOREGROUND_DELIVERY_STATE,
@@ -737,7 +739,9 @@ class CDCGroupPropagationDeliveryMethods {
         });
         continue;
       }
-      if (!result?.acknowledged) {
+      // A target counts as delivered only on the transport owner's decision;
+      // anything else stays in the failed set for the existing retry owner.
+      if (!isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result))) {
         deliveryFailures.push({
           targetGroupId: target.groupId,
           coordinatorNodeId: target.coordinatorNodeId,

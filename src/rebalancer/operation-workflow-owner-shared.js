@@ -34,8 +34,8 @@ import {
 import {
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
 } from '../transport/transport-semantic-outcome.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {resolvePriorityRecoveryActiveNodeCohort} from '../control-plane/active-node-projection.js';
 import {

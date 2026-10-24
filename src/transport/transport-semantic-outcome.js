@@ -1,17 +1,11 @@
-import {ROUTER_ERROR_MSG} from '../constants/transport.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
+  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
 } from './transport-error-codes.js';
-
-const TRANSPORT_SEMANTIC_OUTCOME_STATE = Object.freeze({
-  READY: 'ready',
-  DEFERRED: 'deferred',
-  FAILED: 'failed',
-});
 
 const TRANSPORT_DELIVERY_OUTCOME_STATE = Object.freeze({
   DELIVERED: 'delivered',
@@ -20,6 +14,8 @@ const TRANSPORT_DELIVERY_OUTCOME_STATE = Object.freeze({
 });
 
 const TRANSPORT_COMPLETED_STATUS = 'completed';
+
+const objectHasOwn = Object.hasOwn;
 
 const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD = Object.freeze({
   DELIVERY_STATE: 'deliveryState',
@@ -39,16 +35,19 @@ const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS = Object.freeze([
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.RETRY_AFTER_MS,
 ]);
 
-const TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE = Object.freeze({
-  QUERY_TRANSPORT_NOT_READY: 'query_transport_not_ready',
-  CONNECTION_CLOSED: 'connection_closed',
-  TRANSPORT_DEFERRED: 'transport_deferred',
-});
+// Transport decides the delivery state; every other metadata field is a value
+// a reply may supply. A supplied value is emitted exactly as supplied and only
+// an absent one is computed, so transport adds facts and never rewrites a claim.
+const TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS = Object.freeze(
+  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS.filter((field) =>
+    field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.DELIVERY_STATE),
+);
 
 const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   ACK_REJECTED: 'ack_rejected',
   COMPLETED_WITH_ERROR: 'completed_with_error',
   CONNECTION_CLOSED: 'connection_closed',
+  CONTRADICTORY_DELIVERY_STATE: 'contradictory_delivery_state',
   MESSAGE_TIMEOUT: 'message_timeout',
   NO_HANDLER: 'no_handler',
   NO_CONNECTION: 'no_connection',
@@ -57,9 +56,6 @@ const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   TRANSPORT_DEFERRED: 'transport_deferred',
   WEBSOCKET_CONNECT_TIMEOUT: 'websocket_connect_timeout',
 });
-
-const ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE =
-  'ROUTER_QUERY_TRANSPORT_NOT_READY';
 
 function normalizePositiveRetryAfterMs(value, fallback = null) {
   return Number.isFinite(value) && value > 0 ?
@@ -70,13 +66,6 @@ function normalizePositiveRetryAfterMs(value, fallback = null) {
 function normalizeOptionalString(value) {
   return typeof value === 'string' && value.length > 0 ?
     value :
-    null;
-}
-
-function normalizeTransportErrorCode(value) {
-  const normalizedCode = normalizeOptionalString(value);
-  return normalizedCode !== null ?
-    normalizedCode.toUpperCase() :
     null;
 }
 
@@ -96,45 +85,54 @@ function isDeferredTransportDeliveryErrorCode(errorCode) {
     errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE;
 }
 
+const NAMED_TRANSPORT_DELIVERY_STATES = Object.freeze(
+  Object.values(TRANSPORT_DELIVERY_OUTCOME_STATE),
+);
+
+// An explicit state claim never upgrades an outcome. A claim of failure, a
+// claim outside the named states, or a delivered claim the evidence does not
+// support is a contradiction, and a contradiction fails the outcome.
+function isContradictedDeliveryStateClaim(claim, supported) {
+  return claim !== undefined && (
+    !NAMED_TRANSPORT_DELIVERY_STATES.includes(claim) ||
+    claim === TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED ||
+    (claim === TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED && !supported)
+  );
+}
+
+function resolveTransportDeliveryState(delivered, deferred) {
+  if (delivered) {
+    return TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED;
+  }
+  return deferred ?
+    TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
+    TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED;
+}
+
+// options.claimedDeliveryState is the supplied own value, undefined if absent.
 function classifyTransportDeliveryState(options) {
-  const deferred =
+  const claim = options.claimedDeliveryState;
+  const deferralRequested =
     options.deferRetry === true ||
     isDeferredTransportDeliveryErrorCode(options.errorCode) ||
     options.retryAfterMs !== null ||
-    options.claimedDeliveryState ===
-      TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
+    claim === TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
   const hasConflict =
     options.noHandler ||
     options.completedWithError ||
-    isTransportDeliveryErrorCode(options.errorCode) ||
-    (
-      options.claimedDeliveryState !== null &&
-      options.claimedDeliveryState !==
-        TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED
-    );
-  const delivered = options.acknowledged && !deferred && !hasConflict;
+    isTransportDeliveryErrorCode(options.errorCode);
+  const supported = options.acknowledged && !deferralRequested && !hasConflict;
+  // FAILED dominates deferral, so a normalized outcome is a fixed point.
+  const contradicted = isContradictedDeliveryStateClaim(claim, supported);
+  const delivered = supported && !contradicted;
+  const deferred = deferralRequested && !contradicted;
   return {
+    contradicted,
+    deferralRequested,
     delivered,
     deferred,
-    deliveryState: delivered ?
-      TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED :
-      deferred ?
-        TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED :
-        TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
+    deliveryState: resolveTransportDeliveryState(delivered, deferred),
   };
-}
-
-function resolveTransportSemanticReasonCode(errorCode, deferred) {
-  if (errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE) {
-    return TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.CONNECTION_CLOSED;
-  }
-  if (errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE) {
-    return TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.QUERY_TRANSPORT_NOT_READY;
-  }
-  if (deferred) {
-    return TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE.TRANSPORT_DEFERRED;
-  }
-  return null;
 }
 
 function resolveTransportDeliveryReasonCode(
@@ -177,174 +175,74 @@ function resolveTransportDeliveryReasonCode(
   return null;
 }
 
-function buildTransportSemanticOutcome(options = {}) {
-  const ready = options.ready === true;
-  const retryAfterMs = normalizePositiveRetryAfterMs(
-    options.retryAfterMs,
-    null,
-  );
-  const errorCode = normalizeTransportErrorCode(
-    options.errorCode ?? options.code,
-  );
-  const deferred =
-    options.deferRetry === true ||
-    errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
-    errorCode === ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE ||
-    retryAfterMs !== null;
-
-  return Object.freeze({
-    state:
-      ready ?
-        TRANSPORT_SEMANTIC_OUTCOME_STATE.READY :
-        (
-          deferred ?
-            TRANSPORT_SEMANTIC_OUTCOME_STATE.DEFERRED :
-            TRANSPORT_SEMANTIC_OUTCOME_STATE.FAILED
-        ),
-    ready,
-    deferRetry: deferred,
-    reason: normalizeOptionalString(options.reason),
-    reasonCode: resolveTransportSemanticReasonCode(errorCode, deferred),
-    errorCode,
-    retryAfterMs,
-    service:
-      options.service &&
-        typeof options.service.sendMessage === 'function' ?
-        options.service :
-        null,
-  });
-}
-
 function buildTransportDeliveryOutcome(options = {}) {
   const retryAfterMs = normalizePositiveRetryAfterMs(
     options.retryAfterMs,
     null,
   );
-  const errorCode = normalizeTransportErrorCode(
-    options.errorCode ?? options.code,
-  );
+  const errorCode = normalizeOptionalString(options.errorCode);
   const noHandler = options.noHandler === true;
   const acknowledged = options.acknowledged === true;
-  const claimedDeliveryState = normalizeOptionalString(options.deliveryState);
   const completedWithError = options.status === TRANSPORT_COMPLETED_STATUS &&
-    normalizeOptionalString(options.error ?? options.message) !== null;
-  const {delivered, deferred, deliveryState} =
+    normalizeOptionalString(options.error) !== null;
+  const {contradicted, deferralRequested, delivered, deferred, deliveryState} =
     classifyTransportDeliveryState({
       acknowledged,
-      claimedDeliveryState,
+      // An own undefined claim (dropped by JSON) is no claim.
+      claimedDeliveryState: options.deliveryState,
       deferRetry: options.deferRetry,
       errorCode,
       noHandler,
       retryAfterMs,
       completedWithError,
     });
-
-  return Object.freeze({
-    ...options,
-    acknowledged,
-    deliveryState,
-    deferRetry: deferred,
+  // An absent deferRetry reports the deferral evidence, as before; a failed
+  // contradiction does not withdraw a retry request it carried.
+  const computed = {
+    deferRetry: deferralRequested,
     errorCode,
     retryAfterMs,
     noHandler,
-    reasonCode: resolveTransportDeliveryReasonCode(
-      errorCode,
-      deferred,
-      noHandler,
-      delivered,
-      completedWithError,
-    ),
-  });
-}
-
-function buildQueryTransportSemanticOutcome(
-  selection = null,
-  options = {},
-) {
-  const resolvedSelection =
-    selection && typeof selection === 'object' ?
-      selection :
-      {};
-  const service =
-    resolvedSelection.service &&
-      typeof resolvedSelection.service.sendMessage === 'function' ?
-      resolvedSelection.service :
-      null;
-
-  if (service) {
-    return buildTransportSemanticOutcome({
-      ready: true,
-      service,
-      retryAfterMs: resolvedSelection.retryAfterMs,
-      errorCode: resolvedSelection.errorCode,
-    });
+    reasonCode: contradicted ?
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONTRADICTORY_DELIVERY_STATE :
+      resolveTransportDeliveryReasonCode(
+        errorCode,
+        deferred,
+        noHandler,
+        delivered,
+        completedWithError,
+      ),
+  };
+  const outcome = {...options, acknowledged, deliveryState};
+  for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
+    outcome[field] = objectHasOwn(options, field) ?
+      options[field] :
+      computed[field];
   }
-
-  return buildTransportSemanticOutcome({
-    ready: false,
-    service: null,
-    reason:
-      normalizeOptionalString(resolvedSelection.reason) ||
-      ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-    errorCode:
-      resolvedSelection.errorCode ||
-      ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
-    retryAfterMs: normalizePositiveRetryAfterMs(
-      resolvedSelection.retryAfterMs,
-      normalizePositiveRetryAfterMs(options.defaultRetryAfterMs, null),
-    ),
-    deferRetry: true,
-  });
+  return Object.freeze(outcome);
 }
 
-function classifyTransportSemanticOutcome(value = null, options = {}) {
+// Classifies a router answer, or a thrown error as the outcome it carries. A
+// thrown Error is the one other representation a delivery failure takes: its
+// message is the error text, its code the error code (the JavaScript error
+// convention), and its own value fields are carried as they are. An answer is
+// handed to the builder exactly as supplied.
+function thrownErrorOutcome(error) {
+  const outcome = {errorCode: error.code ?? null, error: error.message};
+  for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
+    if (field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ERROR_CODE &&
+        objectHasOwn(error, field)) {
+      outcome[field] = error[field];
+    }
+  }
+  return outcome;
+}
+
+function classifyTransportDeliveryOutcome(value = null) {
   const resolvedValue = value && typeof value === 'object' ? value : {};
-  return buildTransportSemanticOutcome({
-    ready: resolvedValue.ready === true,
-    reason:
-      resolvedValue.reason ??
-      resolvedValue.error ??
-      resolvedValue.message ??
-      null,
-    errorCode:
-      resolvedValue.errorCode ??
-      resolvedValue.code ??
-      null,
-    retryAfterMs:
-      normalizePositiveRetryAfterMs(
-        resolvedValue.retryAfterMs,
-        normalizePositiveRetryAfterMs(options.defaultRetryAfterMs, null),
-      ),
-    deferRetry: resolvedValue.deferRetry === true,
-    service: resolvedValue.service ?? null,
-  });
-}
-
-function classifyTransportDeliveryOutcome(value = null, options = {}) {
-  const resolvedValue = value && typeof value === 'object' ? value : {};
-  return buildTransportDeliveryOutcome({
-    ...resolvedValue,
-    acknowledged: resolvedValue.acknowledged === true,
-    error:
-      resolvedValue.error ??
-      resolvedValue.message ??
-      null,
-    errorCode:
-      resolvedValue.errorCode ??
-      resolvedValue.code ??
-      null,
-    retryAfterMs:
-      normalizePositiveRetryAfterMs(
-        resolvedValue.retryAfterMs,
-        normalizePositiveRetryAfterMs(options.defaultRetryAfterMs, null),
-      ),
-    deferRetry: resolvedValue.deferRetry === true,
-    noHandler: resolvedValue.noHandler === true,
-  });
-}
-
-function isDeferredTransportSemanticOutcome(outcome = null) {
-  return outcome?.state === TRANSPORT_SEMANTIC_OUTCOME_STATE.DEFERRED;
+  return buildTransportDeliveryOutcome(resolvedValue instanceof Error ?
+    thrownErrorOutcome(resolvedValue) :
+    resolvedValue);
 }
 
 function isDeliveredTransportDeliveryOutcome(outcome = null) {
@@ -358,18 +256,12 @@ function isDeferredTransportDeliveryOutcome(outcome = null) {
 export {
   TRANSPORT_COMPLETED_STATUS,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
-  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
-  TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE,
-  TRANSPORT_SEMANTIC_OUTCOME_STATE,
   buildTransportDeliveryOutcome,
-  buildQueryTransportSemanticOutcome,
   classifyTransportDeliveryOutcome,
-  classifyTransportSemanticOutcome,
   isDeferredTransportDeliveryOutcome,
-  isDeferredTransportSemanticOutcome,
   isDeliveredTransportDeliveryOutcome,
+  normalizeOptionalString,
+  normalizePositiveRetryAfterMs,
 };

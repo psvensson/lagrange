@@ -1,6 +1,8 @@
 import {
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+} from '../transport/transport-error-codes.js';
+import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,

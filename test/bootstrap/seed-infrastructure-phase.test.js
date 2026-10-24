@@ -10,10 +10,11 @@ import {
   MessageRouterSetup,
 } from '../../src/bootstrap/shared/message-router-setup.js';
 import {
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE,
   TRANSPORT_SEMANTIC_OUTCOME_STATE,
-} from '../../src/transport/transport-semantic-outcome.js';
+} from '../../src/transport/transport-query-semantic-outcome.js';
+import {ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 
 const QUERY_TRANSPORT_NOT_READY_REASON =
   'operational message-group ingress not ready';

@@ -55,6 +55,8 @@ import {
 import {completePrepareEvidenceOf} from
   './distributed/distributed-transaction-prepare-evidence.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 const REQUEST_IDENTITY_FIELDS = Object.freeze([
   'transactionId',
@@ -142,7 +144,8 @@ function participantEntryIdOf(operation, request) {
 function participantAnswerSnapshotOf(response, expected = null) {
   const answer = copyStrictOwnDataRecord(response);
   if (answer === null || answer.acknowledged !== true ||
-      answer.noHandler === true) {
+      classifyTransportDeliveryOutcome(answer).reasonCode ===
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
     return null;
   }
   if (expected !== null &&
