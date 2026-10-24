@@ -1,7 +1,0 @@
-/tmp/lagrange-runtime-correction-20261015/comparison-checkpoints.bundle is okay
-The bundle contains these 3 refs:
-19de88997fda4b6719bc0c1e46df61698bac1922 refs/heads/review/runtime-capture-negative-predecessor-20261015
-fbcc14d8b22479244642c54a504a96f452d11e7b refs/heads/review/runtime-capture-negative-before-ensure-20261015
-3b4560b1b0800d3703b6a887632cb2d069dd3144 refs/heads/review/runtime-capture-negative-blanket-one-20261015
-The bundle requires this ref:
-4aa8780cfec6f2718b86b4d1e27ee9711492be59 

@@ -1,0 +1,33 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "seed-control-authority-first-divergence--seed-control-authority-first-divergence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "e14b4f4bcf36f8f143377a37a001315c9a87726fa416a4418912428d442ad997",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-authority-first-divergence--seed-control-authority-first-divergence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/seed-control-authority-first-divergence/evidence/",
+  "files": [
+    ["baseline-lab-result.json","4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",2],
+    ["baseline-lab.txt","da895ba1a1166c68e66143ef7573648959396e3ab8bd774e32f12ad7843e8d85",11340],
+    ["baseline-results.ndjson","ea5f03b6b78c9cf10f7db7d7a8be34c858dfaa0875401aaca12baa9b45dd75bb",404],
+    ["causal-trace-v2.md","51e205f15749d50240760a9279a661ade86e1193c9664e9f63e42f7d8ec05e84",9963],
+    ["causal-trace.md","9d6f712bdea1ed1285c25d1a46d9adc6e462922318d2b075199079c44dcb3a2e",8756],
+    ["complexity.txt","e5b6770a0df93ca29f358f2f53f7e5828ae8a45040bde54cbe1169287f040d9e",6590],
+    ["diagnostic-complexity-debt.json","b3cb9fbc3fdc17114f715e85afaf6012f57de28d58a89c881b9a618d5523d033",1270],
+    ["diagnostic-v1-failed-export.txt","b4a6f7b619554810fbcf99ba10cca8475eec43693489399509a2614df7afa025",11272],
+    ["diagnostic-v1-results.ndjson","b5712485972770bb428859da134db568d58a9c414452b85b56f4a2ecf721c340",241],
+    ["diagnostic-v2-controls-lab.txt","42b9245e26a121f3d9308d8e36df5bb347b7d745b27e8b2e83272bd9dba3cc6e",1109],
+    ["diagnostic-v2-controls-results.ndjson","909961f9f03a5045809d6e32c495c7cfbadbdfcc550de69617d3a19fe6e4726e",163],
+    ["diagnostic-v2-lab.txt","1fb32498ab97515d9e869864969abe0b61abd219cde0b6c1edbc1921ebf18a2c",11388],
+    ["diagnostic-v2-results.ndjson","90bee9b6c7e7f84a7b630e987a26ecd32f9d315439cd40115c0835f92dbb937f",241],
+    ["diagnostic-v2-selected-records.json","91a4895758a31acdc23b952159386d168f73b90b1b90b42fffab1aedd4b29b5b",67830],
+    ["file-size.txt","bb8c0c45922c85ed07f798895436af344c5279cb55cbb3ef4e99b2ccb84a3f58",2282],
+    ["fleet.json","450d05e4fb801d04405a37597c8ff53d7beb5c0f1be4358840041694ad9c94d5",9077],
+    ["historical-first-control-refusal.txt","b9e43394da570fb0c541fb49bb487a8535db82fab0a7df6f46ac846a0486c0ff",2663],
+    ["input-manifest-v2.json","3a9312824e6575729bedf7de1e0b720f4ba0c7f64f180c09559d2a533ab7ad89",927],
+    ["input-manifest.json","a4218fe5660cf0cae7e27d72f9bbd42703d53bd6708a087393177c5fffc0795b",821],
+    ["lint.txt","3ebb8c5cc678dd743c6ad922f35f00d8f6b0323d6539c2eb6f5f443eeed6adf8",13166],
+    ["measurement-2026-10-20.md","3043292b5d6f2142f5ddfe5544d89ccb0baadec74e0d27f2df1013e73f95f9c3",8758],
+    ["physical-custody-review.md","b536a169a09a25cdd0482f6519e5257e8f8635e1e69f4c3eb67227e0b4972dfb",3929],
+    ["source-manifest.json","5a5580380f9eb69545b1eb94e7ac33f2e544e6878e64a9a45b6cb4b29b471edd",3164]
+  ]
+}

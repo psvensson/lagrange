@@ -1,2 +1,0 @@
-{"file":"test/partition/partition-tx1-single-path-alpha.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":2352,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/partition-runtime-reconstruction-leadership.test.js","attempt":1,"ok":false,"assertions":19,"durationMs":35748,"retriedOnce":false,"firstFailureLine":"not ok 1 - W-B6-2/W-B6-4: a lone leader whose election runs on its own clock does not lead during an environmental failure and serves the next write after it heals; its sibling is untouched"}

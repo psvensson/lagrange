@@ -1,5 +1,0 @@
-# test-files planned=1
-classified lane exclusive: 1 file(s), jobs=1
-thermal: ok cpu 71C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
-ok test/wasm-service/wasm-retained-bootstrap.integration.test.js (16 assertions, 2219ms)
-# test-files total=1 pass=1 fail=0 assertions=16

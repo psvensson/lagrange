@@ -1,9 +1,0 @@
-Complexity violations (threshold: 12):
-
-test-output/continuation-20261011/begin-source-round3-working/base-distributed-transaction-recovery.js:143:3 Async method 'resumeRecoveredTransactions' has a complexity of 13. Maximum allowed is 12.
-test-output/continuation-20261011/begin-source-round3-working/base-distributed-transaction-recovery.js:204:3 Async method 'runRecoverySweep' has a complexity of 26. Maximum allowed is 12.
-test-output/continuation-20261011/begin-source-round3-working/base-distributed-transaction-recovery.js:463:3 Method 'recoverFromSystemTables' has a complexity of 38. Maximum allowed is 12.
-test-output/continuation-20261011/begin-source-round3-working/base-distributed-transaction-recovery.js:492:7 Method 'loadWorkflow' has a complexity of 13. Maximum allowed is 12.
-test-output/continuation-20261011/begin-source-round3-working/base-distributed-transaction-recovery.js:549:7 Method 'loadParticipant' has a complexity of 14. Maximum allowed is 12.
-
-5 violation(s) found.

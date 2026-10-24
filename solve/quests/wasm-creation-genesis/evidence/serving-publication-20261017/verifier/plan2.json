@@ -1,9 +1,0 @@
-{
-  "V9-in-path-tombstone-disabled": {
-    "description": "Only the in-path tombstone (open connection, N15) is disabled; the by-path verification still runs after the handles close",
-    "testFile": "test/wasm-service/wasm-creation-publication.integration.test.js",
-    "edits": [{"file": "src/wasm-service/wasm-service-replica-lifecycle.js",
-      "from": "  await retirement.metadataRelease;\n  if (replica.db?.open !== true) return;",
-      "to": "  await retirement.metadataRelease;\n  return;"}]
-  }
-}

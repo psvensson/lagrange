@@ -1,7 +1,0 @@
-r7-01-creation-intent rc=0 RC=0 ELAPSED=1s FILES=test/service/service-consensus-creation-intent.test.js
-r7-02-creation-recovery rc=0 RC=0 ELAPSED=1s FILES=test/service/service-consensus-creation-recovery.integration.test.js
-r7-03-publication-int rc=0 RC=0 ELAPSED=4s FILES=test/wasm-service/wasm-creation-publication.integration.test.js
-fast-static rc=0
-proof range: b3793c7e5..HEAD (flag)
-fast-static: ok in 11563ms
-ALL_DONE

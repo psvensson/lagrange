@@ -1,5 +1,0 @@
-/tmp/lagrange-ordering-consumer-proof-20261015/predecessor-treatment.bundle is okay
-The bundle contains this ref:
-d2c7c600a09cfa371d54c5c9efda6e80438bbb98 refs/heads/review/runtime-consumer-predecessor-20261016
-The bundle requires this ref:
-6cddf137b85975947d09c0165eeb0e2f4c4bdcda 

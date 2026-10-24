@@ -1,6 +1,0 @@
-round-5 bytes: {"total":0,"raw":0,"inherited":0}
-RESTORED_BYTE_IDENTICAL src/service/service-consensus-creation-intent.js
-fast-static rc=0
-proof range: b3793c7e5..HEAD (flag)
-fast-static: ok in 11434ms
-CHAIN2_DONE

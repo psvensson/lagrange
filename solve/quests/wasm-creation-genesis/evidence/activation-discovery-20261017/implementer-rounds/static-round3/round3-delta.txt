@@ -1,7 +1,0 @@
-src/node/runtime-service-bound-creation-route.js 48
-src/node/runtime-service-handler.js 7
-test/node/runtime-service-bound-route.test.js 136
-test/wasm-service/wasm-service-lifecycle.test.js 25
-test/wasm-service/bound-creation-handler-embedding.integration.test.js 1
-test/wasm-service/bound-creation-handler-embedding-fixture.js 5
-test/shards/impact-contracts.json 35

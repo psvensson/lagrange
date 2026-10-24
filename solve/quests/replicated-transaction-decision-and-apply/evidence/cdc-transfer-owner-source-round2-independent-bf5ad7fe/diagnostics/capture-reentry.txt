@@ -1,7 +1,0 @@
-COUNTEREXAMPLE proxy-descriptor
-COUNTEREXAMPLE options-descriptor
-COUNTEREXAMPLE options-terminalize
-PASS options-shutdownRecord
-PASS throwing-proxy-refusal-and-valid-retry
-PASS plain-proxy-captured-once
-PASS fixed-snapshot-does-not-expand

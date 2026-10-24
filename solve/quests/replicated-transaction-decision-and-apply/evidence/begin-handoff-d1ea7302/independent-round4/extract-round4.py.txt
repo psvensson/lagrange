@@ -1,4 +1,0 @@
-import json,pathlib
-p=pathlib.Path(__file__).parent
-for name in ['round4-lifecycle-probes','round4-advanced-retirement','round4-timer-orderings']:
- text=(p/(name+'.log')).read_text();value=json.loads(text.split('RESULTS_START\n')[-1]);(p/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')

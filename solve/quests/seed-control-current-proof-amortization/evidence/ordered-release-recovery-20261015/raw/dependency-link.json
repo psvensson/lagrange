@@ -1,8 +1,0 @@
-{
-  "observedAt": "2026-10-15T13:52:59.423165+00:00",
-  "target": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
-  "lockSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
-  "sourceLockSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
-  "action": "new isolated worktree symlink only; no installation modification",
-  "initialFleetAttempt": "exit 1 missing yaml before dependency link; no test executed"
-}

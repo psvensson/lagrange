@@ -1,5 +1,0 @@
-Scanned 4 JavaScript files
-Found 1 decision-boundary guideline violations
-Top files:
-- src/service/service-consensus-creation-intent.js: 1
-Matched 0 inherited decision-boundary baseline violations

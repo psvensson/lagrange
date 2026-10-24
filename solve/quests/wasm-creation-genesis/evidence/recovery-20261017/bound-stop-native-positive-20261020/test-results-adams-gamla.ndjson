@@ -1,2 +1,0 @@
-{"file":"test/wasm-service/bound-creation-handler-embedding.integration.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":2203,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/wasm-service/bound-remove-physical-operation.integration.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":2460,"retriedOnce":false,"firstFailureLine":null}

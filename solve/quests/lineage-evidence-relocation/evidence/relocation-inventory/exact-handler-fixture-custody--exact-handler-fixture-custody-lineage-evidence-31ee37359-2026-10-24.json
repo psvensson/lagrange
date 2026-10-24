@@ -1,0 +1,30 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "exact-handler-fixture-custody--exact-handler-fixture-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "5471a7d921f1283d91bf13b6f5202a02cf35bbcae76ddc32c0654a9219fc8fc4",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/exact-handler-fixture-custody--exact-handler-fixture-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/exact-handler-fixture-custody/evidence/",
+  "files": [
+    ["candidate-bindings.json","9bea05ea42f8ba77d433d8c73cd40c922b3a046e049f6125c0cfca5dc72566ed",2401],
+    ["fixture-baseline-2016726f/controller.log","35785e7cdcde4c6f36ee09905fbaf40fecd9cc402baed6388a18bdb7c6252916",24995],
+    ["fixture-baseline-2016726f/exit.json","950e8b800437285210983f185696e5176c22281d05a741f991f87d008cb24fc1",13],
+    ["fixture-baseline-2016726f/input.json","e1cc732e2018d1e01010b1916c12f8fdbbe2f626b6581b610f68162ade23a145",605],
+    ["fixture-baseline-2016726f/results.ndjson","c1afec8fa01681e88b12fe836f71963b4b8756ec4a7f9cf2741fb66729689c41",863],
+    ["fixture-baseline-2016726f/sha256.json","5bbeb8d3c8f9c811d8685203d5233a7b2db17e2dfde875e4364df8da812e504c",346],
+    ["fixture-candidate-a0dc88427/controller.log","603d2fce54426899913f28efa632fbbe5aa19d5a25bf442028e2bffeb96dd098",2342],
+    ["fixture-candidate-a0dc88427/exit.json","a570bcf4494f671c5b57805cd66f0c61ace157ea3de5d4e3a29c3cc3e7b84a82",13],
+    ["fixture-candidate-a0dc88427/input.json","605366d464d751907b8e626ad69f77b2e38063fcf0a10155add1f280b55ff066",1117],
+    ["fixture-candidate-a0dc88427/results.ndjson","1af70d9f1f7c327ff18862903efa9f6e5a015264730c6bc467d59ce2157e7924",1010],
+    ["fixture-candidate-a0dc88427/sha256.json","74a80bd63e341e94affb2186c2267bc25bd545105b08ab0abb95ed0b5781f264",346],
+    ["fixture-negative-92cb2d72b/controller-setup-error.log","c2f50b9184a782161315188608d5102400d12790f943181575e47887e8438cb2",884],
+    ["fixture-negative-92cb2d72b/controller.log","224d4a113d6265ada063c8ba4e872efcbb61f19bb26e1f4c537b4ea8232ba22c",10620],
+    ["fixture-negative-92cb2d72b/exit.json","950e8b800437285210983f185696e5176c22281d05a741f991f87d008cb24fc1",13],
+    ["fixture-negative-92cb2d72b/input.json","15668bf95643bedd92dcb16b5b4c36ea470307070bcc284d1fe43797537986b7",353],
+    ["fixture-negative-92cb2d72b/results.ndjson","0bb6de0d6c1e6168e4db58ddf943ab115fbbbffb14122705fb738a66e264945f",215],
+    ["fixture-negative-92cb2d72b/sha256.json","76ee6152e906d60b8aa9657459b467dcd373bb9307624fa0acbd533a7c3f8a8a",446],
+    ["gates-a0dc88427/fast-static.txt","aa89699bfe825fbab2c81d7c7be3df5f43f53e3da9475c1264527bad6112762f",94],
+    ["gates-a0dc88427/owner-statics.json","72efb7bbc04e7cbf89ba5b0e8d6a92f6d2bede36f465fa421fcef9c090b8e9a9",1141],
+    ["independent-review.md","d573b628b5811265a145fef41f79052d0ab97fcb7696b86b090d1cbc586f181a",18556]
+  ]
+}

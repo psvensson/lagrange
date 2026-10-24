@@ -1,5 +1,0 @@
-[lenovo-laptop] npm ERR! Cannot read property '@bytecodealliance/jco-transpile' of undefined
-
-npm ERR! A complete log of this run can be found in:
-npm ERR!     /home/peter/.local/state/lagrange-lab-worker/generic/runs/1c795ef8-bfa4-4d4b-a1a8-35ba150467bd/work/cache/npm/_logs/2026-10-22T16_32_55_378Z-debug.log
-

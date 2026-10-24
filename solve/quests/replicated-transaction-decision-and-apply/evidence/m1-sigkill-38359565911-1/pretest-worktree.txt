@@ -1,4 +1,0 @@
- M test/shards/impact-graph-seal.json
- M test/shards/primary-classes.json
- M test/shards/resource-classes.json
- M test/shards/subsystem-classes.json

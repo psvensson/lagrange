@@ -1,2 +1,0 @@
-{"file":"test/node/replica-handler-release-recovery.test.js","attempt":1,"ok":true,"assertions":15,"durationMs":4684,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":10,"durationMs":5859,"retriedOnce":false,"firstFailureLine":null}

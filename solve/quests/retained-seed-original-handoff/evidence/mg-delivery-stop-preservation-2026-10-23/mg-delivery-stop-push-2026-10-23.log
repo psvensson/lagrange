@@ -1,9 +1,0 @@
-[pre-push +0s] >> pushed-refs: reading pushed refs
-[pre-push +0s] >> tag-only-fast-path: tag-only fast path check
-[pre-push +0s] >> branch-preservation-fast-path: non-main branch preservation check
-pre-push: non-main branch preservation push - skipping local proof gate
-pre-push: remote preservation is NOT merge, Quest-land, release, or publication approval
-pre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push
-[pre-push +0s] all stages green
-To github.com:psvensson/lagrange.git
-   21cfd917d..681da1dc1  HEAD -> work/mg-source-occurrence-delivery-20261023

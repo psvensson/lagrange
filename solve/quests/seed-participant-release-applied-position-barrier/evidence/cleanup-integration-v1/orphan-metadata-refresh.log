@@ -1,8 +1,0 @@
-wrote test/shards/primary-classes.json: 2369 tests, digest fnv1a32-f731fa14
-wrote test/shards/resource-classes.json — 2369 tests, digest fnv1a32-77e2eed6
-wrote test/shards/subsystem-classes.json — 2369 tests, 22 subsystems, digest fnv1a32-ebdf0e25
-{"snapshotDigest":"b966cc422b81097ff890690f037e001e76f185d31e4c035d3b38f0b82c067f8c","graphByteDigest":"9d92fa30bf21603211f7bc78ef31d876fcdbf28dc362c99aa976f77a4a7d9427","sealByteDigest":"665d6c77cde2f8460fd9fd46655bc8a5072ba705fb69ca04d22f1391c96e9f44"}
-Command ['npm', 'run', '-s', 'test:metadata:refresh'] exit 0
-/mnt/data/peter/projects/.worktrees/rs-raft-seed-native-startup-census-20261013/solve/changes/global-owner-debt-inventory/inventory.json
-{"filesWithDebt":1306,"rankedBoundaryCount":113,"semanticBoundaryCount":20,"fallbackBoundaryCount":93,"childQuestCount":16}
-Command ['node', 'scripts/generate-global-owner-debt-inventory.js'] exit 0

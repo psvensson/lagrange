@@ -1,7 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:literals
-> node scripts/check-guideline-literals.js src/node/replica-runtime-cleanup-custody.js
-
-Scanned 1 JavaScript files
-Found 0 new literal-guideline violations
-Matched 0 inherited literal-guideline baseline violations

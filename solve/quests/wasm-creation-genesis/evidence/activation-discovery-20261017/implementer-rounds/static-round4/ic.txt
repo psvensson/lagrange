@@ -1,1 +1,0 @@
-impact-contracts: PASS (67 contracts, 38 coupled pairs, sha256:126f2c3f3efb00bdfbf18b5886fa2c129b6b4ee0de0f77d92cb9403e50f3ab0b)

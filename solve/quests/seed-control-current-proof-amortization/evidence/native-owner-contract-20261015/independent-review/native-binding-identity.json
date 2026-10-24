@@ -1,8 +1,0 @@
-{
-  "verification": "verifyRaftRsBinding returned verified at pinned review head",
-  "digestFile": "vendor/raft-rs-wasm/artifact-digest.json",
-  "artifactDigests": {
-    "wasm": "b285c5eca45ddb6c44301abc0e35c561cd74b24f3e1670b8c49882820aa9e5ad",
-    "glue": "4506be46562d06379c4a1adfb0791bb220096ba780f8cc07eccee6e779e1ab81"
-  }
-}

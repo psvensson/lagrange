@@ -1,9 +1,0 @@
-
-> lagrange-server@0.2.6 test:file
-> node scripts/run-classified-test-files.js test/wasm-service/bound-creation-handler-embedding.integration.test.js
-
-# test-files planned=1
-classified lane exclusive: 1 file(s), jobs=1
-thermal: unmeasurable (no sensors)
-ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 2272ms)
-# test-files total=1 pass=1 fail=0 assertions=3

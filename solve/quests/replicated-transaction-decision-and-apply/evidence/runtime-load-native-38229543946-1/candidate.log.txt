@@ -1,5 +1,0 @@
-# test-files planned=1
-classified lane exclusive: 1 file(s), jobs=1
-thermal: unmeasurable (no sensors)
-ok test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js (4 assertions, 1682ms)
-# test-files total=1 pass=1 fail=0 assertions=4

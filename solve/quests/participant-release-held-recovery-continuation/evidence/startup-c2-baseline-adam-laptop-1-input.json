@@ -1,9 +1,0 @@
-{
-  "host": "adam-laptop",
-  "files": [
-    "test/integration/message-group-membership-claim-cache.integration.test.js"
-  ],
-  "sha": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
-  "kind": "c2-baseline",
-  "startedAt": "2026-10-13T15:28:10.787Z"
-}

@@ -1,5 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:scoped:strict
-> node scripts/check-complexity.js --scoped --strict src/node/participant-release-applied-position-observation.js
-
-No complexity violations (threshold: 12).

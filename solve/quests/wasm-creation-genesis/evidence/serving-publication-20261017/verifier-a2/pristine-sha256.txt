@@ -1,5 +1,0 @@
-62cb2191b7168aa05c6c5faa0b70a0d7b1ecf3474f97fb5c6dd18a270d6d8793  src/control-plane/owners/service-instance-metadata.js
-eb0bad39e9aba095f9fb278798674bde9743b925c9c809c6ef3b992a94dfe7b2  test/control-plane/service-instance-creation-cas.test.js
-89b760911094ae910b6427668dd8e1a1eca6b613c5541a75d9123eda33590a26  test/control-plane/service-instance-selection-admission.test.js
-34807a38e9c6808cd01ca8ec4f521ef742756df70604be9e486713af35613068  test/wasm-service/wasm-creation-publication.integration.test.js
-4d26c1a3dd97b7ce176ba545340060e4df652a1555b8e8925f39dc80e4857c7d  test/wasm-service/wasm-retained-bootstrap-fixture.js

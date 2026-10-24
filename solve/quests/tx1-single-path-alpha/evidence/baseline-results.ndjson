@@ -1,7 +1,0 @@
-{"file":"test/partition/participant-envelope-admission.test.js","attempt":1,"ok":true,"assertions":2,"durationMs":1923,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/partition-legacy-session-statement-admission.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":3460,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/partition-participant-transaction-apply.test.js","attempt":1,"ok":true,"assertions":27,"durationMs":3958,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/partition-participant-transaction-staging.test.js","attempt":1,"ok":true,"assertions":20,"durationMs":4613,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/raft/raft-rs-backend/transaction-leg-a-three-replica.test.js","attempt":1,"ok":true,"assertions":6,"durationMs":4091,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/integration/seed-migration-cutover-persisted.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":31486,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/integration/transaction-coordinator-restart.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":2458,"retriedOnce":false,"firstFailureLine":null}

@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "replica-cleanup-host-custody--replica-cleanup-host-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "18846728fa5641ee75faedff7b9e0c0df11fd235058a19dbd4b1e514670b7348",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replica-cleanup-host-custody--replica-cleanup-host-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/replica-cleanup-host-custody/evidence/",
+  "files": [
+    ["lifecycle-claim-race-38356399734/result-and-review-request.md","30b479a93922f748d0962604f0218c9e5a1d8705b5c4a125a3de2e00979e7c4a",4209],
+    ["reconciled-38272074554-1/SHA256SUMS","a0309b468655f7d93761865a171e3b11625668701c7f6edc3ed27ad814080af7",162],
+    ["reconciled-38272074554-1/raw-evidence.tar.gz","bccde195f09f426b05f30174d2106af54828aa6290e3fd34f40f855c89322515",111406],
+    ["reconciled-38272074554-1/summary.json","eb87691a650f10961fe46f2660071f9453953915b8ef7cd1966b4d8e88047380",2454]
+  ]
+}

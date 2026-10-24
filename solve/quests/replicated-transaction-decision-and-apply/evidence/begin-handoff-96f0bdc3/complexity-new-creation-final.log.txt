@@ -1,1 +1,0 @@
-No complexity violations (threshold: 12).

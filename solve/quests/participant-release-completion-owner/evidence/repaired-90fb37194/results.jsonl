@@ -1,7 +1,0 @@
-{"file":"test/node/participant-release-fresh-create-completion.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":4686,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/node/replica-handler-release-recovery.test.js","attempt":1,"ok":true,"assertions":25,"durationMs":6398,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":true,"assertions":16,"durationMs":6766,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/scripts/check-guideline-decision-boundaries.test.js","attempt":1,"ok":true,"assertions":96,"durationMs":3584,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/scripts/participant-release-completion-owner.test.js","attempt":1,"ok":true,"assertions":12,"durationMs":1915,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/bootstrap/seed-release-once-per-cohort.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":3382,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/bootstrap/seed-participant-release-failure-projection.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":3404,"retriedOnce":false,"firstFailureLine":null}

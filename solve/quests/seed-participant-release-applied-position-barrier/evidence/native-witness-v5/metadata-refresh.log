@@ -1,4 +1,0 @@
-wrote test/shards/primary-classes.json: 2369 tests, digest fnv1a32-f731fa14
-wrote test/shards/resource-classes.json — 2369 tests, digest fnv1a32-77e2eed6
-wrote test/shards/subsystem-classes.json — 2369 tests, 22 subsystems, digest fnv1a32-ebdf0e25
-{"snapshotDigest":"e199f558bbb6301f2723fbf37c8c7e0966ee1fe8c88c0d6bc19fed382231799b","graphByteDigest":"e8ef34eb6ecd23c9a8894732e77ebe9e3f416d65e958c7586c2832cba2cf6032","sealByteDigest":"273adddf8cfd2a969d4281944619303099c1a63397bb5193ce1d727ee4a1acec"}

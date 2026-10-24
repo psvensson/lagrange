@@ -1,9 +1,0 @@
-{
-  "host": "adams-gamla",
-  "files": [
-    "test/bootstrap/node-bootstrap-consistency.property.test.js"
-  ],
-  "sha": "406ceac1c40bdf57da1a6668806d0f3b38526cb9",
-  "kind": "c2-baseline",
-  "startedAt": "2026-10-13T15:27:00.819Z"
-}

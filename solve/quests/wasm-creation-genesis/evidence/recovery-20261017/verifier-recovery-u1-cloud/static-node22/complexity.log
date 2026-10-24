@@ -1,8 +1,0 @@
-Scoped complexity ratchet: 6 violation(s) in 17 target(s) (threshold: 12).
-src/node/runtime-service-handler.js:597:3 Async method 'handleRemoveReplica' has a complexity of 14. Maximum allowed is 12.
-src/runtime/service-runtime-lifecycle-operation-methods.js:153:5 Async method 'prepare' has a complexity of 16. Maximum allowed is 12.
-src/runtime/service-runtime-lifecycle-operation-methods.js:294:5 Async method 'start' has a complexity of 26. Maximum allowed is 12.
-src/runtime/service-runtime-lifecycle-operation-methods.js:468:5 Async method 'stop' has a complexity of 14. Maximum allowed is 12.
-src/service/service-lifecycle-manager.js:247:7 Method '_buildLifecycleLogContext' has a complexity of 16. Maximum allowed is 12.
-src/service/service-lifecycle-recovery.js:97:1 Async function 'recoverOperationRow' has a complexity of 31. Maximum allowed is 12.
-Saved complexity report to test-output/analysis/complexity-scoped.json.

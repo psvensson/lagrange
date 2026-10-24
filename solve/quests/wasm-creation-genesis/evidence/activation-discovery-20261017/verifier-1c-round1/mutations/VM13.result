@@ -1,6 +1,0 @@
-mutated sha: 89df770d7bfdaac48ef00b2e591404ee78a523c51f40505252c945146e690369
-catcher test/runtime/service-runtime-consensus-publication.test.js rc=1
-not ok test/runtime/service-runtime-consensus-publication.test.js (16 assertions, 535ms)
-    not ok 1 - cell (d) endpoint removed by physical id before the stop; services row deleted after CLOSED
-      name: 'AssertionError'
-RESTORED_BYTE_IDENTICAL src/runtime/runtime-endpoint-publication-wiring.js

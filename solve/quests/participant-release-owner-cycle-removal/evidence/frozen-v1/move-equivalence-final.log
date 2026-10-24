@@ -1,7 +1,0 @@
-private_observation_helpers: IDENTICAL
-drain_predicate: IDENTICAL
-generation_and_facts_reader: IDENTICAL
-ADMISSIONS declarations: 1
-OPEN writes: 1
-ADMISSIONS.set sites: 2
-replicaGenerationOf exports: 0

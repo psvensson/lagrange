@@ -1,7 +1,0 @@
-mutated sha: 4f57a33bb9188d248600bc7779c5c6b765e2f4d2e06f05f19960327f3a40ba99
-catcher test/wasm-service/wasm-service-lifecycle.test.js rc=1
-not ok test/wasm-service/wasm-service-lifecycle.test.js (62 assertions, 1565ms)
-        not ok 1 - after PRESENT a second mark for its own token answers ALREADY_PRESENT and leaves pendingRoleUpdate untouched
-          name: 'AssertionError'
-catcher test/wasm-service/bound-creation-handler-embedding.integration.test.js rc=0
-RESTORED_BYTE_IDENTICAL src/wasm-service/wasm-service-serving-state.js

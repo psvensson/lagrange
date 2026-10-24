@@ -1,3 +1,0 @@
-{"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1984,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":7695,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":17288,"retriedOnce":false,"firstFailureLine":null}

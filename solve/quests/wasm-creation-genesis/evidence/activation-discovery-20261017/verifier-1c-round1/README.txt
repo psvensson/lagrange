@@ -1,1 +1,0 @@
-Verifier round 1 (Fable, subagent a20413205d1d4bd1c) of stage 1c at snapshot 04f1a91129550c8c0bf54e509faddfda50528c45 (= refs/heads/wip/rs-raft-serving-publication-3). src.diff/test.diff not retained: reproducible as `git diff b3793c7e5 04f1a9112`. Lab section PENDING at hand-back (jobs #161-#163).

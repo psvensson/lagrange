@@ -1,4 +1,0 @@
-curated test shards: current
-primary classification OK: 2369 tests (unit=2062 integration=97 bootstrap=203 convergence-probe=3 packaging=4)
-resource classification OK — 2369 tests, digest fnv1a32-77e2eed6
-subsystem classification OK — 2369 tests, 22 subsystems, digest fnv1a32-ebdf0e25

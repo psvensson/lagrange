@@ -1,4 +1,0 @@
-$ git diff --check
-
-exit=0
-expected=0

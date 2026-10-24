@@ -1,1 +1,0 @@
-{"file":"test/integration/message-group-membership-claim-cache.integration.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":13551,"retriedOnce":false,"firstFailureLine":"not ok 1 - repository failed and successful T1 cases share one SQL/Raft/cache seed"}

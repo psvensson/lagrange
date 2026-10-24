@@ -1,0 +1,14 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "snapshot-receiver-admission--snapshot-receiver-admission-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "c8c2ef2e621da10fa1149d7fa343d35455544503ebf2e38639e762bed4ab2dc8",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/snapshot-receiver-admission--snapshot-receiver-admission-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/snapshot-receiver-admission/evidence/native-38288795997-1/",
+  "files": [
+    ["SHA256SUMS","51bcb75e8753cb865fe4aac843f5cf29909bc817163cd26a54a8348baeabb601",157],
+    ["raw-evidence.tar.gz","3384e72a2855b3c3a71a1ea1b3b7670ba5caaf87085c6e22baa76ac507544d83",58792],
+    ["result-and-review-request.md","b06dbdb0190c29d813bd47a80df88b0776f211d58c9dc96b3976772037e2dff4",8637],
+    ["summary.json","b0fbe5ec6d7a181833e9c32024d3fc8d90ceb1a669ca6887bed925a9dac13b48",1675]
+  ]
+}

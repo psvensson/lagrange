@@ -1,8 +1,0 @@
-# test-files planned=2
-classified lane ordinary: 1 file(s), jobs=4
-thermal: unmeasurable (no sensors)
-ok test/wasm-service/wasm-creation-reconciliation.test.js (8 assertions, 454ms)
-# test-files total=1 pass=1 fail=0 assertions=8
-classified lane exclusive: 1 file(s), jobs=1
-ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (4 assertions, 2541ms)
-# test-files total=1 pass=1 fail=0 assertions=4

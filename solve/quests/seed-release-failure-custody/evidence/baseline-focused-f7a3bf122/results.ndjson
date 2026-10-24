@@ -1,3 +1,0 @@
-{"file":"test/bootstrap/bootstrap-shutdown-quiesce.test.js","attempt":1,"ok":false,"assertions":19,"durationMs":2020,"retriedOnce":false,"firstFailureLine":"not ok 6 - a new shutdown re-enters the retained cleanup owner"}
-{"file":"test/bootstrap/bootstrap-failure-cleanup.test.js","attempt":1,"ok":false,"assertions":67,"durationMs":2107,"retriedOnce":false,"firstFailureLine":"not ok 1 - the caller sees incomplete cleanup alongside the primary failure"}
-{"file":"test/bootstrap/pipeline/seed-registration-phase-custody.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":641,"retriedOnce":false,"firstFailureLine":"not ok 1 - seed registration phase owns acquisition and release before metadata publication"}
