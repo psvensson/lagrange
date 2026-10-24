@@ -39,5 +39,6 @@
       "id": "exact-measurement",
       "statement": "Acceptance is the acceptance checker printing 0 unmet conditions over: solve-active-bytes within budget, solve-files-over-1mb 0, quest-dirs-off-shape 0, inventory complete for every removed path, every bundle verified, required proof artifacts of every quest present for the paths under solve/quests/ and solve/epics/ (309 of the 405 doneWhen-required paths are legacy v1 paths under solve/evidence, solve/oracle and test-output that were already missing at the base and are outside this quest; recorded as a finding for the terminal-proof owner), mapping present; confirmed by test/scripts/closed-quest-shape.test.js and test/scripts/solve-footprint-accounting.test.js green on a lab host and the applicable landing checks."
     }
-  ]
+  ],
+  "sealedAt": "1538eeab92a151399a9994e101cb316b000f6ed0"
 }
