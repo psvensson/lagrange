@@ -49,7 +49,8 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // failure builder retired the executor's duplicate helpers and hysteresis
 // de-exported its managed-split metrics helpers on the combined tree.
 // 2026-10-24 (D1e): tightened 1416 -> 1413 on the checker hint.
-const BASELINE_UNUSED_EXPORT_COUNT = 1413;
+// 2026-10-26 (fresh-seed-activation C1-C4): tightened 1413 -> 1412 on the checker hint.
+const BASELINE_UNUSED_EXPORT_COUNT = 1412;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
