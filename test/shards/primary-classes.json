@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2128,
+    "unit": 2129,
     "integration": 109,
     "bootstrap": 214,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2458,
-  "digest": "fnv1a32-18db82b2",
+  "censusSize": 2459,
+  "digest": "fnv1a32-9ccc4047",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2337,6 +2337,7 @@
     "test/transport/message-router-api.property.test.js": "unit",
     "test/transport/message-router-cdc-custody.test.js": "unit",
     "test/transport/message-router-cdc-encoding.test.js": "unit",
+    "test/transport/message-router-cdc-outcome-roundtrip.test.js": "unit",
     "test/transport/message-router-cdc-response-boundary.test.js": "unit",
     "test/transport/message-router-critical-source-reserve.test.js": "unit",
     "test/transport/message-router-deliver-metrics.test.js": "unit",

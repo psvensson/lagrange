@@ -22,13 +22,13 @@
     "storage-raft": 143,
     "test-infrastructure": 145,
     "transactions": 16,
-    "transport-messaging": 105,
+    "transport-messaging": 106,
     "wasm-toolchain": 74
   },
-  "censusSize": 2458,
-  "digest": "fnv1a32-be6a3edb",
+  "censusSize": 2459,
+  "digest": "fnv1a32-028d4d54",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-45198cfc",
+  "observationDigest": "fnv1a32-851d9022",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2356,6 +2356,7 @@
     "test/transport/message-router-api.property.test.js": "transport-messaging",
     "test/transport/message-router-cdc-custody.test.js": "transport-messaging",
     "test/transport/message-router-cdc-encoding.test.js": "transport-messaging",
+    "test/transport/message-router-cdc-outcome-roundtrip.test.js": "transport-messaging",
     "test/transport/message-router-cdc-response-boundary.test.js": "transport-messaging",
     "test/transport/message-router-critical-source-reserve.test.js": "transport-messaging",
     "test/transport/message-router-deliver-metrics.test.js": "transport-messaging",
@@ -16650,6 +16651,14 @@
         "src/cdc/cdc-delivery-budget.js",
         "src/transport/message-router-shared-vocabulary.js",
         "test/test-helpers/message-router-cdc-fixture.js"
+      ]
+    },
+    "test/transport/message-router-cdc-outcome-roundtrip.test.js": {
+      "files": [
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/transport/message-router-outbound-queue-admission.js",
+        "src/transport/message-router-shared-vocabulary.js",
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/transport/message-router-cdc-response-boundary.test.js": {
