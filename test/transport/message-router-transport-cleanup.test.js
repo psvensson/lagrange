@@ -183,7 +183,8 @@ describe('MessageRouter transport cleanup verification', () => {
         const originalEnqueueOutbound = router.enqueueOutbound.bind(router);
         router.enqueueOutbound = async (nodeId, deliverFn, options) => {
           passedOptions = options;
-          return {acknowledged: true, data: 'ok'};
+          // A refused send settles at once; only the forwarded options matter.
+          return {acknowledged: false, error: 'stubbed send'};
         };
 
         const remoteNodeId = 'remote-node-1';

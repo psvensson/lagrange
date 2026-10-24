@@ -126,12 +126,11 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
     'src/bootstrap/phases/seed-partitions-phase.js',
     'src/raft/snapshot-catchup.js',
     // Carriers: the dispatch request, row rehydration (two readers), the
-    // owner-port merge, the legacy lifecycle adapter.
+    // owner-port merge.
     'src/control-plane/replica-dispatch-readiness-capture.js',
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
-    'src/node/replica-lifecycle-manager.js',
     // The target: request intake, validation, the partition, the port.
     'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',

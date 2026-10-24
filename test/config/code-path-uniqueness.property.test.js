@@ -338,7 +338,6 @@ test('Property 14: Code Path Uniqueness', async (t) => {
 
     // Required core transport entry points
     const requiredTransports = [
-      'websocket-transport.js', // For inter-node communication
       'message-router.js', // For routing messages between transports
       'rpc-client.js', // For request-response pattern over message groups
     ];

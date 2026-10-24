@@ -33,16 +33,6 @@ const ROUTER_MESSAGE_TYPE = Object.freeze({
   JOIN_COMPLETE_ACK: 'join_complete_ack',
 });
 
-const WS_MESSAGE_TYPE = Object.freeze({
-  RAFT_MESSAGE: 'raft_message',
-  SERVICE_MESSAGE: 'service_message',
-  SERVICE_RESPONSE: 'service_response',
-  PING: 'ping',
-  PONG: 'pong',
-  ACK: 'ack',
-  IDENTIFY: 'identify',
-});
-
 const TRANSPORT_CONFIG_KEY = Object.freeze({
   WS_HOST: 'transport.wsHost',
   MESSAGE_TIMEOUT_MS: 'transport.messageTimeoutMs',
@@ -180,7 +170,6 @@ const TRANSPORT_EVENT = Object.freeze({
 
 const TRANSPORT_SUBSYSTEM = Object.freeze({
   ROUTER: 'message-router',
-  WEBSOCKET: 'websocket-transport',
   RPC: 'rpc-client',
 });
 
@@ -293,14 +282,6 @@ const ROUTER_LOG_MSG = Object.freeze({
   HANDLER_UNREGISTERED: 'Unregistered handler',
   NO_TARGET_CONNECTION: 'No connection to target node for message delivery',
   SHUTTING_DOWN: 'Shutting down MessageRouter',
-  TRANSPORT_REGISTRY_SET: 'TransportRegistry configured for MessageRouter',
-  TRANSPORT_DELIVERY_START: 'Starting transport-based delivery',
-  TRANSPORT_ENDPOINT_SELECTED: 'Selected endpoint for delivery',
-  TRANSPORT_DELIVERY_SUCCESS: 'Transport delivery succeeded',
-  TRANSPORT_DELIVERY_FAILED: 'Transport delivery failed, trying fallback',
-  TRANSPORT_ALL_FAILED: 'All transport endpoints failed',
-  TRANSPORT_NO_ENDPOINTS: 'No endpoints available for node',
-  TRANSPORT_FALLBACK_WS: 'Falling back to WebSocket delivery',
   JOIN_REQUEST_RECEIVED: 'Join request received',
   JOIN_RESPONSE_SENT: 'Join response sent',
   JOIN_REQUEST_FAILED: 'Failed to process join request',
@@ -327,47 +308,9 @@ const ROUTER_ERROR_MSG = Object.freeze({
     'Query/data-plane message-group transport is not configured',
   PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
   SHUTDOWN: 'Router shutdown',
-  ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',
-  NO_ENDPOINTS_FOR_NODE: 'No endpoints available for node',
-  noEndpointsForNode: (nodeId) => `No endpoints available for node ${nodeId}`,
   outboundQueueBackpressured: (nodeId, maxPending) =>
     `Outbound queue for node ${nodeId} is saturated ` +
     `(maxPending=${maxPending})`,
-});
-
-const WS_LOG_MSG = Object.freeze({
-  INITIALIZING: 'Initializing WebSocketTransport',
-  SERVER_LISTENING: 'WebSocket server listening',
-  SERVER_ERROR: 'WebSocket server error',
-  INCOMING_CONNECTION: 'Incoming WebSocket connection',
-  CONNECTION_ERROR: 'WebSocket connection error',
-  ALREADY_CONNECTED: 'Already connected to peer',
-  CONNECTING: 'Connecting to peer',
-  CONNECTED: 'Connected to peer',
-  WS_ERROR: 'WebSocket error',
-  MESSAGE_RECEIVED: 'Received message',
-  MESSAGE_UNKNOWN: 'Unknown message type',
-  MESSAGE_PARSE_FAILED: 'Failed to parse message',
-  IDENTIFICATION_RECEIVED: 'Received identification',
-  MESSAGE_NOT_ACKED: 'Message not acknowledged',
-  CONNECTION_CLOSED: 'Connection closed',
-  CONNECTION_PING_TIMEOUT:
-    'Severing stale-but-open connection: keepalive pings unanswered',
-  CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
-    'Skipping keepalive teardown: peer demonstrably alive (slow, not dead)',
-  PING_TIMEOUT_SATISFIED_BY_INBOUND:
-    'Treating timed-out ping as alive: peer has fresh inbound traffic',
-  MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
-  SCHEDULING_RECONNECT: 'Scheduling reconnection',
-  RECONNECT_FAILED: 'Reconnection failed',
-  HANDLER_REGISTERED: 'Registered message handler',
-  NO_TARGET_CONNECTION: 'No connection to target node',
-  SHUTTING_DOWN: 'Shutting down WebSocketTransport',
-});
-
-const WS_ERROR_MSG = Object.freeze({
-  NO_CONNECTION: 'No connection to target node',
-  SHUTDOWN: 'Transport shutdown',
 });
 
 const RPC_LOG_MSG = Object.freeze({
@@ -447,9 +390,6 @@ export {
   TRANSPORT_NUM,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  WS_LOG_MSG,
-  WS_ERROR_MSG,
-  WS_MESSAGE_TYPE,
   RPC_DEFAULT,
   RPC_LOG_MSG,
   RPC_ERROR_MSG,

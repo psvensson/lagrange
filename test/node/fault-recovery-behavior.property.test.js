@@ -489,6 +489,69 @@ test('Property 7: Recovery State Handling', async (t) => {
   });
 
   /**
+   * A recovery transition is an exact-generation guarded update: when the
+   * guard misses (the row moved on), recovery deletes nothing and does not
+   * report the stale row as transitioned. (Ported from the retired
+   * ReplicaLifecycleManager suite, whose recovery delegated here.)
+   */
+  t.test('a guard miss on the exact source generation deletes nothing',
+    async (t) => {
+      const nodeId = 'test-node';
+      const services = [{
+        service_id: 'replica-1',
+        partition_id: 'partition-1',
+        node_id: nodeId,
+        service_type: 'partition',
+        status: 'syncing',
+        updated_at: 12345,
+      }];
+      const mockCache = createMockCache(nodeId, services);
+      // Every authoritative mutation misses its guard (zero rows).
+      const operations = [];
+      const missingGateway = {
+        async readAuthoritativeRows(tableName, _sql, params) {
+          const row = mockCache.get(tableName, params[0]);
+          return {success: true, rows: row ? [{...row}] : []};
+        },
+        async submitMutation(mutation) {
+          operations.push({type: mutation.operation,
+            whereClause: mutation.whereClause});
+          return {success: true, outcome: 'observed_state_changed',
+            partitionResult: {affectedRows: 0}};
+        },
+      };
+      const stateMachine = new ReplicaStateMachine({
+        nodeId,
+        cdcIntegrationService: createMockCDCService(services),
+        controlPlaneSystemTableGateway: missingGateway,
+      });
+
+      const result = await stateMachine.handleNodeRecovery({
+        systemTableCache: mockCache,
+        nodeId,
+      });
+      stateMachine.clear();
+
+      t.same(operations.filter((op) => op.type === 'delete'), [],
+        'a guard miss never deletes the potentially fresh replica row');
+      t.same(operations[0]?.whereClause, {
+        service_id: 'replica-1',
+        service_type: 'partition',
+        partition_id: 'partition-1',
+        node_id: nodeId,
+        replica_id: 'replica-1',
+        group_id: null,
+        created_at: 12345,
+        status: 'syncing',
+        cleanup_token: null,
+        create_attempt_token: null,
+        state_entered_at: 12345,
+      }, 'the recovery guard targets the exact source generation');
+      t.equal(result.syncingToFailed, 0,
+        'the stale row is not reported as transitioned');
+    });
+
+  /**
    * Property: Recovery handles empty cache gracefully.
    */
   t.test('recovery handles empty cache gracefully', async (t) => {
