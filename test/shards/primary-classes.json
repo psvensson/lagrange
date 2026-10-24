@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2118,
+    "unit": 2119,
     "integration": 108,
     "bootstrap": 212,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2445,
-  "digest": "fnv1a32-107038f3",
+  "censusSize": 2446,
+  "digest": "fnv1a32-b0b5e8d9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2340,6 +2340,7 @@
     "test/transport/message-router-query-transport-failure-shape.test.js": "unit",
     "test/transport/message-router-readiness-inflight-reserve.test.js": "unit",
     "test/transport/message-router-readiness-reserve.test.js": "unit",
+    "test/transport/message-router-superseded-delivery-completion.test.js": "unit",
     "test/transport/message-router-transport-cleanup.test.js": "unit",
     "test/transport/message-router.test.js": "unit",
     "test/transport/name-first-advertising-publication.test.js": "unit",

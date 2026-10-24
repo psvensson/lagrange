@@ -47,6 +47,8 @@ function childProgram(mode, deadlineMs) {
     import {LoggingService} from ${moduleUrl('src/logging/logging-service.js')};
     import {TEST_BOOT_INCARNATION} from
       ${moduleUrl('test/test-helpers/boot-incarnation-fixture.js')};
+    import {acknowledgeThenRespondFrames} from
+      ${moduleUrl('test/test-helpers/message-router-remote-answer.js')};
     const mode = ${JSON.stringify(mode)};
     ConfigurationManager.getInstance().initialize({
       node: {id: 'node-a'}, logging: {level: 'fatal'},
@@ -67,12 +69,11 @@ function childProgram(mode, deadlineMs) {
         if (mode !== ${JSON.stringify(MODE.ACK_NO_RESPONSE)} &&
             mode !== ${JSON.stringify(MODE.ACK_AND_RESPONSE)}) return;
         const {messageId} = JSON.parse(String(bytes));
+        const [ack, response] = acknowledgeThenRespondFrames(messageId, {ok: true});
         setImmediate(() => {
-          router.handleAcknowledgment({
-            type: 'ACK', messageId, acknowledged: true});
+          router.handleAcknowledgment(ack);
           if (mode !== ${JSON.stringify(MODE.ACK_AND_RESPONSE)}) return;
-          setImmediate(() => router.handleServiceResponse({
-            type: 'SERVICE_RESPONSE', messageId, result: {ok: true}}));
+          setImmediate(() => router.handleServiceResponse(response));
         });
       },
     });

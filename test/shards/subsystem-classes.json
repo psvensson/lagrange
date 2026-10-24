@@ -22,13 +22,13 @@
     "storage-raft": 144,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 101,
+    "transport-messaging": 102,
     "wasm-toolchain": 74
   },
-  "censusSize": 2445,
-  "digest": "fnv1a32-e3205ed4",
+  "censusSize": 2446,
+  "digest": "fnv1a32-7a8545de",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-ca46862f",
+  "observationDigest": "fnv1a32-7ef0f372",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2359,6 +2359,7 @@
     "test/transport/message-router-query-transport-failure-shape.test.js": "transport-messaging",
     "test/transport/message-router-readiness-inflight-reserve.test.js": "transport-messaging",
     "test/transport/message-router-readiness-reserve.test.js": "transport-messaging",
+    "test/transport/message-router-superseded-delivery-completion.test.js": "transport-messaging",
     "test/transport/message-router-transport-cleanup.test.js": "transport-messaging",
     "test/transport/message-router.test.js": "transport-messaging",
     "test/transport/name-first-advertising-publication.test.js": "transport-messaging",
@@ -17261,7 +17262,8 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/transport/message-router.js",
-        "test/test-helpers/boot-incarnation-fixture.js"
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/message-router-remote-answer.js"
       ]
     },
     "test/transport/message-router-ping-wait-bound-spent.test.js": {
@@ -17273,6 +17275,12 @@
       "files": [
         "src/transport/message-router-shared-vocabulary.js",
         "src/transport/transport-error-codes.js"
+      ]
+    },
+    "test/transport/message-router-superseded-delivery-completion.test.js": {
+      "files": [
+        "src/transport/message-router-shared-vocabulary.js",
+        "test/test-helpers/message-router-cdc-fixture.js"
       ]
     },
     "test/transport/node-address-resolution-contract.test.js": {
