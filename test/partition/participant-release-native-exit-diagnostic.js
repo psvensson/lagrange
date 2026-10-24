@@ -6,6 +6,20 @@ const EXIT_DIAGNOSTIC_BYTE_CAP = 4096;
 
 const NATIVE_STAGE_EVENT_CAP = 32;
 
+// The per-replica counter each native inbound stage increments; any other
+// stage counts as `other`.
+const STAGE_COUNTER = new Map([
+  [NATIVE_INBOUND_STAGE.ACCEPTED, 'accepted'],
+  [NATIVE_INBOUND_STAGE.COALESCED, 'coalesced'],
+  [NATIVE_INBOUND_STAGE.REQUEST, 'requests'],
+  [NATIVE_INBOUND_STAGE.RETRY_REQUEST, 'retryRequests'],
+  [NATIVE_INBOUND_STAGE.CALLBACK, 'callbacks'],
+  [NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT, 'persistenceWaits'],
+  [NATIVE_INBOUND_STAGE.TURN_REQUEST, 'turnRequests'],
+  [NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY, 'closedOrEmpty'],
+  [NATIVE_INBOUND_STAGE.WAIT_BOUND, 'waitBound'],
+]);
+
 // The one native runtime owner reports its own stages with exact replica
 // identity. This collector never reads a port, registers a timer or drives work.
 function createNativeDrainStageCapture(partitionId, replicaIds) {
@@ -27,20 +41,9 @@ function createNativeDrainStageCapture(partitionId, replicaIds) {
       return;
     }
     record.lastStage = event.stage;
-    switch (event.stage) {
-    case NATIVE_INBOUND_STAGE.ACCEPTED:
-      record.accepted += 1;
-      if (event.scheduled) record.acceptedWithTimer += 1;
-      break;
-    case NATIVE_INBOUND_STAGE.COALESCED: record.coalesced += 1; break;
-    case NATIVE_INBOUND_STAGE.REQUEST: record.requests += 1; break;
-    case NATIVE_INBOUND_STAGE.RETRY_REQUEST: record.retryRequests += 1; break;
-    case NATIVE_INBOUND_STAGE.CALLBACK: record.callbacks += 1; break;
-    case NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT: record.persistenceWaits += 1; break;
-    case NATIVE_INBOUND_STAGE.TURN_REQUEST: record.turnRequests += 1; break;
-    case NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY: record.closedOrEmpty += 1; break;
-    case NATIVE_INBOUND_STAGE.WAIT_BOUND: record.waitBound += 1; break;
-    default: record.other += 1;
+    record[STAGE_COUNTER.get(event.stage) ?? 'other'] += 1;
+    if (event.stage === NATIVE_INBOUND_STAGE.ACCEPTED && event.scheduled) {
+      record.acceptedWithTimer += 1;
     }
   };
   return {records, capture};

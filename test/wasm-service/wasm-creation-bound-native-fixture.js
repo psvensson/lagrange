@@ -358,4 +358,4 @@ async function retire(f) {
 }
 
 export {world, createGroup, initializeAndPublish, administer, retire, startWrite,
-  deliverScheduled, evidence, views, assertRecordedWrite, proposalEntries};
+  deliverScheduled, evidence, assertRecordedWrite, proposalEntries};

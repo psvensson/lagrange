@@ -22,8 +22,12 @@ import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
 
+import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {instantiateRaftRsCore} from './raw-raft-rs-test-core.js';
 
 const REPOSITORY_ROOT = path.resolve(
@@ -232,6 +236,39 @@ function foldAt(fold, index) {
   return {voters: at.voters, learners: at.learners};
 }
 
+/**
+ * The COMMITTED stamp a correct leader answers, built only from the oracles:
+ * the fold of its durable log at its durable applied index, and its durable
+ * identity reservations.
+ * @param {string} dbFile - The leader's database file.
+ * @param {string} groupId - The group.
+ * @param {Array<string>} genesisPeerIds - The test's genesis founders.
+ * @param {string} leaderId - The leader's replica identity.
+ * @return {Object} The committed membership stamp.
+ */
+function oracleCommittedStamp(dbFile, groupId, genesisPeerIds, leaderId) {
+  const applied = durableAppliedState(dbFile, groupId);
+  const voters = foldAt(logFold(dbFile, groupId, genesisPeerIds),
+    applied.appliedIndex).voters;
+  const reserved = reservedIdentities(dbFile);
+  return {
+    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
+    voters,
+    votersOutgoing: [],
+    learners: [],
+    learnersNext: [],
+    appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
+    commitIndex: applied.appliedIndex,
+    term: 1,
+    leaderId,
+    gateOpen: true,
+    identities: Object.fromEntries(voters.map((peerId) =>
+      [peerId, reserved.get(peerId)])),
+  };
+}
+
 export {
   bindingWireNumbers,
   bootstrapFold,
@@ -240,5 +277,6 @@ export {
   durableLog,
   foldAt,
   logFold,
+  oracleCommittedStamp,
   reservedIdentities,
 };

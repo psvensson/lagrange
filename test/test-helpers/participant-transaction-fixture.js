@@ -911,6 +911,12 @@ async function awaitProposal(proposed, predicate) {
   }
   return proposed.find(predicate) ?? null;
 }
+// The test commits the leader's first matching proposal: the entry (or null)
+// and its apply answer, 'not proposed' when the leader proposed none.
+async function applyProposal(leader, proposed, predicate) {
+  const entry = await awaitProposal(proposed, predicate);
+  return {entry, apply: entry === null ? 'not proposed' : applyCommitted(leader, entry)};
+}
 const isPrepareCommand = (entry) => entry.type === V3.PREPARE_COMMAND;
 const isDecisionCommand = (entry) => entry.type === V3.DECISION_COMMAND;
 const isOrdinaryWrite = (entry) => entry.type === PARTITION_SERVICE_OPERATION.QUERY ||
@@ -1097,7 +1103,6 @@ export {
   kindRefusalCases,
   plantRowid,
   rowidsOf,
-  ROWID_CEILING,
   SCRATCH_TABLE,
   committedQueryOf,
   connectionFlag,
@@ -1120,10 +1125,10 @@ export {
   REPLICAS,
   ROW,
   ROW_2,
-  SESSION,
   TABLE,
   V3,
   applyCommitted,
+  applyProposal,
   awaitProposal,
   beginMessage,
   bindingOf,

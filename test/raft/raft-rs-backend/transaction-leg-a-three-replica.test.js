@@ -80,15 +80,16 @@ async function stage(engine, ctx, sessionId, rows) {
 // The transaction's row on each replica, and which of `ids` each holds.
 function replicaViewOf(ctx, transactionId, ids) {
   return ctx.replicaStates().map((state) => {
+    // An absent row reads as every field null.
     const row = state.participants.find((entry) =>
-      entry.transaction_id === transactionId) ?? null;
+      entry.transaction_id === transactionId) ?? {};
     return {
-      state: row?.state ?? null,
-      participantId: row?.participant_id ?? null,
-      preparedDigest: row?.prepared_digest ?? null,
-      prepareIndex: row?.prepare_index ?? null,
-      prepareTerm: row?.prepare_term ?? null,
-      decisionDigest: row?.decision_digest ?? null,
+      state: row.state ?? null,
+      participantId: row.participant_id ?? null,
+      preparedDigest: row.prepared_digest ?? null,
+      prepareIndex: row.prepare_index ?? null,
+      prepareTerm: row.prepare_term ?? null,
+      decisionDigest: row.decision_digest ?? null,
       rows: state.rows.filter((entry) => ids.includes(entry.id))
         .map((entry) => entry.id),
     };

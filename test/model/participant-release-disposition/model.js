@@ -30,7 +30,7 @@
 export const MODE_REV2 = 'rev2-published';
 export const MODE_REV3 = 'rev3-corrected';
 
-export const RETENTION_BOUND = 4;
+const RETENTION_BOUND = 4;
 
 const CURRENT_IDENTITY = identityOf();
 
@@ -53,7 +53,7 @@ export function identityOf(over = {}) {
   };
 }
 
-export function identityValid(identity) {
+function identityValid(identity) {
   return (
     identity !== null &&
     typeof identity === 'object' &&
@@ -71,7 +71,22 @@ function rowsSignature(rows) {
   return digestOf([...rows.entries()].sort((a, b) => a[0] - b[0]));
 }
 
-export class Replica {
+// The transaction-command apply step per command type, by rule set.
+const REV2_OTHER_APPLY = Object.freeze({
+  WRITE: 'applyWriteRev2',
+  BEGIN: 'applyBeginRev2',
+  PREPARE: 'applyPrepareRev2',
+  DECISION: 'applyTxnDecision',
+});
+
+const REV3_OTHER_APPLY = Object.freeze({
+  WRITE: 'applyWriteRev3',
+  BEGIN: 'applyBeginRev3',
+  PREPARE: 'applyPrepareRev3',
+  DECISION: 'applyTxnDecision',
+});
+
+class Replica {
   constructor(id, {startedIncarnation = 1} = {}) {
     this.id = id;
     this.startedIncarnation = startedIncarnation;
@@ -356,79 +371,85 @@ export class PartitionModel {
   }
 
   applyReleaseDecision(r, entry) {
+    if (this.mode === MODE_REV2) this.applyReleaseDecisionRev2(r, entry);
+    else this.applyReleaseDecisionRev3(r, entry);
+  }
+
+  // A refused or stale release command: the outcome is a refusal at E.
+  refuseRelease(r, E, t, out) {
+    this.lastApplyOutcome = {kind: 'refusal', epoch: E};
+    this.pushTrace({t, r: r.id, E, out});
+  }
+
+  applyReleaseDecisionRev2(r, entry) {
     const cmd = entry.cmd;
     const E = cmd.epoch;
     const row = r.rowOf(E);
     const valid = identityValid(cmd.identity);
-
-    if (this.mode === MODE_REV2) {
-      if (row && row.bytes === entry.bytes && row.entryId === entry.entryId) {
-        this.pushTrace({t: 'T2', r: r.id, E, out: 'REPLAYED'});
-        this.lastApplyOutcome = {kind: 'replay', epoch: E};
-        r.gate = this.gateAtEpochRev2(r, E);
-        return;
-      }
-      if (valid && (E > r.l || (E === r.l && row && row.bytes === entry.bytes))) {
-        if (row && row.bytes !== entry.bytes) {
-          this.violate('C4-refusal-no-replace', {
-            entryId: entry.entryId,
-            epoch: E,
-            note: 'a stale epoch command overwrote an existing disposition row',
-          });
-        }
-        this.writeDecisionRow(r, E, cmd, entry);
-        this.pushTrace({t: 'T1', r: r.id, E, out: cmd.disposition});
-        return;
-      }
-      if (E <= r.l && row && row.bytes !== entry.bytes) {
-        this.annotate(r, 'EPOCH_CONFLICT', {epoch: E, reason: 'conflicting-bytes'});
-        this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-        this.pushTrace({t: 'T3', r: r.id, E, out: 'EPOCH_CONFLICT'});
-        return;
-      }
-      if (!valid) {
-        this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'identity_invalid'});
-        r.l = E;
-        this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-        this.pushTrace({t: 'T5', r: r.id, E, out: 'REFUSED_APPLY'});
-        return;
-      }
-      this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'precondition'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T5', r: r.id, E, out: 'REFUSED_APPLY'});
+    if (sameEntryRow(row, entry)) {
+      this.pushTrace({t: 'T2', r: r.id, E, out: 'REPLAYED'});
+      this.lastApplyOutcome = {kind: 'replay', epoch: E};
+      r.gate = this.gateAtEpochRev2(r, E);
       return;
     }
+    if (valid && rev2DecisionAdmissible(r, E, row, entry)) {
+      if (rowBytesDiffer(row, entry)) {
+        this.violate('C4-refusal-no-replace', {
+          entryId: entry.entryId,
+          epoch: E,
+          note: 'a stale epoch command overwrote an existing disposition row',
+        });
+      }
+      this.writeDecisionRow(r, E, cmd, entry);
+      this.pushTrace({t: 'T1', r: r.id, E, out: cmd.disposition});
+      return;
+    }
+    if (E <= r.l && rowBytesDiffer(row, entry)) {
+      this.annotate(r, 'EPOCH_CONFLICT', {epoch: E, reason: 'conflicting-bytes'});
+      this.refuseRelease(r, E, 'T3', 'EPOCH_CONFLICT');
+      return;
+    }
+    if (!valid) {
+      this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'identity_invalid'});
+      r.l = E;
+      this.refuseRelease(r, E, 'T5', 'REFUSED_APPLY');
+      return;
+    }
+    this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'precondition'});
+    this.refuseRelease(r, E, 'T5', 'REFUSED_APPLY');
+  }
 
+  applyReleaseDecisionRev3(r, entry) {
+    const cmd = entry.cmd;
+    const E = cmd.epoch;
+    const row = r.rowOf(E);
+    const valid = identityValid(cmd.identity);
     const expected = this.releaseStateSignatureAtPrefix(entry.index - 1);
     const censusCurrent = cmd.census && cmd.census.stateDigest === expected;
 
-    if (row && row.bytes === entry.bytes && row.entryId === entry.entryId) {
+    if (sameEntryRow(row, entry)) {
       this.pushTrace({t: 'T2', r: r.id, E, out: 'REPLAYED'});
       this.lastApplyOutcome = {kind: 'replay', epoch: E};
       return;
     }
     if (E <= r.l) {
       this.annotateConflict(r, E, 'epoch-spent');
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T3', r: r.id, E, out: 'EPOCH_CONFLICT'});
+      this.refuseRelease(r, E, 'T3', 'EPOCH_CONFLICT');
       return;
     }
     if (!valid) {
       this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'identity_invalid'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T5', r: r.id, E, out: 'REFUSED_APPLY'});
+      this.refuseRelease(r, E, 'T5', 'REFUSED_APPLY');
       return;
     }
     if (!censusCurrent) {
       this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'census_stale'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T1', r: r.id, E, out: 'CENSUS_STALE'});
+      this.refuseRelease(r, E, 'T1', 'CENSUS_STALE');
       return;
     }
     if (E !== r.l + 1) {
       this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'epoch_gap'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T1', r: r.id, E, out: 'EPOCH_GAP'});
+      this.refuseRelease(r, E, 'T1', 'EPOCH_GAP');
       return;
     }
     this.writeDecisionRow(r, E, cmd, entry);
@@ -457,51 +478,11 @@ export class PartitionModel {
   }
 
   applyReleaseHold(r, entry) {
-    const cmd = entry.cmd;
-    const E = cmd.epoch;
-    const row = r.rowOf(E);
-    if (this.mode === MODE_REV2) {
-      if (row && row.bytes === entry.bytes && row.entryId === entry.entryId) {
-        this.pushTrace({t: 'T6', r: r.id, E, out: 'REPLAYED'});
-        this.lastApplyOutcome = {kind: 'replay', epoch: E};
-        return;
-      }
-      if (cmd.supersedes <= r.l && E > r.l) {
-        r.rows.set(E, {
-          type: 'HOLD',
-          epoch: E,
-          supersedes: cmd.supersedes,
-          bytes: entry.bytes,
-          entryId: entry.entryId,
-        });
-        r.l = E;
-        this.lastApplyOutcome = {kind: 'row', epoch: E};
-        this.pushTrace({t: 'T6', r: r.id, E, out: 'HOLD'});
-        return;
-      }
-      this.annotate(r, 'EPOCH_CONFLICT', {epoch: E, reason: 'hold-precondition'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T6', r: r.id, E, out: 'EPOCH_CONFLICT'});
-      return;
-    }
+    if (this.mode === MODE_REV2) this.applyReleaseHoldRev2(r, entry);
+    else this.applyReleaseHoldRev3(r, entry);
+  }
 
-    if (row && row.bytes === entry.bytes && row.entryId === entry.entryId) {
-      this.pushTrace({t: 'T6', r: r.id, E, out: 'REPLAYED'});
-      this.lastApplyOutcome = {kind: 'replay', epoch: E};
-      return;
-    }
-    if (E <= r.l) {
-      this.annotateConflict(r, E, 'epoch-spent');
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T6', r: r.id, E, out: 'EPOCH_CONFLICT'});
-      return;
-    }
-    if (cmd.supersedes > r.l || E !== r.l + 1) {
-      this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'hold_precondition'});
-      this.lastApplyOutcome = {kind: 'refusal', epoch: E};
-      this.pushTrace({t: 'T6', r: r.id, E, out: 'REFUSED_APPLY'});
-      return;
-    }
+  writeHoldRow(r, E, cmd, entry) {
     r.rows.set(E, {
       type: 'HOLD',
       epoch: E,
@@ -514,179 +495,198 @@ export class PartitionModel {
     this.pushTrace({t: 'T6', r: r.id, E, out: 'HOLD'});
   }
 
+  replayHold(r, E) {
+    this.pushTrace({t: 'T6', r: r.id, E, out: 'REPLAYED'});
+    this.lastApplyOutcome = {kind: 'replay', epoch: E};
+  }
+
+  applyReleaseHoldRev2(r, entry) {
+    const cmd = entry.cmd;
+    const E = cmd.epoch;
+    if (sameEntryRow(r.rowOf(E), entry)) {
+      this.replayHold(r, E);
+      return;
+    }
+    if (cmd.supersedes <= r.l && E > r.l) {
+      this.writeHoldRow(r, E, cmd, entry);
+      return;
+    }
+    this.annotate(r, 'EPOCH_CONFLICT', {epoch: E, reason: 'hold-precondition'});
+    this.refuseRelease(r, E, 'T6', 'EPOCH_CONFLICT');
+  }
+
+  applyReleaseHoldRev3(r, entry) {
+    const cmd = entry.cmd;
+    const E = cmd.epoch;
+    if (sameEntryRow(r.rowOf(E), entry)) {
+      this.replayHold(r, E);
+      return;
+    }
+    if (E <= r.l) {
+      this.annotateConflict(r, E, 'epoch-spent');
+      this.refuseRelease(r, E, 'T6', 'EPOCH_CONFLICT');
+      return;
+    }
+    if (cmd.supersedes > r.l || E !== r.l + 1) {
+      this.annotate(r, 'REFUSED_APPLY', {epoch: E, reason: 'hold_precondition'});
+      this.refuseRelease(r, E, 'T6', 'REFUSED_APPLY');
+      return;
+    }
+    this.writeHoldRow(r, E, cmd, entry);
+  }
+
   applyOther(r, entry) {
     const previouslyApplied = r.appliedEntries.has(entry.entryId);
     if (this.mode === MODE_REV2) return this.applyOtherRev2(r, entry, previouslyApplied);
     return this.applyOtherRev3(r, entry, previouslyApplied);
   }
 
+  traceTxn(r, out, cmd) {
+    this.pushTrace({t: 'T7', r: r.id, out, txn: cmd.txn});
+  }
+
+  // Rev2 replays only a WRITE; every other command re-applies.
   applyOtherRev2(r, entry, previouslyApplied) {
     const cmd = entry.cmd;
-    if (cmd.type === 'WRITE') {
-      if (previouslyApplied) {
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_REPLAYED', txn: cmd.txn});
-        return;
-      }
-      if (r.gate === 'OPEN') {
-        r.effects.push({entryId: entry.entryId, txn: cmd.txn, executed: true});
-        this.checkWriteBinding(r, cmd, entry);
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_EXECUTED', txn: cmd.txn});
-      } else {
-        r.effects.push({
-          entryId: entry.entryId,
-          txn: cmd.txn,
-          executed: false,
-          reason: 'WRITE_CUTOVER_PAUSED',
-        });
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_REFUSED', txn: cmd.txn});
-      }
+    const apply = REV2_OTHER_APPLY[cmd.type];
+    if (apply === undefined) return;
+    if (cmd.type === 'WRITE' && previouslyApplied) {
+      this.traceTxn(r, 'WRITE_REPLAYED', cmd);
       return;
     }
-    if (cmd.type === 'BEGIN') {
-      if (r.gate === 'OPEN') {
-        r.txn.set(cmd.txn, {
-          stagedEpoch: r.l,
-          stagedAt: entry.index,
-          preparedIndex: null,
-          decided: null,
-        });
-        this.pushTrace({t: 'T7', r: r.id, out: 'STAGED', txn: cmd.txn});
-      } else {
-        this.pushTrace({t: 'T7', r: r.id, out: 'BEGIN_REFUSED', txn: cmd.txn});
-      }
+    this[apply](r, entry);
+  }
+
+  applyWriteRev2(r, entry) {
+    const cmd = entry.cmd;
+    if (r.gate === 'OPEN') {
+      r.effects.push({entryId: entry.entryId, txn: cmd.txn, executed: true});
+      this.checkWriteBinding(r, cmd, entry);
+      this.traceTxn(r, 'WRITE_EXECUTED', cmd);
       return;
     }
-    if (cmd.type === 'PREPARE') {
-      const staged = r.txn.get(cmd.txn);
-      r.txn.set(cmd.txn, {...(staged || blankTxn()), preparedIndex: entry.index});
-      if (!staged && !r.replicatedAdmissionOpen()) {
-        this.violate('E-prepare-classification', {
-          entryId: entry.entryId,
-          txn: cmd.txn,
-          note: 'a fresh, unstaged PREPARE was admitted while the replicated state was HELD',
-        });
-      }
-      this.pushTrace({
-        t: 'T7',
-        r: r.id,
-        out: staged ? 'PREPARE_SETTLED' : 'PREPARE_APPLIED',
-        txn: cmd.txn,
-      });
-      return;
-    }
-    if (cmd.type === 'DECISION') {
-      const st = r.txn.get(cmd.txn) || blankTxn();
-      st.decided = {outcome: cmd.outcome, index: entry.index};
-      r.txn.set(cmd.txn, st);
-      this.pushTrace({t: 'T7', r: r.id, out: `DECISION_${cmd.outcome}`, txn: cmd.txn});
+    r.effects.push({
+      entryId: entry.entryId,
+      txn: cmd.txn,
+      executed: false,
+      reason: 'WRITE_CUTOVER_PAUSED',
+    });
+    this.traceTxn(r, 'WRITE_REFUSED', cmd);
+  }
+
+  applyBeginRev2(r, entry) {
+    const cmd = entry.cmd;
+    if (r.gate === 'OPEN') {
+      stageTxn(r, cmd, entry);
+      this.traceTxn(r, 'STAGED', cmd);
+    } else {
+      this.traceTxn(r, 'BEGIN_REFUSED', cmd);
     }
   }
 
+  applyPrepareRev2(r, entry) {
+    const cmd = entry.cmd;
+    const staged = r.txn.get(cmd.txn);
+    r.txn.set(cmd.txn, {...(staged || blankTxn()), preparedIndex: entry.index});
+    if (!staged && !r.replicatedAdmissionOpen()) {
+      this.violate('E-prepare-classification', {
+        entryId: entry.entryId,
+        txn: cmd.txn,
+        note: 'a fresh, unstaged PREPARE was admitted while the replicated state was HELD',
+      });
+    }
+    this.traceTxn(r, staged ? 'PREPARE_SETTLED' : 'PREPARE_APPLIED', cmd);
+  }
+
+  applyTxnDecision(r, entry) {
+    const cmd = entry.cmd;
+    const st = r.txn.get(cmd.txn) || blankTxn();
+    st.decided = {outcome: cmd.outcome, index: entry.index};
+    r.txn.set(cmd.txn, st);
+    this.traceTxn(r, `DECISION_${cmd.outcome}`, cmd);
+  }
+
+  // Rev3 replays every transaction command under its own entry identity.
   applyOtherRev3(r, entry, previouslyApplied) {
     const cmd = entry.cmd;
-    if (cmd.type === 'WRITE') {
-      if (previouslyApplied) {
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_REPLAYED', txn: cmd.txn});
-        return;
-      }
-      const bound = cmd.admissionEpoch;
-      const boundKnown = bound > r.retiredBelow;
-      const boundRow = boundKnown ? r.rowOf(bound) : null;
-      const admitted = Boolean(
-        boundRow &&
-          boundRow.type === 'DECISION' &&
-          boundRow.disposition === 'APPROVED' &&
-          bound === r.l,
-      );
-      if (admitted) {
-        r.effects.push({
-          entryId: entry.entryId,
-          txn: cmd.txn,
-          executed: true,
-          admissionEpoch: bound,
-        });
-        this.checkWriteBinding(r, cmd, entry);
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_EXECUTED', txn: cmd.txn});
-      } else {
-        r.effects.push({
-          entryId: entry.entryId,
-          txn: cmd.txn,
-          executed: false,
-          reason: 'STALE_ADMISSION',
-          bound,
-          currentEpoch: r.l,
-        });
-        this.lastApplyOutcome = {kind: 'refusal', entryId: entry.entryId};
-        this.pushTrace({t: 'T7', r: r.id, out: 'WRITE_REFUSED_STALE_ADMISSION', txn: cmd.txn});
-      }
+    const apply = REV3_OTHER_APPLY[cmd.type];
+    if (apply === undefined) return;
+    if (previouslyApplied) {
+      this.traceTxn(r, `${cmd.type}_REPLAYED`, cmd);
       return;
     }
-    if (cmd.type === 'BEGIN') {
-      if (previouslyApplied) {
-        this.pushTrace({t: 'T7', r: r.id, out: 'BEGIN_REPLAYED', txn: cmd.txn});
-        return;
-      }
-      const admitted =
-        cmd.admissionEpoch === r.l &&
-        r.rowOf(cmd.admissionEpoch) &&
-        r.rowOf(cmd.admissionEpoch).type === 'DECISION' &&
-        r.rowOf(cmd.admissionEpoch).disposition === 'APPROVED';
-      if (admitted) {
-        r.txn.set(cmd.txn, {
-          stagedEpoch: r.l,
-          stagedAt: entry.index,
-          preparedIndex: null,
-          decided: null,
-        });
-        this.pushTrace({t: 'T7', r: r.id, out: 'STAGED', txn: cmd.txn});
-      } else {
-        r.effects.push({
-          entryId: entry.entryId,
-          txn: cmd.txn,
-          executed: false,
-          reason: 'STALE_ADMISSION',
-        });
-        this.lastApplyOutcome = {kind: 'refusal', entryId: entry.entryId};
-        this.pushTrace({t: 'T7', r: r.id, out: 'BEGIN_REFUSED_STALE_ADMISSION', txn: cmd.txn});
-      }
-      return;
-    }
-    if (cmd.type === 'PREPARE') {
-      if (previouslyApplied) {
-        this.pushTrace({t: 'T7', r: r.id, out: 'PREPARE_REPLAYED', txn: cmd.txn});
-        return;
-      }
-      const staged = r.txn.get(cmd.txn);
-      if (!staged && !r.replicatedAdmissionOpen()) {
-        this.annotate(r, 'PREPARE_ADMISSIBILITY_REFUSED', {txn: cmd.txn});
-        this.lastApplyOutcome = {kind: 'refusal', txn: cmd.txn};
-        this.pushTrace({t: 'T7', r: r.id, out: 'PREPARE_REFUSED', txn: cmd.txn});
-        return;
-      }
-      if (staged) {
-        r.txn.set(cmd.txn, {...staged, preparedIndex: entry.index});
-        this.pushTrace({t: 'T7', r: r.id, out: 'PREPARE_SETTLED', txn: cmd.txn});
-        return;
-      }
-      r.txn.set(cmd.txn, {
-        stagedEpoch: r.l,
-        stagedAt: entry.index,
-        preparedIndex: entry.index,
-        decided: null,
+    this[apply](r, entry);
+  }
+
+  applyWriteRev3(r, entry) {
+    const cmd = entry.cmd;
+    const bound = cmd.admissionEpoch;
+    const boundKnown = bound > r.retiredBelow;
+    const boundRow = boundKnown ? r.rowOf(bound) : null;
+    const admitted = approvedDecisionRow(boundRow) && bound === r.l;
+    if (admitted) {
+      r.effects.push({
+        entryId: entry.entryId,
+        txn: cmd.txn,
+        executed: true,
+        admissionEpoch: bound,
       });
-      this.pushTrace({t: 'T7', r: r.id, out: 'PREPARE_APPLIED', txn: cmd.txn});
+      this.checkWriteBinding(r, cmd, entry);
+      this.traceTxn(r, 'WRITE_EXECUTED', cmd);
       return;
     }
-    if (cmd.type === 'DECISION') {
-      if (previouslyApplied) {
-        this.pushTrace({t: 'T7', r: r.id, out: 'DECISION_REPLAYED', txn: cmd.txn});
-        return;
-      }
-      const st = r.txn.get(cmd.txn) || blankTxn();
-      st.decided = {outcome: cmd.outcome, index: entry.index};
-      r.txn.set(cmd.txn, st);
-      this.pushTrace({t: 'T7', r: r.id, out: `DECISION_${cmd.outcome}`, txn: cmd.txn});
+    r.effects.push({
+      entryId: entry.entryId,
+      txn: cmd.txn,
+      executed: false,
+      reason: 'STALE_ADMISSION',
+      bound,
+      currentEpoch: r.l,
+    });
+    this.lastApplyOutcome = {kind: 'refusal', entryId: entry.entryId};
+    this.traceTxn(r, 'WRITE_REFUSED_STALE_ADMISSION', cmd);
+  }
+
+  applyBeginRev3(r, entry) {
+    const cmd = entry.cmd;
+    const admitted = cmd.admissionEpoch === r.l &&
+      approvedDecisionRow(r.rowOf(cmd.admissionEpoch));
+    if (admitted) {
+      stageTxn(r, cmd, entry);
+      this.traceTxn(r, 'STAGED', cmd);
+      return;
     }
+    r.effects.push({
+      entryId: entry.entryId,
+      txn: cmd.txn,
+      executed: false,
+      reason: 'STALE_ADMISSION',
+    });
+    this.lastApplyOutcome = {kind: 'refusal', entryId: entry.entryId};
+    this.traceTxn(r, 'BEGIN_REFUSED_STALE_ADMISSION', cmd);
+  }
+
+  applyPrepareRev3(r, entry) {
+    const cmd = entry.cmd;
+    const staged = r.txn.get(cmd.txn);
+    if (!staged && !r.replicatedAdmissionOpen()) {
+      this.annotate(r, 'PREPARE_ADMISSIBILITY_REFUSED', {txn: cmd.txn});
+      this.lastApplyOutcome = {kind: 'refusal', txn: cmd.txn};
+      this.traceTxn(r, 'PREPARE_REFUSED', cmd);
+      return;
+    }
+    if (staged) {
+      r.txn.set(cmd.txn, {...staged, preparedIndex: entry.index});
+      this.traceTxn(r, 'PREPARE_SETTLED', cmd);
+      return;
+    }
+    r.txn.set(cmd.txn, {
+      stagedEpoch: r.l,
+      stagedAt: entry.index,
+      preparedIndex: entry.index,
+      decided: null,
+    });
+    this.traceTxn(r, 'PREPARE_APPLIED', cmd);
   }
 
   checkWriteBinding(r, cmd, entry) {
@@ -820,14 +820,29 @@ function blankTxn() {
   return {stagedEpoch: null, stagedAt: null, preparedIndex: null, decided: null};
 }
 
-export const INVARIANT_IDS = Object.freeze([
-  'A-deterministic-effects',
-  'B-census-binding',
-  'C1-l-monotone',
-  'C2-gate-supersession',
-  'C3-conflict-names-winner',
-  'C4-refusal-no-replace',
-  'D-no-silent-adoption',
-  'E-prepare-classification',
-  'F1-uncertainty-nonterminal',
-]);
+// The row already holds exactly this committed entry: a replay.
+function sameEntryRow(row, entry) {
+  return Boolean(row && row.bytes === entry.bytes && row.entryId === entry.entryId);
+}
+
+function rowBytesDiffer(row, entry) {
+  return Boolean(row && row.bytes !== entry.bytes);
+}
+
+// Rev2 T1: a fresh epoch, or the current epoch re-carrying its own bytes.
+function rev2DecisionAdmissible(r, E, row, entry) {
+  return E > r.l || (E === r.l && Boolean(row) && row.bytes === entry.bytes);
+}
+
+function approvedDecisionRow(row) {
+  return Boolean(row && row.type === 'DECISION' && row.disposition === 'APPROVED');
+}
+
+function stageTxn(r, cmd, entry) {
+  r.txn.set(cmd.txn, {
+    stagedEpoch: r.l,
+    stagedAt: entry.index,
+    preparedIndex: null,
+    decided: null,
+  });
+}

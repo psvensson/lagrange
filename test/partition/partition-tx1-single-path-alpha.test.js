@@ -21,6 +21,7 @@ import {
   ROW,
   TABLE,
   applyCommitted,
+  applyProposal,
   awaitProposal,
   beginMessage,
   clearFixtureSingletons,
@@ -59,6 +60,12 @@ const ordinaryQuery = (sessionId, fields = {}) => ({
   sessionId,
   ...fields,
 });
+// Whether a QUERY was served, its error, and whether it asks to be retried.
+const servingAnswerOf = (answer) => ({success: answer?.success, error: answer?.error,
+  deferRetry: answer?.deferRetry === true});
+// The decision command proposed for this transaction.
+const isDecisionOf = (tx) => (entry) =>
+  isDecisionCommand(entry) && entry.transactionId === tx.transactionId;
 const tableFact = (db, tableName) => {
   const exists = db.prepare(
     'SELECT COUNT(*) AS count FROM sqlite_master WHERE type = ? AND name = ?',
@@ -371,10 +378,7 @@ test('TX1 alpha red: routing-only query collision is refused for volatile and du
     const sealedOperations = command === null ? null : JSON.parse(command.operationsText).length;
     const decision = track(send(leader,
       commitMessage(tx, command?.preparedDigest)));
-    const decisionCommand = await awaitProposal(proposed,
-      (entry) => isDecisionCommand(entry) && entry.transactionId === tx.transactionId);
-    const decisionApply = decisionCommand === null ? 'not proposed' :
-      applyCommitted(leader, decisionCommand);
+    const {apply: decisionApply} = await applyProposal(leader, proposed, isDecisionOf(tx));
     await settleTicks();
     const terminal = await send(leader, ordinaryQuery(tx.sessionId));
 
@@ -421,9 +425,8 @@ test('TX1 alpha: removal keeps malformed and colliding QUERY with the participan
       `SELECT id FROM ${TABLE} ORDER BY id`));
     const unrelated = await send(leader, ordinaryQuery('unrelated-removal'));
     const prepare = track(send(leader, prepareMessage(tx)));
-    const prepareCommand = await awaitProposal(proposed, isPrepareCommand);
-    const prepareApply = prepareCommand === null ? 'not proposed' :
-      applyCommitted(leader, prepareCommand);
+    const {entry: prepareCommand, apply: prepareApply} =
+      await applyProposal(leader, proposed, isPrepareCommand);
     await settleTicks();
     const drain = track(leader.waitForRemovalServingDrain({pollIntervalMs: 1}));
     await settleTicks();
@@ -431,19 +434,14 @@ test('TX1 alpha: removal keeps malformed and colliding QUERY with the participan
 
     const decision = track(send(leader,
       commitMessage(tx, prepareCommand?.preparedDigest)));
-    const decisionCommand = await awaitProposal(proposed,
-      (entry) => isDecisionCommand(entry) && entry.transactionId === tx.transactionId);
-    const decisionApply = decisionCommand === null ? 'not proposed' :
-      applyCommitted(leader, decisionCommand);
+    const {apply: decisionApply} = await applyProposal(leader, proposed, isDecisionOf(tx));
     await Promise.all([decision.promise, drain.promise]);
 
     assert.deepEqual({prepareApply, prepared: prepare.value?.state,
       fence, partial: answerCode(partial), collision: answerCode(collision),
       heldCurrent: {success: heldCurrent?.success, rows: heldCurrent?.rows},
-      absentCurrent: {success: absentCurrent?.success, error: absentCurrent?.error,
-        deferRetry: absentCurrent?.deferRetry === true},
-      unrelated: {success: unrelated?.success, error: unrelated?.error,
-        deferRetry: unrelated?.deferRetry === true},
+      absentCurrent: servingAnswerOf(absentCurrent),
+      unrelated: servingAnswerOf(unrelated),
       pendingBeforeDecision, decisionApply, decision: decision.value?.state,
     }, {
       prepareApply: null,

@@ -75,71 +75,73 @@ async function currentResumeRequest(handler, service) {
   return {release, census: [facts]};
 }
 
-async function withActualHandler(measure, options = {}) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-owner-'));
-  const transport = createInProcessMockTransport();
-  let leader = null;
-  let handler = null;
-  let timerCapture = null;
-  let failure = null;
-  try {
-    ({leader} = await startLeader(options.leader));
-    const handlerTimeSource = options.timeSource ??
-      new VirtualTimeSource({startMs: leader.timeSource.now()});
-    handler = new ReplicaHandler({
-      nodeId: leader.nodeId,
-      ownerIncarnation: 1,
-      systemTableCache: leader.systemTableCache,
-      cdcIntegrationService: {},
-      createPartitionService: () => leader,
-      messageRouter: transport,
-      dataDir: directory,
-      timeSource: handlerTimeSource,
-    });
-    handler.registerWithRouter(transport);
-    handler.localServices.set(leader.replicaId, leader);
-    timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
-    await measure({handler, leader, transport, timeSource: handlerTimeSource});
-  } catch (error) {
-    failure = error;
-  }
+// Releases what withActualHandler acquired, in order, retaining every failure
+// on the primary one; a directory whose owner failed to close is retained.
+async function releaseActualHandler({directory, leader, handler, timerCapture}, failure) {
+  let retained = failure;
   if (timerCapture !== null) {
     try {
       timerCapture.restore();
     } catch (error) {
-      failure = retainFailure(failure, error,
+      retained = retainFailure(retained, error,
         'observation timer capture and assertion cleanup failed');
     }
   }
   let shutdownFailed = false;
-  if (handler !== null) {
+  for (const [owner, message] of [
+    [handler, 'release lifecycle assertion and handler cleanup failed'],
+    [leader, 'release lifecycle assertion and service cleanup failed'],
+  ]) {
+    if (owner === null) continue;
     try {
-      await handler.shutdown();
+      await owner.shutdown();
     } catch (error) {
       shutdownFailed = true;
-      failure = retainFailure(failure, error,
-        'release lifecycle assertion and handler cleanup failed');
-    }
-  }
-  if (leader !== null) {
-    try {
-      await leader.shutdown();
-    } catch (error) {
-      shutdownFailed = true;
-      failure = retainFailure(failure, error,
-        'release lifecycle assertion and service cleanup failed');
+      retained = retainFailure(retained, error, message);
     }
   }
   if (!shutdownFailed) {
     try {
       fs.rmSync(directory, {recursive: true, force: true});
     } catch (error) {
-      failure = retainFailure(failure, error,
+      retained = retainFailure(retained, error,
         'release lifecycle assertion and artifact cleanup failed');
     }
-  } else if (failure !== null) {
-    failure.retainedDirectory = directory;
+  } else if (retained !== null) {
+    retained.retainedDirectory = directory;
   }
+  return retained;
+}
+
+async function withActualHandler(measure, options = {}) {
+  const acquired = {directory: fs.mkdtempSync(path.join(os.tmpdir(), 'release-recovery-owner-')),
+    leader: null, handler: null, timerCapture: null};
+  const transport = createInProcessMockTransport();
+  let failure = null;
+  try {
+    const {leader} = await startLeader(options.leader);
+    acquired.leader = leader;
+    const handlerTimeSource = options.timeSource ??
+      new VirtualTimeSource({startMs: leader.timeSource.now()});
+    const handler = new ReplicaHandler({
+      nodeId: leader.nodeId,
+      ownerIncarnation: 1,
+      systemTableCache: leader.systemTableCache,
+      cdcIntegrationService: {},
+      createPartitionService: () => leader,
+      messageRouter: transport,
+      dataDir: acquired.directory,
+      timeSource: handlerTimeSource,
+    });
+    acquired.handler = handler;
+    handler.registerWithRouter(transport);
+    handler.localServices.set(leader.replicaId, leader);
+    acquired.timerCapture = captureParticipantReleaseObservationTimer(leader, handlerTimeSource);
+    await measure({handler, leader, transport, timeSource: handlerTimeSource});
+  } catch (error) {
+    failure = error;
+  }
+  failure = await releaseActualHandler(acquired, failure);
   if (failure !== null) throw failure;
 }
 
