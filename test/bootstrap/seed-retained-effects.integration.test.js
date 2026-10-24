@@ -177,7 +177,7 @@ for (const tableName of FOUNDATION_TABLES) {
     assert.equal(retained.command.sql, mutation.sql);
     assert.equal(held.rows.length, 0);
     assert.equal(held.outcomes.length, 0);
-    assert.deepEqual(held.obligations, {exists: false, rows: []});
+    assert.deepEqual(held.obligations, {exists: false, rows: [], progress: null});
     const durableEntries = held.history.record.entries;
     await first.shutdown();
     await writing;

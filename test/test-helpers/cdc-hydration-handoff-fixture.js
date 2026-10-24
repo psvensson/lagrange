@@ -1,14 +1,17 @@
-// The one fixture of the hydration -> live CDC hand-off witnesses (CDC
-// decision D4): committed traffic on a controllable-port PartitionService
-// leader, the CDC_DELIVERED pump, and the late subscriber's measured view.
-// User: test/partition/cdc-hydration-live-handoff.test.js (W-D4a); the
-// old-order negative joins it with the window's deletion.
+// The one fixture of the CDC_TABLE ledger witnesses: committed traffic on
+// controllable-port PartitionService replicas, the CDC_DELIVERED pump (applied
+// back to the leader and to every follower in one committed order), the late
+// subscriber's measured view (CDC decision D4) and the ledger's physical
+// facts (CDC decision D1). Users: test/partition/cdc-hydration-live-handoff.test.js
+// (W-D4a) and test/partition/partition-cdc-obligation-reclamation.test.js
+// (W-D1a-d).
 import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
 import {
   PARTITION_CDC_COMMAND,
   PARTITION_CDC_OBLIGATION_BOUND,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
-import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {countCdcObligations, readCdcObligationCensusIn} from
+  '../../src/partition/partition-cdc-obligation-ledger.js';
 // Hosted under the fixture's CDC-carrying table: the CDC policy owner records
 // obligations only for internally propagated system tables (decision D2), so
 // a user table would leave the ledger empty and the hand-off unmeasurable.
@@ -22,6 +25,11 @@ const LATER_EVENTS = 600;
 const IMAGE_ROW_KEYS = 50;
 const DELETED_IMAGE_ROW = 'r-3';
 const PUMP_ROUNDS = 30;
+// The ledger's own b-trees (the obligation rows, their indexes and the
+// compact progress row), as SQLite's page census names them.
+const LEDGER_PAGES_SQL = 'SELECT COUNT(*) AS pages FROM dbstat ' +
+  'WHERE name LIKE \'%\\_cdc\\_obligation%\' ESCAPE \'\\\'';
+const LEDGER_ROWS_SQL = 'SELECT COUNT(*) AS rows FROM _cdc_obligations';
 
 function committedStatement(leader, entryId, sql, params) {
   return {type: PARTITION_SERVICE_OPERATION.QUERY, entryId, sql, params,
@@ -34,9 +42,18 @@ const insertOf = (leader, tag, index) => committedStatement(leader, `${tag}-d-${
   `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`, [`${tag}-${index}`, `v-${index}`]);
 const deleteOf = (leader, tag) => committedStatement(leader, `${tag}-del`,
   `DELETE FROM ${CDC_TABLE} WHERE id = ?`, [DELETED_IMAGE_ROW]);
+// The durable event key a committed statement's obligation carries.
+const eventKeyOf = (command) => `entry:${command.entryId}`;
 
-// The CDC_DELIVERED commands the lane proposed, applied back once each.
-async function pump(timeSource, leader, proposed, applied, rounds = PUMP_ROUNDS) {
+// One committed entry, applied on every replica in the same order; the typed
+// apply answers (null when applied).
+function commitOnAll(replicas, command) {
+  return replicas.map((replica) => applyCommitted(replica, command));
+}
+
+// The CDC_DELIVERED commands the lane proposed, applied back once each, on
+// the leader and then on each follower (one committed order).
+async function pump(timeSource, leader, proposed, applied, rounds = PUMP_ROUNDS, followers = []) {
   for (let round = 0; round < rounds; round += 1) {
     timeSource.advance(PARTITION_CDC_OBLIGATION_BOUND.ACK_FLUSH_DEADLINE_MS);
     await settleTicks();
@@ -45,17 +62,21 @@ async function pump(timeSource, leader, proposed, applied, rounds = PUMP_ROUNDS)
         continue;
       }
       applied.add(command.entryId);
-      applyCommitted(leader, command);
+      commitOnAll([leader, ...followers], command);
     }
     await settleTicks();
   }
 }
 
-function commitLaterTraffic(leader, tag) {
-  applyCommitted(leader, deleteOf(leader, tag));
+// The later traffic: one DELETE of an image row, then distinct inserts. The
+// committed event keys, in log order.
+function commitLaterTraffic(leader, tag, followers = []) {
+  const commands = [deleteOf(leader, tag)];
   for (let index = 1; index < LATER_EVENTS; index += 1) {
-    applyCommitted(leader, insertOf(leader, tag, index));
+    commands.push(insertOf(leader, tag, index));
   }
+  for (const command of commands) commitOnAll([leader, ...followers], command);
+  return commands.map(eventKeyOf);
 }
 
 // The late subscriber's view: the image, then every event above P it was
@@ -73,19 +94,34 @@ function viewOf(imageRows, events, position) {
   return view;
 }
 
-function measure(leader, late, image, position) {
-  const ledgerAbove = leader.db.prepare('SELECT event_key FROM _cdc_obligations ' +
-    'WHERE log_index > ? ORDER BY log_index, ordinal').all(position);
-  const received = new Set(late.events.map((event) => event.eventKey));
+// What the late subscriber missed of the events committed above P (their keys
+// come from the committed traffic, not from the ledger, which reclaims them).
+function measure(leader, late, image, position, committedAbove) {
+  const received = new Set(late.events.filter((event) => event.logIndex > position)
+    .map((event) => event.eventKey));
   const truth = new Map(leader.db.prepare(IMAGE_SQL).all().map((row) => [row.id, row.value]));
   const view = viewOf(image, late.events, position);
   const keys = new Set([...truth.keys(), ...view.keys()]);
   return {
-    ledgerAbove: ledgerAbove.length,
-    missingAbove: ledgerAbove.filter((row) => !received.has(row.event_key)).length,
+    committedAbove: committedAbove.length,
+    missingAbove: committedAbove.filter((eventKey) => !received.has(eventKey)).length,
     divergentRows: [...keys].filter((key) => truth.get(key) !== view.get(key)).length,
     deletedRowInView: view.has(DELETED_IMAGE_ROW),
     owed: countCdcObligations(leader.db).owed,
+  };
+}
+
+// The ledger as one replica holds it: its physical size (rows, pages) and the
+// owner's census (every retained row and the compact progress; the census
+// reads inside one read transaction, as the retained-seed observer does).
+function ledgerFactsOf(replica) {
+  const census = replica.db.transaction(() => readCdcObligationCensusIn(replica.db))();
+  return {
+    rows: census.exists ? replica.db.prepare(LEDGER_ROWS_SQL).get().rows : 0,
+    pages: replica.db.prepare(LEDGER_PAGES_SQL).get().pages,
+    ...countCdcObligations(replica.db),
+    progress: census.progress ?? null,
+    image: JSON.stringify(census),
   };
 }
 
@@ -105,6 +141,6 @@ async function earlierTraffic(leader, proposed, timeSource, applied, earlierCoun
 }
 
 export {
-  DELETED_IMAGE_ROW, IMAGE_SQL, LATER_EVENTS, PENDING_EVENTS, commitLaterTraffic,
-  earlierTraffic, measure, pump, upsertOf,
+  DELETED_IMAGE_ROW, EARLIER_EVENTS, IMAGE_SQL, LATER_EVENTS, PENDING_EVENTS, commitLaterTraffic,
+  commitOnAll, earlierTraffic, eventKeyOf, insertOf, ledgerFactsOf, measure, pump, upsertOf,
 };

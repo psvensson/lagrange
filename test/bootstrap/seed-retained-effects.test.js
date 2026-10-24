@@ -42,6 +42,7 @@ import {NODE_ID, DECLARED_AT, TERM, originalStamp, foundationMutation, sqlComman
 const FOUNDATION_TABLES = [SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
   SYSTEM_TABLE_NAME.TABLES, SYSTEM_TABLE_NAME.PARTITIONS];
 const LEDGER = '_cdc_obligations';
+const PROGRESS = '_cdc_obligation_progress';
 const OUTCOMES = '_partition_statement_outcomes';
 const GENERATION = '_partition_write_generation';
 const PARTICIPANTS = '_participant_transactions';
@@ -114,7 +115,8 @@ test('retained fixture rolls application effects back when the actual applied fr
       'the prior committed origin remains applied, but the failing SQL frontier does not advance');
     assert.equal(f.db.prepare(`SELECT COUNT(*) FROM ${f.member.tableName}`).pluck().get(), 0);
     assert.deepEqual(census(f.db, readCommittedStatementCensusIn), []);
-    assert.deepEqual(census(f.db, readCdcObligationCensusIn), {exists: false, rows: []});
+    assert.deepEqual(census(f.db, readCdcObligationCensusIn),
+      {exists: false, rows: [], progress: null});
     assert.equal(readPartitionWriteOriginHistory(f.db, f.member.groupId).generation, '0');
     assert.deepEqual(f.afterCommitBatches.map(({index}) => index), ['1'],
       'rollback cannot release SQL notification, result or delivery callbacks');
@@ -404,11 +406,34 @@ test('only the first applied pinned ACK can justify a delivered obligation', asy
     retain(f, [origin(f), command, ack, ack]);
     const result = expect(f, STATE.ACCEPTED);
     assert.equal(result.origin.generation, '1');
-    assert.equal(result.obligations.rows[0].delivered, '1');
-    assert.equal(result.obligations.rows[0].deliveredIndex, '3');
-    f.db.exec(`UPDATE ${LEDGER} SET delivered_index = 4`);
+    // Decision D1: the delivered obligation is reclaimed at its first applied
+    // ACK into the compact progress, which keeps that ACK's position.
+    assert.deepEqual(result.obligations.rows, []);
+    assert.deepEqual(result.obligations.progress, {throughLogIndex: '2', throughOrdinal: '0',
+      reclaimed: '1', advancedIndex: '3', advancedTerm: TERM});
+    f.db.exec(`UPDATE ${PROGRESS} SET advanced_index = 4`);
     expect(f, STATE.CONTRARY, REASON.OBLIGATION);
   });
+  await t.test('pre-D1 storage (the delivered row retained, no compact progress) is contrary',
+    (t) => {
+      // Decision D3 (alpha clean initialization): a ledger written by a build
+      // before reclamation is not migrated; the census refuses it typed.
+      const owedImage = fixture(t);
+      const owedCommand = sqlCommand(owedImage.member,
+        foundationMutation(owedImage.declaration, owedImage.member.tableName));
+      retain(owedImage, [origin(owedImage), owedCommand]);
+      const [row] = census(owedImage.db, readCdcObligationCensusIn).rows;
+      const f = fixture(t);
+      const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
+      retain(f, [origin(f), command, acknowledgement(f.member, command, 2)]);
+      expect(f, STATE.ACCEPTED);
+      f.db.prepare(`INSERT INTO ${LEDGER} (event_key, log_index, term, ordinal, entry_id, ` +
+        'event_json, delivered, delivered_index, delivered_term) VALUES (?, ?, ?, ?, ?, ?, 1, 3, ?)')
+        .run(row.eventKey, BigInt(row.logIndex), BigInt(row.term), BigInt(row.ordinal),
+          row.entryId, row.eventJson, BigInt(TERM));
+      f.db.exec(`DELETE FROM ${PROGRESS}`);
+      expect(f, STATE.CONTRARY, REASON.OBLIGATION);
+    });
   await t.test('committed-pending ACK retains owed debt', (t) => {
     const f = fixture(t);
     const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
@@ -428,7 +453,7 @@ test('lazy ledger absence and pending SQL-to-ACK dependencies preserve every obl
     retain(f, [origin(f)]);
     assert.equal(cdcObligationLedgerExists(f.db), false);
     const result = expect(f, STATE.ACCEPTED);
-    assert.deepEqual(result.obligations, {exists: false, rows: []});
+    assert.deepEqual(result.obligations, {exists: false, rows: [], progress: null});
     ensureCdcObligationLedger(f.db);
     assert.equal(expect(f, STATE.ACCEPTED).obligations.exists, true);
   });
@@ -441,7 +466,7 @@ test('lazy ledger absence and pending SQL-to-ACK dependencies preserve every obl
       assert.equal(cdcObligationLedgerExists(f.db), false);
       const result = expect(f, STATE.UNAVAILABLE, REASON.PENDING_SOURCE);
       assert.deepEqual(result.history.entries.slice(1).map(({command}) => command), [command, ack]);
-      assert.deepEqual(result.obligations, {exists: false, rows: []});
+      assert.deepEqual(result.obligations, {exists: false, rows: [], progress: null});
     });
   }
   for (const [name, index, key] of [
@@ -780,7 +805,7 @@ test('a view at a reserved owner name is contrary rather than absent or usable s
         const f = fixture(t);
         retain(f, [origin(f)]);
         const accepted = expect(f, STATE.ACCEPTED);
-        assert.deepEqual(accepted.obligations, {exists: false, rows: []});
+        assert.deepEqual(accepted.obligations, {exists: false, rows: [], progress: null});
         const image = tableName === LEDGER ? null : tableImage(f.db, tableName);
         if (image) f.db.exec(`DROP TABLE ${tableName}`);
         f.db.exec(`CREATE VIEW ${tableName} AS SELECT 2 AS log_index, 0 AS ordinal`);
@@ -964,15 +989,15 @@ test('outcome and CDC censuses reject malformed raw SQLite types before coercion
     f.db.prepare(`UPDATE ${LEDGER} SET event_json = ?`).run(eventJson);
     assert.deepEqual(expect(f, STATE.ACCEPTED), accepted);
   });
-  for (const column of ['delivered_index', 'delivered_term']) {
-    await t.test(`delivered ACK ${column} rejects BLOB decimal bytes`, (t) => {
+  for (const column of ['advanced_index', 'advanced_term', 'through_log_index', 'reclaimed']) {
+    await t.test(`reclaimed-progress ${column} rejects BLOB decimal bytes`, (t) => {
       const f = fixture(t);
       const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
       retain(f, [origin(f), command, acknowledgement(f.member, command, 2)]);
       const accepted = expect(f, STATE.ACCEPTED);
-      const value = f.db.prepare(`SELECT ${column} AS value FROM ${LEDGER}`)
+      const value = f.db.prepare(`SELECT ${column} AS value FROM ${PROGRESS}`)
         .safeIntegers(true).get().value;
-      const update = f.db.prepare(`UPDATE ${LEDGER} SET ${column} = ?`);
+      const update = f.db.prepare(`UPDATE ${PROGRESS} SET ${column} = ?`);
       update.run(Buffer.from(String(value)));
       expect(f, STATE.CONTRARY);
       update.run(value);

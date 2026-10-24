@@ -55,7 +55,7 @@ for (const earlierCount of [1, 3]) {
       const position = Number(image.appliedIndex);
       const imageHadDeletedRow = image.rows.some((row) => row.id === DELETED_IMAGE_ROW);
       const appliedAtRead = durableAppliedIndex(leader);
-      commitLaterTraffic(leader, 'live');
+      const committedAbove = commitLaterTraffic(leader, 'live');
       await settleTicks();
       await pump(timeSource, leader, proposed, applied);
       assert.deepEqual({
@@ -63,13 +63,13 @@ for (const earlierCount of [1, 3]) {
         positionIsDurableAppliedIndex: position === appliedAtRead,
         pendingAtRegistration: pendingAtRegistration >= 1,
         imageHadDeletedRow,
-        ...measure(leader, late, image.rows, position),
+        ...measure(leader, late, image.rows, position, committedAbove),
       }, {
         imageState: PARTITION_HYDRATION_IMAGE_STATE.READ,
         positionIsDurableAppliedIndex: true,
         pendingAtRegistration: true,
         imageHadDeletedRow: true,
-        ledgerAbove: LATER_EVENTS,
+        committedAbove: LATER_EVENTS,
         missingAbove: 0,
         divergentRows: 0,
         deletedRowInView: false,

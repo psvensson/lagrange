@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 199,
+    "storage-partition": 200,
     "storage-raft": 146,
     "test-infrastructure": 148,
     "transactions": 16,
     "transport-messaging": 102,
     "wasm-toolchain": 74
   },
-  "censusSize": 2452,
-  "digest": "fnv1a32-9fc27657",
+  "censusSize": 2453,
+  "digest": "fnv1a32-f773c1fa",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-41ce8dd7",
+  "observationDigest": "fnv1a32-58cff496",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1307,6 +1307,7 @@
     "test/partition/partition-cdc-delivery-progress.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
     "test/partition/partition-cdc-invocation-custody.test.js": "storage-partition",
+    "test/partition/partition-cdc-obligation-reclamation.test.js": "storage-partition",
     "test/partition/partition-cdc-obligation.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
     "test/partition/partition-cdc-topology-progress-currentness.test.js": "storage-partition",
@@ -8205,6 +8206,7 @@
         "src/message-group/message-group-forwarding-owner-constants.js",
         "src/message-group/message-group-service-row-owner.js",
         "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
@@ -8317,6 +8319,8 @@
         "src/bootstrap/system-table-schemas-constants.js",
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome-constants.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/partition/partition-service-constants.js",
@@ -9212,6 +9216,7 @@
     },
     "test/partition/cdc-hydration-live-handoff.test.js": {
       "files": [
+        "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -9701,6 +9706,27 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-cdc-obligation-reclamation.test.js": {
+      "files": [
+        "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },

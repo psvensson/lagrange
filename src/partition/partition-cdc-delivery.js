@@ -167,8 +167,10 @@ function markReplayOnlyCdcEvent(cdcEvent) {
   /**
    * The ledger committed these events delivered (a CDC_DELIVERED applied).
    * @param {Array<string>} eventKeys - Their event keys.
-   */ settleAcknowledgedObligations(eventKeys) {
-    settleAcknowledgedObligations(this, eventKeys);
+   * @param {Object|null} [progress] - The ledger's compact progress after it:
+   *   every position at or below it is delivered too.
+   */ settleAcknowledgedObligations(eventKeys, progress = null) {
+    settleAcknowledgedObligations(this, eventKeys, progress);
   }
   /**
    * @return {Object} The obligation lane's diagnostics.

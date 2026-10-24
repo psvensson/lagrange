@@ -51,7 +51,10 @@ import {
   acknowledgedEventBytesOf,
   buildCdcAcknowledgementCommand,
   cdcObligationEventKeyDigest,
+  countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
+  isCdcPositionReclaimed,
+  readOwedCdcHead,
   readOwedCdcObligations,
   readOwedCdcTail,
 } from './partition-cdc-obligation-ledger.js';
@@ -158,14 +161,21 @@ function resetCdcObligationLane(delivery) {
 
 /**
  * The ledger committed these events delivered (the CDC_DELIVERED applied):
- * they are no longer pending here.
+ * they are no longer pending here, nor is any position the ledger's compact
+ * progress reclaimed (a replayed acknowledgement names those by position
+ * only).
  * @param {Object} delivery - The CDC delivery owner.
  * @param {Array<string>} eventKeys - The acknowledged keys.
+ * @param {Object|null} [progress] - The ledger's compact progress
+ *   ({throughLogIndex, throughOrdinal}) after the application, or null.
  */
-function settleAcknowledgedObligations(delivery, eventKeys) {
+function settleAcknowledgedObligations(delivery, eventKeys, progress = null) {
   const lane = laneOf(delivery);
   for (const eventKey of eventKeys) {
     lane.pending.delete(eventKey);
+  }
+  for (const [eventKey, position] of lane.pending) {
+    if (isCdcPositionReclaimed(position, progress)) lane.pending.delete(eventKey);
   }
   for (const [entryId, pending] of lane.commands) {
     if (pending.eventKeys.every((key) => !lane.pending.has(key))) {
@@ -513,9 +523,28 @@ function drivePage(owner, lane) {
       limit: 1});
 }
 
-function acknowledgementBackpressured(lane) {
-  return lane.held !== null ||
-    lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES;
+// Delivering past the lowest owed row keeps every delivered row above it in
+// the ledger (decision D1 reclaims only below it), so the lane does that only
+// while those retained rows and its own pending acknowledgements stay under
+// RETAINED_DELIVERED_MAX; the lowest owed row itself is always deliverable,
+// and a scan stopped here restarts from it (lane.scan cleared).
+function retainedDeliveredBackpressured(owner, lane, obligation) {
+  const head = readOwedCdcHead(owner.db);
+  if (head === null || (head.logIndex === obligation.logIndex &&
+      head.ordinal === obligation.ordinal)) {
+    return false;
+  }
+  return lane.pending.size + countRetainedDeliveredCdcObligations(owner.db,
+    BOUND.RETAINED_DELIVERED_MAX) >= BOUND.RETAINED_DELIVERED_MAX;
+}
+
+function acknowledgementBackpressured(owner, lane, obligation) {
+  if (lane.held !== null || lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
+    return true;
+  }
+  if (!retainedDeliveredBackpressured(owner, lane, obligation)) return false;
+  lane.scan = null;
+  return true;
 }
 
 function obligationCursor(obligation) {
@@ -539,7 +568,8 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
 
 async function driveOneObligation(delivery, lane, obligation, subscribers,
   reason, delivered, context) {
-  const step = acknowledgementBackpressured(lane) ? DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE :
+  const step = acknowledgementBackpressured(delivery.owner, lane, obligation) ?
+    DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE :
     lane.pending.has(obligation.eventKey) ? OBLIGATION_DRIVE_STEP.PENDING :
       OBLIGATION_DRIVE_STEP.READY;
   if (step === DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE) {

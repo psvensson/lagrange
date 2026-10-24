@@ -30,6 +30,7 @@ import {
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
   PARTITION_CDC_OBLIGATION_FAILURE_CODE,
   PARTITION_CDC_OBLIGATION_FLUSH_STATE,
+  PARTITION_CDC_OBLIGATION_STANDING as STANDING,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
 import {
   acknowledgedBytesOf,
@@ -37,7 +38,8 @@ import {
   cdcObligationEventKeyDigest,
   countCdcObligations,
   readCdcObligation,
-  readCdcObligationsAtPosition,
+  readCdcObligationProgress,
+  readCdcObligationStanding,
   readOwedCdcObligations,
 } from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {getSchemaByTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -109,12 +111,13 @@ function ledgerRow(partition, key) {
   return row === null ? null : {logIndex: row.logIndex, ordinal: row.ordinal,
     entryId: row.entryId, delivered: row.delivered};
 }
-// Every positional member resolves one ledger row and binds its durable key.
+// Every positional member resolves one retained ledger row and binds its
+// durable key.
 function groupsMatchLedger(partition, command) {
   return command.acknowledged.every((group) => group.events.every((event) => {
-    const rows = readCdcObligationsAtPosition(partition.db, group.logIndex, event.ordinal);
-    return rows.length === 1 &&
-      cdcObligationEventKeyDigest(rows[0].eventKey) === event.eventKeyDigest;
+    const {row} = readCdcObligationStanding(partition.db,
+      {logIndex: group.logIndex, ordinal: event.ordinal});
+    return row !== null && cdcObligationEventKeyDigest(row.eventKey) === event.eventKeyDigest;
   }));
 }
 const groupShape = (command) => command.acknowledged.map((group) =>
@@ -435,8 +438,9 @@ test('TX1 CDC O6: a single acknowledged event is proposed at the flush deadline 
 });
 
 // --- O7: the committed CDC_DELIVERED ---
-test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, replays idempotently, ' +
-  'refuses an unknown position or a wrong key digest at a valid position without a ' +
+test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims the delivered ' +
+  'prefix into the compact progress (decision D1), replays idempotently, ' +
+  'refuses an unknown position or a wrong key digest at a retained position without a ' +
   'write, moves neither the generation nor an outcome row, and is admitted only from the ' +
   'CDC delivery owner in its pinned form', async () => {
   const follower = await startCdcReplica(REPLICAS[1]);
@@ -453,11 +457,17 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, replays ide
       outcomes: transactionOperationOutcomes(follower), applied: durableAppliedIndex(follower)};
     const facts = {applies: [a.prepareApply, a.decisionApply, b.prepareApply, b.decisionApply]};
     facts.ackApply = applyCommitted(follower, ackA);
+    const standingAt = (logIndex, ordinal) =>
+      readCdcObligationStanding(follower.db, {logIndex, ordinal}).standing;
+    const progress = () => {
+      const facts = readCdcObligationProgress(follower.db);
+      return facts && {through: [facts.throughLogIndex, facts.throughOrdinal],
+        reclaimed: facts.reclaimed, advancedIndex: facts.advancedIndex};
+    };
     facts.afterAck = {...countCdcObligations(follower.db),
-      a0: ledgerRow(follower, txKey(txA, 0)).delivered,
-      a1: ledgerRow(follower, txKey(txA, 1)).delivered,
-      b0: ledgerRow(follower, txKey(txB, 0)).delivered,
-      deliveredAt: readCdcObligation(follower.db, txKey(txA, 0)).deliveredIndex};
+      a0: standingAt(a.decisionIndex, 0), a1: standingAt(a.decisionIndex, 1),
+      b0: standingAt(b.decisionIndex, 0), rows: ledgerRow(follower, txKey(txA, 0)),
+      progress: progress()};
     facts.replayApply = applyCommitted(follower, ackA);
     facts.afterReplay = countCdcObligations(follower.db);
     const unknown = buildCdcAcknowledgementCommand(PARTITION_ID,
@@ -465,10 +475,13 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, replays ide
         events: [ackEvent(txKey(txB, 0), 0), ackEvent(txKey(txB, 7), 7)]}], stamp);
     facts.unknownApply = applyCommitted(follower, unknown);
     facts.afterUnknown = countCdcObligations(follower.db);
+    // A wrong key digest is judged at a retained row (b0, still owed); at or
+    // below the reclaimed prefix a position is delivered without a row to
+    // compare against (decision D1).
     const misfiled = buildCdcAcknowledgementCommand(PARTITION_ID,
-      [{logIndex: a.decisionIndex, events: [ackEvent(txKey(txB, 0), 0)]}], stamp);
+      [{logIndex: b.decisionIndex, events: [ackEvent(txKey(txA, 0), 0)]}], stamp);
     facts.misfiledApply = applyCommitted(follower, misfiled);
-    facts.afterMisfiled = countCdcObligations(follower.db);
+    facts.afterMisfiled = {...countCdcObligations(follower.db), progress: progress()};
     facts.unchanged = {generation: readPartitionWriteGeneration(follower.db) - before.generation,
       outcomes: transactionOperationOutcomes(follower) - before.outcomes,
       appliedAdvance: durableAppliedIndex(follower) - before.applied};
@@ -487,11 +500,15 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, replays ide
     };
     assert.deepEqual(facts, {applies: [null, null, null, null],
       ackApply: null,
-      afterAck: {owed: 1, delivered: 2, a0: true, a1: true, b0: false,
-        deliveredAt: before.applied + 1},
+      afterAck: {owed: 1, delivered: 2, a0: STANDING.RECLAIMED, a1: STANDING.RECLAIMED,
+        b0: STANDING.OWED, rows: null,
+        progress: {through: [a.decisionIndex, 1], reclaimed: 2,
+          advancedIndex: before.applied + 1}},
       replayApply: null, afterReplay: {owed: 1, delivered: 2},
       unknownApply: null, afterUnknown: {owed: 1, delivered: 2},
-      misfiledApply: null, afterMisfiled: {owed: 1, delivered: 2},
+      misfiledApply: null, afterMisfiled: {owed: 1, delivered: 2,
+        progress: {through: [a.decisionIndex, 1], reclaimed: 2,
+          advancedIndex: before.applied + 1}},
       unchanged: {generation: 0, outcomes: 0, appliedAdvance: 4},
       admission: {fromOwner: true, fromWritePath: CODE.ORIGIN_REFUSED,
         tamperedEntryId: CODE.BYTES_INVALID, unsortedGroups: CODE.BYTES_INVALID,

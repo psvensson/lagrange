@@ -57,6 +57,17 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   last second (at most ACK_BATCH_MAX_EVENTS of them).
 // - DRIVE_PAGE_ROWS: how many owed rows one drive visits before yielding; each
 //   ledger read hydrates only the current row, in log order.
+// - RETAINED_DELIVERED_MAX (decision D1): delivered rows are reclaimed only
+//   below the lowest owed row, so a row the lane leaves owed (a provisional
+//   coverage, a batch that commits after a later one) keeps every delivered
+//   row above it. The lane delivers past such a row only while the delivered
+//   rows retained plus its own pending acknowledgements stay under this
+//   bound; at the bound it answers ACKNOWLEDGEMENT_BACKPRESSURE and retries
+//   from the lowest owed row (R12: backpressure, never a dropped obligation).
+// - RECLAIM_ROWS_PER_APPLY (decision D1): one CDC_DELIVERED application
+//   reclaims at most this many rows, so its transaction stays bounded; it
+//   exceeds what one command can add (ACK_BATCH_MAX_EVENTS) plus the retained
+//   bound, so a backlog shrinks with every acknowledgement.
 const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   ACK_BATCH_MAX_EVENTS: NUM.TWO_HUNDRED_FIFTY_SIX,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,
@@ -65,6 +76,8 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
   // committed command
   ACK_FLUSH_DEADLINE_MS: TIME_MS.SECOND,
   DRIVE_PAGE_ROWS: NUM.TWO_HUNDRED_FIFTY_SIX,
+  RETAINED_DELIVERED_MAX: NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
+  RECLAIM_ROWS_PER_APPLY: NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
 });
 
 // The ledger (design 8.3, points 1 to 6): one row per CDC event a committed
@@ -76,10 +89,22 @@ const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
 // commit (no later row version is ever read as an old event); the delivered
 // flag is set only by a committed CDC_DELIVERED command, so delivery progress
 // is the same on every replica and survives a leader change. An obligation is
-// owed until its flag is committed. Owed-row snapshot retention and delivered-
-// row reclamation remain obligations of the existing retention owner; this
-// ledger does not claim a compaction policy of its own.
+// owed until its flag is committed.
+//
+// Reclamation (decision D1): the application of each committed CDC_DELIVERED
+// deletes every delivered row below the lowest owed one (bounded per apply)
+// and folds them into the one compact progress row of
+// PARTITION_CDC_OBLIGATION_PROGRESS_TABLE: the source-event position the
+// reclaimed prefix runs through, how many obligations it held, and the
+// delivery-marker position (the CDC_DELIVERED entry) that last advanced it.
+// A position at or below that prefix is delivered without a row; a delivered
+// row above it is retained (with its own delivery-marker position) only while
+// an owed row lies below it. Like the rows, the progress row is written only
+// inside committed applications, so every replica reclaims the same rows at
+// the same entry.
 const PARTITION_CDC_OBLIGATION_TABLE = '_cdc_obligations';
+const PARTITION_CDC_OBLIGATION_PROGRESS_TABLE = '_cdc_obligation_progress';
+const PARTITION_CDC_OBLIGATION_PROGRESS_SCOPE = 'ledger';
 const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   SELECT_ALL:
     'SELECT event_key, log_index, term, ordinal, entry_id, event_json, delivered, ' +
@@ -137,6 +162,61 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
   COUNT_BY_FLAG:
     'SELECT delivered, COUNT(*) AS count ' +
     `FROM ${PARTITION_CDC_OBLIGATION_TABLE} GROUP BY delivered`,
+  // The lowest owed row: everything below it is delivered.
+  SELECT_OWED_HEAD:
+    'SELECT log_index, ordinal ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 0 ` +
+    'ORDER BY log_index, ordinal LIMIT 1',
+  // The delivered rows retained, counted up to a bound (the lane's
+  // backpressure reads only whether the bound is reached).
+  COUNT_RETAINED_DELIVERED:
+    'SELECT COUNT(*) AS count FROM (SELECT 1 ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 1 LIMIT @limit)`,
+  // The reclaimable prefix: delivered rows below a position, in log order,
+  // at most @limit of them.
+  SELECT_RECLAIMABLE:
+    'SELECT log_index, ordinal ' +
+    `FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 1 ` +
+    'AND (log_index < @logIndex OR (log_index = @logIndex AND ordinal < @ordinal)) ' +
+    'ORDER BY log_index, ordinal LIMIT @limit',
+  DELETE_RECLAIMED:
+    `DELETE FROM ${PARTITION_CDC_OBLIGATION_TABLE} WHERE delivered = 1 ` +
+    'AND (log_index < @logIndex OR (log_index = @logIndex AND ordinal <= @ordinal))',
+  CREATE_PROGRESS_TABLE: `
+      CREATE TABLE IF NOT EXISTS ${PARTITION_CDC_OBLIGATION_PROGRESS_TABLE} (
+        scope TEXT PRIMARY KEY,
+        through_log_index INTEGER NOT NULL,
+        through_ordinal INTEGER NOT NULL,
+        reclaimed INTEGER NOT NULL,
+        advanced_index INTEGER NOT NULL,
+        advanced_term INTEGER NOT NULL
+      )
+    `,
+  PROGRESS_TABLE_EXISTS:
+    'SELECT 1 AS present FROM sqlite_master WHERE type = \'table\' ' +
+    `AND name = '${PARTITION_CDC_OBLIGATION_PROGRESS_TABLE}'`,
+  SELECT_PROGRESS:
+    'SELECT scope, through_log_index, through_ordinal, reclaimed, advanced_index, ' +
+    `advanced_term FROM ${PARTITION_CDC_OBLIGATION_PROGRESS_TABLE}`,
+  UPSERT_PROGRESS:
+    `INSERT INTO ${PARTITION_CDC_OBLIGATION_PROGRESS_TABLE} ` +
+    '(scope, through_log_index, through_ordinal, reclaimed, advanced_index, advanced_term) ' +
+    'VALUES (@scope, @logIndex, @ordinal, @reclaimed, @index, @term) ' +
+    'ON CONFLICT (scope) DO UPDATE SET through_log_index = excluded.through_log_index, ' +
+    'through_ordinal = excluded.through_ordinal, ' +
+    'reclaimed = reclaimed + excluded.reclaimed, ' +
+    'advanced_index = excluded.advanced_index, advanced_term = excluded.advanced_term',
+});
+
+// Where one source-event position stands in the ledger (decision D1): the one
+// delivered predicate. OWED and DELIVERED name a retained row; RECLAIMED a
+// position at or below the reclaimed prefix (delivered, its row gone);
+// UNKNOWN a position above the prefix the ledger holds no row for.
+const PARTITION_CDC_OBLIGATION_STANDING = Object.freeze({
+  OWED: 'owed',
+  DELIVERED: 'delivered',
+  RECLAIMED: 'reclaimed',
+  UNKNOWN: 'unknown',
 });
 
 // The identity a delivered event carries alongside the consumer's
@@ -181,6 +261,8 @@ const PARTITION_CDC_OBLIGATION_MESSAGE = Object.freeze({
   COMMAND_REFUSED: 'CDC acknowledgement refused',
   MARK_NOT_ONE_ROW:
     'CDC obligation ledger: marking an owed event delivered moved no row',
+  RECLAIM_COUNT_MISMATCH:
+    'CDC obligation ledger: reclaiming the delivered prefix deleted another row count',
   CODE_SEPARATOR: ': ',
 });
 
@@ -253,7 +335,10 @@ export {
   PARTITION_CDC_OBLIGATION_LOG_MSG,
   PARTITION_CDC_OBLIGATION_MESSAGE,
   PARTITION_CDC_OBLIGATION_ORIGIN,
+  PARTITION_CDC_OBLIGATION_PROGRESS_SCOPE,
+  PARTITION_CDC_OBLIGATION_PROGRESS_TABLE,
   PARTITION_CDC_OBLIGATION_REASON,
   PARTITION_CDC_OBLIGATION_SQL,
+  PARTITION_CDC_OBLIGATION_STANDING,
   PARTITION_CDC_OBLIGATION_TABLE,
 };

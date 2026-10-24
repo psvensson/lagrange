@@ -1,15 +1,16 @@
 // The durable CDC obligation ledger (TX1 design revision 10, section 8.3): the
 // one owner of the `_cdc_obligations` rows a partition holds -
 // one per CDC event a committed participant decision owes - and of the pinned
-// byte form of the CDC_DELIVERED command that marks them delivered. Every
-// write here runs inside the application transaction of a committed command
-// (the committed-entry application's callback,
+// byte form of the CDC_DELIVERED command that marks them delivered, and of
+// their reclamation into one compact progress row (decision D1). Every write
+// here runs inside the application transaction of a committed command (the
+// committed-entry application's callback,
 // raft-rs-application-transaction-owner.js): the obligation rows commit with
-// the data change they describe, the delivered flag with the committed
-// acknowledgement, or not at all. Pure functions of a connection and of their
-// inputs, identical on every replica; the CDC delivery owner reads owed rows
-// here (partition-cdc-obligation-delivery.js) and the committed-entry CDC hook
-// writes them (partition-cdc-obligation.js).
+// the data change they describe, the delivered flag and the reclamation with
+// the committed acknowledgement, or not at all. Pure functions of a
+// connection and of their inputs, identical on every replica; the CDC
+// delivery owner reads owed rows here (partition-cdc-obligation-delivery.js)
+// and the committed-entry CDC hook writes them (partition-cdc-obligation.js).
 
 import {createHash} from 'node:crypto';
 import {
@@ -17,7 +18,10 @@ import {
   PARTITION_CDC_OBLIGATION_BOUND as BOUND,
   PARTITION_CDC_OBLIGATION_BYTES as BYTES,
   PARTITION_CDC_OBLIGATION_MESSAGE as MESSAGE,
+  PARTITION_CDC_OBLIGATION_PROGRESS_SCOPE as PROGRESS_SCOPE,
+  PARTITION_CDC_OBLIGATION_PROGRESS_TABLE as PROGRESS_TABLE,
   PARTITION_CDC_OBLIGATION_SQL as SQL,
+  PARTITION_CDC_OBLIGATION_STANDING as STANDING,
   PARTITION_CDC_OBLIGATION_TABLE as TABLE,
 } from './partition-cdc-obligation-constants.js';
 import {RETAINED_STORE_ERROR, retainedStoreError, retainedStoreTableExistsIn, readRetainedStoreRowsIn,
@@ -43,6 +47,11 @@ function isNonEmptyString(value) {
 function ensureCdcObligationLedger(db) {
   db.exec(SQL.CREATE_TABLE);
   db.exec(SQL.CREATE_OWED_INDEX);
+  db.exec(SQL.CREATE_PROGRESS_TABLE);
+}
+
+function progressTableExists(db) {
+  return db.prepare(SQL.PROGRESS_TABLE_EXISTS).get() !== undefined;
 }
 
 /**
@@ -64,8 +73,31 @@ function validCdcCensusRow(row) {
     isStoredNullableInteger(row.delivered_term, 1n);
 }
 
-// Observe lazy existence and ALL debt, including delivered rows. No DDL and
-// no coercion of a malformed flag to false or an exact index to Number.
+function validCdcProgressRow(row) {
+  return row.scope === PROGRESS_SCOPE && isStoredInteger(row.through_log_index, 1n) &&
+    isStoredInteger(row.through_ordinal, 0n) && isStoredInteger(row.reclaimed, 1n) &&
+    isStoredInteger(row.advanced_index, 1n) && isStoredInteger(row.advanced_term, 1n);
+}
+
+// The compact progress as the census reports it: exact decimal strings, or
+// null while nothing was ever reclaimed (no progress table, or no row).
+function readCdcProgressCensusIn(db) {
+  if (!retainedStoreTableExistsIn(db, PROGRESS_TABLE)) return null;
+  const raw = readRetainedStoreRowsIn(db, {table: PROGRESS_TABLE,
+    select: SQL.SELECT_PROGRESS, create: SQL.CREATE_PROGRESS_TABLE});
+  if (raw.length > 1 || !raw.every(validCdcProgressRow)) {
+    throw retainedStoreError(RETAINED_STORE_ERROR.ROW_CONTRARY, PROGRESS_TABLE);
+  }
+  if (raw.length === 0) return null;
+  const [row] = raw;
+  return Object.freeze({throughLogIndex: String(row.through_log_index),
+    throughOrdinal: String(row.through_ordinal), reclaimed: String(row.reclaimed),
+    advancedIndex: String(row.advanced_index), advancedTerm: String(row.advanced_term)});
+}
+
+// Observe lazy existence and ALL debt, including delivered rows, and the
+// compact progress of the reclaimed prefix. No DDL and no coercion of a
+// malformed flag to false or an exact index to Number.
 function readCdcObligationCensusIn(db) {
   const exists = retainedStoreTableExistsIn(db, TABLE);
   const raw = exists ? readRetainedStoreRowsIn(db, {table: TABLE,
@@ -81,7 +113,8 @@ function readCdcObligationCensusIn(db) {
       eventJson: row.event_json, delivered: String(row.delivered),
       deliveredIndex: row.delivered_index === null ? null : String(row.delivered_index),
       deliveredTerm: row.delivered_term === null ? null : String(row.delivered_term)}));
-  return Object.freeze({exists, rows: Object.freeze(rows)});
+  return Object.freeze({exists, rows: Object.freeze(rows),
+    progress: readCdcProgressCensusIn(db)});
 }
 
 /**
@@ -168,13 +201,116 @@ function readCdcObligation(db, eventKey) {
   });
 }
 
-function readCdcObligationsAtPosition(db, logIndex, ordinal) {
-  if (!cdcObligationLedgerExists(db)) return [];
-  return db.prepare(SQL.SELECT_BY_POSITION).all(logIndex, ordinal).map((row) =>
-    Object.freeze({...obligationOf(row),
-      delivered: Number(row.delivered) === DELIVERED_FLAG.DELIVERED,
-      deliveredIndex: row.delivered_index,
-      deliveredTerm: row.delivered_term}));
+/**
+ * The compact progress of the reclaimed prefix (decision D1), or null while
+ * nothing was reclaimed.
+ * @param {Object} db - The partition's connection.
+ * @return {Object|null} Frozen {throughLogIndex, throughOrdinal, reclaimed,
+ *   advancedIndex, advancedTerm}: the source-event position the reclaimed
+ *   prefix runs through, how many obligations it held, and the CDC_DELIVERED
+ *   entry (delivery-marker position) that last advanced it.
+ */
+function readCdcObligationProgress(db) {
+  const row = progressTableExists(db) ? db.prepare(SQL.SELECT_PROGRESS).get() : undefined;
+  if (row === undefined) return null;
+  return Object.freeze({throughLogIndex: Number(row.through_log_index),
+    throughOrdinal: Number(row.through_ordinal), reclaimed: Number(row.reclaimed),
+    advancedIndex: Number(row.advanced_index), advancedTerm: Number(row.advanced_term)});
+}
+
+/**
+ * Whether a source-event position lies in the reclaimed prefix the compact
+ * progress names (delivered, its row gone).
+ * @param {{logIndex: number, ordinal: number}} position - The position.
+ * @param {Object|null} progress - readCdcObligationProgress's answer.
+ * @return {boolean} Whether it is reclaimed.
+ */
+function isCdcPositionReclaimed(position, progress) {
+  return progress !== null && (position.logIndex < progress.throughLogIndex ||
+    (position.logIndex === progress.throughLogIndex &&
+      position.ordinal <= progress.throughOrdinal));
+}
+
+/**
+ * Where one source-event position stands (decision D1): the one delivered
+ * predicate. A position at or below the reclaimed prefix is RECLAIMED
+ * (delivered, its row gone); otherwise the retained row decides (OWED or
+ * DELIVERED, with the row), and a position without one is UNKNOWN.
+ * @param {Object} db - The partition's connection.
+ * @param {{logIndex: number, ordinal: number}} position - The position.
+ * @return {{standing: string, row: Object|null}} A
+ *   PARTITION_CDC_OBLIGATION_STANDING and the row it names, if retained.
+ */
+function readCdcObligationStanding(db, position) {
+  if (isCdcPositionReclaimed(position, readCdcObligationProgress(db))) {
+    return {standing: STANDING.RECLAIMED, row: null};
+  }
+  const row = cdcObligationLedgerExists(db) ?
+    db.prepare(SQL.SELECT_BY_POSITION).get(position.logIndex, position.ordinal) : undefined;
+  if (row === undefined) return {standing: STANDING.UNKNOWN, row: null};
+  const delivered = Number(row.delivered) === DELIVERED_FLAG.DELIVERED;
+  return {standing: delivered ? STANDING.DELIVERED : STANDING.OWED,
+    row: Object.freeze({...obligationOf(row), delivered,
+      deliveredIndex: row.delivered_index, deliveredTerm: row.delivered_term})};
+}
+
+function positionOf(row) {
+  return {logIndex: Number(row.log_index), ordinal: Number(row.ordinal)};
+}
+
+/**
+ * The lowest owed position, or null when nothing is owed: every retained row
+ * below it is delivered, so it bounds what may be reclaimed.
+ * @param {Object} db - The partition's connection.
+ * @return {{logIndex: number, ordinal: number}|null} The position.
+ */
+function readOwedCdcHead(db) {
+  if (!cdcObligationLedgerExists(db)) return null;
+  const row = db.prepare(SQL.SELECT_OWED_HEAD).get();
+  return row ? positionOf(row) : null;
+}
+
+/**
+ * How many delivered rows the ledger retains (above an owed row), counted
+ * up to `limit`: the lane's backpressure input.
+ * @param {Object} db - The partition's connection.
+ * @param {number} limit - The bound counted to.
+ * @return {number} min(retained delivered rows, limit).
+ */
+function countRetainedDeliveredCdcObligations(db, limit) {
+  if (!cdcObligationLedgerExists(db)) return 0;
+  return Number(db.prepare(SQL.COUNT_RETAINED_DELIVERED).get({limit}).count);
+}
+
+/**
+ * Reclaim the delivered prefix (decision D1), inside the application
+ * transaction of the committed CDC_DELIVERED at `marker`: delete the delivered
+ * rows below the lowest owed one, in log order and at most
+ * RECLAIM_ROWS_PER_APPLY of them, and fold them into the compact progress
+ * row. A function of the committed ledger alone, so every replica reclaims
+ * the same rows at the same entry; a count that does not match throws (the
+ * application fails closed).
+ * @param {Object} db - The partition's connection.
+ * @param {{index: number, term: number}} marker - The CDC_DELIVERED entry.
+ * @return {number} How many rows were reclaimed.
+ */
+function reclaimDeliveredCdcObligations(db, {index, term}) {
+  if (!cdcObligationLedgerExists(db)) return 0;
+  const head = readOwedCdcHead(db) ??
+    {logIndex: Number.MAX_SAFE_INTEGER, ordinal: Number.MAX_SAFE_INTEGER};
+  const reclaimable = db.prepare(SQL.SELECT_RECLAIMABLE).all({...head,
+    limit: BOUND.RECLAIM_ROWS_PER_APPLY});
+  if (reclaimable.length === 0) return 0;
+  const through = positionOf(reclaimable.at(-1));
+  const deleted = db.prepare(SQL.DELETE_RECLAIMED).run(through).changes;
+  if (deleted !== reclaimable.length) {
+    throw new Error(`${MESSAGE.RECLAIM_COUNT_MISMATCH}${MESSAGE.CODE_SEPARATOR}` +
+      `${deleted}/${reclaimable.length}`);
+  }
+  db.exec(SQL.CREATE_PROGRESS_TABLE);
+  db.prepare(SQL.UPSERT_PROGRESS).run({scope: PROGRESS_SCOPE, ...through,
+    reclaimed: deleted, index, term});
+  return deleted;
 }
 
 /**
@@ -194,19 +330,21 @@ function markCdcObligationDelivered(db, eventKey, {index, term}) {
 }
 
 /**
- * How many obligations the ledger holds, owed and delivered.
+ * How many obligations the ledger recorded, owed and delivered: the
+ * delivered count is the retained delivered rows plus the reclaimed prefix
+ * the compact progress holds (decision D1), never a physical row count.
  * @param {Object} db - The partition's connection.
  * @return {{owed: number, delivered: number}} The counts (zero without a
  *   ledger).
  */
 function countCdcObligations(db) {
-  const counts = {owed: 0, delivered: 0};
+  const counts = {owed: 0, delivered: readCdcObligationProgress(db)?.reclaimed ?? 0};
   if (!cdcObligationLedgerExists(db)) {
     return counts;
   }
   for (const row of db.prepare(SQL.COUNT_BY_FLAG).all()) {
     if (Number(row.delivered) === DELIVERED_FLAG.DELIVERED) {
-      counts.delivered = Number(row.count);
+      counts.delivered += Number(row.count);
     } else {
       counts.owed = Number(row.count);
     }
@@ -384,14 +522,19 @@ export {
   cdcObligationEventKeyDigest,
   cdcObligationLedgerExists,
   countCdcObligations,
+  countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
   ensureCdcObligationLedger,
   insertCdcObligation,
+  isCdcPositionReclaimed,
   isPinnedCdcAcknowledgementCommand,
   markCdcObligationDelivered,
   readCdcObligation,
   readCdcObligationCensusIn,
-  readCdcObligationsAtPosition,
+  readCdcObligationProgress,
+  readCdcObligationStanding,
+  readOwedCdcHead,
   readOwedCdcObligations,
   readOwedCdcTail,
+  reclaimDeliveredCdcObligations,
 };
