@@ -458,3 +458,102 @@ the anchor; identical sets in the author's TAP and mine.
   lander question I did not evaluate beyond F-OUT-3.
 - Nothing not listed under "What I ran and results" is approved by
   implication.
+
+---
+
+## Re-review r2 (2026-10-24, same independent reviewer; append-only)
+
+### Verdict: APPROVE for predecessor measurement
+
+Applies to exactly:
+`/mnt/data/peter/projects/.worktrees/mg-c2-transport-witness-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js`,
+SHA256 `2a044a90f11bd0992f6d8c393fe8b3dcb53b264c982610b6cb3651d339a9ddd9`
+(recomputed; matches the author's report), 277 lines, untracked on branch
+`work/mg-c2-transport-witness-20261024` at base
+`1e2fcc2da391ab72883132a22fbfbde39b2313f7`, production unchanged (worktree
+still shows only the four author-refreshed `test/shards/*.json` plus this
+file). Any later byte change voids this verdict and requires re-review and
+re-measurement.
+
+### Each required change, checked against the bytes
+
+| Item | Applied as specified | Evidence (revised file lines) |
+| --- | --- | --- |
+| RC1 header | yes | 5-8: "reports a supplied deliveryState that contradicts its computed state as FAILED; it must never erase or rewrite any other explicitly supplied claim" |
+| RC1 `expect` map | yes | PROVISIONAL_CONFLICTS 109-117: third tuple element `{deliveryState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED}` on DELIVERED_WITH_RETRY_HINT (111-113); constant imported at 25; both `.map` callbacks take `[name, fields, expect = {}]` and carry `expect` (102-103, 116-117); explanatory comment 105-108 |
+| RC1 preservation | yes | `preservation(raw, outcome, expect = {})` 208-218, expected value `Object.hasOwn(expect, field) ? expect[field] : raw[field]` (213-214); call site 239 `entry.expect ?? {}` (controls carry no `expect`) |
+| RC1 anchor | yes | `want(field)` 268-269 reads `entry.expect` then `entry.fields`; filter 270-271 `!Object.hasOwn(outcome, field) || !Object.is(outcome[field], want(field))`; message prints supplied, want and actual (272-273) |
+| RC2 | yes | 256-262 iterates `CASES` (27 entries: 7 controls + 16 committed + 4 provisional conflicts); ACK_ONLY reaches `routerEnvelope(undefined)` (251-254), a valid object spread; green in both runs (`ok 4`) |
+| RC3 | yes | import 30-31 `SERVICE_RESPONSE_DISPOSITION_KIND` from message-router-shared-vocabulary.js; used 185-186; the `'settled'` literal is gone |
+| RC4 | yes | 99-101: `ERROR_CODE_EMPTY_STRING {errorCode: ''}`, `DEFER_RETRY_WRONG_TYPE {deferRetry: 'yes'}`, `RETRY_AFTER_WRONG_TYPE {retryAfterMs: String(RETRY_MS)}` |
+| R-a (only tightening taken) | yes | `settledCount(router)` 184-187; both call sites pass the acting router (191, 199), so the delta-0 cut is now meaningful on LOCAL and INLINE_ACK |
+
+Nothing else changed relative to r1: CONTROLS (69-83), fixture and
+handlers (123-145), `before`/`after` (147-182), `suppliedText` (220-226),
+the main loop (228-249, except line 239), `routerEnvelope` (251-254) are
+byte-for-byte the r1 text. Line delta 268 -> 277 (+9) is fully accounted
+for by the edits above.
+
+### No red lost, no assertion weakened
+
+- All seven r1 red cases remain red on all three paths and in the anchor;
+  the three RC4 cells are red on all three paths and in the anchor. 10 red
+  cases x 3 paths = 30 path reds, every one failing at
+  `C2_<path>_<case>_DELIVERED_MATCHES_RAW_VERDICT`; 10 anchor reds, every one
+  at `C2_ANCHOR_<case>_EXPLICIT_FIELD_REPLACED`; 0 failures at
+  `RAW_PREDICATE_IS_*`, `HANDLER_ENGAGED_ONCE`, `NO_PENDING_*` or
+  `*_SETTLED_BY_SERVICE_RESPONSE`. Of the 30 path reds, 27 are launders
+  (`deliveredPredicate` actual true vs expected false: 9 launder cases x 3)
+  and 3 are the rewrite-only `COMMITTED_ERROR_CODE_LOWER_CASE` cells.
+- The only changed expectation is `deliveryState -> FAILED` on
+  PROVISIONAL_DELIVERED_WITH_RETRY_HINT. Today's output is `'deferred'`
+  (anchor body: `deliveryState: supplied "delivered", want "failed" ->
+  "deferred"`), so the cell stays red on all paths and in the anchor; both
+  the r1 expectation (DELIVERED) and the r2 expectation (FAILED) differ from
+  today's value, so nothing was weakened. A fix that preserves `'delivered'`
+  (design A) or leaves `'deferred'` is rejected; only FAILED passes.
+- `want(field)` cannot pass vacuously: it never reads the outcome; every
+  CONFLICTS entry has non-empty `fields` (85-101, 110-115); `expect` is
+  non-empty for exactly one entry and its value differs from today's output
+  (verified red above). The three new anchor bodies read
+  `errorCode: supplied "", want "" -> null`, `deferRetry: supplied "yes",
+  want "yes" -> false`, `retryAfterMs: supplied "250", want "250" -> null`,
+  i.e. each is red by the laundering normalizer, not by setup.
+- Totals: 105 tests, 61 pass, 44 fail (40 leaf reds + 4 red parents),
+  0 skipped, 0 todo, 0 cancelled, matching the author's run2 exactly.
+
+### What I ran (r2)
+
+| Command | Result |
+| --- | --- |
+| `sha256sum`, `wc -l`, `git rev-parse HEAD`, `git status --short` | `2a044a90...ddd9`, 277 lines, HEAD = base, worktree as described |
+| `node --check <file>`; `npx eslint <file>` | SYNTAX_OK; clean |
+| `npm run -s test:file -- <file>` -> `.../scratchpad/c2/review-run2.tap` (SHA256 `7c6500f0d74ea82183b95c2d4ab3dcd6cedd1566aa070ee85c19905932066430`) | thermal ok 74C; 105/61/44, 887 ms, 1.34 s wall; exit 1 as expected. CAUTION: this capture is the runner's stdout and the runner ELIDES mid-stream output above a size threshold (marker at line 1483: "34706 byte(s) elided; full output in .tap/test-results/<file>.tap"); 22 verdict lines of the SERVICE_RESPONSE block are absent from this file although the process summary counts them. My r1 capture was below the threshold; this one is not. |
+| Same command with stdout/stderr separated -> `review-run2b.stdout.tap` (SHA256 `ee0f6bbc...1fc7`), stderr empty | same 83 verdict lines: the gap is elision, not stderr interleaving |
+| `npx tap --reporter=tap <file>` -> `.../scratchpad/c2/review-run2-direct.tap` (SHA256 `63770a2025d4109a8fa04495a556fcf3bee4a6deb22cf8723cc9efdf474a9d38`) | complete: 105 leaf+parent verdict lines; 105/61/44 |
+| `diff` of leaf+parent verdict lines, author `run2-full.tap` (SHA256 `2ee09bc2edfe2d9e19f7dc22a3b2f6c0ce15b0b2784b90c07713af0c13bcf2c1`) vs `review-run2-direct.tap` | IDENTICAL (order preserved) |
+| Runner's own full artifact | `.tap/test-results/test/transport/message-router-cdc-outcome-roundtrip.test.js.tap` exists in the worktree (gitignored), 105 verdict lines |
+
+### Measurement note (process, not a test defect)
+
+The lab measurement must archive the complete TAP (the runner's
+`.tap/test-results/<file>.tap` artifact or a direct `npx tap --reporter=tap`
+capture), not the runner's elided stdout; otherwise the SERVICE_RESPONSE
+block's verdicts are missing from the retained evidence and an
+"incomplete analysis" reading would fail the artifact.
+
+### Heads-up for the fix author (not a test defect)
+
+Under the encoded policy (state conflict -> FAILED) the FAILED-with-deferral
+output must be stable under re-normalization: today's classifier ranks
+DEFERRED above FAILED (transport-semantic-outcome.js:119-123), so a first-pass
+FAILED would become DEFERRED on the second pass; the idempotence test (now
+over all 27 cases) and the twice-normalized INLINE_ACK path will catch that.
+This is the intended discrimination.
+
+### Carried forward unchanged
+
+Recommendations R-b, R-c, R-d, R-e and findings F-OUT-1..F-OUT-5 from r1
+stand; none blocks predecessor measurement. R06 note on
+`HOST = '127.0.0.1'` (no exported owner) unchanged. No repository file was
+edited by me in r1 or r2.
