@@ -14,7 +14,7 @@ import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
@@ -88,7 +88,7 @@ for (const [name, grant] of [
     assert.deepEqual(coreEntries, [], 'the real native entry observer stays empty');
     assert.deepEqual(resource.db.prepare('SELECT name, sql FROM sqlite_master ORDER BY name').all(),
       before, 'refusal precedes even writable formatting');
-    assert.equal(originalAllocationRow(resource.db, member).native_history_state,
+    assert.equal(readOriginalAllocationRow({db: resource.db, member}).native_history_state,
       HISTORY.NEVER_OPENED);
   });
 }
@@ -100,6 +100,6 @@ test('ordinary port requests retain the existing constructor path', (t) => {
   const {request, resource} = requestFor(f, member);
   resource.port = createRaftRsOperationPort(request);
   assert.equal(resource.port.readStatus().outcome, 'CORE_OK');
-  assert.equal(originalAllocationRow(resource.db, member).native_history_state,
+  assert.equal(readOriginalAllocationRow({db: resource.db, member}).native_history_state,
     HISTORY.ESTABLISHED);
 });

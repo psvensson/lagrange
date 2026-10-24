@@ -1,7 +1,8 @@
 // Owner decision 2026-10-26 (Q1, Q2): the original-allocation preparation
-// reaches the lifecycle owner through exactly one named operation, which births
-// a founder's row and mints its incarnation; the class, retirement and every
-// other lifecycle capability stay refused to that caller.
+// reaches the lifecycle owner through one named operation, which births a
+// founder's row and mints its incarnation; the class, retirement and every
+// other lifecycle capability stay refused to that caller. Q3 adds exactly the
+// owner's allocation-field operations and reads the preparation declares.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -14,9 +15,9 @@ import {
   RaftRsReplicaLifecycleOwner,
 } from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
-import {RAFT_RS_OPENING_HISTORY as HISTORY, RAFT_RS_OPENING_HISTORY_ERROR as HISTORY_ERROR} from
+import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
-import {REPLICA_LIFECYCLE_TABLE as TABLE} from
+import {LIFECYCLE_ERROR, REPLICA_LIFECYCLE_TABLE as TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {auditRaftRsOperationBoundary} from
@@ -71,6 +72,15 @@ test('the caller cannot choose the incarnation: only the identity reaches the ow
     'two births never share a minted incarnation');
 });
 
+test('the class takes no caller mint: a passed mintIncarnation never stamps a row (F7)', (t) => {
+  const f = fixture(t);
+  const owner = new RaftRsReplicaLifecycleOwner({db: f.db, ...IDENTITY,
+    mintIncarnation: () => 'caller-chosen'});
+  assert.equal(typeof owner.incarnation, 'string');
+  assert.notEqual(owner.incarnation, 'caller-chosen');
+  assert.equal(f.rows()[0].incarnation, owner.incarnation);
+});
+
 test('birth is once: an existing row in any state is refused unchanged', async (t) => {
   for (const [name, setup, request] of [
     ['exact active row', (db) => bear(db), {}],
@@ -106,8 +116,9 @@ test('durable native history without a row is refused and no row is synthesized'
 
 test('outside the caller transaction the operation refuses before any write', (t) => {
   const f = fixture(t);
+  // The lifecycle owner's own refusal (F4), not the opening-history code.
   assert.throws(() => prepareReplicaLifecycleForOriginalAllocation({db: f.db, ...IDENTITY}),
-    {message: HISTORY_ERROR.TRANSACTION_REQUIRED});
+    {message: LIFECYCLE_ERROR.TRANSACTION_REQUIRED});
   assert.equal(f.db.prepare('SELECT name FROM sqlite_master WHERE name = ?').get(TABLE),
     undefined, 'not even the table is created');
 });
@@ -115,6 +126,10 @@ test('outside the caller transaction the operation refuses before any write', (t
 // The allowance is the symbol at its declared caller, not the caller file.
 const OPERATION = 'prepareReplicaLifecycleForOriginalAllocation';
 const OWNER_MODULE = './raft-rs-replica-lifecycle-owner.js';
+// The preparation's declared calls (Q3): exactly these, nothing else.
+const DECLARED = Object.freeze([OPERATION, 'prepareOriginalAllocationRow',
+  'markOriginalAllocationIssued', 'readOriginalAllocationRow',
+  'readOriginalAllocationDeclaration']);
 for (const [label, source, accepted, caller = 'raft-rs-original-allocation-preparation.js'] of [
   ['named operation', `import {${OPERATION}} from '${OWNER_MODULE}';`, true],
   ['aliased operation', `import {${OPERATION} as bear} from '${OWNER_MODULE}';`, true],
@@ -132,8 +147,18 @@ for (const [label, source, accepted, caller = 'raft-rs-original-allocation-prepa
   ['dynamic', `const lifecycle = await import('${OWNER_MODULE}');`, false],
   ['re-export', `export {${OPERATION}} from '${OWNER_MODULE}';`, false],
   ['second caller', `import {${OPERATION}} from '${OWNER_MODULE}';`, false,
-    'raft-rs-original-allocation-store.js'],
+    'raft-rs-original-allocation-second-caller.js'],
   ['snapshot caller', `import {${OPERATION}} from '${OWNER_MODULE}';`, false, 'snapshot-install.js'],
+  ['every declared operation in one import', `import {${DECLARED.join(', ')}} from '${OWNER_MODULE}';`,
+    true],
+  ['a declared operation in its own import',
+    `import {${OPERATION}} from '${OWNER_MODULE}';\nimport {markOriginalAllocationIssued} from '${OWNER_MODULE}';`,
+    true],
+  ['undeclared rights transition', `import {transitionOriginalRight} from '${OWNER_MODULE}';`, false],
+  ['declared operations with the rights transition',
+    `import {${DECLARED.join(', ')}, transitionOriginalRight} from '${OWNER_MODULE}';`, false],
+  ['declared operation at the snapshot caller',
+    `import {markOriginalAllocationIssued} from '${OWNER_MODULE}';`, false, 'snapshot-install.js'],
 ]) {
   test(`original-allocation lifecycle import boundary: ${label}`, (t) => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'original-lifecycle-boundary-'));
@@ -146,13 +171,15 @@ for (const [label, source, accepted, caller = 'raft-rs-original-allocation-prepa
   });
 }
 
-test('the real preparation imports exactly the named operation and the census holds', () => {
+test('the real preparation imports exactly the declared operations and the census holds', () => {
   const violations = auditRaftRsOperationBoundary({root: ROOT});
   assert.deepEqual(violations.filter((entry) => entry.file === PREPARATION), [],
-    'the inherited class import is replaced by the declared operation');
+    'the inherited class import is replaced by the declared operations');
   const source = fs.readFileSync(path.join(ROOT, PREPARATION), 'utf8');
   const lifecycleImports = source.match(/import\s*\{[^}]*\}\s*from\s*'\.\/raft-rs-replica-lifecycle-owner\.js'/gu);
   assert.equal(lifecycleImports.length, 1);
-  assert.match(lifecycleImports[0], new RegExp(`^import\\s*\\{\\s*${OPERATION}\\s*\\}`, 'u'));
+  const imported = lifecycleImports[0].slice(lifecycleImports[0].indexOf('{') + 1,
+    lifecycleImports[0].indexOf('}')).split(',').map((name) => name.trim()).sort();
+  assert.deepEqual(imported, [...DECLARED].sort());
   assert.doesNotMatch(source, /RaftRsReplicaLifecycleOwner|mintIncarnation/u);
 });

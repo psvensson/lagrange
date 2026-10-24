@@ -11,7 +11,7 @@ import {createSeedOriginalAllocation} from
 import {RaftRsOriginalAllocationPreparation} from
   '../../src/raft/raft-rs-original-allocation-preparation.js';
 import {RaftRsPreparationCustody} from '../../src/raft/raft-rs-preparation-custody.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {acquireDataDirectoryProcessOwner, ownsDataDirectoryProcessOwner,
   DATA_DIRECTORY_OWNER_ERROR_CODE} from '../../src/storage/data-directory-process-owner.js';
 import {createStartupAcquisitionLedger, runStartupWithCleanup} from
@@ -174,7 +174,8 @@ test('post-ISSUED close failure retains only the exact failed handle and never r
     const issued = JSON.parse(read.prepare(`SELECT ${COLUMN.DECLARATION} AS issued
       FROM ${TABLE} WHERE replica_identity = ?`).get(anchor.replicaId).issued);
     const issuedAnchor = issued.members.find((m) => m.replicaId === issued.anchorReplicaId);
-    assert.equal(originalAllocationRow(read, issuedAnchor)[COLUMN.ISSUE], STATE.ISSUED,
+    assert.equal(readOriginalAllocationRow({db: read, member: issuedAnchor})[COLUMN.ISSUE],
+      STATE.ISSUED,
       'cleanup cannot undo a durable issue or turn it into a new original allocation');
   } finally {
     read.close();

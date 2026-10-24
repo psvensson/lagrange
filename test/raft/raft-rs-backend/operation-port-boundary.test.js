@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'espree';
 
 import {
-  auditRaftRsOperationBoundary,
+  auditRaftRsOperationBoundary, lifecycleTableWriters,
 } from '../../../scripts/checks/raft-rs-operation-boundary-audit.js';
 import {
   generateCurrentLedger,
@@ -179,10 +179,9 @@ test('retirement has one production writer and no provider control accessor',
     const sources = sourceFiles().map((file) => ({
       file: relative(file), source: sourceOf(file),
     }));
-    const writers = sources.filter(({source}) =>
-      /UPDATE\s+\$\{LIFECYCLE_TABLE\}/u.test(source))
-      .map(({file}) => file);
-    assert.deepEqual(writers, [
+    // The census owner resolves the table name behind any binding (local,
+    // imported under any alias, namespace member), not one identifier name.
+    assert.deepEqual(lifecycleTableWriters({root: ROOT}), [
       'src/raft/raft-rs-replica-lifecycle-owner.js',
     ]);
     // The provider facade that once could have exposed a control accessor

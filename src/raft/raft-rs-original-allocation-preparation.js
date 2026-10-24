@@ -13,8 +13,12 @@ import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations,
   deriveRaftRsPeerId} from
   './raft-rs-peer-identity.js';
-import {prepareReplicaLifecycleForOriginalAllocation} from
-  './raft-rs-replica-lifecycle-owner.js';
+// The lifecycle owner is the only writer of the founder rows and their
+// allocation fields (owner decision 2026-10-26, Q3): this preparation births,
+// formats, issues and reads them only through these named operations.
+import {prepareReplicaLifecycleForOriginalAllocation, prepareOriginalAllocationRow,
+  markOriginalAllocationIssued, readOriginalAllocationRow,
+  readOriginalAllocationDeclaration} from './raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_RETAINED_HISTORY_COVERAGE, RAFT_RS_RETAINED_ENTRY_KIND,
   RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
@@ -22,12 +26,9 @@ import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RaftRsPreparationCustody} from './raft-rs-preparation-custody.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {ownsDataDirectoryProcessOwner} from '../storage/data-directory-process-owner.js';
-import {originalAllocationRow, prepareOriginalAllocationRow,
-  markOriginalAllocationIssued} from './raft-rs-original-allocation-store.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN, originalAllocationError} from
   './raft-rs-original-allocation-constants.js';
-import {REPLICA_LIFECYCLE_TABLE} from './raft-rs-replica-lifecycle-constants.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST as PORT_REQUEST} from './raft-operation-port-request.js';
 import {validateBootstrapMembershipStamp, validateDurableRecordBootstrap} from
@@ -71,7 +72,7 @@ function bearOriginalMember(db, member) {
 }
 
 function verifyMemberBinding(db, declaration, member) {
-  const row = originalAllocationRow(db, member);
+  const row = readOriginalAllocationRow({db, member});
   if (row[COLUMN.DECLARATION] !== JSON.stringify(declaration) ||
       row[COLUMN.MEMBER] !== JSON.stringify(member)) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
@@ -217,15 +218,10 @@ class RaftRsOriginalAllocationPreparation {
     let answer;
     try {
       const db = this.#custody.open(anchor, {readonly: true, fileMustExist: true});
-      const present = db.prepare(`SELECT 1 FROM sqlite_master
-        WHERE type = 'table' AND name = ?`).get(REPLICA_LIFECYCLE_TABLE);
-      const row = present === undefined ? undefined :
-        db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
-          WHERE group_id = ? AND replica_identity = ?`)
-          .get(anchor.groupId, anchor.replicaId);
-      answer = row?.[COLUMN.DECLARATION] == null ?
-        Object.freeze({state: STATE.ABSENT}) :
-        Object.freeze({state: STATE.PRESENT, declaration: JSON.parse(row[COLUMN.DECLARATION])});
+      const read = readOriginalAllocationDeclaration({db, groupId: anchor.groupId,
+        replicaIdentity: anchor.replicaId});
+      answer = read.state === STATE.PRESENT ?
+        Object.freeze({state: STATE.PRESENT, declaration: read.declaration}) : read;
     } catch (error) {
       this.#fail(originalAllocationError(REASON.OBSERVATION, anchor.replicaId, error));
     }
@@ -265,14 +261,14 @@ class RaftRsOriginalAllocationPreparation {
       declaration = completeSeedOriginalAllocation(draft, incarnations,
         this.#declarationIdentity);
       for (const member of declaration.members) {
-        prepareOriginalAllocationRow(opened.get(member.replicaId), declaration, member);
+        prepareOriginalAllocationRow({db: opened.get(member.replicaId), declaration, member});
       }
       for (const member of declaration.members) {
         verifyMemberBinding(opened.get(member.replicaId), declaration, member);
       }
       const anchor = declaration.members.find(({replicaId}) =>
         replicaId === declaration.anchorReplicaId);
-      markOriginalAllocationIssued(opened.get(anchor.replicaId), declaration, anchor);
+      markOriginalAllocationIssued({db: opened.get(anchor.replicaId), declaration, anchor});
     } catch (error) {
       this.#fail(error);
     }
