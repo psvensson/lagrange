@@ -19,7 +19,8 @@ import {
   unregisterRuntimeLifecycle,
 } from '../../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
-import {inspectLifecycleRetirements} from './lifecycle-retirement-census.js';
+import {inspectLifecycleRetirements} from
+  '../../../scripts/checks/raft-rs-lifecycle-retirement-census.js';
 
 const GROUP_ID = 'registry-generation-group';
 const REPLICA_ID = 'registry-generation-replica';

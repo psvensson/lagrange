@@ -12,7 +12,7 @@ const files = [
   'test/partition/partition-registration-exact-birth.test.js',
   'test/partition/partition-registration-readback-controls.test.js',
   'test/message-group/message-group-registration-exact-birth.test.js',
-  'test/raft/raft-rs-backend/lifecycle-retirement-census.js',
+  'scripts/checks/raft-rs-lifecycle-retirement-census.js',
   'test/raft/raft-rs-backend/lifecycle-retirement-census.test.js',
   'test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js',
   'test/closure/original-birth-scope-lint.test.js',

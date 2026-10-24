@@ -28,7 +28,7 @@
   "censusSize": 2461,
   "digest": "fnv1a32-8db296ae",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8655a726",
+  "observationDigest": "fnv1a32-f5325c08",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -3845,6 +3845,7 @@
     },
     "test/closure/original-birth-scope-lint.test.js": {
       "files": [
+        "scripts/checks/raft-rs-lifecycle-retirement-census.js",
         "src/message-group/message-group-service-row-owner.js",
         "src/node/service-row-incarnation.js",
         "src/partition/partition-service-row-owner.js",
@@ -3853,7 +3854,6 @@
         "test/partition/partition-registration-exact-birth.test.js",
         "test/partition/partition-registration-readback-controls.test.js",
         "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js",
-        "test/raft/raft-rs-backend/lifecycle-retirement-census.js",
         "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js"
       ]
     },
@@ -11345,6 +11345,7 @@
     },
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": {
       "files": [
+        "scripts/checks/raft-rs-lifecycle-retirement-census.js",
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-lifecycle-administration.js",
@@ -11358,6 +11359,7 @@
     },
     "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": {
       "files": [
+        "scripts/checks/raft-rs-lifecycle-retirement-census.js",
         "src/node/replica-handler-remove-execution-methods.js",
         "src/raft/raft-rs-lifecycle-administration.js"
       ]
@@ -12049,6 +12051,7 @@
         "src/raft/raft-operation-port-constants.js",
         "src/wasm-service/wasm-service-committed-command-admission.js",
         "src/wasm-service/wasm-service-constants.js",
+        "src/wasm-service/wasm-service-lifecycle.js",
         "src/wasm-service/wasm-service-replica.js",
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
@@ -17194,8 +17197,13 @@
         "src/logging/logging-service.js",
         "src/node/node-service.js",
         "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/wasm-service/wasm-service-committed-command-admission.js",
-        "test/test-helpers/boot-incarnation-fixture.js"
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js"
       ]
     },
     "test/wasm-service/wasm-strong-write-native-completion.test.js": {

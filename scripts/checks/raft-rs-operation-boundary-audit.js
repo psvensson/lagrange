@@ -3,9 +3,15 @@ import path from 'node:path';
 
 import {parse} from 'espree';
 
+import {
+  inspectLifecycleRetirements,
+  NATIVE_RETIREMENT_METHOD,
+} from './raft-rs-lifecycle-retirement-census.js';
+
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
@@ -72,10 +78,19 @@ const AUDIT_VIOLATION = Object.freeze({
     'core-alias-invocation-outside-owner',
   LIFECYCLE_WRITE_OUTSIDE_OWNER: 'lifecycle-write-outside-owner',
   LIFECYCLE_SQL_OUTSIDE_OWNER: 'lifecycle-sql-outside-owner',
+  // A lifecycle writer may retire, but a binding the census cannot follow
+  // there (escape, dynamic method, re-export) hides where retirement happens.
+  LIFECYCLE_WRITER_BINDING_ESCAPE: 'lifecycle-writer-binding-escape',
   BINDING_LOADER_REEXPORT: 'binding-loader-reexport',
 });
 const LIFECYCLE_WRITE_METHODS = Object.freeze([
-  'putRetirement', 'retireReplica', 'writeRetirement',
+  'putRetirement', 'writeRetirement',
+]);
+// Native retirement is the lifecycle administration's retireReplica, found by
+// its import binding (raft-rs-lifecycle-retirement-census.js), never by the
+// method name: other owners (WasmServiceLifecycle) name a retireReplica too.
+const LIFECYCLE_WRITERS = Object.freeze([
+  LIFECYCLE_OWNER, LIFECYCLE_ADMIN, LIFECYCLE_COORDINATOR,
 ]);
 const BINDING_LOADER_EXPORTS = Object.freeze([
   'loadRaftRsCore', 'instantiateRaftRsCore',
@@ -364,8 +379,7 @@ function auditRaftRsOperationBoundary({root}) {
             node.callee.name));
         }
         if (arrayIncludes(LIFECYCLE_WRITE_METHODS, calledMember) &&
-          fileName !== LIFECYCLE_OWNER &&
-          fileName !== LIFECYCLE_ADMIN && fileName !== LIFECYCLE_COORDINATOR) {
+          !arrayIncludes(LIFECYCLE_WRITERS, fileName)) {
           violations.push(violation(fileName,
             AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER, calledMember));
         }
@@ -392,8 +406,25 @@ function auditRaftRsOperationBoundary({root}) {
         }
       }
     });
+    arrayPush(violations, ...nativeRetirementCensus(source,
+      {file, fileName, lifecycleAdmin}));
   }
   return Object.freeze(violations);
+}
+
+// The binding-aware census runs in every file. Only a lifecycle writer's own
+// retirements are allowed; every native retirement elsewhere, and every
+// binding the census cannot follow anywhere, writers included, fails closed.
+function nativeRetirementCensus(source, {file, fileName, lifecycleAdmin}) {
+  const census = inspectLifecycleRetirements(source, {file, ownerFile: lifecycleAdmin});
+  const writer = arrayIncludes(LIFECYCLE_WRITERS, fileName);
+  const unfollowed = writer ? AUDIT_VIOLATION.LIFECYCLE_WRITER_BINDING_ESCAPE :
+    AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER;
+  return [
+    ...arrayMap(writer ? [] : census.calls, () => violation(fileName,
+      AUDIT_VIOLATION.LIFECYCLE_WRITE_OUTSIDE_OWNER, NATIVE_RETIREMENT_METHOD)),
+    ...arrayMap(census.violations, (entry) => violation(fileName, unfollowed, entry.reason)),
+  ];
 }
 
 export {
