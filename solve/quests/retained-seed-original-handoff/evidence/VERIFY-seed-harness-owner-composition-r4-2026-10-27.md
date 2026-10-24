@@ -186,3 +186,125 @@ not see.
   base SHAs are as the log states; I did not re-run on tv-dator.
 - The merged tree (lineage + unit) was not test-run; conflicts were inspected and the merge aborted.
 - The fresh-seed witness on the lineage was read, not run (it is the Quest's own red-by-design witness).
+
+---
+
+# Re-verification r5: 8504eab76 (on bdd53ab33)
+
+## Verdict: REQUIRED CHANGES (two exact, small; everything else may be kept as is)
+
+RC-A is closed and measured. The round introduces two new per-test copies of shapes that
+`test/guidelines/fixtures.md` rule 1 says must exist once ("add exactly one fixture and use it
+everywhere; never a per-test copy"); both are a few lines to move. Everything else holds.
+
+### RC-B1. `createOwnedSeed(t, options)` is byte-identical in two files; it belongs in the shared fixture once
+- `test/bootstrap/phase-event-ordering-characterization.test.js:109-113` and
+  `test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js:155-159`: the same 4-line
+  helper (`createVirginSeedBootstrapService(options)` + `t.teardown(() => bootstrap.shutdown())`).
+  The same "owned seed bound to the test's teardown" shape is also written locally in
+  `production-scheduling-defaults.test.js` (`seedBootstrapService(t, nodeService)`, prepared variant),
+  `seed-infrastructure-runtime-identity.test.js` (`recordedSeedPhase`), and inline in
+  `core-system-logic-runtime-witness.test.js`, `lifecycle-owner-replica-routing.test.js`
+  (`t.after`/`t.teardown(() => ….shutdown())`). jscpd does not see 4-line copies, so the duplication
+  ratchet (688/26126, unchanged) is not evidence against this.
+- **Fix:** one exported helper in `test/integration/helpers/cluster-test-helpers.js`, e.g.
+  `createOwnedVirginSeedBootstrapService(t, options)` (and, if wanted, the prepared twin), binding
+  `t.teardown`/`t.after` shutdown; both characterizations consume it and drop their local copy.
+  Unifying the other four local variants onto it is recommended in the same move, not required.
+
+### RC-B2. `isFreshSeedContinuationHold` is a fifth test-local copy of the "is this an original-allocation hold with reason X" predicate
+- `return-value-completeness.property.test.js:142-145` restates the predicate from the owner's
+  *constants* (`ORIGINAL_ALLOCATION.HOLD`, `ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE`,
+  imported from `src/raft/raft-rs-original-allocation-constants.js`); the owner exports no predicate
+  (its exports are the two constant tables and `originalAllocationError`, :64-65). It is therefore a
+  test copy composed from owner values, not an owner-provided check.
+- The same predicate already exists as `hold(reason) → (error) => error.code === STATE.HOLD &&
+  error.reason === reason` in `test/raft/raft-rs-original-opening.test.js:63`,
+  `raft-rs-original-allocation-store.test.js:30`, `raft-rs-original-allocation-preparation.test.js:36`,
+  and on the lineage as `const hold = (error) => error?.code === STATE.HOLD` in
+  `test/bootstrap/fresh-seed-activation.integration.test.js:53`. Five versions of one shape (rule 3:
+  a unification finding).
+- **Fix:** exactly one predicate. Preferred (R03, consume the owner): export
+  `isOriginalAllocationHold(error, reason)` from `raft-rs-original-allocation-constants.js` beside
+  `originalAllocationError` and consume it here (a one-function src addition in the constants owner;
+  if the unit must stay src-free, the one fixture under `test/test-helpers/` is acceptable). The
+  three raft copies and the lineage witness's copy are then recorded for unification; this unit
+  must not add the fifth.
+
+## Identity
+- `8504eab76d38ae9466c7fc143acd1cb14e48c837`, parent bdd53ab33, pushed (`ls-remote` = 8504eab76).
+  `git diff bdd53ab33 8504eab76 --stat -- src` is EMPTY. 9 files (+170/−100): 6 test files, 3 generated
+  (inventory.json, subsystem-classes.json, impact-graph-seal.json).
+- Scratch worktrees `wt/r5` (8504eab76), `wt/mut5` (8504eab76 + one reverted fixture mutation),
+  `wt/lineage5` (origin `work/mg-delivery-resume-r2-20261023` = `a733ca56b`, 70 commits past the
+  merge-base; b32f0eca9 is an ancestor). Implementer worktree untouched (8504eab76, clean).
+
+## Per-claim table (r5)
+
+| # | Claim | Verdict | Evidence |
+|---|---|---|---|
+| RC-A | both characterizations build seeds through `createOwnedSeed` → `createVirginSeedBootstrapService`, shut down after the test; `BootstrapService` import gone | holds | diff: `import {BootstrapService}` removed in both; 8 + 2 sites now `await createOwnedSeed(t, {...})`; teardown shutdown in the helper. Probe (`r5-site-probe.mjs`, mirrors the tests' stubs + `installMinimumSeedBootstrapLifecycleFixture`): all-stubbed sites → `{phase:'cache_hydration', error:'original-handoff-continuation-unavailable', code ORIGINAL_ALLOCATION_HOLD}` via `startup.js:111 ← runtime-methods.js:63 ← completeSuccessfulBootstrap`; the injected-partition-failure site → `{phase:'partitions', error:'injected partitions failure'}` from `seed-startup-plan.js:30`; owner held before `bootstrap()`, released after `shutdown()` (`r5-site-probe.out`) |
+| RC-A | the two e29e46abf stubs live once in `installMinimumSeedBootstrapLifecycleFixture`, used by both files and bootstrap-sequence's two phase-stub tests | holds | `cluster-test-helpers.js:63-68`; bootstrap-sequence :424-430/:520-535 wrap the fixture call and the per-test copies are deleted (diff). **Judged owner-shaped enough (rule 2):** they null the registration step's two direct acquisitions (`plan.js:42-43`, return values unused by the plan) for a fixture that has no cache to bind — a seam, not an owner decision restated; no owner value shape is copied |
+| per-leaf | phase-event-ordering 262/267 | holds | my run `# { total: 267, pass: 262, fail: 5 }` in 16 s: 3 × "bootstrap should succeed" + 2 downstream leaves in "emits COMPLETE event after all phases" (`:292-302`: `COMPLETE` is never emitted because the hold fires inside `completeSuccessfulBootstrap`, so `lastEvent` is a `PHASE_COMPLETE`); the two injected-failure tests pass on their own error. DATADIR 0 |
+| per-leaf | join-lifecycle 70/72 | holds | `# { total: 72, pass: 70, fail: 2 }`, both "bootstrap should succeed"; DATADIR 0 |
+| per-leaf | bootstrap-sequence 31/42, no DATADIR | holds | `# { total: 42, pass: 31, fail: 11 }`, CONT 9, DATADIR 0 (same as r4) |
+| RVC | 10 runs through `createPropertyRunSeed` on a fresh NodeService; success-shape properties accept a failure only if `isFreshSeedContinuationHold`; 20/20 at 58–97 s | holds (20/20 in 48.6 s here) | `# { total: 20, pass: 20 } # time=48587ms`, CONT ×20, DATADIR 0; per-seed 2.1–8.5 s (`r5-return-value-completeness.tap`). `createPropertyRunSeed` :137-140 spreads `nodeService: new NodeService()`. The predicate gates only the three success-shape properties (:181,:457,:506); the seven failure-shape properties accept any failure by design |
+| RVC | fails on a non-hold failure (mutation: fixture drops the owner) | **reproduced** | `wt/mut5`: `cluster-test-helpers.js:294` owner never acquired → every run `original-allocation-directory-custody-unavailable` at `not_started` (DIR ×34); result `# { total: 20, pass: 17, fail: 3 }`: the three success-shape properties fail (`Property failed after 1 tests … returning false`), the seven failure-shape ones still pass (`MUT5-return-value-completeness-owner-dropped.tap`). Restored, tree clean. (The DATADIR TypeError itself has no `cause.code`, so it fails the predicate the same way; not separately run) |
+| founder-open | after-hook order fixed; `laterSeedStart` hands the service back before prepare | holds | diff :55-61 `retain(service)` before `prepareOriginalSeedAttempt`; one `t.after` does `await reopened?.shutdown()` then `rmSync` (:78-84). Run: still CLASS (`refused at open, not ORIGINAL_ALLOCATION_HOLD: original-retained-history-classification-unavailable`), the `:106` assertion still unreachable until that hold lifts |
+| budgets | `scaleByMachineFactor(120000)` file budgets on two files | see Judgment below | `phase-event-ordering:103`, `return-value-completeness:131-135`; the only other `t.setTimeout(scaleByMachineFactor(…))` in the tree is this round's; `.taprc` sets `timeout: 5000` for the tap CLI, the runner invokes node directly (30 s default) |
+| checks | eslint / node --check (6 changed .js) | holds | rc 0, no output (`r5-eslint.txt`) |
+| checks | duplication 688/26126 | holds | `npm run -s test:duplication` at 8504eab76: `[src+scripts] OK: 46/46, 1439/1439`; `[test] OK: 688/688, 26126/26126` (`r5-duplication.txt`). The two 4-line `createOwnedSeed` copies are below jscpd's threshold (RC-B1) |
+| checks | unused exports 1413 | holds | `npm run -s test:unused:ratchet` at 8504eab76: `OK: 1413/1413 unused export(s) across 334 file(s)` (`r5-unused.txt`); the lineage is at 1409 (merge conflict, Finding 2) |
+| checks | cycles 0 | holds | `npm run -s test:cycles` at 8504eab76: `Circular dependency ratchet OK: 0/0 cycle group(s)` (`r5-cycles.txt`) |
+| checks | metadata zero drift | holds | `npm run -s test:metadata:refresh` at 8504eab76 (2473 tests; `snapshotDigest 6569002b…` = the committed `impact-graph-seal.json`), then `git status --short`: 0 tracked changes (`r5-metadata-drift.txt`) |
+| merge | dry-run onto a733ca56b | 2 conflicts, both ratchet constants | `check-duplication.js` (lineage 658/24752 vs 688/26126), `check-unused-exports.js` (lineage **1409** vs 1413): keep the lineage's tighter values and re-measure on the merged tree. None of the unit's six test files changed on the lineage since 5cfabc308 (`git log` empty); O3 at `startup.js:111` still unconditional there. The three generated files auto-merge but must be regenerated on the merged tree. Aborted; clean (`verify-r5-merge.log`) |
+
+## Budget judgment (5)
+
+- Measured: return-value-completeness 48.6 s here (implementer 58–97 s), phase-event-ordering 16 s
+  (implementer 12–13 s, ~50 s contended). On tv-dator the lab factor is 1.3 (lab-3.log
+  `placement-env=factor:1.3`) → 156 s budgets; CI lanes export factor 3 → 360 s. Against the memory
+  "GCP proof runner 2.4× lottery", 97 s × 2.4 = 233 s exceeds 156 s: **thin on a 1.3 host**, fine
+  only where the factor is 3. A raised constant is the wrong lever (one-way-ratchet spirit: budgets
+  follow work, not the other way round).
+- There is no owner seed-start budget constant to derive from: `awaitStartupAcquisition`
+  (`lagrange-runtime-startup.js:85-88`) is abort-signal based with no timeout, and the only owner
+  time constant on the seed path is `leadershipWaitTimeoutMs: 30000` (`bootstrap-constants.js:395`),
+  which is not a start budget. So the derivation route is closed today.
+- **Proposed bounded alternative (fewer composed seeds):** with `SEED_PROPERTY_RUNS = 1`, fast-check
+  draws one example per property, so these are ten example tests, not properties; their inputs differ
+  only in which field of the same hold result they inspect. Compose **three** seeds once — the
+  wsPort seed (success-shape class: keys, Map fields), the no-wsPort seed (failure-shape class: error,
+  phase, keys), the short-timeout seed — and assert all ten shapes against those three results (plain
+  assertions, or `fc.constantFrom` over the composed results if the fc framing is to be kept). That
+  is 10 → 3 composed seeds (~15–25 s here, ~60 s at 2.4×) and fits tap's default 30 s where it runs
+  uncontended with headroom under a budget expressed as `seedCount × scaleByMachineFactor(SEED_COMPOSE_REFERENCE_MS)`
+  (measured ≈ 8.5 s max per seed here), i.e. a work-bound budget derived from a count and one
+  measured per-seed reference, not a 120 s constant. The same expression suits phase-event-ordering
+  (8 seeds). Record the per-seed reference where it was measured, as the file already does for its
+  durations.
+
+## Findings (r5)
+1. The round's commit message records the r4 findings faithfully (three `_buildPhaseExecutionDelegates`
+   consumers, the fixture's startup-decision divergences, the unreachable mapped-founder assertion,
+   the three-node elision).
+2. Lineage: `check-unused-exports.js` moved 1411 → 1409 since r4 (`5d5dab010`); the unit's 1413 is
+   now two behind, so the merged tree needs re-measurement before the ratchet can be set.
+3. `return-value-completeness`'s "Property" framing with `numRuns: 1` is an example test (see Budget
+   judgment); the comment at :124-130 says why, honestly.
+
+## What I ran (r5; logs under `verify-r4/logs/`)
+- `run.sh` at 8504eab76: phase-event-ordering (16 s), join-lifecycle (5 s), bootstrap-sequence (31 s),
+  founder-open-refusal (7 s), return-value-completeness (50 s). Mutation `wt/mut5`:
+  return-value-completeness with the fixture's owner acquisition replaced by `null` (10 s).
+  All thermal-gated, one at a time.
+- Probes: `r5-site-probe.mjs` (three sites).
+- Static at 8504eab76: eslint + node --check (`r5-eslint.txt`), duplication (`r5-duplication.txt`),
+  unused (`r5-unused.txt`), cycles (`r5-cycles.txt`), metadata refresh + status (`r5-metadata-drift.txt`).
+- Merge: `verify-r5-merge.log`, aborted.
+
+## Limits (r5)
+- No lab run was provided for 8504eab76; all per-leaf counts are my local runs on a shared machine.
+- The hook replay was not repeated for r5 (r4's replay covered the hook's behaviour on this branch;
+  the generated files changed again here and are covered by the metadata-refresh drift check).
+- The merged tree was not test-run.
