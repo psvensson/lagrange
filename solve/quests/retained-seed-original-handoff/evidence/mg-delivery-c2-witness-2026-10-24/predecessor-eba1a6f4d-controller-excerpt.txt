@@ -1,0 +1,2972 @@
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: hold cpu 84C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 84C >= 75C, waiting 30s (poll 2/20)
+thermal: ok cpu 73C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/transport/message-router-cdc-outcome-roundtrip.test.js (105 assertions, 1042ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: C2 LOCAL: delivered CDC outcome keeps every supplied claim
+    # Subtest: COMMITTED_POSITIVE
+    ok 1 - COMMITTED_POSITIVE
+      ---
+      duration_ms: 3.362733
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_POSITIVE
+    ok 2 - PROVISIONAL_POSITIVE
+      ---
+      duration_ms: 0.7232
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_WRONG_GROUP
+    ok 3 - COMMITTED_WRONG_GROUP
+      ---
+      duration_ms: 0.526597
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_WRONG_GROUP
+    ok 4 - PROVISIONAL_WRONG_GROUP
+      ---
+      duration_ms: 0.419592
+      type: 'test'
+      ...
+    # Subtest: ORDINARY_SUCCESS_COMMITTED
+    ok 5 - ORDINARY_SUCCESS_COMMITTED
+      ---
+      duration_ms: 0.258852
+      type: 'test'
+      ...
+    # Subtest: ORDINARY_SUCCESS_PROVISIONAL
+    ok 6 - ORDINARY_SUCCESS_PROVISIONAL
+      ---
+      duration_ms: 0.20856
+      type: 'test'
+      ...
+    # Subtest: ACK_ONLY_COMMITTED
+    ok 7 - ACK_ONLY_COMMITTED
+      ---
+      duration_ms: 0.264182
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+    not ok 8 - COMMITTED_REASON_CODE_ACK_REJECTED
+      ---
+      duration_ms: 1.50125
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_REASON_CODE_ACK_REJECTED_DELIVERED_MATCHES_RAW_VERDICT (reasonCode: supplied "ack_rejected", delivered null); delivered={"messageId":"151e9dcf-a3ca-4c07-88e5-da884cb301a8","correlationId":"151e9dcf-a3ca-4c07-88e5-da884cb301a8","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"reasonCode":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"noHandler":false}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: 'ack_rejected'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: 'ack_rejected'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+    not ok 9 - COMMITTED_ERROR_CODE_LOWER_CASE
+      ---
+      duration_ms: 0.80555
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"9144d156-677f-4820-b5be-05ae1055afa6","correlationId":"9144d156-677f-4820-b5be-05ae1055afa6","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+            deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+        ...
+                present: true,
+        +       value: 'X'
+        -       value: 'x'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'x'
+      actual:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'X'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_TRUE
+    ok 10 - COMMITTED_DEFER_RETRY_TRUE
+      ---
+      duration_ms: 0.441412
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_TRUE
+    ok 11 - COMMITTED_NO_HANDLER_TRUE
+      ---
+      duration_ms: 0.350333
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+    not ok 12 - COMMITTED_NO_HANDLER_WRONG_TYPE
+      ---
+      duration_ms: 0.509656
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"f143eac0-2e17-4220-a177-7e8110f07703","correlationId":"f143eac0-2e17-4220-a177-7e8110f07703","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: false
+        -       value: 1
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: 1
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: false
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_ZERO
+    not ok 13 - COMMITTED_RETRY_AFTER_ZERO
+      ---
+      duration_ms: 0.469756
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_RETRY_AFTER_ZERO_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied 0, delivered null); delivered={"messageId":"6f015dc2-9210-4885-b64c-0d49cff045af","correlationId":"6f015dc2-9210-4885-b64c-0d49cff045af","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: 0
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: 0
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+    not ok 14 - COMMITTED_RETRY_AFTER_NEGATIVE
+      ---
+      duration_ms: 0.416662
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_RETRY_AFTER_NEGATIVE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied -5, delivered null); delivered={"messageId":"7ab93d28-507a-4077-9b85-a5b170c581cc","correlationId":"7ab93d28-507a-4077-9b85-a5b170c581cc","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: -5
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: -5
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+    ok 15 - COMMITTED_RETRY_AFTER_POSITIVE
+      ---
+      duration_ms: 0.235744
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+    ok 16 - COMMITTED_DELIVERY_STATE_FAILED
+      ---
+      duration_ms: 0.294047
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+    ok 17 - COMMITTED_DELIVERY_STATE_DEFERRED
+      ---
+      duration_ms: 0.250469
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_EMPTY_STRING
+    ok 18 - COMMITTED_ERROR_EMPTY_STRING
+      ---
+      duration_ms: 0.287718
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_STATUS_UNKNOWN
+    ok 19 - COMMITTED_STATUS_UNKNOWN
+      ---
+      duration_ms: 0.274596
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_UNKNOWN_FIELD
+    ok 20 - COMMITTED_UNKNOWN_FIELD
+      ---
+      duration_ms: 0.239665
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+    not ok 21 - COMMITTED_ERROR_CODE_EMPTY_STRING
+      ---
+      duration_ms: 0.461333
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_ERROR_CODE_EMPTY_STRING_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "", delivered null); delivered={"messageId":"f2873c7a-3d6e-42fc-a8b7-b98e41ca1768","correlationId":"f2873c7a-3d6e-42fc-a8b7-b98e41ca1768","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":null,"deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: ''
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: ''
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+    not ok 22 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+      ---
+      duration_ms: 0.439072
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_DEFER_RETRY_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied "yes", delivered false); delivered={"messageId":"298ffae1-0d0f-4356-bb4f-47eeac6020db","correlationId":"298ffae1-0d0f-4356-bb4f-47eeac6020db","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"deferRetry":false,"deliveryState":"delivered","errorCode":null,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: false
+        -       value: 'yes'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          deferRetry:
+            present: true
+            value: 'yes'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          deferRetry:
+            present: true
+            value: false
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+    not ok 23 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+      ---
+      duration_ms: 0.416465
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_COMMITTED_RETRY_AFTER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied "250", delivered null); delivered={"messageId":"d91882e8-f78a-4473-8f3c-4b19795cfc77","correlationId":"d91882e8-f78a-4473-8f3c-4b19795cfc77","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: '250'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: '250'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+    not ok 24 - PROVISIONAL_DEFER_RETRY_FALSE
+      ---
+      duration_ms: 0.56218
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_PROVISIONAL_DEFER_RETRY_FALSE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied false, delivered true); delivered={"messageId":"3983e3b1-6219-4fd2-8852-436209f626a2","correlationId":"3983e3b1-6219-4fd2-8852-436209f626a2","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","error":"cdc_provisional_ingress","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcProvisional: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: true
+        -       value: false
+              },
+              error: {
+                present: true,
+                value: 'cdc_provisional_ingress'
+              },
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: false
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+    not ok 25 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+      ---
+      duration_ms: 0.446343
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_LOCAL_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_DELIVERED_MATCHES_RAW_VERDICT (deliveryState: supplied "delivered", delivered "deferred"; retryAfterMs: supplied 250, delivered 250); delivered={"messageId":"6a5e2d63-7f92-4886-963d-6d19a4496d75","correlationId":"6a5e2d63-7f92-4886-963d-6d19a4496d75","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","error":"cdc_provisional_ingress","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcProvisional: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: 'deferred'
+        -       value: 'failed'
+              },
+              error: {
+                present: true,
+                value: 'cdc_provisional_ingress'
+              },
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+          deliveryState:
+            present: true
+            value: 'failed'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+          deliveryState:
+            present: true
+            value: 'deferred'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+      ...
+    # Subtest: PROVISIONAL_SUCCESS_TRUE
+    ok 26 - PROVISIONAL_SUCCESS_TRUE
+      ---
+      duration_ms: 0.285162
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_ERROR_NULL
+    ok 27 - PROVISIONAL_ERROR_NULL
+      ---
+      duration_ms: 0.223264
+      type: 'test'
+      ...
+    1..27
+not ok 1 - C2 LOCAL: delivered CDC outcome keeps every supplied claim
+  ---
+  duration_ms: 76.845509
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:229:3'
+  failureType: 'subtestsFailed'
+  error: '10 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: C2 SERVICE_RESPONSE: delivered CDC outcome keeps every supplied claim
+    # Subtest: COMMITTED_POSITIVE
+    ok 1 - COMMITTED_POSITIVE
+      ---
+      duration_ms: 8.241099
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_POSITIVE
+    ok 2 - PROVISIONAL_POSITIVE
+      ---
+      duration_ms: 1.241399
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_WRONG_GROUP
+    ok 3 - COMMITTED_WRONG_GROUP
+      ---
+      duration_ms: 1.054328
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_WRONG_GROUP
+    ok 4 - PROVISIONAL_WRONG_GROUP
+      ---
+      duration_ms: 0.983877
+      type: 'test'
+      ...
+    # Subtest: ORDINARY_SUCCESS_COMMITTED
+    ok 5 - ORDINARY_SUCCESS_COMMITTED
+      ---
+      duration_ms: 0.727281
+      type: 'test'
+      ...
+    # Subtest: ORDINARY_SUCCESS_PROVISIONAL
+    ok 6 - ORDINARY_SUCCESS_PROVISIONAL
+      ---
+      duration_ms: 0.650381
+      type: 'test'
+      ...
+    # Subtest: ACK_ONLY_COMMITTED
+    ok 7 - ACK_ONLY_COMMITTED
+      ---
+      duration_ms: 0.638339
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+    not ok 8 - COMMITTED_REASON_CODE_ACK_REJECTED
+      ---
+      duration_ms: 1.15411
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_SERVICE_RESPONSE_COMMITTED_REASON_CODE_ACK_REJECTED_DELIVERED_MATCHES_RAW_VERDICT (reasonCode: supplied "ack_rejected", delivered null); delivered={"messageId":"4477c0bd-d927-451a-b676-d0cbaf3db71b","correlationId":"4477c0bd-d927-451a-b676-d0cbaf3db71b","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"reasonCode":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"noHandler":false}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: 'ack_rejected'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: 'ack_rejected'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+    not ok 9 - COMMITTED_ERROR_CODE_LOWER_CASE
+      ---
+      duration_ms: 1.556873
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_SERVICE_RESPONSE_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"f62657ef-d9a8-4482-81cf-b18f1ec8b2b2","correlationId":"f62657ef-d9a8-4482-81cf-b18f1ec8b2b2","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+            deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+        ...
+                present: true,
+        +       value: 'X'
+        -       value: 'x'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'x'
+      actual:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'X'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_TRUE
+    ok 10 - COMMITTED_DEFER_RETRY_TRUE
+      ---
+      duration_ms: 1.099917
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_TRUE
+    ok 11 - COMMITTED_NO_HANDLER_TRUE
+      ---
+      duration_ms: 0.760931
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+    not ok 12 - COMMITTED_NO_HANDLER_WRONG_TYPE
+      ---
+      duration_ms: 0.945134
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_SERVICE_RESPONSE_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"6af67fda-0588-42fc-a53b-236883a036f7","correlationId":"6af67fda-0588-42fc-a53b-236883a036f7","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: false
+        -       value: 1
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: 1
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: false
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_ZERO
+    not ok 13 - COMMITTED_RETRY_AFTER_ZERO
+      ---
+      duration_ms: 1.095944
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_SERVICE_RESPONSE_COMMITTED_RETRY_AFTER_ZERO_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied 0, delivered null); delivered={"messageId":"5122a94e-1991-432e-82f3-919bfa221954","correlationId":"5122a94e-1991-432e-82f3-919bfa221954","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source"
+# ... 35074 byte(s) elided; full output in .tap/test-results/test/transport/message-router-cdc-outcome-roundtrip.test.js.tap ...
+tKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"reasonCode":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"noHandler":false}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: 'ack_rejected'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: 'ack_rejected'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          reasonCode:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+    not ok 8 - COMMITTED_ERROR_CODE_LOWER_CASE
+      ---
+      duration_ms: 0.849948
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"a3079c05-8366-41b4-a56a-9fa979b4760d","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+            deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+        ...
+                present: true,
+        +       value: 'X'
+        -       value: 'x'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'x'
+      actual:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: 'X'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_TRUE
+    ok 9 - COMMITTED_DEFER_RETRY_TRUE
+      ---
+      duration_ms: 0.74732
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_TRUE
+    ok 10 - COMMITTED_NO_HANDLER_TRUE
+      ---
+      duration_ms: 0.615785
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+    not ok 11 - COMMITTED_NO_HANDLER_WRONG_TYPE
+      ---
+      duration_ms: 0.734484
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"ceddebbc-aec6-454c-84e9-ae8116b782df","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: false
+        -       value: 1
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: 1
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          noHandler:
+            present: true
+            value: false
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_ZERO
+    not ok 12 - COMMITTED_RETRY_AFTER_ZERO
+      ---
+      duration_ms: 0.880539
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_RETRY_AFTER_ZERO_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied 0, delivered null); delivered={"messageId":"bf0352d3-9067-4d4f-a53b-a8802c2085de","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: 0
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: 0
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+    not ok 13 - COMMITTED_RETRY_AFTER_NEGATIVE
+      ---
+      duration_ms: 0.897651
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_RETRY_AFTER_NEGATIVE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied -5, delivered null); delivered={"messageId":"35e2157a-b74b-4ae4-af7d-e6d741f55004","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: -5
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: -5
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+    ok 14 - COMMITTED_RETRY_AFTER_POSITIVE
+      ---
+      duration_ms: 0.670903
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+    ok 15 - COMMITTED_DELIVERY_STATE_FAILED
+      ---
+      duration_ms: 0.536428
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+    ok 16 - COMMITTED_DELIVERY_STATE_DEFERRED
+      ---
+      duration_ms: 0.538307
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_EMPTY_STRING
+    ok 17 - COMMITTED_ERROR_EMPTY_STRING
+      ---
+      duration_ms: 0.556349
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_STATUS_UNKNOWN
+    ok 18 - COMMITTED_STATUS_UNKNOWN
+      ---
+      duration_ms: 0.555569
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_UNKNOWN_FIELD
+    ok 19 - COMMITTED_UNKNOWN_FIELD
+      ---
+      duration_ms: 0.569706
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+    not ok 20 - COMMITTED_ERROR_CODE_EMPTY_STRING
+      ---
+      duration_ms: 0.709162
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_ERROR_CODE_EMPTY_STRING_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "", delivered null); delivered={"messageId":"f56c32c2-5503-4ab1-82cc-620a7481741f","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":null,"deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: ''
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: ''
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          errorCode:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+    not ok 21 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+      ---
+      duration_ms: 0.790624
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_DEFER_RETRY_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied "yes", delivered false); delivered={"messageId":"4453b9b6-1b5b-41e0-96ba-d5e76db01abb","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"deferRetry":false,"deliveryState":"delivered","errorCode":null,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: false
+        -       value: 'yes'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          deferRetry:
+            present: true
+            value: 'yes'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          deferRetry:
+            present: true
+            value: false
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+    not ok 22 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+      ---
+      duration_ms: 0.784074
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_COMMITTED_RETRY_AFTER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied "250", delivered null); delivered={"messageId":"3c555c7b-182e-4878-8ab1-e7470259e27f","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcCommitted: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: null
+        -       value: '250'
+              },
+              success: {
+                present: true,
+                value: true
+              }
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: '250'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: true
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          cdcCommitted:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+                groupId: 'c2-target-group'
+                logIndex: 7
+                term: 2
+          retryAfterMs:
+            present: true
+            value: ~
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+    not ok 23 - PROVISIONAL_DEFER_RETRY_FALSE
+      ---
+      duration_ms: 0.840408
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_PROVISIONAL_DEFER_RETRY_FALSE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied false, delivered true); delivered={"messageId":"e2de981d-ed5a-4d29-ad44-766f893bb9ed","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"error":"cdc_provisional_ingress","deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcProvisional: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: true
+        -       value: false
+              },
+              error: {
+                present: true,
+                value: 'cdc_provisional_ingress'
+              },
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: false
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+    not ok 24 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+      ---
+      duration_ms: 0.950863
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_INLINE_ACK_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_DELIVERED_MATCHES_RAW_VERDICT (deliveryState: supplied "delivered", delivered "deferred"; retryAfterMs: supplied 250, delivered 250); delivered={"messageId":"8e1af06d-252d-4168-80c6-18a556c7eb70","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","error":"cdc_provisional_ingress","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+        + actual - expected
+        ... Skipped lines
+        
+          {
+        +   deliveredPredicate: true,
+        -   deliveredPredicate: false,
+            preserved: {
+              cdcProvisional: {
+                present: true,
+                value: [
+                  {
+        ...
+                present: true,
+        +       value: 'deferred'
+        -       value: 'failed'
+              },
+              error: {
+                present: true,
+                value: 'cdc_provisional_ingress'
+              },
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+        deliveredPredicate: false
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+          deliveryState:
+            present: true
+            value: 'failed'
+      actual:
+        deliveredPredicate: true
+        preserved:
+          success:
+            present: true
+            value: false
+          cdcVectorDigest:
+            present: true
+            value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+          error:
+            present: true
+            value: 'cdc_provisional_ingress'
+          deferRetry:
+            present: true
+            value: true
+          retryAfterMs:
+            present: true
+            value: 250
+          groupId:
+            present: true
+            value: 'c2-target-group'
+          cdcProvisional:
+            present: true
+            value:
+              0:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-0'
+                eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+              1:
+                sourcePartition: 'c2-source'
+                eventKey: 'c2-occurrence-1'
+                eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+          deliveryState:
+            present: true
+            value: 'deferred'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_SUCCESS_TRUE
+    ok 25 - PROVISIONAL_SUCCESS_TRUE
+      ---
+      duration_ms: 0.744202
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_ERROR_NULL
+    ok 26 - PROVISIONAL_ERROR_NULL
+      ---
+      duration_ms: 0.570777
+      type: 'test'
+      ...
+    1..26
+not ok 3 - C2 INLINE_ACK: delivered CDC outcome keeps every supplied claim
+  ---
+  duration_ms: 19.711462
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:229:3'
+  failureType: 'subtestsFailed'
+  error: '10 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# Subtest: C2 normalizeDeliveryOutcome is idempotent on CDC replies
+ok 4 - C2 normalizeDeliveryOutcome is idempotent on CDC replies
+  ---
+  duration_ms: 1.187044
+  type: 'test'
+  ...
+# Subtest: C2 unit anchor: buildTransportDeliveryOutcome keeps explicit fields
+    # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+    not ok 1 - COMMITTED_REASON_CODE_ACK_REJECTED
+      ---
+      duration_ms: 0.231558
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_REASON_CODE_ACK_REJECTED_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'reasonCode: supplied "ack_rejected", want "ack_rejected" -> null'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'reasonCode: supplied "ack_rejected", want "ack_rejected" -> null'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+    not ok 2 - COMMITTED_ERROR_CODE_LOWER_CASE
+      ---
+      duration_ms: 0.146357
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_ERROR_CODE_LOWER_CASE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'errorCode: supplied "x", want "x" -> "X"'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'errorCode: supplied "x", want "x" -> "X"'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_TRUE
+    ok 3 - COMMITTED_DEFER_RETRY_TRUE
+      ---
+      duration_ms: 0.093564
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_TRUE
+    ok 4 - COMMITTED_NO_HANDLER_TRUE
+      ---
+      duration_ms: 0.072658
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+    not ok 5 - COMMITTED_NO_HANDLER_WRONG_TYPE
+      ---
+      duration_ms: 0.121816
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_NO_HANDLER_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'noHandler: supplied 1, want 1 -> false'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'noHandler: supplied 1, want 1 -> false'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_ZERO
+    not ok 6 - COMMITTED_RETRY_AFTER_ZERO
+      ---
+      duration_ms: 0.124757
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_RETRY_AFTER_ZERO_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'retryAfterMs: supplied 0, want 0 -> null'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'retryAfterMs: supplied 0, want 0 -> null'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+    not ok 7 - COMMITTED_RETRY_AFTER_NEGATIVE
+      ---
+      duration_ms: 0.10902
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_RETRY_AFTER_NEGATIVE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'retryAfterMs: supplied -5, want -5 -> null'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'retryAfterMs: supplied -5, want -5 -> null'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+    ok 8 - COMMITTED_RETRY_AFTER_POSITIVE
+      ---
+      duration_ms: 0.171704
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+    ok 9 - COMMITTED_DELIVERY_STATE_FAILED
+      ---
+      duration_ms: 0.071509
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+    ok 10 - COMMITTED_DELIVERY_STATE_DEFERRED
+      ---
+      duration_ms: 0.068131
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_EMPTY_STRING
+    ok 11 - COMMITTED_ERROR_EMPTY_STRING
+      ---
+      duration_ms: 0.071747
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_STATUS_UNKNOWN
+    ok 12 - COMMITTED_STATUS_UNKNOWN
+      ---
+      duration_ms: 0.064856
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_UNKNOWN_FIELD
+    ok 13 - COMMITTED_UNKNOWN_FIELD
+      ---
+      duration_ms: 0.065782
+      type: 'test'
+      ...
+    # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+    not ok 14 - COMMITTED_ERROR_CODE_EMPTY_STRING
+      ---
+      duration_ms: 0.120385
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_ERROR_CODE_EMPTY_STRING_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'errorCode: supplied "", want "" -> null'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'errorCode: supplied "", want "" -> null'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+    not ok 15 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+      ---
+      duration_ms: 0.118159
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_DEFER_RETRY_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'deferRetry: supplied "yes", want "yes" -> false'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'deferRetry: supplied "yes", want "yes" -> false'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+    not ok 16 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+      ---
+      duration_ms: 0.10678
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_COMMITTED_RETRY_AFTER_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'retryAfterMs: supplied "250", want "250" -> null'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'retryAfterMs: supplied "250", want "250" -> null'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+    not ok 17 - PROVISIONAL_DEFER_RETRY_FALSE
+      ---
+      duration_ms: 0.10858
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_PROVISIONAL_DEFER_RETRY_FALSE_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'deferRetry: supplied false, want false -> true'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'deferRetry: supplied false, want false -> true'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+    not ok 18 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+      ---
+      duration_ms: 0.114339
+      type: 'test'
+      location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+      failureType: 'testCodeFailure'
+      error: |-
+        C2_ANCHOR_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_EXPLICIT_FIELD_REPLACED
+        + actual - expected
+        
+        + [
+        +   'deliveryState: supplied "delivered", want "failed" -> "deferred"'
+        + ]
+        - []
+        
+      code: 'ERR_ASSERTION'
+      name: 'AssertionError'
+      expected:
+      actual:
+        0: 'deliveryState: supplied "delivered", want "failed" -> "deferred"'
+      operator: 'deepStrictEqual'
+      stack: |-
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+        Test.runInAsyncScope (node:async_hooks:214:14)
+        Test.run (node:internal/test_runner/test:1047:25)
+        Test.start (node:internal/test_runner/test:944:17)
+        TestContext.test (node:internal/test_runner/test:373:20)
+        TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+        process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+        async Test.run (node:internal/test_runner/test:1054:7)
+        async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+      ...
+    # Subtest: PROVISIONAL_SUCCESS_TRUE
+    ok 19 - PROVISIONAL_SUCCESS_TRUE
+      ---
+      duration_ms: 0.078789
+      type: 'test'
+      ...
+    # Subtest: PROVISIONAL_ERROR_NULL
+    ok 20 - PROVISIONAL_ERROR_NULL
+      ---
+      duration_ms: 0.082607
+      type: 'test'
+      ...
+    1..20
+not ok 5 - C2 unit anchor: buildTransportDeliveryOutcome keeps explicit fields
+  ---
+  duration_ms: 2.772808
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/mg-composition-predecessor-20261024/test/transport/message-router-cdc-outcome-roundtrip.test.js:264:1'
+  failureType: 'subtestsFailed'
+  error: '10 subtests failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..5
+# tests 105
+# suites 0
+# pass 61
+# fail 44
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 199.852623
+# time=1042ms
+# test-files total=1 pass=0 fail=1 assertions=105
+exit=1

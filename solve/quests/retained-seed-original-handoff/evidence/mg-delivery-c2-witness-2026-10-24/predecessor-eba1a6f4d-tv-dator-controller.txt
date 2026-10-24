@@ -1,0 +1,2953 @@
+driver: sha=eba1a6f4d6bf8446a1e247b18e06eea80d8e0597 on=tv-dator startedAt=2026-10-24T07:58:45.665Z files=1
+lab test: tv-dator: ordinary (1 files) cores=12 mem=15.4GiB speed x1.48
+[tv-dator] placement-shell=1701352
+[tv-dator] placement-head=eba1a6f4d6bf8446a1e247b18e06eea80d8e0597
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.5 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=1701772
+[tv-dator] # test-files planned=1
+[tv-dator] classified lane ordinary: 1 file(s), jobs=4
+[tv-dator] thermal: ok cpu 59C (coretemp/Package id 0) nvme 48C (nvme/Sensor 1)
+[tv-dator] not ok test/transport/message-router-cdc-outcome-roundtrip.test.js (105 assertions, 614ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: C2 LOCAL: delivered CDC outcome keeps every supplied claim
+[tv-dator]     # Subtest: COMMITTED_POSITIVE
+[tv-dator]     ok 1 - COMMITTED_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 4.641852
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_POSITIVE
+[tv-dator]     ok 2 - PROVISIONAL_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.97721
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_WRONG_GROUP
+[tv-dator]     ok 3 - COMMITTED_WRONG_GROUP
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.741086
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_WRONG_GROUP
+[tv-dator]     ok 4 - PROVISIONAL_WRONG_GROUP
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.590575
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ORDINARY_SUCCESS_COMMITTED
+[tv-dator]     ok 5 - ORDINARY_SUCCESS_COMMITTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.364976
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ORDINARY_SUCCESS_PROVISIONAL
+[tv-dator]     ok 6 - ORDINARY_SUCCESS_PROVISIONAL
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.297594
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ACK_ONLY_COMMITTED
+[tv-dator]     ok 7 - ACK_ONLY_COMMITTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.372258
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]     not ok 8 - COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 2.085198
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_REASON_CODE_ACK_REJECTED_DELIVERED_MATCHES_RAW_VERDICT (reasonCode: supplied "ack_rejected", delivered null); delivered={"messageId":"9624ed18-9166-4a7a-a346-6cab04830890","correlationId":"9624ed18-9166-4a7a-a346-6cab04830890","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"reasonCode":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"noHandler":false}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: 'ack_rejected'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'ack_rejected'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]     not ok 9 - COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.070164
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"7cd9e660-1f4b-4c34-a1c2-81a10384d5f5","correlationId":"7cd9e660-1f4b-4c34-a1c2-81a10384d5f5","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]             deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: 'X'
+[tv-dator]         -       value: 'x'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'x'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'X'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]     ok 10 - COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.612478
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_TRUE
+[tv-dator]     ok 11 - COMMITTED_NO_HANDLER_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.501695
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]     not ok 12 - COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.723654
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"33620302-43cb-429b-9bc1-9d6c9ab471dd","correlationId":"33620302-43cb-429b-9bc1-9d6c9ab471dd","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: false
+[tv-dator]         -       value: 1
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: 1
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]     not ok 13 - COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.655398
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_RETRY_AFTER_ZERO_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied 0, delivered null); delivered={"messageId":"e8e39389-22b0-47f2-af06-f1442d0bf7c7","correlationId":"e8e39389-22b0-47f2-af06-f1442d0bf7c7","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: 0
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 0
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]     not ok 14 - COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.572225
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_RETRY_AFTER_NEGATIVE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied -5, delivered null); delivered={"messageId":"f9983280-9768-4b5b-ba57-aafa41605b06","correlationId":"f9983280-9768-4b5b-ba57-aafa41605b06","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: -5
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: -5
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]     ok 15 - COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.348498
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]     ok 16 - COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.405768
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]     ok 17 - COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.347312
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]     ok 18 - COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.385396
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_STATUS_UNKNOWN
+[tv-dator]     ok 19 - COMMITTED_STATUS_UNKNOWN
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.416892
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_UNKNOWN_FIELD
+[tv-dator]     ok 20 - COMMITTED_UNKNOWN_FIELD
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.349366
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]     not ok 21 - COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.64301
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_ERROR_CODE_EMPTY_STRING_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "", delivered null); delivered={"messageId":"4a35be33-2095-4f23-89c5-c19651279a7a","correlationId":"4a35be33-2095-4f23-89c5-c19651279a7a","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":null,"deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: ''
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: ''
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]     not ok 22 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.63387
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_DEFER_RETRY_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied "yes", delivered false); delivered={"messageId":"4e7e2e7b-208a-4ce3-917d-c100d4529983","correlationId":"4e7e2e7b-208a-4ce3-917d-c100d4529983","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"deferRetry":false,"deliveryState":"delivered","errorCode":null,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: false
+[tv-dator]         -       value: 'yes'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: 'yes'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]     not ok 23 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.573452
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_COMMITTED_RETRY_AFTER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied "250", delivered null); delivered={"messageId":"5f893fea-4648-40b3-b418-69538560b3de","correlationId":"5f893fea-4648-40b3-b418-69538560b3de","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: '250'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: '250'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]     not ok 24 - PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.807247
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_PROVISIONAL_DEFER_RETRY_FALSE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied false, delivered true); delivered={"messageId":"d1af99f3-cd39-4b89-9cb5-414f219c3c97","correlationId":"d1af99f3-cd39-4b89-9cb5-414f219c3c97","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","error":"cdc_provisional_ingress","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcProvisional: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: true
+[tv-dator]         -       value: false
+[tv-dator]               },
+[tv-dator]               error: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: 'cdc_provisional_ingress'
+[tv-dator]               },
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]     not ok 25 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.610001
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_LOCAL_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_DELIVERED_MATCHES_RAW_VERDICT (deliveryState: supplied "delivered", delivered "deferred"; retryAfterMs: supplied 250, delivered 250); delivered={"messageId":"c522c88d-ae03-4eb7-ad94-df0404828338","correlationId":"c522c88d-ae03-4eb7-ad94-df0404828338","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","error":"cdc_provisional_ingress","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcProvisional: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: 'deferred'
+[tv-dator]         -       value: 'failed'
+[tv-dator]               },
+[tv-dator]               error: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: 'cdc_provisional_ingress'
+[tv-dator]               },
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]           deliveryState:
+[tv-dator]             present: true
+[tv-dator]             value: 'failed'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]           deliveryState:
+[tv-dator]             present: true
+[tv-dator]             value: 'deferred'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_SUCCESS_TRUE
+[tv-dator]     ok 26 - PROVISIONAL_SUCCESS_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.37839
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_ERROR_NULL
+[tv-dator]     ok 27 - PROVISIONAL_ERROR_NULL
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.350213
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..27
+[tv-dator] not ok 1 - C2 LOCAL: delivered CDC outcome keeps every supplied claim
+[tv-dator]   ---
+[tv-dator]   duration_ms: 121.391153
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:229:3'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '10 subtests failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] # Subtest: C2 SERVICE_RESPONSE: delivered CDC outcome keeps every supplied claim
+[tv-dator]     # Subtest: COMMITTED_POSITIVE
+[tv-dator]     ok 1 - COMMITTED_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 12.655903
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_POSITIVE
+[tv-dator]     ok 2 - PROVISIONAL_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.787315
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_WRONG_GROUP
+[tv-dator]     ok 3 - COMMITTED_WRONG_GROUP
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.537163
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_WRONG_GROUP
+[tv-dator]     ok 4 - PROVISIONAL_WRONG_GROUP
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.276112
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ORDINARY_SUCCESS_COMMITTED
+[tv-dator]     ok 5 - ORDINARY_SUCCESS_COMMITTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.149828
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ORDINARY_SUCCESS_PROVISIONAL
+[tv-dator]     ok 6 - ORDINARY_SUCCESS_PROVISIONAL
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.850865
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: ACK_ONLY_COMMITTED
+[tv-dator]     ok 7 - ACK_ONLY_COMMITTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.865622
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]     not ok 8 - COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.427979
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_SERVICE_RESPONSE_COMMITTED_REASON_CODE_ACK_REJECTED_DELIVERED_MATCHES_RAW_VERDICT (reasonCode: supplied "ack_rejected", delivered null); delivered={"messageId":"f23a924b-d767-48ab-a958-b2c46772f889","correlationId":"f23a924b-d767-48ab-a958-b2c46772f889","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"reasonCode":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"noHandler":false}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: 'ack_rejected'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'ack_rejected'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]     not ok 9 - COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.98145
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_SERVICE_RESPONSE_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"d0b2d820-9a45-4e2f-84ed-2c6a7aab0ccf","correlationId":"d0b2d820-9a45-4e2f-84ed-2c6a7aab0ccf","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]             deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: 'X'
+[tv-dator]         -       value: 'x'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'x'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'X'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]     ok 10 - COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.280211
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_TRUE
+[tv-dator]     ok 11 - COMMITTED_NO_HANDLER_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.052371
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]     not ok 12 - COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.18502
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_SERVICE_RESPONSE_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"67a0461f-95ad-4250-b2fc-a6d5f494fb25","correlationId":"67a0461f-95ad-4250-b2fc-a6d5f494fb25","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: false
+[tv-dator]         -       value: 1
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: 1
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]     not ok 13 - COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.430514
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/pe
+[tv-dator] # ... 37552 byte(s) elided; full output in .tap/test-results/test/transport/message-router-cdc-outcome-roundtrip.test.js.tap ...
+[tv-dator] ctorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'ack_rejected'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           reasonCode:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]     not ok 8 - COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.200015
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_ERROR_CODE_LOWER_CASE_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "x", delivered "X"); delivered={"messageId":"554ee9d0-f823-4500-a6f6-fd68461a42b6","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":"X","deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]             deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: 'X'
+[tv-dator]         -       value: 'x'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'x'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: 'X'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]     ok 9 - COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.060287
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_TRUE
+[tv-dator]     ok 10 - COMMITTED_NO_HANDLER_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.83699
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]     not ok 11 - COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.121218
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_NO_HANDLER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (noHandler: supplied 1, delivered false); delivered={"messageId":"f51bbc87-a903-4b38-9325-7a5d50593158","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"noHandler":false,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"retryAfterMs":null,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: false
+[tv-dator]         -       value: 1
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: 1
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           noHandler:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]     not ok 12 - COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.264057
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_RETRY_AFTER_ZERO_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied 0, delivered null); delivered={"messageId":"fb29b5da-6789-4041-bcd6-7137f9727ace","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: 0
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 0
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]     not ok 13 - COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.54187
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_RETRY_AFTER_NEGATIVE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied -5, delivered null); delivered={"messageId":"659966c7-a2df-40a2-adbe-6d6f8df16a0e","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: -5
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: -5
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]     ok 14 - COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.937828
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]     ok 15 - COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.75689
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]     ok 16 - COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.728289
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]     ok 17 - COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.78194
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_STATUS_UNKNOWN
+[tv-dator]     ok 18 - COMMITTED_STATUS_UNKNOWN
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.840768
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_UNKNOWN_FIELD
+[tv-dator]     ok 19 - COMMITTED_UNKNOWN_FIELD
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.764311
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]     not ok 20 - COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.966163
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_ERROR_CODE_EMPTY_STRING_DELIVERED_MATCHES_RAW_VERDICT (errorCode: supplied "", delivered null); delivered={"messageId":"8da7dbe6-98ed-49a0-ac49-75c7bb80bf4e","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"errorCode":null,"deliveryState":"delivered","deferRetry":false,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: ''
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: ''
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           errorCode:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]     not ok 21 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 2.125698
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_DEFER_RETRY_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied "yes", delivered false); delivered={"messageId":"19431954-25e0-40a8-9edc-6113afddae20","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"deferRetry":false,"deliveryState":"delivered","errorCode":null,"retryAfterMs":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: false
+[tv-dator]         -       value: 'yes'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: 'yes'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]     not ok 22 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.455513
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_COMMITTED_RETRY_AFTER_WRONG_TYPE_DELIVERED_MATCHES_RAW_VERDICT (retryAfterMs: supplied "250", delivered null); delivered={"messageId":"7bc62712-7e14-4838-9bce-dabec8a4d46e","acknowledged":true,"success":true,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","cdcCommitted":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be","groupId":"c2-target-group","logIndex":7,"term":2},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370","groupId":"c2-target-group","logIndex":7,"term":2}],"retryAfterMs":null,"deliveryState":"delivered","deferRetry":false,"errorCode":null,"noHandler":false,"reasonCode":null}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcCommitted: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: null
+[tv-dator]         -       value: '250'
+[tv-dator]               },
+[tv-dator]               success: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: true
+[tv-dator]               }
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: '250'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           cdcCommitted:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]                 groupId: 'c2-target-group'
+[tv-dator]                 logIndex: 7
+[tv-dator]                 term: 2
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: ~
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]     not ok 23 - PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.229217
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_PROVISIONAL_DEFER_RETRY_FALSE_DELIVERED_MATCHES_RAW_VERDICT (deferRetry: supplied false, delivered true); delivered={"messageId":"4bc9aa4e-2be8-48f4-9526-e6d3b87d266e","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"error":"cdc_provisional_ingress","deliveryState":"deferred","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcProvisional: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: true
+[tv-dator]         -       value: false
+[tv-dator]               },
+[tv-dator]               error: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: 'cdc_provisional_ingress'
+[tv-dator]               },
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]     not ok 24 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]       ---
+[tv-dator]       duration_ms: 1.170865
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:15'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_INLINE_ACK_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_DELIVERED_MATCHES_RAW_VERDICT (deliveryState: supplied "delivered", delivered "deferred"; retryAfterMs: supplied 250, delivered 250); delivered={"messageId":"a73e5cf8-f92f-428d-ae4f-f1235c3cd0f8","acknowledged":true,"success":false,"cdcVectorDigest":"sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da","deferRetry":true,"retryAfterMs":250,"groupId":"c2-target-group","cdcProvisional":[{"sourcePartition":"c2-source","eventKey":"c2-occurrence-0","eventDigest":"sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be"},{"sourcePartition":"c2-source","eventKey":"c2-occurrence-1","eventDigest":"sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370"}],"deliveryState":"deferred","error":"cdc_provisional_ingress","errorCode":null,"noHandler":false,"reasonCode":"transport_deferred"}
+[tv-dator]         + actual - expected
+[tv-dator]         ... Skipped lines
+[tv-dator]         
+[tv-dator]           {
+[tv-dator]         +   deliveredPredicate: true,
+[tv-dator]         -   deliveredPredicate: false,
+[tv-dator]             preserved: {
+[tv-dator]               cdcProvisional: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: [
+[tv-dator]                   {
+[tv-dator]         ...
+[tv-dator]                 present: true,
+[tv-dator]         +       value: 'deferred'
+[tv-dator]         -       value: 'failed'
+[tv-dator]               },
+[tv-dator]               error: {
+[tv-dator]                 present: true,
+[tv-dator]                 value: 'cdc_provisional_ingress'
+[tv-dator]               },
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]         deliveredPredicate: false
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]           deliveryState:
+[tv-dator]             present: true
+[tv-dator]             value: 'failed'
+[tv-dator]       actual:
+[tv-dator]         deliveredPredicate: true
+[tv-dator]         preserved:
+[tv-dator]           success:
+[tv-dator]             present: true
+[tv-dator]             value: false
+[tv-dator]           cdcVectorDigest:
+[tv-dator]             present: true
+[tv-dator]             value: 'sha256:89b9d13b29166baa195ec25f192d14824c403fb17ffc2e7cfacd69cadf38e8da'
+[tv-dator]           error:
+[tv-dator]             present: true
+[tv-dator]             value: 'cdc_provisional_ingress'
+[tv-dator]           deferRetry:
+[tv-dator]             present: true
+[tv-dator]             value: true
+[tv-dator]           retryAfterMs:
+[tv-dator]             present: true
+[tv-dator]             value: 250
+[tv-dator]           groupId:
+[tv-dator]             present: true
+[tv-dator]             value: 'c2-target-group'
+[tv-dator]           cdcProvisional:
+[tv-dator]             present: true
+[tv-dator]             value:
+[tv-dator]               0:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-0'
+[tv-dator]                 eventDigest: 'sha256:d0d47411f5eed048184d9f018d4969243818c2f856616179028e7eda201f85be'
+[tv-dator]               1:
+[tv-dator]                 sourcePartition: 'c2-source'
+[tv-dator]                 eventKey: 'c2-occurrence-1'
+[tv-dator]                 eventDigest: 'sha256:b16d5a212c408715199001fda4b030523799a4074d1cd136fad1fe8684403370'
+[tv-dator]           deliveryState:
+[tv-dator]             present: true
+[tv-dator]             value: 'deferred'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:240:16)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:232:7)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_SUCCESS_TRUE
+[tv-dator]     ok 25 - PROVISIONAL_SUCCESS_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.944909
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_ERROR_NULL
+[tv-dator]     ok 26 - PROVISIONAL_ERROR_NULL
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.801398
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..26
+[tv-dator] not ok 3 - C2 INLINE_ACK: delivered CDC outcome keeps every supplied claim
+[tv-dator]   ---
+[tv-dator]   duration_ms: 29.61063
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:229:3'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '10 subtests failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] # Subtest: C2 normalizeDeliveryOutcome is idempotent on CDC replies
+[tv-dator] ok 4 - C2 normalizeDeliveryOutcome is idempotent on CDC replies
+[tv-dator]   ---
+[tv-dator]   duration_ms: 1.390936
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: C2 unit anchor: buildTransportDeliveryOutcome keeps explicit fields
+[tv-dator]     # Subtest: COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]     not ok 1 - COMMITTED_REASON_CODE_ACK_REJECTED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.312674
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_REASON_CODE_ACK_REJECTED_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'reasonCode: supplied "ack_rejected", want "ack_rejected" -> null'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'reasonCode: supplied "ack_rejected", want "ack_rejected" -> null'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]     not ok 2 - COMMITTED_ERROR_CODE_LOWER_CASE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.20122
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_ERROR_CODE_LOWER_CASE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'errorCode: supplied "x", want "x" -> "X"'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'errorCode: supplied "x", want "x" -> "X"'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]     ok 3 - COMMITTED_DEFER_RETRY_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.102589
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_TRUE
+[tv-dator]     ok 4 - COMMITTED_NO_HANDLER_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.090306
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]     not ok 5 - COMMITTED_NO_HANDLER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.148336
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_NO_HANDLER_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'noHandler: supplied 1, want 1 -> false'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'noHandler: supplied 1, want 1 -> false'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]     not ok 6 - COMMITTED_RETRY_AFTER_ZERO
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.14979
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_RETRY_AFTER_ZERO_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'retryAfterMs: supplied 0, want 0 -> null'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'retryAfterMs: supplied 0, want 0 -> null'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]     not ok 7 - COMMITTED_RETRY_AFTER_NEGATIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.1398
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_RETRY_AFTER_NEGATIVE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'retryAfterMs: supplied -5, want -5 -> null'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'retryAfterMs: supplied -5, want -5 -> null'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]     ok 8 - COMMITTED_RETRY_AFTER_POSITIVE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.087493
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]     ok 9 - COMMITTED_DELIVERY_STATE_FAILED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.092274
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]     ok 10 - COMMITTED_DELIVERY_STATE_DEFERRED
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.083132
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]     ok 11 - COMMITTED_ERROR_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.081171
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_STATUS_UNKNOWN
+[tv-dator]     ok 12 - COMMITTED_STATUS_UNKNOWN
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.083991
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_UNKNOWN_FIELD
+[tv-dator]     ok 13 - COMMITTED_UNKNOWN_FIELD
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.07743
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]     not ok 14 - COMMITTED_ERROR_CODE_EMPTY_STRING
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.150219
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_ERROR_CODE_EMPTY_STRING_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'errorCode: supplied "", want "" -> null'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'errorCode: supplied "", want "" -> null'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]     not ok 15 - COMMITTED_DEFER_RETRY_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.141284
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_DEFER_RETRY_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'deferRetry: supplied "yes", want "yes" -> false'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'deferRetry: supplied "yes", want "yes" -> false'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]     not ok 16 - COMMITTED_RETRY_AFTER_WRONG_TYPE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.14409
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_COMMITTED_RETRY_AFTER_WRONG_TYPE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'retryAfterMs: supplied "250", want "250" -> null'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'retryAfterMs: supplied "250", want "250" -> null'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]     not ok 17 - PROVISIONAL_DEFER_RETRY_FALSE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.139341
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_PROVISIONAL_DEFER_RETRY_FALSE_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'deferRetry: supplied false, want false -> true'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'deferRetry: supplied false, want false -> true'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]     not ok 18 - PROVISIONAL_DELIVERED_WITH_RETRY_HINT
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.140274
+[tv-dator]       type: 'test'
+[tv-dator]       location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13'
+[tv-dator]       failureType: 'testCodeFailure'
+[tv-dator]       error: |-
+[tv-dator]         C2_ANCHOR_PROVISIONAL_DELIVERED_WITH_RETRY_HINT_EXPLICIT_FIELD_REPLACED
+[tv-dator]         + actual - expected
+[tv-dator]         
+[tv-dator]         + [
+[tv-dator]         +   'deliveryState: supplied "delivered", want "failed" -> "deferred"'
+[tv-dator]         + ]
+[tv-dator]         - []
+[tv-dator]         
+[tv-dator]       code: 'ERR_ASSERTION'
+[tv-dator]       name: 'AssertionError'
+[tv-dator]       expected:
+[tv-dator]       actual:
+[tv-dator]         0: 'deliveryState: supplied "delivered", want "failed" -> "deferred"'
+[tv-dator]       operator: 'deepStrictEqual'
+[tv-dator]       stack: |-
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:274:14)
+[tv-dator]         Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]         Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]         Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]         TestContext.test (node:internal/test_runner/test:373:20)
+[tv-dator]         TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:266:13)
+[tv-dator]         process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+[tv-dator]         async Test.run (node:internal/test_runner/test:1054:7)
+[tv-dator]         async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_SUCCESS_TRUE
+[tv-dator]     ok 19 - PROVISIONAL_SUCCESS_TRUE
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.087513
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     # Subtest: PROVISIONAL_ERROR_NULL
+[tv-dator]     ok 20 - PROVISIONAL_ERROR_NULL
+[tv-dator]       ---
+[tv-dator]       duration_ms: 0.106221
+[tv-dator]       type: 'test'
+[tv-dator]       ...
+[tv-dator]     1..20
+[tv-dator] not ok 5 - C2 unit anchor: buildTransportDeliveryOutcome keeps explicit fields
+[tv-dator]   ---
+[tv-dator]   duration_ms: 3.36113
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/eba1a6f4d6bf-mvm3xns5-3429379/test/transport/message-router-cdc-outcome-roundtrip.test.js:264:1'
+[tv-dator]   failureType: 'subtestsFailed'
+[tv-dator]   error: '10 subtests failed'
+[tv-dator]   code: 'ERR_TEST_FAILURE'
+[tv-dator]   ...
+[tv-dator] 1..5
+[tv-dator] # tests 105
+[tv-dator] # suites 0
+[tv-dator] # pass 61
+[tv-dator] # fail 44
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 294.440524
+[tv-dator] # time=614ms
+[tv-dator] # test-files total=1 pass=0 fail=1 assertions=105
+lab test: tv-dator: # test-files total=1 pass=0 fail=1 assertions=105
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=1 pass=0 fail=1 assertions=105
+driver: status=1 logs=2
