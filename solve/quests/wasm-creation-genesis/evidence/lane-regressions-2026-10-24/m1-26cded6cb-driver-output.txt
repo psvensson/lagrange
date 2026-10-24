@@ -1,0 +1,21 @@
+driver: sha=26cded6cb74594b8d38bce24e6a862302b605e23 on=adam-laptop plan=[{"files":["test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","test/raft/raft-rs-backend/operation-port-boundary.test.js","test/wasm-service/wasm-service-replica.test.js"],"jobs":4,"resourceClass":"ordinary"}]
+lab test: adam-laptop: ordinary (3 files) cores=8 mem=15.5GiB speed x2.04
+[adam-laptop] placement-shell=2174781
+[adam-laptop] placement-head=26cded6cb74594b8d38bce24e6a862302b605e23
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2.1 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=2175208
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 77C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 39C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 1984ms)
+[adam-laptop] ok test/raft/raft-rs-backend/operation-port-boundary.test.js (7 assertions, 7695ms)
+[adam-laptop] ok test/wasm-service/wasm-service-replica.test.js (53 assertions, 17288ms)
+[adam-laptop] # test-files total=3 pass=3 fail=0 assertions=64
+lab test: adam-laptop: # test-files total=3 pass=3 fail=0 assertions=64
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=3 fail=0 assertions=64
+driver: done status=0 startedAt=2026-10-24T07:20:04.400Z finishedAt=2026-10-24T07:21:26.439Z

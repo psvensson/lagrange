@@ -1,0 +1,185 @@
+driver: sha=bed8c6354737df06e8e57a0c5753d3b88f1e5e5f on=adam-laptop plan=[{"files":["test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","test/raft/raft-rs-backend/operation-port-boundary.test.js","test/wasm-service/wasm-service-replica.test.js"],"jobs":4,"resourceClass":"ordinary"}]
+lab test: adam-laptop: ordinary (3 files) cores=8 mem=15.5GiB speed x1.97
+[adam-laptop] placement-shell=2176877
+[adam-laptop] placement-head=bed8c6354737df06e8e57a0c5753d3b88f1e5e5f
+[adam-laptop] placement-link=node_modules
+[adam-laptop] placement-link=data/examples
+[adam-laptop] placement-prepared=import-graph
+[adam-laptop] placement-env=factor:2 mode:local retry: timeout: lanecap:7
+[adam-laptop] placement-pid=2177304
+[adam-laptop] # test-files planned=3
+[adam-laptop] classified lane ordinary: 3 file(s), jobs=4
+[adam-laptop] thermal: hold cpu 80C (coretemp/Package id 0) nvme 18C (nvme/Composite) - CPU package 80C >= 75C, waiting 30s (poll 1/20)
+[adam-laptop] thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+[adam-laptop] not ok test/raft/raft-rs-backend/operation-port-boundary.test.js (7 assertions, 8978ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: the partition receives only a frozen operation port and immutable snapshots
+[adam-laptop] ok 1 - the partition receives only a frozen operation port and immutable snapshots
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 45.651212
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: one private binding owner loads native bytes and only the runtime owner imports it
+[adam-laptop] not ok 2 - one private binding owner loads native bytes and only the runtime owner imports it
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 7509.941646
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/operation-port-boundary.test.js:156:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly deep-equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + [
+[adam-laptop]     +   {
+[adam-laptop]     +     code: 'lifecycle-owner-import-bypass',
+[adam-laptop]     +     detail: './raft-rs-replica-lifecycle-owner.js',
+[adam-laptop]     +     file: 'src/raft/raft-rs-original-allocation-preparation.js'
+[adam-laptop]     +   },
+[adam-laptop]     +   {
+[adam-laptop]     +     code: 'lifecycle-write-outside-owner',
+[adam-laptop]     +     detail: 'retireReplica',
+[adam-laptop]     +     file: 'src/runtime/wasm-component-driver-consensus.js'
+[adam-laptop]     +   }
+[adam-laptop]     + ]
+[adam-laptop]     - []
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected:
+[adam-laptop]   actual:
+[adam-laptop]     0:
+[adam-laptop]       file: 'src/raft/raft-rs-original-allocation-preparation.js'
+[adam-laptop]       code: 'lifecycle-owner-import-bypass'
+[adam-laptop]       detail: './raft-rs-replica-lifecycle-owner.js'
+[adam-laptop]     1:
+[adam-laptop]       file: 'src/runtime/wasm-component-driver-consensus.js'
+[adam-laptop]       code: 'lifecycle-write-outside-owner'
+[adam-laptop]       detail: 'retireReplica'
+[adam-laptop]   operator: 'deepStrictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/operation-port-boundary.test.js:173:10)
+[adam-laptop]     Test.runInAsyncScope (node:async_hooks:214:14)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1047:25)
+[adam-laptop]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[adam-laptop]     Test.postRun (node:internal/test_runner/test:1173:19)
+[adam-laptop]     Test.run (node:internal/test_runner/test:1101:12)
+[adam-laptop]     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: retirement has one production writer and no provider control accessor
+[adam-laptop] ok 3 - retirement has one production writer and no provider control accessor
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 95.873152
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the private owner instruments actual core entry rather than gate checks
+[adam-laptop] ok 4 - the private owner instruments actual core entry rather than gate checks
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.673059
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the operation boundary removes public capability instead of renaming it
+[adam-laptop] ok 5 - the operation boundary removes public capability instead of renaming it
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 27.935113
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the ownership census catches import and lifecycle-writer bypass modules
+[adam-laptop] ok 6 - the ownership census catches import and lifecycle-writer bypass modules
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 0.529972
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: the real ownership audit rejects core, facade and lifecycle mutants
+[adam-laptop] ok 7 - the real ownership audit rejects core, facade and lifecycle mutants
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 4.06761
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] 1..7
+[adam-laptop] # tests 7
+[adam-laptop] # suites 0
+[adam-laptop] # pass 6
+[adam-laptop] # fail 1
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 7698.21866
+[adam-laptop] # time=8978ms
+[adam-laptop] not ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 12246ms)
+[adam-laptop] # TAP assertions failed; test process exited 1
+[adam-laptop] TAP version 13
+[adam-laptop] # Subtest: worker consensus path and its replica base are deleted
+[adam-laptop] ok 1 - worker consensus path and its replica base are deleted
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 1.379779
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: wasm service replica requires its own durable file
+[adam-laptop] ok 2 - wasm service replica requires its own durable file
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 85.691896
+[adam-laptop]   type: 'test'
+[adam-laptop]   ...
+[adam-laptop] # Subtest: wasm service group commits and applies kv writes through raft-rs
+[adam-laptop] not ok 3 - wasm service group commits and applies kv writes through raft-rs
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 440.270506
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:218:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly equal:
+[adam-laptop]     + actual - expected
+[adam-laptop]     
+[adam-laptop]     + undefined
+[adam-laptop]     - true
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:238:14)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] # Subtest: wasm service replica restart preserves kv and consensus state
+[adam-laptop] not ok 4 - wasm service replica restart preserves kv and consensus state
+[adam-laptop]   ---
+[adam-laptop]   duration_ms: 10313.075247
+[adam-laptop]   type: 'test'
+[adam-laptop]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:260:1'
+[adam-laptop]   failureType: 'testCodeFailure'
+[adam-laptop]   error: |-
+[adam-laptop]     Expected values to be strictly equal:
+[adam-laptop]     
+[adam-laptop]     false !== true
+[adam-laptop]     
+[adam-laptop]   code: 'ERR_ASSERTION'
+[adam-laptop]   name: 'AssertionError'
+[adam-laptop]   expected: true
+[adam-laptop]   actual: false
+[adam-laptop]   operator: 'strictEqual'
+[adam-laptop]   stack: |-
+[adam-laptop]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/bed8c6354737-mvm2r1tt-3314379/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:270:16)
+[adam-laptop]     async Test.run (node:internal/test_runner/test:1054:7)
+[adam-laptop]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[adam-laptop]   ...
+[adam-laptop] 1..4
+[adam-laptop] # tests 4
+[adam-laptop] # suites 0
+[adam-laptop] # pass 2
+[adam-laptop] # fail 2
+[adam-laptop] # cancelled 0
+[adam-laptop] # skipped 0
+[adam-laptop] # todo 0
+[adam-laptop] # duration_ms 10847.552712
+[adam-laptop] # time=12246ms
+[adam-laptop] ok test/wasm-service/wasm-service-replica.test.js (54 assertions, 18449ms)
+[adam-laptop] # test-files total=3 pass=1 fail=2 assertions=65
+lab test: adam-laptop: # test-files total=3 pass=1 fail=2 assertions=65
+lab test: adam-laptop: results copied to test-output/reports/test-results-adam-laptop.ndjson
+# test-files total=3 pass=1 fail=2 assertions=65
+driver: done status=1 startedAt=2026-10-24T07:25:37.866Z finishedAt=2026-10-24T07:27:05.639Z

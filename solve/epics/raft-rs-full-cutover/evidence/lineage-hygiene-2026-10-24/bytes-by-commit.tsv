@@ -1,0 +1,322 @@
+34931714	1163	4151a3ab4 2026-10-12 Ephemeral exact-byte proof snapshot only; not reviewed or landed
+6106846	306	f5717e6f5 2026-10-18 handover: preserve independent U1 rejection and cloud restart evidence
+5943504	147	d35d8828c 2026-10-13 WIP: remove legacy transaction engine; retain rs-raft recovery HOLD
+4862081	105	c6006c745 2026-10-17 WIP: bounded owner-side re-decide for slot transitions (amendment A2', stage 1b, verified, lab-accepted); closeout plan, owner ru
+4572019	152	c3c9154b3 2026-10-15 docs(raft): preserve W07 correction evidence and F1 ordering hold
+3175726	417	381750de2 2026-10-17 stage 1c (wasm-creation-genesis): node-side bound CREATE/REMOVE routes, discovery rows, PRESENT mark by token, wake consumer in t
+3075621	133	108282c80 2026-10-15 docs: preserve native release fencing owner packet and rejected review
+2571530	189	681da1dc1 2026-10-23 wip: preserve rs-raft delivery draft at user stop
+1612879	104	dbf2e0f3f 2026-10-14 wip: preserve applied-position v2 and v4 control evidence
+1518430	67	b7266f3b8 2026-10-17 docs: preserve all event-reconciliation evidence and next-agent handover; no merge approval
+1504760	98	89e70949f 2026-10-17 WIP: serving grant, receiver-local publication and RETIRED-before-CLOSED through the existing owners (stage 1, independently veri
+1435709	117	a251ce4fd 2026-10-17 handover: recovery-stage design (Revisions 1-5, APPROVED after six vet rounds) + UNVERIFIED recovery unit 1 implementation + hand
+1285528	172	c447019c2 2026-10-13 WIP: preserve qualified native release source red and approved barrier design
+1226534	88	0aa3807bc 2026-10-12 WIP rs-raft: preserve refined shared-replacement proof and all audit outcomes
+1211176	79	9e32db444 2026-10-12 WIP rs-raft: retain exact shared-replacement source and all positive and negative evidence
+1123851	71	d9b687263 2026-10-16 evidence(raft-rs): preserve ordering and consumer proof with explicit holds
+1050004	74	e6f0b1bf7 2026-10-15 docs: preserve ordered release recovery design and evidence
+1031464	72	84ef2c883 2026-10-14 wip: preserve reviewed release source and first exact candidate failures
+986833	8	2e229bd6f 2026-10-21 docs: preserve complete raw completion audit census
+824985	122	3ebc7da41 2026-10-13 wip(rs-raft): preserve rejected observer V1 and exact review evidence
+799986	59	847c36a31 2026-10-20 Preserve reviewed insight witnesses and unresolved execution gates
+750215	30	575138446 2026-10-21 fix: distinguish proven construction in mixed-source audit (WIP)
+747769	61	f434c88e0 2026-10-19 wip(rs-raft): preserve independent source approvals and complete F1 execution proof
+715907	178	ffe35e77d 2026-10-13 WIP: preserve reviewed release diagnostics and locked lab evidence; retain startup HOLD
+700572	11	f0084d02a 2026-10-21 test: preserve delegated-read audit control and red evidence (WIP)
+669024	58	fee22f4ce 2026-10-15 docs: preserve protected release closure contract and native plan
+642552	130	86d53bc79 2026-10-10 WIP handoff: preserve safety-first learner recording, diagnostics and local takeover instructions
+595744	6	deef6b41c 2026-10-24 docs(rs-raft): preserve the C2 predecessor measurement (tv-dator and full controller TAP)
+573361	101	3ea4dd505 2026-10-12 WIP startup cleanup: retain exact native controls and unresolved wider gates
+565427	24	77e091f64 2026-10-13 WIP: preserve native startup census and qualified publication diagnosis; retain HOLD
+497259	97	406ceac1c 2026-10-13 WIP: remove orphan C2 promotion paths; retain seed-release HOLD
+490727	133	f6c483012 2026-10-13 WIP: retain held participant release recovery; preserve static HOLD
+483546	76	7036fb1bd 2026-10-12 WIP rs-raft: retain native history evidence and unresolved full-gate failures
+448904	15	5af0cc7f6 2026-10-21 Recognize caught cleanup exception data and name private settlement values
+428646	9	0e003dc89 2026-10-21 Preserve exception audit red and strengthen provenance controls
+417441	2	fa5d86146 2026-10-10 tx1: design revision 10 (narrow delta on revision 9): canonical decimal string params count as explicit integer keys (pgwire Bind
+416555	22	d4645836b 2026-10-06 public-binding-two-partition-harness: The public Binding invocation acc…
+399555	7	0b532f76e 2026-10-24 docs(rs-raft): preserve the predecessor run logs under a tracked extension and the base comparison of the remaining reds
+386676	13	e69db481f 2026-10-21 WIP: preserve engaged cold public seed frontier and review
+381767	2	f7967ef32 2026-10-10 tx1: design revision 9 (narrow delta on revision 8): R2 only for allocating statements with explicit-key REPLACE admitted, exact 
+376949	45	62ed226b6 2026-10-12 WIP rs-raft: retain exact startup refusal source and native proof evidence
+354766	80	19780f8db 2026-10-19 test(u1): prioritize physical start exclusion and retain negative evidence
+353333	29	fb3c09d4a 2026-10-15 docs: preserve release fencing decision closeout evidence
+350460	51	3ab04d197 2026-10-12 WIP rs-raft: retain snapshot proof and unresolved WASM history safety red
+348562	2	8b76e1de7 2026-10-10 tx1: design revision 8 completes revision 7 against the agreed owner decisions (R7-1/R7-2 disposed: post-statement rowid ceiling,
+341111	3	96741ee01 2026-10-21 test: preserve dependency-construction audit discriminator (WIP)
+303442	39	8c9b14141 2026-10-18 wip(rs-raft): preserve independently reviewed U1 corrections and U2 preparation
+299808	2	4119114d7 2026-10-10 tx1: design revision 7 (R6-1/R6-2 disposed): one statement-kind owner before any prepare and at apply, rowid alias/ceiling/order-
+295696	8	400775164 2026-10-24 docs(rs-raft): record the 2026-10-24 predecessor measurement, C1/C2 design inputs and decisions
+287953	38	d5a2a7821 2026-10-15 docs: preserve runtime result credit contract review
+283726	5	68633168e 2026-10-23 WIP: observe retained original foundation effects without opening startup
+276921	26	9d8f03b99 2026-10-14 WIP: preserve V5a controls custody and candidate diagnostic decisions
+276598	24	680edfb65 2026-10-15 docs(raft): preserve W07 native service RED and reviewed correction scope
+263317	74	92d99c4bd 2026-10-14 WIP: preserve V12 native lifetime evidence and approved V6a controls
+259226	2	91751b41f 2026-10-10 tx1: design revision 6 (R5-1/R5-2 disposed): whole-program fail-closed classifier with leader self-check, grep-derived inventory 
+249412	27	00d391b3d 2026-10-12 WIP rs-raft: retain native load-recovery results, not independent approval
+220619	5	462a8e25c 2026-10-01 WIP: checkpoint zero-Liferaft cutover
+217489	54	ef99b5fc4 2026-10-14 wip(rs-raft): preserve reviewed V10 source control and correction designs
+215707	2	04174f4be 2026-10-10 tx1: design revision 5 (R4-1..R4-6 disposed): data-only write generation, leader-only EXPLAIN allow-list classifier, kernel-owned
+214842	12	6f9193a71 2026-10-19 wip(rs-raft): preserve U1 first failure and measured Set B boundary
+213924	10	c11c4ca26 2026-10-23 WIP: repair retained effects witnesses and preserve failed lab evidence
+213787	26	3c4db94e9 2026-10-12 WIP rs-raft: retain independent-review native reds and test correction evidence
+209077	18	7db99d333 2026-10-21 WIP preserve reviewed original seed handoff contract
+206328	58	eda090278 2026-10-14 wip: preserve S1-S7 release source correction and exact review input
+200669	19	e0e93bf70 2026-10-20 Bind seed cleanup census to exact retirement and add MG custody witnesses
+195603	2	f9bcfe493 2026-10-10 tx1: design revision 4 (V1-V13 disposed), seam revision-4 falsifiers, 42 red witnesses + replay-cursor sibling, shell receipts fo
+189309	18	09387f447 2026-10-08 WIP preservation: restore saved C0 self-review and mutation-killing witnesses
+182358	9	e29e46abf 2026-10-20 WIP: preserve reviewed seed cleanup repair with static blockers recorded
+180732	21	e59c976f3 2026-10-19 wip(rs-raft): preserve observer identity oracles and recovered evidence
+179601	39	e828be224 2026-10-14 WIP: preserve exact V6a paired lab results and native stage triage
+179250	8	9c94c5924 2026-10-21 docs: preserve measured construction audit and unresolved gates (WIP)
+178841	31	04391697a 2026-10-15 test(raft): preserve captured-inbound boundary controls for review
+148638	1	05a9883ae 2026-10-08 evidence: retain initial learner authorization, timing correction and mutation proofs
+146561	25	4aa8780cf 2026-10-15 wip(raft): review finite inbound capture after execution admission
+142848	1	99f0de77e 2026-10-08 evidence: retain exact failed-only source proof and publication recovery
+142837	9	cb822d6fc 2026-10-22 Observe retained native history and participant origin at original opening boundaries
+133854	2	84ae1a623 2026-10-10 tx1: design revision 3, seam revision-3 items, v3 witnesses (25 red, 4 controls green), exact-count receipts; no src change
+133360	1	16bc20e7d 2026-10-08 C0: retain exact GCP evidence and complete bounded authority classifications
+126412	30	19f3f09c9 2026-10-13 WIP: consolidate release facts with admission owner; preserve lab proof and static HOLD
+125185	1	809ab2e1b 2026-10-04 solve: census of bounded waits in src/ and where each spent bound is reported
+121967	7	bde70cec7 2026-10-15 design: release-linearization transition-model addendum answering the closeout review - retain the revision-2 T-row counterexampl
+115425	36	32dfdc388 2026-10-20 WIP: compose native recovery and exact physical custody witnesses
+114598	12	0ddbba2bc 2026-10-20 Preserve repaired seed custody measurements and recovery gate routing
+114022	3	6166f0120 2026-10-12 WIP cleanup: retain exact reconciliation proof and unresolved wider failures
+110535	5	64c34a5da 2026-10-23 docs: record stopped delivery checkpoint and preservation receipt
+106839	15	45293b471 2026-10-16 WIP creation-genesis: preserve approved contract and unexecuted proof at user stop
+102115	26	90fb37194 2026-10-21 fix: own bounded participant release completion in existing client
+97206	1	605789e86 2026-10-08 evidence: retain native learner-consumer proof, failed census and explicit limits
+95368	9	45a0388b5 2026-10-20 docs(rs-raft): persist approved insight execution plan and exact review evidence
+94822	39	35d533b6b 2026-10-17 docs: preserve ignored original evidence logs and verify complete committed checkpoint
+93418	7	048e56df9 2026-10-20 docs(rs-raft): preserve real-entry release diagnosis and custody limits
+91288	3	5479e597a 2026-10-12 WIP TX1: retain native admission proof and unwaived wider regression failures
+84125	1	6623b93ce 2026-10-08 evidence: retain T1 red green and mutation results without claiming closure
+81339	1	b82da44dc 2026-10-08 evidence: retain query phase traces and bounded lab fixture corrections
+81289	2	2e82c7aef 2026-10-17 docs: design revision 2 after two independent design vets (publication owned by the keyed continuation, retirement intent + retir
+80236	1	6cc314f53 2026-10-17 docs: design note for the serving grant, receiver-local publication and RETIRED-before-CLOSED stage (proposed, pre-vet; no source
+78925	10	a1d004f31 2026-10-21 Preserve reviewed seed release composition and next recovery frontier
+77925	6	328532f02 2026-10-22 test(bootstrap): correct transport absence oracles and preserve measured evidence
+76458	12	44592afe6 2026-10-07 reservation: preserve exact green owner snapshot
+76146	10	c968fc6ec 2026-10-16 docs(wasm): preserve creation-origin counterexample and handover
+73646	8	26cded6cb 2026-10-16 test(wasm): preserve v1 witnesses; creation-origin HOLD
+73293	3	5c5de9acf 2026-10-13 WIP TX1: retain envelope source controls and real M1 persistence with remaining reds
+71577	6	e88863f87 2026-10-19 test(rs-raft U1): reconstruct reviewed physical return lifetime oracles
+67367	1	9ab6470f8 2026-10-08 evidence: retain read-availability correction and actual review findings
+67309	6	bcba7d2ab 2026-10-22 Record completed retained-history lab verification
+63446	1	4b31e9076 2026-10-08 evidence: retain exact successful terminal resolution and failed predecessors
+62001	3	0a25d29bd 2026-10-10 TX1 (PR100 Leg A): seal replicated-transaction-decision-and-apply against the first supported red witnesses; record the coordinat
+60624	3	6f249dcf3 2026-10-12 WIP snapshot receiver: retain exact refusal/recovery proof and unresolved global gates
+60215	10	c8638eb93 2026-10-20 diagnostic: retain full seed trace with explicit artifact custody
+59958	5	1262e9c9b 2026-10-22 docs(bootstrap): retain verified startup lifetime checkpoint
+59629	3	7fa4d79ae 2026-10-22 wip: own original seed startup lifetime through native construction
+59013	10	947107b63 2026-10-24 wip: preserve reviewed rs-raft delivery R2 and unmeasured witnesses [skip ci]
+58442	7	cdcb9c95f 2026-10-16 docs(wasm): preserve completion identity and retention decision gate
+57293	4	cf34d0b73 2026-10-15 test(raft): freeze reviewed native captured-inbound service witness
+56659	20	2fd70f40d 2026-10-21 Preserve reviewed exact-handler positive and custody negative evidence
+55350	4	5a04a798f 2026-10-21 Preserve reviewed contract for bounded nonserving seed handoff
+55197	2	7e184b8aa 2026-10-17 docs: stage-1c design Revision 1 (scope split to the sealed R2 embedding scope), production-activation quest charter draft, stage
+53864	8	164479277 2026-10-22 Retain candidate lab failure and diagnose RF3 settled state
+52148	6	c280049f7 2026-10-06 partition-replication-restart-attempt-handoff: The durable split or mer…
+48683	21	c6b1aa259 2026-10-17 docs: record exact-tip home-lab acceptance of the event-to-reconciliation stage (lab #99-#101 at 35d533b6b: 21/21 files, 733 asse
+48395	4	21cfd917d 2026-10-23 test(cdc): add native source custody and canonical acceptance witnesses
+45949	5	688c75e0a 2026-10-16 WIP creation-genesis: freeze contract review and process custody witness
+45350	6	a7e821154 2026-10-15 docs(raft): expose exact W07 log mirrors for remote review
+45062	2	f1487f97b 2026-10-08 evidence: retain T1 cache red green and the corrected HLC oracle failure
+43207	1	91ed3358f 2026-10-08 WIP FreshMG: exact membership holder and monotonic branch selection (not activated)
+42763	6	96985eb2b 2026-10-15 docs(raft): record verified W07 F1 evidence publication
+42268	2	3db821fa7 2026-10-15 design: release-linearization revision 2 answering the REVISE verdict - deterministic disposition as a pure function of committed
+40638	4	f6c3698be 2026-10-16 docs(wasm): preserve creation binding decision and authority gap review
+39898	1	f2cf205f3 2026-10-24 docs(rs-raft): record the owner's C2 decision, the C2 witness re-review approval and the C1 design vet
+39797	4	f7a3bf122 2026-10-20 Preserve seed release cleanup custody quest and baseline witnesses
+39709	5	f66fa29f3 2026-10-14 WIP: preserve cutoff handover and final independent rs-raft findings
+39035	1	e3e70fb3b 2026-10-17 docs: stage-1c design Revision 2 (REMOVE via a journal-only read, CREATE route order, binding-first remover, node address owner, 
+38390	17	b4a635745 2026-10-21 Preserve engaged native retry suppression discriminator
+38319	1	02e2070cc 2026-10-08 evidence: retain bounded shared-seed T1 proof
+37373	3	25cb5b1fb 2026-10-19 fix(u1): release superseded removal execution and bind legacy authority proof
+37106	2	c6ece57ee 2026-10-21 WIP: preserve reviewed cold public seed baseline witness
+36712	14	b0ee13255 2026-10-14 WIP: preserve passive native V11 diagnostic and V5a correction findings
+36633	1	4b6c1c680 2026-10-24 docs(rs-raft): record the C2 witness review verdict, the lineage boundary debt and the Set B repair state
+35781	4	7597e046f 2026-10-19 test(rs-raft): preserve independent U1 physical custody witnesses
+35639	5	d7ef793be 2026-10-22 Use canonical ConfState identity in retained-origin RF3 witness
+34981	1	b3793c7e5 2026-10-17 docs: stage-1c design Revision 3 (endpoint host owner, deferral carrier, result-shape tables, token-keyed PRESENT mark, re-entry 
+33436	6	6fe2c2b77 2026-10-14 WIP: preserve paired review findings and bounded native discriminator design
+33370	2	5b9c6b33f 2026-10-21 Record recovery authority boundary and current failure attribution
+32696	5	2cdd3e8e1 2026-10-22 Preserve retained-history review and static evidence with lab admission pending
+32218	8	2016726f6 2026-10-20 Preserve seed cleanup handover with measured HOLD receipt
+31938	12	ea69ca71b 2026-10-14 WIP: preserve native V13 enqueued-work evidence and next source design
+31355	5	6cddf137b 2026-10-16 test(raft): preserve ordering companions and completion consumer witnesses
+31114	6	90794b55f 2026-10-20 WIP: preserve reviewed control refusal and recovery witnesses for lab measurement
+30657	1	7696c3d8e 2026-10-17 docs: design revision 3 after the re-vet (process-local latch and wake predicate, guarded RELEASING with monotonic CLOSED, retire
+29521	6	0e9ff4fdc 2026-10-20 test(rs-raft): discriminate nested control refusal before repair
+29125	2	bed8c6354 2026-10-24 docs: record committed rs-raft R2 handover and verified custody [skip ci]
+28897	8	b2cb7168b 2026-10-06 test: carry identity successor proof
+26387	1	5c54bb74e 2026-10-08 diagnostic: retain controlled retry windows without runtime or gate changes
+25379	4	74fde68a4 2026-10-23 docs: preserve rs-raft takeover state after workspace disconnect [skip ci]
+25148	8	650970eed 2026-10-20 diagnostic: preserve reviewed seed control-authority trace input
+24506	3	5a3cdc718 2026-10-16 test(raft): bind consumer witnesses to actual custody and exact observations
+23994	3	a9d45cf50 2026-10-10 tx1: revise the Leg A design (revision 2), seam decisions and witnesses; no src change
+23812	1	963edd967 2026-10-08 evidence: attribute unchanged restart cost and retain new holder-race finding
+23280	1	1c250b6f5 2026-10-05 solve: record the group-retirement round-5 rejection, the owner's option-A record-store / tombstone-incarnation / reseed-proof de
+22772	13	a9506863a 2026-10-14 WIP: freeze passive native step-result diagnostic V13
+22361	1	0c398d50b 2026-10-10 docs: agree TX1 owner decisions and bound local continuation
+22194	1	75977928e 2026-10-08 evidence: retain exact null-claim correction attempt and proof ceiling
+21639	1	87a200e2c 2026-10-08 evidence: retain base-candidate lab failure attribution, not acceptance
+20920	1	3f86af040 2026-10-15 design: proposed release linearization as one committed PARTICIPANT_RELEASE_DECISION consumed from the partition's own log - prop
+20862	4	453938ec0 2026-10-06 seed-registration-election-priority: On FULL raft-rs persistence, the s…
+20240	4	63420a1a5 2026-10-20 Bind native seed witness to its attempt and preserve baseline failures
+19725	3	65f4b0b6a 2026-10-21 WIP: preserve original allocation foundation corrections and regression witnesses
+19371	1	d3b08b79a 2026-10-14 wip: record complete source v2 review and correction boundary
+18556	1	a0dc88427 2026-10-21 Repair exact-handler fixtures and settle refused WASM cleanup custody
+17621	2	3a08f9421 2026-10-22 Record lab intake defect and Harnessd repair ownership
+16432	4	1246200cd 2026-10-21 Seal cleanup exception audit correspondence and freeze role witnesses
+16266	3	ec6a14832 2026-10-15 docs: record protected closure evidence publication
+15698	1	99064e13c 2026-10-08 analysis: specify replacement subjects and reconcile snapshot recovery boundaries
+15526	1	62e905c86 2026-10-04 solve: amend ruling F2 - a group retired by a durable cutover exits as a unit (owner decision 2026-10-04)
+15377	2	0b205d0d2 2026-10-07 add durable message-group membership foundation
+14827	1	ce72a31fe 2026-10-12 WIP rs-raft: retain tested narrow snapshot lifecycle correction for exact-candidate execution
+14366	4	4a8145c8f 2026-10-21 WIP: seal bounded nonserving original seed handoff red
+14243	1	c204723ec 2026-10-12 WIP rs-raft: account for all seven operator ownership findings and preserve merge blockers
+13683	1	9514ba8bf 2026-10-19 wip(rs-raft): preserve reconstructed U1 source, explicitly unverified
+13436	2	d2d7c7504 2026-10-21 docs(original-handoff): preserve resumed lab proof and remaining metadata boundary
+13425	1	1733e7da7 2026-10-10 docs: preserve adversarial priorities and local handoff (WIP)
+12778	2	e221c8c63 2026-10-17 WIP: preserve reviewed native event-to-reconciliation connection; home-lab acceptance open
+12564	1	ca1cb1384 2026-10-08 review: record adversarial verdict, measured corrections and next native-receipt boundary
+12439	1	37a0ef16b 2026-10-08 planning: adopt bounded contract-first cutover continuation
+12403	11	730aa9226 2026-10-13 WIP TX1: retain exact native post-SIGKILL coordinator durability receipts
+12370	1	6ba848634 2026-10-16 docs: accept source-bound genesis observation after local lab review; keep serving held
+12307	1	282944876 2026-10-10 RS1 verified on the candidate; TX1 Leg A design note for the independent design vet
+12130	1	60a60b2a6 2026-10-09 policy: prioritize safe recovery and separate historical receipts from execution authority
+11901	1	cfd321f78 2026-10-23 Preserve rs-raft handover and disclose unrecovered classification draft
+11846	1	4c8f02e8e 2026-10-12 WIP TX1: record native admission proof, exact scope and remaining migration obligations
+11278	1	d3d947f2d 2026-10-09 review: bind registered learner gate to canonical results and preserve commit-authority blocker
+11035	1	3fda8406d 2026-10-08 analysis: retain lab attribution, recovered timing evidence and bounded repair status
+11025	1	58c505788 2026-10-20 docs(rs-raft): add exact-reference insight-plan handover
+10881	1	0d9d36004 2026-10-12 WIP rs-raft: retain complete ownership-audit disposition and exact measured merge blockers
+10849	1	50c64ac47 2026-10-16 docs: accept held native bootstrap after exact-source lab review; keep serving and release held
+10796	16	ad23d75d5 2026-10-13 WIP: retain exact ignored cycle checks and lab logs in checkpoint
+10757	1	f1fc732f2 2026-10-19 test(rs-raft U1): require superseded REMOVE to release execution custody
+10611	1	f5a06f643 2026-10-09 review: bind native learner-origin implementation to measured evidence and remaining gates
+10452	1	5e3ae57f6 2026-10-16 WIP test checkpoint: freeze held native bootstrap and exhaustive cleanup witnesses
+10309	1	5c1595e7e 2026-10-08 analysis: bind R2 race correction and restart profile to measured evidence
+10163	3	19aafbd90 2026-10-12 WIP startup cleanup: seal and retain all-owner failure witnesses
+10162	4	48f15d953 2026-10-12 WIP cleanup: reconcile exact service releases and retain host custody
+10160	3	fefc75988 2026-10-21 test: freeze participant release completion boundaries
+9790	1	733da50e2 2026-10-13 WIP TX1: record envelope admission and real M1 persistence proof with four legacy failures retained
+9770	1	11f1481b7 2026-10-21 Record pending native retry-suppression discriminator prerequisites
+9752	1	85711505b 2026-10-09 review: bind recovered learner recording to exact proof and remaining activation gates
+9646	7	d4f606be3 2026-10-21 docs: preserve reviewed completion owner measurement and audit delta
+9644	1	cd86d12d0 2026-10-16 docs: accept bounded instance metadata CAS after source-bound local lab review; keep activation held
+9580	1	bcbf5e762 2026-10-09 review: bind actual process-loss results to their source and explicit remaining driver limits
+9573	2	0cdf38556 2026-10-16 WIP: retain process-directory custody after failed cleanup (uncertified)
+9529	4	7e2c3e851 2026-10-12 WIP rs-raft: seal native opening history and record operator timing tolerance
+9428	1	609f35524 2026-10-16 docs: accept original creation-intent recovery after exact local-lab proof; physical milestone remains open
+9428	1	8ece20f70 2026-10-09 review: document measured delivery/native boundary and remaining committed-outcome work
+9202	7	01828da02 2026-10-21 Preserve reviewed exception audit candidate and pending composition gates
+9183	1	ebd932655 2026-10-12 WIP TX1: prove native partition admission and recovery through existing release owners
+8919	1	26409c74b 2026-10-12 WIP rs-raft: record native proof, timing failure and complete review scope
+8637	1	64b85decf 2026-10-12 WIP snapshot receiver: record exact measured result and independent review boundary
+8600	2	9f815cf46 2026-10-19 wip(rs-raft): preserve U1 projection-debt and joined-stop oracles
+8584	1	68697465b 2026-10-08 evidence: retain exact five-host lab failure and bounded attribution plan
+8568	1	21920f75a 2026-10-08 FreshMG: resume admitted owner-chain implementation from measured existing frontier
+8483	1	aa152d85d 2026-10-12 WIP rs-raft: retain opening-history proof, timing ruling and remaining merge blockers
+8434	1	c090b63b2 2026-10-16 WIP: connect bound INIT to applied genesis and native membership observation; serving held
+8427	1	9b53962f2 2026-10-16 wip(wasm): freeze incomplete v1 source at creation-origin HOLD
+8104	1	d5fe21d6b 2026-10-16 WIP test checkpoint: freeze genesis reentry and membership observation witnesses
+8063	5	fa50cdf3f 2026-10-15 record: REJECT partial-RESUME release publication under the control Quest - retain three independently verified test-only witness
+8026	1	9b6ed2378 2026-10-08 analysis: narrow C0 to actual commit points and serialization boundaries
+7818	1	2218eeb58 2026-10-16 docs: record author acceptance of bounded custody repair and next creation stage
+7652	1	6d09b134c 2026-10-08 review: bind corrected learner guards to measured proof and keep restart timing unresolved
+7546	1	5402f3b9b 2026-10-09 evidence: retain registered learner recipient owner interaction
+7384	1	c1d37eed7 2026-10-08 design: make J1 forward-recovery recommendation and identity boundaries explicit
+7352	1	a168806b1 2026-10-08 evidence: retain real-owner GCP controls and the failed fixture attempt
+7342	1	af976fe92 2026-10-16 docs: accept bounded service-instance schema stage with exact lab and negative evidence
+7298	1	76c3a6175 2026-10-08 evidence: retain terminal/claim documentation correction and exact metadata proof
+7200	1	9fa3d0b30 2026-10-08 analysis: close C0 authority questions and identify next implementation boundaries
+7131	1	50ef7714d 2026-10-08 planning: separate cutover integration gates from 0.3 product and release closure
+6957	3	72712c394 2026-10-21 Seal exact-handler fixture custody repair against open red obligations
+6864	1	f5fb317be 2026-10-23 Preserve exact transcribed 42-file inventory for unrecovered retained-effects draft
+6840	1	588b8803a 2026-10-16 WIP: implement reviewed bounded instance selection and resource metadata CAS (not activated)
+6667	1	41a8cdfb3 2026-10-08 evidence: retain actual C0 crash proof and independent rejection (not closure)
+6582	1	831b1d490 2026-10-12 WIP rs-raft: record complete replacement interaction and explicit evidence limits
+6561	1	ff8c95ee3 2026-10-08 analysis: record measured retry residual window and preserve cutover proof boundaries
+6161	1	d93065458 2026-10-12 WIP rs-raft: retain startup refusal result and request independent source review
+6094	1	f50a66a5e 2026-10-13 WIP TX1: restore envelope admission and prove real seed migration persistence
+6086	1	d78d9d70e 2026-10-09 evidence: retain process-loss successor-holder recovery and refusal correction
+6053	1	5fbdd0443 2026-10-05 solve: B0 finding - the participation gate freezes a gated replica's Raft time (tick refused at port, runtime and partition), whi
+6045	5	0c981c7b1 2026-10-15 docs: record ordered recovery evidence publication receipt
+5796	3	c96a59d6f 2026-10-12 WIP snapshot receiver: seal native receiver-state and recovery refusals
+5789	1	ed4707a2e 2026-10-16 docs: preserve creation-stage import failure and corrected capability baseline
+5600	1	ba1d93bc7 2026-10-21 fix(metadata): keep repository census authoritative on large or failed Git reads
+5340	1	b0049460f 2026-10-16 WIP: retain original creation intent and exact admission across process loss; physical creation held
+5326	8	c814899fe 2026-10-13 WIP TX1: retain native in-doubt COMMIT process-loss proof
+5297	1	bc0c53145 2026-10-12 WIP rs-raft: record 44 behavioral passes and unresolved static gates for independent review
+5267	1	e6d43bc1a 2026-10-13 Decision: alpha 0.3 single raft-rs and TX1 path; retire superseded implementations
+5128	1	d2b88510c 2026-10-12 WIP rs-raft: preserve real WASM lost-history discriminator and canonical recursive-freeze correction
+5099	1	fa5a8f333 2026-10-08 analysis: classify six real process-loss boundaries without overstating distributed recovery
+4908	1	eb7d49396 2026-10-14 WIP control owner: specify single post-PAUSE census and original RESUME refusal obligations before changing source
+4874	1	10d4c6076 2026-10-08 evidence: retain hash-verified GCP boundary baseline and focused results
+4753	1	9712d2633 2026-10-16 WIP review: freeze process-custody edge and startup failure witnesses
+4710	1	d99753d07 2026-10-14 WIP native Quest: record exact accepted-work timer custody and falsifiers before production implementation
+4694	1	ee4ddd5ca 2026-10-08 evidence: retain exact T1 source test failure and cache proof archives
+4689	1	3f0a983c9 2026-10-08 quest: declare bounded cutover transition-authority review
+4598	1	6fa07ca26 2026-10-08 FreshMG: bind first implementation boundary to measured planner and handler refusals
+4475	1	be195aa8a 2026-10-12 WIP rs-raft: bind startup refusal correction to existing cleanup and reservation owners
+4473	2	b8e36a97c 2026-10-13 WIP: remove unused legacy connection mutator; preserve unsafe-connection guards
+4452	1	041fad16e 2026-10-14 WIP rs-raft: declare bounded seed per-cohort release-intent Quest after measured 694-delivery census
+4445	1	55c6067f0 2026-10-14 WIP rs-raft: define canonical control cohort idempotent current-proof Quest without cached admission
+4341	1	76f98c3b7 2026-10-21 fix(partition): bind uncertain registration to its exact birth
+4341	3	92ae06ef4 2026-10-21 Seal dependency construction audit repair against classifier evidence
+4330	1	4d6bd725c 2026-10-13 WIP TX1: document genuine pre-fanout SIGKILL proof and unrecovered authority gap
+4274	1	0ecb52200 2026-10-08 decision: record approved J1 forward recovery and bounded continuation
+4231	1	7c0abccf9 2026-10-14 WIP rs-raft: declare bounded admitted inbound scheduling/liveness Quest, unsealed until red measurement
+4209	1	8f0afd525 2026-10-13 WIP lifecycle claim race: retain green exact proof and review request
+4196	1	c6735aff5 2026-10-14 WIP native: document measured admitted-wake loss during shared reconstruction and single-owner recovery design
+4192	1	ddff5a2c8 2026-10-08 planning: bind initial learner action to existing operation-row authority
+4171	1	3f74319a7 2026-10-21 chore(test): commit canonical original-handoff metadata and graph seal
+4138	1	6764a2c71 2026-10-14 WIP rs-raft: freeze identity-correct passive inbound scheduling discriminator before repair
+4116	1	82eeddc0b 2026-10-14 WIP rs-raft: preserve full original 694-delivery census and single-intent seed owner judgment
+4084	6	a94ef6e35 2026-10-13 WIP TX1: retain native in-doubt COMMIT process-loss proof
+4081	1	7cc110614 2026-10-08 evidence: retain self-review counterexample and exact fixture proof
+4046	1	97862332d 2026-10-08 evidence: retain same-runtime workflow and snapshot controls without widening proof
+3879	1	79fa766ed 2026-10-22 test(raft): witness retained native history admission before application inspection
+3834	3	ba4e49758 2026-10-12 WIP rs-raft: scope snapshot lifecycle staging without changing release acceptance
+3781	1	8200dd452 2026-10-16 WIP: connect retained creation to held native bootstrap; serving and full recovery remain held
+3709	1	0620204ce 2026-10-08 feat: consume exact issued learner intent through the existing native admission owner
+3632	1	1e10a4ef7 2026-10-09 evidence: retain actual-delivery and queued-native fence proof
+3579	1	ff46e8d52 2026-10-08 evidence: retain PR109 corrective proof and unresolved restart-cost measurement
+3570	1	1603b31a9 2026-10-16 WIP: preserve original startup and failed-cleanup causes through ledger owner
+3533	2	d6659598a 2026-10-06 partition-deferred-evaluation-obligation-scheduler: PartitionSplitMerge…
+3492	1	00bdffab4 2026-10-16 WIP: register R2 service-instance schema through bootstrap and CDC owners (not certified)
+3479	6	f4ea7ce8b 2026-10-13 WIP TX1: retain native in-doubt COMMIT process-loss proof
+3463	6	619c670e1 2026-10-21 Preserve passing composed audit witness before retry integration
+3439	1	4cdeac1c4 2026-10-08 planning: link contract-first cutover and seal read-only C0 (not certification)
+3391	1	7766ccafb 2026-10-22 fix(raft): revalidate original authority at the native opening effect
+3339	1	c425ef42e 2026-10-15 docs: record verified runtime credit evidence publication
+3339	1	53fcbd49b 2026-10-09 evidence: retain exact learner outcome recording and unresolved broader gates
+3257	2	a40630f7c 2026-10-12 WIP rs-raft: native shared-runtime load recovery witness and bounded proof execution
+3216	1	c3f3c352b 2026-10-09 evidence: retain exact PR111 boundary corrections and regression results
+3201	1	e324760ea 2026-10-13 WIP rs-raft: retain green message-group handler cleanup proof and independent review limits
+3192	6	ccea575aa 2026-10-13 WIP TX1: retain corrected legacy-fixture test proof and historical migration HOLD
+3191	1	1e4b3a6e0 2026-10-09 evidence: retain bounded learner-origin recovery and explicit remaining gates
+3076	1	16bcff35b 2026-10-09 evidence: retain continuous origin-bearing target install and reopen proof
+2936	1	de00becf1 2026-10-08 evidence: retain paused-read race correction and its source-revert proof
+2774	1	589ce6827 2026-10-08 evidence: preserve native invalidation controls and explicit remaining authority gap
+2256	1	9529902fd 2026-10-12 WIP rs-raft: retain observed CORE_REFUSED classification without rewriting failed evidence
+2186	1	e13fe6e5f 2026-10-22 feat(raft): preserve exact-runtime handoff participation scope
+2075	1	4512b564c 2026-10-22 feat(raft): preserve original-allocation native-opening boundary
+1986	1	55e9a2d6e 2026-10-12 WIP rs-raft: retain native baseline failure and workflow capture defect
+1877	1	3e86fdcd0 2026-10-13 WIP rs-raft: retain handler identity proof and separately open init cleanup finding
+1870	1	1e2fcc2da 2026-10-23 docs: record verified recovery checkpoint and remaining file custody gap [skip ci]
+1850	1	97a030da2 2026-10-08 evidence: correct prior learner-run attribution without rewriting history
+1781	2	768bf9a09 2026-10-21 docs: clarify bounded audit gate scope without widening repair (WIP)
+1746	1	162dc8ee7 2026-10-14 WIP rs-raft: bind unsatisfied five-part native admitted-work receipt before seal
+1629	1	0918ac3e5 2026-10-14 WIP rs-raft: retain five unmet per-cohort startup receipts before canonical red seal
+1621	1	8e2013c27 2026-10-21 test(raft): bind retirement census to the native lifecycle owner
+1495	1	56c81693d 2026-10-12 WIP rs-raft: retain exact native TAP with the unit timing failure
+1356	1	51fa486bb 2026-10-21 test(original-handoff): repair scoped lint without changing witness assertions
+1331	1	1def2a5dd 2026-10-21 test(original-handoff): measure canonical dependency and metadata gates
+1236	1	0271f9e46 2026-10-21 test(raft): follow immutable lifecycle aliases and witness exact registration birth
+1210	1	db8aceefc 2026-10-08 review: retain independent C0 closure rejection without reinterpreting it
+1208	1	961f8bd5e 2026-10-14 WIP rs-raft: preserve five red current-control proof acceptance receipts
+1169	1	deeffdd02 2026-10-22 test(raft): expose late original-opening authority changes
+759	1	310cb0209 2026-10-08 test: align native partition fixture journal while explicitly preserving FULL

@@ -1,0 +1,18 @@
+placement-shell=2174781
+placement-head=26cded6cb74594b8d38bce24e6a862302b605e23
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2.1 mode:local retry: timeout: lanecap:7
+placement-pid=2175208
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: hold cpu 77C (coretemp/Package id 0) nvme 21C (nvme/Composite) - CPU package 77C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 39C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 1984ms)
+ok test/raft/raft-rs-backend/operation-port-boundary.test.js (7 assertions, 7695ms)
+ok test/wasm-service/wasm-service-replica.test.js (53 assertions, 17288ms)
+# test-files total=3 pass=3 fail=0 assertions=64
+placement-results={"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":true,"assertions":4,"durationMs":1984,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":7695,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":17288,"retriedOnce":false,"firstFailureLine":null}

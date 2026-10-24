@@ -1,0 +1,484 @@
+placement-shell=2175798
+placement-head=9b53962f2e7b8402b2a6a02a4a24b45985cd3563
+placement-link=node_modules
+placement-link=data/examples
+placement-prepared=import-graph
+placement-env=factor:2 mode:local retry: timeout: lanecap:7
+placement-pid=2176219
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: hold cpu 75C (coretemp/Package id 0) nvme 22C (nvme/Composite) - CPU package 75C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 41C (coretemp/Package id 0) nvme 18C (nvme/Composite)
+ok test/raft/raft-rs-backend/operation-port-boundary.test.js (7 assertions, 7789ms)
+not ok test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js (4 assertions, 11534ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: worker consensus path and its replica base are deleted
+ok 1 - worker consensus path and its replica base are deleted
+  ---
+  duration_ms: 1.501152
+  type: 'test'
+  ...
+# Subtest: wasm service replica requires its own durable file
+ok 2 - wasm service replica requires its own durable file
+  ---
+  duration_ms: 86.818743
+  type: 'test'
+  ...
+# Subtest: wasm service group commits and applies kv writes through raft-rs
+not ok 3 - wasm service group commits and applies kv writes through raft-rs
+  ---
+  duration_ms: 377.794829
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:218:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:238:14)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: wasm service replica restart preserves kv and consensus state
+not ok 4 - wasm service replica restart preserves kv and consensus state
+  ---
+  duration_ms: 10320.297737
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:260:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js:270:16)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10792.281594
+# time=11534ms
+not ok test/wasm-service/wasm-service-replica.test.js (53 assertions, 17409ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: WasmServiceReplica
+    # Subtest: class exports
+        # Subtest: should export WasmServiceReplica
+        ok 1 - should export WasmServiceReplica
+          ---
+          duration_ms: 84.773464
+          type: 'test'
+          ...
+        # Subtest: should export ENTRY_TYPE constants
+        ok 2 - should export ENTRY_TYPE constants
+          ---
+          duration_ms: 54.918345
+          type: 'test'
+          ...
+        # Subtest: should export MESSAGE_OP constants
+        ok 3 - should export MESSAGE_OP constants
+          ---
+          duration_ms: 44.723214
+          type: 'test'
+          ...
+        1..3
+    ok 1 - class exports
+      ---
+      duration_ms: 185.40925
+      type: 'suite'
+      ...
+    # Subtest: constructor
+        # Subtest: should set entityType to WASM_SERVICE
+        ok 1 - should set entityType to WASM_SERVICE
+          ---
+          duration_ms: 49.213502
+          type: 'test'
+          ...
+        # Subtest: should store serviceDefinitionId
+        ok 2 - should store serviceDefinitionId
+          ---
+          duration_ms: 36.067959
+          type: 'test'
+          ...
+        # Subtest: opens its kvStore only with its consensus port
+        ok 3 - opens its kvStore only with its consensus port
+          ---
+          duration_ms: 37.275332
+          type: 'test'
+          ...
+        # Subtest: should initialize timerManager
+        ok 4 - should initialize timerManager
+          ---
+          duration_ms: 38.122507
+          type: 'test'
+          ...
+        # Subtest: should initialize safetyInterval
+        ok 5 - should initialize safetyInterval
+          ---
+          duration_ms: 42.221495
+          type: 'test'
+          ...
+        # Subtest: should default wasmExecutor to null
+        ok 6 - should default wasmExecutor to null
+          ---
+          duration_ms: 33.092924
+          type: 'test'
+          ...
+        # Subtest: should default portAllocation to null
+        ok 7 - should default portAllocation to null
+          ---
+          duration_ms: 36.942866
+          type: 'test'
+          ...
+        # Subtest: should use default read consistency
+        ok 8 - should use default read consistency
+          ---
+          duration_ms: 35.245032
+          type: 'test'
+          ...
+        # Subtest: should accept custom read consistency
+        ok 9 - should accept custom read consistency
+          ---
+          duration_ms: 31.238782
+          type: 'test'
+          ...
+        # Subtest: should use default write consistency
+        ok 10 - should use default write consistency
+          ---
+          duration_ms: 27.751285
+          type: 'test'
+          ...
+        1..10
+    ok 2 - constructor
+      ---
+      duration_ms: 368.048428
+      type: 'suite'
+      ...
+    # Subtest: proposeEntry
+        # Subtest: should reject when raft is null
+        ok 1 - should reject when raft is null
+          ---
+          duration_ms: 43.413455
+          type: 'test'
+          ...
+        # Subtest: proposes the entry through its port with a base64 value
+        ok 2 - proposes the entry through its port with a base64 value
+          ---
+          duration_ms: 32.75639
+          type: 'test'
+          ...
+        # Subtest: rejects a proposal its port refused
+        ok 3 - rejects a proposal its port refused
+          ---
+          duration_ms: 29.581502
+          type: 'test'
+          ...
+        # Subtest: refuses an unknown command type before proposing
+        ok 4 - refuses an unknown command type before proposing
+          ---
+          duration_ms: 43.839492
+          type: 'test'
+          ...
+        1..4
+    ok 3 - proposeEntry
+      ---
+      duration_ms: 149.886011
+      type: 'suite'
+      ...
+    # Subtest: applyCommittedEntry
+        # Subtest: should apply KV_SET records to kvStore
+        not ok 1 - should apply KV_SET records to kvStore
+          ---
+          duration_ms: 28.279782
+          type: 'test'
+          location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:322:5'
+          failureType: 'testCodeFailure'
+          error: "Cannot read properties of undefined (reading 'push')"
+          code: 'ERR_TEST_FAILURE'
+          name: 'TypeError'
+          stack: |-
+            WasmServiceReplica.applyCommittedEntry (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/src/wasm-service/wasm-service-replica.js:328:35)
+            TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:324:30)
+            Test.runInAsyncScope (node:async_hooks:214:14)
+            Test.run (node:internal/test_runner/test:1047:25)
+            async Promise.all (index 0)
+            async Suite.run (node:internal/test_runner/test:1442:7)
+            async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+          ...
+        # Subtest: should apply KV_DELETE records to kvStore
+        not ok 2 - should apply KV_DELETE records to kvStore
+          ---
+          duration_ms: 27.443181
+          type: 'test'
+          location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:332:5'
+          failureType: 'testCodeFailure'
+          error: "Cannot read properties of undefined (reading 'push')"
+          code: 'ERR_TEST_FAILURE'
+          name: 'TypeError'
+          stack: |-
+            WasmServiceReplica.applyCommittedEntry (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/src/wasm-service/wasm-service-replica.js:328:35)
+            TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:337:15)
+            Test.runInAsyncScope (node:async_hooks:214:14)
+            Test.run (node:internal/test_runner/test:1047:25)
+            async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+          ...
+        # Subtest: should apply KV_DELETE_SESSION records
+        not ok 3 - should apply KV_DELETE_SESSION records
+          ---
+          duration_ms: 27.692425
+          type: 'test'
+          location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:347:5'
+          failureType: 'testCodeFailure'
+          error: "Cannot read properties of undefined (reading 'push')"
+          code: 'ERR_TEST_FAILURE'
+          name: 'TypeError'
+          stack: |-
+            WasmServiceReplica.applyCommittedEntry (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/src/wasm-service/wasm-service-replica.js:328:35)
+            TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:355:15)
+            Test.runInAsyncScope (node:async_hooks:214:14)
+            Test.run (node:internal/test_runner/test:1047:25)
+            async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+          ...
+        # Subtest: fails a committed record whose type it never admits
+        ok 4 - fails a committed record whose type it never admits
+          ---
+          duration_ms: 31.578874
+          type: 'test'
+          ...
+        # Subtest: advances the safety interval applied index from the record
+        not ok 5 - advances the safety interval applied index from the record
+          ---
+          duration_ms: 25.700271
+          type: 'test'
+          location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:376:5'
+          failureType: 'testCodeFailure'
+          error: "Cannot read properties of undefined (reading 'push')"
+          code: 'ERR_TEST_FAILURE'
+          name: 'TypeError'
+          stack: |-
+            WasmServiceReplica.applyCommittedEntry (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/src/wasm-service/wasm-service-replica.js:328:35)
+            TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:378:15)
+            Test.runInAsyncScope (node:async_hooks:214:14)
+            Test.run (node:internal/test_runner/test:1047:25)
+            async Suite.processPendingSubtests (node:internal/test_runner/test:744:7)
+          ...
+        1..5
+    not ok 4 - applyCommittedEntry
+      ---
+      duration_ms: 141.121152
+      type: 'suite'
+      location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:321:3'
+      failureType: 'subtestsFailed'
+      error: '4 subtests failed'
+      code: 'ERR_TEST_FAILURE'
+      ...
+    # Subtest: onBecameLeader
+        # Subtest: should reconstruct timers via timerManager
+        ok 1 - should reconstruct timers via timerManager
+          ---
+          duration_ms: 41.673376
+          type: 'test'
+          ...
+        # Subtest: should start safety interval broadcasts
+        ok 2 - should start safety interval broadcasts
+          ---
+          duration_ms: 26.638438
+          type: 'test'
+          ...
+        1..2
+    ok 5 - onBecameLeader
+      ---
+      duration_ms: 68.534064
+      type: 'suite'
+      ...
+    # Subtest: onBecameFollower
+        # Subtest: should stop all timers
+        ok 1 - should stop all timers
+          ---
+          duration_ms: 26.234376
+          type: 'test'
+          ...
+        # Subtest: should stop safety broadcasts
+        ok 2 - should stop safety broadcasts
+          ---
+          duration_ms: 26.062116
+          type: 'test'
+          ...
+        1..2
+    ok 6 - onBecameFollower
+      ---
+      duration_ms: 52.421788
+      type: 'suite'
+      ...
+    # Subtest: handleMessage
+        # Subtest: should route read operations via read router
+        ok 1 - should route read operations via read router
+          ---
+          duration_ms: 25.573931
+          type: 'test'
+          ...
+        # Subtest: should forward reads to leader in leader_only mode
+        ok 2 - should forward reads to leader in leader_only mode
+          ---
+          duration_ms: 38.121853
+          type: 'test'
+          ...
+        # Subtest: should forward writes when not leader
+        ok 3 - should forward writes when not leader
+          ---
+          duration_ms: 25.671714
+          type: 'test'
+          ...
+        # Subtest: should return error for unknown operations
+        ok 4 - should return error for unknown operations
+          ---
+          duration_ms: 28.009597
+          type: 'test'
+          ...
+        1..4
+    ok 7 - handleMessage
+      ---
+      duration_ms: 117.615353
+      type: 'suite'
+      ...
+    # Subtest: flushRoleUpdate
+        # Subtest: writes role updates through owner callback
+        ok 1 - writes role updates through owner callback
+          ---
+          duration_ms: 29.48181
+          type: 'test'
+          ...
+        # Subtest: writes role updates through CDC owner when no callback
+        ok 2 - writes role updates through CDC owner when no callback
+          ---
+          duration_ms: 28.16042
+          type: 'test'
+          ...
+        1..2
+    ok 8 - flushRoleUpdate
+      ---
+      duration_ms: 57.772144
+      type: 'suite'
+      ...
+    # Subtest: flushLeaderNodeUpdate
+        # Subtest: writes leader updates through owner callback
+        ok 1 - writes leader updates through owner callback
+          ---
+          duration_ms: 26.939841
+          type: 'test'
+          ...
+        # Subtest: writes leader updates through CDC owner when no callback
+        ok 2 - writes leader updates through CDC owner when no callback
+          ---
+          duration_ms: 25.592759
+          type: 'test'
+          ...
+        # Subtest: clears pending update when replica is not leader
+        ok 3 - clears pending update when replica is not leader
+          ---
+          duration_ms: 27.106859
+          type: 'test'
+          ...
+        1..3
+    ok 9 - flushLeaderNodeUpdate
+      ---
+      duration_ms: 79.847326
+      type: 'suite'
+      ...
+    # Subtest: retry timers
+        # Subtest: schedules role retry when services table is not write-ready
+        ok 1 - schedules role retry when services table is not write-ready
+          ---
+          duration_ms: 27.164122
+          type: 'test'
+          ...
+        # Subtest: schedules leader retry when services table is not write-ready
+        ok 2 - schedules leader retry when services table is not write-ready
+          ---
+          duration_ms: 26.320102
+          type: 'test'
+          ...
+        1..2
+    ok 10 - retry timers
+      ---
+      duration_ms: 53.643493
+      type: 'suite'
+      ...
+    # Subtest: shutdown
+        # Subtest: should stop timers and close kvStore
+        ok 1 - should stop timers and close kvStore
+          ---
+          duration_ms: 35.130904
+          type: 'test'
+          ...
+        # Subtest: a delayed shutdown of an old instance leaves its successor's handler registered and receiving messages
+        ok 2 - a delayed shutdown of an old instance leaves its successor's handler registered and receiving messages
+          ---
+          duration_ms: 73.80586
+          type: 'test'
+          ...
+        1..2
+    ok 11 - shutdown
+      ---
+      duration_ms: 109.070143
+      type: 'suite'
+      ...
+    # Subtest: lifecycle interleavings
+        # Subtest: every interleaving of up to three calls on A and B keeps the address, the resources and delivery on the model
+        ok 1 - every interleaving of up to three calls on A and B keeps the address, the resources and delivery on the model
+          ---
+          duration_ms: 15257.94803
+          type: 'test'
+          ...
+        1..1
+    ok 12 - lifecycle interleavings
+      ---
+      duration_ms: 15258.04074
+      type: 'suite'
+      ...
+    1..12
+not ok 1 - WasmServiceReplica
+  ---
+  duration_ms: 16642.801482
+  type: 'suite'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/9b53962f2e7b-mvm2m25j-3307521/test/wasm-service/wasm-service-replica.test.js:153:1'
+  failureType: 'subtestsFailed'
+  error: '1 subtest failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+1..1
+# tests 40
+# suites 13
+# pass 36
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16658.310994
+# time=17409ms
+# test-files total=3 pass=1 fail=2 assertions=64
+placement-results={"file":"test/raft/raft-rs-backend/operation-port-boundary.test.js","attempt":1,"ok":true,"assertions":7,"durationMs":7789,"retriedOnce":false,"firstFailureLine":null}
+placement-results={"file":"test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":11534,"retriedOnce":false,"firstFailureLine":"not ok 3 - wasm service group commits and applies kv writes through raft-rs"}
+placement-results={"file":"test/wasm-service/wasm-service-replica.test.js","attempt":1,"ok":false,"assertions":53,"durationMs":17409,"retriedOnce":false,"firstFailureLine":"not ok 1 - should apply KV_SET records to kvStore"}

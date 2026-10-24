@@ -1,0 +1,22 @@
+{
+  "sha": "8c9b14141f89872938d21cc35472b262929818d6",
+  "on": "tv-dator",
+  "startedAt": "2026-10-24T08:12:31.152Z",
+  "finishedAt": "2026-10-24T08:13:08.872Z",
+  "status": 0,
+  "files": [
+    "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js"
+  ],
+  "logs": [
+    {
+      "name": "8c9b14141f89-mvm4fcql-3518486-tv-dator.err",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "8c9b14141f89-mvm4fcql-3518486-tv-dator.log",
+      "bytes": 890,
+      "sha256": "7dc4540fbafbfceee6fdbb050ece17e188508c9b474ac4598fb0047edc023a88"
+    }
+  ]
+}
