@@ -34,6 +34,15 @@ const RAFT_EVENT = Object.freeze({
   CONF_CHANGE_APPLIED: 'conf change applied',
 });
 
+// The one typed startup refusal of a replica its consensus port refused at
+// initialization - the runtime owner refused to open the group, the port
+// opened it held by its host failure (its durable record could not be read),
+// or a lone replica's campaign was refused - whatever service kind opened
+// it. The kind is the refusal's domain, never a second code.
+const RAFT_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
+  CONSENSUS_INIT_REFUSED: 'consensus_init_refused',
+});
+
 // The operations of the port beyond the scheduling and proposal surface,
 // named once: the one read of the committed configuration, answered as frozen
 // data from the runtime owner's recorded observation (committed-read
@@ -207,6 +216,7 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_CONSENSUS_STARTUP_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
   RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_EVENT,

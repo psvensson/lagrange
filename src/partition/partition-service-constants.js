@@ -189,14 +189,6 @@ const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   ENTRY_ID_INVALID: 'partition_write_entry_id_invalid',
 });
 
-const PARTITION_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
-  // Its consensus port refused the partition at initialization - a port that
-  // opened its group held (its durable record unreadable), whatever the
-  // replica count, or a lone replica's refused campaign - so initialization
-  // fails closed with this outcome, naming the port's phase (R11).
-  CONSENSUS_INIT_REFUSED: 'partition_consensus_init_refused',
-});
-
 const PARTITION_SERVICE_ROLE = Object.freeze({
   LEADER: 'leader',
   FOLLOWER: 'follower',
@@ -658,12 +650,6 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   COMMITTED_STATEMENT_ENVIRONMENT_FAILED:
     'Committed partition statement failed in the host environment; the ' +
     'entry is not consumed and is applied again when the host recovers',
-  consensusInitRefused: (partitionId, answer) => {
-    const detail = answer?.failure?.detail ?? answer?.detail;
-    return `Partition ${partitionId} cannot initialize: its consensus port ` +
-      `refused it in phase ${answer?.phase} (${answer?.outcome}: ` +
-      `${answer?.reason}${detail ? ` ${JSON.stringify(detail)}` : ''})`;
-  },
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
@@ -711,7 +697,6 @@ export {
   PARTITION_COMMITTED_COMMAND_OUTCOME,
   PARTITION_COMMITTED_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
   PARTITION_SERVICE_CDC,

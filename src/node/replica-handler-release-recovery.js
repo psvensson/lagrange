@@ -13,7 +13,7 @@ import {PARTICIPANT_CUTOVER_BOUND as BOUND, PARTICIPANT_CUTOVER_OUTCOME as OUTCO
   '../partition/partition-participant-transaction-cutover-constants.js';
 import {runParticipantCutover} from './replica-handler-participant-cutover.js';
 import {completeParticipantRelease, requestParticipantRelease} from './participant-release-client.js';
-import {isHeldByHostFailure} from '../partition/partition-write-kernel.js';
+import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 
 const RELEASE_RECOVERY_FACT = Object.freeze({
   BUILD: 'measured_boot_content',

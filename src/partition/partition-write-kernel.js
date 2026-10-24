@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
 import {isValidRaftLogIndex} from '../raft/log-index.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 import {RAFT_RS_PERSISTENCE_ADMISSION} from
   '../raft/raft-rs-durable-store-constants.js';
 import {PARTITION_COMMITTED_COMMAND_ERROR_CODE} from
@@ -348,17 +349,6 @@ function recoveryRefusalMessage({reason, phase, retryAfterMs}) {
     `(phase ${phase})${retry}`;
 }
 
-/**
- * Whether a port status names its group held by a host failure (the port's
- * recovery outcome).
- * @param {Object} status - A port status.
- * @return {boolean} Whether the group is held.
- */
-function isHeldByHostFailure(status) {
-  return status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-    status.recoveryRequired === true;
-}
-
 // A write this replica may not propose, typed by what its port reports: a
 // group held by its host failure (the port's recovery outcome, carried as
 // read; an open user session that holds the recovery is its own code), or no
@@ -584,7 +574,6 @@ export {
   buildRejectedProposedWriteAnswer,
   buildReleasedPendingWriteAnswer,
   isAppliedWithUnknownCount,
-  isHeldByHostFailure,
   isPartitionWriteFailureCode,
   isReroutableWriteFailureCode,
   isRetryableWriteFailureCode,

@@ -4788,11 +4788,11 @@
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 544,
+      "line": 580,
       "column": 1,
-      "functionName": "initialize",
+      "functionName": "initializeUnserialized",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 544) and SQL/DB (line 337) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 580) and SQL/DB (line 452) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {

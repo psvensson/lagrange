@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3078611,
-        "sha256": "2af830d89622c1d2b5a4d1266193d0f28516744f5515de6354cc9270ebe2edb2"
+        "bytes": 3079722,
+        "sha256": "2fd86739f312bb1e7895618320bd501ea2de2a6173ccd7275ddffea0435ff870"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e761625aed73db3d6c9e5aabcc7a8196fb56a393b009e6b7c319db212308e7a2"
+    "inputDigest": "e9936c56bd0de001e29ae6e1831242d878ba374aa1acf082ff315d4a00dedb6c"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3078611,
-        "sha256": "2af830d89622c1d2b5a4d1266193d0f28516744f5515de6354cc9270ebe2edb2"
+        "bytes": 3079722,
+        "sha256": "2fd86739f312bb1e7895618320bd501ea2de2a6173ccd7275ddffea0435ff870"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "d403f669439aecc559dfc8305a388a3efcc4c62c9c0df2596c6f114b88987979",
-      "moduleCount": 5612,
-      "edgeCount": 29754,
+      "sourceDigest": "6b02d1ec1301d1f446c7ef54db4aef815e0977510ddeedebd32fbd9b28ec3f30",
+      "moduleCount": 5613,
+      "edgeCount": 29769,
       "unresolvedCount": 36
     }
   },
@@ -332,7 +332,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 374,
-      "importOut": 479,
+      "importOut": 480,
       "score": 662.4,
       "topPaths": [
         "src/bootstrap/node-joining-backfill-merge-and-status.js",
@@ -1088,7 +1088,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 21,
-      "importOut": 80,
+      "importOut": 79,
       "score": 79,
       "topPaths": [
         "src/partition/partition-service-raft-init-base.js",
@@ -2110,7 +2110,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 69,
+      "importOut": 70,
       "score": 15.4,
       "topPaths": [
         "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js",

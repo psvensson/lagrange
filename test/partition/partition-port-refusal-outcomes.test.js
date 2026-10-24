@@ -42,12 +42,11 @@ import {
   CDCOperation,
   PartitionService,
 } from '../../src/partition/partition-service.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {admitPartitionRaftPeer} from
   '../../src/partition/partition-service-raft-membership-administration.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {deepFreeze} from '../../src/raft/raft-operation-port.js';
+import {deepFreeze, isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
 import {
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
@@ -153,13 +152,10 @@ async () => {
     try {
       assert.ok(error !== null,
         'initialization does not report a partition that cannot lead');
-      assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+      assert.ok(isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION),
         `the refusal is the typed startup outcome (${error?.message})`);
       assert.deepEqual(error.consensus, CAMPAIGN_REFUSAL,
-        'the error carries what the port answered');
-      assert.equal(error.phase, CAMPAIGN_REFUSAL.phase ?? null,
-        'and names the port\'s phase (none here)');
+        'the error carries what the port answered, its phase included');
       assert.equal(service.initialized, false, 'the partition is not initialized');
       assert.equal(service.raft, null, 'the port was released');
       assert.equal(service.db, null, 'the database handle was released');
@@ -190,8 +186,7 @@ test('F-f: production construction over an inert rs-raft record (no ' +
     try {
       assert.ok(error !== null,
         'initialization does not report a partition that cannot lead');
-      assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+      assert.ok(isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION),
         `the refusal is the typed startup outcome (${error?.message})`);
       assert.equal(error.consensus?.outcome,
         RAFT_OPERATION_OUTCOME.CORE_REFUSED, 'the port refused the campaign');

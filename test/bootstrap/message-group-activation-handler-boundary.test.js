@@ -32,6 +32,9 @@ import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
 import {runSerializedReplicaMutation} from
   '../../src/node/replica-state-machine-serialization.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {consensusInitRefusedError} from '../../src/raft/raft-operation-port.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {
   createGatedServicesRow,
   createMessageGroupReplicaRuntime,
@@ -145,8 +148,10 @@ for (const failRetirement of [false, true]) {
     (failRetirement ? 'retains unretired handler under host custody' :
       'retires registered handler before returning the primary refusal'),
   async (t) => {
-    const primary = Object.assign(new Error('refused during native initialization'),
-      {code: 'CONSENSUS_INIT_REFUSED'});
+    const primary = consensusInitRefusedError({domain: ENTITY_TYPE.MESSAGE_GROUP,
+      identity: {groupId: 'refused-group', replicaId: REPLICA_ID},
+      answer: Object.freeze({outcome: RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+        phase: 'native-initialization'})});
     const registered = new Map();
     const address = ADDRESS;
     const handler = () => {};

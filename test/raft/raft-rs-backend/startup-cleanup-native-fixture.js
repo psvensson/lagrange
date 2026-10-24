@@ -7,11 +7,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
 import {PartitionService} from '../../../src/partition/partition-service.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from '../../../src/partition/partition-service-constants.js';
 import {MessageGroupService} from '../../../src/message-group/message-group-service.js';
-import {MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME} from '../../../src/message-group/constants.js';
 import {WasmServiceReplica} from '../../../src/wasm-service/wasm-service-replica.js';
-import {WASM_SERVICE_ERROR_MSG} from '../../../src/wasm-service/wasm-service-constants.js';
 import {MessageRouter} from '../../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
@@ -22,12 +19,21 @@ import {genesisStamp} from '../../../src/raft/raft-committed-membership-stamp.js
 import {setCoreFaultInjector, setActualCoreEntryObserver} from '../../../src/raft/raft-rs-runtime-owner.js';
 import {RUNTIME_PHASE, RUNTIME_REASON} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {RAFT_OPERATION_OUTCOME as OUTCOME} from '../../../src/raft/raft-operation-port-constants.js';
+import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {TEST_BOOT_INCARNATION} from '../../test-helpers/boot-incarnation-fixture.js';
 
 const NODE_ID = 'opening-refusal-node';
 const EXISTING_GROUP = 'opening-refusal-survivor';
 const EXISTING_REPLICA = 'opening-refusal-survivor-r1';
 const KINDS = ['partition', 'message-group', 'wasm-service'];
+// Each kind's refusal is the port's one refusal in its own domain.
+const DOMAIN_OF_KIND = Object.freeze({
+  'partition': ENTITY_TYPE.PARTITION,
+  'message-group': ENTITY_TYPE.MESSAGE_GROUP,
+  'wasm-service': ENTITY_TYPE.WASM_SERVICE,
+});
+const groupIdOf = (kind) => `opening-${kind}`;
 
 async function createFixture(t) {
   NodeService.resetInstance();
@@ -99,7 +105,7 @@ async function createFixture(t) {
 }
 
 function buildService(fixture, kind) {
-  const id = `opening-${kind}`;
+  const id = groupIdOf(kind);
   const replicaId = `${id}-r1`;
   const options = {nodeId: NODE_ID, replicaId, replicaIds: [replicaId],
     dbPath: path.join(fixture.directory, `${id}.db`), transport: fixture.router,
@@ -128,17 +134,9 @@ function assertInitializationRefusal(kind, error, replicaId, shared = null) {
   assert.equal(error.consensus.recoveryRequired, true);
   assert.equal(error.consensus.replicaIdentity, replicaId);
   assert.equal(Object.isFrozen(error.consensus), true, 'the owner answer is retained as immutable data');
-  if (kind === 'partition') {
-    assert.equal(error.code, PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
-      'partition initialize must expose its existing typed refusal');
-  } else if (kind === 'message-group') {
-    assert.equal(error.code, MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
-      'message-group initialize must expose its existing typed refusal');
-  } else {
-    assert.equal(error.message, WASM_SERVICE_ERROR_MSG.CONSENSUS_INIT_REFUSED,
-      'WASM initialize must expose its existing startup refusal');
-    assert.equal(error.replicaId, replicaId);
-  }
+  assert.ok(isConsensusInitRefusal(error, DOMAIN_OF_KIND[kind]),
+    `${kind} initialize must expose the port's one typed refusal in its domain`);
+  assert.deepEqual(error.identity, {groupId: groupIdOf(kind), replicaId});
 }
 
 
