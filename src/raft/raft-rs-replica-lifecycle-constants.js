@@ -7,5 +7,11 @@ const LIFECYCLE_STATE = Object.freeze({
   ACTIVE: 'active',
   RETIRED: 'retired',
 });
+// The lifecycle owner's own errors, whichever of its operations raises them.
+const LIFECYCLE_ERROR = Object.freeze({
+  // A lifecycle operation that commits with its caller's rows was called
+  // outside the caller's open transaction; nothing was written.
+  TRANSACTION_REQUIRED: 'replica-lifecycle-transaction-required',
+});
 
-export {LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE};
+export {LIFECYCLE_ERROR, LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE};

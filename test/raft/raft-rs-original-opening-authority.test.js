@@ -14,7 +14,7 @@ import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
@@ -93,7 +93,7 @@ test('original admission is unavailable until the complete allocation closes pre
   const native = f.native(member, opening);
   const port = native.open();
   assert.equal(port.readStatus().outcome, 'CORE_OK');
-  const row = originalAllocationRow(native.db, member);
+  const row = readOriginalAllocationRow({db: native.db, member});
   assert.equal(row.native_history_state, HISTORY.ESTABLISHED);
   assert.equal(row[COLUMN.SERVICE_RIGHT], STATE.UNUSED, 'opening is not SERVICES consumption');
   port.close();
@@ -148,7 +148,7 @@ for (const close of ['revoke', 'directory']) {
     setActualCoreEntryObserver((entry) => entries.push(entry));
     assert.throws(native.open, hold(close === 'revoke' ? REASON.CLOSED : REASON.DIRECTORY));
     assert.deepEqual(entries, []);
-    assert.equal(originalAllocationRow(native.db, member).native_history_state,
+    assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
       HISTORY.NEVER_OPENED);
   });
 }
@@ -168,7 +168,8 @@ test('revocation during an intermediate constructor callback prevents native ent
   setActualCoreEntryObserver((entry) => entries.push(entry));
   assert.throws(native.open, hold(REASON.CLOSED));
   assert.deepEqual(entries, []);
-  assert.equal(originalAllocationRow(native.db, member).native_history_state, HISTORY.NEVER_OPENED);
+  assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
+    HISTORY.NEVER_OPENED);
 });
 
 test('constructor failure cannot restore an already consumed opening', (t) => {
@@ -298,5 +299,6 @@ test('revocation while resolving the last dispatcher callback cannot cross nativ
   setActualCoreEntryObserver((entry) => entries.push(entry));
   assert.throws(native.open, hold(REASON.CLOSED));
   assert.deepEqual(entries, []);
-  assert.equal(originalAllocationRow(native.db, member).native_history_state, HISTORY.NEVER_OPENED);
+  assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
+    HISTORY.NEVER_OPENED);
 });

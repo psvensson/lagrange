@@ -31,7 +31,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ADDRESS, ENTITY_TYPE, SERVICE_TYPE, SERVICE_LIFECYCLE_STATE} from
   '../../src/constants/index.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
@@ -136,7 +136,7 @@ function queueReplica(f, options) {
 function readRow(member) {
   const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
   try {
-    return originalAllocationRow(db, member);
+    return readOriginalAllocationRow({db, member});
   } finally {
     db.close();
   }

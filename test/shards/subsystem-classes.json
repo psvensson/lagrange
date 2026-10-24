@@ -19,16 +19,16 @@
     "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 199,
-    "storage-raft": 145,
+    "storage-raft": 146,
     "test-infrastructure": 148,
     "transactions": 16,
     "transport-messaging": 102,
     "wasm-toolchain": 74
   },
-  "censusSize": 2451,
-  "digest": "fnv1a32-3e37576c",
+  "censusSize": 2452,
+  "digest": "fnv1a32-9fc27657",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-09697cad",
+  "observationDigest": "fnv1a32-41ce8dd7",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1634,6 +1634,7 @@
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "storage-raft",
@@ -2939,6 +2940,7 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/test-helpers/fresh-seed-activation-public-child.js",
@@ -11801,6 +11803,28 @@
         "src/raft/raft-rs-lifecycle-administration.js"
       ]
     },
+    "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": {
+      "files": [
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft",
+        "test/raft/raft-rs-backend"
+      ]
+    },
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -12637,8 +12661,8 @@
       "files": [
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
-        "src/raft/raft-rs-original-allocation-store.js",
-        "src/raft/raft-rs-replica-lifecycle-constants.js"
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
       ]
     },
     "test/raft/raft-rs-original-opening-authority.test.js": {
@@ -12657,7 +12681,7 @@
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
-        "src/raft/raft-rs-original-allocation-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },

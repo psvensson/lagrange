@@ -1,15 +1,17 @@
 // Custody-free, read-only observation of the durable original seed allocation
 // for witnesses that cannot hold the data-directory owner (a live runtime
-// holds it). The authority read is the store owner's originalAllocationRow;
-// the per-macrotask sampler is a cached hint that never decides a receipt.
-// When the lifecycle owner exports a custody-free reader (Q3), both consume it.
+// holds it). The authority reads are the lifecycle owner's named reads
+// (readOriginalAllocationDeclaration, readOriginalAllocationRow); the
+// per-macrotask sampler is a cached hint that never decides a receipt.
 import fs from 'node:fs';
 import Database from 'better-sqlite3';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationDeclaration, readOriginalAllocationRow} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {originalSeedAnchor} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
-import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_COLUMN as COLUMN,
-  REPLICA_LIFECYCLE_TABLE} from '../../src/raft/raft-rs-original-allocation-constants.js';
+import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
+import {REPLICA_LIFECYCLE_TABLE} from '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 
 const RIGHT_COLUMNS = Object.freeze([COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT]);
 const NATIVE_KEY = 'native';
@@ -20,8 +22,8 @@ function readOnly(dbPath) {
 
 /**
  * The complete declaration once the anchor is ISSUED; null while absent or
- * still PREPARING. Restates the anchor-row read of
- * RaftRsOriginalAllocationPreparation.readDeclaration, which needs custody.
+ * still PREPARING. The same owner read RaftRsOriginalAllocationPreparation.
+ * readDeclaration consumes, on a read-only handle without custody.
  * @param {string} dataDir
  * @return {Object|null}
  */
@@ -30,13 +32,10 @@ function readIssuedDeclaration(dataDir) {
   if (!fs.existsSync(anchor.dbPath)) return null;
   const db = readOnly(anchor.dbPath);
   try {
-    const present = db.prepare(`SELECT 1 FROM sqlite_master
-      WHERE type = 'table' AND name = ?`).get(REPLICA_LIFECYCLE_TABLE);
-    if (present === undefined) return null;
-    const row = db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
-      WHERE group_id = ? AND replica_identity = ?`).get(anchor.groupId, anchor.replicaId);
-    if (row?.[COLUMN.ISSUE] !== STATE.ISSUED) return null;
-    return JSON.parse(row[COLUMN.DECLARATION]);
+    const read = readOriginalAllocationDeclaration({db, groupId: anchor.groupId,
+      replicaIdentity: anchor.replicaId});
+    return read.state === STATE.PRESENT && read.issue === STATE.ISSUED ?
+      read.declaration : null;
   } finally {
     db.close();
   }
@@ -47,7 +46,7 @@ function rightKey(replicaId, column) {
 }
 
 /**
- * Authority read of every declared member through the store owner.
+ * Authority read of every declared member through the lifecycle owner.
  * @param {Object} declaration
  * @return {Object} replicaId -> {native, <right column>: state}
  */
@@ -56,7 +55,7 @@ function readOwnerRights(declaration) {
   for (const member of declaration.members) {
     const db = readOnly(member.dbPath);
     try {
-      const row = originalAllocationRow(db, member);
+      const row = readOriginalAllocationRow({db, member});
       rights[member.replicaId] = {[NATIVE_KEY]: row.native_history_state,
         ...Object.fromEntries(RIGHT_COLUMNS.filter((column) => row[column] !== null)
           .map((column) => [column, row[column]]))};

@@ -8,12 +8,12 @@ import {createSeedOriginalAllocation, originalSeedAnchor} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {ownerStampedSeedDeclaration} from
   '../test-helpers/original-allocation-declaration-fixture.js';
-import {readDurableReplicaLifecycle} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {readDurableReplicaLifecycle, readOriginalAllocationRow} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import {RaftRsOriginalAllocationPreparation} from
   '../../src/raft/raft-rs-original-allocation-preparation.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {acquireDataDirectoryProcessOwner, ownsDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
@@ -157,7 +157,7 @@ test('complete catalog is durably prepared and closed before any native history'
   for (const member of declaration.members) {
     const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
     try {
-      const row = originalAllocationRow(db, member);
+      const row = readOriginalAllocationRow({db, member});
       const anchor = member.replicaId === declaration.anchorReplicaId;
       assert.equal(row[COLUMN.DECLARATION], JSON.stringify(declaration));
       assert.equal(row[COLUMN.ISSUE], anchor ? STATE.ISSUED : STATE.PREPARING);
