@@ -65,6 +65,8 @@ const distributedTransactionParticipantSetMethods = {
       return {success: false, error: QUERY_ERROR_MSG.NO_ACTIVE_TRANSACTION,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION};
     }
+    const held = this.recoveryObligationStageRefusal(tx, null);
+    if (held) return held;
     if (tx.participantSetState !== PARTICIPANT_SET_STATE.OPEN) {
       return {success: false, error: QUERY_ERROR_MSG.TRANSACTION_PARTICIPANTS_FROZEN,
         errorCode: QUERY_ERROR_CODE.TRANSACTION_PARTICIPANTS_FROZEN};

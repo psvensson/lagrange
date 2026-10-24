@@ -483,6 +483,10 @@ class DistributedTransactionCoordinator {
           expectedTransactionId),
       };
     }
+    // Not stamped with a commit point: the restored status is a progress
+    // hint, so the held answer is outcome-unknown, never "not committed".
+    const held = this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.COMMIT);
+    if (held) return held;
     await this.freezeParticipantSet(tx);
     try {
       return withCommitPoint(await this.runCommitProtocol(tx), tx);
@@ -514,7 +518,8 @@ class DistributedTransactionCoordinator {
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
-    return this.runRollbackProtocol(tx);
+    return this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.ROLLBACK) ??
+      this.runRollbackProtocol(tx);
   }
 
   /**
