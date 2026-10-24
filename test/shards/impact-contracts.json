@@ -1439,7 +1439,12 @@
         "test/message-group/message-group-cdc-input-guard.test.js",
         "test/message-group/message-group-native-application-membership.test.js",
         "test/topology/cdc-group-propagation-stop-arms-nothing.test.js",
-        "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js"
+        "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/partition/proposal-queue.test.js",
+        "test/partition/proposal-queue-capacity.property.test.js",
+        "test/partition/proposal-queue-size-invariant.property.test.js",
+        "test/message-group/message-group-cdc-public-defer-repair.test.js"
       ]
     }
   },
@@ -2977,7 +2982,12 @@
         "test/transport/message-router-cdc-encoding.test.js",
         "test/transport/message-router-cdc-response-boundary.test.js",
         "test/message-group/message-group-cdc-input-guard.test.js",
-        "test/message-group/message-group-native-application-membership.test.js"
+        "test/message-group/message-group-native-application-membership.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/partition/proposal-queue.test.js",
+        "test/partition/proposal-queue-capacity.property.test.js",
+        "test/partition/proposal-queue-size-invariant.property.test.js",
+        "test/message-group/message-group-cdc-public-defer-repair.test.js"
       ]
     }
   }

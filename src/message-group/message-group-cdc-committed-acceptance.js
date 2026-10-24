@@ -22,6 +22,7 @@ const objectAssign = Object.assign;
 const numberIsFinite = Number.isFinite;
 const mathMin = Math.min;
 const promiseWithResolvers = Promise.withResolvers.bind(Promise);
+const promiseRace = Promise.race.bind(Promise);
 const reservationToken = Symbol;
 const arraySome = Function.call.bind(Array.prototype.some);
 const arrayFind = Function.call.bind(Array.prototype.find);
@@ -110,6 +111,10 @@ function reserveCdcWait(service, command, timeoutMs, parent, options) {
   const queue = service.cdcCommitWaiters;
   const reservation = reservationToken();
   // The queue owner reserves capacity BEFORE immutable capture or digesting.
+  // Every durable caller, the public receiver included, reaches this point
+  // having read only shallow wrapper fields: message type, the durable
+  // classification, the remaining duration and the forward context. No event
+  // payload is traversed or copied before this reservation.
   queue.enqueue(reservation, {});
   try {
     const clock = queue.timeSource;
@@ -150,6 +155,21 @@ function proposeCdcAndAwaitCommitted(service, wait) {
   // same recipient queue slot even though no local source brand crossed wire.
   wait.entry.parent.context?.ownChild(raw);
   return raw;
+}
+
+function forwardCdcWithinWait(service, wait, forward) {
+  // A follower's forward is raw work of this same admitted entry. The slot
+  // stays charged until the forward's own transport promise settles, while
+  // the caller's response still retires at its original deadline. A FORWARD
+  // attempt that finds this entry's PROPOSE raw still open deliberately joins
+  // it (ownOperation) instead of forwarding: one raw effect per entry at a time.
+  if (!currentWait(service, wait.key, wait.entry)) return wait.completion;
+  const raw = service.cdcCommitWaiters.ownOperation(wait.key, forward);
+  wait.entry.parent.context?.ownChild(raw);
+  // Retiring the response settles wait.completion in the same synchronous
+  // step, before the raw body can observe it and reject RELEASED, so a late
+  // raw refusal or failure never replaces the caller's settled answer.
+  return promiseRace([raw, wait.completion]);
 }
 
 async function runCdcProposal(service, wait) {
@@ -221,6 +241,7 @@ async function deliverCapturedCdc(service, wait, options, context) {
       return getRemainingBudgetMs(wait.entry.originalBudget, {now: wait.entry.now});
     },
     proposeCommand: () => proposeCdcAndAwaitCommitted(service, wait),
+    forwardCommand: (forward) => forwardCdcWithinWait(service, wait, forward),
   });
   assertCurrent();
   return isCommittedCdcOutcome(answer, wait.entry.events, service.groupId) ||
@@ -249,6 +270,20 @@ function inputCdcOutcome(service, wait, answer, context) {
   return {...answer, cdcVectorDigest: wait.entry.inputVectorDigest};
 }
 
+async function retiredCdcOutcome(service, wait, context) {
+  // Expiry, shutdown or parent retirement of this admitted wait is named here
+  // as the response's own settled typed answer, never an untyped deadline
+  // error that a routing wrapper later renames. A committed receipt survives
+  // only while this invocation is still live and bound to its input digest.
+  if (currentWait(service, wait.key, wait.entry)) {
+    service.cdcCommitWaiters.resolve(wait.key, unknownCdcAcceptance());
+  }
+  const settled = await wait.completion;
+  if (!isCommittedCdcOutcome(settled, wait.entry.events, wait.entry.groupId)) return settled;
+  return liveWait(service, wait.entry) ? inputCdcOutcome(service, wait, settled, context) :
+    {...unknownCdcAcceptance(), cause: settled};
+}
+
 async function applyDurableCdcBatch(service, events, options = {}) {
   const {context, timeoutMs, parent} = captureCdcParentGrant(service, options);
   if (!numberIsFinite(timeoutMs) || timeoutMs <= 0) return unknownCdcAcceptance();
@@ -264,6 +299,9 @@ async function applyDurableCdcBatch(service, events, options = {}) {
   try {
     const answer = await deliverCapturedCdc(service, wait, options, context);
     return inputCdcOutcome(service, wait, answer, context);
+  } catch (error) {
+    if (currentWait(service, wait.key, wait.entry) && liveWait(service, wait.entry)) throw error;
+    return retiredCdcOutcome(service, wait, context);
   } finally {
     if (currentWait(service, wait.key, wait.entry)) {
       service.cdcCommitWaiters.resolve(wait.key, unknownCdcAcceptance());
