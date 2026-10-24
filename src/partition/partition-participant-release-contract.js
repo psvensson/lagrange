@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {deepFreeze} from '../raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-constants.js';
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
-import {TRANSACTION_RELEASE_CENSUS_STATE} from
+import {TRANSACTION_RELEASE_CENSUS_STATE, TRANSACTION_RELEASE_TERMINAL_STATUS} from
   '../query/distributed/distributed-transaction-release-census.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
   './partition-participant-transaction-cutover-constants.js';
@@ -47,8 +47,8 @@ function transactionReleaseProofValid(proof, {release, attempt, census}) {
   return proof.transactions.every((entry, index) =>
     exactRecord(entry, RELEASE_PROOF_RESULT_FIELDS) &&
     entry.transactionId === census.recoverableTransactionIds[index] &&
-    ((entry.decision === 'COMMIT' && entry.terminalStatus === 'COMMITTED') ||
-      (entry.decision === 'ROLLBACK' && entry.terminalStatus === 'ROLLED_BACK')) &&
+    Object.keys(TRANSACTION_RELEASE_TERMINAL_STATUS).includes(entry.decision) &&
+    entry.terminalStatus === TRANSACTION_RELEASE_TERMINAL_STATUS[entry.decision] &&
     DIGEST_PATTERN.test(entry.decisionDigest) && Array.isArray(entry.participantIds) &&
     entry.participantIds.every(nonempty));
 }
@@ -198,7 +198,7 @@ function releaseAnswer(outcome, request = {}, fields = {}) {
 }
 
 export {isReleaseDrained, originEqual, releaseAnswer, releaseCensusDefect,
-  participantReleaseGenerationValid, releaseFactsDefect, releaseIdentityOf,
+  participantReleaseGenerationValid, releaseIdentityOf,
   releaseIdentityValid, releaseMemberIds,
   sameReplicaGeneration,
   transactionReleaseProofValid};

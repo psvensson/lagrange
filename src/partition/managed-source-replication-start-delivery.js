@@ -73,6 +73,5 @@ function sourceReplicationStartAnswerMayBeLost(error) {
 
 export {
   deliverProcessedSourceReplicationStart,
-  requireProcessedSourceReplicationStart,
   sourceReplicationStartAnswerMayBeLost,
 };

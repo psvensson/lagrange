@@ -71,11 +71,13 @@ function canonicalRecordedResult(input) {
   return Object.freeze({state: RECORDED_DECISION_STATE.RECORDED, ...record});
 }
 
+const SETTLEMENT_RESULT_FIELDS = Object.freeze(['outcome', 'reason', 'recordedDecision']);
 /** Validate both transported and retained command results before consuming them. */
 function canonicalTransactionSettlementResult(input) {
   const data = copyStrictOwnDataRecord(input);
-  if (!data || Object.keys(data).length !== 3 || !['outcome', 'reason', 'recordedDecision']
-    .every((key) => key in data) || !Object.values(OUTCOME).includes(data.outcome)) return null;
+  if (!data || Object.keys(data).length !== SETTLEMENT_RESULT_FIELDS.length ||
+    !SETTLEMENT_RESULT_FIELDS.every((key) => key in data) ||
+    !Object.values(OUTCOME).includes(data.outcome)) return null;
   const record = data.recordedDecision === null ? null :
     canonicalRecordedResult(data.recordedDecision);
   if (data.recordedDecision !== null && record === null) return null;
@@ -223,5 +225,5 @@ function applyTransactionSettlement(database, input) {
 
 export {canonicalTransactionSettlement, transactionSettlementBytes,
   canonicalTransactionSettlementResult,
-  validateTransactionSettlement, observeTransactionSettlement, applyTransactionSettlement,
-  TRANSACTION_SETTLEMENT_KIND, TRANSACTION_SETTLEMENT_OUTCOME, TRANSACTION_SETTLEMENT_REASON};
+  observeTransactionSettlement, applyTransactionSettlement,
+  TRANSACTION_SETTLEMENT_KIND, TRANSACTION_SETTLEMENT_OUTCOME};

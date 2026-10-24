@@ -404,7 +404,6 @@ export {
   encodeCommittedPromotionAdmission,
   learnerAdmissionMatchesReservation,
   promotionAdmissionMatchesReservation,
-  COMMITTED_MEMBERSHIP_CONTEXT_ERROR,
   committedMembershipChangeType,
   committedMembershipContext,
   encodeCommittedMembershipContext,

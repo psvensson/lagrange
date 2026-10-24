@@ -86,8 +86,10 @@ const RATCHET_TARGETS = [
     // 2026-10-13: tightened 47/1473 -> 47/1462 on the checker's measured
     // hint during the TX1 deletion audit. The exact e6 predecessor also
     // measures 47/1462, so this quest claims no clone reduction.
-    baselineCloneGroupCount: 47,
-    baselineDuplicatedLineCount: 1462,
+    // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
+    // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
+    baselineCloneGroupCount: 46,
+    baselineDuplicatedLineCount: 1439,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

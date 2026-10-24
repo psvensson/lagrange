@@ -15,4 +15,4 @@ function coordinatorTableParticipantRefusal(tableName) {
     COORDINATOR_PARTICIPANT_REFUSAL : null;
 }
 
-export {coordinatorTableParticipantRefusal, COORDINATOR_PARTICIPANT_REFUSAL_CODE};
+export {coordinatorTableParticipantRefusal};

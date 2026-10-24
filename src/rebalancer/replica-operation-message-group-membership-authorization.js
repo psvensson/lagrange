@@ -5,7 +5,6 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
  */
 import {WORKFLOW_STEP} from '../constants/workflow.js';
 import {ReplicaStatus} from './replica-status.js';
-import {REBALANCE_COORDINATOR_LOG_MSG} from './rebalancer-constants.js';
 import {committedStampOfAnswer, validateBootstrapMembershipStamp} from
   '../raft/raft-committed-membership-stamp.js';
 import {RAFT_MEMBERSHIP_TRANSITION_STAGE} from '../raft/raft-operation-port-constants.js';
@@ -25,17 +24,10 @@ import {MEMBERSHIP_PHASE as PHASE, MEMBERSHIP_PERMIT_STATE as STATE,
 
 import {observeMembershipOperation, membershipRowIdentityMatches,
   membershipClaimIsLocalAndLive, membershipBootIsCurrent,
-  membershipRowWhere, neverAuthorized} from
+  membershipRowWhere, neverAuthorized, noteUncertainMembershipWrite} from
   './replica-operation-message-group-membership-owner-claim.js';
 
 const result = (outcome, operation = null) => Object.freeze({outcome, operation});
-// A membership write whose answer was an error is neither committed nor lost:
-// the caller resolves it by exact authoritative readback. The error is named
-// here so an uncertain write is never silent.
-function noteUncertainMembershipWrite(repository, operationId, error) {
-  repository.logger?.debug?.(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_WRITE_UNCERTAIN,
-    {nodeId: repository.nodeId, operationId, error: error?.message || String(error)});
-}
 function priorLearnerStamp(row, identity, prior) {
   try {
     const stamp = committedStampOfAnswer(JSON.parse(row.messageGroupLearnerStamp));

@@ -110,6 +110,11 @@ import {proposeMembershipTransition} from
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
 const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
+// A group holds no cached usable status answer (a discarded core's answers
+// are never reused).
+const NO_STATUS_OBSERVATION = null;
+// The shared replacement attempt has recorded no failure yet.
+const NO_REPLACEMENT_FAILURE = null;
 
 
 let core = null;
@@ -358,34 +363,40 @@ function invokeCore(group, operation, ...args) {
     coreFaultInjector?.(group.groupId, operation, args);
     return {ok: true, value: core[operation](...parameters)};
   } catch (error) {
-    if (isCoreRefusal(error)) {
-      return {
-        ok: false,
-        result: outcome(CORE_REFUSED, {
-          reason: String(error.message || RUNTIME_REASON.CORE_REFUSED),
-          phase: operation,
-          retryable: false,
-          recoveryRequired: false,
-        }),
-      };
-    }
-    // A trap inside replacement cannot release its synchronous barrier.
-    if (runtimeHealth === REPLACING) {
-      runtimeRecovery.failure = {phase: operation,
-        reason: String(error?.message || error)};
-    } else runtimeHealth = UNHEALTHY;
-    reportCoreTrap(group, operation, args, String(error?.message || error),
-      runtimeGeneration);
+    return coreCallFailure(group, operation, args, error);
+  }
+}
+
+// A core refusal is the operation's typed answer; anything else is a trap
+// that fails the whole core.
+function coreCallFailure(group, operation, args, error) {
+  if (isCoreRefusal(error)) {
     return {
       ok: false,
-      result: outcome(CORE_FATAL, {
-        reason: String(error?.message || error),
+      result: outcome(CORE_REFUSED, {
+        reason: String(error.message || RUNTIME_REASON.CORE_REFUSED),
         phase: operation,
-        retryable: true,
-        recoveryRequired: true,
+        retryable: false,
+        recoveryRequired: false,
       }),
     };
   }
+  // A trap inside replacement cannot release its synchronous barrier.
+  if (runtimeHealth === REPLACING) {
+    runtimeRecovery.failure = {phase: operation,
+      reason: String(error?.message || error)};
+  } else runtimeHealth = UNHEALTHY;
+  reportCoreTrap(group, operation, args, String(error?.message || error),
+    runtimeGeneration);
+  return {
+    ok: false,
+    result: outcome(CORE_FATAL, {
+      reason: String(error?.message || error),
+      phase: operation,
+      retryable: true,
+      recoveryRequired: true,
+    }),
+  };
 }
 
 // A continuation from before a core replacement, or of a group that failed
@@ -588,7 +599,7 @@ function runtimeRecoveryOutcome(group) {
 function invalidateRuntimeGroups() {
   for (const group of groups.values()) {
     group.handle = null;
-    group.statusObservation = null;
+    group.statusObservation = NO_STATUS_OBSERVATION;
     group.pendingRuntimeResume = null;
     cancelRuntimeResumption(group);
     group.health = RECOVERY_REQUIRED;
@@ -720,6 +731,59 @@ function scheduleRuntimeResumption(group, generation) {
     containUnexpectedThrow(group, error));
 }
 
+// Reopen every registered group in the replacement core, collecting each
+// restored group. Answers the shared attempt's failure (a trap, or a failure
+// a callback recorded), or null once every group is accounted for.
+function restoreGroupsIntoNewCore(trigger, restoredGroups) {
+  for (const group of [...groups.values()]) {
+    try {
+      const opening = openingForReplacement(group);
+      if (opening === null || group.closed) continue;
+      const restored = openGroupInCurrentRuntime(group, opening);
+      if (restored.outcome === CORE_FATAL) {
+        return failedRuntimeReplacement(trigger, restored);
+      }
+      if (restored.outcome !== CORE_OK) {
+        groupHostFailure(group, restored.phase, restored.reason);
+        continue;
+      }
+      group.health = RECOVERY_REQUIRED;
+      group.recovery = null;
+      group.pendingRuntimeResume = runtimeGeneration;
+      restoredGroups.push(group);
+    } catch (error) {
+      containUnexpectedThrow(group, error);
+    }
+    if (runtimeRecovery.failure !== NO_REPLACEMENT_FAILURE) {
+      return failedRuntimeReplacement(trigger, runtimeRecovery.failure);
+    }
+  }
+  return null;
+}
+
+// An attempt that never published HEALTHY leaves the runtime UNHEALTHY and
+// drops closed groups; with no group left there is nothing to recover.
+function settleAbandonedReplacement() {
+  if (runtimeHealth !== REPLACING) return;
+  runtimeHealth = UNHEALTHY;
+  for (const group of groups.values()) {
+    if (group.closed) groups.delete(group.key);
+  }
+  if (groups.size === 0) {
+    core = null; runtimeRecovery = null; runtimeHealth = HEALTHY;
+  }
+}
+
+// Every restored group other than the trigger still owed this generation's
+// resumption gets it on its own clock.
+function scheduleRestoredResumptions(trigger, restoredGroups, generation) {
+  for (const group of restoredGroups) {
+    if (group === trigger || group.closed ||
+        group.pendingRuntimeResume !== generation) continue;
+    scheduleRuntimeResumption(group, generation);
+  }
+}
+
 // Account for every registered group while the barrier is closed. A host or
 // native refusal holds only its group; a trap aborts the shared attempt and
 // invalidates even handles already rebuilt in that attempt.
@@ -730,38 +794,17 @@ function replaceRuntime(trigger) {
   }
   runtimeRecovery ??= {clock: trigger.timers,
     windowMs: recoveryRetryWindowMsOf(trigger.timing),
-    retryNotBefore: 0, failure: null, attempts: 0};
+    retryNotBefore: 0, failure: NO_REPLACEMENT_FAILURE, attempts: 0};
   runtimeRecovery.attempts += 1;
-  runtimeRecovery.failure = null;
+  runtimeRecovery.failure = NO_REPLACEMENT_FAILURE;
   runtimeHealth = REPLACING;
   invalidateRuntimeGroups();
   core = null;
   const restoredGroups = [];
   try {
     ensureCore();
-    for (const group of [...groups.values()]) {
-      try {
-        const opening = openingForReplacement(group);
-        if (opening === null || group.closed) continue;
-        const restored = openGroupInCurrentRuntime(group, opening);
-        if (restored.outcome === CORE_FATAL) {
-          return failedRuntimeReplacement(trigger, restored);
-        }
-        if (restored.outcome !== CORE_OK) {
-          groupHostFailure(group, restored.phase, restored.reason);
-          continue;
-        }
-        group.health = RECOVERY_REQUIRED;
-        group.recovery = null;
-        group.pendingRuntimeResume = runtimeGeneration;
-        restoredGroups.push(group);
-      } catch (error) {
-        containUnexpectedThrow(group, error);
-      }
-      if (runtimeRecovery.failure !== null) {
-        return failedRuntimeReplacement(trigger, runtimeRecovery.failure);
-      }
-    }
+    const restoreFailure = restoreGroupsIntoNewCore(trigger, restoredGroups);
+    if (restoreFailure !== null) return restoreFailure;
     const released = releaseClosedReplacementGroups();
     if (released.outcome !== CORE_OK) {
       return failedRuntimeReplacement(trigger, released);
@@ -780,23 +823,16 @@ function replaceRuntime(trigger) {
     return failedRuntimeReplacement(trigger,
       hostFailure(RUNTIME_PHASE.RUNTIME_REPLACEMENT, error, true));
   } finally {
-    if (runtimeHealth === REPLACING) {
-      runtimeHealth = UNHEALTHY;
-      for (const group of groups.values()) {
-        if (group.closed) groups.delete(group.key);
-      }
-      if (groups.size === 0) {
-        core = null; runtimeRecovery = null; runtimeHealth = HEALTHY;
-      }
-    }
+    settleAbandonedReplacement();
   }
   const generation = runtimeGeneration;
-  for (const group of restoredGroups) {
-    if (group === trigger || group.closed ||
-        group.pendingRuntimeResume !== generation) continue;
-    scheduleRuntimeResumption(group, generation);
-  }
-  // A callback may already have resumed the trigger or trapped the new core.
+  scheduleRestoredResumptions(trigger, restoredGroups, generation);
+  return triggerAnswerAfterReplacement(trigger, generation);
+}
+
+// The trigger's own answer once the replacement published `generation`.
+// A callback may already have resumed the trigger or trapped the new core.
+function triggerAnswerAfterReplacement(trigger, generation) {
   if (runtimeHealth !== HEALTHY || generation !== runtimeGeneration) {
     return hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
       RUNTIME_REASON.GENERATION_CHANGED, true);
@@ -1437,7 +1473,7 @@ function readStatusNow(group) {
 
 function readStatusObserved(group) {
   if ((group.tail === null && group.inbound.length === 0) ||
-      group.statusObservation === null) {
+      group.statusObservation === NO_STATUS_OBSERVATION) {
     return readStatusUndrained(group);
   }
   if (group.inbound.length > 0) {
@@ -1908,7 +1944,7 @@ function createRuntimeDispatcher(request) {
     reseedHoldRecorded: false,
     reseedHoldWriteFailures: 0,
     lastStatus: null,
-    statusObservation: null,
+    statusObservation: NO_STATUS_OBSERVATION,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
     announcedAppliedRuntimeGeneration: null,
     announcedAppliedIndex: null,

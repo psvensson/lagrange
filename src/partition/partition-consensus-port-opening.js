@@ -75,5 +75,4 @@ async function cleanupRefusedPartitionStartup(service, primary) {
   throw primary;
 }
 
-export {consensusInitRefusedError, openPartitionConsensusPort,
-  refusePartitionConsensusStartup};
+export {openPartitionConsensusPort, refusePartitionConsensusStartup};
