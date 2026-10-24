@@ -52,7 +52,7 @@ import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
-import {isHeldByHostFailure} from './partition-write-kernel.js';
+import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
 const {

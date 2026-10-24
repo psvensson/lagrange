@@ -47,10 +47,10 @@ import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
-import {
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
-  PARTITION_SERVICE_OPERATION,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_SERVICE_OPERATION} from
+  '../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -241,12 +241,11 @@ function assertInitRefusedOnUnreadableRecord(error) {
   assert.ok(error !== null,
     'initialization does not report a partition that cannot read its ' +
     'durable record');
-  assert.equal(error.code,
-    PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+  assert.ok(isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION),
     `the refusal is the typed startup outcome (${error?.message})`);
-  assert.ok(typeof phase === 'string' && error.phase === phase &&
-    error.consensus?.phase === phase, 'the refusal and the port\'s answer ' +
-    `name the durable-record-read phase (${JSON.stringify(error?.consensus)})`);
+  assert.ok(typeof phase === 'string' && error.consensus?.phase === phase,
+    'the port\'s answer the refusal carries names the durable-record-read ' +
+    `phase (${JSON.stringify(error?.consensus)})`);
   assert.ok(String(error.message).includes(phase),
     `the refusal's text names the phase (${error.message})`);
   assert.equal(error.consensus?.failure?.detail?.table, LOST_TABLE,

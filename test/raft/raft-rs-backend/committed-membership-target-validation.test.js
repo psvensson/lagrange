@@ -41,8 +41,8 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from
   '../../../src/raft/raft-rs-runtime-owner-constants.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {reservePartitionRaftPeerIdentity} from
   '../../../src/partition/partition-service-raft-membership-administration.js';
 import {ReplicaOperationField} from
@@ -253,8 +253,7 @@ test('T3: a COMMITTED stamp already naming the target a voter, with no ' +
       refused = error;
     }
     assert.ok(refused, 'the zombie target is not opened');
-    assert.equal(refused.code,
-      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+    assert.ok(isConsensusInitRefusal(refused, ENTITY_TYPE.PARTITION),
       'surfaced as the typed consensus init refusal');
     assert.equal(refused.consensus?.reason,
       COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING);

@@ -1,4 +1,5 @@
 import {
+  RAFT_CONSENSUS_STARTUP_OUTCOME,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from './raft-operation-port-constants.js';
@@ -6,8 +7,7 @@ import {
 const FREEZABLE_VALUE_TYPES = Object.freeze(['object', 'function']);
 const VALUE_DESCRIPTOR_KEY = 'value';
 const OPENING_ERROR_METADATA = Object.freeze([
-  'code', 'phase', 'consensus', 'partitionId', 'groupId', 'replicaId',
-  'serviceDefinitionId',
+  'code', 'domain', 'identity', 'consensus',
 ]);
 const RAFT_OPERATION_PORT_METHODS = Object.freeze([
   'subscribe',
@@ -68,6 +68,59 @@ function isRaftOpeningFailure(error) {
     result === RAFT_OPERATION_OUTCOME.HOST_FAILURE;
 }
 
+/**
+ * Whether a port status names its group held by its host failure (the
+ * port's recovery outcome): at open it is a startup refusal, while the
+ * group runs it is a hold its consumers wait out.
+ * @param {Object} status - A port status.
+ * @return {boolean} Whether the group is held.
+ */
+function isHeldByHostFailure(status) {
+  return status?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
+    status.recoveryRequired === true;
+}
+
+function consensusInitRefusedMessage(domain, {groupId, replicaId}, answer) {
+  const detail = answer?.failure?.detail ?? answer?.detail;
+  return `${domain} ${groupId} replica ${replicaId} cannot initialize: its ` +
+    `consensus port refused it in phase ${answer?.phase} ` +
+    `(${answer?.outcome}: ${answer?.reason}` +
+    `${detail ? ` ${JSON.stringify(detail)}` : ''})`;
+}
+
+/**
+ * The one typed startup refusal of a replica its consensus port refused:
+ * every service kind's, distinguished by its domain. The port's answer is
+ * carried as is; its phase, reason and outcome are read from it, never
+ * copied beside it.
+ * @param {Object} refusal
+ * @param {string} refusal.domain - The opening service kind (ENTITY_TYPE).
+ * @param {{groupId: string, replicaId: string}} refusal.identity - The Raft
+ *   group the port was opened for, and the replica.
+ * @param {Object} refusal.answer - What the port answered.
+ * @return {Error} The refusal.
+ */
+function consensusInitRefusedError({domain, identity, answer}) {
+  const error = new Error(consensusInitRefusedMessage(domain, identity, answer));
+  error.code = RAFT_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED;
+  error.domain = domain;
+  error.identity = Object.freeze({
+    groupId: identity.groupId, replicaId: identity.replicaId});
+  error.consensus = answer ?? null;
+  return error;
+}
+
+/**
+ * Whether an error is the typed startup refusal of a replica of the domain.
+ * @param {*} error - A startup failure.
+ * @param {string} domain - The opening service kind (ENTITY_TYPE).
+ * @return {boolean} Whether it is that domain's consensus init refusal.
+ */
+function isConsensusInitRefusal(error, domain) {
+  return error?.code === RAFT_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
+    error.domain === domain;
+}
+
 // Preserve the exact original error and owner answer when its existing
 // service lifecycle cleanup also fails. This composes data only: no resource,
 // retry, deadline, or cleanup permission lives in the public port module.
@@ -98,8 +151,11 @@ function assertRaftOperationSucceeded(result) {
 export {
   RAFT_OPERATION_PORT_METHODS,
   assertRaftOperationSucceeded,
+  consensusInitRefusedError,
   createRaftOperationPort,
   deepFreeze,
+  isConsensusInitRefusal,
+  isHeldByHostFailure,
   isRaftOpeningFailure,
   withRaftOpeningCleanupFailure,
 };

@@ -1,4 +1,4 @@
-import {createRaftOperationPort} from '../../../src/raft/raft-operation-port.js';
+import {createRaftOperationPort, isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {closeMessageGroupConsensus} from '../../../src/message-group/message-group-consensus-port.js';
 import {closeWasmServiceConsensus} from '../../../src/wasm-service/wasm-service-consensus-port.js';
 import {SessionKVStore} from '../../../src/wasm-service/session-kv-store.js';
@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import {test} from 'node:test';
 import Database from 'better-sqlite3';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from '../../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
 import {WASM_SERVICE_COMMAND_TYPE} from '../../../src/wasm-service/wasm-service-constants.js';
 import {genesisStamp} from '../../../src/raft/raft-committed-membership-stamp.js';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
@@ -478,7 +478,7 @@ for (const edge of ['status', 'campaign']) {
         failure = error;
       }
       assert.ok(engaged > 0, 'the actual initializer must consume the controlled refusal');
-      assert.equal(failure?.code, PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+      assert.ok(isConsensusInitRefusal(failure, ENTITY_TYPE.PARTITION));
       assert.equal(failure.consensus, answer, 'keep exact post-open refusal');
       assert.ok(failure instanceof AggregateError);
       assert.equal(failure.errors[1], cleanupError);

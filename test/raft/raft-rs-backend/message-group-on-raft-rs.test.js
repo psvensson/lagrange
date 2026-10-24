@@ -18,10 +18,9 @@ import Database from 'better-sqlite3';
 
 import {MessageGroupService} from
   '../../../src/message-group/message-group-service.js';
-import {
-  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
-  MESSAGE_GROUP_SERVICE_ERROR_MSG,
-} from '../../../src/message-group/constants.js';
+import {MESSAGE_GROUP_SERVICE_ERROR_MSG} from
+  '../../../src/message-group/constants.js';
+import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../../../src/raft/raft-committed-membership-constants.js';
 import {MESSAGE_GROUP_COMMAND_REFUSAL} from
@@ -35,6 +34,7 @@ import {LoggingService} from '../../../src/logging/logging-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {SystemTableCache} from '../../../src/cache/system-table-cache.js';
 import {
+  ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   TABLES,
@@ -516,8 +516,7 @@ test('message group replica joining an existing group with no record is ' +
     fs.rmSync(host.dbFileOf(FOUNDERS[2]), {force: true});
     await assert.rejects(
       host.open(FOUNDERS[2], FOUNDERS, {isJoiningExistingGroup: true}),
-      (error) => error.code ===
-        MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
+      (error) => isConsensusInitRefusal(error, ENTITY_TYPE.MESSAGE_GROUP) &&
         error.consensus?.reason ===
           COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING);
     await host.close(FOUNDERS[2]);

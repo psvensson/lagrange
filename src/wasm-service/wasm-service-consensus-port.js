@@ -6,8 +6,13 @@
 // decision; nothing here reproduces one.
 
 import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
-import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
-  '../raft/raft-operation-port.js';
+import {
+  assertRaftOperationSucceeded,
+  consensusInitRefusedError,
+  isHeldByHostFailure,
+  isRaftOpeningFailure,
+} from '../raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
 import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,7 +22,6 @@ import {SERVICE_TYPE, isPartitionCleanupServiceRow} from
   '../constants/service.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {genesisStamp} from '../raft/raft-committed-membership-stamp.js';
-import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {
   RAFT_OPERATION_PORT_REQUEST,
   hostedConsensusSubstrate,
@@ -91,17 +95,22 @@ function assertFoundingReplicaSet(replicaId, replicaIds) {
 }
 
 /**
- * The typed startup refusal of a replica its consensus port refused.
+ * The Raft group the replica's port is opened for: its creation's group, or
+ * - without one - its service definition.
  * @param {Object} replica - The WASM service replica.
- * @param {Object} answer - What the port answered.
- * @return {Error} The error, carrying the port's answer.
+ * @return {string} The group id.
  */
-function consensusInitRefusedError(replica, answer) {
-  const error = new Error(WASM_SERVICE_ERROR_MSG.CONSENSUS_INIT_REFUSED);
-  error.serviceDefinitionId = replica.serviceDefinitionId;
-  error.replicaId = replica.replicaId;
-  error.consensus = answer ?? null;
-  return error;
+function wasmServiceConsensusGroupId(replica) {
+  return replica.consensusCreation?.identity.groupId ?? replica.serviceDefinitionId;
+}
+
+// The replica's typed startup refusal is the port's one refusal, in the
+// WASM-service domain, for the group the port was opened for.
+function wasmServiceConsensusInitRefusal(replica, answer) {
+  return consensusInitRefusedError({domain: ENTITY_TYPE.WASM_SERVICE,
+    identity: {groupId: wasmServiceConsensusGroupId(replica),
+      replicaId: replica.replicaId},
+    answer});
 }
 
 /**
@@ -146,8 +155,7 @@ function resolveWasmServicePeerAddress(replica, replicaIdentity) {
  */
 function wasmServiceConsensusRequest(replica) {
   return {
-    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]:
-      replica.consensusCreation?.identity.groupId ?? replica.serviceDefinitionId,
+    [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: wasmServiceConsensusGroupId(replica),
     [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: replica.replicaId,
     [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: replica.unifiedAddress,
     [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: replica.replicaIds,
@@ -211,12 +219,11 @@ function openWasmServiceConsensusPort(replica) {
     if (!isRaftOpeningFailure(error)) {
       throw error;
     }
-    throw consensusInitRefusedError(replica, error.consensus);
+    throw wasmServiceConsensusInitRefusal(replica, error.consensus);
   }
   const opened = replica.raft.readStatus();
-  if (opened?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-      opened.recoveryRequired === true) {
-    throw consensusInitRefusedError(replica, opened);
+  if (isHeldByHostFailure(opened)) {
+    throw wasmServiceConsensusInitRefusal(replica, opened);
   }
   return replica.raft;
 }

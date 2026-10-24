@@ -8,8 +8,8 @@ import {
 import {
   attachSnapshotCatchupDispatcher,
 } from './shared/snapshot-catchup-wiring.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
+import {isConsensusInitRefusal} from '../raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../raft/raft-committed-membership-constants.js';
 import {assertDurableRejoinStorageAdmission} from
@@ -26,9 +26,8 @@ import {initializeGuardedRuntimeServiceHandler} from
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
 function isDurableRecordMissingRefusal(error) {
-  return error?.code ===
-      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
-    error?.consensus?.reason ===
+  return isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION) &&
+    error.consensus?.reason ===
       COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING;
 }
 

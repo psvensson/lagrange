@@ -5,10 +5,7 @@
  */
 
 import {copyStrictOwnDataRecord} from '../../utils/strict-own-data.js';
-
-function isPositiveSafeInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
-}
+import {isPositiveSafeInteger} from '../../utils/safe-integer.js';
 
 function completePrepareEvidenceOf(value) {
   // This boundary is also called by injected participant adapters in unit
@@ -31,4 +28,4 @@ function completePrepareEvidenceOf(value) {
   };
 }
 
-export {completePrepareEvidenceOf, isPositiveSafeInteger};
+export {completePrepareEvidenceOf};

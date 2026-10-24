@@ -25,8 +25,8 @@ import {ConfigurationManager} from
   '../../../src/config/configuration-manager.js';
 import {LoggingService} from '../../../src/logging/logging-service.js';
 import {PartitionService} from '../../../src/partition/partition-service.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../../src/raft/raft-operation-port.js';
 import {
   COMMITTED_MEMBERSHIP_REFUSAL,
   COMMITTED_MEMBERSHIP_STAMP_DEFECT,
@@ -141,8 +141,7 @@ test('V1a: a partition service built without a bootstrap membership cannot ' +
   });
   try {
     await assert.rejects(service.initialize(), (error) => {
-      assert.equal(error.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED);
+      assert.ok(isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION));
       assert.deepEqual(consensusOf(error), MISSING_STAMP);
       return true;
     });

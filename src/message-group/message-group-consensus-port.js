@@ -6,8 +6,13 @@
 // handles. The port's runtime owner makes every Raft decision; nothing here
 // reproduces one.
 
-import {isRaftOpeningFailure, assertRaftOperationSucceeded} from
-  '../raft/raft-operation-port.js';
+import {
+  assertRaftOperationSucceeded,
+  consensusInitRefusedError,
+  isHeldByHostFailure,
+  isRaftOpeningFailure,
+} from '../raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -29,30 +34,15 @@ import {committedMembershipRefusal} from
   '../raft/raft-rs-committed-membership-read.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
-import {
-  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
-  MESSAGE_GROUP_SERVICE_ERROR_MSG,
-} from './constants.js';
 
-/**
- * The typed startup refusal of a replica its consensus port refused: the
- * runtime owner refused to open the group, the port opened it held by its
- * host failure (its durable record could not be read), or a lone replica's
- * campaign was refused.
- * @param {Object} service - The message-group replica.
- * @param {Object} answer - What the port answered.
- * @return {Error} The error, carrying the typed code, the port's phase and
- *   the port's answer.
- */
-function consensusInitRefusedError(service, answer) {
-  const error = new Error(
-    MESSAGE_GROUP_SERVICE_ERROR_MSG.CONSENSUS_INIT_REFUSED);
-  error.code = MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED;
-  error.groupId = service.groupId;
-  error.replicaId = service.replicaId;
-  error.phase = answer?.phase ?? null;
-  error.consensus = answer ?? null;
-  return error;
+// The replica's typed startup refusal is the port's one refusal, in the
+// message-group domain: the runtime owner refused to open the group, the
+// port opened it held by its host failure, or a lone replica's campaign was
+// refused.
+function messageGroupConsensusInitRefusal(service, answer) {
+  return consensusInitRefusedError({domain: ENTITY_TYPE.MESSAGE_GROUP,
+    identity: {groupId: service.groupId, replicaId: service.replicaId},
+    answer});
 }
 
 /**
@@ -160,12 +150,11 @@ function openMessageGroupConsensusPort(service) {
     if (!isRaftOpeningFailure(error)) {
       throw error;
     }
-    throw consensusInitRefusedError(service, error.consensus);
+    throw messageGroupConsensusInitRefusal(service, error.consensus);
   }
   const opened = service.raft.readStatus();
-  if (opened?.outcome === RAFT_OPERATION_OUTCOME.HOST_FAILURE &&
-      opened.recoveryRequired === true) {
-    throw consensusInitRefusedError(service, opened);
+  if (isHeldByHostFailure(opened)) {
+    throw messageGroupConsensusInitRefusal(service, opened);
   }
   return service.raft;
 }
@@ -185,7 +174,7 @@ async function leadLoneMessageGroup(service) {
   }
   const campaign = await service.raft.campaign();
   if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-    throw consensusInitRefusedError(service, campaign);
+    throw messageGroupConsensusInitRefusal(service, campaign);
   }
 }
 
@@ -246,7 +235,6 @@ function closeMessageGroupConsensus(service) {
 
 export {
   closeMessageGroupConsensus,
-  consensusInitRefusedError,
   leadLoneMessageGroup,
   openMessageGroupConsensusPort,
   readMessageGroupCommittedMembership,

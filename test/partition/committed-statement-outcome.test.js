@@ -46,11 +46,12 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
 import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
 import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
@@ -673,8 +674,7 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
       } catch (error) {
         refusal = error;
       }
-      assert.equal(refusal?.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+      assert.ok(isConsensusInitRefusal(refusal, ENTITY_TYPE.PARTITION),
         `the restart fails closed (${refusal?.message})`);
       assert.ok(String(refusal.message).includes(unknownReason) &&
         String(refusal.message).includes('BOGUS'),

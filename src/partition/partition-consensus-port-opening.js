@@ -5,30 +5,19 @@
 // holds no durable record. Every refusal releases what initialization
 // acquired (R11) before it is thrown.
 
-import {isRaftOpeningFailure, withRaftOpeningCleanupFailure} from
-  '../raft/raft-operation-port.js';
-import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  './partition-service-constants.js';
+import {
+  consensusInitRefusedError,
+  isRaftOpeningFailure,
+  withRaftOpeningCleanupFailure,
+} from '../raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
 
-const {PARTITION_SERVICE_ERROR_MSG} = PARTITION_SERVICE_SHARED;
-
-/**
- * The typed startup refusal of a partition its consensus port refused at
- * initialization: the port opened its group held (its durable record could
- * not be read), or a lone replica's campaign was refused.
- * @param {string} partitionId - The partition.
- * @param {Object} answer - What the port answered (a status or a campaign).
- * @return {Error} The error, carrying the typed code, the port's phase and
- *   the port's answer.
- */
-function consensusInitRefusedError(partitionId, answer) {
-  const error = new Error(PARTITION_SERVICE_ERROR_MSG
-    .consensusInitRefused(partitionId, answer));
-  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED;
-  error.phase = answer?.phase ?? null;
-  error.consensus = answer;
-  return error;
+// The partition's typed startup refusal is the port's one refusal, in the
+// partition domain, for the group the port was opened for.
+function partitionConsensusInitRefusal(service, answer) {
+  return consensusInitRefusedError({domain: ENTITY_TYPE.PARTITION,
+    identity: {groupId: service.partitionId, replicaId: service.replicaId},
+    answer});
 }
 
 /**
@@ -43,7 +32,7 @@ async function openPartitionConsensusPort(service, request) {
     return service.createOperationPort(request);
   } catch (error) {
     const primary = isRaftOpeningFailure(error) ?
-      consensusInitRefusedError(service.partitionId, error.consensus) : error;
+      partitionConsensusInitRefusal(service, error.consensus) : error;
     return cleanupRefusedPartitionStartup(service, primary);
   }
 }
@@ -53,7 +42,7 @@ async function openPartitionConsensusPort(service, request) {
 // primary refusal, and pending cleanup cannot admit another opening.
 async function refusePartitionConsensusStartup(service, answer) {
   return cleanupRefusedPartitionStartup(service,
-    consensusInitRefusedError(service.partitionId, answer));
+    partitionConsensusInitRefusal(service, answer));
 }
 
 async function cleanupRefusedPartitionStartup(service, primary) {
@@ -75,5 +64,4 @@ async function cleanupRefusedPartitionStartup(service, primary) {
   throw primary;
 }
 
-export {consensusInitRefusedError, openPartitionConsensusPort,
-  refusePartitionConsensusStartup};
+export {openPartitionConsensusPort, refusePartitionConsensusStartup};

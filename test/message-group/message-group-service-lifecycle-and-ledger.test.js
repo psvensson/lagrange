@@ -18,9 +18,8 @@ import {
   MessageGroupService,
   RaftRole,
 } from '../../src/message-group/message-group-service.js';
-import {
-  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
-} from '../../src/message-group/constants.js';
+import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {
   RAFT_OPERATION_OUTCOME,
 } from '../../src/raft/raft-operation-port-constants.js';
@@ -174,11 +173,9 @@ test('MessageGroupService - single-replica initialization fails closed ' +
       transport: router,
     }, port);
 
-    await t.rejects(
-      service.initialize(),
-      {code: MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED},
-      'single-replica initialization should fail instead of publishing leader state its core never took',
-    );
+    const refusal = await service.initialize().then(() => null, (error) => error);
+    t.ok(isConsensusInitRefusal(refusal, ENTITY_TYPE.MESSAGE_GROUP),
+      'single-replica initialization should fail instead of publishing leader state its core never took');
     t.equal(service.isLeaderReplica(), false,
       'a refused campaign publishes no leadership');
     t.equal(service.raft, null, 'the refused port is released');

@@ -87,13 +87,6 @@ const MESSAGE_GROUP_PROPOSAL_ROUTE = Object.freeze({
   FORWARD: 'forward',
 });
 
-const MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
-  // The replica's consensus port refused it at initialization (it opened its
-  // group held, or a lone replica's campaign was refused), so initialization
-  // fails closed with this outcome after releasing what it acquired.
-  CONSENSUS_INIT_REFUSED: 'message_group_consensus_init_refused',
-});
-
 const MESSAGE_GROUP_SERVICE_DEFAULT = Object.freeze({
   // A replica's consensus state is durable; an in-memory database would
   // lose its term, vote and configuration on restart, so it is refused.
@@ -119,8 +112,6 @@ const MESSAGE_GROUP_SERVICE_ERROR_MSG = Object.freeze({
   IN_MEMORY_DB_PATH_REFUSED:
     'MessageGroupService refuses an in-memory dbPath - its consensus state ' +
     'must survive a restart',
-  CONSENSUS_INIT_REFUSED:
-    'MessageGroupService consensus refused to initialize',
   UNKNOWN_COMMITTED_COMMAND:
     'MessageGroupService cannot apply a committed command of unknown type',
   COMMAND_TYPE_REFUSED:
@@ -156,7 +147,6 @@ export {
   MESSAGE_GROUP_CDC_ERROR_MSG,
   MESSAGE_GROUP_COMMAND_REFUSAL,
   MESSAGE_GROUP_COMMAND_TYPE,
-  MESSAGE_GROUP_CONSENSUS_STARTUP_OUTCOME,
   MESSAGE_GROUP_OPERATION_LEDGER,
   MESSAGE_GROUP_OPERATION_LEDGER_NOW,
   MESSAGE_GROUP_PROPOSAL_ROUTE,
