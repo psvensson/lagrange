@@ -5,7 +5,7 @@
     "admin-diagnostics": 116,
     "architecture-governance": 21,
     "bootstrap-membership": 321,
-    "cdc-metadata": 66,
+    "cdc-metadata": 67,
     "cli-tooling": 96,
     "control-plane": 217,
     "convergence-topology": 78,
@@ -18,7 +18,7 @@
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 199,
+    "storage-partition": 198,
     "storage-raft": 145,
     "test-infrastructure": 148,
     "transactions": 16,
@@ -26,9 +26,9 @@
     "wasm-toolchain": 74
   },
   "censusSize": 2451,
-  "digest": "fnv1a32-3e37576c",
+  "digest": "fnv1a32-9fef4c10",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-09697cad",
+  "observationDigest": "fnv1a32-08f0aea9",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1026,6 +1026,7 @@
     "test/integration/bidirectional-websocket.integration.test.js": "transport-messaging",
     "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "services-runtime",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "cdc-metadata",
+    "test/integration/cdc-group-boundary-handoff.integration.test.js": "cdc-metadata",
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
@@ -1255,9 +1256,8 @@
     "test/partition/cdc-event-buffer.test.js": "storage-partition",
     "test/partition/cdc-generation.property.test.js": "storage-partition",
     "test/partition/cdc-hydration-live-handoff.test.js": "storage-partition",
-    "test/partition/cdc-sliding-window-catchup.exploration.test.js": "storage-partition",
+    "test/partition/cdc-hydration-old-order.test.js": "storage-partition",
     "test/partition/cdc-sliding-window-catchup.preservation.test.js": "storage-partition",
-    "test/partition/cdc-subscriber-registration-timing.test.js": "storage-partition",
     "test/partition/child-partition-leader-propagation.test.js": "storage-partition",
     "test/partition/committed-statement-outcome.test.js": "storage-partition",
     "test/partition/complete-peer-list.property.test.js": "storage-partition",
@@ -3329,6 +3329,7 @@
     },
     "test/bootstrap/seed-cache-hydration-handoff.test.js": {
       "files": [
+        "src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js",
         "src/bootstrap/phases/seed-cache-hydration-phase.js",
         "src/partition/partition-service-hydration-image-methods.js"
       ]
@@ -7495,6 +7496,16 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/integration/cdc-group-boundary-handoff.integration.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/constants/cdc-lifecycle-constants.js",
+        "src/constants/index.js",
+        "src/storage/data-directory-process-owner.js"
+      ]
+    },
     "test/integration/cdc-propagation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -9216,6 +9227,26 @@
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-hydration-image-methods.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/cdc-hydration-old-order.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-transaction-determinism-constants.js",
         "src/partition/partition-transaction-determinism.js",
         "src/partition/partition-write-kernel.js",

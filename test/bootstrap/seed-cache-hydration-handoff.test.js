@@ -22,9 +22,19 @@ import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {PARTITION_HYDRATION_IMAGE_STATE} from
   '../../src/partition/partition-service-hydration-image-methods.js';
+import {buildCdcSubscriptionHandshake} from '../../src/partition/partition-cdc-delivery.js';
+import {PARTITION_SERVICE_CDC} from '../../src/partition/partition-service-constants.js';
+import {SeedRuntimeBridgeOwner} from '../../src/bootstrap/owners/seed-runtime-bridge-owner.js';
+import {BootstrapNodeReadyRebalanceOwner} from
+  '../../src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js';
+import {BOOTSTRAP_ERROR} from '../../src/bootstrap/bootstrap-constants.js';
+import {SERVICE_STATUS, TABLES} from '../../src/constants/index.js';
 
 const SEED_NODE_ID = 'seed-handoff-node';
 const LEADER_WAIT_REACHED = 'leader wait reached';
+const LANE_RETRIES = 3;
+const NODE_READY_DELAY_MS = 600000;
+const READY_LEASE_MS = 600000;
 const silentLogger = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 const positionOf = (tableName) => `${tableName.length + 100}`;
 const handedOffTables = CACHE_HYDRATION_TABLES.filter((tableName) =>
@@ -41,10 +51,8 @@ function recordingSeed({imageState = PARTITION_HYDRATION_IMAGE_STATE.READ} = {})
         isLeader: index === 0,
         async subscribeToCDCWithHandshake(_subscriber, options = {}) {
           log.push(['register', tableName, replicaId]);
-          // The handshake answer as the delivery owner shapes it today; its
-          // catch-up leaves with the sliding window (decision D4).
-          return {status: 'ok', subscriberId: options.subscriberId, subscriptionEpoch: 1,
-            catchup: {mode: 'none', bufferedEventsReplayed: 0}};
+          return buildCdcSubscriptionHandshake({status: PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK,
+            subscriberId: options.subscriberId, subscriptionEpoch: 1, streamVersion: 0});
         },
         readHydrationImage(sql) {
           log.push(['read', tableName, sql]);
@@ -169,4 +177,63 @@ test('seed handoff: phaseCacheHydration completes every table\'s handoff before 
       lastIndex(log, 'register', tableName) < firstIndex(log, 'read', tableName)),
     verifyBeforeLeaderWait: log.findIndex((entry) => entry[0] === 'verify') < leaderWait,
   }, {handoffsBeforeLeaderWait: true, verifyBeforeLeaderWait: true});
+});
+
+test('seed handoff: before the latency owners exist the lane retries a nodes event whose ' +
+  'propagation is refused (LATENCY_TOPOLOGY_MISSING); beforePropagation runs on every retry ' +
+  'and the node-ready rebalance trigger it calls is idempotent (one schedule)', async () => {
+  const subscribers = [];
+  const partition = {
+    partitionId: INITIAL_PARTITION_IDS[TABLES.NODES],
+    isLeader: true,
+    async subscribeToCDCWithHandshake(subscriber, options = {}) {
+      subscribers.push(subscriber);
+      return buildCdcSubscriptionHandshake({status: PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK,
+        subscriberId: options.subscriberId, subscriptionEpoch: 1, streamVersion: 0});
+    },
+  };
+  const executed = [];
+  const rebalanceOwner = new BootstrapNodeReadyRebalanceOwner({delegates: {
+    getLogger: () => silentLogger,
+    getLocalNodeId: () => SEED_NODE_ID,
+    getNodeReadyRebalanceDelayMs: () => NODE_READY_DELAY_MS,
+    executeNodeReadyRebalance: (reason) => executed.push(reason),
+  }});
+  const messageGroup = {groupId: 'mg-1', initialized: true, async subscribeToCDC() {}};
+  const delegates = {
+    getLogger: () => silentLogger,
+    getNodeId: () => SEED_NODE_ID,
+    getMessageGroupServices: () => new Map([['mg-1-r1', messageGroup]]),
+    getPartitionServices: () => new Map([[getInitialReplicaIds(TABLES.NODES)[0], partition]]),
+    getSystemTableCache: () => ({get: () => null}),
+    getLatencyTopology: () => null,
+    resolveOperationalMessageGroupSelectionAsync: async () => ({service: messageGroup}),
+    handleNodeReadyRebalanceTrigger: (event, previousRow) =>
+      rebalanceOwner.handleNodeReadyRebalanceTrigger(event, previousRow),
+  };
+  const bridge = new SeedRuntimeBridgeOwner({delegates});
+  delegates.propagatePartitionCDCEvent = (service, event, context) =>
+    bridge.propagatePartitionCDCEvent(service, event, context);
+  const phase = new SeedCacheHydrationPhase({delegates, runtimeBridgeOwner: bridge});
+  await phase.subscribeToInitialSystemTableCDC(TABLES.NODES);
+  const event = {tableName: TABLES.NODES, operation: 'UPDATE',
+    data: {node_id: 'remote-node', status: SERVICE_STATUS.ACTIVE,
+      ready_lease_expires_at: Date.now() + READY_LEASE_MS}};
+  const refusals = [];
+  try {
+    for (let retry = 0; retry < LANE_RETRIES; retry += 1) {
+      await subscribers[0](event).catch((error) => refusals.push(error.message));
+    }
+    assert.deepEqual({
+      refusals,
+      scheduled: rebalanceOwner.pendingNodeReadyRebalanceTimers.size,
+      executed: executed.length,
+    }, {
+      refusals: Array(LANE_RETRIES).fill(BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING),
+      scheduled: 1,
+      executed: 0,
+    });
+  } finally {
+    rebalanceOwner.clearNodeReadyRebalanceState();
+  }
 });

@@ -932,10 +932,6 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 
@@ -1076,10 +1072,6 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 

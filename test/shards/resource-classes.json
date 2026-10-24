@@ -8,7 +8,7 @@
     "exclusive": 3
   },
   "censusSize": 2451,
-  "digest": "fnv1a32-ef536707",
+  "digest": "fnv1a32-416d201b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -1006,6 +1006,7 @@
     "test/integration/bidirectional-websocket.integration.test.js": "ordinary",
     "test/integration/call-cell-public-outcome-adversarial.integration.test.js": "ordinary",
     "test/integration/cdc-bootstrap-control-plane-pressure.integration.test.js": "ordinary",
+    "test/integration/cdc-group-boundary-handoff.integration.test.js": "ordinary",
     "test/integration/cdc-propagation.integration.test.js": "ordinary",
     "test/integration/cdc-subscription-catchup.integration.test.js": "ordinary",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "ordinary",
@@ -1235,9 +1236,8 @@
     "test/partition/cdc-event-buffer.test.js": "ordinary",
     "test/partition/cdc-generation.property.test.js": "ordinary",
     "test/partition/cdc-hydration-live-handoff.test.js": "ordinary",
-    "test/partition/cdc-sliding-window-catchup.exploration.test.js": "ordinary",
+    "test/partition/cdc-hydration-old-order.test.js": "ordinary",
     "test/partition/cdc-sliding-window-catchup.preservation.test.js": "ordinary",
-    "test/partition/cdc-subscriber-registration-timing.test.js": "ordinary",
     "test/partition/child-partition-leader-propagation.test.js": "ordinary",
     "test/partition/committed-statement-outcome.test.js": "ordinary",
     "test/partition/complete-peer-list.property.test.js": "ordinary",

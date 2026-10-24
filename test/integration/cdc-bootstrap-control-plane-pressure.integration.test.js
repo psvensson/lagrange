@@ -332,18 +332,15 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
         'integration-buffer-growth',
       );
 
-      const handshake = await partition.subscribeToCDCWithHandshake(
+      // The handshake replays nothing (CDC decision D4): the buffer's own
+      // replay is what fails here.
+      await partition.subscribeToCDCWithHandshake(
         async () => {
           throw new Error('integration replay subscriber failure');
         },
         {subscriberId: 'integration-replay-subscriber'},
       );
-
-      t.equal(
-        handshake.catchup.completed,
-        false,
-        'handshake should surface partial catchup failure deterministically',
-      );
+      await partition.flushBufferedCDCEvents('integration-buffer-flush');
 
       const replayFailure = logger.entries.warn.find((entry) =>
         entry.message === 'Buffered CDC replay failed',
@@ -351,7 +348,7 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       t.ok(replayFailure, 'replay failure should be logged');
       t.equal(
         replayFailure?.fields?.reason,
-        'handshake_catchup_replay_failed',
+        'integration-buffer-flush',
       );
       t.equal(
         replayFailure?.fields?.replayRetryDepth,

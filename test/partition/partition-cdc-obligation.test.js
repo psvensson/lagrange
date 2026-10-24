@@ -30,6 +30,7 @@ import {
   PARTITION_CDC_OBLIGATION_DRIVE_STATE,
   PARTITION_CDC_OBLIGATION_FAILURE_CODE,
   PARTITION_CDC_OBLIGATION_FLUSH_STATE,
+  PARTITION_CDC_OBLIGATION_REASON,
 } from '../../src/partition/partition-cdc-obligation-constants.js';
 import {
   acknowledgedBytesOf,
@@ -829,7 +830,6 @@ test('TX1 CDC O17: provisional metadata advances formation without acknowledging
       assert.deepEqual(seen, [ROW.id, ROW_2.id], 'later peer metadata must reach ingress');
       assert.deepEqual(countCdcObligations(leader.db), {owed: 2, delivered: 0});
       assert.equal(leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements, 0);
-      assert.equal(leader.cdcEventBuffer.getRecentEvents().length, 0);
       provisional = false;
       timeSource.advance(50);
       await settleTicks();
@@ -870,34 +870,28 @@ test('TX1 CDC O18: provisional scanning yields after one page and revisits old d
   }
 });
 
-for (const buffered of [true, false]) {
-  test(`TX1 CDC O19: provisional ${buffered ? 'buffered' : 'sliding'} handshake stays incomplete`,
-    async () => {
-      const timeSource = new VirtualTimeSource();
-      const {leader} = await startCdcLeader({timeSource});
-      try {
-        const event = {tableName: CDC_TABLE, operation: 'UPSERT', data: ROW,
-          timestamp: leader.hlcClock.now().toString(), sourcePartition: PARTITION_ID,
-          eventKey: 'handshake-event'};
-        if (buffered) leader.cdcEventBuffer.buffer(event);
-        else leader.cdcEventBuffer.recordDelivered(event);
-        let completed = 0;
-        leader.on(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, () => {
-          completed += 1;
-        });
-        const subscriber = async (received) => buildProvisionalCdcOutcome([received], 50);
-        const answer = await leader.subscribeToCDCWithHandshake(subscriber);
-        assert.equal(answer.catchup.completed, false);
-        assert.equal(answer.catchup.completedAt, null);
-        assert.equal(answer.catchup.provisionalEvents, 1);
-        assert.equal(completed, 0, 'no semantic completion announcement');
-        assert.equal(leader.cdcSubscriberStates.get(subscriber).lastDeliveredAt, null);
-        assert.equal(leader.cdcEventBuffer.size(), buffered ? 1 : 0);
-      } finally {
-        await shutdownAll(leader);
-      }
-    });
-}
+test('TX1 CDC O19: a subscription handshake is registration plus the lane drive (decision ' +
+  'D4): the owed obligation reaches the new subscriber in the lane, nothing is replayed ' +
+  'outside it, and the handshake carries no catch-up', async () => {
+  const timeSource = new VirtualTimeSource();
+  const {leader} = await startCdcLeader({timeSource});
+  try {
+    commitHandBuilt(leader, identityOf('c19'), [cdcOperationOf(ROW)]);
+    await settleTicks();
+    const subscriber = recordingSubscriber();
+    const answer = await leader.subscribeToCDCWithHandshake(subscriber);
+    await settleTicks();
+    assert.deepEqual({
+      catchup: Object.hasOwn(answer, 'catchup'),
+      delivered: subscriber.events.map((event) => event.data.id),
+      outsideLane: subscriber.events.filter((event) => event.replayOnly === true).length,
+      lastDriveReason: leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive.reason,
+    }, {catchup: false, delivered: [ROW.id], outsideLane: 0,
+      lastDriveReason: PARTITION_CDC_OBLIGATION_REASON.SUBSCRIPTION_HANDSHAKE});
+  } finally {
+    await shutdownAll(leader);
+  }
+});
 
 // --- O20/O21: the recording rule (owner decision D2) ---
 

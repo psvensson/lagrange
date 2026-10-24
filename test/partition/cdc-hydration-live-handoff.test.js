@@ -10,11 +10,11 @@
  * subscribers acknowledging, and with an acknowledgement pending (acknowledged,
  * CDC_DELIVERED not committed) at the registration.
  *
- * The sliding window is still present here (the owner ordered it removed
- * only after W-D4a and W-D4b pass; W-D4b is blocked, see the D4 evidence), so
- * this witness asserts the gap-freedom above P, which the window cannot
- * provide past its capacity, not the absence of window replays at or below P.
+ * The negative (today's order) is cdc-hydration-old-order.test.js.
  * Design: solve/epics/raft-rs-full-cutover/evidence/cdc-lifecycle-2026-10-26/.
+ * Supersedes cdc-sliding-window-catchup.exploration.test.js and
+ * cdc-subscriber-registration-timing.test.js, deleted with the window and the
+ * handshake's buffer catch-up they pinned.
  */
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
@@ -50,7 +50,7 @@ for (const earlierCount of [1, 3]) {
       const pendingAtRegistration =
         leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements;
       const late = acknowledgingCdcSubscriber();
-      await leader.subscribeToCDCWithHandshake(late, {subscriberId: 'B'});
+      const handshake = await leader.subscribeToCDCWithHandshake(late, {subscriberId: 'B'});
       const image = leader.readHydrationImage(IMAGE_SQL);
       const position = Number(image.appliedIndex);
       const imageHadDeletedRow = image.rows.some((row) => row.id === DELETED_IMAGE_ROW);
@@ -63,17 +63,20 @@ for (const earlierCount of [1, 3]) {
         positionIsDurableAppliedIndex: position === appliedAtRead,
         pendingAtRegistration: pendingAtRegistration >= 1,
         imageHadDeletedRow,
+        handshakeCarriesCatchup: Object.hasOwn(handshake, 'catchup'),
         ...measure(leader, late, image.rows, position),
       }, {
         imageState: PARTITION_HYDRATION_IMAGE_STATE.READ,
         positionIsDurableAppliedIndex: true,
         pendingAtRegistration: true,
         imageHadDeletedRow: true,
+        handshakeCarriesCatchup: false,
         ledgerAbove: LATER_EVENTS,
         missingAbove: 0,
         divergentRows: 0,
         deletedRowInView: false,
         owed: 0,
+        outsideLane: 0,
       });
     } finally {
       await shutdownAll(leader);

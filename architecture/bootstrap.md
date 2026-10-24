@@ -277,10 +277,16 @@ deferred activation.
 `NodeJoiningService` ensure `subscribeToCDCWithHandshake()` completes
 before the factory returns. This guarantees CDC subscribers are
 registered before the first Raft-committed entry is processed.
-Buffered CDC events are replayed inline during the handshake catchup
-phase. After handshake (whether full or partial replay), the buffer
-replay delay resets to the initial value so follow-up replays use
-initial backoff rather than escalated delay.
+The handshake is registration plus one drive of the durable obligation
+lane (CDC decision D4): it registers the subscriber synchronously, so no
+later event can be acknowledged without it, and then drives the ledger's
+owed obligations to every current subscriber in log order. It replays
+nothing itself (no sliding window, no volatile-buffer catch-up). The
+seed hydration registers each table's subscribers before it reads that
+table's image and applied index P through
+`PartitionService.readHydrationImage`, so every ledger event above P
+reaches them through the lane; events at or below P that still arrive are
+absorbed by the cache's row-version merge.
 
 #### Restart CDC Re-establishment
 
