@@ -1,0 +1,11 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "seed-release-once-per-partition-cohort--seed-release-once-per-partition-cohort-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "664ab80d8069e468f1f39dcf3d7b84226ed413e942d95bab1d6adde45e3ab209",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-once-per-partition-cohort--seed-release-once-per-partition-cohort-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/seed-release-once-per-partition-cohort/evidence/",
+  "files": [
+    ["first-owner-decision-and-census-v1.md","39792e6cb64b2de32d6f4daf0cda462fc4c492c7bbf1e44880168342930ed400",4116]
+  ]
+}

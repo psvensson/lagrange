@@ -1,3 +1,0 @@
-{"file":"test/bootstrap/rejoin-hints.test.js","attempt":1,"ok":true,"assertions":53,"durationMs":647,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/bootstrap/node-bootstrap-consistency.property.test.js","attempt":1,"ok":false,"assertions":57,"durationMs":35974,"retriedOnce":false,"firstFailureLine":"not ok 2 - seed bootstrap should succeed"}
-{"file":"test/integration/seed-migration-cutover-persisted.integration.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":56849,"retriedOnce":false,"firstFailureLine":null}

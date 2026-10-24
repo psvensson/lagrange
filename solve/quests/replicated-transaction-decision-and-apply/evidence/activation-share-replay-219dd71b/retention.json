@@ -1,9 +1,0 @@
-{
-  "files": {
-    "startdiag-after-stable-seed-authorization.log.txt": "e98bc015d2c52c62caf59dd70dc3abb8002174235a7b89d769bba151026e9712",
-    "diagnostic.json": "6918124bde3c9822aa5a643812ea0d23465a13bf0707cdb43403fdfa75aefa85",
-    "startdiag.mjs.txt": "ce2635bfec3139359c2096b4346907cea1e5e75f75258d301092e9eb91ab52ca"
-  },
-  "noDatabaseWrites": true,
-  "noProductChanges": true
-}

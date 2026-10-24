@@ -1,6 +1,0 @@
-import json,pathlib
-D=pathlib.Path(__file__).parent
-for name,marker in [('semantic-probes-unchanged','SEMANTIC_RESULTS_START'),('advanced-orderings','RESULTS_START'),('round3-interactions','RESULTS_START')]:
- text=(D/(name+'.log')).read_text();value=json.loads(text.split(marker+'\n')[-1]);(D/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')
-for name,opening in [('original-adversary-new','{\n  "invalidAdvancedMutableRow"'),('round3-pgwire-sweep','{\n  "writes"')]:
- text=(D/(name+'.log')).read_text();value=json.JSONDecoder().raw_decode(text[text.rindex(opening):])[0];(D/(name+'.json')).write_text(json.dumps(value,indent=2)+'\n')

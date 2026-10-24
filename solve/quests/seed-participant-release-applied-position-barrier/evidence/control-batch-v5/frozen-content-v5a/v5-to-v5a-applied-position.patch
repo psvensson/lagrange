@@ -1,9 +1,0 @@
-diff --git a/test/partition/participant-release-applied-position.test.js b/test/partition/participant-release-applied-position.test.js
-index 37680b49e..8e122a375 100644
---- a/test/partition/participant-release-applied-position.test.js
-+++ b/test/partition/participant-release-applied-position.test.js
-@@ -937,4 +937,3 @@ test('an applied-progress wake reflected by the first facts read needs no forced
-     }
-     if (failure !== null) throw failure;
-   }));
--

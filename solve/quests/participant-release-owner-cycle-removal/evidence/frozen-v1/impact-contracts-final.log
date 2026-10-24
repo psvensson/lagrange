@@ -1,5 +1,0 @@
-
-> lagrange-server@0.2.6 audit:impact-contracts
-> node scripts/checks/impact-contract-registry.js
-
-impact-contracts: PASS (62 contracts, 33 coupled pairs, sha256:abee85fb1fb81699cdf4b61141074b35329d14f09360b39daaf8a25adc21439c)

@@ -1,9 +1,0 @@
-4daebb3978eba80e8e3603a3fc112be1bdc48f39d4ecf589071042e53e9d150b  test-output/seed-native-startup-census-20261013/applied-position-production-v4/source-manifest-v4.sha256
-7ad6c0b8ca95b64fb6047b5303df3ad518a86f67a15021453f547a888da248ef  test-output/seed-native-startup-census-20261013/applied-position-production-v4/hc-delta-vs-v3.patch
-59034b26b7288df848550e492289da26ba2830d2db1ef9624358b796d948f004  test-output/seed-native-startup-census-20261013/applied-position-production-v4/hc-delta-vs-v3.stat
-aef6b488b5cc293f0d563b3483923378ea956d75b07043ae6ed94c8265107544  test-output/seed-native-startup-census-20261013/applied-position-production-v4/v3-preservation-v4.log
-b77482430d59f65c94dfa8abd7d4709895c1d06290618445001bf06c455cb2bc  test-output/seed-native-startup-census-20261013/applied-position-production-v4/git-status-v4.log
-f832a4a9e3c2a6fa438b895865f17f0683be366cd3b399e4e77647052e8ca227  test-output/seed-native-startup-census-20261013/applied-position-production-v4/file-lines-v4.log
-dd0293eb6c66db3a487ff1faa845811720f18d3d789dc76bd43dcce9c253fc59  test-output/seed-native-startup-census-20261013/applied-position-production-v4/report-v4.md
-327d8a3a58087ad9c90ce246eb5ca86bf37e2783d3473cdb97705adca31c22fe  test-output/seed-native-startup-census-20261013/applied-position-production-v4/checks-manifest-v4.json
-70b2632dc182b5db5d7cd19132ac21d0bcaf0c4d972a3d7adadbcc222b62bfa1  test-output/seed-native-startup-census-20261013/applied-position-production-v4/check-logs-v4.sha256

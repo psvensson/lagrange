@@ -1,7 +1,0 @@
-{"sha":"f7a3bf12236a63aa1ccc7ac2237e636f31110bf9","index":67,"host":"adam-laptop","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}
-{"sha":"a1d3b056d75e85f257646da6388b0c003a45b30b","index":33,"host":"tv-dator","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}
-{"sha":"4cc155b8656fb3fd68c8b6b4019df1d3389e7306","index":16,"host":"tv-dator","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}
-{"sha":"ed6b3c5a3ec625d5897aed3f484ef1fa58686e21","index":8,"host":"tv-dator","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}
-{"sha":"ac092686975dd22b4843be8df8e2e1d3663c0b7f","index":4,"host":"tv-dator","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}
-{"sha":"8c9b14141f89872938d21cc35472b262929818d6","index":2,"host":"tv-dator","result":"GOOD","total":"# test-files total=1 pass=1 fail=0 assertions=12"}
-{"sha":"9514ba8bf115d7a5fec919d123422bc9202b586c","index":3,"host":"tv-dator","result":"BAD","total":"# test-files total=1 pass=0 fail=1 assertions=2"}

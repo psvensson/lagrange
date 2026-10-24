@@ -1,2 +1,0 @@
-{"file":"test/node/replica-handler-replica-membership.test.js","attempt":1,"ok":true,"assertions":1,"durationMs":1018,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/node/replica-handler-leadership-transfer.test.js","attempt":1,"ok":true,"assertions":3,"durationMs":1467,"retriedOnce":false,"firstFailureLine":null}

@@ -1,8 +1,0 @@
-{
-  "sourceHead": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
-  "remoteRef": "refs/heads/review/runtime-captured-inbound-correction-20261015",
-  "verifiedRemoteHead": "4aa8780cfec6f2718b86b4d1e27ee9711492be59",
-  "route": "normal non-force non-main branch preservation",
-  "proof": "git ls-remote returned exact SHA; pre-push used documented non-main preservation fast path",
-  "qualification": "No merge, landing or release approval. Evidence publication follows separately."
-}

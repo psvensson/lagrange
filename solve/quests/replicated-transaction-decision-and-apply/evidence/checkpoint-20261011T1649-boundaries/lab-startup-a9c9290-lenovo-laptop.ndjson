@@ -1,1 +1,0 @@
-{"file":"test/integration/pgwire-command-tag-real-engine.integration.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":17230,"retriedOnce":false,"firstFailureLine":"not ok 1 - Cannot add property tapCaught, object is not extensible"}

@@ -1,4 +1,0 @@
-f5fb317bebc3dc074f3d8d4102122ba4ddb94ecc	refs/heads/wip/rs-raft-handover-20261023
-8a9b186d7bf4c8709855db95335a44254d0740d2	refs/heads/work/mg-delivery-fixture-trace-20261023
-681da1dc1beb5728a52ee5d223113b71b423156b	refs/heads/work/mg-source-occurrence-delivery-20261023
-6a7e70674b109ef0e6d17ea33b32a4de16f3c0a9	refs/heads/work/retained-effects-replacement-20261023

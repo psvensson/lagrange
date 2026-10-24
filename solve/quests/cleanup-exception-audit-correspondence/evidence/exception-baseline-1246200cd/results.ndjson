@@ -1,1 +1,0 @@
-{"file":"test/scripts/check-guideline-decision-boundaries.test.js","attempt":1,"ok":false,"assertions":128,"durationMs":1953,"retriedOnce":false,"firstFailureLine":"not ok 2 - caught cleanup exceptions are data; the retained map owns cleanup state"}

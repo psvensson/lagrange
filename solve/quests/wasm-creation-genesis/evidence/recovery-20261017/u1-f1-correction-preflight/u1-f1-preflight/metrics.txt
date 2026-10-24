@@ -1,8 +1,0 @@
-
-Cyclomatic complexity
-Scoped complexity ratchet: 0 violation(s) in 4 target(s) (threshold: 12).
-Saved complexity report to test-output/analysis/complexity-scoped.json.
-
-Cognitive complexity
-Scoped cognitive complexity ratchet: 0 violation(s) in 4 target(s) (threshold: 20).
-Saved cognitive complexity report to test-output/analysis/cognitive-complexity-scoped.json.

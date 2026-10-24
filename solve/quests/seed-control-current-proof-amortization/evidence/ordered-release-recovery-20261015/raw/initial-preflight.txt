@@ -1,1 +1,0 @@
-Initial fleet discovery before isolated dependency link: exit 1, ERR_MODULE_NOT_FOUND: yaml. Node v22.23.2. No test executed. Identical-lock dependency symlink then added only in own worktree; subsequent discovery and locked native executions recorded separately. No shared dependency installation modified.

@@ -1,4 +1,0 @@
-Error: carinas-windows is not a ready lab machine this run: ready
-    at placeLabLanes (file:///mnt/data/peter/projects/.worktrees/rs-raft-c2-recovery-integration-20261013/scripts/lab/probe.js:2580:11)
-    at runLabTest (file:///mnt/data/peter/projects/.worktrees/rs-raft-c2-recovery-integration-20261013/scripts/lab/probe.js:2859:21)
-    at async file:///mnt/data/peter/projects/.worktrees/rs-raft-c2-recovery-integration-20261013/[eval1]:16:8

@@ -1,8 +1,0 @@
-{
-  "path": "/workspace/scratch/6d2a7b72384f/lagrange/data/examples/movielens-100k/u.data",
-  "bytes": 1979173,
-  "sha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
-  "expectedSha256": "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490",
-  "providedBy": "root using repository canonical downloader",
-  "localPath": "/workspace/scratch/6d2a7b72384f/verify-recovery-u1/data/examples/movielens-100k/u.data"
-}

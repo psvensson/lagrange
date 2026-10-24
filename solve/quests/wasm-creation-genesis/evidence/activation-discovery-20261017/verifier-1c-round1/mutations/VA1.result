@@ -1,7 +1,0 @@
-mutated sha: f77142e4fdd76b56096453935f9b952f23e606520d970aaeb5c971022164bfd5
-catcher test/wasm-service/bound-creation-handler-embedding.integration.test.js rc=1
-not ok test/wasm-service/bound-creation-handler-embedding.integration.test.js (3 assertions, 1296ms)
-    not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
-      name: 'AssertionError'
-catcher test/runtime/service-runtime-consensus-publication.test.js rc=0
-RESTORED_BYTE_IDENTICAL src/wasm-service/wasm-service-lifecycle.js

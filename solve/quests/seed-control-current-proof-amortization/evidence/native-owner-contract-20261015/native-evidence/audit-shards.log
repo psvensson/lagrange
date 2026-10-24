@@ -1,8 +1,0 @@
-
-> lagrange-server@0.2.6 audit:shards
-> node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check
-
-curated test shards: current
-primary classification OK: 2377 tests (unit=2069 integration=97 bootstrap=204 convergence-probe=3 packaging=4)
-resource classification OK — 2377 tests, digest fnv1a32-047783d4
-subsystem classification OK — 2377 tests, 22 subsystems, digest fnv1a32-2c119e51

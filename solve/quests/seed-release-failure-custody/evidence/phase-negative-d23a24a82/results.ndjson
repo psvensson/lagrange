@@ -1,2 +1,0 @@
-{"file":"test/bootstrap/pipeline/seed-registration-phase-custody.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":729,"retriedOnce":false,"firstFailureLine":"not ok 1 - seed registration phase owns acquisition and release before metadata publication"}
-{"file":"test/bootstrap/seed-release-failure-custody.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":16955,"retriedOnce":false,"firstFailureLine":"not ok 1 - registration failure observes every acquired cleanup owner"}

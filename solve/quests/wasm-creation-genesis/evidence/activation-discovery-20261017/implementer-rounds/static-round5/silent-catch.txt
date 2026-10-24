@@ -1,5 +1,0 @@
-Scanned 24 JavaScript files
-Found 1 silent catch violations
-Top files:
-- src/service/service-consensus-creation-intent.js: 1
-Matched 3 inherited silent-catch baseline violations

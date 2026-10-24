@@ -1,7 +1,0 @@
-syntax=0
-eslint=0
-strict_metrics=0
-file_size=0
-diff_check=0
-no_index_whitespace=1
-v8_to_v9_diff=1

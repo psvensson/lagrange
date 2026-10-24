@@ -1,6 +1,0 @@
-quest decision-audit-dependency-construction: open
-  probe: metric 1 target 0 done=false measuring=true (measured)
-  seal-time metric 4; delta -3; attempts 5 (5 since the last altitude check)
-  2026-10-21T04:52:10.229Z attempt: Final construction classifier uses occurrence-level proof, direct constructor-option keys and conservative binding/field checks. Final complete raw census is 79
-  2026-10-21T04:52:10.427Z verification approve: Independent reviewer approved exact checker c79c7888, helper 33dfb3a8 and frozen witness 49895c1c for candidate measurement after complete source and census rev
-  2026-10-21T04:55:59.707Z attempt: Candidate 575138446abcde520b8474ee24faa938f8ca8fa4 passed the frozen 49895c1c witness on locked lenovo-laptop through the canonical classified runner: 1 file, 1

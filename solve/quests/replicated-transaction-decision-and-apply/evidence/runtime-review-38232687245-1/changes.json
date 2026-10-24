@@ -1,1 +1,0 @@
-{"scope": "test only; production unchanged", "registryChanges": [["contracts", "tests"], ["coupledPairs", "witnessTests"]], "registered": ["test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js", "test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js"]}

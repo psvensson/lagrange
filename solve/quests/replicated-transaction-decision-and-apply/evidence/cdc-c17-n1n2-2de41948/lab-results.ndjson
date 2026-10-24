@@ -1,5 +1,0 @@
-{"file":"test/cdc/cdc-coverage-reconcile-owner.test.js","attempt":1,"ok":true,"assertions":77,"durationMs":1332,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/cache/system-table-cache-cdc-source-order.test.js","attempt":1,"ok":true,"assertions":127,"durationMs":1779,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/cdc/cdc-authoritative-catchup-hydration.test.js","attempt":1,"ok":true,"assertions":24,"durationMs":1115,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/partition/partition-cdc-source-coverage.test.js","attempt":1,"ok":true,"assertions":144,"durationMs":2618,"retriedOnce":false,"firstFailureLine":null}
-{"file":"test/cdc/cdc-authoritative-coverage-reconciliation.test.js","attempt":1,"ok":true,"assertions":95,"durationMs":2817,"retriedOnce":false,"firstFailureLine":null}

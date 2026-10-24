@@ -1,8 +1,0 @@
-68	32	src/node/participant-release-applied-position-observation.js
-8	7	src/node/participant-release-client.js
-7	0	src/node/replica-handler-constants.js
-3	2	src/node/replica-handler-lifecycle-methods.js
-8	7	src/node/replica-handler-participant-cutover.js
-25	17	src/node/replica-handler-participant-release.js
-10	1	src/partition/partition-participant-transaction-cutover-constants.js
-10	0	test/shards/impact-contracts.json

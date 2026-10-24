@@ -1,1 +1,0 @@
-{"file":"test/partition/participant-release-first-prepare-native.test.js","attempt":1,"ok":false,"assertions":1,"durationMs":2274,"retriedOnce":false,"firstFailureLine":"not ok 1 - local staging grants no first PREPARE admission after the production PAUSE"}

@@ -1,8 +1,0 @@
-{
-  "archive": "/home/peter/Downloads/LAGRANGE_PROTECTED_RELEASE_CLOSURE_20261015T150842Z.tar.gz",
-  "sha256": "0c0a3974b53c6030bef042dedf35ad4d88194fad4a0788efb789be5c1c476286",
-  "bytes": 123180,
-  "payloadCount": 59,
-  "manifestSha256": "73e70da379d28d186e50a45c3d2d29a8b4e2658eac8e46595b924a9ee8947dd3",
-  "verification": "All payload sizes and SHA256 checked through archive reader"
-}

@@ -1,1 +1,0 @@
-{"file":"test/transport/message-router-cdc-outcome-roundtrip.test.js","attempt":1,"ok":false,"assertions":105,"durationMs":614,"retriedOnce":false,"firstFailureLine":"not ok 8 - COMMITTED_REASON_CODE_ACK_REJECTED"}

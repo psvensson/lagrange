@@ -1,7 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:hot-path-diagnostics
-> node scripts/check-guideline-hot-path-diagnostics.js
-
-Scanned 8 JavaScript files
-Found 0 hot-path diagnostics violations
-Matched 31 inherited hot-path diagnostics baseline violations

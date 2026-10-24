@@ -1,1 +1,0 @@
-{"file":"test/partition/participant-release-protocol.test.js","attempt":1,"ok":false,"assertions":16,"durationMs":4666,"retriedOnce":false,"firstFailureLine":"not ok 15 - registered dependent release retains control expiry before nested client dispatch"}

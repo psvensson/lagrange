@@ -1,8 +1,0 @@
-$ git diff 758b32e733754b2fb67da7953899a2c4a55765dc -- declared paths | rg "^\\+export|^\\+  [A-Za-z].*,?$"
-# No new export declaration is added by the slice; exported names at file tails are unchanged.
-
-$ rg -n "^export" declared production files
-src/transport/inproc-transport.js:186:export {
-src/constants/transport.js:427:export {
-src/transport/bulk-transfer-channel.js:616:export {
-src/raft/bulk-connection-transfer-socket.js:135:export {

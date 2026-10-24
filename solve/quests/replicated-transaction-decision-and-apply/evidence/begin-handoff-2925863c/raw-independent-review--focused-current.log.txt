@@ -1,9 +1,0 @@
-
-> lagrange-server@0.2.6 test:file
-> node scripts/run-classified-test-files.js test/query/transaction-begin-uncertain-handoff.test.js
-
-# test-files planned=1
-classified lane ordinary: 1 file(s), jobs=4
-thermal: ok cpu 54C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
-ok test/query/transaction-begin-uncertain-handoff.test.js (98 assertions, 2509ms)
-# test-files total=1 pass=1 fail=0 assertions=98

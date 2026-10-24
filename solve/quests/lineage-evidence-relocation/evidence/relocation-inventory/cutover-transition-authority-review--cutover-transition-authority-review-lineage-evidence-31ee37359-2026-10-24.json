@@ -1,0 +1,33 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "cutover-transition-authority-review--cutover-transition-authority-review-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "5e026fc19a81bff8287ea49f31d53e91c648b2e81c38cc1349c8e7f3b545b95e",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--cutover-transition-authority-review-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/cutover-transition-authority-review/evidence/",
+  "files": [
+    ["classification-gcp-20261008.json","0265af9a44641fdbd3f1c075c6be8926311f13123f5c12204ea32555133dc12c",133360],
+    ["gcp-37736547313.json","1b65ade8446e26122781d3fa7e7171fffdf7589c54f0cc7fcaef334f29f88ab7",4874],
+    ["gcp-37740082892.json","9297aef27dbb6d3c44827770829b97d91028bec109a870b46e08516376b24ba7",4046],
+    ["gcp-37743852151.json","286c7ace1ad66525c277766503b36bc7c4edb9cf6a9ef48a10a30fd03c33e751",6667],
+    ["owner-entry-2026-10-08.json","897993979e0ef93d109cc849c68ac51d84bcb71ea70c9c32fd24ba67dd235894",7352],
+    ["review-5452918820.json","ab9d1f3bf677589575cf4cbb23e2d2ff610aaa680dde3eb4cc28e5a91c5b2d95",1210],
+    ["self-review-20261008/adversarial-mutations.json","ab73afa17dc71b3fed417f73f2ef1167cc83597e46fe8df211ea9c6cebefda62",1794],
+    ["self-review-20261008/live-artifact-review.json","d2712aab256ddb43844dc500190d1ec24a2e927dfe2d43e8ea1fc6d44df8e4a5",563],
+    ["self-review-20261008/local-continuation-original.patch","0474fbc8236d4509ac148e25dd070f818b5a6179b3d2cddb35876af8d16bdd54",64542],
+    ["self-review-20261008/local-continuation-original.zip","b0236d31651f8b4abee45c90e8d8e2afb75bb5eaad04489586f98714c02d3071",34323],
+    ["self-review-20261008/probe-check.stderr.txt","a410872da6a9b9d4ebf78b64bcccb5b49981a879377b734edecba639df1c7d4e",890],
+    ["self-review-20261008/probe-check.stdout.txt","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",0],
+    ["self-review-20261008/projection-rerun.json","e1b7cf15f025d2917a012d0d98bc0a697a77b8f9ee8552308ab6444cf2be28d2",28175],
+    ["self-review-20261008/projection-rerun.stderr.txt","ae234cdfccdb3da6d6ea9cebe092fef1490b81800ea5ac6940ae50c80d802529",167],
+    ["self-review-20261008/projection-rerun.stdout.txt","6d4a17bcf3769f0fdf93a57e777f72ba7d6d3580d394976bc627f243a1cbdaa3",866],
+    ["self-review-20261008/projection-strengthened.json","dc7b8d39b7b0cbb7c84419acde025cdfad9cb65a7fb9816ecd49508bbc67465c",36115],
+    ["self-review-20261008/projection-strengthened.stderr.txt","47eae6973dea61c94302237df0da6e715bf0f6f67ea3af6187b57ebf22bd0d4a",168],
+    ["self-review-20261008/projection-strengthened.stdout.txt","6d4a17bcf3769f0fdf93a57e777f72ba7d6d3580d394976bc627f243a1cbdaa3",866],
+    ["self-review-20261008/reproduce.py","bc4336ea3125f02ba848af7439ded7a9fa9b9f5ee372a784468e256beab040bc",4165],
+    ["self-review-20261008/reproducer.stderr.txt","e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",0],
+    ["self-review-20261008/reproducer.stdout.json","eaf2a77a1e3f60a6eaab72bf4a46ba92aead132457cd10e2f0a7d550aa8fa668",2395],
+    ["self-review-20261008/source-check.json","3cd14a0d6f3cb6e605eb0b11c42325cde0cc23b3e4da5ee92081ffed573c4d7e",126],
+    ["self-review-20261008/summary.json","173ea9dd8125484aaaa3dceb34fdcc78ffcf9f4e7048a5b2e9c076310ba16e8a",1191]
+  ]
+}

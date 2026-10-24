@@ -1,7 +1,0 @@
-Scanned 1938 JavaScript files
-Found 4 silent catch violations
-Top files:
-- src/rebalancer/replica-operation-message-group-membership-owner-claim.js: 2
-- src/raft/raft-rs-membership-transition-runtime.js: 1
-- src/service/service-consensus-creation-intent.js: 1
-Matched 90 inherited silent-catch baseline violations

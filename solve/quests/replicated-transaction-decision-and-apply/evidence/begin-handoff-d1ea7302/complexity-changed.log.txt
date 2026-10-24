@@ -1,6 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:scoped
-> node scripts/check-complexity.js --scoped src/query/distributed/distributed-transaction-creation.js src/query/distributed/distributed-transaction-creation-resources.js src/query/sql-query-engine-transaction-persistence-methods.js
-
-Scoped complexity ratchet: 0 violation(s) in 3 target(s) (threshold: 12).
-Saved complexity report to test-output/analysis/complexity-scoped.json.

@@ -1,8 +1,0 @@
-{
-  "utc": "2026-10-11T21:48:34.291740+00:00",
-  "subject": "design-query-begin-uncertain-insert-resolution-2026-10-11.md",
-  "sha256": "bd551d60cc2b5c61aacffa59ec93640ee25119784f1196b6e725df90303233c3",
-  "sourceWorktree": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011",
-  "bytes": 113796,
-  "state": "DESIGN ONLY; independent review pending; product source HOLD"
-}

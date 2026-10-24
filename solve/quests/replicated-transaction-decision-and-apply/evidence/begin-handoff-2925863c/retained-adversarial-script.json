@@ -1,7 +1,0 @@
-{
-  "subject": "2925863c3e72a17854413fa2c850ce4ff76f6aff",
-  "script": "adversarial-source-review.mjs.txt",
-  "originalPath": "/mnt/data/peter/projects/.worktrees/rs-raft-startup-integration-20261011/test-output/continuation-20261011/tx-begin-handoff/independent-review/adversarial-source-review.mjs",
-  "sha256": "8b2015c99d9d0ada3f31fe582c71d35d82df290b80ef68594958d060f09d3755",
-  "purpose": "Byte-identical historical independent counterexample script retained as text evidence; rejected source remains rejected. Re-run requires relocating module paths to exact target deliberately."
-}

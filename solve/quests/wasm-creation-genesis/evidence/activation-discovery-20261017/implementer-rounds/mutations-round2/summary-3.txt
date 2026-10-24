@@ -1,5 +1,0 @@
-M13-remover-parses-S src/runtime/runtime-endpoint-publication-wiring.js ['rc=1'] restored-sha-ok | not ok 1 - cell (d) endpoint removed by physical id before the stop; services row deleted after CLOSED || not ok 2 - closed:false keeps the services row (custody stays with the creation)
-M14-address-literal src/runtime/service-runtime-consensus-publication.js ['rc=1'] restored-sha-ok | not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
-M15-absent-writer-as-present src/runtime/service-runtime-consensus-publication.js ['rc=1'] restored-sha-ok | not ok 3 - cell (i) an absent endpoint or projection writer is typed PUBLISHED_UNPROJECTED, never PRESENT
-M16-raw-node-address-as-host src/runtime/runtime-startup-wiring.js ['rc=1'] restored-sha-ok | not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)
-M17-mark-keyed-by-S src/wasm-service/wasm-service-lifecycle.js ['rc=1'] restored-sha-ok | not ok 1 - C6-1 HELD, C6-3 duplicate, C6-2 PUBLISHED rows + one catalog group, (e) (f) (g) (h)

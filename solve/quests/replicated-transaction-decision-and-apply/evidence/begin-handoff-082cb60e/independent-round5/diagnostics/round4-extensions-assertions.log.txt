@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/mnt/data/peter/projects/.worktrees/rs-raft-candidate-20261011/test-output/continuation-20261011/begin-source-round5-independent/evaluate-round4-extensions.py", line 8, in <module>
-    check('B4-1a advanced retry uses current pre-FIFO turn budget',r['retained']['advancedHandoff'] and all(t['budget'].get('deadlineMs',0)>t['now'] for t in r['trace'][2:]))
-KeyError: 'retained'

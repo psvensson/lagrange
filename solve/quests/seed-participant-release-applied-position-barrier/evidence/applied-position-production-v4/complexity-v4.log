@@ -1,9 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:scoped:strict
-> node scripts/check-complexity.js --scoped --strict src/node/replica-runtime-cleanup-custody.js
-
-Complexity violations (threshold: 12):
-
-src/node/replica-runtime-cleanup-custody.js:71:1 Async function 'fenceFailedReplicaCreateRuntime' has a complexity of 14. Maximum allowed is 12.
-
-1 violation(s) found.

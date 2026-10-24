@@ -1,9 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:literals
-> node scripts/check-guideline-literals.js scripts/check-guideline-decision-boundaries.js scripts/checks/decision-boundary-construction.js
-
-Scanned 2 JavaScript files
-Found 48 new literal-guideline violations
-Top files:
-- scripts/checks/decision-boundary-construction.js: 48
-Matched 50 inherited literal-guideline baseline violations

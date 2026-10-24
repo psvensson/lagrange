@@ -1,5 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:cognitive:scoped:strict
-> node scripts/check-cognitive-complexity.js --scoped --strict src/node/participant-release-applied-position-observation.js
-
-No cognitive complexity violations (threshold: 20).

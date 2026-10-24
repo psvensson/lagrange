@@ -1,2 +1,0 @@
-command: node --check test/node/replica-handler-release-recovery.test.js
-exit: 0

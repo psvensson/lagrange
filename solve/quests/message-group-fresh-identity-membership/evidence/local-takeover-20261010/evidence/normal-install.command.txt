@@ -1,1 +1,0 @@
-npm ci --offline --ignore-scripts

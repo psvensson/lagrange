@@ -1,7 +1,0 @@
-{
-  "source": "/tmp/opencode/release-linearization-rev2-correction/node_modules",
-  "target": "/mnt/data/peter/projects/.worktrees/release-linearization-independent-bde70cec-20261015/node_modules",
-  "readOnlyUse": true,
-  "installationPerformed": false,
-  "lockfileSha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd"
-}

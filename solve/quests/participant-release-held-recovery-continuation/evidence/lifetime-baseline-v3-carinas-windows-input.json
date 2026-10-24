@@ -1,8 +1,0 @@
-{
-  "sha": "cee78b3a92fc942fb9214e61cf6a5c96f2b3c567",
-  "host": "carinas-windows",
-  "files": [
-    "test/node/replica-handler-release-recovery.test.js"
-  ],
-  "startedAt": "2026-10-13T15:01:55.769Z"
-}
