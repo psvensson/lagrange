@@ -32,7 +32,8 @@ const restored = coordinator.workflowCoordinator.getWorkflowById(transactionId);
 assert.ok(restored, 'the exact durable transaction identity is recovered');
 // A snapshot can discover an ID, but it cannot authorize a COMMIT decision.
 // The live recovery owner must reread it through the authoritative gateway.
-assert.equal(restored.decision, null,
+// The restored record has the live record's shape: no decision key at all.
+assert.equal(Object.hasOwn(restored, 'decision'), false,
   'snapshot discovery must not adopt an unverified COMMIT decision');
 assert.equal(restored.participants.size, 2);
 assert.equal(restored.frozenParticipantCount, 2);
