@@ -4,6 +4,10 @@ import {captureCdcForwardOptions,
   createMessageGroupForwardingOwnerNativeDeliveryMethods, requiresDurableCdcForwarding} from
   './message-group-forwarding-owner-native-delivery-methods.js';
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from '../transport/transport-error-codes.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome,
+  isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const buildForwardTopologyRepairReadOptions =
@@ -348,10 +352,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         typeof errorMessage === typeofToken.STRING ?
           errorMessage :
           '';
-      if (
-        deliveryResult?.errorCode ===
-        messageGroupForwardingOwnerLiteral.OUTBOUND_QUEUE_BACKPRESSURED
-      ) {
+      if (deliveryResult?.errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
         return true;
       }
       return normalizedErrorMessage.includes(
@@ -623,16 +624,16 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             payload,
             deliveryOptions,
           );
-          const deliveryAcked = deliveryResult?.acknowledged === true;
+          // Transport decides delivery; success and error are the leader's answer.
+          const deliveryOutcome = classifyTransportDeliveryOutcome(deliveryResult);
+          const deliveryAcked = isDeliveredTransportDeliveryOutcome(deliveryOutcome);
           const deliverySucceeded = deliveryResult?.success !== false;
           const deliveryErrorMessage =
             typeof deliveryResult?.error === typeofToken.STRING &&
             deliveryResult.error.length > num.ZERO ?
               deliveryResult.error :
               null;
-          const deliveryRejectedByHandler =
-            deliveryResult?.noHandler === true ||
-            deliveryErrorMessage !== null;
+          const deliveryRejectedByHandler = deliveryErrorMessage !== null;
           if (
             !deliveryAcked ||
             !deliverySucceeded ||
@@ -671,9 +672,11 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 causeId,
                 durationMs: service.now() - forwardStartMs,
                 deliveryRejectedByHandler,
-                acknowledged: deliveryAcked,
+                acknowledged: deliveryOutcome.acknowledged,
                 success: deliverySucceeded,
-                noHandler: deliveryResult?.noHandler === true,
+                deliveryState: deliveryOutcome.deliveryState,
+                noHandler: deliveryOutcome.reasonCode ===
+                  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
                 replayIsolationEngaged: replayOnly,
                 deliveryPriority,
                 deliverySource,
@@ -693,7 +696,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               deliveryResult,
               {
                 message: deliveryErrorMessage,
-                deferRetry: deliveryResult?.deferRetry === true,
+                deferRetry: isDeferredTransportDeliveryOutcome(deliveryOutcome),
               },
             );
             const resolvedRetryAfterMs = this.resolveForwardRetryAfterMs(

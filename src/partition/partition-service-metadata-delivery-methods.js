@@ -1,5 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 const {
   CONTROL_PLANE_PARTITION_IDS,
@@ -541,7 +543,7 @@ class PartitionServiceMetadataDeliveryMethods {
         }
         throw earlyRejection;
       }
-      if (result && result.acknowledged === false) {
+      if (!isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result))) {
         const errorMsg =
           result.error || PARTITION_SERVICE_ERROR_MSG.DELIVERY_NOT_ACK;
         this.logger.warn(PARTITION_SERVICE_ERROR_MSG.MESSAGE_DELIVERY_FAILED, {

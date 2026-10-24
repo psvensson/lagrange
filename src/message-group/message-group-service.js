@@ -62,7 +62,6 @@ import {
   buildLatencyCdcPropagationResult,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,
-  shouldDeferImmediateDeliveryRetry,
   wrapCdcProposeError,
 } from './message-group-service-runtime-support.js';
 
@@ -108,7 +107,6 @@ const MESSAGE_GROUP_SERVICE_RUNTIME_METHODS =
     normalizeMessageDeliveryMode,
     normalizePublishedRaftRole,
     resolveTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
     uuidv4,
     wrapCdcProposeError,
     RaftRole,

@@ -1,9 +1,10 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {classifyTransportDeliveryOutcome} from './transport-semantic-outcome.js';
 
 const {
-  MESSAGE_ROUTER_LITERAL,
   QUERY_DATA_PLANE_MESSAGE_TYPE,
   QUERY_TRANSPORT_DELIVERY_STATE,
+  QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE,
   QUERY_TRANSPORT_SELECTION,
   ROUTER_ERROR_MSG,
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
@@ -108,9 +109,6 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
             this.reconnectIntervalMs,
         deferRetry: true,
       },
-      {
-        defaultRetryAfterMs: this.reconnectIntervalMs,
-      },
     );
   },
 
@@ -125,69 +123,54 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
       error:
         selection.reason ||
         ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
-      errorCode: MESSAGE_ROUTER_LITERAL.STRING_ROUTER_QUERY_TRANSPORT_NOT_READY,
+      errorCode: ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
       deferRetry: true,
       retryAfterMs,
     };
   },
 
+  // A query transport failure is either a thrown Error or a delivery answer;
+  // the transport owner converts both, so the text, code and retry fields are
+  // read from one classified outcome.
   buildCanonicalDeferredQueryTransportOutcome(
     messageId,
     correlationId,
     failure,
   ) {
+    const outcome = classifyTransportDeliveryOutcome(failure);
     return this.buildDeferredDeliveryFailure(
       messageId,
       correlationId,
-      failure?.error ||
-        failure?.message ||
-        ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+      outcome.error ?? ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
       {
-        errorCode:
-          typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING &&
-          failure.errorCode.length > TRANSPORT_NUM.ZERO ?
-            failure.errorCode :
-            typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
-                failure.code.length > TRANSPORT_NUM.ZERO ?
-              failure.code :
-              null,
-        retryAfterMs: Number.isFinite(failure?.retryAfterMs) ?
-          failure.retryAfterMs :
+        errorCode: outcome.errorCode,
+        retryAfterMs: Number.isFinite(outcome.retryAfterMs) ?
+          outcome.retryAfterMs :
           this.reconnectIntervalMs,
       },
     );
   },
 
   buildQueryTransportFailureError(failure, _targetNodeId) {
+    const outcome = classifyTransportDeliveryOutcome(failure);
     const normalizedMessage =
-      typeof failure?.error === TRANSPORT_TYPEOF.STRING &&
-      failure.error.length > TRANSPORT_NUM.ZERO ?
-        failure.error :
-        typeof failure?.message === TRANSPORT_TYPEOF.STRING &&
-            failure.message.length > TRANSPORT_NUM.ZERO ?
-          failure.message :
-          ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
+      outcome.error ?? ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
     const error =
       failure instanceof Error ? failure : new Error(normalizedMessage);
     error.message = normalizedMessage;
     if (
-      typeof failure?.errorCode === TRANSPORT_TYPEOF.STRING &&
-      failure.errorCode.length > TRANSPORT_NUM.ZERO
+      typeof outcome.errorCode === TRANSPORT_TYPEOF.STRING &&
+      outcome.errorCode.length > TRANSPORT_NUM.ZERO
     ) {
-      error.code = failure.errorCode;
-    } else if (
-      typeof failure?.code === TRANSPORT_TYPEOF.STRING &&
-      failure.code.length > TRANSPORT_NUM.ZERO
-    ) {
-      error.code = failure.code;
+      error.code = outcome.errorCode;
     }
-    if (failure?.deferRetry === true) {
+    if (outcome.deferRetry === true) {
       error.deferRetry = true;
     }
-    if (Number.isFinite(failure?.retryAfterMs)) {
+    if (Number.isFinite(outcome.retryAfterMs)) {
       error.retryAfterMs = Math.max(
         TRANSPORT_NUM.ZERO,
-        Math.floor(failure.retryAfterMs),
+        Math.floor(outcome.retryAfterMs),
       );
     }
     if (failure?.recoverableBeforeSend === true) {
@@ -197,13 +180,10 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
   },
 
   resolveQueryTransportDeliveryState(failure) {
-    if (failure?.acknowledged === true) {
-      return QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS;
-    }
-    if (failure?.deferRetry === true) {
-      return QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY;
-    }
-    return QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE;
+    const outcome = classifyTransportDeliveryOutcome(failure);
+    return outcome.acknowledged ?
+      QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS :
+      QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE[outcome.deliveryState];
   },
 
   async normalizeQueryTransportFailure({

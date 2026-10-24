@@ -19,7 +19,8 @@
         "src/partition/partition-service-entry-apply-base.js",
         "src/partition/partition-service-remote-query-methods.js",
         "src/partition/partition-service-participant-transaction-cadence-methods.js",
-        "src/partition/partition-service-removal-serving-methods.js"
+        "src/partition/partition-service-removal-serving-methods.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/query/partition-transaction-seam-falsifiers.test.js",
@@ -222,7 +223,8 @@
         "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
         "src/node/replica-state-machine-failed-create-claim.js",
         "src/node/replica-handler-remove-request-methods.js",
-        "src/node/replica-cleanup-tombstone-owner.js"
+        "src/node/replica-cleanup-tombstone-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/rebalancer/terminal-failed-add-target-cleanup.test.js",
@@ -644,7 +646,8 @@
         "src/bootstrap/bootstrap-service-runtime-methods.js",
         "src/bootstrap/bootstrap-service-seed-delegates.js",
         "src/bootstrap/owners/seed-runtime-bridge-owner.js",
-        "src/bootstrap/phases/seed-cleanup-handler.js"
+        "src/bootstrap/phases/seed-cleanup-handler.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/operation-port-ready-recovery.test.js",
@@ -683,7 +686,8 @@
         "test/bootstrap/seed-release-failure-custody.test.js",
         "test/bootstrap/retained-seed-original-handoff.integration.test.js",
         "test/bootstrap/seed-message-group-cleanup-custody.test.js",
-        "test/bootstrap/message-group-activation-handler-boundary.test.js"
+        "test/bootstrap/message-group-activation-handler-boundary.test.js",
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -763,7 +767,8 @@
         "src/query/query-executor-shared.js",
         "src/query/query-executor-partition-delivery.js",
         "src/query/query-executor-write-retry-routing.js",
-        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+        "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/control-plane/control-plane-error-classification.test.js",
@@ -785,7 +790,8 @@
         "src/raft/raft-committed-membership-stamp.js",
         "src/raft/raft-rs-bootstrap-membership.js",
         "src/raft/raft-rs-operation-port.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/evidence-o1-real-chain.test.js",
@@ -807,7 +813,8 @@
         "src/rebalancer/operation-workflow-replace-surviving-membership.js",
         "src/rebalancer/operation-workflow-replace-owner-wake.js",
         "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
-        "src/rebalancer/operation-workflow-replace-witness.js"
+        "src/rebalancer/operation-workflow-replace-witness.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/raft/raft-rs-backend/membership-changed-event.test.js",
@@ -920,7 +927,8 @@
         "src/partition/managed-source-replication-start-delivery.js",
         "src/partition/partition-service-source-replication-start-methods.js",
         "src/query/sql-query-engine-partition-routing-readiness.js",
-        "src/partition/managed-merge-topology-adapter.js"
+        "src/partition/managed-merge-topology-adapter.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/partition/partition-replication-restart-attempt-handoff.test.js"
@@ -1038,7 +1046,8 @@
         "src/rebalancer/operation-workflow-recovery-reconcile.js",
         "src/rebalancer/rebalance-coordinator-lifecycle.js",
         "src/rebalancer/rebalance-coordinator-recovery-budget-bindings.js",
-        "src/rebalancer/rebalance-coordinator-recovery-helper.js"
+        "src/rebalancer/rebalance-coordinator-recovery-helper.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/integration/message-group-learner-recipient.integration.test.js",
@@ -1269,7 +1278,8 @@
         "src/node/replica-handler-release-recovery.js",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "scripts/participant-release-completion-audit.js",
-        "scripts/check-guideline-decision-boundaries.js"
+        "scripts/check-guideline-decision-boundaries.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "tests": [
         "test/node/participant-release-fresh-create-completion.test.js",
@@ -1405,7 +1415,8 @@
         "src/transport/message-router-stats-shutdown.js",
         "src/transport/transport-semantic-outcome.js",
         "src/utils/canonical-json-data.js",
-        "src/topology/cdc-group-propagation-retry-wait-report.js"
+        "src/topology/cdc-group-propagation-retry-wait-report.js",
+        "src/transport/transport-query-semantic-outcome.js"
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
@@ -1439,7 +1450,13 @@
         "test/message-group/message-group-cdc-input-guard.test.js",
         "test/message-group/message-group-native-application-membership.test.js",
         "test/topology/cdc-group-propagation-stop-arms-nothing.test.js",
-        "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js"
+        "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js",
+        "test/transport/message-router-cdc-outcome-roundtrip.test.js",
+        "test/transport/transport-semantic-outcome.test.js",
+        "test/message-group/message-group-forward-backpressure-code.test.js",
+        "test/transport/transport-outcome-forwarding-hop.test.js",
+        "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
+        "test/transport/message-router-query-transport-failure-shape.test.js"
       ]
     }
   },
@@ -1458,7 +1475,8 @@
             "src/bootstrap/system-table-workflow-schema-definitions.js",
             "src/query/sql-query-engine-select-execution.js",
             "src/query/query-executor-base.js",
-            "src/query/query-executor-join-execution.js"
+            "src/query/query-executor-join-execution.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         },
         {
@@ -1649,7 +1667,8 @@
             "src/rebalancer/operation-workflow-transition-persistence.js",
             "src/rebalancer/replica-operation-repository.js",
             "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-            "src/rebalancer/unified-rebalancer-failed-create-cleanup.js"
+            "src/rebalancer/unified-rebalancer-failed-create-cleanup.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         },
         {
@@ -1986,7 +2005,8 @@
             "src/bootstrap/bootstrap-service-runtime-methods.js",
             "src/bootstrap/bootstrap-service-seed-delegates.js",
             "src/bootstrap/owners/seed-runtime-bridge-owner.js",
-            "src/bootstrap/phases/seed-cleanup-handler.js"
+            "src/bootstrap/phases/seed-cleanup-handler.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         }
       ],
@@ -2023,7 +2043,8 @@
         "test/bootstrap/seed-release-failure-custody.test.js",
         "test/bootstrap/retained-seed-original-handoff.integration.test.js",
         "test/bootstrap/seed-message-group-cleanup-custody.test.js",
-        "test/bootstrap/message-group-activation-handler-boundary.test.js"
+        "test/bootstrap/message-group-activation-handler-boundary.test.js",
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
       ]
     },
     "partition-raft-operation-port": {
@@ -2139,7 +2160,8 @@
             "src/query/query-executor-shared.js",
             "src/query/query-executor-partition-delivery.js",
             "src/query/query-executor-write-retry-routing.js",
-            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js"
+            "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         }
       ],
@@ -2162,7 +2184,8 @@
             "src/node/replica-handler-committed-membership-methods.js",
             "src/rebalancer/committed-membership-bootstrap-read.js",
             "src/rebalancer/rebalance-coordinator-operation-creation.js",
-            "src/query/sql-query-engine-initial-partition-provisioning.js"
+            "src/query/sql-query-engine-initial-partition-provisioning.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         },
         {
@@ -2203,7 +2226,8 @@
             "src/rebalancer/operation-workflow-replace-surviving-membership.js",
             "src/rebalancer/operation-workflow-replace-owner-wake.js",
             "src/rebalancer/operation-workflow-replace-handoff-attempt.js",
-            "src/rebalancer/operation-workflow-replace-witness.js"
+            "src/rebalancer/operation-workflow-replace-witness.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         }
       ],
@@ -2261,7 +2285,8 @@
             "src/partition/managed-source-replication-start-delivery.js",
             "src/partition/partition-service-source-replication-start-methods.js",
             "src/query/sql-query-engine-partition-routing-readiness.js",
-            "src/partition/managed-merge-topology-adapter.js"
+            "src/partition/managed-merge-topology-adapter.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         }
       ],
@@ -2442,7 +2467,8 @@
             "src/rebalancer/operation-workflow-recovery-reconcile.js",
             "src/rebalancer/rebalance-coordinator-lifecycle.js",
             "src/rebalancer/rebalance-coordinator-recovery-budget-bindings.js",
-            "src/rebalancer/rebalance-coordinator-recovery-helper.js"
+            "src/rebalancer/rebalance-coordinator-recovery-helper.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         }
       ],
@@ -2768,7 +2794,8 @@
           "owners": [
             "src/node/participant-release-client.js",
             "scripts/participant-release-completion-audit.js",
-            "scripts/check-guideline-decision-boundaries.js"
+            "scripts/check-guideline-decision-boundaries.js",
+            "src/transport/transport-semantic-outcome.js"
           ]
         },
         {
@@ -2955,7 +2982,8 @@
             "src/transport/message-router-reconnect-behaviors.js",
             "src/transport/message-router-shared-vocabulary.js",
             "src/transport/message-router-stats-shutdown.js",
-            "src/transport/transport-semantic-outcome.js"
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/transport-query-semantic-outcome.js"
           ]
         }
       ],
@@ -2977,7 +3005,13 @@
         "test/transport/message-router-cdc-encoding.test.js",
         "test/transport/message-router-cdc-response-boundary.test.js",
         "test/message-group/message-group-cdc-input-guard.test.js",
-        "test/message-group/message-group-native-application-membership.test.js"
+        "test/message-group/message-group-native-application-membership.test.js",
+        "test/transport/message-router-cdc-outcome-roundtrip.test.js",
+        "test/transport/transport-semantic-outcome.test.js",
+        "test/message-group/message-group-forward-backpressure-code.test.js",
+        "test/transport/transport-outcome-forwarding-hop.test.js",
+        "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
+        "test/transport/message-router-query-transport-failure-shape.test.js"
       ]
     }
   }

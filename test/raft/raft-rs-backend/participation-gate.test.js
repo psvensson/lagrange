@@ -25,7 +25,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
   durableAppliedState,
@@ -106,7 +106,7 @@ function createCluster(founders, {rewriteToTarget = null,
       }
       cluster.replica(TARGET).inbox.push({...packet,
         message: rewriteToTarget(packet.message)});
-      return null;
+      return DELIVERED_TO_PEER;
     },
   });
   return cluster;

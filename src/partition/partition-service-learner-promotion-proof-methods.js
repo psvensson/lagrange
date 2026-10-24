@@ -1,4 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
   LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE,
@@ -307,7 +309,8 @@ class PartitionServiceLearnerPromotionProofMethods {
    * @private
    */
   learnerPromotionProofResponseBindsThisLearner(response) {
-    return response?.acknowledged === true &&
+    return isDeliveredTransportDeliveryOutcome(
+      classifyTransportDeliveryOutcome(response)) &&
       response?.partitionId === this.partitionId &&
       response?.learnerReplicaId === this.replicaId &&
       Boolean(response?.proof) &&

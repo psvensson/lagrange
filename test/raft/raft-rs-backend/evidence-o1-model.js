@@ -22,7 +22,7 @@
 
 import assert from 'node:assert/strict';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from './partition-node-cluster.js';
 import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
   bindingWireNumbers,
@@ -113,7 +113,7 @@ function createModelCluster({partitionId, founders, target, filter,
       if (message !== null) {
         cluster.replica(target).inbox.push({...packet, message});
       }
-      return null;
+      return DELIVERED_TO_PEER;
     },
   });
   return cluster;
