@@ -197,8 +197,9 @@ test('a bundle whose re-download does not verify removes nothing and records not
     pathsFile: pathsFile(root, Object.keys(BULK)), sourceCommit: head, date: DATE,
     run: release.run, tmpdir}), /did not verify; nothing was removed/u);
   for (const file of Object.keys(BULK)) assert.ok(fs.existsSync(path.join(root, file)));
-  assert.equal(fs.existsSync(path.join(root, 'solve/quests', RECORD_QUEST, 'evidence',
+  assert.equal(fs.existsSync(path.join(root, RELOCATION.RECORDS_DIR, RECORD_QUEST,
     RELOCATION.INVENTORY_FILE)), false);
+  assert.equal(fs.existsSync(path.join(root, 'solve/quests', RECORD_QUEST, 'evidence')), false);
 });
 
 test('a verified relocation records the mapping, removes the paths, and meets acceptance', (t) => {
@@ -220,4 +221,25 @@ test('a verified relocation records the mapping, removes the paths, and meets ac
   const conditions = relocationAcceptance({root, budgetRows: okRows});
   assert.deepEqual(conditions.filter((entry) => !entry.met), [],
     'the records the tool writes are the records acceptance reads');
+  const records = path.join(RELOCATION.RECORDS_DIR, RECORD_QUEST);
+  assert.equal(result.records, records);
+  for (const file of [RELOCATION.INVENTORY_FILE, RELOCATION.VERIFICATION_FILE,
+    result.recorded.shard]) {
+    assert.ok(fs.existsSync(path.join(root, records, file)), `${file} under ${records}`);
+  }
+});
+
+test('a relocation recorded by a quest leaves nothing under that quest\'s evidence/', (t) => {
+  // Records written under the recording quest would be off the closed-quest
+  // shape the moment it closes; the owner writes them to its record home.
+  const {root, head, tmpdir} = repository(t);
+  const release = fakeRelease();
+  evidenceRelocate(root, {id: QUEST, recordTo: RECORD_QUEST,
+    pathsFile: pathsFile(root, Object.keys(BULK)), sourceCommit: head, date: DATE,
+    run: release.run, tmpdir});
+  const recordQuest = path.join(root, 'solve/quests', RECORD_QUEST);
+  assert.deepEqual(fs.readdirSync(recordQuest).sort(), ['log.ndjson', 'quest.json']);
+  const evidence = path.join(root, 'solve/quests', QUEST, 'evidence');
+  assert.deepEqual(fs.readdirSync(evidence), ['receipt.json'],
+    'the uploading quest keeps only its required receipt');
 });

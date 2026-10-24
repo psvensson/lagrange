@@ -279,6 +279,8 @@ The dry run prints the plan (files, bytes, bundle name) and touches nothing.
 The real run uploads through `evidence add` (no overwrite; a closed quest
 takes no entry, so name an open `--id`), downloads the bundle again, hashes
 every member against its manifest and the blob at the source commit, writes
-the inventory shard and the verification record under the `--record-to`
-quest, and stages the removals with `git rm`. Commit them with the hooks
+the inventory shard and the verification record to
+`solve/changes/evidence-relocation/<record-to quest>/` (never under a quest's
+`evidence/`, so closing the record quest keeps it on shape), and stages the
+removals with `git rm`. Commit them, records included, with the hooks
 running; the inventory maps each old path to its bundle.

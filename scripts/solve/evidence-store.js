@@ -20,7 +20,8 @@
  * same add path above, then downloaded again independently, extracted, and
  * every member is hashed against the manifest and against the blob at the
  * source commit. Only then are the inventory and verification records written
- * and the verified paths removed with `git rm`; a path that fails any check
+ * (under RELOCATION.RECORDS_DIR/<record quest>/, outside every quest
+ * directory) and the verified paths removed with `git rm`; a path that fails any check
  * stays in the tree.
  */
 
@@ -169,6 +170,12 @@ function deleteSharedEvidenceAsset({asset, authorizedAsset, run = gh}) {
 // --- relocation ---------------------------------------------------------------
 
 const RELOCATION = Object.freeze({
+  // Where relocation records live: one directory per recording quest under
+  // this cross-cutting record home, never under a quest's evidence/. A closed
+  // quest keeps only its record, its log and its sealed claim's artifacts
+  // (closed-quest-shape owner), so records written there go off-shape the
+  // moment the recording quest closes.
+  RECORDS_DIR: 'solve/changes/evidence-relocation',
   INVENTORY_FILE: 'relocation-inventory.json',
   SHARD_DIR: 'relocation-inventory',
   VERIFICATION_FILE: 'relocation-verification.json',
@@ -511,6 +518,16 @@ function relocationShard({manifest, uploaded}) {
       [entry.path.slice(root.length), entry.sha256, entry.bytes])};
 }
 
+/**
+ * The directory holding the relocation records a quest wrote.
+ * @param {string} root repository root
+ * @param {string} questId the recording quest
+ * @return {string}
+ */
+function relocationRecordsDir(root, questId) {
+  return path.join(root, RELOCATION.RECORDS_DIR, questId);
+}
+
 function readJsonOr(file, fallback) {
   return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, TEXT_ENCODING)) : fallback;
 }
@@ -539,26 +556,27 @@ function withBundle(list, entry) {
 
 /**
  * Write the shard, then merge its index entry into the inventory and its
- * verification into the verification record, both under `evidenceRoot`.
- * @param {{evidenceRoot: string, shard: Object, verification: Object,
+ * verification into the verification record, all under `recordsRoot` (the
+ * recording quest's `relocationRecordsDir`).
+ * @param {{recordsRoot: string, shard: Object, verification: Object,
  *   verifiedAt: string}} input
  * @return {{shard: string, shardSha256: string}}
  */
-function recordRelocation({evidenceRoot, shard, verification, verifiedAt}) {
+function recordRelocation({recordsRoot, shard, verification, verifiedAt}) {
   const shardRelative = `${RELOCATION.SHARD_DIR}${PATH_SEPARATOR}` +
     `${shard.bundle.slice(0, -RELOCATION.BUNDLE_SUFFIX.length)}.json`;
   const content = shardText(shard);
-  fs.mkdirSync(path.join(evidenceRoot, RELOCATION.SHARD_DIR), {recursive: true});
-  fs.writeFileSync(path.join(evidenceRoot, shardRelative), content);
+  fs.mkdirSync(path.join(recordsRoot, RELOCATION.SHARD_DIR), {recursive: true});
+  fs.writeFileSync(path.join(recordsRoot, shardRelative), content);
   const shardSha256 = sha256OfBuffer(Buffer.from(content, TEXT_ENCODING));
-  const inventoryFile = path.join(evidenceRoot, RELOCATION.INVENTORY_FILE);
+  const inventoryFile = path.join(recordsRoot, RELOCATION.INVENTORY_FILE);
   const inventory = readJsonOr(inventoryFile,
     {schema: RELOCATION.INVENTORY_SCHEMA, bundles: []});
   writeJson(inventoryFile, {...inventory, bundles: withBundle(inventory.bundles,
     {bundle: shard.bundle, bundleSha256: shard.bundleSha256, url: shard.url,
       sourceCommit: shard.sourceCommit, root: shard.root,
       files: shard.files.length, shard: shardRelative})});
-  const verificationFile = path.join(evidenceRoot, RELOCATION.VERIFICATION_FILE);
+  const verificationFile = path.join(recordsRoot, RELOCATION.VERIFICATION_FILE);
   const record = readJsonOr(verificationFile,
     {schema: RELOCATION.VERIFICATION_SCHEMA, bundles: []});
   writeJson(verificationFile, {...record, bundles: withBundle(record.bundles,
@@ -586,6 +604,6 @@ export {
   FINDING_KIND_EVIDENCE, MEMBER_MISMATCH, RELOCATION, RELOCATION_REFUSAL,
   addingCommits, assetName, bundleBasename, deleteSharedEvidenceAsset,
   parsePathsList, recordRelocation, relocationManifest, relocationRefusals,
-  relocationShard, removeRelocated, sha256Of, sourceBlobs, sourceRefusals,
+  relocationRecordsDir, relocationShard, removeRelocated, sha256Of, sourceBlobs, sourceRefusals,
   uploadAndVerify, verifyRelocationBundle, writeRelocationBundle,
 };

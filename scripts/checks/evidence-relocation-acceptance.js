@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
  * Acceptance of the lineage evidence relocation
- * (`node scripts/checks/evidence-relocation-acceptance.js [--metric|--json]`).
+ * (`node scripts/checks/evidence-relocation-acceptance.js [--metric|--json]
+ * [--records <dir>]`).
  *
  * Bulk evidence the rs-raft lineage committed under solve/ is relocated to
  * the solve-evidence store by `solve evidence relocate`, which writes an
  * inventory (an index plus one shard per bundle) and a verification record
- * on the relocation quest. This checker reads those records and the working
- * tree and counts the unmet conditions:
+ * into the recording quest's relocation records directory, whose location
+ * the evidence owner holds (`relocationRecordsDir`, RELOCATION.RECORDS_DIR).
+ * `--records <dir>` reads another records directory (relative to the
+ * repository root). This checker reads those records and the working tree
+ * and counts the unmet conditions:
  *
  *   - the three solve/ budget rows (active bytes, files over 1 MB, quest
  *     directories off shape), as the budget owner measures them;
@@ -32,11 +36,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {METRIC, measureSolveV2Budget} from './solve-v2-budget.js';
-import {RELOCATION} from '../solve/evidence-store.js';
+import {RELOCATION, relocationRecordsDir} from '../solve/evidence-store.js';
 import {requiredProofArtifacts} from '../solve/probes.js';
-import {
-  EPICS_DIR, EVIDENCE_DIR, LOG_FILE, QUESTS_DIR, QUEST_FILE,
-} from '../solve/schema.js';
+import {EPICS_DIR, LOG_FILE, QUESTS_DIR, QUEST_FILE} from '../solve/schema.js';
 import {listQuestIds, readQuest} from '../solve/store.js';
 
 const arrayEvery = Function.call.bind(Array.prototype.every);
@@ -44,6 +46,7 @@ const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayFlatMap = Function.call.bind(Array.prototype.flatMap);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arraySome = Function.call.bind(Array.prototype.some);
 const stringEndsWith = Function.call.bind(String.prototype.endsWith);
@@ -53,7 +56,8 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const regExpTest = Function.call.bind(RegExp.prototype.test);
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-// The quest whose evidence directory holds the relocation records.
+// The quest that recorded the lineage relocation; its records live in the
+// evidence owner's relocation records directory for this quest.
 const RELOCATION_QUEST_ID = 'lineage-evidence-relocation';
 const TEXT_ENCODING = 'utf8';
 const HASH_ALGORITHM = 'sha256';
@@ -61,6 +65,8 @@ const HASH_ENCODING = 'hex';
 const ARGV_OFFSET = 2;
 const METRIC_FLAG = '--metric';
 const JSON_FLAG = '--json';
+const RECORDS_FLAG = '--records';
+const FLAG_VALUE_OFFSET = 1;
 const JSON_INDENT = 2;
 const LINE_SEPARATOR = '\n';
 const PATH_SEPARATOR = '/';
@@ -138,10 +144,6 @@ function isRelativeInside(value) {
     !arrayIncludes(stringSplit(value, PATH_SEPARATOR), PARENT_SEGMENT);
 }
 
-function evidenceRoot(root, questId) {
-  return path.join(root, QUESTS_DIR, questId, EVIDENCE_DIR);
-}
-
 function bundleFieldsOk(entry) {
   return Boolean(entry) && isText(entry.bundle) && isSha256(entry.bundleSha256) &&
     isText(entry.url) && typeof entry.sourceCommit === 'string' &&
@@ -200,7 +202,7 @@ function duplicateProblems(files) {
 /**
  * The relocation inventory as recorded: its bundles, every old path it maps,
  * and what is wrong with it.
- * @param {string} evidence the relocation quest's evidence directory
+ * @param {string} evidence the relocation records directory
  * @return {{problems: string[], bundles: Object[], files: Object[]}}
  */
 function readInventory(evidence) {
@@ -305,12 +307,15 @@ function budgetConditions(rows) {
 
 /**
  * Every acceptance condition with whether it is met.
- * @param {{root?: string, questId?: string, budgetRows?: Function}} [options]
+ * @param {{root?: string, questId?: string, records?: string,
+ *   budgetRows?: Function}} [options] `records` (relative to `root`)
+ *   overrides the owner's records directory for `questId`
  * @return {{id: string, met: boolean, problems: number, detail: string[]}[]}
  */
 function relocationAcceptance(options = {}) {
   const root = options.root || REPO_ROOT;
-  const evidence = evidenceRoot(root, options.questId || RELOCATION_QUEST_ID);
+  const evidence = options.records ? path.resolve(root, options.records) :
+    relocationRecordsDir(root, options.questId || RELOCATION_QUEST_ID);
   const rows = (options.budgetRows || measureSolveV2Budget)();
   const inventory = readInventory(evidence);
   const required = requiredArtifacts(root);
@@ -341,8 +346,13 @@ function renderTable(conditions) {
     .join(LINE_SEPARATOR);
 }
 
+function flagValue(argv, flag) {
+  const index = arrayIndexOf(argv, flag);
+  return index < 0 ? undefined : argv[index + FLAG_VALUE_OFFSET];
+}
+
 function main(argv) {
-  const conditions = relocationAcceptance();
+  const conditions = relocationAcceptance({records: flagValue(argv, RECORDS_FLAG)});
   const unmet = unmetCount(conditions);
   if (arraySome(argv, (arg) => arg === METRIC_FLAG)) {
     process.stdout.write(`${unmet}${LINE_SEPARATOR}`);

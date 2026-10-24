@@ -39,8 +39,9 @@ function write(root, relative, content) {
     `${JSON.stringify(content, null, 2)}\n`);
 }
 
+// The records live where the evidence owner puts them, outside every quest.
 function evidence(relative) {
-  return `${QUESTS_DIR}/${RELOCATION_QUEST_ID}/${EVIDENCE_DIR}/${relative}`;
+  return `${RELOCATION.RECORDS_DIR}/${RELOCATION_QUEST_ID}/${relative}`;
 }
 
 function okRows() {
@@ -191,4 +192,16 @@ test('an inventoried log, quest record or required artifact is unmet', (t) => {
   // The receipt is both required and inventoried: it is present (so the
   // absence condition is unmet too), and inventorying it is refused.
   assert.deepEqual(unmet(root), [CONDITION.ABSENT, CONDITION.PROTECTED]);
+});
+
+test('records left under the quest\'s evidence/ are not read; --records reads a moved home', (t) => {
+  const root = greenRepository(t);
+  const legacy = `${QUESTS_DIR}/${RELOCATION_QUEST_ID}/${EVIDENCE_DIR}`;
+  fs.cpSync(path.join(root, RELOCATION.RECORDS_DIR, RELOCATION_QUEST_ID),
+    path.join(root, legacy), {recursive: true});
+  fs.rmSync(path.join(root, RELOCATION.RECORDS_DIR), {recursive: true});
+  assert.deepEqual(unmet(root), [CONDITION.INVENTORY, CONDITION.VERIFIED],
+    'the owner location is the only default');
+  assert.deepEqual(relocationAcceptance({root, budgetRows: okRows, records: legacy})
+    .filter((entry) => !entry.met), [], 'an explicit records directory is honoured');
 });

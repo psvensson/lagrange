@@ -60,14 +60,25 @@ with `node scripts/solve.js evidence relocate --id <quest> --paths-file <list>
 (path, bytes, sha256, adding commit), uploaded through the same add path,
 downloaded again and verified member by member against the manifest and the
 blob at the source commit, recorded in an inventory and a verification
-record (`evidence/relocation-inventory.json` with one shard per bundle, and
-`evidence/relocation-verification.json`) on the record quest
-(`--record-to`, default the `--id` quest), and only then removed with
-`git rm`. It refuses quest records, quest logs, required proof artifacts and
-paths outside `solve/`, and removes nothing when any member fails. The
-inventory is where an old path is looked up: its shard names the bundle, the
-bundle's sha256 and its release URL. Historical documents that cite a
-relocated path stay as they are.
+record, and only then removed with `git rm`. It refuses quest records, quest
+logs, required proof artifacts and paths outside `solve/`, and removes
+nothing when any member fails. The inventory is where an old path is looked
+up: its shard names the bundle, the bundle's sha256 and its release URL.
+Historical documents that cite a relocated path stay as they are.
+
+Relocation records live in `solve/changes/evidence-relocation/<quest>/`,
+named by the record quest (`--record-to`, default the `--id` quest):
+`relocation-inventory.json` (the index), `relocation-inventory/<bundle>.json`
+(one shard per bundle) and `relocation-verification.json`. They never go in
+a quest's `evidence/`. A closed quest keeps only `quest.json`, `log.ndjson`
+and the artifacts its sealed `doneWhen` requires, so records written there
+would go off-shape as soon as the record quest closes; and the records are
+cross-cutting, mapping paths of many quests, so they belong with the other
+cross-cutting records under `solve/changes/`. That directory still counts
+toward the active-state budget, and the 1 MiB and binary rules still apply
+there. The location is one constant of the evidence owner
+(`RELOCATION.RECORDS_DIR` in `scripts/solve/evidence-store.js`), which the
+relocation acceptance checker also reads.
 
 `solve/state/` is derived cache. The derived cache is git-ignored and may be
 rebuilt from the Quest plus event log.
