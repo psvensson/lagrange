@@ -3,27 +3,27 @@
 // startup path, startLagrangeRuntime, which itself composes the production
 // data-directory owner and prepares the original attempt. Nothing in the
 // startup path is replaced. Observation is passive: the native core-entry
-// observer seam, read-only reads of the durable lifecycle rows through the
-// allocation store owner, and public-port probes from outside the runtime.
-import fs from 'node:fs';
+// observer seam, read-only reads of the durable lifecycle rows (a cached
+// sampler as the hint, the store owner's reader as the authority), and
+// bracketed public-port probes from outside the runtime.
 import http from 'node:http';
 import net from 'node:net';
-import Database from 'better-sqlite3';
+import {performance} from 'node:perf_hooks';
 import {startLagrangeRuntime} from '../../src/lagrange-runtime-startup.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
-import {originalSeedAnchor} from
-  '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {BOOTSTRAP_API_ROUTE} from '../../src/bootstrap/bootstrap-api-constants.js';
-import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_COLUMN as COLUMN,
-  REPLICA_LIFECYCLE_TABLE} from '../../src/raft/raft-rs-original-allocation-constants.js';
+import {createRightsSampler, everyRightTransferred, readIssuedDeclaration,
+  readOwnerRights} from './original-allocation-durable-reader.js';
 
 // R27: a solver probe never starts a seed.
 refuseUnderProbe('a fresh seed runtime');
-const [mode, directory, nodeId, portsJson] = process.argv.slice(2);
+const [mode, directory, nodeId, portsJson, host] = process.argv.slice(2);
 const ports = JSON.parse(portsJson);
-const RIGHT_COLUMNS = Object.freeze([COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT]);
+// Bounded sampling: at most one sample per macrotask and per interval. A
+// SUBMITTED window shorter than the interval reads [UNUSED, TRANSFERRED] and
+// fails the witness (a false red, never a false green).
+const MIN_SAMPLE_INTERVAL_MS = 1;
 const ADMISSION_PROBE_INTERVAL_MS = 5;
 const READY_BOUND_MS = 30000;
 const HTTP_OK = 200;
@@ -52,88 +52,60 @@ function observe(work) {
   }
 }
 
-// --- durable original rights, read through the allocation store owner ------
+// --- durable original rights ----------------------------------------------
 
-const durable = {declaration: null, handles: new Map(), sequences: {}, closed: false};
-
-function readOnly(dbPath) {
-  return new Database(dbPath, {readonly: true, fileMustExist: true});
-}
-
-function loadDeclaration() {
-  const anchor = originalSeedAnchor(directory);
-  if (!fs.existsSync(anchor.dbPath)) return null;
-  const db = readOnly(anchor.dbPath);
-  try {
-    const present = db.prepare(`SELECT 1 FROM sqlite_master
-      WHERE type = 'table' AND name = ?`).get(REPLICA_LIFECYCLE_TABLE);
-    if (present === undefined) return null;
-    const row = db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
-      WHERE group_id = ? AND replica_identity = ?`).get(anchor.groupId, anchor.replicaId);
-    // Only an ISSUED allocation is complete; a PREPARING one is still forming.
-    if (row?.[COLUMN.ISSUE] !== STATE.ISSUED) return null;
-    return JSON.parse(row[COLUMN.DECLARATION]);
-  } finally {
-    db.close();
-  }
-}
+const durable = {declaration: null, sampler: null, closed: false,
+  samples: 0, sampleMs: 0, lastSampleAt: -Infinity};
 
 function sampleRights() {
   if (durable.closed) return null;
-  if (durable.declaration === null) {
-    durable.declaration = loadDeclaration();
+  if (durable.sampler === null) {
+    durable.declaration = readIssuedDeclaration(directory);
     if (durable.declaration === null) return null;
+    durable.sampler = createRightsSampler(durable.declaration);
   }
-  const snapshot = {};
-  for (const member of durable.declaration.members) {
-    if (!durable.handles.has(member.replicaId)) {
-      durable.handles.set(member.replicaId, readOnly(member.dbPath));
-    }
-    const row = originalAllocationRow(durable.handles.get(member.replicaId), member);
-    for (const column of RIGHT_COLUMNS) {
-      if (row[column] === null) continue;
-      const key = `${member.replicaId}:${column}`;
-      snapshot[key] = row[column];
-      const sequence = durable.sequences[key] ??= [];
-      if (sequence.at(-1) !== row[column]) sequence.push(row[column]);
-    }
-    snapshot[`${member.replicaId}:native_history_state`] = row.native_history_state;
-  }
+  const started = performance.now();
+  const snapshot = durable.sampler.sample();
+  durable.samples += 1;
+  durable.sampleMs += performance.now() - started;
+  durable.lastSampleAt = started;
   return snapshot;
-}
-
-function allTransferred(snapshot) {
-  if (snapshot === null) return false;
-  return Object.entries(snapshot).every(([key, value]) =>
-    key.endsWith(':native_history_state') || value === STATE.TRANSFERRED);
 }
 
 let polling = true;
 function pollRights() {
   if (!polling) return;
-  observe(sampleRights);
+  if (performance.now() - durable.lastSampleAt >= MIN_SAMPLE_INTERVAL_MS) {
+    observe(sampleRights);
+  }
   setImmediate(pollRights);
 }
 
 function closeDurable() {
   durable.closed = true;
-  for (const db of durable.handles.values()) observe(() => db.close());
-  durable.handles.clear();
+  if (durable.sampler !== null) observe(() => durable.sampler.close());
 }
 
-// --- public admission, observed from outside the runtime ------------------
+// --- public admission, bracketed and observed from outside the runtime ----
 
 // Whether startLagrangeRuntime has returned a runtime yet.
 let returned = false;
 const admission = [];
+
+function recordAccepted(surface, port, before) {
+  const after = everyRightTransferred(observe(sampleRights));
+  // The accept happened between the two samples. after=false is a definite
+  // violation; before=false/after=true is ambiguous and reported as such.
+  admission.push({surface, port, afterReturn: returned, before, after,
+    ambiguous: before === false && after === true});
+}
+
 function probeTcp(port, surface) {
   return new Promise((resolve) => {
-    const socket = net.connect({port, host: '127.0.0.1'});
+    const before = everyRightTransferred(observe(sampleRights));
+    const socket = net.connect({port, host});
     socket.once('connect', () => {
-      // The durable rights at the instant a public listener accepted.
-      const rights = observe(sampleRights);
-      admission.push({surface, port, at: Date.now(), afterReturn: returned,
-        rightsTransferred: allTransferred(rights)});
+      recordAccepted(surface, port, before);
       socket.destroy();
       resolve(true);
     });
@@ -143,15 +115,12 @@ function probeTcp(port, surface) {
 
 function probeReady() {
   return new Promise((resolve) => {
-    const request = http.get({host: '127.0.0.1', port: ports.restApiPort,
+    const before = everyRightTransferred(observe(sampleRights));
+    const request = http.get({host, port: ports.restApiPort,
       path: BOOTSTRAP_API_ROUTE.READYZ}, (response) => {
       response.resume();
       const served = response.statusCode === HTTP_OK;
-      if (served) {
-        const rights = observe(sampleRights);
-        admission.push({surface: 'rest-readyz', port: ports.restApiPort, at: Date.now(),
-          afterReturn: returned, rightsTransferred: allTransferred(rights)});
-      }
+      if (served) recordAccepted('rest-readyz', ports.restApiPort, before);
       resolve(served);
     });
     request.once('error', () => resolve(false));
@@ -186,7 +155,6 @@ setActualCoreEntryObserver((entry) => coreEntries.push({...entry, afterReturn: r
 let startupError = null;
 let cleanupError = null;
 let service = null;
-const startedAt = Date.now();
 pollRights();
 const admissionProbe = probeAdmission();
 let runtime = null;
@@ -194,7 +162,7 @@ try {
   runtime = await startLagrangeRuntime({
     cliArgs: {dataDir: directory},
     configuration: {
-      node: {id: nodeId, address: `localhost:${ports.restApiPort}`,
+      node: {id: nodeId, address: `${host}:${ports.restApiPort}`,
         restApiPort: ports.restApiPort, wsPort: ports.transportWebSocketPort},
       admin: {websocketPort: ports.adminWebSocketPort},
       logging: {level: 'error'},
@@ -211,7 +179,8 @@ try {
 }
 probing = false;
 await admissionProbe;
-const rightsAtSettle = observe(sampleRights);
+const rightsAtSettle = durable.declaration === null ? null :
+  observe(() => readOwnerRights(durable.declaration));
 
 if (runtime !== null) {
   try {
@@ -236,9 +205,11 @@ setActualCoreEntryObserver(null);
 closeDurable();
 
 const report = {kind: 'fresh-seed-startup-settled', mode, pid: process.pid, directory,
-  ports, startedAt, returnedRuntime: runtime !== null, startupError, cleanupError,
-  service, observation: {declaration: durable.declaration, rightSequences: durable.sequences,
-    rightsAtSettle, admission, coreEntries, observerErrors}};
+  ports, host, returnedRuntime: runtime !== null, startupError, cleanupError, service,
+  observation: {declaration: durable.declaration,
+    rightSequences: durable.sampler?.sequences ?? {}, rightsAtSettle, admission,
+    coreEntries, observerErrors,
+    samplingCost: {samples: durable.samples, totalMs: durable.sampleMs}}};
 // The parent records the real outcome before explicitly reaping this process.
 process.once('message', (message) => {
   if (message !== 'exit-after-observation') throw new Error('unexpected parent command');

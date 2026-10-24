@@ -3,48 +3,66 @@
 // transfers its original registration and cluster-identity rights, and reaches
 // normal service through the supported startup path.
 //
-// Entry is the actual public startLagrangeRuntime in genuinely new child
-// processes (test/test-helpers/fresh-seed-activation-public-child.js): it
-// composes the production data-directory owner, the startup membership and
+// Positive receipts enter the actual public startLagrangeRuntime in genuinely
+// new child processes (test/test-helpers/fresh-seed-activation-public-child.js):
+// it composes the production data-directory owner, the startup membership and
 // storage admissions, and prepareOriginalSeedAttempt itself. No grant,
-// admission, phase or owner is replaced. Observation is passive.
+// admission, phase or owner is replaced. Observation is passive. One shared
+// observation (initial start, then a cold restart) feeds every positive test.
 //
-// Receipts (solve/quests/fresh-seed-activation/evidence/receipt.json):
-//   R1 protected activation only for openings admitted under the exact allocation
-//   R2 each original right UNUSED -> SUBMITTED -> TRANSFERRED durably, never reset
-//   R3 public admission closed until the handoff completes, open after
-//   R4 a write and a read succeed through public admission
-//   R5 restart on the same durable data reaches service or is held typed
-// R5 keeps the restart obligation visible. It is not a recovery claim: the
-// retained two-start handoff stays with retained-seed-original-handoff and
-// the final cutover acceptance.
-import {test} from 'node:test';
+// Engaged negatives (review C2) build BootstrapService through the shared
+// owner fixture createVirginSeedBootstrapService with the production
+// data-directory owner. They discriminate an ordered decision from a mutant
+// that deletes the continuation throw, and must hold on every head.
+//
+// Test names are the receipt selectors of
+// scripts/quest-evidence/fresh-seed-activation.js: "R<n> ..." per receipt.
+// R5 keeps the restart obligation visible. It is not a recovery claim.
+import {after, test} from 'node:test';
 import assert from 'node:assert/strict';
 import {fork} from 'node:child_process';
 import fs from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
-import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
+import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
+import {originalSeedAnchor} from
+  '../../src/bootstrap/seed-original-allocation-declaration.js';
+import {cleanupTestEnvironment, createVirginSeedBootstrapService,
+  initializeTestEnvironment} from '../integration/helpers/cluster-test-helpers.js';
+import {RIGHT_COLUMNS, declaredRightKeys, readIssuedDeclaration, readOwnerRights} from
+  '../test-helpers/original-allocation-durable-reader.js';
 
 const CHILD = new URL('../test-helpers/fresh-seed-activation-public-child.js', import.meta.url);
 const NODE_ID = '550e8400-e29b-41d4-a716-446655449971';
-const TEST_TIMEOUT_MS = 180000;
-const RIGHT_COLUMNS = Object.freeze([COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT]);
+const NEGATIVE_NODE_ID = '550e8400-e29b-41d4-a716-446655449972';
+// The configured host: the runtime's node.address and every probe target.
+const HOST = '127.0.0.1';
+const TEST_TIMEOUT_MS = 240000;
 const EXPECTED_SEQUENCE = Object.freeze([STATE.UNUSED, STATE.SUBMITTED, STATE.TRANSFERRED]);
 const NATIVE_OPEN = 'create_node';
 const CAMPAIGN = 'campaign';
+const READY_SURFACE = 'rest-readyz';
 const allocator = createPortAllocator(import.meta.url);
+const hold = (error) => error?.code === STATE.HOLD;
 
-function childAttempt(t, mode, directory, ports) {
-  const child = fork(CHILD, [mode, directory, NODE_ID, JSON.stringify(ports)],
+// --- the shared positive observation ---------------------------------------
+
+const retained = [];
+after(() => {
+  for (const {directory, passed} of retained) {
+    if (passed()) fs.rmSync(directory, {recursive: true, force: true});
+  }
+});
+
+function childAttempt(mode, directory, ports) {
+  const child = fork(CHILD, [mode, directory, NODE_ID, JSON.stringify(ports), HOST],
     {execArgv: [], stdio: ['ignore', 'pipe', 'pipe', 'ipc']});
   const outputPath = path.join(directory, `${mode}-child-output.log`);
   const output = fs.createWriteStream(outputPath);
@@ -58,169 +76,246 @@ function childAttempt(t, mode, directory, ports) {
     child.once('message', resolve);
     child.once('close', () => reject(new Error(`fresh-seed child ${mode} exited before report`)));
   });
-  let outputReported = false;
-  const reportOutput = () => {
-    if (outputReported) return;
-    outputReported = true;
-    const raw = fs.readFileSync(outputPath, 'utf8');
-    if (raw) t.diagnostic(raw);
-  };
-  t.after(async () => {
-    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
-    await closed;
-    reportOutput();
-  });
-  return {child, closed, report, reportOutput};
+  return {child, closed, report, outputPath};
 }
 
-async function finishAttempt(t, attempt) {
-  const report = await attempt.report;
-  assert.equal(report.kind, 'fresh-seed-startup-settled');
-  assert.notEqual(report.pid, process.pid);
-  if (attempt.child.connected) attempt.child.send('exit-after-observation');
-  assert.deepEqual(await attempt.closed, {code: 0, signal: null});
-  t.diagnostic(JSON.stringify({mode: report.mode, returnedRuntime: report.returnedRuntime,
-    startupError: report.startupError, cleanupError: report.cleanupError,
-    service: report.service, rightSequences: report.observation.rightSequences,
-    admission: report.observation.admission,
-    observerErrors: report.observation.observerErrors}));
-  attempt.reportOutput();
-  return report;
-}
-
-function holdLabel(error) {
-  if (error === null) return 'none';
-  return `${error.code ?? error.name}/${error.reason ?? error.message}`;
-}
-
-// Durable rights after the child released the directory, read through the
-// same allocation store owner the runtime uses.
-function readDurableRights(declaration) {
-  const owner = acquireDataDirectoryProcessOwner(declaration.dataDir);
+async function finishAttempt(attempt) {
   try {
-    const rights = {};
-    for (const member of declaration.members) {
-      const db = new Database(member.dbPath, {readonly: true, fileMustExist: true});
-      try {
-        const row = originalAllocationRow(db, member);
-        rights[member.replicaId] = {native: row.native_history_state,
-          ...Object.fromEntries(RIGHT_COLUMNS.filter((column) => row[column] !== null)
-            .map((column) => [column, row[column]]))};
-      } finally {
-        db.close();
-      }
+    const report = await attempt.report;
+    if (attempt.child.connected) attempt.child.send('exit-after-observation');
+    return {report, exit: await attempt.closed, outputPath: attempt.outputPath};
+  } finally {
+    if (attempt.child.exitCode === null && attempt.child.signalCode === null) {
+      attempt.child.kill('SIGKILL');
     }
-    return rights;
+    await attempt.closed;
+  }
+}
+
+function readDurableRights(declaration, directory) {
+  const owner = acquireDataDirectoryProcessOwner(directory);
+  try {
+    return readOwnerRights(declaration);
   } finally {
     owner.release();
   }
 }
 
-// R1: every campaign before startup returned is on a declared original group,
-// after that group's single native opening; every declared member is opened.
-function assertProtectedActivation(report) {
-  const {declaration, coreEntries} = report.observation;
-  const declaredGroups = new Set(declaration.members.map(({groupId}) => groupId));
-  const startup = coreEntries.filter((entry) => entry.afterReturn === false);
-  const opened = new Set();
-  const campaigned = new Set();
-  for (const entry of startup) {
-    if (entry.operation === NATIVE_OPEN) opened.add(entry.groupId);
-    if (entry.operation !== CAMPAIGN) continue;
-    assert.ok(declaredGroups.has(entry.groupId),
-      `startup campaigned ${entry.groupId}, which the exact allocation never admitted`);
-    assert.ok(opened.has(entry.groupId),
-      `${entry.groupId} campaigned before its admitted original opening`);
-    campaigned.add(entry.groupId);
-  }
-  assert.deepEqual([...campaigned].sort(), [...declaredGroups].sort(),
-    'every admitted original group activates; no other group activates during startup');
+let observation = null;
+function observeFreshSeed() {
+  observation ??= (async () => {
+    const directory = fs.mkdtempSync(path.join(tmpdir(), 'fresh-seed-activation-'));
+    const outcomes = new Set();
+    retained.push({directory, passed: () => outcomes.size === 0});
+    const ports = allocator.getListenerPorts();
+    const first = await finishAttempt(childAttempt('initial', directory, ports));
+    const declaration = first.report.observation.declaration;
+    const transferred = declaration && first.report.returnedRuntime ?
+      readDurableRights(declaration, directory) : null;
+    // The restart runs only on data the first start served from.
+    const second = transferred === null ? null :
+      await finishAttempt(childAttempt('restart', directory, ports));
+    const afterRestart = second === null ? null : readDurableRights(declaration, directory);
+    return {directory, outcomes, first, second, declaration, transferred, afterRestart};
+  })();
+  return observation;
 }
 
-// R2: monotonic durable consumption observed from the live process.
-function assertRightSequences(report) {
-  const {declaration, rightSequences} = report.observation;
-  const expectedKeys = declaration.members.flatMap((member) => [
-    `${member.replicaId}:${COLUMN.SERVICE_RIGHT}`,
-    ...(member.replicaId === declaration.anchorReplicaId ?
-      [`${member.replicaId}:${COLUMN.IDENTITY_RIGHT}`] : []),
-  ]).sort();
-  assert.deepEqual(Object.keys(rightSequences).sort(), expectedKeys,
-    'every declared SERVICES birth right and the anchor identity right is observed');
-  for (const [key, sequence] of Object.entries(rightSequences)) {
-    assert.deepEqual(sequence, EXPECTED_SEQUENCE,
-      `${key} must move UNUSED -> SUBMITTED -> TRANSFERRED exactly once, never reset`);
-  }
+function holdLabel(error) {
+  if (error === null || error === undefined) return 'none';
+  return `${error.code ?? error.name}/${error.reason ?? error.message}`;
 }
 
-// R3: no public surface acts before every right is TRANSFERRED; it acts after.
-function assertAdmissionFence(report) {
-  const {admission} = report.observation;
-  for (const sample of admission) {
-    assert.equal(sample.rightsTransferred, true,
-      `${sample.surface} admitted a public request before the handoff completed`);
+async function servedObservation(t, receipt) {
+  const observed = await observeFreshSeed();
+  observed.outcomes.add(receipt);
+  const {report, exit, outputPath} = observed.first;
+  t.diagnostic(JSON.stringify({receipt, returnedRuntime: report.returnedRuntime,
+    startupError: report.startupError, cleanupError: report.cleanupError,
+    service: report.service, rightSequences: report.observation.rightSequences,
+    admission: report.observation.admission, samplingCost: report.observation.samplingCost,
+    observerErrors: report.observation.observerErrors, retained: observed.directory}));
+  if (!report.returnedRuntime && !observed.outputReported) {
+    observed.outputReported = true;
+    t.diagnostic(fs.readFileSync(outputPath, 'utf8'));
   }
-  assert.equal(report.service.ready, true, 'public readiness opens after the handoff');
-  assert.ok(admission.some((sample) => sample.afterReturn && sample.surface === 'rest-readyz'));
+  assert.equal(report.kind, 'fresh-seed-startup-settled');
+  assert.notEqual(report.pid, process.pid);
+  assert.deepEqual(exit, {code: 0, signal: null});
+  assert.equal(report.returnedRuntime, true,
+    'a legitimately admitted fresh seed must reach service; startup refused ' +
+    `${holdLabel(report.startupError)}`);
+  assert.equal(report.cleanupError, null);
+  assert.deepEqual(report.observation.observerErrors, []);
+  assert.ok(observed.declaration, 'the live issuer prepared one exact allocation');
+  return observed;
 }
 
-test('fresh seed completes protected activation, transfers its original rights ' +
-  'and serves through the supported startup path', {timeout: TEST_TIMEOUT_MS}, async (t) => {
-  const directory = fs.mkdtempSync(path.join(tmpdir(), 'fresh-seed-activation-'));
-  const ports = allocator.getListenerPorts();
-  let passed = false;
-  t.after(() => {
-    // A failed attempt retains its child output and native artifacts.
-    if (passed) fs.rmSync(directory, {recursive: true, force: true});
-    else t.diagnostic(`retained fresh-seed artifacts: ${directory}`);
+function pass(observed, receipt) {
+  observed.outcomes.delete(receipt);
+}
+
+test('R1 protected activation happens only for openings admitted under the exact allocation',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const observed = await servedObservation(t, 'R1');
+    const {declaration, first: {report}} = observed;
+    const declaredGroups = [...new Set(declaration.members.map(({groupId}) => groupId))].sort();
+    const startup = report.observation.coreEntries.filter((entry) => !entry.afterReturn);
+    const opened = new Set();
+    const campaigned = new Set();
+    for (const entry of startup) {
+      if (entry.operation === NATIVE_OPEN) opened.add(entry.groupId);
+      if (entry.operation !== CAMPAIGN) continue;
+      assert.ok(declaredGroups.includes(entry.groupId),
+        `startup campaigned ${entry.groupId}, which the exact allocation never admitted`);
+      assert.ok(opened.has(entry.groupId),
+        `${entry.groupId} campaigned before its admitted original opening`);
+      campaigned.add(entry.groupId);
+    }
+    assert.deepEqual([...opened].sort(), declaredGroups,
+      'startup natively opens exactly the declared original groups');
+    assert.deepEqual([...campaigned].sort(), declaredGroups,
+      'every admitted original group activates; no other group activates during startup');
+    pass(observed, 'R1');
   });
 
-  const first = await finishAttempt(t, childAttempt(t, 'initial', directory, ports));
-  assert.equal(first.returnedRuntime, true,
-    'a legitimately admitted fresh seed must reach service; startup refused ' +
-    `${holdLabel(first.startupError)}`);
-  assert.equal(first.cleanupError, null);
-  assert.deepEqual(first.observation.observerErrors, []);
-  assert.ok(first.observation.declaration, 'the live issuer prepared one exact allocation');
-
-  assertProtectedActivation(first);
-  assertRightSequences(first);
-  assertAdmissionFence(first);
-
-  // R4: a write and a read through public admission.
-  assert.equal(first.service.error, undefined,
-    `public write/read failed: ${JSON.stringify(first.service.error)}`);
-  assert.equal(first.service.write.affectedRows, 1);
-  assert.deepEqual(first.service.read.rows,
-    [{id: 'row-1', value: 'written-before-restart'}]);
-
-  const declaration = {...first.observation.declaration, dataDir: directory};
-  const transferred = readDurableRights(declaration);
-  for (const [replicaId, rights] of Object.entries(transferred)) {
-    assert.equal(rights.native, HISTORY.ESTABLISHED, `${replicaId} established`);
-    for (const column of RIGHT_COLUMNS) {
-      if (column in rights) {
-        assert.equal(rights[column], STATE.TRANSFERRED, `${replicaId} ${column} durable`);
+test('R2 each original right moves UNUSED -> SUBMITTED -> TRANSFERRED durably and never resets',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const observed = await servedObservation(t, 'R2');
+    const {declaration, transferred, first: {report}} = observed;
+    const sequences = report.observation.rightSequences;
+    assert.deepEqual(Object.keys(sequences).sort(), declaredRightKeys(declaration),
+      'every declared SERVICES birth right and the anchor identity right is observed');
+    for (const [key, sequence] of Object.entries(sequences)) {
+      assert.deepEqual(sequence, EXPECTED_SEQUENCE,
+        `${key} must move UNUSED -> SUBMITTED -> TRANSFERRED exactly once, never reset`);
+    }
+    assert.deepEqual(report.observation.rightsAtSettle, transferred,
+      'the owner read at settle equals the durable read after the process released custody');
+    for (const [replicaId, rights] of Object.entries(transferred)) {
+      assert.equal(rights.native, HISTORY.ESTABLISHED, `${replicaId} established`);
+      for (const column of RIGHT_COLUMNS) {
+        if (column in rights) {
+          assert.equal(rights[column], STATE.TRANSFERRED, `${replicaId} ${column} durable`);
+        }
       }
     }
-  }
+    pass(observed, 'R2');
+  });
 
-  // R5: same durable data, genuinely new process. Service again through the
-  // retained path, or a typed hold; either way no right is reset or re-spent.
-  const second = await finishAttempt(t, childAttempt(t, 'restart', directory, ports));
-  assert.notEqual(second.pid, first.pid, 'restart enters in a genuinely cold process');
-  assert.equal(second.cleanupError, null);
-  assert.deepEqual(second.observation.observerErrors, []);
-  if (second.returnedRuntime) {
-    assert.deepEqual(second.service.read.rows,
-      [{id: 'row-1', value: 'written-before-restart'}],
-      'the restarted seed serves the pre-restart write');
-  } else {
-    assert.equal(second.startupError?.code, STATE.HOLD,
-      `an unserved restart must be an owner-named hold, got ${holdLabel(second.startupError)}`);
-    t.diagnostic(`restart obligation held: ${holdLabel(second.startupError)}`);
+test('R3 public admission is closed until the handoff completes and open after',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const observed = await servedObservation(t, 'R3');
+    const {report} = observed.first;
+    const samples = report.observation.admission;
+    for (const sample of samples) {
+      assert.equal(sample.after, true,
+        `${sample.surface} admitted a public request before the handoff completed`);
+    }
+    const ambiguous = samples.filter((sample) => sample.ambiguous);
+    if (ambiguous.length > 0) t.diagnostic(`ambiguous admission brackets: ${JSON.stringify(ambiguous)}`);
+    assert.equal(report.service.ready, true, 'public readiness opens after the handoff');
+    assert.ok(samples.some((sample) => sample.afterReturn && sample.surface === READY_SURFACE));
+    pass(observed, 'R3');
+  });
+
+test('R4 a write and a read succeed through public admission',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const observed = await servedObservation(t, 'R4');
+    const {service} = observed.first.report;
+    assert.equal(service.error, undefined, `public write/read failed: ${JSON.stringify(service.error)}`);
+    assert.equal(service.write.affectedRows, 1);
+    assert.deepEqual(service.read.rows, [{id: 'row-1', value: 'written-before-restart'}]);
+    pass(observed, 'R4');
+  });
+
+test('R5 a restart on the same durable data serves or is held typed and resets no right',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const observed = await servedObservation(t, 'R5');
+    const {report, exit} = observed.second;
+    t.diagnostic(JSON.stringify({restart: report.returnedRuntime ? 'served' : 'held',
+      startupError: report.startupError, service: report.service}));
+    assert.deepEqual(exit, {code: 0, signal: null});
+    assert.notEqual(report.pid, observed.first.report.pid, 'restart enters a cold process');
+    assert.equal(report.cleanupError, null);
+    assert.deepEqual(report.observation.observerErrors, []);
+    if (report.returnedRuntime) {
+      assert.deepEqual(report.service.read.rows,
+        [{id: 'row-1', value: 'written-before-restart'}],
+        'the restarted seed serves the pre-restart write');
+    } else {
+      assert.ok(hold(report.startupError),
+        `an unserved restart must be an owner-named hold, got ${holdLabel(report.startupError)}`);
+    }
+    assert.deepEqual(observed.afterRestart, observed.transferred,
+      'a restart never resets, re-arms or re-spends an original right');
+    pass(observed, 'R5');
+  });
+
+// --- engaged negatives (in-process, shared owner fixture) ------------------
+
+async function negativeSeed(t, {prepare}) {
+  const dataDir = fs.mkdtempSync(path.join(tmpdir(), 'fresh-seed-negative-'));
+  const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
+  initializeTestEnvironment({nodeId: NEGATIVE_NODE_ID, storage: {dataDir}});
+  const service = await createVirginSeedBootstrapService({nodeId: NEGATIVE_NODE_ID,
+    nodeAddress: `http://${HOST}:18091`, wsPort: allocator.getListenerPorts().transportWebSocketPort,
+    dataDir, dataDirectoryProcessOwner: directoryOwner});
+  t.after(async () => {
+    await service.shutdown();
+    await cleanupTestEnvironment();
+    directoryOwner.release();
+    fs.rmSync(dataDir, {recursive: true, force: true});
+  });
+  if (prepare) {
+    await service.prepareOriginalSeedAttempt();
+    await service.seedInfrastructurePhase.phaseInfrastructure();
   }
-  assert.deepEqual(readDurableRights(declaration), transferred,
-    'a restart never resets, re-arms or re-spends an original right');
-  passed = true;
+  return {dataDir, service};
+}
+
+function continuationEntries(service) {
+  return [
+    ['startDeferredBootstrapReplicaElections', () =>
+      service.seedPartitionsPhase.startDeferredBootstrapReplicaElections()],
+    ['phaseRegistration', () => service.seedRegistrationPhase.phaseRegistration()],
+    ['ensureSystemTableWriter', () => service.seedRegistrationPhase.ensureSystemTableWriter()],
+    ...admissionEntries(service),
+  ];
+}
+
+function admissionEntries(service) {
+  return [
+    ['startWebSocketServer', () => service.startWebSocketServer()],
+    ['openExternalTransportAdmission', () => service.openExternalTransportAdmission()],
+    ['completeSuccessfulBootstrap', () => service.completeSuccessfulBootstrap()],
+  ];
+}
+
+test('R1 negative: without a live original attempt (null opening mode) every continuation ' +
+  'entry holds', async (t) => {
+  const {dataDir, service} = await negativeSeed(t, {prepare: false});
+  for (const [name, invoke] of continuationEntries(service)) {
+    await assert.rejects(async () => invoke(), (error) =>
+      hold(error) && error.reason === REASON.AUTHORITY, name);
+  }
+  assert.equal(fs.existsSync(originalSeedAnchor(dataDir).dbPath), false,
+    'no original allocation is issued by any continuation entry');
+  assert.equal(service.messageRouter, null);
 });
+
+test('R3 negative: with original rights untransferred every public admission entry holds',
+  async (t) => {
+    const {dataDir, service} = await negativeSeed(t, {prepare: true});
+    const declaration = readIssuedDeclaration(dataDir);
+    const before = readOwnerRights(declaration);
+    assert.ok(Object.values(before).every((rights) =>
+      rights[COLUMN.SERVICE_RIGHT] === STATE.UNUSED), 'the live attempt holds UNUSED rights');
+    for (const [name, invoke] of admissionEntries(service)) {
+      await assert.rejects(async () => invoke(), hold, name);
+      assert.deepEqual(readOwnerRights(declaration), before, `${name} preserves every right`);
+      assert.equal(service.messageRouter.server, null, `${name} opens no listener`);
+      assert.equal(service.messageRouter.isExternalAdmissionEnabled(), false,
+        `${name} opens no external admission`);
+    }
+  });

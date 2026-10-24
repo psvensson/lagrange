@@ -28,7 +28,7 @@
   "censusSize": 2468,
   "digest": "fnv1a32-ecdc514c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b8b53c49",
+  "observationDigest": "fnv1a32-515d28b6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2951,10 +2951,15 @@
     },
     "test/bootstrap/fresh-seed-activation.integration.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/storage/data-directory-process-owner.js",
-        "test/test-helpers/fresh-seed-activation-public-child.js"
+        "test/integration/helpers/cluster-test-helpers.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js",
+        "test/test-helpers/original-allocation-durable-reader.js"
       ]
     },
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": {
