@@ -14,7 +14,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
-import {resumeFixtureParticipantAdmission} from
+import {CDC_TABLE, resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
   '../test-helpers/acknowledging-cdc-subscriber.js';
@@ -79,25 +79,12 @@ const partitionIdArbitrary = fc.string({minLength: 1, maxLength: 20})
   .map((s) => `partition-${s}`);
 
 /**
- * SQL reserved keywords to avoid in table names.
+ * The table: one whose committed writes owe CDC. The CDC policy owner records
+ * an obligation only for the internally propagated system tables (owner
+ * decision D2; a user table owes none, see partition-cdc-obligation O20), so
+ * the generator properties run on the fixture's CDC-carrying table.
  */
-const SQL_RESERVED_KEYWORDS = new Set([
-  'add', 'all', 'alter', 'and', 'as', 'asc', 'between', 'by', 'case', 'check',
-  'column', 'constraint', 'create', 'cross', 'current', 'default', 'delete',
-  'desc', 'distinct', 'drop', 'else', 'end', 'escape', 'except', 'exists',
-  'for', 'foreign', 'from', 'full', 'group', 'having', 'if', 'in', 'index',
-  'inner', 'insert', 'intersect', 'into', 'is', 'join', 'key', 'left', 'like',
-  'limit', 'not', 'null', 'on', 'or', 'order', 'outer', 'primary', 'references',
-  'right', 'select', 'set', 'table', 'then', 'to', 'union', 'unique', 'update',
-  'using', 'values', 'when', 'where', 'with',
-]);
-
-/**
- * Generate a random table name.
- */
-const tableNameArbitrary = fc.string({minLength: 1, maxLength: 15})
-  .filter((s) => /^[a-z_][a-z0-9_]*$/i.test(s))
-  .filter((s) => !SQL_RESERVED_KEYWORDS.has(s.toLowerCase()));
+const tableNameArbitrary = fc.constant(CDC_TABLE);
 
 /**
  * Generate random data for insert/update operations.

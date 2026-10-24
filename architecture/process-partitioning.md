@@ -166,16 +166,13 @@ interval plus one window. A longer span is still an average over at least
 one window. For a merge that is the stated criterion, so it is safe; for a
 split it can only delay a split on a recent burst.
 
-The write counter is the CDC pipeline's generated-event counter. Tables on
-the default policy count every committed write, whether or not anything
-subscribes. A table whose policy sets `externalCdcAllowed: false` generates
-no CDC events while it has no subscriber, so its counter stays at zero and
-it reads a valid **0 queries per minute** forever: it can never split on
-traffic, and the traffic criterion of a merge always holds for it, so it
-splits and merges on size alone. The merge-under-load scenario's
-configuration opts out this way, so its traffic gate always passes. Counting
-committed writes at the partition apply path instead of the CDC counter is
-recorded as follow-up work.
+The write counter is the partition's committed-write counter
+(`src/partition/partition-write-traffic.js`). The apply path increments it
+after a committed entry's application transaction commits: one per ordinary
+statement and one per applied operation of a committed participant decision,
+on every replica. It does not depend on CDC: a user table records no CDC
+obligation (CDC owner decision D2), and its writes still count as traffic, so
+it can split on traffic and a merge sees its real rate.
 
 Until such a span exists, the partition has **no traffic signal** (not zero
 traffic). That is the case after it is created, after a leader change or a

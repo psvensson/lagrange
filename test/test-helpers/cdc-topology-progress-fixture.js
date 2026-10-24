@@ -17,7 +17,8 @@ import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {createDurableSourceMessageGroupService, createMessageGroupServiceRow} from
   '../topology/cdc-group-propagation-service-harness.js';
-import {TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll, startLeader} from
+import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
+  startLeader} from
   './participant-transaction-fixture.js';
 
 const SOURCE_GROUP = 'progress-group-a';
@@ -106,7 +107,7 @@ function buildSubscriber(f, index) {
 
 async function topologyProgressFixture(t) {
   const clock = new VirtualTimeSource({startMs: 100});
-  const {leader, proposed} = await startLeader({timeSource: clock});
+  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
     sourceCalls: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,

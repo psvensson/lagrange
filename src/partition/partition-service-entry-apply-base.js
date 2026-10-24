@@ -43,6 +43,7 @@ import {
   isCdcCommandType,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
+import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -685,6 +686,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         recordCommittedStatementCdc(this, {command, index, term, afterCommit},
           {entryKey, result: info});
         advancePartitionWriteGeneration(this.db);
+        recordCommittedWriteTraffic(this, afterCommit, 1);
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
         }

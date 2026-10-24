@@ -90,6 +90,7 @@ import {
   PARTICIPANT_TRANSACTION_REFUSAL_CAUSE as CAUSE,
   PARTICIPANT_TRANSACTION_STATE as STATE,
 } from './partition-participant-transaction-constants.js';
+import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 
 // The private value that ends a PREPARE's dry run: thrown inside its
 // savepoint, so better-sqlite3 rolls every carried operation back.
@@ -434,6 +435,7 @@ function commitPrepared(service, committed, row) {
   if (operations.length > 0) {
     advancePartitionWriteGeneration(service.db);
   }
+  recordCommittedWriteTraffic(service, committed.afterCommit, operations.length);
   answerProposer(service, committed, {success: true, results: applied.results,
     ...rowAnswer(service, committed.command)});
   scheduleCommitEffects(service, committed, operations, applied.events);

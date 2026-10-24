@@ -13,6 +13,7 @@ import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.j
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
+import {PartitionWriteTraffic} from './partition-write-traffic.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -79,10 +80,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
-    this.externalCdcAllowed =
-      typeof options.externalCdcAllowed === PARTITION_SERVICE_LITERAL.BOOLEAN ?
-        options.externalCdcAllowed :
-        null;
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
@@ -162,6 +159,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.cdcReplayRetryDepth = 0;
     this.cdcPipelineMetrics =
       options.cdcPipelineMetrics || new CDCPipelineMetrics();
+    // Committed write traffic, the managed split/merge QPM signal (not CDC).
+    this.writeTraffic = new PartitionWriteTraffic();
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     this.pendingCDCEventDeliveries = /* @__PURE__ */ new Set();
     this.proposalQueue = new ProposalQueue({timeSource: this.timeSource});

@@ -13,6 +13,7 @@ import {
 } from './partition-write-kernel.js';
 import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
 import {committedStatementEntryKey} from './partition-committed-statement-outcome.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -89,7 +90,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   bufferCDCEventWithoutSubscribers(cdcEvent, tableName) {
-    if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
+    if (!isTableCdcObligationRecorded(tableName)) {
       return;
     }
     const buffered = this.cdcEventBuffer.buffer(cdcEvent);
@@ -118,7 +119,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   cdcEventHasNoAudience(tableName) {
     return this.cdcSubscribers.size === 0 &&
-      !this.shouldBufferCdcWithoutSubscribers(tableName);
+      !isTableCdcObligationRecorded(tableName);
   }
   /**
    * Generate a CDC event for a write operation.
@@ -507,34 +508,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   parseValue(val) {
     return this.syncCDCGeneratorDependencies().parseValue(val);
-  }
-  /**
-   * Resolve whether late-subscriber external CDC is enabled for a table.
-   * Control-plane propagation tables remain driven by the canonical CDC
-   * policy matrix; user tables may override external CDC via tables.table_policies.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when external CDC buffering should remain enabled.
-   * @private
-   */
-  /**
-   * Resolve whether late-subscriber external CDC is enabled for a table.
-   * Delegates to partition-cdc-delivery.js.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when external CDC buffering should remain enabled.
-   * @private
-   */
-  isExternalCdcAllowedForTable(tableName) {
-    return this.cdcDelivery.isExternalCdcAllowedForTable(tableName);
-  }
-  /**
-   * Determine whether CDC events should be buffered when there are no
-   * subscribers yet. Delegates to partition-cdc-delivery.js.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when buffering should stay enabled.
-   * @private
-   */
-  shouldBufferCdcWithoutSubscribers(tableName) {
-    return this.cdcDelivery.shouldBufferCdcWithoutSubscribers(tableName);
   }
   /**
    * Allocate next CDC event sequence number.
