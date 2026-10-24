@@ -51,7 +51,6 @@ function runIsolatedEffects(effects) {
 function applyCommittedEntryTransaction({store, groupId, entry, confState,
   membershipGenerationIndex, applyCommittedEntry, admitted = false,
   committedMembershipContext = null, applyCommittedMembershipContext = null,
-  committedMembershipApplication = null,
   runApplySlice = null}) {
   if (committedMembershipContext !== null &&
       typeof applyCommittedMembershipContext !== 'function') {
@@ -70,8 +69,7 @@ function applyCommittedEntryTransaction({store, groupId, entry, confState,
     if (committedMembershipContext !== null) {
       const appliedMembership =
         applyCommittedMembershipContext(committedMembershipContext,
-          Object.freeze({index: entry.index, term: entry.term}),
-          committedMembershipApplication);
+          Object.freeze({index: entry.index, term: entry.term}));
       if (appliedMembership && typeof appliedMembership.then === 'function') {
         throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
       }
