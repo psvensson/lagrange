@@ -1,0 +1,198 @@
+{
+ "windowCapacityConstant": 256,
+ "T1_today_one_earlier_M600": {
+  "earlierSubscribers": 1,
+  "eventsBetweenHydrationAndSubscribe": 600,
+  "hydrationPosition": {
+   "appliedIndex": 24,
+   "ledgerMaxLogIndex": 22,
+   "rows": 20
+  },
+  "ledgerBeforeB": {
+   "owed": 0,
+   "delivered": 620
+  },
+  "windowEntriesAtHandshake": 256,
+  "handshakeB": {
+   "mode": "sliding_window",
+   "slidingWindowEventsReplayed": 256
+  },
+  "bCalls": 256,
+  "bReplayOnly": 256,
+  "bDuplicatesOfImage": 0,
+  "gap": {
+   "owedAfterH": 600,
+   "receivedAfterH": 256,
+   "missing": 344,
+   "firstMissingLogIndex": 25,
+   "lastMissingLogIndex": 368
+  },
+  "effectOnB": {
+   "truthRows": 618,
+   "viewRows": 276,
+   "rowsDiverging": 344
+  },
+  "ledgerAfter": {
+   "owed": 0,
+   "delivered": 620
+  }
+ },
+ "T2_today_three_earlier_M200": {
+  "earlierSubscribers": 3,
+  "eventsBetweenHydrationAndSubscribe": 200,
+  "hydrationPosition": {
+   "appliedIndex": 24,
+   "ledgerMaxLogIndex": 22,
+   "rows": 20
+  },
+  "ledgerBeforeB": {
+   "owed": 0,
+   "delivered": 220
+  },
+  "windowEntriesAtHandshake": 256,
+  "handshakeB": {
+   "mode": "sliding_window",
+   "slidingWindowEventsReplayed": 86
+  },
+  "bCalls": 86,
+  "bReplayOnly": 86,
+  "bDuplicatesOfImage": 0,
+  "gap": {
+   "owedAfterH": 200,
+   "receivedAfterH": 86,
+   "missing": 114,
+   "firstMissingLogIndex": 25,
+   "lastMissingLogIndex": 138
+  },
+  "effectOnB": {
+   "truthRows": 218,
+   "viewRows": 106,
+   "rowsDiverging": 114
+  },
+  "ledgerAfter": {
+   "owed": 0,
+   "delivered": 220
+  }
+ },
+ "T3_today_one_earlier_M100": {
+  "earlierSubscribers": 1,
+  "eventsBetweenHydrationAndSubscribe": 100,
+  "hydrationPosition": {
+   "appliedIndex": 24,
+   "ledgerMaxLogIndex": 22,
+   "rows": 20
+  },
+  "ledgerBeforeB": {
+   "owed": 0,
+   "delivered": 120
+  },
+  "windowEntriesAtHandshake": 120,
+  "handshakeB": {
+   "mode": "sliding_window",
+   "slidingWindowEventsReplayed": 120
+  },
+  "bCalls": 120,
+  "bReplayOnly": 120,
+  "bDuplicatesOfImage": 20,
+  "gap": {
+   "owedAfterH": 100,
+   "receivedAfterH": 100,
+   "missing": 0,
+   "firstMissingLogIndex": null,
+   "lastMissingLogIndex": null
+  },
+  "effectOnB": {
+   "truthRows": 118,
+   "viewRows": 118,
+   "rowsDiverging": 0
+  },
+  "ledgerAfter": {
+   "owed": 0,
+   "delivered": 120
+  }
+ },
+ "S1_subscribe_first_one_earlier_M600": {
+  "earlierSubscribers": 1,
+  "eventsAfterHydration": 600,
+  "pendingAtRegistration": 1,
+  "hydrationPosition": {
+   "appliedIndex": 31,
+   "ledgerMaxLogIndex": 31
+  },
+  "handshakeB": {
+   "mode": "sliding_window",
+   "slidingWindowEventsReplayed": 21
+  },
+  "bCalls": 627,
+  "bAtOrBelowH": 27,
+  "gap": {
+   "owedAfterH": 600,
+   "receivedAfterH": 600,
+   "missing": 0,
+   "firstMissingLogIndex": null,
+   "lastMissingLogIndex": null
+  },
+  "effectOnB": {
+   "truthRows": 618,
+   "viewRows": 618,
+   "rowsDiverging": 0
+  },
+  "sampleDeleteEvent": {
+   "key": "entry:live-del-3",
+   "logIndex": 32,
+   "replayOnly": false,
+   "operation": "DELETE",
+   "data": {
+    "id": "r-3",
+    "updated_at_hlc": "5000-14-tx1-v3-r1"
+   },
+   "oldData": null
+  },
+  "ledgerAfter": {
+   "owed": 0,
+   "delivered": 627
+  }
+ },
+ "S2_subscribe_first_three_earlier_M600": {
+  "earlierSubscribers": 3,
+  "eventsAfterHydration": 600,
+  "pendingAtRegistration": 1,
+  "hydrationPosition": {
+   "appliedIndex": 31,
+   "ledgerMaxLogIndex": 31
+  },
+  "handshakeB": {
+   "mode": "sliding_window",
+   "slidingWindowEventsReplayed": 21
+  },
+  "bCalls": 627,
+  "bAtOrBelowH": 27,
+  "gap": {
+   "owedAfterH": 600,
+   "receivedAfterH": 600,
+   "missing": 0,
+   "firstMissingLogIndex": null,
+   "lastMissingLogIndex": null
+  },
+  "effectOnB": {
+   "truthRows": 618,
+   "viewRows": 618,
+   "rowsDiverging": 0
+  },
+  "sampleDeleteEvent": {
+   "key": "entry:live-del-3",
+   "logIndex": 32,
+   "replayOnly": false,
+   "operation": "DELETE",
+   "data": {
+    "id": "r-3",
+    "updated_at_hlc": "5000-14-tx1-v3-r1"
+   },
+   "oldData": null
+  },
+  "ledgerAfter": {
+   "owed": 0,
+   "delivered": 627
+  }
+ }
+}
