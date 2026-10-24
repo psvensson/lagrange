@@ -610,7 +610,9 @@ class PgWireProtocolHandler {
    * engine executed (never from the query text, so a statement the engine
    * refused changes no state). Sends RowDescription + DataRow* +
    * CommandComplete on success, EmptyQueryResponse when the text held no
-   * statement, or ErrorResponse on failure.
+   * statement, or ErrorResponse on failure. A result with no taggable
+   * statement kind is answered with the PGWIRE_UNKNOWN_STATEMENT_TYPE
+   * ErrorResponse before any RowDescription or DataRow frame is written.
    *
    * @param {string} query - SQL query text.
    * @param {unknown[]} params - Bind parameters.
@@ -647,6 +649,10 @@ class PgWireProtocolHandler {
         throw error;
       }
 
+      // The tag is derived before any row frame is written: a result the
+      // wire cannot tag is refused whole (XX000), never rows then an error.
+      const tag = deriveCommandTag(result);
+
       // Send result set for SELECT-like queries
       const columns = extractColumns(result);
       if (columns.length > 0 && Array.isArray(result?.rows)) {
@@ -657,7 +663,6 @@ class PgWireProtocolHandler {
         }
       }
 
-      const tag = deriveCommandTag(result);
       const statementType = readExecutedStatementType(result);
       const notice = takeTransactionEndNotice(this._session, statementType);
       if (notice) this._socket.write(notice);
