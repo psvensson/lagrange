@@ -79,6 +79,9 @@ function createDeliveryLifetime(router, options) {
     shutdownError ??= new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     return shutdownError;
   };
+  // The deadline settles an owned obligation (F1: queue, connection wait,
+  // ACK and response), so it stays ref'd: an empty event loop must still see
+  // the typed refusal. refuse(), dispose() and router shutdown clear it.
   const armTimer = (remainingMs) => {
     clearTimer();
     timeoutId = clock.setTimeout(() => {
@@ -89,7 +92,6 @@ function createDeliveryLifetime(router, options) {
         refuse(error);
       }
     }, remainingMs);
-    timeoutId?.unref?.();
   };
   function remaining() {
     if (refusal !== null) throw refusal;

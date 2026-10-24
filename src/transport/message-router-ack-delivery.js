@@ -137,7 +137,6 @@ function sendWithAck(router, connection, targetAddress, messageId, payload, targ
           finish(reject, error);
         }
       }, remainingDeliveryMs(options));
-      pending.timeout?.unref?.();
     };
     router.pendingMessages.set(messageId, pending);
     options.signal.addEventListener('abort', onAbort, {once: true});
