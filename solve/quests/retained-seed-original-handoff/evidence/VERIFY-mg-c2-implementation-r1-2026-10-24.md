@@ -312,3 +312,44 @@ tighten hint 47→46, 1462→1439 pre-exists); repo-wide `audit:guideline:decisi
 - L-r2-2. The hint-0 deferral judgment (item 8) is by reading; no test exercises `deliverDirectOnlyMessage` with a `{deferRetry:true, retryAfterMs:0}` answer on either tree.
 - L-r2-3. Local runs only; the lab was not re-run for r2.
 - L-r2-4. The "before" tree for the before/after runs is f34899bdd (my r1 snapshot), not the implementer's intermediate r3 state.
+
+---
+
+## Re-verification r3 (2026-10-24, same independent verifier, appended)
+
+Scope: exactly `git diff f291aad32 1a29cfc9c` (my shortstat: 12 files, +100/−82; 4 src,
+1 new test, 2 modified tests, 4 shard JSON, inventory). Chain confirmed:
+`bed8c6354 → f291aad32 → cba438358 → 1a29cfc9c`; `refs/wip/lab-c2-6` =
+`1a29cfc9c45fbbb814e6aa8af69a6926002b49b6`. Verified in detached scratch worktrees
+(`wt3` at 1a29cfc9c, `wt2` at f291aad32, `base2` at bed8c6354), all removed afterwards.
+No repository edits. C2 witness sha at 1a29cfc9c unchanged:
+`2a044a90f11bd0992f6d8c393fe8b3dcb53b264c982610b6cb3651d339a9ddd9`.
+
+### Verdict: APPROVE for keeping 1a29cfc9c (no required changes); landing still blocked by the inherited gate reds recorded in r1/r2
+
+| # | Claim | Verdict | Evidence (file:line at 1a29cfc9c; my runs) |
+| --- | --- | --- | --- |
+| 1 | RC-r2-1 pin `test/partition/learner-promotion-proof-delivery-outcome.test.js` (6 assertions; 3 red on the base consumer) | VERIFIED | 6/6 green at 1a29cfc9c (`verify-r3-witnesses-1a29cfc9c.tap`). With `bed8c6354:src/partition/partition-service-learner-promotion-proof-methods.js` swapped in (then reverted, 0 changes left): exactly `not ok 1 - a failed claim`, `not ok 2 - a contradictory delivered claim with a retry hint`, `not ok 3 - a missing handler`; `ok 4 - a deferral`, `ok 5 - an ordinary delivered proof` (`verify-r3-pin-on-base-consumer.tap`). The test calls the real method with `this = {partitionId, replicaId}` and router-built outcomes (`:13-28`) |
+| 2 | RC-r2-2 as deletion: `classifyTransportDeliveryOutcome(value = null)` takes no options, never attaches a hint; dispatch owner calls it bare and defers through its own fallback; `buildQueryTransportSemanticOutcome` option deleted as dead; `defaultRetryAfterMs` grep | VERIFIED | `transport-semantic-outcome.js:241-246` = `build(Error ? thrownErrorOutcome(value) : value)`. `replica-dispatch-direct-wakeup.js:119-132` bare call; the production defer path `replica-dispatch-retry-scheduling.js:183-188` uses `resolveOperationDispatchRetryAfterMs` (`:166-172`: positive hint floored, else `this.operationDispatchRetryAfterMs`) — the same function the witness samples, so the fallback is on the real path. Dead-pattern confirmed by reading `pressure-routing.js:97-115` (f291aad32) vs `:97-112` (1a29cfc9c): the caller already passed `retryAfterMs = selection.retryAfterMs > 0 ? floor : this.reconnectIntervalMs`, positive whenever the default would have been, and both `null` when `reconnectIntervalMs ≤ 0`, so the default could never change the result; `query-transport-selection.js:7,13,14,17,24,30` always call with one argument; no other caller. `grep defaultRetryAfterMs src/` → only `lifecycle-controller.js:92,457` (`_defaultRetryAfterMs`, unrelated) |
+| 3 | Unit test 62 assertions; option cases removed; kept with fixed point: deferral without hint → null, own 0/−5/'7' kept, thrown own 0 kept; matrix 483,840 with classify∘build unchanged | VERIFIED | 62/62 green; diff `:377-396` shows the five cases, each followed by `classifyTransportDeliveryOutcome(classified) ≡ classified`; size line `:296` unchanged. My kill matrix on the committed owner (`verify-r3-kill-matrix-1a29cfc9c.txt`): 31,104,000 inputs, zero `classify(build(x))` violations, zero rewrites, named states, FAILED dominance; the only violation class remains my stale own-`undefined` expectation (1,918,080, ruled F3). 69 checks, 9 flips, all ruled behaviours; the two `defaultRetryAfterMs` checks now flip because the option is ignored entirely (DELIVERED stays DELIVERED; own 0 kept), which is the deletion. r2 observation O1 (own non-positive hint overwritten by the default) is closed by the deletion |
+| 4 | Direct-wakeup witness 5 assertions (fallback 23 for null and own-0 hints; options object has no effect) | VERIFIED | `replica-dispatch-direct-wakeup-delivery-decision.test.js` 5/5 (`verify-r3-direct-wakeup-1a29cfc9c.tap`): delivered → verification; router deferral → `deferred: [null]`, `delays: [23]`; own-0 hint → `deferred: [0]`, `delays: [23]`; `classify(…, {defaultRetryAfterMs: 23}).retryAfterMs === null` |
+| 5 | Runs and statics | VERIFIED (one correction to the file set) | Nine fixed-count witness files + the pin + the property file: 10/10, 789 assertions (property 428 this run); plus the two direct-wakeup files by filename: `replica-dispatch-direct-wakeup-delivery-decision.test.js` 5/5 green and `replica-dispatch-node-state-update-remote-direct-wakeup.test.js` RED with verdict lines IDENTICAL at bed8c6354, f291aad32 and 1a29cfc9c (`not ok 1 - remote-owned coordinator creates should wake the target owner directly`, `not ok 2 - initial remote wake-up should use bounded target-owner delivery`; `verify-r3-remote-direct-wakeup-{base2,wt2,wt3}.tap`) and present in the lab baseline red list → pre-existing, not attributable. `seed-infrastructure-phase.test.js` red with the same pre-existing leaf `d.assertOriginalSeedAttempt is not a function`. Statics at 1a29cfc9c: `node --check` 7 delta js files OK; eslint 0; `audit:impact-contracts` PASS 71/44 (sha `1ab1017b…`, unchanged from r2); `test:cycles` 0/0; scoped metrics on the 4 delta src files 1 cyclomatic (`getDeliverMetricTrigger` 13, pre-existing at f291aad32 too) / 0 cognitive — no increase; `test:metadata:refresh` zero drift; `test:unused:ratchet` 1446 > 1416 (unchanged, inherited) |
+
+Not re-measured in r3 (carried from r2, files untouched by this delta): test duplication
+701/26618 and the repo-wide decision-boundaries audit (29 violations in 16 files outside
+the C2 diff).
+
+### What I ran (r3)
+
+`c2-verify/tools/r3-chain.sh` → `verify-r3-chain.txt`, `verify-r3-witnesses-1a29cfc9c.tap`,
+`verify-r3-pin-on-base-consumer.tap`, `verify-r3-kill-matrix-1a29cfc9c.txt`; then
+`verify-r3-direct-wakeup-1a29cfc9c.tap` and `verify-r3-remote-direct-wakeup-{base2,wt2,wt3}.tap`
+(the chain's content-grep for the direct-wakeup files matched nothing, so they were run
+separately by filename). Reads: the full delta diff, `replica-dispatch-direct-wakeup.js:112-160`,
+`replica-dispatch-retry-scheduling.js:166-222`, `pressure-routing.js:84-116` on both trees,
+`query-transport-selection.js`, `transport-query-semantic-outcome.js`.
+
+### Limits (r3)
+
+Local runs only; the lab was not re-run. The two pre-existing reds (`seed-infrastructure-phase`,
+`remote-direct-wakeup`) are classified by identical leaves across three trees, not by root cause.
