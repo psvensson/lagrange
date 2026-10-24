@@ -1,6 +1,7 @@
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {applyDurableCdcBatch} from './message-group-cdc-committed-acceptance.js';
-import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {CDC_COMPLETION, hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {assertCdcTerminalEvents, captureCdcForwardOptions} from
   './message-group-forwarding-owner-native-delivery-methods.js';
@@ -20,13 +21,27 @@ const MESSAGE_GROUP_SERVICE_CDC_REPLICATION_RUNTIME_LITERAL = {
   LEADER_TARGET_SOURCE: 'forward_to_leader',
 };
 
-function forwardedCdcRelayDepth(command, attempt, options) {
-  const events = command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ?
-    command.events : [command];
-  if (hasDurableCdcEvents(events)) {
-    return options.relayDepth === undefined ? 0 : options.relayDepth;
+function cdcCommandEvents(command) {
+  return command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH ? command.events : [command];
+}
+
+// The committed-acceptance owner charges both raw routes of a durable command
+// (local proposal and follower forward) to its admitted queue entry. An
+// unpaired hook, or a durable command without them, would run one route
+// uncharged, so it is refused before any routing.
+function assertCdcRouteCustody(command, options) {
+  const proposes = typeof options.proposeCommand === 'function';
+  const forwards = typeof options.forwardCommand === 'function';
+  if (proposes !== forwards || (!proposes && hasDurableCdcEvents(cdcCommandEvents(command)))) {
+    throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
   }
-  return Number.isInteger(attempt) && attempt >= 1 ? attempt : 1;
+}
+
+// Relay depth belongs to the hop, never to the routing attempt: every retry
+// of one hop carries this hop's depth, and only the send owners increment it
+// (cdcRelaySendDepth).
+function forwardedCdcRelayDepth(options) {
+  return options.relayDepth === undefined ? 0 : options.relayDepth;
 }
 
 function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
@@ -252,7 +267,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
         // Replicate via Raft so all message group replicas (and their
         // co-located system caches) receive this CDC event. Cache updates
         // are applied only from committed CDC entries.
-        await this.proposeCDCCommand(cdcCommand);
+        await this.proposeCDCCommand(cdcCommand, {relayDepth});
         // Retain only successfully proposed commands in the bounded local
         // diagnostic ledger so failed relays do not accumulate indefinitely.
         const entry = this.operationLedger.appendEntry({...cdcCommand});
@@ -321,6 +336,7 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
       // A command the committed-command owner refuses is never proposed,
       // forwarded or retried.
       assertMessageGroupCommandAdmitted(cdcCommand);
+      assertCdcRouteCustody(cdcCommand, options);
       const configuredRetryBudget =
         Number.isInteger(this.retryMaxAttempts) &&
         this.retryMaxAttempts > 0 ?
@@ -336,8 +352,12 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
           proposeCommand: options.proposeCommand,
           assertCurrent: options.assertCurrent,
           remainingMs: options.remainingMs,
-          forwardToLeader: (command, routeContext) =>
-            this.forwardCDCCommandToLeader(command, routeContext.attempt, options),
+          // The committed-acceptance owner charges a durable forward to its
+          // admitted queue entry, as it does a local proposal.
+          forwardToLeader: (command) => {
+            const forward = () => this.forwardCDCCommandToLeader(command, options);
+            return options.forwardCommand ? options.forwardCommand(forward) : forward();
+          },
           computeRetryDelayMs: (attempt) =>
             this.computeCdcForwardRetryDelayMs(attempt),
           onRetry: ({attempt, mode, retryDelayMs, error}) => {
@@ -389,12 +409,12 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
      * Forward one CDC command to the group's leader over the application
      * forward (a follower's route to the log).
      * @param {Object} command - A CDC or CDC_BATCH command.
-     * @param {number} attempt - The routing attempt; durable relay depth is request context.
+     * @param {Object} [options] - Request context; its relayDepth is this hop's depth.
      * @return {Promise<void>}
      * @private
      */
-    async forwardCDCCommandToLeader(command, attempt, options = {}) {
-      const relayDepth = forwardedCdcRelayDepth(command, attempt, options);
+    async forwardCDCCommandToLeader(command, options = {}) {
+      const relayDepth = forwardedCdcRelayDepth(options);
       if (command?.type === MESSAGE_GROUP_COMMAND_TYPE.CDC_BATCH) {
         return this.forwardCDCBatchToLeader(
           Array.isArray(command?.events) ? command.events : [],

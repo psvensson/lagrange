@@ -1,4 +1,6 @@
 import {NUM} from '../constants/index.js';
+import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
+import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
 import {ControlPlaneMessageType} from '../control-plane/control-plane-constants.js';
 import {
   CRITICAL_TRANSPORT_TARGET_REASON,
@@ -89,6 +91,18 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   QUERY_TIMEOUT_MS: 1500,
 });
 const CDC_FORWARD_MAX_RELAY_DEPTH = 2;
+
+/**
+ * The relay depth one CDC forward send carries: the sending hop's depth plus
+ * one. This is the single increment of the rule; callers pass their hop.
+ * @param {number} hopDepth - The sending hop's own relay depth.
+ * @return {number} The depth on the wire.
+ */
+function cdcRelaySendDepth(hopDepth) {
+  const sendDepth = hopDepth + 1;
+  if (sendDepth > CDC_FORWARD_MAX_RELAY_DEPTH) throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
+  return sendDepth;
+}
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
 const DIRECT_ONLY_MESSAGE_TYPES = new Set([
@@ -354,6 +368,7 @@ function buildLatencyCdcPropagationResult(result) {
 
 export {
   CDC_FORWARD_MAX_RELAY_DEPTH,
+  cdcRelaySendDepth,
   DIRECT_ONLY_MESSAGE_TYPES,
   FLUSH_SKIP_DISABLED,
   FLUSH_SKIP_NOT_OWNER,

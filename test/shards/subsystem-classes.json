@@ -22,13 +22,13 @@
     "storage-raft": 143,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 106,
+    "transport-messaging": 107,
     "wasm-toolchain": 74
   },
-  "censusSize": 2463,
-  "digest": "fnv1a32-1e01a935",
+  "censusSize": 2464,
+  "digest": "fnv1a32-9e5b00bc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-78f1eb8c",
+  "observationDigest": "fnv1a32-a380c63a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1115,6 +1115,7 @@
     "test/message-group/maximum-retry-limiting.property.test.js": "transport-messaging",
     "test/message-group/message-delivery-reliability.property.test.js": "transport-messaging",
     "test/message-group/message-group-cdc-input-guard.test.js": "transport-messaging",
+    "test/message-group/message-group-cdc-public-defer-repair.test.js": "transport-messaging",
     "test/message-group/message-group-cdc-receiver-admission.test.js": "transport-messaging",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-promotion.test.js": "transport-messaging",
@@ -8123,11 +8124,33 @@
         "test/helpers/hostile-intrinsics.js"
       ]
     },
+    "test/message-group/message-group-cdc-public-defer-repair.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/message-group/message-group-forwarding-owner-constants.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/message-group/message-group-native-provisional-route-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/message-group/message-group-cdc-receiver-admission.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/cdc/cdc-delivery-budget.js",
         "src/cdc/cdc-delivery-outcome.js",
-        "src/message-group/message-group-forwarding-owner-constants.js"
+        "src/message-group/constants.js",
+        "src/message-group/message-group-forwarding-owner-constants.js",
+        "src/message-group/message-group-service-runtime-support.js"
       ]
     },
     "test/message-group/message-group-failover-cdc-continuity.test.js": {

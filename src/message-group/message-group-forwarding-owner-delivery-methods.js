@@ -4,6 +4,7 @@ import {captureCdcForwardOptions,
   createMessageGroupForwardingOwnerNativeDeliveryMethods, requiresDurableCdcForwarding} from
   './message-group-forwarding-owner-native-delivery-methods.js';
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {cdcRelaySendDepth} from './message-group-service-runtime-support.js';
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const buildForwardTopologyRepairReadOptions =
@@ -378,11 +379,11 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
           options.timestamp :
           service.hlcClock.now().toString();
       const replayOnly = options.replayOnly === true;
-      const relayDepth =
+      const relayDepth = cdcRelaySendDepth(
         Number.isInteger(options.relayDepth) &&
         options.relayDepth >= num.ZERO ?
           options.relayDepth :
-          num.ZERO;
+          num.ZERO);
       const causeId = normalizeCauseId(options.causeId);
       const payload = {
         type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION,
@@ -414,11 +415,11 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         }, options);
       }
       const replayOnly = options.replayOnly === true;
-      const relayDepth =
+      const relayDepth = cdcRelaySendDepth(
         Number.isInteger(options.relayDepth) &&
         options.relayDepth >= num.ZERO ?
           options.relayDepth :
-          num.ZERO;
+          num.ZERO);
       const normalizedEvents = (Array.isArray(events) ? events : [])
         .filter((event) => event?.tableName && event?.operation && event?.data)
         .map((event) => {

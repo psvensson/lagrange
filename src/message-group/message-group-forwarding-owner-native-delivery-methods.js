@@ -8,7 +8,8 @@ import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, checkedCdcRemainingMs
   '../cdc/cdc-delivery-budget.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE, MESSAGE_GROUP_CDC_ERROR_MSG} from './constants.js';
-import {CDC_FORWARD_MAX_RELAY_DEPTH} from './message-group-service-runtime-support.js';
+import {CDC_FORWARD_MAX_RELAY_DEPTH, cdcRelaySendDepth} from
+  './message-group-service-runtime-support.js';
 import {MESSAGE_GROUP_CDC_FORWARD_MODE, MESSAGE_GROUP_CDC_INGRESS_ACTION,
   resolveCDCForwardDeliveryProfile} from './message-group-forwarding-owner-constants.js';
 
@@ -150,9 +151,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       const decision = this.resolveCdcIngressDecision(context);
       if (decision.action !== MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL ||
           decision.localIngress !== true) return null;
-      const answer = options.applyProvisionalIngress ? await options.applyProvisionalIngress() :
-        await this.service.applyCDCBatch(events,
-          {...options, ...context, skipSubscriptionCheck: true});
+      const answer = await options.applyProvisionalIngress();
       options.assertCurrent();
       return answer;
     },
@@ -180,7 +179,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       this.assertDurableCdcForwardTarget(target, options, address);
       const terminal = this.isNativeCdcForwardTarget(target);
       const request = {...payload, targetGroupId: service.groupId,
-        relayDepth: options.relayDepth + 1,
+        relayDepth: cdcRelaySendDepth(options.relayDepth),
         ...(terminal ? {cdcForwardMode: MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT} : {})};
       const profile = resolveCDCForwardDeliveryProfile(events[0].tableName, payload,
         options.replayOnly === true);
@@ -249,6 +248,12 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
       const startedAtMs = service.timeSource.now();
       payload = captureCdcForwardRecord(payload);
       incomingOptions = captureCdcForwardRecord(incomingOptions);
+      // Durable forwarding is raw work of one admitted committed-acceptance
+      // wait, which supplies its provisional operation for that exact vector.
+      // Anything else is refused before capture, reservation or any forward.
+      if (typeof incomingOptions.applyProvisionalIngress !== 'function') {
+        throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
+      }
       const budget = createCdcDeliveryBudget(service, incomingOptions, startedAtMs);
       const context = readCdcForwardContext(service,
         combinedCdcForwardContext(payload, incomingOptions));

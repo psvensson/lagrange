@@ -1,9 +1,7 @@
-import {captureCdcEvents, copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
-import {unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {CDC_DELIVERY_REMAINING_MS, createCdcDeliveryBudget} from '../cdc/cdc-delivery-budget.js';
-import {assertCdcTerminalEvents, captureCdcForwardOptions, captureCdcForwardRequest} from
+import {captureCdcForwardOptions, captureCdcForwardRequest} from
   './message-group-forwarding-owner-native-delivery-methods.js';
-import {MESSAGE_GROUP_CDC_FORWARD_MODE} from './message-group-forwarding-owner-constants.js';
 import {appendOwnArrayValue, copyArrayByIndex} from '../utils/canonical-json-data.js';
 
 const arrayIsArray = Array.isArray;
@@ -11,38 +9,24 @@ const arrayIsArray = Array.isArray;
 async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, request,
   batch, localDelivery, startedAtMs) {
   // This receiver owns a distinct clock domain. Capture the wire duration at
-  // handler entry, before envelope capture or any selection/application await.
+  // handler entry, before any application await. Only the shallow wrapper
+  // copy, its durable classification and forward context precede the owner's
+  // queue reservation; capture, ingress decision and delivery are all its own.
   const {payload, incoming, context} = request;
   const budget = createCdcDeliveryBudget(service,
     {...localDelivery, receivedRemainingMs: payload[CDC_DELIVERY_REMAINING_MS]}, startedAtMs);
-  const events = captureCdcEvents(incoming);
-  assertCdcTerminalEvents(events, context);
-  const options = {...context, ...budget, skipSubscriptionCheck: true,
-    replayOnly: payload.replayOnly === true};
-  const event = events.find((item) => service.shouldUseStrictCDCForwarding(item)) ?? events[0];
-  const decision = service.resolveCdcIngressDecision({...event, ...context, events});
-  const answer = await applyDurableLatencyCdcDecision(
-    service, runtimeDeps, decision, events, options);
+  const answer = await service.applyCDCBatch(incoming, {...context, ...budget,
+    skipSubscriptionCheck: true, replayOnly: payload.replayOnly === true});
   budget.assertCurrent();
+  // Optional wrapper metadata comes from the shallow wrapper copy and its
+  // dense, already classified member count; it never overrides the answer.
   return runtimeDeps.buildLatencyCdcPropagationResult({messageId, acknowledged: true,
     status: batch ? runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED :
       runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-    ...(batch ? {eventCount: events.length} :
-      {tableName: event.tableName, operation: event.operation}),
+    ...(batch ? {eventCount: incoming.length} :
+      {tableName: payload.tableName, operation: payload.operation}),
     ...answer,
   });
-}
-
-async function applyDurableLatencyCdcDecision(service, runtimeDeps, decision, events, options) {
-  options.assertCurrent();
-  const {MESSAGE_GROUP_CDC_INGRESS_ACTION} = runtimeDeps;
-  if (decision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER) return unknownCdcAcceptance();
-  if (decision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL) {
-    if (options.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT &&
-        decision.localIngress) return unknownCdcAcceptance();
-    return service.applyCDCBatch(events, options);
-  }
-  return service.forwardCDCBatchToLeader(events, options);
 }
 
 async function handleLatencyCdcPropagationMessage(
@@ -158,7 +142,7 @@ async function handleLatencyCdcPropagationMessage(
     const answer = await service.forwardCDCEventToLeader(tableName, operation, data, {
       ...copyCdcEventMetadata(payload),
       timestamp: eventTimestamp || undefined,
-      relayDepth: relayDepth + 1,
+      relayDepth,
       causeId,
       replayOnly,
     });
@@ -284,7 +268,7 @@ async function handleLatencyCdcPropagationBatchMessage(
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
     const answer = await service.forwardCDCBatchToLeader(events, {
-      relayDepth: relayDepth + 1,
+      relayDepth,
       replayOnly,
     });
     return buildLatencyCdcPropagationResult({
