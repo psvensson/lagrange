@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2432,
+    "ordinary": 2433,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2449,
-  "digest": "fnv1a32-151a9c0b",
+  "censusSize": 2450,
+  "digest": "fnv1a32-d7aa50f2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2353,6 +2353,7 @@
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "ordinary",
     "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "ordinary",
     "test/transport/router-envelope-w-env-4-no-handler-frame.test.js": "ordinary",
+    "test/transport/router-envelope-w-env-5-superseded-pending.test.js": "ordinary",
     "test/transport/router-server-manager.test.js": "ordinary",
     "test/transport/routing-correctness.property.test.js": "ordinary",
     "test/transport/rpc-client.test.js": "ordinary",

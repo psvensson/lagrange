@@ -6,6 +6,7 @@ import {
   buildHandlerFailedError,
   buildTransportDeliveryOutcome,
   classifyTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
 } from './transport-semantic-outcome.js';
 
 const {
@@ -454,8 +455,10 @@ async function completeRemoteDelivery(router, {
       queueWaitMs,
     };
   }
-  if (router.hasInlineAckPayload(ackResult)) {
-    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK);
+  if (isSupersededTransportDeliveryOutcome(ackResult)) {
+    // Replaced in the queue before it was sent: no request left, so no
+    // answer will come (decision D3).
+    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.SUPERSEDED);
     return {
       result: ackResult,
       queueWaitMs,

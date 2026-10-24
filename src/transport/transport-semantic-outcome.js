@@ -53,6 +53,7 @@ const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   MESSAGE_TIMEOUT: 'message_timeout',
   NO_HANDLER: 'no_handler',
   NO_CONNECTION: 'no_connection',
+  SUPERSEDED: 'superseded',
   OUTBOUND_QUEUE_BACKPRESSURED: 'outbound_queue_backpressured',
   QUERY_TRANSPORT_NOT_READY: 'query_transport_not_ready',
   TRANSPORT_DEFERRED: 'transport_deferred',
@@ -251,6 +252,19 @@ function buildHandlerFailedError(text) {
   return Object.assign(new Error(text), {code: ROUTER_HANDLER_FAILED_ERROR_CODE});
 }
 
+// A queued delivery replaced by a newer one under the same replace key before
+// it was sent (decision D3): DELIVERED, with no answer, named superseded.
+function buildSupersededDeliveryOutcome(fields = {}) {
+  return buildTransportDeliveryOutcome({...fields, acknowledged: true, coalesced: true,
+    reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED});
+}
+
+function isSupersededTransportDeliveryOutcome(outcome = null) {
+  return isDeliveredTransportDeliveryOutcome(outcome) &&
+    outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED &&
+    outcome.coalesced === true;
+}
+
 function classifyTransportDeliveryOutcome(value = null) {
   const resolvedValue = value && typeof value === 'object' ? value : {};
   return buildTransportDeliveryOutcome(resolvedValue instanceof Error ?
@@ -272,10 +286,12 @@ export {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
   buildHandlerFailedError,
+  buildSupersededDeliveryOutcome,
   buildTransportDeliveryOutcome,
   classifyTransportDeliveryOutcome,
   isDeferredTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
   normalizeOptionalString,
   normalizePositiveRetryAfterMs,
 };

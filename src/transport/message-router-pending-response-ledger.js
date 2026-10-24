@@ -5,7 +5,6 @@ import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {buildHandlerFailedError} from './transport-semantic-outcome.js';
 
 const {
-  INLINE_ACK_PASSTHROUGH_KEYS,
   MESSAGE_ROUTER_LITERAL,
   RETIRED_PENDING_RESPONSE_REASON,
   ROUTER_ERROR_MSG,
@@ -487,24 +486,6 @@ class MessageRouterPendingResponseLedger {
     }
   }
   /**
-   * Check whether an ACK includes legacy inline handler payload.
-   * @param {Object} ackResult - ACK result.
-   * @return {boolean} True when ACK carries handler payload.
-   * @private
-   */
-  hasInlineAckPayload(ackResult) {
-    if (
-      !ackResult ||
-      typeof ackResult !== TRANSPORT_TYPEOF.OBJECT ||
-      ackResult.acknowledged !== true
-    ) {
-      return false;
-    }
-    return Object.keys(ackResult).some(
-      (key) => !INLINE_ACK_PASSTHROUGH_KEYS.has(key),
-    );
-  }
-  /**
    * Normalize SERVICE_RESPONSE payload to transport delivery shape.
    * @param {*} result - Handler result payload.
    * @return {Object} Normalized payload fields.
@@ -527,13 +508,13 @@ class MessageRouterPendingResponseLedger {
     return rest;
   }
   /**
-   * Handle acknowledgment message.
-   * Passes through flat ACK structure without additional nesting.
+   * Handle acknowledgment message. An ACK carries only messageId,
+   * acknowledged and error; it never carries a handler answer.
    * @param {Object} message - Acknowledgment message.
    * @private
    */
   handleAcknowledgment(message) {
-    const {messageId, acknowledged, error, type: _type, ...rest} = message;
+    const {messageId, acknowledged, error} = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
       try {
@@ -555,11 +536,7 @@ class MessageRouterPendingResponseLedger {
           connection.lastAckAt = this.timeSource.now();
           connection.lastAckTimeoutAt = null;
         }
-        const resolved = {
-          messageId,
-          acknowledged: true,
-          ...rest,
-        };
+        const resolved = {messageId, acknowledged: true};
         if (error !== void 0) {
           resolved.error = error;
         }

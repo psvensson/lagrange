@@ -22,11 +22,11 @@
     "storage-raft": 144,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 105,
+    "transport-messaging": 106,
     "wasm-toolchain": 74
   },
-  "censusSize": 2449,
-  "digest": "fnv1a32-feb04bae",
+  "censusSize": 2450,
+  "digest": "fnv1a32-cf6b8b5b",
   "observationSchemaVersion": 2,
   "observationDigest": "fnv1a32-a350f8dc",
   "classes": {
@@ -2373,6 +2373,7 @@
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-4-no-handler-frame.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-5-superseded-pending.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",

@@ -1465,7 +1465,7 @@
       ]
     },
     "router-delivery-envelope": {
-      "description": "The router alone computes a delivery's transport outcome, from its own facts: an answer cannot change the acknowledgement (decision D2), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on the LOCAL and the remote path alike (D1), and a no-handler reply is a frame-level router fact with no answer slot. Q6 stages 1-2 keep the flat shape; the {transport, answer} envelope cutover restates the approved C2 roundtrip and forwarding-hop witnesses and widens W-ENV-1 to every transport field.",
+      "description": "The router alone computes a delivery's transport outcome, from its own facts: an answer cannot change the acknowledgement (decision D2), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on the LOCAL and the remote path alike (D1), a no-handler reply is a frame-level router fact with no answer slot, and a queued delivery replaced before it was sent is the named superseded outcome (D3), so an ACK never carries a handler answer. Q6 stages 1-2 keep the flat shape; the {transport, answer} envelope cutover restates the approved C2 roundtrip and forwarding-hop witnesses and widens W-ENV-1 to every transport field.",
       "owners": [
         "src/transport/transport-semantic-outcome.js",
         "src/transport/transport-error-codes.js",
@@ -1484,6 +1484,7 @@
         "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js",
         "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js",
         "test/transport/router-envelope-w-env-4-no-handler-frame.test.js",
+        "test/transport/router-envelope-w-env-5-superseded-pending.test.js",
         "test/transport/transport-semantic-outcome.test.js",
         "test/transport/message-router-cdc-outcome-roundtrip.test.js",
         "test/transport/transport-outcome-forwarding-hop.test.js"

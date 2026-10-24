@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3054066,
-        "sha256": "5165c5ceda61987112a356b5dae5aaf89def35cf64743b364ac20bd432280c6f"
+        "bytes": 3054756,
+        "sha256": "bc4017a6e325fc7b003650ac4e9172ff7343f699bd4a9e4f182ab73c71ec9c54"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "3fb1bc5b236e9e663ed22274a626c32590d1db302d96525785bfbab420f04006"
+    "inputDigest": "58718af6ad9c8b48a2622ebdccdc5841ede411738df5048ef08aadd7d8c26acd"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3054066,
-        "sha256": "5165c5ceda61987112a356b5dae5aaf89def35cf64743b364ac20bd432280c6f"
+        "bytes": 3054756,
+        "sha256": "bc4017a6e325fc7b003650ac4e9172ff7343f699bd4a9e4f182ab73c71ec9c54"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "37fc029764354c00498c5179e3f2c52565891151a416733e32076277c5e22c0f",
-      "moduleCount": 5579,
-      "edgeCount": 29524,
+      "sourceDigest": "70479b0098fe457310db5a98b488ee314ef6c2000a2f0c32b5cb3735fb8c09c4",
+      "moduleCount": 5580,
+      "edgeCount": 29531,
       "unresolvedCount": 36
     }
   },
@@ -779,7 +779,7 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 120,
+      "importIn": 121,
       "importOut": 62,
       "score": 122,
       "topPaths": [
@@ -864,7 +864,7 @@
       "cycleGroups": 0,
       "lintExclusions": 3,
       "importIn": 5,
-      "importOut": 77,
+      "importOut": 79,
       "score": 118,
       "topPaths": [
         "test/transport/node-registration-creates-endpoint.property.test.js",

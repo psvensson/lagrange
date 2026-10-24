@@ -2,7 +2,10 @@ import {
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {buildTransportDeliveryOutcome} from './transport-semantic-outcome.js';
+import {
+  buildSupersededDeliveryOutcome,
+  buildTransportDeliveryOutcome,
+} from './transport-semantic-outcome.js';
 import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, normalizeIdentifier} from './message-router-shared-vocabulary.js';
 import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
 import {buildPendingSourceAdmission, buildPendingSourceLimitEvidence, countCriticalPendingByAdmissionSource, countCriticalPendingBySource, countPendingBySource, normalizeQueueMaxPending, normalizeQueuedDeliverySource, resolveBoundedCriticalReserve, resolveBoundedReadinessReserve, resolveCriticalPendingSourceLimit, resolveDeliverySourceAdmissionKey, resolvePendingSourceLimit, resolveProportionalPendingSourceLimit, resolveQueuedDeliverySourceAdmissionKey} from './message-router-delivery-source-admission.js';
@@ -71,8 +74,8 @@ function buildRetiredPendingClassification(reason) {
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_DEFERRED_DELIVERY;
   case RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED:
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_ACK_REJECTED;
-  case RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK:
-    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_INLINE_ACK;
+  case RETIRED_PENDING_RESPONSE_REASON.SUPERSEDED:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_SUPERSEDED;
   case RETIRED_PENDING_RESPONSE_REASON.CANCELLED:
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_CANCELLED;
   default:
@@ -175,12 +178,9 @@ function normalizeRetryAfterMs(value, fallback) {
 
 function buildSupersededPendingResult(replacedItem) {
   return {
-    result: {
-      acknowledged: true,
-      coalesced: true,
-      replacedPending: true,
+    result: buildSupersededDeliveryOutcome({
       deliverySource: replacedItem?.deliverySource || null,
-    },
+    }),
     queueWaitMs: TRANSPORT_NUM.ZERO,
   };
 }

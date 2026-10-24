@@ -88,8 +88,10 @@ const RATCHET_TARGETS = [
     // measures 47/1462, so this quest claims no clone reduction.
     // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
     // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
-    baselineCloneGroupCount: 46,
-    baselineDuplicatedLineCount: 1439,
+    // Q6 stages 1-2 on the API-removal tree: tightened 46/1439 -> 44/1383 on
+    // the checker hint.
+    baselineCloneGroupCount: 44,
+    baselineDuplicatedLineCount: 1383,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -237,8 +239,10 @@ const RATCHET_TARGETS = [
     // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
     // Alpha API removal: tightened 679/25717 -> 658/24752 (WebSocketTransport
     // family and ReplicaLifecycleManager tests deleted).
-    baselineCloneGroupCount: 658,
-    baselineDuplicatedLineCount: 24752,
+    // Q6 stages 1-2: tightened 658/24752 -> 656/24700 (no-handler property
+    // tests read the transport owner).
+    baselineCloneGroupCount: 656,
+    baselineDuplicatedLineCount: 24700,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
