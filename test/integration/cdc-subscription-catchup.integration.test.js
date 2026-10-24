@@ -19,6 +19,7 @@ import {
 } from '../../src/partition/partition-service-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {CDC_TABLE} from '../test-helpers/participant-transaction-fixture.js';
 import {resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
@@ -33,7 +34,8 @@ const TEST_TABLE_SCHEMA = Object.freeze({
 
 const TEST_IDS = Object.freeze({
   PARTITION_ID: 'cdc-handshake-p1',
-  TABLE_ID: 'cdc_handshake_items',
+  // A CDC-carrying table: only a propagated table records CDC (decision D2).
+  TABLE_ID: CDC_TABLE,
   REPLICA_ID: 'cdc-handshake-p1-r1',
   NODE_ID: 'cdc-handshake-node-1',
 });

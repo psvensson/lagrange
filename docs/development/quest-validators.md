@@ -3,7 +3,7 @@ scope: governance
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Quest validation and honesty policy. Reached from the
@@ -11,47 +11,68 @@ last_reviewed: 2026-07-10
 
 # Workflow Validators
 
-## Probe-Owned Truth
+## Owners Of Validation
 
-The Solver never trusts an agent's claim that work succeeded. It trusts only
-probe output collected after the attempt.
+The current Solver implementation owns executable validation:
 
-Required validation:
+| Owner | Validates |
+| --- | --- |
+| `scripts/solve/schema.js` | Quest and epic shapes, allowed probes, log entry types, verifier identity/verdict, and status vocabulary. |
+| `scripts/solve/probes.js` | Measurements for `test-receipt`, `scenario-harness`, `oracle` and `script`, including an explicit non-measuring result. |
+| `scripts/solve/commands.js` | Red sealing measurement, immutable sealed `doneWhen`, current verification, holds, altitude budget, and the landing sequence. |
+| `scripts/solve/guards.js` | Changed paths, epic scope, interaction guards, static checks, and canonical import-graph checks. |
+| `scripts/solve/store.js` | Append-only log reads/writes and derived quest state. |
 
-1. `doneWhen` is evaluated by a real probe.
-2. Frontier metrics are evaluated by real probes.
-3. The post-attempt metric is finite when progress is claimed.
-4. The configured metric direction is lower-is-better.
-5. The attempt `changeRef` resolves to an existing `diff:<path>` artifact.
+Consult the generated [`command reference`](../steering/generated/solve-commands.md)
+for supported operations. Solver v1 frontier metrics, strategy rungs, diff
+response protocols and `run`/`step` gates are historical vocabulary, not current
+validation requirements.
 
-## Goalpost Immutability
+## Sealed Acceptance
 
-The first Solver declaration seals:
+`start` validates the draft and epic, requires a measuring red probe, records
+`sealedAt`, and appends the seal. Before that, the draft may be refined. After
+sealing, `doneWhen` is immutable; `land` compares it with the seal and measures
+it again. A non-measuring or red probe cannot close the quest. If the premise
+has changed, record supersession and author the replacement; do not silently
+rewrite acceptance or substitute a weaker test.
 
-- `doneWhen`;
-- each frontier id;
-- each frontier metric.
+Choose the probe for the claim before sealing: a bounded repair needs its
+reproducer and affected interaction proof; a distributed service milestone
+needs its public scenario proof. `scenario-harness` is terminal evidence only
+under a certification epic. These levels must not be exchanged to force a
+green result.
 
-The first declaration happens at the first `run`/`step` begin, not at `new` —
-until then the quest file is a refinable draft.
+## Evidence Applicability And Review
 
-Later attempts must use the same sealed goalposts. If the desired result
-changes, stop the current Quest as EXHAUSTED or author a new Quest.
+An agent's assertion, an artifact's presence, or a green result from another
+revision is insufficient proof. Retain provenance, executed scope, outcome and
+limitations. Reuse earlier evidence only when the existing proof-selection and
+receipt rules establish applicability to the current change, including relevant
+dependencies, callers, configuration and environment. If applicability cannot
+be established, run the necessary proof; a prose assurance is no substitute.
 
-One sanctioned exception: a frontier metric may be sharpened to a strictly
-harder gradient from `GRADIENT_REFINEMENT_METRICS` (e.g. `priority` →
-`distance`) without violating the seal, provided the probe and every other
-metric arg stay byte-identical and `doneWhen` is untouched — see
-solver-quests.md "Gradient refinement of the sealed metric".
+For `src/` changes, landing requires an independent `subagent:<id>` approval
+newer than the last attempt; a current rejection refuses landing. The runtime
+checks identity format and log order. The author and reviewer must also bind
+the review to the actual changed content and evidence, record a new attempt
+after a material repair, and renew review for what that repair invalidates.
+Preserve applicable unaffected findings instead of restarting the whole review.
 
-## Report Projection
+The existing landing guard requires an `altitude-check` finding after more
+than three attempts since the previous altitude check. Use it to reconsider
+the owner, hypothesis, evidence and scope. It is a recorded engineering decision,
+not an automatic user stop or a requirement to replace an otherwise valid quest.
 
-A quest report is a projection over the append-only
-event log. The report projection must not invent terminal status, synthetic
-attempts, or unmeasured progress.
+## Terminal Truth
 
-SOLVED requires live `doneWhen` evidence. EXHAUSTED requires every frontier to
-be parked as `exhausted` — either by the finite strategy ladder (measured — at
-least one honestly-measured sample) or by a recorded operator decision
-(`provenance: operator`, requiring a prior altitude reflection and a reason;
-see solver-quests.md "Operator park").
+Only `land` writes `solved`, after the probe, guards, staged-tree proof and
+commit succeed. `note` can record `blocked`, `exhausted` or `superseded` with
+the required fields; it cannot assert `solved`. A blocked hold is cleared by a
+later attempt or typed finding, so record a clearance only after its reason is
+resolved. An unavailable test or reviewer is a pending input, not evidence of
+success or exhaustion.
+
+The current epic summary and human reports link these records. They do not
+invent attempts, revise terminal history, grant release acceptance, or claim
+that unrequested work is running.

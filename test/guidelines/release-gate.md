@@ -3,92 +3,114 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Scenario and release-gate Quest proof policy. Index:
 > [`INDEX.md`](INDEX.md).
 
-# Testing — Scenario And Release-Gate Quests
+# Testing - Scenario And Release-Gate Quests
 
-## Reference Scenario Policy
+## Separate Acceptance Claims
 
-When a Quest exists because a distributed, integration, load, or scenario
-failure must be resolved, the Quest must keep one named reference scenario or
-probe as its `doneWhen`.
+Keep these verdicts explicit in existing Quest and epic evidence:
 
-This does not conflict with the gate-last-resort policy: the reference scenario
-is executed once, at closure, after the deterministic ladder is green — its role
-is certification of the sealed `doneWhen`, not iteration.
+| Claim | Required evidence | What remains open |
+| --- | --- | --- |
+| Bounded causal repair | The named invariant and real owner path, focused regression, affected consumers, applicable guards, and independent review of the candidate. | Other scenario causes and wider service or release acceptance. |
+| Representative distributed service milestone | The named workload through the real public WASI service entry path on the declared distributed topology, including failure and recovery behavior. | Stable-core and release requirements outside that envelope. |
+| Stable core or release acceptance | All authoritative acceptance and exact-candidate release requirements, including required configurations, fault domains, resource bounds, and statistical or soak evidence. | Nothing may be inferred from a smaller milestone alone. |
 
-Required workflow:
+The representative service scenario guides which repair matters next. It does
+not become every repair's `doneWhen`. Name the originating scenario and causal
+blocker in the repair record, and seal a probe that measures that bounded repair.
+An independently proved repair can close and integrate while the scenario still
+fails for a different, recorded cause. Preserve its regression as part of the
+cumulative proof; the scenario and release verdicts remain failing or incomplete.
 
-1. Keep one named reference scenario or blocker probe for the Quest.
-2. Run focused owner tests before broad representative reruns.
-3. If the reference scenario still fails after focused proof passes, record a
-   finding that names the new dominant failure and owner boundary.
-4. Do not claim SOLVED on local green proof alone while the reference scenario
-   still fails for a different named reason.
-5. If the Quest records repeated material blocker migrations, escalate by
-   adding a model or architecture frontier instead of continuing local patches.
-6. A scenario-driven Quest that changes runtime meaning, decision meaning, or
-   shared reporting must prove the direct owner path and the consuming status,
-   diagnostics, admin, harness, or report surface.
+If a Quest already promises the whole scenario, keep that promise until it is
+met or explicitly superseded through the existing lifecycle. Do not relabel a
+failing scenario as a passing repair after measurement. Repeated migrations of
+the dominant blocker prompt a causal reassessment by the current author,
+reviewer, and integration owner, not an automatic architecture task.
+
+A shared-contract repair includes its affected status, diagnostics, admin,
+harness, and reporting consumers. The work is bounded by the changed contract
+and reachable consequences, not by an obligation to repair every historical
+defect encountered during review.
+
+## Evidence Ceilings
+
+For each acceptance claim name the source/candidate, configuration, workload,
+entry path, production owners, dependency and test versions, execution substrate,
+and artifact. Report safety, recovery progress, and resource behavior separately.
+State the finite-failure assumptions under which progress is expected, and show
+both retained obligations during refusal and useful work after the blocker clears.
+
+Deterministic tests prove the exercised mechanism and ordering. Native tests
+exercise the real runtime and dependencies. A physical distributed run can prove
+the named network, process, host, and storage failure domains actually used.
+Several processes or containers on one host do not establish independent host
+failure evidence. None of these layers silently substitutes for another.
+
+Use an existing supported configuration when it supplies the needed workload.
+If a capability is proposed for exclusion, first compare completing it with
+excluding it safely: inspect public, internal, and background reachability,
+refusal before admission, and retained obligations across restart. A declaration
+that a feature is out of scope, or a new test-only product mode, is not exclusion
+proof. The integration owner records the supported envelope without weakening
+the authoritative stable-core or release bar.
 
 ## Fixture Versus Runtime Proof
 
 If a fixture or harness contract was wrong, fix it and prove why. If the fixture
-contract was correct, the next attempt must target the runtime owner boundary
-that now dominates.
+contract was correct, the next repair targets the runtime owner that produced
+the failure. Retain the first failure and classify product, fixture/harness,
+verifier, and execution-unavailable causes separately. A broken fixture or
+unavailable worker is inconclusive about product behavior; a correctly measured
+product failure stays a failure even if it occurs before the repair's target
+path. Record whether the target engaged and retain valid target-phase evidence.
 
-Classification-only (accepting a finding without a runtime fix) is valid only
-when the Quest records all of:
-
-- the focused probe command;
-- the evidence path;
-- the bounded-progress proof or reason no local runtime patch should continue;
-- the next frontier or terminal EXHAUSTED result.
+Classification without a runtime fix is valid only when the existing record
+contains the focused command, evidence path, reason a runtime repair is not
+justified or cannot continue, and responsible owner with next action or truthful
+terminal disposition. It cannot turn an unresolved product failure into a pass.
 
 ## Representative Rerun Order
 
-Use this order for scenario Quests:
+Use this order for scenario-driven work:
 
-1. focused owner test or probe;
-2. static guardrail relevant to the touched owner boundary;
-3. shared unit-only gate when the package manager or runner boundary requires
-   it;
-4. representative scenario rerun — **last resort only**, governed by the gate
-   policy in the next paragraph (reach it only for an irreducibly-statistical
-   claim, never as a routine step);
-5. Solver step commit or autonomous loop report.
+1. Focused regression through the real owner path, including a meaningful
+   red-on-revert control when it can discriminate the defect.
+2. Static guardrails relevant to that boundary and affected consumers.
+3. Shared unit or dependency gates required by the selected change proof.
+4. Native, physical, or representative service evidence when the claim needs
+   that layer and the target path is ready to measure.
+5. Statistical certification only when the metric requires it.
+6. Current Quest evidence, independent review, and landing steps.
 
-The expensive non-deterministic statistical gate (the docker rolling-restart
-stat-gate and equivalent multi-run scenario reruns) is a last resort, reached
-only after deterministic in-process proof: a fix is validated by a deterministic
-reproduction that goes red on revert, not by a passing gate run, and a gate is
-never the iteration loop. The gate policy itself is single-homed in
-[`operational-ground-truth.md`](../distributed/operational-ground-truth.md) (per the
-AGENTS.md single-canonical-home rule) — consult it before queuing any gate run
-for: the admission criteria (the named irreducibly-statistical cases, including
-hot failure-path aggregate A/B validation), the mandatory
-`npm run analyze:latent-blockers` pre-gate step, the sealed-metric detail, and
-the statistical N calibration table. This file only fixes the rerun-ladder
-ordering above; it does not restate those criteria.
+The expensive non-deterministic statistical gate is reserved for claims that
+need statistical evidence. It follows deterministic mechanism proof and never
+becomes the routine repair loop. Necessary native or physical service evidence
+has its own ceiling; it is not prohibited merely because its question is not a
+pass rate. The statistical policy, allowed categories, preflight, sealed metric,
+and N calibration remain single-homed in
+[`operational-ground-truth.md`](../distributed/operational-ground-truth.md).
 
-## Deterministic Proof Must Move the Binding Observable
+## Proof Must Reach The Binding Observable
 
-A deterministic proof MUST move the real in-cluster binding observable that the
-`doneWhen` is about — not merely the internal math or return value of the
-mechanism the fix introduces. A unit test of your own new function cannot fail to
-"engage"; passing it proves the function runs, not that the binding signal moved.
+A deterministic repair proof must reach the production owner and the observable
+its contract promises. A test of a new helper's return value is insufficient
+when production cannot reach it. Trace the real entry path and use a
+red-on-revert witness at the actual seam; label source-only reachability arguments
+as such. A deterministic fixture does not establish real in-cluster behavior
+merely by giving its values the same names.
 
-- Before spending a gate, split efficacy into two questions and answer the first
-  deterministically and cheaply, below the gate: (a) does the lever move the
-  binding in-cluster observable at all (deterministic, red-on-revert), and only
-  then (b) does it lift the statistical metric (the gate's job).
-- A lever that passes its own unit DT but never moves the real observable is NOT
-  proven; do NOT advance it to a gate. Reproduce the observable deterministically
-  in-process first.
+Before measuring an aggregate improvement, show that the repaired mechanism
+engages and changes its intended observable. Retain separate verdicts for
+mechanism correctness and for measured service or statistical improvement. If
+the live target never engages, preserve the outer result, name the blocking
+cause, and route the next repair; do not rerun unchanged to seek a passing sample.
 
 ## Static Gate Baselines Are A One-Way Ratchet
 
@@ -108,6 +130,8 @@ MUST NOT increase, with the single re-anchor exception below.
 - Tighten a baseline in the same change that removes violations whenever the
   measured count drops below the committed one.
 
-When a delegated worker reviews a scenario Quest, it must compare current probe
-evidence with the Quest's selected frontier and findings. The review should
-produce candidate findings or risks; the Solver still owns terminal status.
+When a delegated worker reviews a scenario Quest, compare current evidence with
+the sealed claim and recorded findings. Consolidate scoped findings with their
+invariant, reachable path, and evidence; the Solver owns terminal status. The
+integration owner updates the existing epic's current summary with the candidate,
+first blocker, evidence ceiling, next action, and actual continuation owner.

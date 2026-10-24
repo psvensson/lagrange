@@ -89,7 +89,8 @@ coordinator.recoverFromSystemTables({
 });
 const tx = coordinator.workflowCoordinator.getWorkflowById(transactionId);
 assert.ok(tx?.recoveryDiscovered);
-assert.equal(tx.decision, null, 'discovery snapshot cannot authorize decision');
+assert.equal(Object.hasOwn(tx, 'decision'), false,
+  'discovery snapshot cannot authorize decision');
 
 const unavailable = await coordinator.resumeRecoveredTransactions();
 assert.equal(unavailable.failed, 1);
@@ -102,7 +103,8 @@ const invalid = await coordinator.resumeRecoveredTransactions();
 assert.equal(invalid.failed, 1);
 assert.equal(invalid.resumed, 0);
 assert.equal(fanouts.length, 0);
-assert.equal(tx.decision, null);
+assert.equal(Object.hasOwn(tx, 'decision'), false,
+  'an invalid authoritative read adopts no decision');
 
 readMode = 'available';
 const attempted = await coordinator.resumeRecoveredTransactions();

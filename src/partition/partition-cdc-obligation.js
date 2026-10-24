@@ -55,6 +55,7 @@ import {registerCdcAcknowledgementProposer} from
   './partition-cdc-obligation-delivery.js';
 import {eventCdcSourceScope} from '../cdc/cdc-source-scope-evidence.js';
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
 /**
  * @param {*} type - A command's type.
@@ -65,6 +66,15 @@ function isCdcCommandType(type) {
 }
 
 // --- the committed-entry CDC hook ---
+
+// Whether a committed write on this partition owes a CDC obligation at all:
+// the policy owner's recording rule over the table the partition holds
+// (owner decision D2). It is a pure function of code and the partition's
+// table identity, so every replica records the same rows at the same entry;
+// no event is built and no row is read for a table that owes nothing.
+function partitionOwesCdc(service) {
+  return isTableCdcObligationRecorded(service.tableName);
+}
 
 // The write entry the CDC generator reads one applied operation as: the
 // operation's statement and params, the decision's stamp (its HLC is the
@@ -93,6 +103,7 @@ function operationEntryOf(command, operation, result) {
  * @return {Object|null} Immutable owed row, or no event for a no-op.
  */
 function captureCommittedOperationCdc(service, committed, {operation, result, ordinal}) {
+  if (!partitionOwesCdc(service)) return null;
   const {command, index, term} = committed;
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     operationEntryOf(command, operation, result),
@@ -123,6 +134,7 @@ function captureCommittedOperationCdc(service, committed, {operation, result, or
 function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
   const {command, index, term} = committed;
   if (command.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT) return 0;
+  if (!partitionOwesCdc(service)) return 0;
   const built = service.syncCDCGeneratorDependencies().buildEvent(
     {...command, changes: result.changes},
     {suppressNoOpWrite: true, sourceReplica: command.proposedBy});
@@ -145,14 +157,12 @@ function recordCommittedStatementCdc(service, committed, {entryKey, result}) {
  */
 function recordCommittedOperationCdc(service, committed, events) {
   const {command, index} = committed;
-  const recorded = events.length;
-  if (recorded > 0) {
-    ensureCdcObligationLedger(service.db);
-    for (const event of events) insertCdcObligation(service.db, event);
-  }
+  const recorded = partitionOwesCdc(service) ? events.length : 0;
   if (recorded === 0) {
     return recorded;
   }
+  ensureCdcObligationLedger(service.db);
+  for (const event of events) insertCdcObligation(service.db, event);
   committed.afterCommit(() => {
     for (let ordinal = 0; ordinal < recorded; ordinal += 1) {
       service.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
@@ -205,7 +215,7 @@ function refuseAcknowledgement(service, committed, failureCode, fields = {}) {
 // no caller-sized durable ID enters the ACK.
 function acknowledgementJudgementOf(service, groups) {
   const owed = [];
-  const alreadyDelivered = [];
+  const deliveredEarlier = [];
   for (const group of groups) {
     for (const event of group.events) {
       const rows = readCdcObligationsAtPosition(service.db, group.logIndex, event.ordinal);
@@ -218,10 +228,10 @@ function acknowledgementJudgementOf(service, groups) {
         return {refusal: {failureCode: CODE.POSITION_MISMATCH,
           logIndex: group.logIndex, ordinal: event.ordinal}};
       }
-      (row.delivered ? alreadyDelivered : owed).push(row.eventKey);
+      (row.delivered ? deliveredEarlier : owed).push(row.eventKey);
     }
   }
-  return {owed, alreadyDelivered};
+  return {owed, alreadyDelivered: deliveredEarlier};
 }
 
 /**

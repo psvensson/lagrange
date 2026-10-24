@@ -862,7 +862,7 @@ test('ControlPlaneReadinessService classifies degraded publication separately',
       }),
       cdcGroupPropagationService: createPublicationService({
         currentMode: CONTROL_PLANE_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-        reasonCode: 'grouped_delivery_failure',
+        reasonCode: 'missing_coordinator_address',
         enteredAt: '2026-03-04T00:00:00.000Z',
         recentTransitions: [],
       }),

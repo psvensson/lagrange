@@ -21,14 +21,9 @@
   "distributed:matrix": "Run the distributed scenario matrix on a selected local, lab, or GCP target and canonical or topology profile.",
   "distributed:rerun-failed": "Re-run only scenarios whose latest local-target distributed report still fails.",
   "distributed:stop-containers": "Stop local Docker containers and Node processes created by the distributed harness.",
-  "frontier": "Print the Solver frontier board.",
-  "frontier:write": "Write the durable frontier board to solve/FRONTIER.generated.md.",
   "gate": "Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).",
   "health:formation": "Run the MovieLens formation-only phase (local, or one node per GCP VM with --gcp) or read a report, append one formation-verdict record to data/formation-health/trend.ndjson, and print the trend (--summary renders it without running).",
   "hooks:install": "Install the repository git hooks.",
-  "overview": "Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).",
-  "overview:write": "Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.",
-  "quest:context": "Print full Quest context: status, model guidance, pending step, latest probe, findings, dirty worktree.",
   "release:notes": "Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.",
   "release:preflight": "Evaluate the five release-exit checks for the current checkout (clean release content, HEAD is origin/main, ci gate green on the exact sha, versions and changelog agree, tag absent) and print the exact tag commands; never tags.",
   "repro": "Run a closure-ledger reproduction case (npm run repro -- CL-0NN).",
@@ -36,6 +31,5 @@
   "test-output": "(category) test-harness artifact lifecycle tools.",
   "test-output:prune": "Delete old test-harness artifacts (reports, playbacks, run dirs); keeps pinned names, today's items, and the most recent few per category.",
   "test-output:prune:dry": "Preview what test-output:prune would delete without removing anything.",
-  "test:topology-failure-gates": "Run the topology failure gates.",
-  "trace": "Join quests/specs/CLs across planning layers (solve.js trace)."
+  "test:topology-failure-gates": "Run the topology failure gates."
 }

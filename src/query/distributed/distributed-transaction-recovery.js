@@ -9,7 +9,7 @@ import {
   buildTransactionRecoveryIncompleteError,
   buildRecoveredTransactionDecisionState,
 } from './distributed-transaction-recovery-validation.js';
-import {redriveAuthoritativeRecovery} from
+import {redriveAuthoritativeRecovery, TRANSACTION_AUTHORITY_STATE} from
   './distributed-transaction-recovery-authority.js';
 import {PARTICIPANT_TRANSACTION_DECISION} from
   '../../partition/partition-participant-transaction-constants.js';
@@ -101,6 +101,25 @@ async function redriveRecoveredTransaction(coordinator, tx) {
 
 const distributedTransactionRecoveryMethods = {
   shouldDeferRecoverySweepError,
+
+  /**
+   * A discovered obligation belongs to this recovery owner until its
+   * re-drive restores the authoritative row, validates its decision state
+   * (validateRecoveredTransactionDecision) and ends it. A session stage on
+   * it - a statement, COMMIT or ROLLBACK - would run on restored state that
+   * no validator has seen and let a client own a recovered decision
+   * (Invariant 0); it is answered in doubt, naming the last authority read
+   * state (NOT_READ before the first re-drive), and changes nothing.
+   * @param {Object} tx - The session's held transaction.
+   * @param {?string} operation - The refused stage's operation.
+   * @return {Object|null} The in-doubt answer, or null when the session owns tx.
+   */
+  recoveryObligationStageRefusal(tx, operation) {
+    return tx.recoveryDiscovered === true ?
+      {...this.buildDecisionInDoubtResult(tx), operation,
+        decisionReadState: tx.decisionReadState ??
+          TRANSACTION_AUTHORITY_STATE.NOT_READ} : null;
+  },
 
   recover(rows) {
     if (!Array.isArray(rows)) {
@@ -538,7 +557,6 @@ const distributedTransactionRecoveryMethods = {
             timestamp: updatedAt,
           })],
           writeOperations: [],
-          decision: null,
           participantSetText: row.participant_set_text ?? row.participantSetText ?? null,
           recoveryDiscovered: true,
           transactionRowInserted: true,

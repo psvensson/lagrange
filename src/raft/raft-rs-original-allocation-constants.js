@@ -51,8 +51,6 @@ const ORIGINAL_RIGHT_SUCCESSOR = Object.freeze({
   [ORIGINAL_ALLOCATION.SUBMITTED]: ORIGINAL_ALLOCATION.TRANSFERRED,
 });
 
-const REPLICA_LIFECYCLE_TABLE = '_raft_rs_replica_lifecycle';
-
 function originalAllocationError(reason, detail = null, cause = undefined) {
   return Object.assign(new Error(reason, cause === undefined ? undefined : {cause}), {
     code: ORIGINAL_ALLOCATION.HOLD,
@@ -62,5 +60,4 @@ function originalAllocationError(reason, detail = null, cause = undefined) {
 }
 
 export {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON,
-  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
-  REPLICA_LIFECYCLE_TABLE, originalAllocationError};
+  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR, originalAllocationError};

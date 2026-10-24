@@ -6,7 +6,7 @@
  * durable `partitions` rows, with `created_at` stamped exactly as the split
  * and merge workflows stamp a new child: at the moment the row is written),
  * one local-leader partition service per row whose CDC
- * `eventsGenerated` counter advances with the modelled write load, and
+ * `committedWrites` counter (partition-write-traffic.js) advances with the modelled write load, and
  * split/merge executors that replace rows in one step.
  *
  * The load is uniform over the integer key space [0, KEY_SPACE), so a
@@ -28,7 +28,7 @@
  * clock, through the manager's real flush path.
  */
 
-import {CDC_PIPELINE_METRIC} from '../../src/constants/index.js';
+import {PARTITION_WRITE_TRAFFIC_METRIC} from '../../src/partition/partition-write-traffic.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {CONFIG_KEY} from '../../src/config/config-key-constants.js';
 import {
@@ -105,9 +105,9 @@ function createSplitMergeSimulation(options = {}) {
       // The leadership edge's tenure token: one tenure per simulated row.
       leadershipTenure: Object.freeze({term: 1}),
       getSize: () => row.size_bytes,
-      cdcPipelineMetrics: {
+      writeTraffic: {
         getSnapshot: () => ({
-          [CDC_PIPELINE_METRIC.EVENTS_GENERATED]:
+          [PARTITION_WRITE_TRAFFIC_METRIC.COMMITTED_WRITES]:
             counters.get(row.partition_id),
         }),
       },

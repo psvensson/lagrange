@@ -88,8 +88,10 @@ const RATCHET_TARGETS = [
     // measures 47/1462, so this quest claims no clone reduction.
     // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
     // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
-    baselineCloneGroupCount: 46,
-    baselineDuplicatedLineCount: 1439,
+    // Alpha API removal: tightened 46/1439 -> 44/1383 (WebSocketTransport
+    // family, RouterMessageHandler and ReplicaLifecycleManager deleted).
+    baselineCloneGroupCount: 44,
+    baselineDuplicatedLineCount: 1383,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -234,10 +236,11 @@ const RATCHET_TARGETS = [
     // 2026-10-24: the rs-raft lineage's test copies import their shared
     // helpers (trace, native startup fixture, contender, schedules, stamp
     // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
-    // 2026-10-25: the seed harness consumes the production startup authorities
-    // through one fixture; tightened 689/26148 -> 688/26126 on the checker's hint.
-    baselineCloneGroupCount: 688,
-    baselineDuplicatedLineCount: 26126,
+    // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
+    // Alpha API removal: tightened 679/25717 -> 658/24752 (WebSocketTransport
+    // family and ReplicaLifecycleManager tests deleted).
+    baselineCloneGroupCount: 658,
+    baselineDuplicatedLineCount: 24752,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -49,6 +49,7 @@ import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
+  CDC_TABLE,
   commitMessage,
   identityOf,
   prepareMessage,
@@ -62,6 +63,8 @@ import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
 import {PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {buildPartitionWriteEntry} from '../../src/partition/partition-write-kernel.js';
+import {RAFT_OPERATION_OUTCOME} from '../../src/raft/raft-operation-port-constants.js';
 
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_OWNER_NODE_ID = 'node-owner';
@@ -1034,8 +1037,8 @@ test('PartitionService - generates CDC events on insert', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-6',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1054,12 +1057,12 @@ test('PartitionService - generates CDC events on insert', async (t) => {
   await partition.subscribeToCDCWithHandshake(subscriber);
   await settlePendingCdcDeliveries(partition);
 
-  await partition.insertData('cdc_test', {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
   t.equal(cdcEvents[0].operation, CDCOperation.INSERT);
-  t.equal(cdcEvents[0].tableName, 'cdc_test');
+  t.equal(cdcEvents[0].tableName, CDC_TABLE);
   t.equal(cdcEvents[0].sourcePartition, 'test-partition-6');
   // The delivery was accepted, not refused and held for redelivery: its
   // acknowledgement commits as CDC_DELIVERED and the ledger owes nothing.
@@ -1072,7 +1075,53 @@ test('PartitionService - generates CDC events on insert', async (t) => {
   await partition.shutdown();
 });
 
-// Deleted: two no-subscriber buffering tests asserted the retired volatile buffer and its warning (vacuous; the durable recorder owes these tables' events, an open CDC-policy owner decision).
+// The durable recording rule (owner decision D2): a committed write owes a CDC
+// obligation only on an internally propagated table. A user table owes none,
+// even when its cached table policy asks for external CDC (a per-node cache is
+// not replicated input), and neither does a non-propagated control table.
+// Five committed writes to a partition's own table, then its ledger counts.
+async function ledgerAfterFiveWrites(options, rowOf) {
+  const partition = new PartitionService(withFoundingStamp({replicaIds: [options.replicaId],
+    dbPath: ':memory:', systemTableCache: new SystemTableCache(), ...options}));
+  await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
+  for (let index = 0; index < 5; index += 1) {
+    await partition.insertData(options.tableName, rowOf(index));
+  }
+  await settlePendingCdcDeliveries(partition);
+  const facts = {rows: partition.db.prepare(
+    `SELECT COUNT(*) AS c FROM ${options.tableName}`).get().c,
+  ...countCdcObligations(partition.db)};
+  await partition.shutdown();
+  return facts;
+}
+
+test('PartitionService - a user table write records no CDC obligation, whatever its ' +
+  'cached table policy asks', async (t) => {
+  const facts = await ledgerAfterFiveWrites({partitionId: 'test-partition-cdc-user',
+    tableId: 'tbl-benchmark', tableName: 'benchmark_events', replicaId: 'replica-1',
+    schema: {columns: [{name: 'event_id', type: 'TEXT', primaryKey: true},
+      {name: 'payload', type: 'INTEGER'}]},
+    systemTableCache: {getAll: () => [], filter: () => [],
+      get: (tableName, key) => (tableName === TABLES.TABLES && key === 'tbl-benchmark' ?
+        {table_id: 'tbl-benchmark', table_name: 'benchmark_events',
+          table_policies: JSON.stringify({externalCdcAllowed: true})} : null)}},
+  (index) => ({event_id: `evt-${index}`, payload: index}));
+  t.same(facts, {rows: 5, owed: 0, delivered: 0},
+    'five committed user-table writes leave the ledger empty');
+});
+
+test('PartitionService - a non-propagated control table write records no CDC obligation',
+  async (t) => {
+    const facts = await ledgerAfterFiveWrites({partitionId: 'sql-write-operations-p1',
+      tableId: TABLES.SQL_WRITE_OPERATIONS, tableName: TABLES.SQL_WRITE_OPERATIONS,
+      replicaId: 'sql-write-operations-p1-r1',
+      schema: {columns: [{name: 'operation_id', type: 'TEXT', primaryKey: true},
+        {name: 'sql_text', type: 'TEXT'}]}},
+    (index) => ({operation_id: `op-${index}`, sql_text: 'INSERT INTO b VALUES (...)'}));
+    t.same(facts, {rows: 5, owed: 0, delivered: 0},
+      'five committed sql_write_operations writes leave the ledger empty');
+  });
 
 test('PartitionService - generates CDC events on update', async (t) => {
   const schema = {
@@ -1084,8 +1133,8 @@ test('PartitionService - generates CDC events on update', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-7',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1098,7 +1147,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
   // Single replica becomes leader immediately
   await Promise.resolve();
 
-  await partition.insertData('cdc_test', {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1108,7 +1157,7 @@ test('PartitionService - generates CDC events on update', async (t) => {
   await settlePendingCdcDeliveries(partition);
   cdcEvents.length = 0;
 
-  await partition.updateData('cdc_test', {id: 'cdc-1'}, {value: 200});
+  await partition.updateData(CDC_TABLE, {id: 'cdc-1'}, {value: 200});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1127,8 +1176,8 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-7-noop',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1146,7 +1195,7 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
   });
 
   const updateResult = await partition.updateData(
-    'cdc_test',
+    CDC_TABLE,
     {id: 'missing-row'},
     {value: 999},
   );
@@ -1168,8 +1217,8 @@ test('PartitionService - generates CDC events on delete', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-8',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1182,7 +1231,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   // Single replica becomes leader immediately
   await Promise.resolve();
 
-  await partition.insertData('cdc_test', {id: 'cdc-1', value: 100});
+  await partition.insertData(CDC_TABLE, {id: 'cdc-1', value: 100});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1192,7 +1241,7 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   await settlePendingCdcDeliveries(partition);
   cdcEvents.length = 0;
 
-  await partition.deleteData('cdc_test', {id: 'cdc-1'});
+  await partition.deleteData(CDC_TABLE, {id: 'cdc-1'});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1217,8 +1266,8 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-upsert-cdc',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1231,7 +1280,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   await Promise.resolve();
 
   // Insert initial row
-  await partition.upsertData('cdc_test', {id: 'u1', value: 10});
+  await partition.upsertData(CDC_TABLE, {id: 'u1', value: 10});
 
   // A durable CDC event is delivered only on the owner's committed receipt;
   // the setup write's owed event reaches the new subscriber first.
@@ -1242,7 +1291,7 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   cdcEvents.length = 0;
 
   // Upsert same key — should produce UPSERT, not INSERT
-  await partition.upsertData('cdc_test', {id: 'u1', value: 20});
+  await partition.upsertData(CDC_TABLE, {id: 'u1', value: 20});
   await settlePendingCdcDeliveries(partition);
 
   t.equal(cdcEvents.length, 1);
@@ -1270,8 +1319,8 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-sql-upsert',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1285,7 +1334,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
 
   // Insert initial row via raw SQL
   await partition.executeQuery(
-    'INSERT OR REPLACE INTO cdc_test (id, value) VALUES (?, ?)',
+    `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
     ['s1', 10],
   );
 
@@ -1299,7 +1348,7 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
 
   // Upsert same key via raw SQL — should produce UPSERT, not INSERT
   await partition.executeQuery(
-    'INSERT OR REPLACE INTO cdc_test (id, value) VALUES (?, ?)',
+    `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
     ['s1', 20],
   );
   await settlePendingCdcDeliveries(partition);
@@ -1391,8 +1440,8 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-follower-cdc',
-    tableId: 'cdc_test',
-    tableName: 'cdc_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -1412,18 +1461,21 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
   });
 
   // The committed entry reaches the application through the port; the
-  // application decides CDC on this replica's own leadership state.
-  await partition.raft.propose({
-    type: 'INSERT',
-    sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
+  // application decides CDC on this replica's own leadership state. The
+  // entry is built by the write-entry owner, as every proposer builds it.
+  const proposed = await partition.raft.propose(buildPartitionWriteEntry({
+    type: PARTITION_SERVICE_OPERATION.INSERT,
+    sql: `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
     params: ['f1', 42],
-    timestamp: String(Date.now()),
-    proposedBy: 'other-replica',
-  });
+  }, {timestamp: Date.now(), proposedBy: 'other-replica'}));
 
   // Allow any async CDC generation to complete
   await Promise.resolve();
 
+  t.equal(proposed.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'the committed entry is applied on this replica');
+  t.same(partition.db.prepare(`SELECT id, value FROM ${CDC_TABLE}`).all(),
+    [{id: 'f1', value: 42}], 'its statement ran');
   t.equal(
     cdcEvents.length,
     0,

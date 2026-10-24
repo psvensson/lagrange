@@ -2,7 +2,9 @@
  * The one QPM authority for automatic split/merge decisions.
  *
  * Semantics: `queriesPerMinute` is the average write rate (the local
- * leader's CDC `eventsGenerated` counter) over the most recent span of AT
+ * leader's committed-write counter, partition-write-traffic.js, which counts
+ * every applied data operation whether or not the table records CDC) over
+ * the most recent span of AT
  * LEAST one traffic window during which this node continuously led the
  * partition: one leadership tenure, one counter instance, no counter
  * regression. The span runs from the anchor (the newest retained sample at
@@ -46,7 +48,7 @@
  * would add timer load for an answer the next call produces exactly.
  */
 
-import {CDC_PIPELINE_METRIC} from '../constants/index.js';
+import {PARTITION_WRITE_TRAFFIC_METRIC} from './partition-write-traffic.js';
 import {SPLIT_MERGE_DEFAULT} from './partition-constants.js';
 import {resolveTrafficMeasurement} from './partition-split-merge-policy.js';
 
@@ -110,7 +112,7 @@ function normalizeCounterValue(value) {
  *   tenure: Object|null}}
  */
 function readLeaderCounter(partitionService) {
-  const counterSource = partitionService?.cdcPipelineMetrics || null;
+  const counterSource = partitionService?.writeTraffic || null;
   const tenure = partitionService?.leadershipTenure || null;
   if (!tenure || !counterSource ||
       typeof counterSource.getSnapshot !== LOCAL_STR_FUNCTION) {
@@ -119,7 +121,7 @@ function readLeaderCounter(partitionService) {
   const snapshot = counterSource.getSnapshot();
   return {
     count: normalizeCounterValue(
-      snapshot?.[CDC_PIPELINE_METRIC.EVENTS_GENERATED],
+      snapshot?.[PARTITION_WRITE_TRAFFIC_METRIC.COMMITTED_WRITES],
     ),
     counterSource,
     tenure,

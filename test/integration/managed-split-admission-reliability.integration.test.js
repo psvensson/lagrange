@@ -577,12 +577,12 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
         readinessService?.cdcGroupPropagationService || null;
     const degradedPublicationMode = Object.freeze({
       currentMode: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-      reasonCode: CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+      reasonCode: CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
       enteredAt: new Date().toISOString(),
       recentTransitions: Object.freeze([{
         from: CDC_GROUP_PUBLICATION_MODE.GROUPED,
         to: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-        reasonCode: CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+        reasonCode: CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
         changedAt: new Date().toISOString(),
       }]),
     });
@@ -709,7 +709,7 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
       );
       t.equal(
         diagnostics.publicationMode?.reasonCode,
-        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+        CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
         'diagnostics should preserve the publication degradation reason',
       );
       t.equal(

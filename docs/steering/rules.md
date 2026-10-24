@@ -1,21 +1,15 @@
 ---
 audience: agent
-last_reviewed: 2026-09-13
+last_reviewed: 2026-10-26
 ---
 
 # Rules
 
-The cross-cutting invariants. An agent can violate this repository merely by
-not knowing these before acting; everything else belongs to an owner and is
-consulted when relevant. Each rule states one invariant, names one owner
-through [`router.md`](router.md), and says what to do when the code in front
-of you disagrees. A rule never restates what its owner defines, so changing an
-owner's detail does not change a rule.
-
-Which rules exist is sealed in a manifest beside this page, one entry per
-independently violable invariant. How many there are follows from that and is
-never itself the criterion. Holding this page to a fixed total once pushed a pair
-of separately owned invariants into one rule to keep the total intact.
+Read these cross-cutting invariants before acting. Each states one invariant,
+routes to one owner through [`router.md`](router.md), and resolves disagreement.
+Owners hold the detail, consulted when relevant; their detail can change without
+changing a rule. The adjacent manifest seals one entry per independently violable
+invariant. Rule count follows those invariants, never an arbitrary total.
 
 ## R01. One semantic owner per concern
 
@@ -33,18 +27,20 @@ that contract is the change boundary.
 
 ## R03. Authority is consumed, not copied
 
-**Invariant.** A consumer asks its owner; it never restates the owner's
-knowledge in its own terms.
+**Invariant.** A consumer uses the owner's contract and outcomes; it never
+re-derives the owner's decision or creates competing authority.
 **Owner.** `architecture`
-**On conflict.** Replace the copy with a call to the owner.
+**On conflict.** Delegate the decision to its owner; preserve its meaning across
+any owner-defined representation boundary.
 
-## R04. A symptom is an owner defect
+## R04. A failure is repaired at its proven cause
 
-**Invariant.** A local failure is evidence that an owner or a boundary is
-wrong; it is never grounds for a local fallback, adapter or compatibility
-path.
+**Invariant.** A failure is traced to its first causal divergence before the
+repair is assigned. Product, fixture, verifier and infrastructure failures are
+distinguished; none authorizes a fallback that invents owner authority.
 **Owner.** `architecture`
-**On conflict.** Repair the owner the symptom points at.
+**On conflict.** Repair the demonstrated cause and its affected interaction;
+do not infer an architectural defect from the symptom alone.
 
 ## R05. Derived material is not an authority
 
@@ -69,10 +65,12 @@ from an empty, absent or ambiguous value.
 
 ## R08. A shared contract has one canonical shape
 
-**Invariant.** A contract crossing a boundary has one representation, defined
-once.
+**Invariant.** A contract crossing a boundary has one owner-defined semantic
+shape. Encodings and adapters preserve its authority, identities, deadlines,
+outcomes and retained obligations.
 **Owner.** `contracts`
-**On conflict.** Converge on the canonical shape rather than translating.
+**On conflict.** Remove competing interpretations; make any required conversion
+explicit at the owned boundary and prove that it preserves the contract.
 
 ## R09. A sealed contract is superseded, never reinterpreted
 
@@ -148,7 +146,8 @@ change touches are known.
 **Invariant.** A claim holds only when its declared proof measures it. Working
 locally, reading correct, or passing an unrelated check is not proof.
 **Owner.** `sealed-acceptance`
-**On conflict.** Measure the declared proof, or change nothing.
+**On conflict.** Withhold the unsupported acceptance claim, record the evidence
+gap and perform the investigation or proof that can resolve it.
 
 ## R20. Terminal state is not terminal proof
 
@@ -161,7 +160,8 @@ and nothing else.
 ## R21. History is append-only
 
 **Invariant.** Recorded findings, attempts, verdicts and terminal entries are
-appended to; they are never rewritten, truncated, relocated or deleted.
+appended to; they are never rewritten, truncated, relocated or deleted. A current
+summary is a mutable index to those records, not a replacement for them.
 **Owner.** `record-history`
 **On conflict.** Append a correcting entry; never edit a recorded one.
 
@@ -170,7 +170,9 @@ appended to; they are never rewritten, truncated, relocated or deleted.
 **Invariant.** Statements about landing, publishing or continuous integration
 identify the exact commit they were measured on.
 **Owner.** `publication`
-**On conflict.** Re-measure against the current head before claiming.
+**On conflict.** Re-measure or establish applicability through the existing proof
+owner before claiming coverage; exact-candidate publication and release gates
+still run where required.
 
 ## R23. No gate is bypassed to obtain a green state
 
@@ -190,7 +192,8 @@ Detail lives with its owner and is loaded only when relevant.
 ## R25. Memory informs, authority decides
 
 **Invariant.** Notes, prior reports, historical records and conversation
-context inform work; the repository's current owners decide it.
+context inform work; current owners decide repository semantics under the user's
+instructions and standing authority.
 **Owner.** `steering`
 **On conflict.** Verify against the owner before acting on remembered detail.
 
@@ -200,8 +203,9 @@ context inform work; the repository's current owners decide it.
 repository, is performed only where the operator's authority for it already
 exists.
 **Owner.** `action-authority`
-**On conflict.** Surface the boundary and stop; never infer authority from a
-previous action or from the ease of taking this one.
+**On conflict.** Ask for the missing authority and explain the boundary. Existing
+authorization for the same scope persists; unrelated authorization does not
+extend it.
 
 ## R27. A probe measures, it never acts
 

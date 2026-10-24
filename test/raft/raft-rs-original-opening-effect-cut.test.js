@@ -14,8 +14,8 @@ import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow, transitionOriginalRight} from
-  '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow, transitionOriginalRight} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
@@ -31,9 +31,9 @@ function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-effect-cut-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: 'original-node', buildDigest: 'effect-cut-build'};
-  const declaration = createSeedOriginalAllocation({...identity, now: 1234});
+  const draft = createSeedOriginalAllocation({...identity, now: 1234});
   const preparation = new RaftRsOriginalAllocationPreparation({directoryOwner, ...identity});
-  let db;
+  let db = null;
   let port;
   t.after(() => {
     setActualCoreEntryObserver(null);
@@ -43,8 +43,9 @@ function fixture(t) {
     directoryOwner.release();
     fs.rmSync(dataDir, {recursive: true, force: true});
   });
-  preparation.prepare(declaration);
-  const member = declaration.members.find((entry) => entry.replicaId === declaration.anchorReplicaId);
+  const declaration = preparation.prepare(draft);
+  const member = declaration.members.find((entry) =>
+    entry.replicaId === declaration.anchorReplicaId);
   db = new Database(member.dbPath, {fileMustExist: true});
   const entries = [];
   setActualCoreEntryObserver((entry) => entries.push(entry));
@@ -66,7 +67,8 @@ test('unchanged original authority reaches actual native creation', (t) => {
   const f = fixture(t);
   assert.equal(f.open().readStatus().outcome, 'CORE_OK');
   assert.ok(f.entries.some(({operation}) => operation === 'create_node'));
-  assert.equal(originalAllocationRow(f.db, f.member).native_history_state, HISTORY.ESTABLISHED);
+  assert.equal(readOriginalAllocationRow({db: f.db, member: f.member}).native_history_state,
+    HISTORY.ESTABLISHED);
 });
 
 test('revocation inside native tuning cannot cross the actual creation cut', (t) => {
@@ -77,19 +79,22 @@ test('revocation inside native tuning cannot cross the actual creation cut', (t)
   }};
   assert.throws(f.open, hold(REASON.CLOSED));
   assert.deepEqual(f.entries, [], 'the native create boundary was not entered');
-  assert.equal(originalAllocationRow(f.db, f.member).native_history_state, HISTORY.NEVER_OPENED);
+  assert.equal(readOriginalAllocationRow({db: f.db, member: f.member}).native_history_state,
+    HISTORY.NEVER_OPENED);
 });
 
 for (const column of [COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT]) {
   test(`late consumption of ${column} cannot authorize native creation`, (t) => {
     const f = fixture(t);
     Object.defineProperty(f.request, 'sendToPeer', {get() {
-      transitionOriginalRight(f.db, f.member, column, STATE.UNUSED, STATE.SUBMITTED);
+      transitionOriginalRight({db: f.db, member: f.member, right: column,
+        from: STATE.UNUSED, to: STATE.SUBMITTED});
       return () => {};
     }});
     assert.throws(f.open, hold(REASON.SPENT));
     assert.deepEqual(f.entries, []);
-    assert.equal(originalAllocationRow(f.db, f.member)[column], STATE.SUBMITTED);
-    assert.equal(originalAllocationRow(f.db, f.member).native_history_state, HISTORY.NEVER_OPENED);
+    assert.equal(readOriginalAllocationRow({db: f.db, member: f.member})[column], STATE.SUBMITTED);
+    assert.equal(readOriginalAllocationRow({db: f.db, member: f.member}).native_history_state,
+      HISTORY.NEVER_OPENED);
   });
 }

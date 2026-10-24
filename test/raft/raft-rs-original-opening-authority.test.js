@@ -14,11 +14,13 @@ import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {originalAllocationRow} from '../../src/raft/raft-rs-original-allocation-store.js';
+import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN, REPLICA_LIFECYCLE_TABLE as TABLE} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
+import {REPLICA_LIFECYCLE_TABLE as TABLE} from
+  '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from '../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
@@ -33,7 +35,7 @@ function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-opening-authority-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: 'original-node', buildDigest: 'test-build'};
-  const declaration = createSeedOriginalAllocation({...identity, now: 1234});
+  const draft = createSeedOriginalAllocation({...identity, now: 1234});
   const owners = [];
   const resources = [];
   const newOwner = () => {
@@ -68,14 +70,20 @@ function fixture(t) {
       return resource.port;
     }};
   }
-  return {directoryOwner, declaration, preparation, newOwner, native};
+  const f = {directoryOwner, draft, declaration: null, preparation, newOwner, native};
+  // The issued declaration carries the stamps the lifecycle owner minted.
+  f.prepare = () => {
+    f.declaration = preparation.prepare(draft);
+    return f.declaration;
+  };
+  return f;
 }
 
 test('original admission is unavailable until the complete allocation closes preparation', (t) => {
   const f = fixture(t);
-  const member = f.declaration.members[0];
-  assert.throws(() => f.preparation.openingFor(member.replicaId), hold(REASON.AUTHORITY));
-  f.preparation.prepare(f.declaration);
+  assert.throws(() => f.preparation.openingFor(f.draft.members[0].replicaId),
+    hold(REASON.AUTHORITY));
+  const member = f.prepare().members[0];
   assert.deepEqual(f.preparation.observeResources(), []);
   const opening = f.preparation.openingFor(member.replicaId);
   assert.equal(Object.isFrozen(opening), true);
@@ -85,7 +93,7 @@ test('original admission is unavailable until the complete allocation closes pre
   const native = f.native(member, opening);
   const port = native.open();
   assert.equal(port.readStatus().outcome, 'CORE_OK');
-  const row = originalAllocationRow(native.db, member);
+  const row = readOriginalAllocationRow({db: native.db, member});
   assert.equal(row.native_history_state, HISTORY.ESTABLISHED);
   assert.equal(row[COLUMN.SERVICE_RIGHT], STATE.UNUSED, 'opening is not SERVICES consumption');
   port.close();
@@ -94,7 +102,7 @@ test('original admission is unavailable until the complete allocation closes pre
 
 test('opening capabilities bind exact member, store and original membership', async (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const opening = f.preparation.openingFor(member.replicaId);
   for (const [name, extra] of [
@@ -130,7 +138,7 @@ test('opening capabilities bind exact member, store and original membership', as
 for (const close of ['revoke', 'directory']) {
   test(`${close} closes queued original native admission`, (t) => {
     const f = fixture(t);
-    f.preparation.prepare(f.declaration);
+    f.prepare();
     const member = f.declaration.members[0];
     const opening = f.preparation.openingFor(member.replicaId);
     const native = f.native(member, opening);
@@ -140,14 +148,14 @@ for (const close of ['revoke', 'directory']) {
     setActualCoreEntryObserver((entry) => entries.push(entry));
     assert.throws(native.open, hold(close === 'revoke' ? REASON.CLOSED : REASON.DIRECTORY));
     assert.deepEqual(entries, []);
-    assert.equal(originalAllocationRow(native.db, member).native_history_state,
+    assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
       HISTORY.NEVER_OPENED);
   });
 }
 
 test('revocation during an intermediate constructor callback prevents native entry', (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const opening = f.preparation.openingFor(member.replicaId);
   const native = f.native(member, opening, {timing: {
@@ -160,12 +168,13 @@ test('revocation during an intermediate constructor callback prevents native ent
   setActualCoreEntryObserver((entry) => entries.push(entry));
   assert.throws(native.open, hold(REASON.CLOSED));
   assert.deepEqual(entries, []);
-  assert.equal(originalAllocationRow(native.db, member).native_history_state, HISTORY.NEVER_OPENED);
+  assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
+    HISTORY.NEVER_OPENED);
 });
 
 test('constructor failure cannot restore an already consumed opening', (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const opening = f.preparation.openingFor(member.replicaId);
   const failure = new Error('timing owner failed');
@@ -180,7 +189,7 @@ test('constructor failure cannot restore an already consumed opening', (t) => {
 
 test('a changed durable incarnation cannot borrow the original opening', (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const native = f.native(member, f.preparation.openingFor(member.replicaId));
   native.db.prepare(`UPDATE ${TABLE} SET incarnation = ? WHERE replica_identity = ?`)
@@ -190,7 +199,7 @@ test('a changed durable incarnation cannot borrow the original opening', (t) => 
 
 test('all-member actual native opening then readonly original recovery', async (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   for (const member of f.declaration.members) {
     const native = f.native(member, f.preparation.openingFor(member.replicaId));
     const port = native.open();
@@ -279,7 +288,7 @@ test('all-member actual native opening then readonly original recovery', async (
 
 test('revocation while resolving the last dispatcher callback cannot cross native entry', (t) => {
   const f = fixture(t);
-  f.preparation.prepare(f.declaration);
+  f.prepare();
   const member = f.declaration.members[0];
   const native = f.native(member, f.preparation.openingFor(member.replicaId));
   Object.defineProperty(native.request, 'sendToPeer', {get() {
@@ -290,5 +299,6 @@ test('revocation while resolving the last dispatcher callback cannot cross nativ
   setActualCoreEntryObserver((entry) => entries.push(entry));
   assert.throws(native.open, hold(REASON.CLOSED));
   assert.deepEqual(entries, []);
-  assert.equal(originalAllocationRow(native.db, member).native_history_state, HISTORY.NEVER_OPENED);
+  assert.equal(readOriginalAllocationRow({db: native.db, member}).native_history_state,
+    HISTORY.NEVER_OPENED);
 });

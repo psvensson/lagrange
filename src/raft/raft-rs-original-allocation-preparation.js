@@ -5,14 +5,20 @@ import path from 'node:path';
 import {isDeepStrictEqual} from 'node:util';
 import {deepFreeze} from './raft-operation-port.js';
 import {SERVICE_TYPE} from '../constants/service.js';
-import {validateOriginalSeedDeclaration, originalSeedPeerAddresses} from
+import {validateOriginalSeedDeclaration, validateOriginalSeedDraft,
+  completeSeedOriginalAllocation, originalSeedPeerAddresses} from
   '../bootstrap/seed-original-allocation-declaration.js';
 import {readOriginalSeedRetainedEffects} from '../bootstrap/seed-retained-effects.js';
 import {getSchemaByTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations,
   deriveRaftRsPeerId} from
   './raft-rs-peer-identity.js';
-import {RaftRsReplicaLifecycleOwner} from './raft-rs-replica-lifecycle-owner.js';
+// The lifecycle owner is the only writer of the founder rows and their
+// allocation fields (owner decision 2026-10-26, Q3): this preparation births,
+// formats, issues and reads them only through these named operations.
+import {prepareReplicaLifecycleForOriginalAllocation, prepareOriginalAllocationRow,
+  markOriginalAllocationIssued, readOriginalAllocationRow,
+  readOriginalAllocationDeclaration} from './raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_RETAINED_HISTORY_COVERAGE, RAFT_RS_RETAINED_ENTRY_KIND,
   RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
@@ -20,12 +26,10 @@ import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RaftRsPreparationCustody} from './raft-rs-preparation-custody.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {ownsDataDirectoryProcessOwner} from '../storage/data-directory-process-owner.js';
-import {originalAllocationRow, prepareOriginalAllocationRow,
-  markOriginalAllocationIssued} from './raft-rs-original-allocation-store.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN, originalAllocationError} from
   './raft-rs-original-allocation-constants.js';
-import {REPLICA_LIFECYCLE_TABLE} from './raft-rs-original-allocation-constants.js';
+import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST as PORT_REQUEST} from './raft-operation-port-request.js';
 import {validateBootstrapMembershipStamp, validateDurableRecordBootstrap} from
   './raft-committed-membership-stamp.js';
@@ -45,27 +49,30 @@ function assertVirginMember(member) {
   }
 }
 
-function formatOriginalMember(db, declaration, member) {
+// Birth one founder through the lifecycle owner's named original operation,
+// committed with its peer-identity rows. The owner mints the incarnation and
+// this returns it; the declaration is completed from these stamps only.
+function bearOriginalMember(db, member) {
   db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
   db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
+  let born;
   commitDurably(db, () => {
     const registry = new RaftRsPeerIdentityRegistry(db);
     for (const replicaId of member.replicaIds) registry.registerReplica(replicaId);
     // This callback closes over immutable owned data and cannot call a
     // consumer. No observer/logger/native dispatcher runs during preparation.
-    const lifecycle = new RaftRsReplicaLifecycleOwner({db,
-      groupId: member.groupId, peerId: member.peerId, replicaIdentity: member.replicaId,
-      mintIncarnation: () => member.incarnation});
-    if (!lifecycle.active || lifecycle.incarnation !== member.incarnation) {
+    born = prepareReplicaLifecycleForOriginalAllocation({db, groupId: member.groupId,
+      peerId: member.peerId, replicaIdentity: member.replicaId});
+    if (born.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
       throw originalAllocationError(REASON.IDENTITY, member.replicaId);
     }
   });
   new RaftRsDurableStore(db);
-  prepareOriginalAllocationRow(db, declaration, member);
+  return born.detail.incarnation;
 }
 
 function verifyMemberBinding(db, declaration, member) {
-  const row = originalAllocationRow(db, member);
+  const row = readOriginalAllocationRow({db, member});
   if (row[COLUMN.DECLARATION] !== JSON.stringify(declaration) ||
       row[COLUMN.MEMBER] !== JSON.stringify(member)) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
@@ -85,8 +92,7 @@ function verifyMemberBinding(db, declaration, member) {
   if (reservations.length !== member.replicaIds.length ||
       !member.replicaIds.every((replicaId) =>
         reservations.some((reservation) => reservation.replicaIdentity === replicaId &&
-          reservation.learnerAdmission === undefined &&
-          reservation.promotionAdmission === undefined))) {
+          reservation.learnerAdmission === undefined))) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
   return row;
@@ -212,15 +218,10 @@ class RaftRsOriginalAllocationPreparation {
     let answer;
     try {
       const db = this.#custody.open(anchor, {readonly: true, fileMustExist: true});
-      const present = db.prepare(`SELECT 1 FROM sqlite_master
-        WHERE type = 'table' AND name = ?`).get(REPLICA_LIFECYCLE_TABLE);
-      const row = present === undefined ? undefined :
-        db.prepare(`SELECT * FROM ${REPLICA_LIFECYCLE_TABLE}
-          WHERE group_id = ? AND replica_identity = ?`)
-          .get(anchor.groupId, anchor.replicaId);
-      answer = row?.[COLUMN.DECLARATION] == null ?
-        Object.freeze({state: STATE.ABSENT}) :
-        Object.freeze({state: STATE.PRESENT, declaration: JSON.parse(row[COLUMN.DECLARATION])});
+      const read = readOriginalAllocationDeclaration({db, groupId: anchor.groupId,
+        replicaIdentity: anchor.replicaId});
+      answer = read.state === STATE.PRESENT ?
+        Object.freeze({state: STATE.PRESENT, declaration: read.declaration}) : read;
     } catch (error) {
       this.#fail(originalAllocationError(REASON.OBSERVATION, anchor.replicaId, error));
     }
@@ -228,34 +229,53 @@ class RaftRsOriginalAllocationPreparation {
     return answer;
   }
 
-  prepare(declaration) {
+  /**
+   * Prepare the complete cohort of an original allocation and issue it,
+   * before any native effect. Every founder is born first (the lifecycle
+   * owner mints each incarnation), then the declaration is completed from
+   * those stamps and written to every row, and only then is the anchor
+   * issued. A failure at any point leaves no issued allocation, and the
+   * files it leaves make every later attempt hold (virgin inventory).
+   * @param {Object} draft The declaration owner's allocation, without
+   *   incarnations: a caller-chosen incarnation is refused.
+   * @return {Object} The complete, immutable declaration that was issued.
+   */
+  prepare(draft) {
     this.#begin();
     const opened = new Map();
+    let declaration;
     try {
       // Ask the catalog owner before inventory, mkdir or any writable open.
       // Checking only the supplied members cannot prove a complete allocation.
-      validateOriginalSeedDeclaration(declaration, this.#declarationIdentity);
+      validateOriginalSeedDraft(draft, this.#declarationIdentity);
       this.assertCurrent();
       // Complete virgin inventory precedes the first writable open.
-      for (const member of declaration.members) assertVirginMember(member);
-      for (const member of declaration.members) {
+      for (const member of draft.members) assertVirginMember(member);
+      const incarnations = new Map();
+      for (const member of draft.members) {
         fs.mkdirSync(path.dirname(member.dbPath), {recursive: true});
         const db = this.#custody.open(member);
         opened.set(member.replicaId, db);
-        formatOriginalMember(db, declaration, member);
+        incarnations.set(member.replicaId, bearOriginalMember(db, member));
+      }
+      declaration = completeSeedOriginalAllocation(draft, incarnations,
+        this.#declarationIdentity);
+      for (const member of declaration.members) {
+        prepareOriginalAllocationRow({db: opened.get(member.replicaId), declaration, member});
       }
       for (const member of declaration.members) {
         verifyMemberBinding(opened.get(member.replicaId), declaration, member);
       }
       const anchor = declaration.members.find(({replicaId}) =>
         replicaId === declaration.anchorReplicaId);
-      markOriginalAllocationIssued(opened.get(anchor.replicaId), declaration, anchor);
+      markOriginalAllocationIssued({db: opened.get(anchor.replicaId), declaration, anchor});
     } catch (error) {
       this.#fail(error);
     }
     this.#finishRead();
     this.#declaration = declaration;
     this.#openingMode = STATE.LIVE_ISSUER;
+    return declaration;
   }
 
   inspect(declaration, inspectApplicationHistory) {

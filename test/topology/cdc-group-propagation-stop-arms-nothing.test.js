@@ -14,13 +14,15 @@
 // built on it, both in cdc-group-propagation-lifecycle-methods.js.
 //
 // Witnessed on the rs-raft cutover:
-// - A delivery waiting in a batch window never settled at stop (the seed
-//   teardown hang).
+// - A delivery waiting at stop never settled (the seed teardown hang).
 // - A retry delay was armed after stop (round 3).
-// - A background retry wave in flight at stop re-armed its timer (round 4, R4-1).
 // - Deliveries continued to the remaining targets after stop (round 4, C).
 // - A propagate call after stop still proposed on the source message group
 //   (round 5, N1).
+// The service has one propagation path, the durable wave: its only held work
+// is the retry delay (sleep) and the in-flight wave (activeDurablePropagation).
+// Deleted with the volatile branch: the batch-window and background-retry
+// lanes (their maps and timers no longer exist).
 //
 // The proof has four owner-scoped legs. None of them counts global Node
 // handles.
@@ -31,9 +33,9 @@
 // - Semantic. After stop the primitive refuses (it answers null and arms
 //   nothing), the held sleep resolves at once, and a caller arriving after
 //   stop gets the typed stopped answer at once.
-// - State. After stop the owner's bookkeeping is empty (batch timers and
-//   entries, background timers and waves, held sleeps), and every waiter has
-//   settled with the typed stopped answer. The owner work ledger
+// - State. After stop the owner's bookkeeping is empty (no held sleep, no
+//   wave in flight), and every caller has settled without a success: the
+//   source owner keeps the debt. The owner work ledger
 //   (test/helpers/owner-work-ledger.js) holds no pending owner timer or
 //   immediate: P-Q's "remain pending". It holds none that is referenced: P-L.
 //   The ledger attributes a timer to the owner by its creating stack, or by
@@ -47,32 +49,36 @@
 // The end-to-end corroboration is test/bootstrap/
 // seed-teardown-pending-cdc-delivery.test.js.
 //
-// Each lane is fully in memory: the router and the source message group are
-// held fakes, driven by held promises. A timer the service must fire before
-// stop (a batch flush, a background wave) is fired with node:test mock
-// timers. The mock is restored before stop, so the ledger sees every real
-// timer. No wall clock is waited on.
+// Each lane is fully in memory: the router and the source message group's
+// batch apply are held fakes, driven by held promises, and the source
+// invocation runs on a virtual clock. No wall clock is waited on.
 //
 // Residual limit: owner work still waiting, at assert time, on a promise the
 // lane holds is not observed. None is pending on the fix.
 
 import assert from 'node:assert/strict';
-import {mock, test} from 'node:test';
+import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {COLUMN} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {buildCommittedCdcOutcome, unknownCdcAcceptance} from
+  '../../src/cdc/cdc-delivery-outcome.js';
 import {LATENCY_PROPAGATION_MODE} from
   '../../src/topology/latency-topology-constants.js';
-import * as CDC_GROUP_PROPAGATION_CONSTANTS from
+import {CDC_GROUP_PROPAGATION_DELIVERY_ERROR} from
   '../../src/topology/cdc-group-propagation-constants.js';
 import {CDCGroupPropagationService} from
   '../../src/topology/cdc-group-propagation-service.js';
+import {LatencyTopologySetup} from
+  '../../src/bootstrap/shared/latency-topology-setup.js';
 import {
   censusDelayedWorkSites,
   createOwnerWorkLedger,
 } from '../helpers/owner-work-ledger.js';
 import {
+  createDurablePropagationRequest,
+  createDurableSourceMessageGroupService,
   createGroupRow,
   createMessageGroupServiceRow,
   createTopologyCache,
@@ -81,24 +87,24 @@ import {
 } from './cdc-group-propagation-service-harness.js';
 
 const TURNS = 60;
-const QUIET_LOGGER = Object.freeze({info() {}, warn() {}, debug() {}, error() {}});
-const STOPPED_ERROR =
-  CDC_GROUP_PROPAGATION_CONSTANTS.CDC_GROUP_PROPAGATION_DELIVERY_ERROR
-    ?.PROPAGATION_STOPPED ?? 'a typed stopped outcome';
-const REFUSED = Object.freeze({acknowledged: false, error: 'refused'});
-// Batched by the owner (an internal-cache table) and not batched (a user table).
-const BATCHED_TABLE = TABLES.STORAGE_RESERVATIONS;
-const UNBATCHED_TABLE = 'orders';
+const QUIET_LOGGER = Object.freeze({info() {}, warn() {}, debug() {}, error() {},
+  logConsoleOnly() {}});
+const REFUSED = Object.freeze(unknownCdcAcceptance());
 const TARGETS = Object.freeze(['b', 'c'].map((node) => Object.freeze({
   groupId: `mg-node-${node}`,
   coordinatorNodeId: `node-${node}`,
   address: `node-${node}/message-group/mg-node-${node}`,
 })));
+const GROUP_IDS = Object.freeze(['mg-node-a', ...TARGETS.map((target) => target.groupId)]);
 const REPOSITORY_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OWNER_FILES = Object.freeze([
   'src/topology/cdc-group-propagation-service.js',
   'src/topology/cdc-group-propagation-delivery-methods.js',
+  'src/topology/cdc-group-propagation-durable-delivery.js',
+  'src/topology/cdc-group-propagation-durable-plan.js',
+  'src/topology/cdc-group-propagation-foreground-retry.js',
   'src/topology/cdc-group-propagation-lifecycle-methods.js',
+  'src/topology/cdc-group-propagation-retry-wait-report.js',
   'src/topology/cdc-group-propagation-routing.js',
 ]);
 const OWNER_FILE = /[\\/]src[\\/]topology[\\/]cdc-group-propagation[\w-]*\.js$/u;
@@ -119,13 +125,14 @@ function compose(mode, options = {}) {
   const service = new CDCGroupPropagationService({
     nodeId: 'node-a',
     systemTableCache: createTopologyCache({
-      nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: 'g-a'}],
-      groups: [createGroupRow('g-a', 'node-a'), createGroupRow('g-b', 'node-b'),
-        createGroupRow('g-c', 'node-c')],
+      // One id per group: the latency group is its message group.
+      nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: 'mg-node-a'}],
+      groups: GROUP_IDS.map((groupId, index) =>
+        createGroupRow(groupId, `node-${'abc'[index]}`)),
       services: [
         {groupId: 'mg-node-a', coordinatorNodeId: 'node-a',
           address: 'node-a/message-group/mg-node-a'},
-        ...TARGETS,
+        ...(options.targets ?? [TARGETS[0]]),
       ].map((target) => createMessageGroupServiceRow(target.groupId,
         target.coordinatorNodeId, target.address, RAFT_ROLE.LEADER,
         target.groupId)),
@@ -136,24 +143,25 @@ function compose(mode, options = {}) {
         lane.routerCalls.push({address, afterStop: lane.stopped, answer});
       }),
     },
-    latencyTreeService: {getRoutingOrder: () => ['g-a', 'g-b', 'g-c']},
+    latencyTreeService: {getRoutingOrder: () => GROUP_IDS},
     nowFn: () => 1000,
-    ...options,
+    ...options.service,
   });
   service.logger = QUIET_LOGGER;
   service.initialize();
   service.start();
   lane.service = service;
-  lane.source = {
-    groupId: 'mg-node-a',
-    replicaId: 'mg-node-a-r1',
-    applyCDCEvent: () => {
+  lane.source = createDurableSourceMessageGroupService('mg-node-a', {
+    applyCDCBatch: (events) => {
       lane.applies.push({afterStop: lane.stopped});
+      // A held apply is released after stop with the source's committed
+      // receipt: the wave must still reach no target.
       return lane.holdApply ? new Promise((release) => {
-        lane.heldApply = release;
-      }) : Promise.resolve();
+        lane.heldApply = () => release(buildCommittedCdcOutcome(events, 'mg-node-a',
+          {index: 1, term: 1}));
+      }) : REFUSED;
     },
-  };
+  });
   // The terminal boundary is stop()'s first statement: whatever stop() itself
   // arms is after it.
   lane.stop = () => {
@@ -164,27 +172,11 @@ function compose(mode, options = {}) {
   return lane;
 }
 
-function track(lane, operation) {
-  lane.box = {answer: null};
-  operation.then((answer) => {
-    lane.box.answer = answer;
-  });
-}
-
-function deliver(lane, table, targets = [TARGETS[0]], extra = {}) {
-  track(lane, lane.service.deliverToTargetsWithRetry({
-    tableName: table, operation: 'UPDATE',
-    data: {id: `${table}-1`, status: 'released'},
-    sourceGroupId: 'mg-node-a', targets: targets.map((target) => ({...target})),
-    ...extra,
-  }));
-}
-
-function propagate(lane, table = UNBATCHED_TABLE) {
-  track(lane, lane.service.propagateCDCEvent({
-    tableName: table, operation: 'UPDATE', data: {id: `${table}-1`},
-    sourceMessageGroupService: lane.source,
-  }));
+function propagate(lane) {
+  lane.box = {settled: false};
+  lane.service.propagateCDCEvent(createDurablePropagationRequest(lane.source)).then(
+    (value) => Object.assign(lane.box, {settled: true, value}),
+    (error) => Object.assign(lane.box, {settled: true, error}));
 }
 
 async function untilRouterCalls(lane, count) {
@@ -196,16 +188,19 @@ async function untilRouterCalls(lane, count) {
     `router delivery ${count} is in flight before stop`);
 }
 
-// Fire a timer the owner armed before stop, then restore real timers so every
-// creation after stop is observed.
-async function fireOwnerTimer(lane, delayMs) {
-  mock.timers.tick(delayMs);
-  await turns(TURNS);
-  mock.timers.reset();
-}
-
 function answerLastCall(lane, answer = REFUSED) {
   lane.routerCalls.at(-1).answer(answer);
+}
+
+// The wave sleeps between attempts once its first target answer is refused.
+async function untilRetryDelay(lane) {
+  await untilRouterCalls(lane, 1);
+  answerLastCall(lane);
+  for (let turn = 0; turn < TURNS && lane.service.retrySleepReleases.size === 0;
+    turn += 1) {
+    await turns(1);
+  }
+  assert.equal(lane.service.retrySleepReleases.size, 1, 'the wave holds its retry delay');
 }
 
 const LANES = [
@@ -234,108 +229,64 @@ const LANES = [
       lane.stop();
       lane.heldApply();
     }},
-  {name: 'propagate (grouped mode), stop during the grouped delivery',
+  {name: 'propagate (grouped mode), stop during the target delivery',
     mode: LATENCY_PROPAGATION_MODE.GROUPED, async drive(lane) {
       propagate(lane);
       await untilRouterCalls(lane, 1);
       lane.stop();
       answerLastCall(lane);
     }},
-  {name: 'propagate (grouped mode), stop during the safe-fanout recovery',
-    mode: LATENCY_PROPAGATION_MODE.GROUPED,
-    options: {deliveryRetryMaxAttempts: 1}, async drive(lane) {
+  {name: 'propagate (safe mode, one attempt), stop while the attempt is in flight',
+    options: {service: {deliveryRetryMaxAttempts: 1}}, async drive(lane) {
       propagate(lane);
       await untilRouterCalls(lane, 1);
-      answerLastCall(lane);
-      await untilRouterCalls(lane, 2);
       lane.stop();
       answerLastCall(lane);
     }},
-  {name: 'immediate batch, stop inside the batch window',
-    options: {immediateBatchDelayMs: 3600000}, async drive(lane) {
-      deliver(lane, BATCHED_TABLE);
-      await turns(3);
-      lane.stop();
-    }},
-  {name: 'immediate batch, stop while the flush is in flight', mockTimers: true,
-    options: {immediateBatchDelayMs: 50}, async drive(lane) {
-      deliver(lane, BATCHED_TABLE);
-      await turns(3);
-      await fireOwnerTimer(lane, 50);
+  {name: 'propagate (safe mode), stop during the retry delay', async drive(lane) {
+    propagate(lane);
+    await untilRetryDelay(lane);
+    lane.stop();
+  }},
+  // The seed cleanup's own teardown step (seed-cleanup-handler.js), which
+  // runs before the replica handler shuts down.
+  {name: 'the latency topology teardown during the retry delay', async drive(lane) {
+    propagate(lane);
+    await untilRetryDelay(lane);
+    lane.stopped = true;
+    lane.ledger.markTerminal();
+    await LatencyTopologySetup.stop({cdcGroupPropagationService: lane.service});
+  }},
+  {name: 'two targets, stop while the first is in flight',
+    options: {targets: TARGETS}, async drive(lane) {
+      propagate(lane);
       await untilRouterCalls(lane, 1);
       lane.stop();
       answerLastCall(lane);
     }},
-  {name: 'retry loop, stop while an attempt is in flight', async drive(lane) {
-    deliver(lane, UNBATCHED_TABLE);
-    await untilRouterCalls(lane, 1);
-    lane.stop();
-    answerLastCall(lane);
-  }},
-  {name: 'retry loop, stop during the retry delay', async drive(lane) {
-    deliver(lane, UNBATCHED_TABLE);
-    await untilRouterCalls(lane, 1);
-    answerLastCall(lane);
-    await turns(TURNS);
-    lane.stop();
-  }},
-  {name: 'background retry wave armed at stop', answeredBeforeStop: true,
-    options: {deliveryRetryMaxAttempts: 1}, async drive(lane) {
-      deliver(lane, UNBATCHED_TABLE);
-      await untilRouterCalls(lane, 1);
-      answerLastCall(lane);
-      await turns(TURNS);
-      lane.stop();
-    }},
-  {name: 'background retry wave in flight at stop', answeredBeforeStop: true,
-    mockTimers: true, options: {deliveryRetryMaxAttempts: 1},
-    async drive(lane) {
-      deliver(lane, UNBATCHED_TABLE);
-      await untilRouterCalls(lane, 1);
-      answerLastCall(lane);
-      await turns(TURNS);
-      await fireOwnerTimer(lane, lane.service.deliveryRetryMaxDelayMs);
-      await untilRouterCalls(lane, 2);
-      lane.stop();
-      answerLastCall(lane);
-    }},
-  {name: 'two targets, stop while the first is in flight', async drive(lane) {
-    deliver(lane, UNBATCHED_TABLE, TARGETS);
-    await untilRouterCalls(lane, 1);
-    lane.stop();
-    answerLastCall(lane);
-  }},
-  {name: 'delivery called after stop', async drive(lane) {
-    lane.stop();
-    deliver(lane, BATCHED_TABLE);
-  }},
 ];
 
-
+// Every caller settles once the service stops, and never with a success:
+// the answer (or the retired invocation's refusal) defers to the source owner.
 function assertStoppedAnswer(lane) {
-  assert.notEqual(lane.box?.answer ?? null, null,
-    'the awaiting caller settles once the service stops');
-  const failures = Array.isArray(lane.box.answer) ?
-    lane.box.answer :
-    lane.box.answer.deliveryFailures;
-  assert.ok(failures.length > 0 && failures.every((failure) =>
-    failure.error === STOPPED_ERROR),
-  'every target is answered with the typed stopped outcome, never a ' +
-  'success or a pending retry');
+  assert.equal(lane.box?.settled, true, 'the awaiting caller settles once the service stops');
+  const answer = lane.box.value ?? lane.box.error;
+  assert.notEqual(answer?.success, true, 'never a success after stop');
+  assert.equal(answer?.deferRetry, true, 'the source owner keeps the debt');
+  if (lane.box.value && lane.applies.length === 0) {
+    assert.equal(lane.box.value.reason,
+      CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED,
+      'a call after stop gets the typed stopped answer at once');
+  }
 }
 
 // State leg, bookkeeping half: nothing the owner holds for later.
 function assertOwnerBookkeepingEmpty(service) {
   assert.deepEqual({
-    immediateBatchTimers: service.immediateBatchTimers.size,
-    immediateBatchEntries: service.immediateBatchEntriesByKey.size,
-    backgroundRetryTimers: service.backgroundRetryTimers.size,
-    backgroundRetryWaves: service.backgroundRetryEntriesByKey.size,
     heldSleeps: service.retrySleepReleases.size,
-  }, {
-    immediateBatchTimers: 0, immediateBatchEntries: 0,
-    backgroundRetryTimers: 0, backgroundRetryWaves: 0, heldSleeps: 0,
-  }, 'the owner holds no batch, wave, timer or sleep after stop');
+    waveInFlight: service.activeDurablePropagation !== null,
+  }, {heldSleeps: 0, waveInFlight: false},
+  'the owner holds no wave and no sleep after stop');
 }
 
 // The four legs for one lane, once the lane has settled.
@@ -367,22 +318,16 @@ async function assertQuiescentAfterStop(lane) {
 
 for (const spec of LANES) {
   test(`${spec.name}: the owner is quiescent after stop`, async () => {
-    if (spec.mockTimers) {
-      mock.timers.enable({apis: ['setTimeout']});
-    }
     const lane = compose(spec.mode ?? LATENCY_PROPAGATION_MODE.SAFE,
       spec.options);
     try {
       await spec.drive(lane);
       await turns(TURNS);
       await assertQuiescentAfterStop(lane);
-      if (!spec.answeredBeforeStop) {
-        assertStoppedAnswer(lane);
-      }
+      assertStoppedAnswer(lane);
     } finally {
       lane.ledger.close();
       lane.service.stop();
-      mock.timers.reset();
       for (const call of lane.routerCalls) {
         call.answer(REFUSED);
       }

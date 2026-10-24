@@ -1,35 +1,28 @@
-// Component witnesses for the real foreground retry owner and its consumer.
-// Durable cases use the actual source ledger/subscriber/topology fixture with
-// controlled recipient answers; they do not claim native recipient commit proof.
+// Component witnesses for the real foreground retry owner and its consumer,
+// on the actual source ledger/subscriber/topology fixture with controlled
+// recipient answers; they do not claim native recipient commit proof.
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 
-import {COLUMN, TABLES} from '../../src/constants/index.js';
 import {WAIT_BOUND_SPENT_EVENT} from '../../src/logging/wait-bound-spent.js';
-import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE} from
   '../../src/partition/partition-cdc-obligation-constants.js';
-import {CDC_GROUP_FOREGROUND_CONTINUATION as CONTINUATION,
-  CDC_GROUP_FOREGROUND_RETRY_STATE as RETRY,
-  CDC_GROUP_PROPAGATION_DELIVERY_ERROR as DELIVERY_ERROR,
+import {CDC_GROUP_FOREGROUND_RETRY_STATE as RETRY,
   CDC_GROUP_PROPAGATION_STATE as STATE} from
   '../../src/topology/cdc-group-propagation-constants.js';
-import {CDCGroupPropagationService} from
-  '../../src/topology/cdc-group-propagation-service.js';
 import {LATENCY_PROPAGATION_MODE} from '../../src/topology/latency-topology-constants.js';
 import {RESPONSE, assertDebtWithoutAck, topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {settleTicks} from '../test-helpers/participant-transaction-fixture.js';
-import {createGroupRow, createMessageGroupServiceRow, createMessageRouter,
-  createTopologyCache, setupConfig, teardownConfig} from
-  './cdc-group-propagation-service-harness.js';
+import {setupConfig, teardownConfig} from './cdc-group-propagation-service-harness.js';
+import {scaleByMachineFactor} from '../integration/helpers/test-machine-factor.js';
 
 const RETRY_DELAY_MS = 50;
-const TEST_TIMEOUT_MS = 2000;
+// A hang guard over the real source fixture (its first leader start warms the
+// runtime), scaled for the host like every work-bound budget.
+const TEST_TIMEOUT_MS = scaleByMachineFactor(3000);
 const FOREGROUND_WAIT = 'CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS';
 const DURATION_WAIT = 'CDC delivery invocation remaining duration for the next retry';
-const TARGET = Object.freeze({groupId: 'mg-node-b', coordinatorNodeId: 'node-b',
-  address: 'node-b/message-group/mg-node-b'});
 
 beforeEach(() => setupConfig(LATENCY_PROPAGATION_MODE.SAFE));
 afterEach(teardownConfig);
@@ -51,32 +44,6 @@ function spentReports(entries) {
   return entries.filter((entry) => entry.context?.event === WAIT_BOUND_SPENT_EVENT);
 }
 
-function ordinaryFixture(t, maxAttempts) {
-  const router = createMessageRouter([{acknowledged: false, error: 'controlled refusal'}]);
-  const service = new CDCGroupPropagationService({nodeId: 'node-a',
-    systemTableCache: createTopologyCache({
-      nodes: [{[COLUMN.NODE_ID]: 'node-a', [COLUMN.LATENCY_GROUP_ID]: 'g-1'}],
-      groups: [createGroupRow('g-1', 'node-a'), createGroupRow('g-2', 'node-b')],
-      services: [createMessageGroupServiceRow(TARGET.groupId, TARGET.coordinatorNodeId,
-        TARGET.address, RAFT_ROLE.LEADER)],
-    }),
-    messageRouter: router,
-    latencyTreeService: {getRoutingOrder: () => ['g-1', 'g-2']},
-    deliveryRetryMaxAttempts: maxAttempts,
-    deliveryRetryDelayMs: RETRY_DELAY_MS,
-    deliveryRetryMaxDelayMs: RETRY_DELAY_MS,
-  });
-  const logs = recordLogs(service);
-  service.initialize();
-  service.start();
-  t.after(() => service.stop());
-  return {service, logs, router, deliver: () => service.deliverToTargetsWithRetry({
-    tableName: TABLES.STORAGE_RESERVATIONS, operation: 'UPDATE',
-    data: {reservation_id: 'foreground-reservation', status: 'released'},
-    sourceGroupId: 'mg-node-a', targets: [{...TARGET}], allowBatching: false,
-  })};
-}
-
 // The barrier holds only the already-computed result. The production helper
 // still decides, schedules, sleeps and observes stop through its real owners.
 function observeRetryDecisions(t, service, barrier = false) {
@@ -95,88 +62,6 @@ function observeRetryDecisions(t, service, barrier = false) {
   return {decisions, reached: reached.promise, release: released.resolve};
 }
 
-function assertNoTransientPayloads(service) {
-  assert.equal(service.immediateBatchEntriesByKey.size, 0);
-  assert.equal(service.immediateBatchTimers.size, 0);
-  assert.equal(service.backgroundRetryEntriesByKey.size, 0);
-  assert.equal(service.backgroundRetryTimers.size, 0);
-  assert.equal(service.retrySleepReleases.size, 0);
-}
-
-function assertStopped(answer, f, observed) {
-  assert.deepEqual(answer.map((failure) => failure.targetGroupId), [TARGET.groupId]);
-  assert.ok(answer.every((failure) => failure.error === DELIVERY_ERROR.PROPAGATION_STOPPED));
-  assert.equal(observed.decisions.length, 1,
-    'the consumer performs no extra foreground iteration after the real helper decision');
-  assert.equal(f.router.calls.length, 1, 'no further recipient effect follows stop');
-  assert.equal(spentReports(f.logs).length, 0, 'stop does not spend a retry budget');
-  assertNoTransientPayloads(f.service);
-}
-
-test('foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
-    const f = ordinaryFixture(t, 1);
-    const observed = observeRetryDecisions(t, f.service, true);
-    const delivery = f.deliver();
-    assert.equal((await observed.reached).state, RETRY.ATTEMPTS_EXHAUSTED);
-    f.service.stop();
-    observed.release();
-    assertStopped(await delivery, f, observed);
-  });
-
-test('foreground consumer rechecks stop after actual sleep returns ADVANCE',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
-    t.mock.timers.enable({apis: ['setTimeout']});
-    const f = ordinaryFixture(t, 2);
-    const observed = observeRetryDecisions(t, f.service, true);
-    const delivery = f.deliver();
-    await settleTicks();
-    assert.equal(f.service.retrySleepReleases.size, 1, 'the actual sleep is armed');
-    t.mock.timers.tick(RETRY_DELAY_MS);
-    assert.equal((await observed.reached).state, RETRY.ADVANCE);
-    f.service.stop();
-    observed.release();
-    assertStopped(await delivery, f, observed);
-  });
-
-test('foreground consumer preserves observed STOPPED when service restarts before consumption',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
-    t.mock.timers.enable({apis: ['setTimeout']});
-    const f = ordinaryFixture(t, 2);
-    const observed = observeRetryDecisions(t, f.service, true);
-    const delivery = f.deliver();
-    await settleTicks();
-    assert.equal(f.service.retrySleepReleases.size, 1);
-    f.service.stop();
-    assert.equal((await observed.reached).state, RETRY.STOPPED);
-    f.service.start();
-    assert.equal(f.service.state, STATE.RUNNING);
-    observed.release();
-    assertStopped(await delivery, f, observed);
-  });
-
-test('ordinary foreground attempt exhaustion truthfully hands work to background retry',
-  {timeout: TEST_TIMEOUT_MS}, async (t) => {
-    t.mock.timers.enable({apis: ['setTimeout']});
-    const f = ordinaryFixture(t, 1);
-    const observed = observeRetryDecisions(t, f.service);
-    const answer = await f.deliver();
-    assert.equal(answer.length, 1);
-    assert.deepEqual(observed.decisions.map(({state}) => state), [RETRY.ATTEMPTS_EXHAUSTED]);
-    assert.equal(f.service.backgroundRetryEntriesByKey.size, 1);
-    assert.equal(f.service.backgroundRetryTimers.size, 1);
-    const reports = spentReports(f.logs);
-    assert.equal(reports.length, 1);
-    const report = reports[0].context;
-    assert.equal(report.wait, FOREGROUND_WAIT);
-    assert.equal(report.lastObserved.stopReason, RETRY.ATTEMPTS_EXHAUSTED);
-    assert.equal(report.lastObserved.continuation, CONTINUATION.BACKGROUND_RETRY);
-    assert.equal(report.lastObserved.failureCountUnit, 'target_failures');
-    assert.equal(report.lastObserved.background, false);
-    assert.match(report.awaited, /hand over to background retry/);
-    assert.equal(report.lastObserved.attempt, 1);
-    assert.equal(report.lastObserved.maxAttempts, 1);
-  });
 
 async function durableFixture(t, maxAttempts) {
   const f = await topologyProgressFixture(t);
@@ -189,9 +74,14 @@ async function durableFixture(t, maxAttempts) {
   return f;
 }
 
+function assertNoHeldWork(topology) {
+  assert.equal(topology.retrySleepReleases.size, 0, 'no retry delay is held');
+  assert.equal(topology.activeDurablePropagation, null, 'no durable wave is in flight');
+}
+
 function assertDurableDebt(f) {
   assertDebtWithoutAck(f);
-  assertNoTransientPayloads(f.topology);
+  assertNoHeldWork(f.topology);
 }
 
 function assertDurableSpent(f, state, wait) {
@@ -200,14 +90,78 @@ function assertDurableSpent(f, state, wait) {
   const report = reports[0].context;
   assert.equal(report.wait, wait);
   assert.equal(report.lastObserved.stopReason, state);
-  assert.equal(report.lastObserved.continuation, CONTINUATION.SOURCE_OWNER);
-  assert.equal(report.lastObserved.failureCountUnit, 'aggregate_durable_wave');
-  assert.equal(report.lastObserved.failureCount, 1);
-  assert.equal(report.lastObserved.background, false);
+  assert.equal(report.lastObserved.failureCount, 1, 'one aggregate durable wave');
   assert.match(report.awaited, /unresolved debt returns to the source owner/);
   assert.doesNotMatch(report.awaited, /hand over to background retry/);
   return report;
 }
+
+// After stop the consumer performs no further iteration and no recipient
+// effect; the source owner keeps the debt and nothing spends a budget.
+async function assertStoppedDrive(f, drive) {
+  await drive;
+  assert.equal(f.observed.decisions.length, 1,
+    'the consumer performs no extra foreground iteration after the real helper decision');
+  assert.equal(f.targetCalls.length, 1, 'no further recipient effect follows stop');
+  assert.equal(spentReports(f.logs).length, 0, 'stop does not spend a retry budget');
+  await settleTicks();
+  assertDurableDebt(f);
+}
+
+async function barrierFixture(t, maxAttempts) {
+  const f = await durableFixture(t, maxAttempts);
+  f.observed = observeRetryDecisions(t, f.topology, true);
+  return f;
+}
+
+test('foreground consumer rechecks stop after actual ATTEMPTS_EXHAUSTED',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const f = await barrierFixture(t, 1);
+    const drive = f.drive();
+    assert.equal((await f.observed.reached).state, RETRY.ATTEMPTS_EXHAUSTED);
+    f.topology.stop();
+    f.observed.release();
+    await assertStoppedDrive(f, drive);
+  });
+
+test('foreground consumer rechecks stop after actual sleep returns ADVANCE',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const f = await barrierFixture(t, 2);
+    t.mock.timers.enable({apis: ['setTimeout']});
+    const drive = f.drive();
+    await settleTicks();
+    assert.equal(f.topology.retrySleepReleases.size, 1, 'the actual sleep is armed');
+    t.mock.timers.tick(RETRY_DELAY_MS);
+    f.clock.advance(RETRY_DELAY_MS);
+    assert.equal((await f.observed.reached).state, RETRY.ADVANCE);
+    f.topology.stop();
+    f.observed.release();
+    await assertStoppedDrive(f, drive);
+  });
+
+// stop() retires the wave's invocation, so the held sleep ends by refusal:
+// no decision is consumed, and a restart before the drive settles resumes
+// nothing (was: an observed STOPPED survives a restart).
+test('stop during the held retry delay ends the wave at once; a restart resumes nothing',
+  {timeout: TEST_TIMEOUT_MS}, async (t) => {
+    const f = await durableFixture(t, 2);
+    t.mock.timers.enable({apis: ['setTimeout']});
+    const drive = f.drive();
+    await settleTicks();
+    assert.equal(f.topology.retrySleepReleases.size, 1);
+    f.topology.stop();
+    f.topology.start();
+    assert.equal(f.topology.state, STATE.RUNNING);
+    await drive;
+    assert.deepEqual(f.observed.decisions, [], 'the retired wave consumes no decision');
+    assert.equal(f.targetCalls.length, 1, 'no further recipient effect follows stop');
+    assert.equal(spentReports(f.logs).length, 0, 'stop does not spend a retry budget');
+    await settleTicks();
+    assertDurableDebt(f);
+  });
+
+// Deleted: 'ordinary foreground attempt exhaustion truthfully hands work to
+// background retry' - the background retry is gone with the volatile branch.
 
 test('durable foreground attempt exhaustion retains source debt and source continuation',
   {timeout: TEST_TIMEOUT_MS}, async (t) => {
@@ -275,3 +229,4 @@ test('durable foreground sufficient duration admits the actual delay and provisi
     assert.equal(spentReports(f.logs).length, 0, 'successful coverage does not report exhaustion');
     assertDurableDebt(f);
   });
+

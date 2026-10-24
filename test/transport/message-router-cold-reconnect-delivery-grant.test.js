@@ -24,6 +24,7 @@ import {
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
 } from '../../src/transport/transport-error-codes.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 
 const REMOTE_NODE_ID = 'cold-remote-node';
 const TARGET_ADDRESS = `${REMOTE_NODE_ID}/service/remote-service`;
@@ -101,7 +102,8 @@ function countDials(router) {
   router.sendMessage = async (
     _connection, _targetAddress, messageId, _payload, targetNodeId,
     correlationId,
-  ) => ({messageId, correlationId, acknowledged: true, targetNodeId});
+  ) => acknowledgeThenRespond(router, {messageId, correlationId,
+    result: {targetNodeId}});
   return dials;
 }
 

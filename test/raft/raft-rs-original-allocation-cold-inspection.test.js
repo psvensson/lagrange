@@ -23,8 +23,10 @@ import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN, REPLICA_LIFECYCLE_TABLE as TABLE} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
+import {REPLICA_LIFECYCLE_TABLE as TABLE} from
+  '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 
 const hold = (reason) => (error) =>
   error.code === STATE.HOLD && error.reason === reason;
@@ -33,7 +35,7 @@ function completeStorageFixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-cold-inspection-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: 'inspection-node', buildDigest: 'inspection-build'};
-  const declaration = createSeedOriginalAllocation({...identity, now: 1234});
+  const draft = createSeedOriginalAllocation({...identity, now: 1234});
   const preparations = [];
   const createPreparation = () => {
     const owner = new RaftRsOriginalAllocationPreparation({directoryOwner, ...identity});
@@ -45,7 +47,7 @@ function completeStorageFixture(t) {
     directoryOwner.release();
     fs.rmSync(dataDir, {recursive: true, force: true});
   });
-  createPreparation().prepare(declaration);
+  const declaration = createPreparation().prepare(draft);
   for (const member of declaration.members) {
     const db = new Database(member.dbPath, {fileMustExist: true});
     try {

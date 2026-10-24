@@ -6,7 +6,7 @@
  * Feature: transport-architecture-improvements,
  * Property 2: Immediate ACK before handler invocation
  *
- * *For any* SERVICE_MESSAGE received by the RouterMessageHandler,
+ * *For any* SERVICE_MESSAGE received by the MessageRouter,
  * the ACK SHALL be sent to the sender before the registered handler
  * is invoked. Specifically, the sendRaw call for the ACK SHALL occur
  * before the handler function is called.
@@ -14,9 +14,16 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {RouterMessageHandler} from
-  '../../src/transport/router-message-handler.js';
 import {ROUTER_MESSAGE_TYPE} from '../../src/constants/transport.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+
+ConfigurationManager.resetInstance();
+LoggingService.resetInstance();
+ConfigurationManager.getInstance().initialize({node: {id: 'local-node'}});
+LoggingService.getInstance().initialize({level: 'error'});
 
 /**
  * Arbitrary for a target address string in the format
@@ -79,7 +86,7 @@ function buildServiceMessage(
 }
 
 /**
- * Create a RouterMessageHandler with an ordered event log
+ * Create a MessageRouter with an ordered event log
  * that tracks the sequence of sendRaw calls and handler
  * invocations.
  * @param {string} targetAddress - Address to register handler for.
@@ -88,14 +95,11 @@ function buildServiceMessage(
  */
 function createTrackedHandler(targetAddress, handlerFn) {
   const eventLog = [];
-  const handlers = new Map();
 
   const handler = handlerFn || ((_envelope) => {
     eventLog.push({event: 'handler_invoked'});
     return {ok: true};
   });
-
-  handlers.set(targetAddress, handler);
 
   const sendRaw = (_ws, msg) => {
     if (msg.type === ROUTER_MESSAGE_TYPE.ACK) {
@@ -108,23 +112,18 @@ function createTrackedHandler(targetAddress, handlerFn) {
     }
   };
 
-  const messageHandler = new RouterMessageHandler({
-    logger: {debug: () => {}, warn: () => {}, error: () => {}},
-    handlers,
-    pendingMessages: new Map(),
-    pendingPings: new Map(),
-    nodeConnections: new Map(),
-    nodeId: 'local-node',
-    sendRaw,
-    emit: () => {},
-    getJoinRequestHandler: () => null,
-    getJoinCompleteHandler: () => null,
-    onServiceResponse: () => {},
-  });
+  // The real MessageRouter inbound dispatch, with only its socket write
+  // captured: the router is never initialized, so it opens no server.
+  const messageHandler = new MessageRouter({
+    bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'local-node'});
+  messageHandler.logger = {debug: () => {}, warn: () => {}, error: () => {},
+    info: () => {}};
+  messageHandler.sendRaw = sendRaw;
+  messageHandler.register(targetAddress, handler);
 
   const mockWs = {send: () => {}};
 
-  return {messageHandler, eventLog, mockWs, handlers};
+  return {messageHandler, eventLog, mockWs};
 }
 
 test('Property 2: Immediate ACK before handler invocation',

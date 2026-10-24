@@ -18,6 +18,10 @@ import {
   endReplicaLeadershipTenure,
   wireReplicaLifecycleEvents,
 } from '../../src/raft/replica-leadership-state.js';
+import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {INSERT_SQL, applyCommitted, clearFixtureSingletons, committedQueryOf,
+  resetFixtureSingletons, settleTicks, shutdownAll, startLeader} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const WINDOW_MS = 60_000;
 const CADENCE_MS = WINDOW_MS / 12;
@@ -62,9 +66,9 @@ function buildLeaderServices(state) {
       getSize() {
         return 622592;
       },
-      cdcPipelineMetrics: {
+      writeTraffic: {
         getSnapshot() {
-          return {eventsGenerated: state.generatedCount};
+          return {committedWrites: state.generatedCount};
         },
       },
     }],
@@ -99,7 +103,7 @@ test('createManagedSplitMetricsProvider prefers live local leader size over stal
       queriesPerMinute: null,
       trafficObservedMs: 0,
     },
-    'a leader without a CDC counter has a size but no traffic signal',
+    'a leader without a write-traffic counter has a size but no traffic signal',
   );
 });
 
@@ -233,14 +237,14 @@ function buildTermServices(state) {
     get leadershipTenure() {
       return state.tenure;
     },
-    get cdcPipelineMetrics() {
+    get writeTraffic() {
       return state.metrics;
     },
   }]]);
 }
 
 function createCounter(state) {
-  return {getSnapshot: () => ({eventsGenerated: state.count})};
+  return {getSnapshot: () => ({committedWrites: state.count})};
 }
 
 test('B1 witness: called 3x/s for 1 h at 0 QPM then 3000 QPM, the provider ' +
@@ -355,7 +359,7 @@ test('I5: partitions no longer asked about are swept after the retention ' +
       getSize: () => 1,
       raft: UNTOUCHABLE_RAFT,
       leadershipTenure: STEADY_TENURE,
-      cdcPipelineMetrics: state.metrics,
+      writeTraffic: state.metrics,
     });
   }
   const provider = createManagedSplitMetricsProvider({
@@ -665,7 +669,7 @@ test('B3: the provider never touches the consensus port - a readStatus ' +
           return {term: 7};
         },
       },
-      cdcPipelineMetrics: createCounter(state),
+      writeTraffic: createCounter(state),
     });
   }
   const provider = createManagedSplitMetricsProvider({
@@ -759,7 +763,7 @@ test('B3 edge: the REAL leadership edge mints a new tenure on election, on ' +
       return this.currentTerm;
     },
     getSize: () => 1024,
-    cdcPipelineMetrics: createCounter(counter),
+    writeTraffic: createCounter(counter),
   };
   const emit = wireRealLeadershipEdge(replica);
   let nowMs = 1_700_000_000_000;
@@ -868,7 +872,7 @@ test('S2: a sample older than the retention horizon is never an anchor, ' +
     leadershipTenure: state.tenure,
     getSize: () => 1,
     raft: UNTOUCHABLE_RAFT,
-    cdcPipelineMetrics: createCounter(state),
+    writeTraffic: createCounter(state),
   }]));
   const provider = createManagedSplitMetricsProvider({
     partitionServices: services,
@@ -890,4 +894,42 @@ test('S2: a sample older than the retention horizon is never an anchor, ' +
   t.equal(reading.queriesPerMinute, null,
     'the stale sample is not an anchor: no signal, not a ' +
     `${retentionMs + WINDOW_MS - 2} ms span`);
+});
+
+// The real counter path (owner decision D2): the QPM signal is the
+// partition's committed-write counter at the apply path, not CDC. A user
+// table records no CDC obligation, yet its committed writes still drive the
+// managed split/merge traffic rate.
+test('a user table\'s committed writes advance the split traffic signal with zero CDC ' +
+  'obligations', async (t) => {
+  resetFixtureSingletons();
+  const {leader} = await startLeader();
+  try {
+    let nowMs = 1_000_000;
+    const getPartitionMetrics = createManagedSplitMetricsProvider({
+      partitionServices: new Map([[leader.replicaId, leader]]),
+      now: () => nowMs,
+      trafficWindowMs: WINDOW_MS,
+    });
+    const tenureMinted = leader.leadershipTenure !== null &&
+      leader.leadershipTenure !== undefined;
+    const first = getPartitionMetrics(leader.partitionId, ROW).queriesPerMinute;
+    const failures = [];
+    for (let index = 0; index < 30; index += 1) {
+      const failure = applyCommitted(leader, {...committedQueryOf(`traffic-${index}`,
+        INSERT_SQL), params: [`traffic-${index}`, 'v']});
+      if (failure !== null) failures.push(failure);
+    }
+    await settleTicks();
+    nowMs += WINDOW_MS;
+    const full = getPartitionMetrics(leader.partitionId, ROW);
+    t.same({tenureMinted, first, failures, committedWrites: leader.writeTraffic
+      .getSnapshot().committedWrites, qpm: full.queriesPerMinute,
+    ...countCdcObligations(leader.db)}, {tenureMinted: true, first: null, failures: [],
+      committedWrites: 30, qpm: 30, owed: 0, delivered: 0},
+    'thirty committed user-table writes in one window read 30 QPM and owe no CDC');
+  } finally {
+    await shutdownAll(leader);
+    clearFixtureSingletons();
+  }
 });

@@ -37,7 +37,7 @@ import {
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   buildCriticalVisibilityCdcPropagationDeliverySource,
-  buildCriticalVisibilityCdcPropagationReplacePendingKey,
+  resolveCdcPropagationDeliveryProfile,
 } from '../../src/cache/cdc-propagation-delivery-profile.js';
 import {
   COLUMN,
@@ -622,13 +622,13 @@ test(
 
     t.equal(
       deliveredOptions?.replacePendingKey,
-      buildCriticalVisibilityCdcPropagationReplacePendingKey([
+      resolveCdcPropagationDeliveryProfile([
         {
           tableName: TABLES.REPLICA_OPERATIONS,
           operation: CDC_OPERATION.UPDATE,
           data: TEST_CDC_VISIBILITY_REPLACE_REPLICA_OPERATION_ROW,
         },
-      ]),
+      ]).replacePendingKey,
       'strict CDC propagation should supersede pending visibility forwards for the same replica-operation row',
     );
     t.equal(

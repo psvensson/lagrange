@@ -57,8 +57,11 @@ When writing or modifying code:
 
 - New or newly edited source-code files must finish within the per-scope thresholds owned by `scripts/check-file-size-thresholds.js` (currently src ≤ 800, test ≤ 1500 lines; run `npm run audit:file-size` to confirm).
 - If an edit would leave a touched source-code file over its scope threshold, extract
-  a smaller semantic owner, helper, contract, state model, or consumer boundary
+  a smaller responsibility module, helper, contract, state model, or consumer boundary
   before Quest closure.
+- Extraction can preserve the existing semantic owner. A file-size limit does
+  not require a new service, state store, queue, class or asynchronous handoff;
+  introduce a new authority only when the concern itself requires that boundary.
 - New source-code files must be named for the semantic responsibility they own,
   not for their position in a split.
 - Prefer names that describe the owner boundary, decision, contract, state

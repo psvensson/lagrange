@@ -7,19 +7,17 @@
  * directly on it, keeping the mutable state in one place.
  */
 
-import {TABLES} from '../constants/index.js';
 import {
   CDC_PIPELINE_METRIC,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
-import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 import {buildEventIdentity} from './cdc-event-buffer.js';
 import {hasDurableCdcEvents, isCommittedCdcOutcome,
   isProvisionalCdcOutcome} from '../cdc/cdc-delivery-outcome.js';
 import {assertCdcDeliveryInvocation, beginCdcDeliveryInvocation} from
   '../cdc/cdc-delivery-invocation.js';
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_DEFAULT,
@@ -41,14 +39,12 @@ import {
 
 const PARTITION_CDC_DELIVERY_LITERAL = Object.freeze({
   OBJECT: 'object',
-  BOOLEAN: 'boolean',
   CDCREPLAYBUFFERGROWTHCOUNT: 'cdcReplayBufferGrowthCount',
   CDCBUFFERREPLAYTIMER: 'cdcBufferReplayTimer',
   CDCREPLAYRETRYDEPTH: 'cdcReplayRetryDepth',
   HANDSHAKE_CATCHUP_REPLAY_FAILED: 'handshake_catchup_replay_failed',
   POST_SUBSCRIPTION_HANDSHAKE: 'post_subscription_handshake',
 });
-const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([SYSTEM_TABLE_NAME.LOGS]);
 const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
 const CDC_SUBSCRIBER_REFUSED_MSG = 'CDC subscriber refused the event';
 const CDC_SUBSCRIBER_REFUSED_CODE = 'cdc_subscriber_refused';
@@ -106,35 +102,6 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     return cdcEvent;
   }
   return {...cdcEvent, replayOnly: true};
-}
-/**
- * Parse external CDC allowed override from table policy JSON.
- * @param {string|Object|null} rawPolicy - Raw table_policies value.
- * @return {boolean|null} Override value or null when absent.
- */ function parseExternalCdcAllowedOverride(rawPolicy) {
-  if (!rawPolicy) {
-    return null;
-  }
-  let policy = rawPolicy;
-  if (typeof policy === 'string') {
-    try {
-      policy = JSON.parse(policy);
-    } catch (_parseErr) {
-      return null;
-    }
-  }
-  if (!policy || typeof policy !== PARTITION_CDC_DELIVERY_LITERAL.OBJECT) {
-    return null;
-  }
-  if (typeof policy.externalCdcAllowed === PARTITION_CDC_DELIVERY_LITERAL.BOOLEAN) {
-    return policy.externalCdcAllowed;
-  }
-  if (
-    typeof policy.changeDataCapture?.externalCdcAllowed === PARTITION_CDC_DELIVERY_LITERAL.BOOLEAN
-  ) {
-    return policy.changeDataCapture.externalCdcAllowed;
-  }
-  return null;
 }
 /**
  * Check whether a value is a valid CDC subscriber.
@@ -282,38 +249,6 @@ function markReplayOnlyCdcEvent(cdcEvent) {
     );
   }
   /**
-   * Resolve whether late-subscriber external CDC is enabled for a table.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when external CDC buffering should remain enabled.
-   */ isExternalCdcAllowedForTable(tableName) {
-    if (!tableName || tableName !== this.owner.tableName) {
-      return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
-    }
-    if (typeof this.owner.externalCdcAllowed === PARTITION_CDC_DELIVERY_LITERAL.BOOLEAN) {
-      return this.owner.externalCdcAllowed;
-    }
-    const tableRow = this.owner.systemTableCache?.get?.(TABLES.TABLES, this.owner.tableId) || null;
-    const policyOverride = parseExternalCdcAllowedOverride(tableRow?.table_policies || null);
-    if (typeof policyOverride === PARTITION_CDC_DELIVERY_LITERAL.BOOLEAN) {
-      return policyOverride;
-    }
-    return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
-  }
-  /**
-   * Determine whether CDC events should be buffered when there are no
-   * subscribers yet.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when buffering should stay enabled.
-   */ shouldBufferCdcWithoutSubscribers(tableName) {
-    if (CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName)) {
-      return false;
-    }
-    const policy = getTableCdcPolicy(tableName, {
-      externalCdcAllowed: this.isExternalCdcAllowedForTable(tableName),
-    });
-    return policy.internalCachePropagation === true || policy.externalCdcAllowed === true;
-  }
-  /**
    * Allocate next CDC event sequence number.
    * @return {number} Monotonic sequence number.
    */ nextCDCEventSequenceNumber() {
@@ -326,7 +261,7 @@ function markReplayOnlyCdcEvent(cdcEvent) {
    * @param {string} reason - Buffering reason.
    * @return {boolean} True when buffered, false when dropped.
    */ bufferCDCEventForRetry(cdcEvent, reason) {
-    if (!this.shouldBufferCdcWithoutSubscribers(cdcEvent.tableName)) {
+    if (!isTableCdcObligationRecorded(cdcEvent.tableName)) {
       return false;
     }
     const buffered = this.owner.cdcEventBuffer.buffer(cdcEvent);

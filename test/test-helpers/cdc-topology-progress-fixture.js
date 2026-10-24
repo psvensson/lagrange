@@ -15,8 +15,10 @@ import {CDCGroupPropagationService} from '../../src/topology/cdc-group-propagati
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_REASON} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {countCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {createMessageGroupServiceRow} from '../topology/cdc-group-propagation-service-harness.js';
-import {TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll, startLeader} from
+import {createDurableSourceMessageGroupService, createMessageGroupServiceRow} from
+  '../topology/cdc-group-propagation-service-harness.js';
+import {CDC_TABLE as TABLE, applyCommitted, committedQueryOf, settleTicks, shutdownAll,
+  startLeader} from
   './participant-transaction-fixture.js';
 
 const SOURCE_GROUP = 'progress-group-a';
@@ -58,15 +60,12 @@ function controlledProjection() {
 }
 
 function buildTopology(f) {
-  const source = {groupId: SOURCE_GROUP, initialized: true, isShutdown: false,
-    raft: Object.freeze({}), cdcCommitLifetime: Object.freeze({}),
+  const source = createDurableSourceMessageGroupService(SOURCE_GROUP, {
     canAcceptCDCEvent: () => f.ready,
-    resolveStrictCdcForwardRetryAfterMs: () => RETRY_AFTER_MS,
-    applyCDCEvent: () => assert.fail('durable delivery must preserve its batch envelope'),
     applyCDCBatch: (events) => {
       f.sourceCalls.push(events.map((event) => event.eventKey));
       return controlledAnswer(events, SOURCE_GROUP, f.sourceMode);
-    }};
+    }});
   const router = {deliver: async (address, payload, options) => {
     assert.equal(f.leader.db.inTransaction, false);
     f.targetCalls.push({address, groupId: payload.targetGroupId,
@@ -108,7 +107,7 @@ function buildSubscriber(f, index) {
 
 async function topologyProgressFixture(t) {
   const clock = new VirtualTimeSource({startMs: 100});
-  const {leader, proposed} = await startLeader({timeSource: clock});
+  const {leader, proposed} = await startLeader({tableName: TABLE, timeSource: clock});
   const f = {clock, leader, proposed, ready: false, projection: controlledProjection(),
     sourceCalls: [], targetCalls: [], subscriberCalls: [], hooks: [],
     sourceMode: RESPONSE.NATIVE, targetMode: RESPONSE.WEAK, otherMode: RESPONSE.NATIVE,

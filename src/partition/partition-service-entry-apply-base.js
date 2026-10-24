@@ -17,6 +17,7 @@ import {
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
 import {
+  isCommittedStatementKeyed,
   readCommittedStatementOutcome,
   recordCommittedStatementOutcome,
   settleFailedCommittedStatement,
@@ -42,6 +43,7 @@ import {
   isCdcCommandType,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
+import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
   ROLLBACK: 'afterRollback',
@@ -60,6 +62,49 @@ const {
   SYSTEM_TABLE_NAME,
   isRaftRsTransportEnvelope,
 } = PARTITION_SERVICE_SHARED;
+
+// A refusal of the committed-command gate: the application fails closed,
+// typed. The group's host failure names the reason, the index and the type;
+// the applied index does not advance and the restart is refused with it.
+function committedCommandRefusal(service, {command, index, rollback}, refusal) {
+  const commandType = command?.type;
+  const error = new Error(`${refusal.message}: ` +
+    `${JSON.stringify(commandType)} at index ${index}`);
+  error.code = refusal.code;
+  error.outcome = refusal.outcome;
+  error.reason = refusal.reason;
+  error.detail = Object.freeze({index, commandType: commandType ?? null,
+    code: refusal.code});
+  rollback(() => service.rejectCommittedWrite(command?.entryId, error));
+  return error;
+}
+
+// What the application refuses of a committed command before anything of it
+// runs, decided from the command alone. Only a bug or version skew commits
+// one (the admission owner never proposes it; every proposer builds its
+// entry with an entryId); consuming it would drop a committed command, so
+// both refusals fail the application closed with one disposition:
+// - an unrecognised type;
+// - an SQL command without an entryId: it has no outcome-row key and no
+//   CDC-obligation key, so its statement never runs.
+function committedCommandGate(service, committed) {
+  const commandType = committed.command?.type;
+  if (!isCommittedCommandType(commandType)) {
+    throw committedCommandRefusal(service, committed, {
+      message: PARTITION_SERVICE_ERROR_MSG.COMMITTED_COMMAND_UNRECOGNISED,
+      code: PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED,
+      outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED,
+      reason: PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON.COMMAND_UNKNOWN});
+  }
+  if (isCommittedSqlCommandType(commandType) &&
+      !isCommittedStatementKeyed(committed.command)) {
+    throw committedCommandRefusal(service, committed, {
+      message: PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENTRY_ID_MISSING,
+      code: PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_MISSING,
+      outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.ENTRY_ID_MISSING_REFUSED,
+      reason: PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON.ENTRY_ID_MISSING});
+  }
+}
 
 class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase {
   ensureReplicaOperationsTableColumns() {
@@ -579,25 +624,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         }
       });
     };
-    const commandType = command?.type;
-    // Only a bug or version skew commits one (the admission owner never
-    // proposes it); consuming it silently would let this replica skip what
-    // another applies, so the application fails closed, typed: the group's
-    // host failure names the reason, the index and the type.
-    if (!isCommittedCommandType(commandType)) {
-      const error = new Error(
-        `${PARTITION_SERVICE_ERROR_MSG.COMMITTED_COMMAND_UNRECOGNISED}: ` +
-        `${JSON.stringify(commandType)} at index ${index}`);
-      error.code = PARTITION_COMMITTED_COMMAND_ERROR_CODE.UNRECOGNISED;
-      error.outcome = PARTITION_COMMITTED_COMMAND_OUTCOME.UNRECOGNISED;
-      error.reason = PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON
-        .COMMAND_UNKNOWN;
-      error.detail = Object.freeze({index, commandType: commandType ?? null});
-      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
-        this.rejectCommittedWrite(command?.entryId, error),
-      );
-      throw error;
-    }
+    committedCommandGate(this, {command, index,
+      rollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK,
+        effect)});
+    const commandType = command.type;
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
@@ -656,6 +686,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         recordCommittedStatementCdc(this, {command, index, term, afterCommit},
           {entryKey, result: info});
         advancePartitionWriteGeneration(this.db);
+        recordCommittedWriteTraffic(this, afterCommit, 1);
         if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
           afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
         }

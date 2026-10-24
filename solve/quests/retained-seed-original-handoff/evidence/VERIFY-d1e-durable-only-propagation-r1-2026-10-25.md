@@ -128,3 +128,92 @@ Thermal gate (`scripts/checks/wait-for-thermal-headroom.js`) before and between 
 - Whether the forwarding owner's `replacePendingKey` coalescing is wanted for durable strict forwards (F3): owner decision.
 - Whether `scheduleBackgroundRetry` rows and the third unmatched decision-boundary row should be pruned now (no hint printed).
 - Lab behaviour of `foreground-boundary` under the scaled guard (not re-run).
+
+---
+
+# Re-verification r2 (2026-10-25): 745ea039d on e6295c7c4
+
+Delta round. The branch was fast-forwarded to the lineage head `e6295c7c4`
+(which now contains C2/C3, C6, F3 and the refusal owner) and the unit was
+re-committed as one commit `745ea039d264dd104e2a0a9d197ed540d7d7feed`
+(34 files +794/-4912; src 9 files +97/-1295). 2e26c3ddf is gone from the
+branch. Scratch worktrees: `verify-d1e/head2` = 745ea039d, `verify-d1e/base2` =
+e6295c7c4, `verify-d1e/mut2` = 745ea039d for mutations (all removed at the
+end; no repository edits).
+
+## Verdict r2: REQUIRED CHANGES (one, test-only, exact) - otherwise APPROVE
+
+The production change is correct and the r1 regression is fixed. One item
+meets the coordinator's stated criterion for a required change:
+
+**RC-r2 (test, required).** The rewritten C2 witness
+`test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js`
+does not pin the durable wave's consumption of the transport owner's
+decision. Two mutations that make the wave ignore `isDelivered` while the CDC
+receipt is valid leave it green (4/4 each):
+
+- M1: `src/cdc/cdc-propagation-progress.js:130` `{transport: true}` ->
+  `{transport: false}` (the wave observes targets with the plain CDC
+  predicates). `verify-d1e/logs/mut-M1-transport-false-failed-set.tap`.
+- M2: `src/cdc/cdc-delivery-outcome.js:336-339` `isCommittedCdcDelivery`
+  returns `isCommittedCdcOutcome(...)` alone (transport ignored).
+  `verify-d1e/logs/mut-M2-cdc-group-propagation-transport-outcome-failed-set.test.js.tap`.
+
+M1 is caught by no test at all: the whole durable-wave set under M1 reproduces
+the unmutated counts exactly (failed-set 4/4, service 9/9, stop-arms 11/11,
+foreground 7/7, progress-currentness 5/7, delivery-progress 2/1,
+invocation-custody 14/14, obligation 20/20, seed-teardown 1/1,
+cdc-delivery-outcome 132/132, router round-trip 5/5;
+`verify-d1e/runs/mut-M1/summary.txt`). M2 is caught only by the CDC owner's
+unit test ("canonical local committed acceptance needs no transport ACK",
+`test/cdc/cdc-delivery-outcome.test.js:60-66`), i.e. at the owner, not on the
+wave. Cause (probe `verify-d1e/probe-discriminating-reply.mjs`, log
+`verify-d1e/logs/probe-discriminating-reply.log`): the CDC owner's committed
+predicate is an exact-field table (`cdc-delivery-outcome.js:133-141` +
+`OUTCOME_METADATA_FIELDS :112-131`, matched by `outcomeFieldsMatch :166-170`)
+that already rejects every reply carrying `noHandler`, `deferRetry: true`,
+`retryAfterMs`, `errorCode`, `reasonCode`, `deliveryState !== 'delivered'` or
+`acknowledged: false`; so for all four lanes `isCommittedCdcOutcome` is already
+false and the transport check in `isCommittedCdcDelivery` never decides. The
+witness's header sentence "only the transport owner's classification can keep
+it uncovered" is therefore false for every lane it has. Across 15 candidate
+replies through the real `MessageRouter` local dispatch, `isCommittedCdcOutcome`
+and `isCommittedCdcDelivery` never disagree; the only discriminating input is
+a bare committed receipt with no transport envelope (`buildCommittedCdcOutcome`
+returned without `acknowledged`): CDC committed = true, transport = failed,
+`isCommittedCdcDelivery` = false. The real router always stamps `acknowledged`
+and `deliveryState`, so this input needs a router double.
+
+Exact change: add one lane to the failed-set file in which the service's
+`messageRouter.deliver` answers the failing target's address directly with
+`buildCommittedCdcOutcome([payload], failing.groupId, {index: 1, term: 1})`
+(no `router.deliver`, no transport envelope) while the delivered target still
+goes through the real router; assert as the other lanes do (`result.success ===
+false`, delivered target called once, failing target called >= MAX_ATTEMPTS).
+This lane is red under M1 and under M2 (both would accept the bare receipt) and
+green at 745ea039d. Correct the header comment to say that the four envelope
+lanes are rejected by both the transport owner and the CDC owner's metadata
+table, and that the bare-receipt lane is the one that pins the wave's
+transport consumption. No src change.
+
+## Per-item results
+
+| # | Item | Verdict | Evidence |
+| --- | --- | --- | --- |
+| 1 | RC1 fixed | **HOLDS** | `git diff e6295c7c4 745ea039d -- test/message-group/message-group-service-strict-cdc-forward-routing.test.js`: `:40` imports `resolveCdcPropagationDeliveryProfile`, `:625-631` consumes `resolveCdcPropagationDeliveryProfile([...]).replacePendingKey`. Runs: head2 13 cases, 12 ok, only #12 `buildPeerAddress prefers the consensus configuration peer address` red; base2 identical leaves (`runs/head2`, `runs/base2`). Removed exports at 745ea039d (`buildCriticalVisibilityCdcPropagationReplacePendingKey`, `createSourceMessageGroupService`, `reportCdcPropagationBackgroundRetrySpent`, `resolveKnownMessageGroupIds`, `resolveSourceMessageGroupId`, `CDC_GROUP_FOREGROUND_CONTINUATION`, `CDC_GROUP_FOREGROUND_DELIVERY_STATE`): 0 importers in src/test/scripts (the harness `waitForCondition` is gone; the remaining `waitForCondition` hits are unrelated `src/query` helpers of the same name). |
+| 2 | C2 interaction: the durable wave's per-target decision | **HOLDS in production (doubly guarded); witness unpinned -> RC-r2** | Decision site: `src/cdc/cdc-propagation-progress.js:124-139` `observe()`; a target leaf's answer goes to `observeCdcCoverage(answer, events, leaf.groupId, {transport: true})` (`cdc-delivery-outcome.js:351-363`): COMMITTED iff `isCommittedCdcDelivery` (`:336-339` = `isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(answer)) && isCommittedCdcOutcome(...)`), PROVISIONAL iff `isProvisionalCdcDelivery` (`:341-346`: `acknowledged`, no `noHandler`, `errorCode === null`, `reasonCode === TRANSPORT_DEFERRED`, and the provisional CDC shape), else UNCOVERED. The wave never reads a local flag for the decision; `deliverUncoveredLeaves` (`durable-delivery.js:88-114`) reads `answer?.success` only for the diagnostic `cause`. A FAILED, contradictory, no-handler or deferred transport outcome is UNCOVERED (probe: all such envelopes classify `failed`/`deferred`, `isCommittedCdcDelivery` false, and `isCommittedCdcOutcome` false as well), so `complete()` is false, `deliverToTargetsWithRetry` (`delivery-methods.js:25-43`) re-dispatches only the uncovered leaves (`nextUncoveredLeaf`, progress.js:92-104) up to `deliveryRetryMaxAttempts` within the invocation's remaining duration, and on exhaustion `result()` answers `{...propagationResult(.., unknownCdcAcceptance()), cause}` (`success:false, deferRetry:true`); the subscriber turns that into UNKNOWN/deferRetry (`partition-cdc-propagation-subscriber.js:183-190`) and the source lane keeps the obligation owed and redrives it (`held_by_subscriber`; witnessed end-to-end on the real ledger by foreground-boundary case 4 `assertDebtWithoutAck`). A FAILED outcome cannot count as delivered: it would need transport DELIVERED and a valid receipt, and both predicates reject every failed/contradictory/no-handler/deferred envelope (15 candidates, direct and via the router). Semantics 3 and 4 (no-handler replies and application deferrals are retried by the wave owner) hold on the one remaining path and are witnessed by the rewritten file; what the file does not witness is which owner decided (RC-r2). Pre-existing, not D1e's: the CDC owner's metadata table restates transport facts (`acknowledged`, `deliveryState`, `noHandler`, `retryAfterMs`, `errorCode`, `reasonCode`, `deferRetry`) rather than consuming `isDelivered` alone - a second version of the transport decision (R03) that the C2 rounds accepted. |
+| 3a | Conflict resolution: delivery-methods | **HOLDS; nothing of C2 lost** | `git diff 2e26c3ddf 745ea039d -- src/topology/cdc-group-propagation-delivery-methods.js` is empty (D1e's r1 version kept). C2's whole topology footprint on the lineage (`git diff --stat 747a5f80a e6295c7c4` over `src/topology/cdc-group-propagation-*`, `test/topology/`): `delivery-methods.js` +6 (the import and the `isDelivered` check inside the deleted `deliverToTargets`, commit 7bf6ceecb) and the failed-set witness +98, plus impact-contract lists. The hardening's durable equivalent pre-existed at `progress.js:130` -> `isCommittedCdcDelivery`. The witness stays listed in `test/shards/impact-contracts.json:1458,3018`. The unit's own src patch r1 -> r2 differs only by that C2 hunk (`diff` of the two patches); the shared test patches are identical. |
+| 3b | `scripts/check-duplication.js` 689/26148 -> 679/25717 | **hint-driven, not a raise** | base2 (e6295c7c4): `689/689`, `26148/26148` exact. With the baseline reverted to 689/26148 at 745ea039d the checker prints "Baseline can be tightened from 689 to 679 ... from 26148 to 25717" (`logs/hint-duplication-at-689.log`); head2 `679/679`, `25717/25717` (`logs/duplication-head2.log`). |
+| 3c | `scripts/check-unused-exports.js` 1416 -> 1413 | **hint-driven, not a raise** | The lineage head still carried 1416 (the diff is 1416 -> 1413, as the script comment says; "1415 -> 1413" in the brief is not what the tree shows). base2: `1413/1416` with the hint "can be tightened from 1416 to 1413" (`logs/unused-ratchet-base2.log`) - the slack pre-exists at e6295c7c4; with the baseline reverted to 1416 at 745ea039d the same hint prints (`logs/hint-unused-at-1416.log`); head2 `1413/1413` across 334 files (`logs/unused-ratchet-head2.log`). |
+| 4 | Re-runs | **HOLDS** | head2 (`runs/head2/summary.txt`): topology all green - foreground 7, service 9, stop-arms 11, failed-set 4 cases (3 assertions each), group-selection 6, latency-group-manager 7, latency-measurement 5, constants 1, tree 3, anti-entropy 5; seed-teardown 1/1; strict-forward 12/13 (#12 pre-existing); the 3 CDC integration files identical leaves to base2 (admin-cdc-propagation 0/1, cdc-propagation 0/1, managed-split 1/4 with #2-#4 red at both); progress-currentness 5/12 identical; readiness publication 13/13; native-provisional-route 0/1 identical. eslint on every changed .js rc=0 (`logs/eslint-head2.log`); `node --check` rc=0 (`logs/node-check-head2.log`); `test:cycles` 0/0; `audit:impact-contracts` PASS (71 contracts, 44 coupled pairs, sha256 5e7b3f65...); `audit:shards` current (2467 tests); `test:metadata:refresh` then `git status --porcelain` empty (zero drift; `logs/metadata-refresh-head2.log`). |
+
+## Runs and limits (r2)
+
+Same method as r1: one file per `node --test` process, thermal gate between
+files, head2 then base2 (`runs/head2`, `runs/base2`), static chain serialized
+(`logs/*-head2.log`, `logs/*-base2.log`), mutations in `mut2` with the tree
+restored after each (`git status` clean, `logs/hint-mut2-status.log` empty).
+Not run: `npm test`, `test:static`, any lab run. The r1 findings F2-F9 stand
+unchanged; F5 (record the publicationModeOf behaviour change in the quest log)
+and the RC2 record correction from r1 are not visible to me in this tree and
+remain for the coordinator to confirm.

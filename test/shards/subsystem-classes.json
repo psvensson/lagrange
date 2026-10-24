@@ -4,31 +4,31 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 321,
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
-    "convergence-topology": 84,
+    "convergence-topology": 78,
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 184,
+    "query-sql": 185,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 198,
-    "storage-raft": 144,
+    "storage-partition": 199,
+    "storage-raft": 146,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 112,
+    "transport-messaging": 102,
     "wasm-toolchain": 74
   },
-  "censusSize": 2473,
-  "digest": "fnv1a32-864a4308",
+  "censusSize": 2452,
+  "digest": "fnv1a32-9fc27657",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-7cd03c35",
+  "observationDigest": "fnv1a32-f5ba9e5f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -177,6 +177,7 @@
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "bootstrap-membership",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "bootstrap-membership",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "bootstrap-membership",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap-membership",
@@ -201,8 +202,6 @@
     "test/bootstrap/latency-topology-owner-delegation.test.js": "bootstrap-membership",
     "test/bootstrap/latency-topology-table-schemas.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-controller.test.js": "bootstrap-membership",
-    "test/bootstrap/lifecycle-handler-address-format.property.test.js": "bootstrap-membership",
-    "test/bootstrap/lifecycle-message-delegation.property.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-owner-replica-routing.test.js": "bootstrap-membership",
     "test/bootstrap/lifecycle-unification.test.js": "bootstrap-membership",
     "test/bootstrap/mesh-reconcile-terminal-revive.test.js": "bootstrap-membership",
@@ -273,6 +272,7 @@
     "test/bootstrap/return-value-completeness.property.test.js": "bootstrap-membership",
     "test/bootstrap/runtime-service-rebalancer-owner.test.js": "bootstrap-membership",
     "test/bootstrap/schema-operations-table-schema.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-cache-hydration-handoff.test.js": "bootstrap-membership",
     "test/bootstrap/seed-delegate-bundles.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-phase.test.js": "bootstrap-membership",
     "test/bootstrap/seed-infrastructure-runtime-identity.test.js": "bootstrap-membership",
@@ -1017,7 +1017,6 @@
     "test/index-management/index-maintenance-consistency.property.test.js": "query-sql",
     "test/index-management/index-service.test.js": "query-sql",
     "test/index-management/query-optimizer.test.js": "query-sql",
-    "test/integration/ack-delivery.integration.test.js": "transport-messaging",
     "test/integration/admin-cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/artifact-payload-durability.integration.test.js": "services-runtime",
     "test/integration/authoritative-discovery-repair-pressure.integration.test.js": "bootstrap-membership",
@@ -1180,7 +1179,6 @@
     "test/node/group-retirement-liveness.test.js": "bootstrap-membership",
     "test/node/group-retirement-redrive.test.js": "bootstrap-membership",
     "test/node/group-retirement-reseed-held.test.js": "bootstrap-membership",
-    "test/node/idempotent-operations.property.test.js": "bootstrap-membership",
     "test/node/lifecycle-readiness.test.js": "bootstrap-membership",
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
@@ -1190,7 +1188,6 @@
     "test/node/metrics-accuracy.property.test.js": "bootstrap-membership",
     "test/node/node-lifecycle-service.test.js": "bootstrap-membership",
     "test/node/node-lifecycle-state-machine.test.js": "bootstrap-membership",
-    "test/node/node-recovery-orphan-cleanup.property.test.js": "bootstrap-membership",
     "test/node/node-reintegration-service.test.js": "bootstrap-membership",
     "test/node/node-service-cache-delegation.property.test.js": "bootstrap-membership",
     "test/node/node-service-presence.property.test.js": "bootstrap-membership",
@@ -1198,12 +1195,9 @@
     "test/node/node-service.test.js": "bootstrap-membership",
     "test/node/participant-release-control-refusal-observation.test.js": "bootstrap-membership",
     "test/node/participant-release-fresh-create-completion.test.js": "bootstrap-membership",
-    "test/node/partition-registration-invariant.property.test.js": "bootstrap-membership",
-    "test/node/registered-partition-removal.property.test.js": "bootstrap-membership",
     "test/node/replica-cleanup-token-authority.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-owner.test.js": "bootstrap-membership",
     "test/node/replica-create-admission-recovery.test.js": "bootstrap-membership",
-    "test/node/replica-creation-idempotency.property.test.js": "bootstrap-membership",
     "test/node/replica-executor-activation-handler-boundary.test.js": "bootstrap-membership",
     "test/node/replica-failed-create-cleanup-generation.test.js": "bootstrap-membership",
     "test/node/replica-handler-cache-state.test.js": "bootstrap-membership",
@@ -1217,15 +1211,12 @@
     "test/node/replica-handler-voter-ready-wait-bound-spent.test.js": "bootstrap-membership",
     "test/node/replica-handler.test.js": "bootstrap-membership",
     "test/node/replica-lifecycle-durable-generation.test.js": "bootstrap-membership",
-    "test/node/replica-lifecycle-manager.test.js": "bootstrap-membership",
-    "test/node/replica-lifecycle-message-delivery.property.test.js": "bootstrap-membership",
     "test/node/replica-local-only-row-convergence.test.js": "bootstrap-membership",
     "test/node/replica-recovery-service.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit-decisions.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit-reported-once.test.js": "bootstrap-membership",
     "test/node/replica-removal-consensus-exit.test.js": "bootstrap-membership",
     "test/node/replica-removal-deferred-row-write.test.js": "bootstrap-membership",
-    "test/node/replica-removal-graceful-shutdown.property.test.js": "bootstrap-membership",
     "test/node/replica-removal-leader-source.test.js": "bootstrap-membership",
     "test/node/replica-runtime-cleanup-custody.integration.test.js": "bootstrap-membership",
     "test/node/replica-state-delegation.test.js": "bootstrap-membership",
@@ -1234,7 +1225,6 @@
     "test/node/replica-state-machine-time-source.test.js": "bootstrap-membership",
     "test/node/replica-state-machine-transitions.property.test.js": "bootstrap-membership",
     "test/node/replica-state-machine.test.js": "bootstrap-membership",
-    "test/node/replica-status-state-machine.property.test.js": "bootstrap-membership",
     "test/node/replica-status-write-retry-spent-owner.test.js": "bootstrap-membership",
     "test/node/replica-transport-handler-identity.test.js": "bootstrap-membership",
     "test/node/runtime-service-bound-route.test.js": "bootstrap-membership",
@@ -1264,6 +1254,7 @@
     "test/partition/cdc-event-buffer.property.test.js": "storage-partition",
     "test/partition/cdc-event-buffer.test.js": "storage-partition",
     "test/partition/cdc-generation.property.test.js": "storage-partition",
+    "test/partition/cdc-hydration-live-handoff.test.js": "storage-partition",
     "test/partition/cdc-sliding-window-catchup.exploration.test.js": "storage-partition",
     "test/partition/cdc-sliding-window-catchup.preservation.test.js": "storage-partition",
     "test/partition/cdc-subscriber-registration-timing.test.js": "storage-partition",
@@ -1578,6 +1569,7 @@
     "test/query/transaction-evidence-binding-production.test.js": "query-sql",
     "test/query/transaction-owned-commit-mode-guard.test.js": "query-sql",
     "test/query/transaction-participant-set-authority.test.js": "query-sql",
+    "test/query/transaction-recovery-decision-validation.test.js": "query-sql",
     "test/query/transaction-recovery-ownership.test.js": "query-sql",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "query-sql",
     "test/query/transaction-release-census.test.js": "query-sql",
@@ -1642,6 +1634,7 @@
     "test/raft/raft-rs-backend/joining-genesis-tripwire.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-registry-runtime-generation.test.js": "storage-raft",
     "test/raft/raft-rs-backend/lifecycle-retirement-census.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "storage-raft",
@@ -1700,6 +1693,7 @@
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-custody.test.js": "storage-raft",
+    "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-preparation.test.js": "storage-raft",
     "test/raft/raft-rs-original-allocation-store.test.js": "storage-raft",
     "test/raft/raft-rs-original-opening-authority.test.js": "storage-raft",
@@ -2329,15 +2323,9 @@
     "test/time/dt4-seam-collapse.test.js": "runtime-primitives",
     "test/time/pct-scheduler.test.js": "runtime-primitives",
     "test/time/time-source.test.js": "runtime-primitives",
-    "test/topology/cdc-group-propagation-background-retry-bounded.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-background-retry-preservation.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-lifecycle-bounded.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-memory.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-foreground-boundary.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": "convergence-topology",
     "test/topology/group-selection-service.test.js": "convergence-topology",
     "test/topology/latency-group-manager.test.js": "convergence-topology",
@@ -2352,10 +2340,7 @@
     "test/transport/bulk-channel-identify-incarnation.test.js": "transport-messaging",
     "test/transport/bulk-registry-bootstrap.test.js": "transport-messaging",
     "test/transport/bulk-transfer-lane-isolation.test.js": "transport-messaging",
-    "test/transport/connection-pool.test.js": "transport-messaging",
-    "test/transport/connection-ttl-lifecycle.property.test.js": "transport-messaging",
     "test/transport/delivery-semantics.property.test.js": "transport-messaging",
-    "test/transport/endpoint-priority-selection.property.test.js": "transport-messaging",
     "test/transport/error-response-correlation-id.property.test.js": "transport-messaging",
     "test/transport/exact-handler-identity-api.test.js": "transport-messaging",
     "test/transport/handler-registration.property.test.js": "transport-messaging",
@@ -2380,6 +2365,7 @@
     "test/transport/message-router-query-transport-failure-shape.test.js": "transport-messaging",
     "test/transport/message-router-readiness-inflight-reserve.test.js": "transport-messaging",
     "test/transport/message-router-readiness-reserve.test.js": "transport-messaging",
+    "test/transport/message-router-superseded-delivery-completion.test.js": "transport-messaging",
     "test/transport/message-router-transport-cleanup.test.js": "transport-messaging",
     "test/transport/message-router.test.js": "transport-messaging",
     "test/transport/name-first-advertising-publication.test.js": "transport-messaging",
@@ -2398,16 +2384,9 @@
     "test/transport/service-delivery-lifetime.test.js": "transport-messaging",
     "test/transport/service-response-correlation.property.test.js": "transport-messaging",
     "test/transport/transport-outcome-forwarding-hop.test.js": "transport-messaging",
-    "test/transport/transport-provider-interface.property.test.js": "transport-messaging",
-    "test/transport/transport-registry-provider-management.property.test.js": "transport-messaging",
-    "test/transport/transport-registry.test.js": "transport-messaging",
     "test/transport/transport-semantic-outcome.test.js": "transport-messaging",
     "test/transport/uniform-message-routing.property.test.js": "transport-messaging",
     "test/transport/uniform-websocket-delivery.property.test.js": "transport-messaging",
-    "test/transport/websocket-provider-backward-compatibility.property.test.js": "transport-messaging",
-    "test/transport/websocket-provider-interface-compliance.property.test.js": "transport-messaging",
-    "test/transport/websocket-transport-provider.test.js": "transport-messaging",
-    "test/transport/websocket-transport.test.js": "transport-messaging",
     "test/utils/assert.property.test.js": "runtime-primitives",
     "test/utils/canonical-json-data.test.js": "runtime-primitives",
     "test/utils/correlation-id-presence.property.test.js": "runtime-primitives",
@@ -2931,7 +2910,7 @@
       "files": [
         "src/bootstrap/critical-placement-convergence.js",
         "src/bootstrap/replication-target-authority.js",
-        "src/node/replica-lifecycle-manager.js",
+        "src/node/replica-handler-create-methods.js",
         "src/partition/partition-service-learner-promotion-methods.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
       ]
@@ -2957,6 +2936,20 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/bootstrap/fresh-seed-activation.integration.test.js": {
+      "files": [
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/integration/helpers/cluster-test-helpers.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js",
+        "test/test-helpers/original-allocation-durable-reader.js"
       ]
     },
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": {
@@ -3013,11 +3006,6 @@
     "test/bootstrap/join-retry-patience-selectable.test.js": {
       "files": [
         "src/node/replica-state-machine.js",
-        "test/test-helpers/lifecycle-state-store.js"
-      ]
-    },
-    "test/bootstrap/lifecycle-message-delegation.property.test.js": {
-      "files": [
         "test/test-helpers/lifecycle-state-store.js"
       ]
     },
@@ -3374,6 +3362,12 @@
         "src/workflow/reconcile-queue-constants.js"
       ]
     },
+    "test/bootstrap/seed-cache-hydration-handoff.test.js": {
+      "files": [
+        "src/bootstrap/phases/seed-cache-hydration-phase.js",
+        "src/partition/partition-service-hydration-image-methods.js"
+      ]
+    },
     "test/bootstrap/seed-infrastructure-phase.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -3414,6 +3408,7 @@
         "src/constants/index.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
         "src/storage/data-directory-manager.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -3477,8 +3472,10 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js",
-        "test/bootstrap/seed-retained-effects-fixture.js"
+        "test/bootstrap/seed-retained-effects-fixture.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js"
       ]
     },
     "test/bootstrap/seed-retained-effects.integration.test.js": {
@@ -3501,9 +3498,11 @@
         "src/raft/raft-rs-durable-store-constants.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "test/bootstrap/seed-retained-effects-fixture.js",
         "test/partition/partition-service-test-support.js",
         "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
@@ -3523,7 +3522,9 @@
         "src/partition/partition-service-entry-apply-base.js",
         "src/query/distributed/distributed-transaction-schema-enforcement.js",
         "src/raft/raft-rs-durable-store-constants.js",
-        "test/bootstrap/seed-retained-effects-fixture.js"
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "test/bootstrap/seed-retained-effects-fixture.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
@@ -7476,11 +7477,6 @@
         "LAGRANGE_PROOF_NODE_HOST"
       ]
     },
-    "test/integration/ack-delivery.integration.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
-      ]
-    },
     "test/integration/admin-cdc-propagation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -7632,7 +7628,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/replication-target-authority.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/node/replica-lifecycle-manager.js",
+        "src/node/replica-handler-create-methods.js",
         "src/partition/partition-service-learner-promotion-methods.js",
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
         "src/storage/data-directory-process-owner.js"
@@ -7640,11 +7636,7 @@
     },
     "test/integration/cross-node-replica-placement.integration.test.js": {
       "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/rebalancer/replica-operation-constants.js",
-        "test/node/replica-handler-bootstrap-stamps.js",
-        "test/test-helpers/lifecycle-state-store.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
+        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/integration/data-local-call-missing-cell-activation.integration.test.js": {
@@ -8125,8 +8117,10 @@
     },
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": {
       "files": [
+        "src/query/application-database-result.js",
         "src/runtime/runtime-startup-wiring.js",
-        "src/sea-entry.js"
+        "src/sea-entry.js",
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/integration/services-p1-self-referential-write.integration.test.js": {
@@ -8217,10 +8211,18 @@
         "src/bootstrap/system-table-workflow-schema-definitions.js",
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service-constants.js",
         "src/partition/partition-service.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -8249,14 +8251,6 @@
         "src/admin/static/playback-viewer.html",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
-      ]
-    },
-    "test/integration/websocket-create-replica-ack.integration.test.js": {
-      "files": [
-        "src/bootstrap/system-table-schemas-constants.js",
-        "src/rebalancer/replica-operation-constants.js",
-        "test/node/replica-handler-bootstrap-stamps.js",
-        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/live-query/live-query-startup-wiring.test.js": {
@@ -8863,12 +8857,6 @@
         "test/raft/raft-rs-backend/partition-node-cluster.js"
       ]
     },
-    "test/node/idempotent-operations.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js",
-        "test/test-helpers/replica-handler-identity-fixture.js"
-      ]
-    },
     "test/node/local-only-reconcile-activation-boundary.test.js": {
       "files": [
         "src/node/replica-transport-handler-identity.js"
@@ -8915,11 +8903,6 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
-    "test/node/node-recovery-orphan-cleanup.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
-      ]
-    },
     "test/node/participant-release-control-refusal-observation.test.js": {
       "files": [
         "src/node/participant-release-diagnostic-observation.js",
@@ -8933,22 +8916,12 @@
         "src/partition/partition-participant-transaction-cutover-constants.js"
       ]
     },
-    "test/node/registered-partition-removal.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
-      ]
-    },
     "test/node/replica-create-admission-recovery.test.js": {
       "files": [
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
         "src/rebalancer/replica-status.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
-      ]
-    },
-    "test/node/replica-creation-idempotency.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/replica-executor-activation-handler-boundary.test.js": {
@@ -9084,21 +9057,9 @@
         "src/entrypoint-startup-acquisition-ledger.js",
         "src/lagrange-runtime-startup.js",
         "src/node/replica-handler-runtime-methods.js",
-        "src/node/replica-lifecycle-manager.js",
-        "src/node/replica-lifecycle-recovery.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/runtime/oci-host-agent-durable-files.js",
         "src/storage/data-directory-process-owner.js"
-      ]
-    },
-    "test/node/replica-lifecycle-manager.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
-      ]
-    },
-    "test/node/replica-lifecycle-message-delivery.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/replica-removal-consensus-exit-decisions.test.js": {
@@ -9150,11 +9111,6 @@
         "src/transport/transport-semantic-outcome.js",
         "test/raft/raft-rs-backend/committed-membership-oracles.js",
         "test/raft/raft-rs-backend/partition-node-cluster.js"
-      ]
-    },
-    "test/node/replica-removal-graceful-shutdown.property.test.js": {
-      "files": [
-        "test/test-helpers/lifecycle-state-store.js"
       ]
     },
     "test/node/replica-removal-leader-source.test.js": {
@@ -9340,6 +9296,27 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/cdc-hydration-live-handoff.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-hydration-image-methods.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/child-partition-leader-propagation.test.js": {
       "files": [
         "src/constants/index.js"
@@ -9348,6 +9325,7 @@
     "test/partition/committed-statement-outcome.test.js": {
       "files": [
         "src/config/configuration-manager.js",
+        "src/partition/partition-cdc-obligation-ledger.js",
         "src/partition/partition-committed-statement-outcome.js",
         "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
@@ -9427,6 +9405,27 @@
     "test/partition/managed-split-epoch-persistence-effects.test.js": {
       "files": [
         "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/managed-split-metrics-provider.test.js": {
+      "files": [
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/managed-split-resume-under-write-load.test.js": {
@@ -11233,7 +11232,9 @@
       "files": [
         "src/cdc/cdc-routed-mutation-readiness.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-participant-set.js",
         "src/query/distributed/distributed-transaction-protocol.js",
+        "src/query/distributed/distributed-transaction-recovery-authority.js",
         "src/query/distributed/distributed-transaction-recovery-validation.js",
         "src/query/distributed/distributed-transaction-recovery.js",
         "src/query/sql-query-engine-write-execution.js",
@@ -11246,6 +11247,14 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/transaction-recovery-decision-validation.test.js": {
+      "files": [
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-decision.js",
+        "src/query/distributed/distributed-transaction-identity.js",
+        "src/query/distributed/distributed-transaction-participant-manifest.js"
       ]
     },
     "test/query/transaction-recovery-ownership.test.js": {
@@ -11522,7 +11531,6 @@
         "src/node/replica-handler-create-methods.js",
         "src/node/replica-handler-membership-methods.js",
         "src/node/replica-handler-runtime-metadata-methods.js",
-        "src/node/replica-lifecycle-manager.js",
         "src/node/replica-removal-consensus-exit.js",
         "src/partition/partition-service-core-base.js",
         "src/partition/partition-service-raft-init-base.js",
@@ -11881,6 +11889,28 @@
         "src/raft/raft-rs-lifecycle-administration.js"
       ]
     },
+    "test/raft/raft-rs-backend/lifecycle-table-writer-census.test.js": {
+      "files": [
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft",
+        "test/raft/raft-rs-backend"
+      ]
+    },
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": {
       "files": [
         "src/raft/raft-committed-membership-constants.js",
@@ -12049,6 +12079,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-administration.js",
         "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
         "src/raft/raft-rs-peer-identity.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -12505,9 +12536,17 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/constants/transactions.js",
         "src/partition/partition-cdc-obligation-ledger.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
         "src/partition/partition-service.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-operation-port-constants.js",
         "src/raft/raft-operation-port-request.js",
         "src/raft/raft-rs-application-transaction-owner.js",
@@ -12655,6 +12694,7 @@
         "src/raft/raft-rs-durable-store.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
@@ -12665,7 +12705,31 @@
         "src/entrypoint-startup-acquisition-ledger.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
         "src/storage/data-directory-process-owner.js"
+      ]
+    },
+    "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": {
+      "files": [
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "src/node/replica-handler-remove-execution-methods.js",
+        "src/raft/raft-rs-binding-owner.js",
+        "src/raft/raft-rs-core-constants.js",
+        "src/raft/raft-rs-group-membership-admission.js",
+        "src/raft/raft-rs-lifecycle-administration.js",
+        "src/raft/raft-rs-membership-administration.js",
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/raft/snapshot-install.js",
+        "src/raft/snapshot-receiver-admission.js"
+      ],
+      "directories": [
+        "src",
+        "src/raft"
       ]
     },
     "test/raft/raft-rs-original-allocation-preparation.test.js": {
@@ -12674,14 +12738,18 @@
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
-        "src/storage/data-directory-process-owner.js"
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/original-allocation-declaration-fixture.js"
       ]
     },
     "test/raft/raft-rs-original-allocation-store.test.js": {
       "files": [
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
-        "src/raft/raft-rs-original-allocation-store.js"
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js"
       ]
     },
     "test/raft/raft-rs-original-opening-authority.test.js": {
@@ -12690,6 +12758,7 @@
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-replica-lifecycle-constants.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -12699,7 +12768,7 @@
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
-        "src/raft/raft-rs-original-allocation-store.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -12742,6 +12811,7 @@
         "src/raft/raft-rs-lifecycle-administration.js",
         "src/raft/raft-rs-membership-administration.js",
         "src/raft/raft-rs-operation-port.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/raft/raft-rs-runtime-owner.js",
         "src/raft/snapshot-install.js",
@@ -16656,7 +16726,9 @@
         "package.json",
         "scripts/solve.js",
         "solve/epics/solve-v2/steering-disposition.json",
-        "solve/epics/solve-v2/steering-inventory.json"
+        "solve/epics/solve-v2/steering-inventory.json",
+        "test/guidelines/proof-ladders.md",
+        "test/guidelines/regression-policy.md"
       ],
       "directories": [
         "architecture",
@@ -17315,7 +17387,6 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/cdc-group-propagation-constants.js",
-        "src/topology/cdc-group-propagation-service.js",
         "test/test-helpers/cdc-topology-progress-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -17323,20 +17394,23 @@
         "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
-    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
+    "test/topology/cdc-group-propagation-service.test.js": {
       "files": [
-        "src/topology/cdc-group-propagation-constants.js",
-        "src/topology/cdc-group-propagation-delivery-methods.js",
-        "src/topology/cdc-group-propagation-lifecycle-methods.js",
-        "src/topology/cdc-group-propagation-routing.js",
-        "src/topology/cdc-group-propagation-service.js",
-        "src/topology/latency-topology-constants.js"
+        "src/cache/cdc-propagation-delivery-profile.js"
       ]
     },
-    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": {
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
       "files": [
         "src/bootstrap/shared/latency-topology-setup.js",
+        "src/cdc/cdc-delivery-outcome.js",
         "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-delivery-methods.js",
+        "src/topology/cdc-group-propagation-durable-delivery.js",
+        "src/topology/cdc-group-propagation-durable-plan.js",
+        "src/topology/cdc-group-propagation-foreground-retry.js",
+        "src/topology/cdc-group-propagation-lifecycle-methods.js",
+        "src/topology/cdc-group-propagation-retry-wait-report.js",
+        "src/topology/cdc-group-propagation-routing.js",
         "src/topology/cdc-group-propagation-service.js",
         "src/topology/latency-topology-constants.js"
       ]
@@ -17344,7 +17418,8 @@
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": {
       "files": [
         "src/topology/cdc-group-propagation-service.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
     "test/topology/topology-anti-entropy-reconciler.test.js": {
@@ -17400,16 +17475,6 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
-    "test/transport/endpoint-priority-selection.property.test.js": {
-      "files": [
-        "test/test-helpers/endpoint-incarnation-fixture.js"
-      ]
-    },
-    "test/transport/immediate-ack-ordering.property.test.js": {
-      "files": [
-        "src/transport/router-message-handler.js"
-      ]
-    },
     "test/transport/message-router-cdc-custody.test.js": {
       "files": [
         "src/transport/inproc-transport.js",
@@ -17446,7 +17511,8 @@
       "files": [
         "src/config/configuration-manager.js",
         "src/transport/message-router.js",
-        "test/test-helpers/boot-incarnation-fixture.js"
+        "test/test-helpers/boot-incarnation-fixture.js",
+        "test/test-helpers/message-router-remote-answer.js"
       ]
     },
     "test/transport/message-router-ping-wait-bound-spent.test.js": {
@@ -17458,6 +17524,12 @@
       "files": [
         "src/transport/message-router-shared-vocabulary.js",
         "src/transport/transport-error-codes.js"
+      ]
+    },
+    "test/transport/message-router-superseded-delivery-completion.test.js": {
+      "files": [
+        "src/transport/message-router-shared-vocabulary.js",
+        "test/test-helpers/message-router-cdc-fixture.js"
       ]
     },
     "test/transport/node-address-resolution-contract.test.js": {
@@ -17491,19 +17563,9 @@
         "src/logging/wait-bound-spent.js"
       ]
     },
-    "test/transport/service-response-correlation.property.test.js": {
-      "files": [
-        "src/transport/router-message-handler.js"
-      ]
-    },
     "test/transport/transport-outcome-forwarding-hop.test.js": {
       "files": [
         "src/message-group/message-group-service-runtime-support.js"
-      ]
-    },
-    "test/transport/transport-registry.test.js": {
-      "files": [
-        "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
     "test/utils/canonical-json-data.test.js": {

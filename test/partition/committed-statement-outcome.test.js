@@ -65,15 +65,20 @@ import {
   PARTITION_SETTLED_REPLAY,
 } from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {countCdcObligations} from
+  '../../src/partition/partition-cdc-obligation-ledger.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
+  CDC_TABLE,
   resumeFixtureParticipantAdmission,
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
-const TABLE_NAME = 'statement_outcome_rows';
+// A CDC-carrying table: the witnesses below also measure the committed
+// write's CDC obligation, which only a propagated table owes (decision D2).
+const TABLE_NAME = CDC_TABLE;
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const SELECT_ROW_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
 // A schema error on the partition's own table (a write to any other table is
@@ -682,6 +687,132 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
     });
     assert.equal((await insert(sibling, 's-1', 'after', 's-after')).success,
       true, 'the sibling still serves a write');
+  });
+});
+
+const UNKEYED_ROW_ID = 'row-unkeyed';
+
+// A committed SQL command with no entryId, as only a bug or version skew
+// proposes one: straight through the port, past the write-entry builder.
+function unkeyedInsert() {
+  return {type: PARTITION_SERVICE_OPERATION.INSERT, sql: INSERT_SQL,
+    params: [UNKEYED_ROW_ID, 'unkeyed'], timestamp: String(Date.now()),
+    proposedBy: 'other-replica'};
+}
+
+// One replica's whole application-visible state around the unkeyed command.
+function unkeyedStateOf(service, dbFile, partitionId) {
+  return {
+    appliedIndex: durableRecord(dbFile, partitionId).appliedIndex,
+    row: rowOf(dbFile, UNKEYED_ROW_ID),
+    outcomeRows: outcomeRows(dbFile),
+    obligations: countCdcObligations(service.db),
+  };
+}
+
+// The group's typed host failure the gate names for the unkeyed command.
+function assertEntryIdMissingFailure(status, replica) {
+  assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    `${replica}: readStatus is the group's host failure (${
+      JSON.stringify(status)})`);
+  assert.equal(status.failure?.reason,
+    partitionConstants.PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON
+      ?.ENTRY_ID_MISSING, `${replica}: with the typed reason, not the ` +
+    `CDC recorder's untyped constraint text (${JSON.stringify(status.failure)})`);
+  assert.equal(status.failure.detail?.code,
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_MISSING,
+    `${replica}: and the typed code`);
+  assert.equal(status.failure.detail.commandType,
+    PARTITION_SERVICE_OPERATION.INSERT, `${replica}: naming the type`);
+}
+
+test('U1: a committed SQL command without an entryId (proposed straight ' +
+  'through the port) fails the application closed, typed, before its ' +
+  'statement runs, on every replica: no row, no outcome row, no CDC ' +
+  'obligation, the applied index unchanged',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  quietEnvironment();
+  const partitionId = 'u1-unkeyed';
+  const members = [['u1-unkeyed-r1', 'node-1'], ['u1-unkeyed-r2', 'node-2'],
+    ['u1-unkeyed-r3', 'node-3']];
+  const group = await formAdmittedGroup({
+    partitionId,
+    members,
+    tempPrefix: TEMP_PREFIX,
+    serviceOptions: partitionOptions(partitionId, null),
+    budgetMs: GROUP_BUDGET_MS,
+  });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+  const {dbFileOf, waitFor, services} = group;
+  const stateOf = (index) =>
+    unkeyedStateOf(services[index], dbFileOf(members[index]), partitionId);
+  try {
+    assert.equal((await insert(services[0], 'row-0', 'setup', 'u1-setup'))
+      .success, true, 'setup: the group serves a keyed write');
+    const setupApplied = durableRecord(dbFileOf(members[0]), partitionId)
+      .appliedIndex;
+    assert.equal(await waitFor(() => members.every((member) =>
+      durableRecord(dbFileOf(member), partitionId).appliedIndex >=
+        setupApplied)), true, 'setup: every replica applied the setup write');
+    const before = services.map((service, index) => stateOf(index));
+
+    await services[0].raft.propose(unkeyedInsert());
+    const failed = await waitFor(() => services.every((service) =>
+      service.raft.readStatus().outcome ===
+        RAFT_OPERATION_OUTCOME.HOST_FAILURE));
+    assert.equal(failed, true, 'every replica fails the application closed (' +
+      `${JSON.stringify(services.map((service) =>
+        service.raft.readStatus().failure ?? null))})`);
+    services.forEach((service, index) => {
+      const replica = members[index][0];
+      assertEntryIdMissingFailure(service.raft.readStatus(), replica);
+      assert.deepEqual(stateOf(index), before[index],
+        `${replica}: no row, no outcome row, no CDC obligation, the ` +
+        'applied index unchanged');
+    });
+  } finally {
+    await group.dispose();
+    resetEnvironment();
+  }
+});
+
+test('U2: the unkeyed committed command refuses the restart with the same ' +
+  'typed reason, and a keyed write on a separate partition is unaffected',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('u2-keyed', async ({dbPath: keyedPath, open:
+    openKeyed}) => {
+    const keyed = await openKeyed();
+    await withPartition('u2-unkeyed', async ({dbPath, open}) => {
+      const partition = await open();
+      assert.equal((await insert(partition, 'row-0', 'setup', 'u2-setup'))
+        .success, true, 'setup: the partition serves a keyed write');
+      const before = unkeyedStateOf(partition, dbPath, 'u2-unkeyed');
+      await partition.raft.propose(unkeyedInsert());
+      assertEntryIdMissingFailure(partition.raft.readStatus(), 'u2-unkeyed');
+      assert.deepEqual(unkeyedStateOf(partition, dbPath, 'u2-unkeyed'), before,
+        'no row, no outcome row, no CDC obligation, the applied index ' +
+        'unchanged');
+      await partition.shutdown();
+      let refusal = null;
+      try {
+        await open();
+      } catch (error) {
+        refusal = error;
+      }
+      assert.ok(isConsensusInitRefusal(refusal, ENTITY_TYPE.PARTITION),
+        `the restart fails closed (${refusal?.message})`);
+      assert.ok(String(refusal.message).includes(partitionConstants
+        .PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON?.ENTRY_ID_MISSING),
+      `initialize() names the typed reason (${refusal.message})`);
+    });
+    const applied = await insert(keyed, 'row-keyed', 'after', 'u2-keyed');
+    assert.equal(applied.success, true,
+      `a keyed write on a separate partition applies (${
+        JSON.stringify(applied)})`);
+    assert.equal(outcomeOf(keyedPath, keyed, 'u2-keyed').length, 1,
+      'its outcome row is keyed by its entryId');
+    assert.equal(countCdcObligations(keyed.db).owed, 1,
+      'it owes its one CDC obligation');
   });
 });
 

@@ -87,8 +87,9 @@ blocked behind the separate `raft-rs-full-cutover` epic: no behavior-changing
 Q1+ convergence work starts until that epic closes and Q0 re-measures READY.
 
 That merge is a **foundation landing**, not evidence that the partition Raft
-cutover is already complete. The exact merged tree currently says all of the
-following:
+cutover is already complete. The following are historical observations of that
+foundation landing, retained to explain the predecessor requirement. They are
+not a fresh measurement of the current head; Q0 must recheck them:
 
 - `RAFT_BACKEND_DEFAULT` is still `liferaft`;
 - `raft-rs-wasm` is selected only when `raftBackend` names it explicitly;
@@ -822,18 +823,20 @@ The matrix frozen by Q0 must include the current canonical equivalents of:
 - operation recovery/replay;
 - representative service-near-data execution.
 
-If message groups still intentionally use Liferaft, their focused safety and
-recovery proofs remain part of certification. Q9 must not hide that mixed
-implementation; the final owner map names it explicitly.
+Message groups must satisfy the same completed rs-raft cutover and their focused
+safety and recovery proofs. No mixed-backend exception survives the predecessor
+epic's zero-active-Liferaft requirement.
 
-The live/costly runs are terminal evidence, not a debugging loop.
-Deterministic/focused proofs must be green first.
+Full live certification is terminal evidence after the relevant deterministic
+and focused proofs. A bounded physical experiment may resolve a specific causal
+question that those proofs cannot reproduce; record its evidence ceiling and
+first failure rather than using a certification campaign as a debugging loop.
 
 ## Per-Quest adversarial proof contract
 
 Every behavior-changing Quest in this epic must satisfy all of the following.
 
-### 1. Name the owner before the symptom
+### 1. Name the demonstrated concern and affected owner
 
 The sealed statement names:
 
@@ -916,16 +919,17 @@ The verifier must attempt to disprove:
 An independent verifier may approve a no-op/refutation. "The suspected
 duplicate is legitimate evidence integration" is a valid and useful outcome.
 
-## Scope discipline for weaker agents
+## Scope discipline
 
-This epic is intentionally written so GPT-5.5/Kimi-class agents can execute it
-without architecture invention.
+Use the declared owner interactions to make each repair reviewable and to avoid
+architecture invention. A broader service blocker does not enlarge a repair's
+sealed acceptance; record the remaining work in the current epic summary.
 
 Rules:
 
 - one semantic concern or one owner interaction per behavior-changing Quest;
-- default to fewer than ~12 touched `src/` files; exceeding that is a signal
-  to stop and split unless the extra files are mechanical imports/deletions;
+- use touched-file count as a review-capacity signal, not a mandatory split
+  threshold; keep a coupled repair together and record any scope widening;
 - do not broaden a Quest because the same smell appears elsewhere; record a
   finding for the appropriate later phase;
 - do not edit an owner and all its observers in one unbounded sweep;

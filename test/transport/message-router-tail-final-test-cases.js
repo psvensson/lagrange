@@ -1,4 +1,5 @@
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 export async function registerMessageRouterTailFinalTests({
   t,
   MessageRouter,
@@ -172,13 +173,8 @@ export async function registerMessageRouterTailFinalTests({
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const secondResult = await router.deliver(
@@ -296,13 +292,8 @@ export async function registerMessageRouterTailFinalTests({
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const result = await router.deliver(
@@ -394,13 +385,8 @@ export async function registerMessageRouterTailFinalTests({
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const result = await router.deliver(
@@ -486,13 +472,8 @@ export async function registerMessageRouterTailFinalTests({
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const firstResult = await router.deliver(
@@ -621,13 +602,8 @@ export async function registerMessageRouterTailFinalTests({
             _payload,
             targetNodeId,
             correlationId,
-          ) => ({
-            messageId,
-            correlationId,
-            acknowledged: true,
-            targetNodeId,
-            recovered: true,
-          });
+          ) => acknowledgeThenRespond(router, {messageId, correlationId,
+            result: {targetNodeId, recovered: true}});
 
           const result = await router.deliver(
             'node-b/service/handshake-stale-reconnect-suppression',
@@ -734,13 +710,8 @@ export async function registerMessageRouterTailFinalTests({
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const result = await router.deliver(
@@ -879,11 +850,8 @@ export async function registerMessageRouterTailFinalTests({
     router.sendMessage = async (
       _connection, _targetAddress, messageId,
       _payload, targetNodeId, correlationId,
-    ) => ({
-      messageId, correlationId,
-      acknowledged: true, targetNodeId,
-      recovered: true,
-    });
+    ) => acknowledgeThenRespond(router, {messageId, correlationId,
+      result: {targetNodeId, recovered: true}});
 
     const result = await router.deliver(
       'node-b/service/bare-address-test',

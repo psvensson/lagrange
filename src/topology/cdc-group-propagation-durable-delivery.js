@@ -1,6 +1,6 @@
-// CDCGroupPropagationService's durable wave. Source debt and between-attempt
-// progress remain with the source lane. No durable payload enters the existing
-// immediate-batch or background-retry maps.
+// CDCGroupPropagationService's durable wave, its one propagation path. Source
+// debt and between-attempt progress remain with the source lane; the service
+// keeps no payload of its own between attempts or after the wave.
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {CDC_COMPLETION, isCommittedCdcOutcome, isProvisionalCdcOutcome,
   unknownCdcAcceptance} from '../cdc/cdc-delivery-outcome.js';
@@ -14,8 +14,8 @@ import {PRESSURE_GOVERNOR_ACTION} from '../control-plane/pressure-governor.js';
 import {captureDurablePropagationPlan} from './cdc-group-propagation-durable-plan.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from
   './latency-topology-constants.js';
-import {CDC_GROUP_FOREGROUND_CONTINUATION, CDC_GROUP_FOREGROUND_DELIVERY_STATE,
-  CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT, CDC_GROUP_PROPAGATION_REASON,
+import {CDC_GROUP_FOREGROUND_RETRY_STATE, CDC_GROUP_PROPAGATION_EVENT,
+  CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_STATUS, CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PUBLICATION_MODE} from
   './cdc-group-propagation-constants.js';
@@ -64,8 +64,7 @@ function targetDeliveryPayload(owner, source, events, target) {
 
 async function deliverTarget(owner, source, events, leaf, context) {
   context.assertCurrent();
-  const gate = owner.resolvePropagationTrafficGate(events);
-  if (gate.pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+  if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
     return unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE);
   }
   if (!owner.messageRouter || typeof owner.messageRouter.deliver !== 'function') {
@@ -127,10 +126,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
         cause: lastFailure};
   };
   return {
-    state: CDC_GROUP_FOREGROUND_DELIVERY_STATE.READY,
-    continuation: CDC_GROUP_FOREGROUND_CONTINUATION.SOURCE_OWNER,
     deliveryLabel: owner.describeDeliveryEvents(events),
-    hasPending: () => true,
     complete: () => complete(progress.result()),
     result,
     // The prepared unit is one aggregate durable wave. Leaf coverage, never
@@ -150,7 +146,7 @@ function prepareDurableForegroundWave(owner, wave, events, plan) {
       if (plan.useGrouped) progress.refreshRoutes(plan.safeTargets, {fallback: true});
       return context.run(() => owner.sleep(delayMs));
     },
-    // Durable debt has no background retry callback: the original source lane
+    // Unresolved debt returns to the source owner: the original source lane
     // retains the next invocation and this child scope retains actual cleanup.
   };
 }
@@ -171,6 +167,15 @@ function propagationResult(owner, source, plan, progress, answer) {
   else owner.stats.safeCount += 1;
   owner.emit(CDC_GROUP_PROPAGATION_EVENT.PROPAGATED, result);
   return result;
+}
+
+// The publication mode a captured plan is: grouped, configured safe mode
+// (repair_only, the healthy safe mode the config owner already published), or
+// a conservative fan-out forced by a grouped prerequisite.
+function publicationModeOf(plan) {
+  if (plan.useGrouped) return CDC_GROUP_PUBLICATION_MODE.GROUPED;
+  return plan.fallbackReason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE ?
+    CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY : CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT;
 }
 
 async function propagateDurableCdcEvent(owner, options) {
@@ -196,10 +201,9 @@ async function propagateDurableCdcEvent(owner, options) {
     if (sourceAdmission !== DURABLE_PROPAGATION_ADMISSION.ADMIT) {
       return durablePropagationRefusal(owner, sourceAdmission);
     }
-    owner.setPublicationMode(plan.useGrouped ? CDC_GROUP_PUBLICATION_MODE.GROUPED :
-      CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT, plan.fallbackReason);
+    owner.setPublicationMode(publicationModeOf(plan), plan.fallbackReason);
     const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
-    const result = await owner.deliverToTargetsWithRetry({}, prepared);
+    const result = await owner.deliverToTargetsWithRetry(prepared);
     context.assertCurrent();
     return result;
   } finally {
