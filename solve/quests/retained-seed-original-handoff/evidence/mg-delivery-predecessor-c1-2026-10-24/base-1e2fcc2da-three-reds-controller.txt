@@ -1,0 +1,495 @@
+driver: sha=1e2fcc2da391ab72883132a22fbfbde39b2313f7 on=tv-dator startedAt=2026-10-24T07:28:58.458Z files=3
+lab test: tv-dator: ordinary (3 files) cores=12 mem=15.4GiB speed x1.39
+[tv-dator] placement-shell=1604406
+[tv-dator] placement-head=1e2fcc2da391ab72883132a22fbfbde39b2313f7
+[tv-dator] placement-link=node_modules
+[tv-dator] placement-link=data/examples
+[tv-dator] placement-link=data/partitions
+[tv-dator] placement-link=tools/alloy-6.2.0
+[tv-dator] placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+[tv-dator] placement-link=tools/tla2tools.jar
+[tv-dator] placement-prepared=import-graph
+[tv-dator] placement-env=factor:1.4 mode:local retry: timeout: lanecap:11
+[tv-dator] placement-pid=1604820
+[tv-dator] # test-files planned=3
+[tv-dator] classified lane ordinary: 3 file(s), jobs=4
+[tv-dator] thermal: ok cpu 69C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+[tv-dator] not ok test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js (2 assertions, 947ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 14
+[tv-dator] RebalanceCoordinator initialized {
+[tv-dator]   nodeId: 'node-runtime-source',
+[tv-dator]   config: {
+[tv-dator]     pendingTimeoutMs: 30000,
+[tv-dator]     creatingTimeoutMs: 60000,
+[tv-dator]     syncingTimeoutMs: 300000,
+[tv-dator]     removingTimeoutMs: 60000,
+[tv-dator]     maxConcurrentAdds: 5,
+[tv-dator]     reservedRuntimeServicePlacementSlots: 1,
+[tv-dator]     maxConcurrentRemoves: 5,
+[tv-dator]     periodicCheckIntervalMs: 60000,
+[tv-dator]     reservationTtlMs: 300000
+[tv-dator]   }
+[tv-dator] }
+[tv-dator] Reconcile queue shutdown { queue: 'rebalance-check-reconcile:svc-runtime-replace-proof' }
+[tv-dator] # Subtest: runtime-service REPLACE keeps one canonical target through the next placement evaluation
+[tv-dator]     not ok 1 - Runtime-service REPLACE failed: UNKNOWN
+[tv-dator]       ---
+[tv-dator]       stack: |
+[tv-dator]         RebalanceCoordinator.failedListener (test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js:143:14)
+[tv-dator]         OperationWorkflowOwner.failOperation (src/rebalancer/operation-workflow-transition-persistence.js:757:18)
+[tv-dator]         async OperationWorkflowOwner.reconcileExecutorOutcome (src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js:723:7)
+[tv-dator]         async OperationWorkflowOwner.redriveExecutorOutcomeReconcile (src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js:146:11)
+[tv-dator]       at:
+[tv-dator]         fileName: test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+[tv-dator]         lineNumber: 143
+[tv-dator]         columnNumber: 14
+[tv-dator]         typeName: RebalanceCoordinator
+[tv-dator]         methodName: failedListener
+[tv-dator]         functionName: RebalanceCoordinator.failedListener
+[tv-dator]       tapCaught: returnedPromiseRejection
+[tv-dator]       source: |2
+[tv-dator]               clearTimeout(timeout);
+[tv-dator]               cleanup();
+[tv-dator]               reject(new Error(
+[tv-dator]         -------------^
+[tv-dator]                 `Runtime-service REPLACE failed: ${event?.error ||
+[tv-dator]                   event?.operation?.errorMessage || 'unknown_error'}`,
+[tv-dator]       ...
+[tv-dator]     
+[tv-dator]     1..1
+[tv-dator] not ok 1 - runtime-service REPLACE keeps one canonical target through the next placement evaluation # time=73.895ms
+[tv-dator]   ---
+[tv-dator]   at:
+[tv-dator]     fileName: test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+[tv-dator]     lineNumber: 239
+[tv-dator]     columnNumber: 1
+[tv-dator]     isToplevel: true
+[tv-dator]   source: |
+[tv-dator]     }
+[tv-dator]   
+[tv-dator]     test('runtime-service REPLACE keeps one canonical target through the next ' +
+[tv-dator]     ^
+[tv-dator]       'placement evaluation', async (t) => {
+[tv-dator]       const cache = attachServiceDefinition(createMockCache({
+[tv-dator]   ...
+[tv-dator] 
+[tv-dator] 1..1
+[tv-dator] # { total: 1, pass: 0, fail: 1 }
+[tv-dator] # time=81.999ms
+[tv-dator] not ok test/scripts/solve-footprint-accounting.test.js (4 assertions, 391828ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: the accounting reports total, append-only history and active bytes
+[tv-dator] not ok 1 - the accounting reports total, append-only history and active bytes
+[tv-dator]   ---
+[tv-dator]   duration_ms: 391201.488743
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:29:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: 'false == true'
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: '=='
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:39:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     Test.start (node:internal/test_runner/test:944:17)
+[tv-dator]     startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+[tv-dator]   ...
+[tv-dator] # Subtest: the accounting adds up
+[tv-dator] ok 2 - the accounting adds up
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.377032
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the active footprint carries the 20 MB budget and meets it
+[tv-dator] not ok 3 - the active footprint carries the 20 MB budget and meets it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.442135
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:54:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     the active footprint satisfies 20 MB
+[tv-dator]     
+[tv-dator]     false !== true
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected: true
+[tv-dator]   actual: false
+[tv-dator]   operator: 'strictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:59:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[tv-dator]     Test.postRun (node:internal/test_runner/test:1173:19)
+[tv-dator]     Test.run (node:internal/test_runner/test:1101:12)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] # Subtest: history is whatever the quest-layout owner classifies, and only that
+[tv-dator] ok 4 - history is whatever the quest-layout owner classifies, and only that
+[tv-dator]   ---
+[tv-dator]   duration_ms: 0.170965
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] 1..4
+[tv-dator] # tests 4
+[tv-dator] # suites 0
+[tv-dator] # pass 2
+[tv-dator] # fail 2
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 391230.619324
+[tv-dator] # time=391828ms
+[tv-dator] not ok test/scripts/closed-quest-shape.test.js (9 assertions, 392031ms)
+[tv-dator] # TAP assertions failed; test process exited 1
+[tv-dator] TAP version 13
+[tv-dator] # Subtest: an ordinary closed quest holds only its record and log
+[tv-dator] ok 1 - an ordinary closed quest holds only its record and log
+[tv-dator]   ---
+[tv-dator]   duration_ms: 65.701802
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a sealed receipt survives closure
+[tv-dator] ok 2 - a sealed receipt survives closure
+[tv-dator]   ---
+[tv-dator]   duration_ms: 34.692376
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: a sealed oracle survives closure
+[tv-dator] ok 3 - a sealed oracle survives closure
+[tv-dator]   ---
+[tv-dator]   duration_ms: 33.17518
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an unrelated file in a closed quest is rejected
+[tv-dator] ok 4 - an unrelated file in a closed quest is rejected
+[tv-dator]   ---
+[tv-dator]   duration_ms: 33.434554
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: an unreferenced proof-shaped file is rejected
+[tv-dator] ok 5 - an unreferenced proof-shaped file is rejected
+[tv-dator]   ---
+[tv-dator]   duration_ms: 34.776193
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: deleting a required artifact invalidates closure
+[tv-dator] ok 6 - deleting a required artifact invalidates closure
+[tv-dator]   ---
+[tv-dator]   duration_ms: 35.84439
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: modifying a required artifact after closure invalidates closure
+[tv-dator] ok 7 - modifying a required artifact after closure invalidates closure
+[tv-dator]   ---
+[tv-dator]   duration_ms: 65.447418
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: prose naming an artifact cannot legalize it
+[tv-dator] ok 8 - prose naming an artifact cannot legalize it
+[tv-dator]   ---
+[tv-dator]   duration_ms: 29.058104
+[tv-dator]   type: 'test'
+[tv-dator]   ...
+[tv-dator] # Subtest: the repository itself is clean under the general rule
+[tv-dator] not ok 9 - the repository itself is clean under the general rule
+[tv-dator]   ---
+[tv-dator]   duration_ms: 391121.358392
+[tv-dator]   type: 'test'
+[tv-dator]   location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/closed-quest-shape.test.js:157:1'
+[tv-dator]   failureType: 'testCodeFailure'
+[tv-dator]   error: |-
+[tv-dator]     Expected values to be strictly deep-equal:
+[tv-dator]     + actual - expected
+[tv-dator]     
+[tv-dator]     + [
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/checkpoint-hold.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/receipt-initial-v1.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v2.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v3.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-independent-review-v2.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-result-v2.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.err',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.log',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.status.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-fleet.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-input.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-lab.log',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-result.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-test-results.ndjson',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-excerpt-records-v2.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-input-v2.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v1.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v2.md',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1-hashes.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1.diff',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2-hashes.json',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   },
+[tv-dator]     +   {
+[tv-dator]     +     at: 'working tree',
+[tv-dator]     +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2.diff',
+[tv-dator]     +     quest: 'seed-participant-release-native-startup-census',
+[tv-dator]     +     reason: 'is not required by the sealed terminal claim'
+[tv-dator]     +   }
+[tv-dator]     + ]
+[tv-dator]     - []
+[tv-dator]     
+[tv-dator]   code: 'ERR_ASSERTION'
+[tv-dator]   name: 'AssertionError'
+[tv-dator]   expected:
+[tv-dator]   actual:
+[tv-dator]     0:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/checkpoint-hold.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     1:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/receipt-initial-v1.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     2:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v2.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     3:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v3.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     4:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-independent-review-v2.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     5:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-result-v2.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     6:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.err'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     7:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.log'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     8:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.status.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     9:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-fleet.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     10:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-input.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     11:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-lab.log'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     12:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-result.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     13:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-test-results.ndjson'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     14:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-excerpt-records-v2.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     15:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-input-v2.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     16:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v1.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     17:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v2.md'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     18:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1-hashes.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     19:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1.diff'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     20:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2-hashes.json'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]     21:
+[tv-dator]       quest: 'seed-participant-release-native-startup-census'
+[tv-dator]       path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2.diff'
+[tv-dator]       reason: 'is not required by the sealed terminal claim'
+[tv-dator]       at: 'working tree'
+[tv-dator]   operator: 'deepStrictEqual'
+[tv-dator]   stack: |-
+[tv-dator]     TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/closed-quest-shape.test.js:161:10)
+[tv-dator]     Test.runInAsyncScope (node:async_hooks:214:14)
+[tv-dator]     Test.run (node:internal/test_runner/test:1047:25)
+[tv-dator]     Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+[tv-dator]     Test.postRun (node:internal/test_runner/test:1173:19)
+[tv-dator]     Test.run (node:internal/test_runner/test:1101:12)
+[tv-dator]     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+[tv-dator]   ...
+[tv-dator] 1..9
+[tv-dator] # tests 9
+[tv-dator] # suites 0
+[tv-dator] # pass 8
+[tv-dator] # fail 1
+[tv-dator] # cancelled 0
+[tv-dator] # skipped 0
+[tv-dator] # todo 0
+[tv-dator] # duration_ms 391474.695365
+[tv-dator] # time=392031ms
+[tv-dator] # test-files total=3 pass=0 fail=3 assertions=15
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+[tv-dator] fatal: Not a valid object name origin/main
+lab test: tv-dator: # test-files total=3 pass=0 fail=3 assertions=15
+lab test: tv-dator: results copied to test-output/reports/test-results-tv-dator.ndjson
+# test-files total=3 pass=0 fail=3 assertions=15
+driver: status=1 logs=2

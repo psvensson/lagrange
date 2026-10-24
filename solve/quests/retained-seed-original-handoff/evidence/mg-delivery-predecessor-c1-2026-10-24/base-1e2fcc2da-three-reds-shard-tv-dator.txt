@@ -1,0 +1,484 @@
+placement-shell=1604406
+placement-head=1e2fcc2da391ab72883132a22fbfbde39b2313f7
+placement-link=node_modules
+placement-link=data/examples
+placement-link=data/partitions
+placement-link=tools/alloy-6.2.0
+placement-link=tools/alloy-6.2.0-linux-amd64.tar.gz
+placement-link=tools/tla2tools.jar
+placement-prepared=import-graph
+placement-env=factor:1.4 mode:local retry: timeout: lanecap:11
+placement-pid=1604820
+# test-files planned=3
+classified lane ordinary: 3 file(s), jobs=4
+thermal: ok cpu 69C (coretemp/Package id 0) nvme 50C (nvme/Sensor 1)
+not ok test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js (2 assertions, 947ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'node-runtime-source',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Reconcile queue shutdown { queue: 'rebalance-check-reconcile:svc-runtime-replace-proof' }
+# Subtest: runtime-service REPLACE keeps one canonical target through the next placement evaluation
+    not ok 1 - Runtime-service REPLACE failed: UNKNOWN
+      ---
+      stack: |
+        RebalanceCoordinator.failedListener (test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js:143:14)
+        OperationWorkflowOwner.failOperation (src/rebalancer/operation-workflow-transition-persistence.js:757:18)
+        async OperationWorkflowOwner.reconcileExecutorOutcome (src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js:723:7)
+        async OperationWorkflowOwner.redriveExecutorOutcomeReconcile (src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js:146:11)
+      at:
+        fileName: test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+        lineNumber: 143
+        columnNumber: 14
+        typeName: RebalanceCoordinator
+        methodName: failedListener
+        functionName: RebalanceCoordinator.failedListener
+      tapCaught: returnedPromiseRejection
+      source: |2
+              clearTimeout(timeout);
+              cleanup();
+              reject(new Error(
+        -------------^
+                `Runtime-service REPLACE failed: ${event?.error ||
+                  event?.operation?.errorMessage || 'unknown_error'}`,
+      ...
+    
+    1..1
+not ok 1 - runtime-service REPLACE keeps one canonical target through the next placement evaluation # time=73.895ms
+  ---
+  at:
+    fileName: test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js
+    lineNumber: 239
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('runtime-service REPLACE keeps one canonical target through the next ' +
+    ^
+      'placement evaluation', async (t) => {
+      const cache = attachServiceDefinition(createMockCache({
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=81.999ms
+not ok test/scripts/solve-footprint-accounting.test.js (4 assertions, 391828ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: the accounting reports total, append-only history and active bytes
+not ok 1 - the accounting reports total, append-only history and active bytes
+  ---
+  duration_ms: 391201.488743
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:29:1'
+  failureType: 'testCodeFailure'
+  error: 'false == true'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:39:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.start (node:internal/test_runner/test:944:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
+  ...
+# Subtest: the accounting adds up
+ok 2 - the accounting adds up
+  ---
+  duration_ms: 0.377032
+  type: 'test'
+  ...
+# Subtest: the active footprint carries the 20 MB budget and meets it
+not ok 3 - the active footprint carries the 20 MB budget and meets it
+  ---
+  duration_ms: 0.442135
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:54:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    the active footprint satisfies 20 MB
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/solve-footprint-accounting.test.js:59:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: history is whatever the quest-layout owner classifies, and only that
+ok 4 - history is whatever the quest-layout owner classifies, and only that
+  ---
+  duration_ms: 0.170965
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 391230.619324
+# time=391828ms
+not ok test/scripts/closed-quest-shape.test.js (9 assertions, 392031ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: an ordinary closed quest holds only its record and log
+ok 1 - an ordinary closed quest holds only its record and log
+  ---
+  duration_ms: 65.701802
+  type: 'test'
+  ...
+# Subtest: a sealed receipt survives closure
+ok 2 - a sealed receipt survives closure
+  ---
+  duration_ms: 34.692376
+  type: 'test'
+  ...
+# Subtest: a sealed oracle survives closure
+ok 3 - a sealed oracle survives closure
+  ---
+  duration_ms: 33.17518
+  type: 'test'
+  ...
+# Subtest: an unrelated file in a closed quest is rejected
+ok 4 - an unrelated file in a closed quest is rejected
+  ---
+  duration_ms: 33.434554
+  type: 'test'
+  ...
+# Subtest: an unreferenced proof-shaped file is rejected
+ok 5 - an unreferenced proof-shaped file is rejected
+  ---
+  duration_ms: 34.776193
+  type: 'test'
+  ...
+# Subtest: deleting a required artifact invalidates closure
+ok 6 - deleting a required artifact invalidates closure
+  ---
+  duration_ms: 35.84439
+  type: 'test'
+  ...
+# Subtest: modifying a required artifact after closure invalidates closure
+ok 7 - modifying a required artifact after closure invalidates closure
+  ---
+  duration_ms: 65.447418
+  type: 'test'
+  ...
+# Subtest: prose naming an artifact cannot legalize it
+ok 8 - prose naming an artifact cannot legalize it
+  ---
+  duration_ms: 29.058104
+  type: 'test'
+  ...
+# Subtest: the repository itself is clean under the general rule
+not ok 9 - the repository itself is clean under the general rule
+  ---
+  duration_ms: 391121.358392
+  type: 'test'
+  location: '/home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/closed-quest-shape.test.js:157:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/checkpoint-hold.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/receipt-initial-v1.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v2.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v3.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-independent-review-v2.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-result-v2.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.err',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.log',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.status.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-fleet.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-input.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-lab.log',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-result.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-test-results.ndjson',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-excerpt-records-v2.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-input-v2.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v1.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v2.md',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1-hashes.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1.diff',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2-hashes.json',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   },
+    +   {
+    +     at: 'working tree',
+    +     path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2.diff',
+    +     quest: 'seed-participant-release-native-startup-census',
+    +     reason: 'is not required by the sealed terminal claim'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/checkpoint-hold.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    1:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/receipt-initial-v1.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    2:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v2.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    3:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-source-ordering-diagnosis-v3.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    4:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-independent-review-v2.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    5:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-result-v2.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    6:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.err'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    7:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.raw.log'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    8:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-adam-laptop.status.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    9:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-fleet.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    10:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-input.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    11:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-lab.log'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    12:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-result.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    13:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/startup-trace-v2-test-results.ndjson'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    14:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-excerpt-records-v2.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    15:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-input-v2.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    16:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v1.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    17:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-preflight-v2.md'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    18:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1-hashes.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    19:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v1.diff'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    20:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2-hashes.json'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+    21:
+      quest: 'seed-participant-release-native-startup-census'
+      path: 'solve/quests/seed-participant-release-native-startup-census/evidence/trace-v2.diff'
+      reason: 'is not required by the sealed terminal claim'
+      at: 'working tree'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/peter/projects/lagrange/test-output/placement-worktrees/1e2fcc2da391-mvm2vcji-3321093/test/scripts/closed-quest-shape.test.js:161:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 8
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 391474.695365
+# time=392031ms
+# test-files total=3 pass=0 fail=3 assertions=15
+placement-results={"file":"test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js","attempt":1,"ok":false,"assertions":2,"durationMs":947,"retriedOnce":false,"firstFailureLine":"not ok 1 - Runtime-service REPLACE failed: UNKNOWN"}
+placement-results={"file":"test/scripts/solve-footprint-accounting.test.js","attempt":1,"ok":false,"assertions":4,"durationMs":391828,"retriedOnce":false,"firstFailureLine":"not ok 1 - the accounting reports total, append-only history and active bytes"}
+placement-results={"file":"test/scripts/closed-quest-shape.test.js","attempt":1,"ok":false,"assertions":9,"durationMs":392031,"retriedOnce":false,"firstFailureLine":"not ok 9 - the repository itself is clean under the general rule"}
