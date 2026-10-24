@@ -446,14 +446,13 @@ class MessageRouterInboundDispatch {
         sourceAddress: message.sourceAddress,
         sourceNodeId: message.sourceNodeId,
       });
+      // The router's own fact travels at frame level; no answer slot exists.
       this.sendRaw(ws, {
         type: RouterMessageType.SERVICE_RESPONSE,
         messageId,
         sourceAddress: message.sourceAddress,
-        result: {
-          noHandler: true,
-          error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
-        },
+        noHandler: true,
+        error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
       });
       return;
     }
@@ -500,7 +499,7 @@ class MessageRouterInboundDispatch {
    * @private
    */
   handleServiceResponse(message) {
-    const {messageId, result, error} = message;
+    const {messageId, result, error, noHandler} = message;
     this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_RECEIVED, {
       messageId,
       hasError: Boolean(error),
@@ -508,6 +507,7 @@ class MessageRouterInboundDispatch {
     const disposition = this.resolveServiceResponseDisposition(messageId, {
       result,
       error,
+      noHandler,
     });
     this.recordServiceResponseDisposition(disposition);
     if (disposition.kind === SERVICE_RESPONSE_DISPOSITION_KIND.SETTLED) {

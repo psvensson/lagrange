@@ -1,5 +1,7 @@
 import {registerMessageRouterTailFinalTests} from './message-router-tail-final-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+  '../../src/transport/transport-semantic-outcome.js';
 
 export async function registerMessageRouterTailMoreTests({
   t,
@@ -322,7 +324,7 @@ export async function registerMessageRouterTailMoreTests({
     await router.shutdown();
   });
 
-  t.test('should preserve no-handler error details on acknowledged self delivery', async (t) => {
+  t.test('should preserve no-handler error details on self delivery', async (t) => {
     const router = new MessageRouter({
       bootIncarnation: TEST_BOOT_INCARNATION,
       nodeId: 'self-no-handler-test',
@@ -336,12 +338,14 @@ export async function registerMessageRouterTailMoreTests({
       {type: 'TEST', data: 'missing'},
     );
 
-    t.equal(result.acknowledged, true, 'should acknowledge delivery');
+    t.equal(classifyTransportDeliveryOutcome(result).reasonCode,
+      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
+      'the frame-level no-handler fact is FAILED/no_handler');
     t.equal(result.noHandler, true, 'should surface noHandler flag');
     t.match(
       result.error,
       /No handler registered for address self-no-handler-test\/service\/missing-handler/,
-      'should preserve no-handler error text on acknowledged ACK',
+      'should preserve no-handler error text',
     );
 
     await router.shutdown();

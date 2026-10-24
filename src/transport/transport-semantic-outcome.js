@@ -1,6 +1,7 @@
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+  ROUTER_HANDLER_FAILED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
@@ -48,9 +49,11 @@ const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   COMPLETED_WITH_ERROR: 'completed_with_error',
   CONNECTION_CLOSED: 'connection_closed',
   CONTRADICTORY_DELIVERY_STATE: 'contradictory_delivery_state',
+  HANDLER_FAILED: 'handler_failed',
   MESSAGE_TIMEOUT: 'message_timeout',
   NO_HANDLER: 'no_handler',
   NO_CONNECTION: 'no_connection',
+  SUPERSEDED: 'superseded',
   OUTBOUND_QUEUE_BACKPRESSURED: 'outbound_queue_backpressured',
   QUERY_TRANSPORT_NOT_READY: 'query_transport_not_ready',
   TRANSPORT_DEFERRED: 'transport_deferred',
@@ -72,6 +75,7 @@ function normalizeOptionalString(value) {
 function isTransportDeliveryErrorCode(errorCode) {
   return errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE ||
     errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE ||
+    errorCode === ROUTER_HANDLER_FAILED_ERROR_CODE ||
     errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE ||
     errorCode === ROUTER_NO_CONNECTION_ERROR_CODE ||
     errorCode === WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE ||
@@ -147,6 +151,9 @@ function resolveTransportDeliveryReasonCode(
   }
   if (errorCode === ROUTER_CONNECTION_CLOSED_ERROR_CODE) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED;
+  }
+  if (errorCode === ROUTER_HANDLER_FAILED_ERROR_CODE) {
+    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.HANDLER_FAILED;
   }
   if (errorCode === ROUTER_MESSAGE_TIMEOUT_ERROR_CODE) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT;
@@ -238,6 +245,26 @@ function thrownErrorOutcome(error) {
   return outcome;
 }
 
+// A registered handler that threw (decision D1). The LOCAL throw and the
+// remote SERVICE_RESPONSE error text are both this one router failure, so the
+// two paths classify alike: FAILED with reasonCode handler_failed.
+function buildHandlerFailedError(text) {
+  return Object.assign(new Error(text), {code: ROUTER_HANDLER_FAILED_ERROR_CODE});
+}
+
+// A queued delivery replaced by a newer one under the same replace key before
+// it was sent (decision D3): DELIVERED, with no answer, named superseded.
+function buildSupersededDeliveryOutcome(fields = {}) {
+  return buildTransportDeliveryOutcome({...fields, acknowledged: true, coalesced: true,
+    reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED});
+}
+
+function isSupersededTransportDeliveryOutcome(outcome = null) {
+  return isDeliveredTransportDeliveryOutcome(outcome) &&
+    outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED &&
+    outcome.coalesced === true;
+}
+
 function classifyTransportDeliveryOutcome(value = null) {
   const resolvedValue = value && typeof value === 'object' ? value : {};
   return buildTransportDeliveryOutcome(resolvedValue instanceof Error ?
@@ -258,10 +285,13 @@ export {
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
+  buildHandlerFailedError,
+  buildSupersededDeliveryOutcome,
   buildTransportDeliveryOutcome,
   classifyTransportDeliveryOutcome,
   isDeferredTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
   normalizeOptionalString,
   normalizePositiveRetryAfterMs,
 };

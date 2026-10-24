@@ -218,6 +218,7 @@ class PartitionServiceMergeReplicationMethods {
     }
     return Promise.resolve({
       acknowledged: false,
+      success: false,
       error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
     });
   }

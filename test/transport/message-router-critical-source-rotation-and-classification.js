@@ -7,6 +7,8 @@
 import net from 'net';
 import {EventEmitter} from 'events';
 import t from '../../src/test-helpers/tap.js';
+import {isSupersededTransportDeliveryOutcome} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -668,7 +670,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
         'superseded heartbeat should still resolve successfully',
       );
       t.equal(
-        supersededResult?.result?.replacedPending,
+        isSupersededTransportDeliveryOutcome(supersededResult?.result),
         true,
         'explicit heartbeat replace keys should coalesce typeless queued work',
       );

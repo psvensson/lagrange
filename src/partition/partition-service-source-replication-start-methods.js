@@ -119,7 +119,7 @@ function consumeAuthorizedPredecessors(service, handle, family) {
 }
 
 function rejected(error) {
-  return {acknowledged: false, error};
+  return {acknowledged: false, success: false, error};
 }
 
 function snapshotExecutionMetadata(metadata) {

@@ -300,6 +300,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
           ) {
             return {
               acknowledged: false,
+              success: false,
               error:
                 REPLICA_DISPATCH_SERVICE_LITERAL.UNSUPPORTED_DISPATCH_CONTROL_MESSAGE,
             };

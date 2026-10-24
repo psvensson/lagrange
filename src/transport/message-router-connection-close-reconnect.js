@@ -9,6 +9,7 @@ const {
   ConnectionState,
   MESSAGE_ROUTER_LITERAL,
   RECONNECT_DISPOSITION,
+  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   RouterMessageType,
@@ -126,8 +127,9 @@ class MessageRouterConnectionCloseReconnect {
       connection.ws = null;
       connection.bootIncarnation = TRANSPORT_NUM.ZERO;
       this.clearPingInterval(connection);
-      const disconnectError = new Error(
-        ROUTER_ERROR_MSG.connectionClosed(nodeId),
+      const disconnectError = Object.assign(
+        new Error(ROUTER_ERROR_MSG.connectionClosed(nodeId)),
+        {code: ROUTER_CONNECTION_CLOSED_ERROR_CODE},
       );
       this.failOutboundQueue(nodeId, disconnectError);
       this.failPendingMessagesForNode(nodeId, disconnectError);

@@ -2,6 +2,12 @@ import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {
+  buildHandlerFailedError,
+  buildTransportDeliveryOutcome,
+  classifyTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
+} from './transport-semantic-outcome.js';
 
 const {
   ConnectionState,
@@ -25,6 +31,18 @@ const {
   resolveRequestIdFromMessage,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+// The handler answered. The acknowledgement is the router's own fact, written
+// after the answer, so an answer's `acknowledged` value cannot turn a delivered
+// message into a transport failure (decision D2).
+function answeredDelivery(router, messageId, correlationId, answer) {
+  return {
+    messageId,
+    correlationId,
+    ...router.normalizeServiceResponseResult(answer),
+    acknowledged: true,
+  };
+}
 
 export async function deliverLocal(
   router,
@@ -61,31 +79,28 @@ export async function deliverLocal(
       payload: options.deliveryLifetime.prepareMessage(payload),
       timestamp: options.deliveryLifetime.clock.now(),
     };
+    const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
+    assertDeliveryOpen(options);
+    let result;
     try {
-      const delivery = router.connectionAuthorityOwner?.captureLocalDelivery() ?? null;
-      assertDeliveryOpen(options);
-      const result = await Promise.resolve(handler(envelope, delivery, localDelivery));
-      assertDeliveryOpen(options);
-      return {
-        result: {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          ...router.normalizeServiceResponseResult(result),
-        },
-        queueWaitMs: TRANSPORT_NUM.ZERO,
-      };
+      result = await Promise.resolve(handler(envelope, delivery, localDelivery));
     } catch (error) {
+      // Only the handler's own throw is a handler failure; the delivery
+      // lifetime's refusals stay the router's (decision D1).
       return {
         result: {
           messageId,
           correlationId,
-          acknowledged: false,
-          error: error.message,
+          ...classifyTransportDeliveryOutcome(buildHandlerFailedError(error?.message)),
         },
         queueWaitMs: TRANSPORT_NUM.ZERO,
       };
     }
+    assertDeliveryOpen(options);
+    return {
+      result: answeredDelivery(router, messageId, correlationId, result),
+      queueWaitMs: TRANSPORT_NUM.ZERO,
+    };
   });
 }
 
@@ -191,14 +206,18 @@ export async function deliver(
     return result;
   }, (error, lifetime) => {
     if (lifetime.ownsShutdown(error)) {
-      return {messageId, correlationId, acknowledged: false, error: error.message, shutdown: true};
+      return buildTransportDeliveryOutcome({
+        messageId, correlationId, acknowledged: false, error: error.message, shutdown: true,
+      });
     }
-    return router.buildDeferredDeliveryFailure(messageId, correlationId, error.message, {
-      errorCode: error.code,
-      retryAfterMs: router.resolveReconnectRetryAfterMs(
-        router.nodeConnections.get(targetNodeId) || null,
-      ),
-    });
+    return buildTransportDeliveryOutcome(router.buildDeferredDeliveryFailure(
+      messageId, correlationId, error.message, {
+        errorCode: error.code,
+        retryAfterMs: router.resolveReconnectRetryAfterMs(
+          router.nodeConnections.get(targetNodeId) || null,
+        ),
+      },
+    ));
   });
 }
 
@@ -436,8 +455,10 @@ async function completeRemoteDelivery(router, {
       queueWaitMs,
     };
   }
-  if (router.hasInlineAckPayload(ackResult)) {
-    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK);
+  if (isSupersededTransportDeliveryOutcome(ackResult)) {
+    // Replaced in the queue before it was sent: no request left, so no
+    // answer will come (decision D3).
+    cancelResponse(RETIRED_PENDING_RESPONSE_REASON.SUPERSEDED);
     return {
       result: ackResult,
       queueWaitMs,
@@ -450,22 +471,16 @@ async function completeRemoteDelivery(router, {
     const serviceResult = await responsePromise;
     assertDeliveryOpen(options);
     return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: true,
-        ...router.normalizeServiceResponseResult(serviceResult),
-      },
+      result: answeredDelivery(router, messageId, correlationId, serviceResult),
       queueWaitMs,
     };
   } catch (error) {
+    // No answer arrived after the ACK: the waiter's failure is the outcome,
+    // through the owner's thrown-error conversion so its router code survives
+    // (a connection closed after the ACK is the router's deferral, never
+    // DELIVERED; a remote handler throw is handler_failed, finding F-A).
     return {
-      result: {
-        messageId,
-        correlationId,
-        acknowledged: true,
-        error: error.message,
-      },
+      result: {messageId, correlationId, ...classifyTransportDeliveryOutcome(error)},
       queueWaitMs,
     };
   }

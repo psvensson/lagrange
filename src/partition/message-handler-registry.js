@@ -71,6 +71,7 @@ class MessageHandlerRegistry {
       }
       return {
         acknowledged: false,
+        success: false,
         error: MESSAGE_HANDLER_ERROR_MSG.unknownMessageType(messageType),
       };
     }

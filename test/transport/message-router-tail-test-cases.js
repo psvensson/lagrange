@@ -1,5 +1,7 @@
 import {registerMessageRouterTailMoreTests} from './message-router-tail-more-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {isSupersededTransportDeliveryOutcome} from
+  '../../src/transport/transport-semantic-outcome.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_TRANSPORT_PROTOCOL,
@@ -84,7 +86,7 @@ export async function registerMessageRouterTailTests({
         'superseded heartbeat node-state update should resolve without surfacing an error',
       );
       t.equal(
-        supersededResult?.result?.replacedPending,
+        isSupersededTransportDeliveryOutcome(supersededResult?.result),
         true,
         'superseded heartbeat node-state update should be marked as replaced pending work',
       );
@@ -190,7 +192,7 @@ export async function registerMessageRouterTailTests({
         'superseded heartbeat should resolve without surfacing an error',
       );
       t.equal(
-        supersededResult?.result?.replacedPending,
+        isSupersededTransportDeliveryOutcome(supersededResult?.result),
         true,
         'superseded heartbeat should be marked as replaced pending work',
       );

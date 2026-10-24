@@ -256,6 +256,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     if (!sql) {
       return {
         acknowledged: false,
+        success: false,
         error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY,
       };
     }

@@ -239,8 +239,10 @@ const RATCHET_TARGETS = [
     // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
     // Alpha API removal: tightened 679/25717 -> 658/24752 (WebSocketTransport
     // family and ReplicaLifecycleManager tests deleted).
-    baselineCloneGroupCount: 658,
-    baselineDuplicatedLineCount: 24752,
+    // Q6 stages 1-2: tightened 658/24752 -> 656/24700 (no-handler property
+    // tests read the transport owner).
+    baselineCloneGroupCount: 656,
+    baselineDuplicatedLineCount: 24700,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

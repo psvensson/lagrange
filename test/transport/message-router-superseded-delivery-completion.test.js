@@ -1,9 +1,11 @@
 // Witness: a delivery the outbound queue supersedes completes through
 // MessageRouter.deliver at once, without waiting for a SERVICE_RESPONSE that
 // can never arrive (the superseded message is never sent). The queue resolves
-// it with {acknowledged, coalesced, replacedPending}; completeRemoteDelivery
-// returns that result without arming a response wait. Remove that completion
-// and the superseded delivery is held until its full delivery deadline.
+// it with the transport owner's named superseded outcome (decision D3:
+// DELIVERED, reasonCode superseded, coalesced, no answer); completeRemoteDelivery
+// completes that outcome by name without arming a response wait. Remove that
+// completion and the superseded delivery is held until its full delivery
+// deadline.
 //
 // The router, its outbound queue and the identified in-process socket are
 // real; the first write is held so the single dispatch slot stays occupied,
@@ -12,6 +14,11 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, watchSettlement}
   from '../test-helpers/message-router-cdc-fixture.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  TRANSPORT_DELIVERY_OUTCOME_STATE,
+  isSupersededTransportDeliveryOutcome,
+} from '../../src/transport/transport-semantic-outcome.js';
 
 const CASE_TIMEOUT_MS = 2000;
 const CONTROL_PLANE = `${CDC_ROUTER_TEST.PEER}/service/control-plane`;
@@ -27,7 +34,7 @@ const CASES = [
 ];
 
 for (const {name, message, options} of CASES) {
-  test(`a superseded ${name} delivery completes immediately as replaced pending work`,
+  test(`a superseded ${name} delivery completes immediately, named superseded`,
     {timeout: CASE_TIMEOUT_MS}, async (t) => {
       const f = await cdcRouterFixture(t);
       const peer = await controlledCdcPeer(f);
@@ -45,8 +52,12 @@ for (const {name, message, options} of CASES) {
       assert.equal(superseded.settled, true,
         'the superseded delivery settled with no clock advance and no response');
       assert.equal(superseded.error, null);
-      assert.equal(superseded.value?.acknowledged, true);
-      assert.equal(superseded.value?.replacedPending, true);
+      assert.equal(isSupersededTransportDeliveryOutcome(superseded.value), true,
+        'the owner names the outcome superseded');
+      assert.equal(superseded.value?.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
+      assert.equal(superseded.value?.reasonCode,
+        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED);
+      assert.equal(superseded.value?.coalesced, true);
       assert.equal(superseded.value?.errorCode ?? null, null);
       assert.equal(peer.writes.length, 1, 'the superseded message was never sent');
 

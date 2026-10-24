@@ -2,10 +2,9 @@ import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeou
 import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-
+import {buildHandlerFailedError} from './transport-semantic-outcome.js';
 
 const {
-  INLINE_ACK_PASSTHROUGH_KEYS,
   MESSAGE_ROUTER_LITERAL,
   RETIRED_PENDING_RESPONSE_REASON,
   ROUTER_ERROR_MSG,
@@ -55,6 +54,15 @@ function reportPendingResponseSpent(router, messageId, pending, timeoutMs) {
 }
 
 const DUPLICATE_PENDING_RESPONSE = 'router_duplicate_pending_response';
+
+// A SERVICE_RESPONSE that carries no answer settles its waiter as the router
+// fact it states: the target router had no handler (frame-level noHandler),
+// or the target handler threw (frame-level error text, decision D1).
+function unansweredServiceResponseError({error, noHandler}) {
+  return noHandler === true ?
+    Object.assign(new Error(error), {noHandler: true}) :
+    buildHandlerFailedError(error);
+}
 
 function remainingResponseMs(pending) {
   if (pending.deliveryLifetime) {
@@ -361,10 +369,12 @@ class MessageRouterPendingResponseLedger {
         settle(value);
         return true;
       };
-      pending.acceptResponse = ({result, error}) => {
+      pending.acceptResponse = ({result, error, noHandler}) => {
         try {
           remainingResponseMs(pending);
-          return error ? finish(reject, new Error(error)) : finish(resolve, result);
+          return error || noHandler === true ?
+            finish(reject, unansweredServiceResponseError({error, noHandler})) :
+            finish(resolve, result);
         } catch (expired) {
           // A parent refusal can synchronously retire this exact entry. Only
           // the still-current waiter may install its own timeout marker.
@@ -448,9 +458,9 @@ class MessageRouterPendingResponseLedger {
   }
 
   /** Settle a response only while its original grant is still current. */
-  settlePendingResponse(messageId, {result, error}) {
+  settlePendingResponse(messageId, {result, error, noHandler}) {
     const pending = this.pendingResponses.get(messageId);
-    return pending ? pending.acceptResponse({result, error}) : false;
+    return pending ? pending.acceptResponse({result, error, noHandler}) : false;
   }
 
   /** Close local response custody even when the caller will use the ACK. */
@@ -476,24 +486,6 @@ class MessageRouterPendingResponseLedger {
     }
   }
   /**
-   * Check whether an ACK includes legacy inline handler payload.
-   * @param {Object} ackResult - ACK result.
-   * @return {boolean} True when ACK carries handler payload.
-   * @private
-   */
-  hasInlineAckPayload(ackResult) {
-    if (
-      !ackResult ||
-      typeof ackResult !== TRANSPORT_TYPEOF.OBJECT ||
-      ackResult.acknowledged !== true
-    ) {
-      return false;
-    }
-    return Object.keys(ackResult).some(
-      (key) => !INLINE_ACK_PASSTHROUGH_KEYS.has(key),
-    );
-  }
-  /**
    * Normalize SERVICE_RESPONSE payload to transport delivery shape.
    * @param {*} result - Handler result payload.
    * @return {Object} Normalized payload fields.
@@ -516,13 +508,13 @@ class MessageRouterPendingResponseLedger {
     return rest;
   }
   /**
-   * Handle acknowledgment message.
-   * Passes through flat ACK structure without additional nesting.
+   * Handle acknowledgment message. An ACK carries only messageId,
+   * acknowledged and error; it never carries a handler answer.
    * @param {Object} message - Acknowledgment message.
    * @private
    */
   handleAcknowledgment(message) {
-    const {messageId, acknowledged, error, type: _type, ...rest} = message;
+    const {messageId, acknowledged, error} = message;
     const pending = this.pendingMessages.get(messageId);
     if (pending) {
       try {
@@ -544,11 +536,7 @@ class MessageRouterPendingResponseLedger {
           connection.lastAckAt = this.timeSource.now();
           connection.lastAckTimeoutAt = null;
         }
-        const resolved = {
-          messageId,
-          acknowledged: true,
-          ...rest,
-        };
+        const resolved = {messageId, acknowledged: true};
         if (error !== void 0) {
           resolved.error = error;
         }
