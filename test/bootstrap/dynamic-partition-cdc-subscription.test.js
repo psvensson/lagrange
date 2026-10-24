@@ -159,10 +159,6 @@ async function withCapturedReplicaFactory(
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 
@@ -440,10 +436,6 @@ test('NodeJoiningService can defer priority CDC handshake behind replica lifecyc
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         },
     });

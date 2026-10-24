@@ -61,10 +61,6 @@ test(
         return {
           subscriberId: options.subscriberId || null,
           subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
         };
       },
       isLeader: false,
@@ -145,10 +141,6 @@ test(
         return {
           subscriberId: options.subscriberId || null,
           subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
         };
       },
       isLeader: false,
@@ -239,10 +231,6 @@ test(
         return {
           subscriberId: options.subscriberId || null,
           subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
         };
       },
       isLeader: false,
@@ -359,10 +347,6 @@ test(
         return {
           subscriberId: options.subscriberId || null,
           subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
         };
       },
       isLeader: false,
@@ -424,10 +408,6 @@ test(
         return {
           subscriberId: 'mock-subscriber',
           subscriptionEpoch: 1,
-          catchup: {
-            mode: 'none',
-            bufferedEventsReplayed: 0,
-          },
         };
       },
       isLeader: false,

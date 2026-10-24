@@ -235,8 +235,9 @@ const RATCHET_TARGETS = [
     // helpers (trace, native startup fixture, contender, schedules, stamp
     // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
     // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
-    baselineCloneGroupCount: 679,
-    baselineDuplicatedLineCount: 25717,
+    // D4: tightened 679/25717 -> 678/25668 (the window-pinning tests deleted).
+    baselineCloneGroupCount: 678,
+    baselineDuplicatedLineCount: 25668,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

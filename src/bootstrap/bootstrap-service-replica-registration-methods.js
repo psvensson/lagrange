@@ -245,8 +245,6 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
               replicaId: options.replicaId,
               subscriberId: handshake.subscriberId,
               subscriptionEpoch: handshake.subscriptionEpoch,
-              catchupMode: handshake.catchup.mode,
-              bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
             });
           };
           if (options.deferCdcPropagationHandshake === true) {

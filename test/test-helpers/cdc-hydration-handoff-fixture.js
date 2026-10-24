@@ -1,8 +1,8 @@
 // The one fixture of the hydration -> live CDC hand-off witnesses (CDC
 // decision D4): committed traffic on a controllable-port PartitionService
 // leader, the CDC_DELIVERED pump, and the late subscriber's measured view.
-// User: test/partition/cdc-hydration-live-handoff.test.js (W-D4a); the
-// old-order negative joins it with the window's deletion.
+// Users: test/partition/cdc-hydration-live-handoff.test.js (W-D4a) and
+// test/partition/cdc-hydration-old-order.test.js (its negative).
 import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service-constants.js';
 import {
   PARTITION_CDC_COMMAND,
@@ -83,6 +83,7 @@ function measure(leader, late, image, position) {
     divergentRows: [...keys].filter((key) => truth.get(key) !== view.get(key)).length,
     deletedRowInView: view.has(DELETED_IMAGE_ROW),
     owed: countCdcObligations(leader.db).owed,
+    outsideLane: late.events.filter((event) => event.replayOnly === true).length,
   };
 }
 

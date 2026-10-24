@@ -221,8 +221,6 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   KEY_RANGE_CHANGED: 'keyRangeChanged',
   SIZE_UPDATED: 'sizeUpdated',
   CDC_EVENT: 'cdcEvent',
-  CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
-  CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
   SHUTDOWN_STARTED: 'shutdownStarted',
   SHUTDOWN: 'shutdown',
   CONSENSUS_OBSERVED: 'consensusObserved',
@@ -335,10 +333,6 @@ const PARTITION_SERVICE_TYPE = Object.freeze({
 const PARTITION_SERVICE_CDC = Object.freeze({
   HANDSHAKE_STATUS_OK: 'ok',
   HANDSHAKE_STATUS_ALREADY_SUBSCRIBED: 'already_subscribed',
-  CATCHUP_MODE_NONE: 'none',
-  CATCHUP_MODE_BACKFILL: 'backfill',
-  CATCHUP_MODE_SLIDING_WINDOW: 'sliding_window',
-  STREAM_MODE_CATCHUP: 'catchup',
   STREAM_MODE_STEADY: 'steady',
   SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
   REPLAY_REASON_BUFFERED_REMAINING: 'buffered_events_remaining',
@@ -515,8 +509,6 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   CDC_SUBSCRIBER_REMOVED: 'CDC subscriber removed',
   CDC_SUBSCRIPTION_HANDSHAKE_ACK:
     'CDC subscription handshake acknowledged',
-  CDC_CATCHUP_STARTED: 'CDC catch-up replay started',
-  CDC_CATCHUP_COMPLETED: 'CDC catch-up replay completed',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
   INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
   REBALANCER_DEPENDENCIES_APPLIED:

@@ -16,7 +16,6 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   CDC_EVENT_BUFFER_CAPACITY,
   CDC_EVENT_IDENTITY,
-  CDC_EVENT_SLIDING_WINDOW_CAPACITY,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
@@ -96,15 +95,11 @@ class CDCEventBuffer {
    */
   constructor(options = {}) {
     this.capacity = options.capacity || CDC_EVENT_BUFFER_CAPACITY;
-    this.slidingWindowCapacity = options.slidingWindowCapacity ||
-      CDC_EVENT_SLIDING_WINDOW_CAPACITY;
     const loggingService = LoggingService.getInstance();
     this.logger = options.logger ||
       (loggingService.isInitialized() ?
         loggingService.forSubsystem(BUFFER_SUBSYSTEM) : console);
     this.events = [];
-    this.recentEvents = [];
-    this.recentEventsHead = 0;
   }
 
   /**
@@ -201,58 +196,10 @@ class CDCEventBuffer {
   }
 
   /**
-   * Clear all buffered events and the sliding window.
+   * Clear all buffered events.
    */
   clear() {
     this.events = [];
-    this.clearRecentEvents();
-  }
-
-  /**
-   * Record a successfully delivered CDC event in the bounded sliding
-   * window. Uses a circular array: pushes when not full, overwrites
-   * the oldest entry and advances the head pointer when full.
-   *
-   * @param {Object} cdcEvent - CDC event to record.
-   */
-  recordDelivered(cdcEvent) {
-    if (this.recentEvents.length < this.slidingWindowCapacity) {
-      this.recentEvents.push(cdcEvent);
-    } else {
-      this.recentEvents[this.recentEventsHead] = cdcEvent;
-      this.recentEventsHead =
-        (this.recentEventsHead + 1) % this.slidingWindowCapacity;
-    }
-  }
-
-  /**
-   * Return a copy of the sliding window contents in insertion order.
-   *
-   * @return {Array<Object>} recent events in delivery order.
-   */
-  getRecentEvents() {
-    if (this.recentEvents.length < this.slidingWindowCapacity) {
-      return this.recentEvents.slice();
-    }
-    return [
-      ...this.recentEvents.slice(this.recentEventsHead),
-      ...this.recentEvents.slice(0, this.recentEventsHead),
-    ];
-  }
-
-  /**
-   * @return {number} number of events in the sliding window.
-   */
-  recentEventsSize() {
-    return this.recentEvents.length;
-  }
-
-  /**
-   * Reset the sliding window to empty state.
-   */
-  clearRecentEvents() {
-    this.recentEvents = [];
-    this.recentEventsHead = 0;
   }
 }
 

@@ -41,10 +41,7 @@ function recordingSeed({imageState = PARTITION_HYDRATION_IMAGE_STATE.READ} = {})
         isLeader: index === 0,
         async subscribeToCDCWithHandshake(_subscriber, options = {}) {
           log.push(['register', tableName, replicaId]);
-          // The handshake answer as the delivery owner shapes it today; its
-          // catch-up leaves with the sliding window (decision D4).
-          return {status: 'ok', subscriberId: options.subscriberId, subscriptionEpoch: 1,
-            catchup: {mode: 'none', bufferedEventsReplayed: 0}};
+          return {status: 'ok', subscriberId: options.subscriberId, subscriptionEpoch: 1};
         },
         readHydrationImage(sql) {
           log.push(['read', tableName, sql]);
