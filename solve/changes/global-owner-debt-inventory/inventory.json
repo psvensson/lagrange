@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3079722,
-        "sha256": "2fd86739f312bb1e7895618320bd501ea2de2a6173ccd7275ddffea0435ff870"
+        "bytes": 3073046,
+        "sha256": "aa1a341d3b9ac300c0cac1cbee4cf0a7a8896a7ebfb9938e8161114e091b75c0"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "e9936c56bd0de001e29ae6e1831242d878ba374aa1acf082ff315d4a00dedb6c"
+    "inputDigest": "5346935b5f087871e352c89738e559718639f4b1640205b2ce69ddc61ebf7eff"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3079722,
-        "sha256": "2fd86739f312bb1e7895618320bd501ea2de2a6173ccd7275ddffea0435ff870"
+        "bytes": 3073046,
+        "sha256": "aa1a341d3b9ac300c0cac1cbee4cf0a7a8896a7ebfb9938e8161114e091b75c0"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "6b02d1ec1301d1f446c7ef54db4aef815e0977510ddeedebd32fbd9b28ec3f30",
-      "moduleCount": 5613,
-      "edgeCount": 29769,
+      "sourceDigest": "cca10e8835bacc76eb91b4d0660bcc7324c5c1b32d487c0670d333d03a68c53f",
+      "moduleCount": 5607,
+      "edgeCount": 29713,
       "unresolvedCount": 36
     }
   },
@@ -976,7 +976,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 65,
+      "importOut": 15,
       "score": 92,
       "topPaths": [
         "test/topology/cdc-group-propagation-closure-preservation.property.test.js",
@@ -1282,7 +1282,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 693,
+      "importIn": 688,
       "importOut": 44,
       "score": 56,
       "topPaths": [
@@ -1504,8 +1504,8 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 26,
-      "importOut": 43,
+      "importIn": 18,
+      "importOut": 38,
       "score": 40,
       "topPaths": [
         "src/topology/cdc-group-propagation-delivery-methods.js",
@@ -1640,7 +1640,7 @@
       "cloneTouches": 0,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 249,
+      "importIn": 243,
       "importOut": 77,
       "score": 32,
       "topPaths": [

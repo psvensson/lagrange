@@ -234,8 +234,9 @@ const RATCHET_TARGETS = [
     // 2026-10-24: the rs-raft lineage's test copies import their shared
     // helpers (trace, native startup fixture, contender, schedules, stamp
     // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
-    baselineCloneGroupCount: 689,
-    baselineDuplicatedLineCount: 26148,
+    // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
+    baselineCloneGroupCount: 679,
+    baselineDuplicatedLineCount: 25717,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
