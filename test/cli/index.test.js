@@ -318,57 +318,57 @@ test('AdminCLI logs since command', async (t) => {
 });
 
 test('AdminCLI node management commands', async (t) => {
-  await t.test('drain command sends node status update and refreshes', async (t) => {
-    const cli = new AdminCLI();
-    const eventBus = new EventEmitter();
-    let sentQuery = null;
-    let refreshCalls = 0;
-    let lastStatus = null;
-    let shownError = null;
+  await t.test('drain command invokes the drain owner operation and refreshes',
+    async (t) => {
+      const cli = new AdminCLI();
+      const drained = [];
+      let sentSql = 0;
+      let refreshCalls = 0;
+      let lastStatus = null;
+      let shownError = null;
 
-    cli.eventBus = eventBus;
-    cli.connectionManager = {
-      sendQuery: (queryId, sql, params) => {
-        sentQuery = {queryId, sql, params};
-        return true;
-      },
-    };
-    cli.updateStatus = (message) => {
-      lastStatus = message;
-    };
-    cli.forceRefresh = () => {
-      refreshCalls += 1;
-    };
-    cli.showError = (message) => {
-      shownError = message;
-    };
+      cli.eventBus = new EventEmitter();
+      cli.connectionManager = {
+        sendQuery: () => {
+          sentSql += 1;
+          return true;
+        },
+        drainNode: async (nodeId) => {
+          drained.push(nodeId);
+          return {success: true, outcome: 'applied', nodeId};
+        },
+      };
+      cli.updateStatus = (message) => {
+        lastStatus = message;
+      };
+      cli.forceRefresh = () => {
+        refreshCalls += 1;
+      };
+      cli.showError = (message) => {
+        shownError = message;
+      };
 
-    cli.executeCommand('drain', ['node-1']);
+      await cli.executeCommand('drain', ['node-1']);
+      await new Promise((resolve) => setImmediate(resolve));
 
-    t.match(sentQuery.sql, /UPDATE nodes SET status = \?1 WHERE node_id = \?2/);
-    t.same(sentQuery.params, ['draining', 'node-1'], 'should send draining update');
-    t.match(lastStatus, /draining node node-1/i, 'should show pending status');
-
-    eventBus.emit('query:result', {
-      queryId: sentQuery.queryId,
-      affectedRows: 1,
+      t.same(drained, ['node-1'], 'drains through the owner operation');
+      t.equal(sentSql, 0, 'sends no system-table SQL');
+      t.match(lastStatus, /node node-1 draining/i, 'shows the applied drain');
+      t.equal(refreshCalls, 1, 'should refresh after the applied drain');
+      t.equal(shownError, null, 'should not show error on success');
     });
-
-    t.equal(refreshCalls, 1, 'should refresh after successful mutation');
-    t.equal(shownError, null, 'should not show error on success');
-  });
 
   await t.test('remove-node command is blocked in read-only mode', async (t) => {
     const cli = new AdminCLI();
     let shownError = null;
-    let sendCalls = 0;
+    let removeCalls = 0;
 
     cli.readOnlyMode = true;
     cli.eventBus = new EventEmitter();
     cli.connectionManager = {
-      sendQuery: () => {
-        sendCalls += 1;
-        return true;
+      removeNode: async () => {
+        removeCalls += 1;
+        return {success: true};
       },
     };
     cli.showError = (message) => {
@@ -377,7 +377,7 @@ test('AdminCLI node management commands', async (t) => {
 
     cli.executeCommand('remove-node', ['node-9']);
 
-    t.equal(sendCalls, 0, 'should not send mutation in read-only mode');
+    t.equal(removeCalls, 0, 'should not invoke removal in read-only mode');
     t.match(
       shownError,
       /read-only mode/,

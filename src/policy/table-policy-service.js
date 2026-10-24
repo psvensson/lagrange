@@ -20,6 +20,7 @@ import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   POLICY_DEFAULT,
+  POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_LOG_MSG,
@@ -47,6 +48,18 @@ const LOCAL_STR_CRITICAL = 'critical';
  * TablePolicyService manages table policies for partition behavior.
  * Policies control splitting thresholds, merging criteria, and replication factors.
  */
+/**
+ * A typed refusal of a policy write: nothing was written.
+ * @param {string} code - POLICY_ERROR_CODE value.
+ * @param {string} message - Refusal message.
+ * @return {Error}
+ */
+function buildPolicyRefusal(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 class TablePolicyService extends EventEmitter {
   /**
    * Create a new TablePolicyService.
@@ -298,7 +311,8 @@ class TablePolicyService extends EventEmitter {
    */
   async updateTablePolicy(tableId, policyUpdates) {
     if (!tableId) {
-      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.TABLE_ID_REQUIRED,
+        POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
     if (!this.cdcIntegrationService) {
@@ -308,7 +322,8 @@ class TablePolicyService extends EventEmitter {
     // Validate the policy updates
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
+        `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
     const table = await this.readTableRow(tableId);
@@ -323,7 +338,7 @@ class TablePolicyService extends EventEmitter {
     // Validate the merged policy
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
-      throw new Error(
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
         `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }

@@ -89,6 +89,12 @@ const CONFIG_ERROR_MSG = Object.freeze({
   DEPRECATED_ENV_INFIX: ' — use ',
 });
 
+// The typed refusal of a configuration write: the value does not satisfy
+// the key's definition. Nothing is written.
+const CONFIG_ERROR_CODE = Object.freeze({
+  VALUE_INVALID: 'CONFIG_VALUE_INVALID',
+});
+
 const CONFIG_STATS_DEFAULT = Object.freeze({
   reads: 0,
   writes: 0,
@@ -201,6 +207,7 @@ export {
   CONFIG_ENV,
   CONFIG_ENV_REGEX,
   CONFIG_ENV_REPLACE,
+  CONFIG_ERROR_CODE,
   CONFIG_ERROR_MSG,
   CONFIG_EVENT,
   CONFIG_KEY,

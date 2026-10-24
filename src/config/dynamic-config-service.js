@@ -21,6 +21,7 @@ import {
   CONFIG_ENV,
   CONFIG_ENV_REGEX,
   CONFIG_ENV_REPLACE,
+  CONFIG_ERROR_CODE,
   CONFIG_ERROR_MSG,
   CONFIG_EVENT,
   CONFIG_KEY,
@@ -254,7 +255,10 @@ class DynamicConfigService extends EventEmitter {
     // Validate the value
     const validation = this.validateValue(key, value);
     if (!validation.valid) {
-      throw new Error(`${CONFIG_ERROR_MSG.INVALID_VALUE_PREFIX}${validation.error}`);
+      const refusal = new Error(
+        `${CONFIG_ERROR_MSG.INVALID_VALUE_PREFIX}${validation.error}`);
+      refusal.code = CONFIG_ERROR_CODE.VALUE_INVALID;
+      throw refusal;
     }
 
     const definition = CONFIG_DEFINITIONS[key];

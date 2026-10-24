@@ -1,5 +1,6 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
+import {requestTablePolicyUpdate} from './cluster-node-owner-operations.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -1017,6 +1018,12 @@ class NodeHandle {
         },
       ],
     };
+  }
+
+  /** Merge table-policy overrides through the owner (no SQL). */
+  updateTablePolicy(tableId, policy, options = {}) {
+    return requestTablePolicyUpdate({ip: this.ip,
+      adminApiPort: this._adminApiPort}, tableId, policy, options);
   }
 
   /** Read the node-owned process resource sample from its diagnostics route. */

@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 116,
+    "admin-diagnostics": 117,
     "architecture-governance": 21,
-    "bootstrap-membership": 331,
+    "bootstrap-membership": 330,
     "cdc-metadata": 66,
-    "cli-tooling": 96,
+    "cli-tooling": 97,
     "control-plane": 217,
     "convergence-topology": 78,
     "distributed-harness": 177,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2470,
-  "digest": "fnv1a32-b7ff2237",
+  "censusSize": 2471,
+  "digest": "fnv1a32-330f7ef5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-05836bed",
+  "observationDigest": "fnv1a32-0d3dab02",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -65,6 +65,7 @@
     "test/admin/admin-meta-endpoint-builder.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.pbt.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.test.js": "admin-diagnostics",
+    "test/admin/admin-owner-operations.test.js": "admin-diagnostics",
     "test/admin/admin-preflight-repair-wait-bound-spent.test.js": "admin-diagnostics",
     "test/admin/admin-preflight-snapshot.test.js": "admin-diagnostics",
     "test/admin/admin-query-result-envelope-participant-failures.test.js": "admin-diagnostics",
@@ -385,6 +386,7 @@
     "test/cdc/schema-default-application.property.test.js": "cdc-metadata",
     "test/cdc/unique-constraint-handling.property.test.js": "cdc-metadata",
     "test/cdc/websocket-address-derivation.property.test.js": "cdc-metadata",
+    "test/cli/admin-cli-owner-operations.test.js": "cli-tooling",
     "test/cli/core/back-navigation-consistency.property.test.js": "cli-tooling",
     "test/cli/core/base-view-model.test.js": "cli-tooling",
     "test/cli/core/base-view.test.js": "cli-tooling",
@@ -1189,7 +1191,6 @@
     "test/node/message-group-service-handler-membership.test.js": "bootstrap-membership",
     "test/node/message-group-service-handler.test.js": "bootstrap-membership",
     "test/node/metrics-accuracy.property.test.js": "bootstrap-membership",
-    "test/node/node-lifecycle-service.test.js": "bootstrap-membership",
     "test/node/node-lifecycle-state-machine.test.js": "bootstrap-membership",
     "test/node/node-recovery-orphan-cleanup.property.test.js": "bootstrap-membership",
     "test/node/node-reintegration-service.test.js": "bootstrap-membership",
@@ -2591,6 +2592,13 @@
         "src/admin/admin-meta-command-handlers.js"
       ]
     },
+    "test/admin/admin-owner-operations.test.js": {
+      "files": [
+        "src/config/configuration-manager.js",
+        "src/config/dynamic-config-service.js",
+        "src/node/local-node-drain.js"
+      ]
+    },
     "test/admin/admin-preflight-repair-wait-bound-spent.test.js": {
       "files": [
         "src/admin/admin-preflight-snapshot.js",
@@ -3734,6 +3742,12 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/cli/admin-cli-owner-operations.test.js": {
+      "files": [
+        "src/admin/admin-owner-operations.js",
+        "src/cli/admin-cli-action-methods.js"
       ]
     },
     "test/cli/core/base-view-model.test.js": {
@@ -5511,6 +5525,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -5546,6 +5561,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5569,6 +5585,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5592,6 +5609,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5615,6 +5633,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5638,6 +5657,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5671,6 +5691,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -5682,6 +5703,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -5693,6 +5715,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5717,6 +5740,7 @@
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-constants.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/control-plane-publication-merge.js",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -5741,6 +5765,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5764,6 +5789,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5787,6 +5813,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5810,6 +5837,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -5821,6 +5849,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5844,6 +5873,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5867,6 +5897,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5890,6 +5921,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5913,6 +5945,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5936,6 +5969,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5959,6 +5993,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -5982,6 +6017,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6005,6 +6041,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6028,6 +6065,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6051,6 +6089,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6074,6 +6113,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6098,6 +6138,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6121,6 +6162,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6296,6 +6338,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6388,6 +6431,7 @@
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-control-snapshot.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6420,6 +6464,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6465,6 +6510,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6680,6 +6726,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -6726,6 +6773,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -6743,6 +6791,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -6760,6 +6809,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6782,6 +6832,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6831,6 +6882,7 @@
         ".dockerignore",
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6866,6 +6918,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6916,6 +6969,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -6939,6 +6993,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -6968,6 +7023,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -7180,6 +7236,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -7203,6 +7260,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
@@ -14124,6 +14182,7 @@
         "Dockerfile",
         "scripts/solve/probes.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -15111,6 +15170,7 @@
         "Dockerfile",
         "README.md",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -15245,6 +15305,7 @@
         "solve/epics/solve-v2/migration-report.md",
         "solve/quests/rolling-restart-core-stability/log.ndjson",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -15303,6 +15364,7 @@
         "solve/epics/solve-v2/migration-report.md",
         "solve/quests/rolling-restart-core-stability/log.ndjson",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/index.js",
         "src/utils/canonical-json-data.js",
@@ -15455,6 +15517,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "src/constants/index.js",
@@ -15649,6 +15712,7 @@
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local-three-node.json",
@@ -16285,6 +16349,7 @@
         "scripts/solve/probes.js",
         "scripts/solve/store.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/formation-release-handoff-contract.js",
         "src/control-plane/formation-release-handoff-identity.js",
@@ -16370,6 +16435,7 @@
         "examples/service-data-affinity/run-affinity-demo.js",
         "examples/service-data-affinity/run-formation-probe.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -16416,6 +16482,7 @@
         "scripts/run-distributed-matrix.js",
         "scripts/select-change-tests.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -16452,6 +16519,7 @@
         "scripts/select-change-tests.js",
         "scripts/summarize-harness-runs.js",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
         "src/control-plane/publication-recovery-evidence.js",
@@ -16573,6 +16641,7 @@
         "solve/epics/solve-v2/migration-report.md",
         "solve/quests/rolling-restart-core-stability/log.ndjson",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -17123,6 +17192,7 @@
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",
@@ -17215,6 +17285,7 @@
       "files": [
         "Dockerfile",
         "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/convergence-sealed-bars.json",

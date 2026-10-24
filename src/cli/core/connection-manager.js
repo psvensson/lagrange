@@ -8,6 +8,8 @@
 import WebSocket from 'ws';
 import {CLI_STREAM} from '../cli-constants.js';
 import {ADMIN_MESSAGE_TYPE} from '../../admin/admin-constants.js';
+import {ADMIN_OWNER_OPERATION_PATH} from
+  '../../admin/admin-owner-operations.js';
 
 const LOCAL_NUM_TEN = 10;
 const LOCAL_NUM_THOUSAND = 1000;
@@ -19,6 +21,17 @@ const LOCAL_STR_WS = 'ws://';
 const LOCAL_STR_WSS = 'wss://';
 const LOCAL_STR_WS_2 = 'ws:';
 const LOCAL_STR_WSS_2 = 'wss:';
+const LOCAL_STR_HTTP_SCHEME = 'http:';
+const LOCAL_STR_HTTPS_SCHEME = 'https:';
+const LOCAL_STR_NOT_CONNECTED = 'Not connected to server';
+const ADMIN_HTTP_METHOD = Object.freeze({
+  PUT: 'PUT',
+  POST: 'POST',
+  DELETE: 'DELETE',
+});
+const ADMIN_HTTP_JSON_HEADERS = Object.freeze({
+  'content-type': 'application/json',
+});
 const LOCAL_STR_CONNECTING = 'connecting';
 const LOCAL_STR_CONNECTION_ALREADY_IN_PROGRESS = 'Connection already in progress';
 const LOCAL_STR_OPEN = 'open';
@@ -367,6 +380,72 @@ export class ConnectionManager {
     }));
 
     return true;
+  }
+
+  /**
+   * The admin HTTP base URL of the connected node (same server as the
+   * admin stream).
+   * @returns {string|null}
+   */
+  buildAdminHttpBaseUrl() {
+    if (!this.currentAddress) {
+      return null;
+    }
+    return this.buildWebSocketUrl(this.currentAddress)
+      .replace(/^ws:/, LOCAL_STR_HTTP_SCHEME)
+      .replace(/^wss:/, LOCAL_STR_HTTPS_SCHEME)
+      .replace(CLI_STREAM.ADMIN_PATH, '');
+  }
+
+  /**
+   * Invoke one admin owner operation over HTTP.
+   * @param {string} method - HTTP method.
+   * @param {string} path - Operation path.
+   * @param {Object} [body] - JSON body.
+   * @returns {Promise<Object>} The operation's answer body.
+   */
+  async requestAdminOperation(method, path, body = undefined) {
+    const baseUrl = this.buildAdminHttpBaseUrl();
+    if (!baseUrl) {
+      return {success: false, error: LOCAL_STR_NOT_CONNECTED};
+    }
+    const response = await fetch(baseUrl + path, {
+      method,
+      headers: body === undefined ? {} : ADMIN_HTTP_JSON_HEADERS,
+      ...(body === undefined ? {} : {body: JSON.stringify(body)}),
+    });
+    return response.json();
+  }
+
+  /**
+   * Set one configuration value through its owner.
+   * @param {string} key
+   * @param {*} value - Typed value.
+   * @returns {Promise<Object>}
+   */
+  setConfigValue(key, value) {
+    return this.requestAdminOperation(ADMIN_HTTP_METHOD.PUT,
+      ADMIN_OWNER_OPERATION_PATH.configByKey(key), {value});
+  }
+
+  /**
+   * Drain the connected node through its one-way lifecycle owner.
+   * @param {string} nodeId
+   * @returns {Promise<Object>}
+   */
+  drainNode(nodeId) {
+    return this.requestAdminOperation(ADMIN_HTTP_METHOD.POST,
+      ADMIN_OWNER_OPERATION_PATH.nodeDrain(nodeId), {});
+  }
+
+  /**
+   * Remove a stopped or failed node's metadata row.
+   * @param {string} nodeId
+   * @returns {Promise<Object>}
+   */
+  removeNode(nodeId) {
+    return this.requestAdminOperation(ADMIN_HTTP_METHOD.DELETE,
+      ADMIN_OWNER_OPERATION_PATH.nodeById(nodeId));
   }
 
   /**

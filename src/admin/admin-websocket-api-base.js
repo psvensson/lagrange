@@ -5,6 +5,10 @@ import {
 import {
   ADMIN_WEBSOCKET_LIFECYCLE_STATE,
 } from './admin-websocket-lifecycle-state.js';
+import {
+  AdminOwnerOperations,
+  registerAdminOwnerOperationRoutes,
+} from './admin-owner-operations.js';
 
 const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
@@ -147,6 +151,8 @@ class AdminWebSocketAPIBase {
       (this.sqlQueryEngine ?
         new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
         null);
+    this.ownerOperations = new AdminOwnerOperations(
+      options.adminOwnerProviders, this.nodeId);
     this.debugDapRouter = options.debugDapRouter || null;
     this.traceCollector = options.traceCollector || new TraceCollector();
     this.serviceDispatcher =
@@ -483,6 +489,7 @@ class AdminWebSocketAPIBase {
     this.fastify.post(ADMIN_ROUTE.DEBUG_DAP_REQUEST, async (request, reply) => {
       return this.debugHandlers.handleDebugDapRequest(request, reply);
     });
+    registerAdminOwnerOperationRoutes(this.fastify, this.ownerOperations);
 
     this.fastify.get(ADMIN_ROUTE.PLAYBACK_VIEWER, async (_request, reply) => {
       return this.debugHandlers.handlePlaybackViewerPage(reply);

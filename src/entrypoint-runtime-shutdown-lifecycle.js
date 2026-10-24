@@ -9,6 +9,7 @@ import {
   startLogsTablePersistenceOnReadiness,
 } from './logging/logs-persistence-startup.js';
 import {LogsTableService} from './logging/logs-table-service.js';
+import {submitLocalNodeDrainIntent} from './node/local-node-drain.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
@@ -297,16 +298,11 @@ function createRuntimeShutdown(options) {
         Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
       const drainingSnapshot = await timeShutdownStep(
         options.logger, signal, 'submitDrainIntent', () =>
-          typeof options.membershipLifecycleController?.submitDrainIntent ===
-            'function' ?
-            options.membershipLifecycleController.submitDrainIntent({
-              drainDeadlineMs,
-              reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
-              signal,
-            }) :
-            options.bootstrapAPI.markDraining({
-              drainDeadlineMs,
-            }),
+          submitLocalNodeDrainIntent(options, {
+            drainDeadlineMs,
+            reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
+            signal,
+          }),
       );
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,

@@ -14,7 +14,8 @@ test('CommandParser', async (t) => {
     const commands = parser.getCommandNames();
     t.ok(commands.includes('connect'), 'has connect command');
     t.ok(commands.includes('drain'), 'has drain command');
-    t.ok(commands.includes('activate'), 'has activate command');
+    t.notOk(commands.includes('activate'),
+      'no activate command: no undrain contract exists');
     t.ok(commands.includes('remove-node'), 'has remove-node command');
     t.ok(commands.includes('refresh'), 'has refresh command');
     t.ok(commands.includes('filter'), 'has filter command');

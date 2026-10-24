@@ -335,6 +335,9 @@ class BootstrapService extends EventEmitter {
       get tablePolicyService() {
         return self.tablePolicyService;
       },
+      get systemMetadataOwners() {
+        return self.systemMetadataOwners;
+      },
       get latencyTopology() {
         return self.latencyTopology;
       },

@@ -28,6 +28,12 @@ const POLICY_LOG_MSG = Object.freeze({
   TABLE_POLICY_SHUTDOWN: 'TablePolicyService shutdown',
 });
 
+// The typed refusals of a table-policy write. Nothing is written.
+const POLICY_ERROR_CODE = Object.freeze({
+  TABLE_ID_REQUIRED: 'TABLE_ID_REQUIRED',
+  POLICY_INVALID: 'TABLE_POLICY_INVALID',
+});
+
 const POLICY_ERROR_MSG = Object.freeze({
   SERVICE_ID_REQUIRED: 'serviceId is required',
   TABLE_ID_REQUIRED: 'tableId is required',
@@ -133,6 +139,7 @@ export {
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
   POLICY_DEFAULT,
+  POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_FIELD_TYPES,
