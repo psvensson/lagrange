@@ -158,15 +158,22 @@ const PARTITION_COMMITTED_COMMAND_TYPES = Object.freeze([
 ]);
 
 // The reason a group's host failure names when a committed entry carries a
-// command type the application does not recognise (a bug or version skew:
-// the admission owner never proposes one). The application fails closed.
+// command type the application does not recognise, or an SQL command without
+// an entryId (a bug or version skew: the admission owner never proposes one,
+// every proposer builds its entry with an entryId). The application fails
+// closed.
 const PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON = Object.freeze({
   COMMAND_UNKNOWN: 'committed-command-unknown',
+  ENTRY_ID_MISSING: 'committed-command-entry-id-missing',
 });
 
 // What the committed-entry application did with one committed command (R07):
 // a failed statement is a deterministic outcome that consumes the entry; an
 // unknown command type fails the application closed, never a silent no-op.
+// ENTRY_ID_MISSING_REFUSED: a committed SQL command without an entryId fails
+// the application closed exactly as an unknown type does (its statement
+// never runs: the entryId is the one key of its outcome row and its CDC
+// obligation).
 const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   APPLIED: 'applied',
   REPLAYED: 'replayed',
@@ -174,6 +181,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
   STATEMENT_FAILED: 'statement_failed',
   STATEMENT_ENVIRONMENT_FAILED: 'statement_environment_failed',
   UNRECOGNISED: 'unrecognised',
+  ENTRY_ID_MISSING_REFUSED: 'entry_id_missing_refused',
   RESERVED_REFUSED: 'reserved_refused',
 });
 
@@ -181,6 +189,7 @@ const PARTITION_COMMITTED_COMMAND_OUTCOME = Object.freeze({
 // consensus construction.
 const PARTITION_COMMITTED_COMMAND_ERROR_CODE = Object.freeze({
   UNRECOGNISED: 'partition_committed_command_unrecognised',
+  ENTRY_ID_MISSING: 'partition_committed_command_entry_id_missing',
   STATEMENT_ENVIRONMENT_FAILED:
     'partition_committed_statement_environment_failed',
   STATEMENT_MISSING: 'partition_write_statement_missing',
@@ -642,6 +651,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   MIGRATION_ALTER_MISSING_SQL: 'Migration ALTER TABLE SQL is required',
   COMMITTED_COMMAND_UNRECOGNISED:
     'Committed partition command type is not recognised',
+  COMMITTED_STATEMENT_ENTRY_ID_MISSING:
+    'Committed partition SQL command carries no entryId',
   COMMITTED_ENTRY_EFFECT_FAILED:
     'Committed partition entry effect failed after its transaction',
   WRITE_STATEMENT_MISSING:

@@ -72,21 +72,23 @@ const {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_VALUE,
-  PARTITION_SERVICE_LITERAL,
-  STRING,
   buildDurableCommitWitness,
 } = PARTITION_SERVICE_SHARED;
 
 const NO_COMMITTED_STATEMENT_KEY = null;
 
 // The same identity is used by apply, replay answers and cold observation.
+// The one key is the command's entryId; a command without one (not a
+// non-empty string) has no key, and the application refuses it before its
+// statement runs (PARTITION_COMMITTED_COMMAND_OUTCOME.ENTRY_ID_MISSING_REFUSED).
+function isCommittedStatementKeyed(command) {
+  const entryId = command?.entryId;
+  return typeof entryId === 'string' && entryId.length > 0;
+}
+
 function committedStatementEntryKey(command) {
-  if (!command) return NO_COMMITTED_STATEMENT_KEY;
-  if (command.entryId) return `entry:${command.entryId}`;
-  if (!command.sql) return NO_COMMITTED_STATEMENT_KEY;
-  const params = Array.isArray(command.params) ? JSON.stringify(command.params) : STRING.EMPTY;
-  return [command.proposedBy || STRING.EMPTY, String(command.proposedAt || 0),
-    command.timestamp || STRING.EMPTY, command.sql, params].join(PARTITION_SERVICE_LITERAL.VALUE);
+  return isCommittedStatementKeyed(command) ?
+    `entry:${command.entryId}` : NO_COMMITTED_STATEMENT_KEY;
 }
 
 // Exact read-only census. Positions/result integers never round through Number.
@@ -394,6 +396,7 @@ function settleFailedCommittedStatement(service, {error, command, entryKey,
 
 export {
   committedStatementEntryKey,
+  isCommittedStatementKeyed,
   readCommittedStatementCensusIn,
   answerSettledStatement,
   createCommittedStatementOutcomeTable,
