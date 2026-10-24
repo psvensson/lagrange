@@ -12,6 +12,7 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
 import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {TEST_BOOT_INCARNATION} from './boot-incarnation-fixture.js';
+import {acknowledgeThenRespondFrames} from './message-router-remote-answer.js';
 
 const CDC_ROUTER_TEST = Object.freeze({
   LOCAL: 'cdc-transport-local', PEER: 'cdc-transport-peer',
@@ -137,9 +138,12 @@ function controlWrites(f, peer, accepted, {throwAfterSend = false} = {}) {
   return {peer, accepted, writes,
     nextWrite: (index = writes.length) => writes[index] ? Promise.resolve(writes[index]) :
       new Promise((resolve) => notifications.push(resolve)),
-    ack: (messageId, result = {}) => peer.send(JSON.stringify({
-      type: ROUTER_MESSAGE_TYPE.ACK, messageId, acknowledged: true, ...result,
-    })),
+    // The current wire answer: a plain ACK, then the SERVICE_RESPONSE.
+    ack: (messageId, result = {}) => {
+      for (const frame of acknowledgeThenRespondFrames(messageId, result)) {
+        peer.send(JSON.stringify(frame));
+      }
+    },
     inbound: () => peer.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.PING,
       pingId: 'live-peer', timestamp: f.clock.now()})),
   };

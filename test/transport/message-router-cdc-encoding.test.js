@@ -9,6 +9,7 @@ import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {ROUTER_MESSAGE_TYPE, TRANSPORT_EVENT} from '../../src/constants/transport.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
+import {acknowledgeThenRespondFrames} from '../test-helpers/message-router-remote-answer.js';
 import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, realCdcPeer}
   from '../test-helpers/message-router-cdc-fixture.js';
 
@@ -194,8 +195,8 @@ test('real ws receives the duration payload as unchanged Unicode JSON text with 
       const frame = JSON.parse(data.toString());
       if (frame.type !== ROUTER_MESSAGE_TYPE.SERVICE_MESSAGE) return;
       received.resolve({data, isBinary, frame});
-      peer.send(JSON.stringify({type: ROUTER_MESSAGE_TYPE.ACK,
-        messageId: frame.messageId, acknowledged: true, transportProbe: 'real-ws'}));
+      for (const answer of acknowledgeThenRespondFrames(frame.messageId,
+        {transportProbe: 'real-ws'})) peer.send(JSON.stringify(answer));
     });
     const input = payload();
     const result = await f.router.deliver(CDC_ROUTER_TEST.ADDRESS, input, options());
