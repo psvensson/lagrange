@@ -8,7 +8,6 @@ import {
   DEBUG_METADATA_ERROR_MSG as ERR,
 } from './debug-metadata-service-constants.js';
 
-const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_BASE64 = 'base64';
 
 /**
@@ -20,18 +19,6 @@ const LOCAL_STR_BASE64 = 'base64';
  */
 function buildBreakpointId(sessionId, index, lineNumber, columnNumber) {
   return `${sessionId}:bp:${index}:${lineNumber}:${columnNumber}`;
-}
-
-/**
- * @param {number} count
- * @return {string}
- */
-function buildPlaceholders(count) {
-  const placeholders = [];
-  for (let index = 1; index <= count; index++) {
-    placeholders.push(`?${index}`);
-  }
-  return placeholders.join(LOCAL_STR_COMMA_SPACE);
 }
 
 /**
@@ -131,7 +118,6 @@ export {
   assertNonEmptyString,
   assertRequestObject,
   buildBreakpointId,
-  buildPlaceholders,
   createDebugMetadataError,
   normalizeEnvelopeBuffer,
   normalizeLimit,

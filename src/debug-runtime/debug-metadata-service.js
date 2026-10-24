@@ -1,10 +1,13 @@
 /**
- * SQL/CDC-owned debug metadata service.
+ * Debug metadata store: the owner of the debug_* system tables. It writes
+ * them only through the control-plane gateway's UPSERT mutation and reads
+ * them through the gateway's authoritative read.
  */
 
 import crypto from 'node:crypto';
 import {SQL} from '../constants/index.js';
-import {createSqlRequest} from '../query/sql-request.js';
+import {CONTROL_PLANE_MUTATION_OPERATION} from
+  '../control-plane/control-plane-system-table-gateway-constants.js';
 import {
   authorizeAction,
   validateSecurityContext,
@@ -36,7 +39,6 @@ import {
   assertNonEmptyString,
   assertRequestObject,
   buildBreakpointId,
-  buildPlaceholders,
   createDebugMetadataError,
   normalizeEnvelopeBuffer,
   normalizeLimit,
@@ -101,33 +103,28 @@ const ORDER_BY_CREATED_ASC = `${SQL.ORDER_BY} ${DBF.CREATED_AT} ASC`;
 const ORDER_BY_CAPTURED_DESC = `${SQL.ORDER_BY} ${DPF.CAPTURED_AT} DESC`;
 
 /**
- * SQL-owned debug metadata store.
+ * Gateway-owned debug metadata store.
  */
 class DebugMetadataStore {
   /**
    * @param {Object} [options]
-   * @param {Object} [options.sqlQueryEngine]
+   * @param {Function} [options.getControlPlaneSystemTableGateway] - Resolves
+   *   the owner route of the debug_* system tables at call time: UPSERT
+   *   writes and authoritative reads, nothing else.
    * @param {Function} [options.now]
-   * @param {Function} [options.createSqlRequest]
    * @param {Function} [options.validateSecurityContext]
    * @param {Function} [options.authorizeAction]
    * @param {Function} [options.resolvePolicy]
    */
   constructor(options = {}) {
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.getControlPlaneSystemTableGateway =
+      typeof options.getControlPlaneSystemTableGateway === 'function' ?
+        options.getControlPlaneSystemTableGateway : () => null;
     this.now = options.now || (() => Date.now());
-    this.createSqlRequest = options.createSqlRequest || createSqlRequest;
     this.validateSecurityContext =
       options.validateSecurityContext || validateSecurityContext;
     this.authorizeAction = options.authorizeAction || authorizeAction;
     this.resolvePolicy = options.resolvePolicy || defaultDebugPolicyResolver;
-  }
-
-  /**
-   * @param {Object} sqlQueryEngine
-   */
-  setSqlQueryEngine(sqlQueryEngine) {
-    this.sqlQueryEngine = sqlQueryEngine;
   }
 
   /**
@@ -163,8 +160,6 @@ class DebugMetadataStore {
       tableName: DT.SESSIONS,
       columns: SESSION_COLUMNS,
       row,
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId,
     });
 
     return normalizeSessionRow(row);
@@ -182,7 +177,6 @@ class DebugMetadataStore {
     const auth = this.authorizeRequest(request.securityContext, ACTION.UPDATE_SESSION);
     const existing = await this.readSessionRow(
       auth.tenantId,
-      request.sessionId,
       request.sessionId,
     );
     if (!existing) {
@@ -215,8 +209,6 @@ class DebugMetadataStore {
       tableName: DT.SESSIONS,
       columns: SESSION_COLUMNS,
       row,
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId,
     });
 
     return normalizeSessionRow(row);
@@ -264,7 +256,6 @@ class DebugMetadataStore {
     const row = await this.readSessionRow(
       auth.tenantId,
       request.sessionId,
-      request.sessionId,
     );
     if (!row) {
       throw createDebugMetadataError(
@@ -288,7 +279,6 @@ class DebugMetadataStore {
     const auth = this.authorizeRequest(request.securityContext, ACTION.ATTACH_SESSION);
     const row = await this.readSessionRow(
       auth.tenantId,
-      request.sessionId,
       request.sessionId,
     );
 
@@ -323,11 +313,10 @@ class DebugMetadataStore {
       ` ${ORDER_BY_UPDATED_DESC}` +
       `${DSQL.LIMIT}${limit}`;
 
-    const result = await this.executeSql({
+    const result = await this.readRows({
+      tableName: DT.SESSIONS,
       statement: sql,
       parameters: params,
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId || auth.tenantId,
     });
     const rows = Array.isArray(result.rows) ? result.rows : [];
     return rows.map((row) => normalizeSessionRow(row));
@@ -351,7 +340,6 @@ class DebugMetadataStore {
     const auth = this.authorizeRequest(request.securityContext, ACTION.WRITE_BREAKPOINTS);
     const sessionRow = await this.readSessionRow(
       auth.tenantId,
-      request.sessionId,
       request.sessionId,
     );
     if (!sessionRow) {
@@ -407,8 +395,6 @@ class DebugMetadataStore {
         tableName: DT.BREAKPOINTS,
         columns: BREAKPOINT_COLUMNS,
         row,
-        tenantId: auth.tenantId,
-        sessionId: request.sessionId,
       });
       rows.push(normalizeBreakpointRow(row));
     }
@@ -433,11 +419,10 @@ class DebugMetadataStore {
       ` ${SQL.AND} ${DBF.SESSION_ID} = ?2` +
       ` ${ORDER_BY_CREATED_ASC}` +
       `${DSQL.LIMIT}${limit}`;
-    const result = await this.executeSql({
+    const result = await this.readRows({
+      tableName: DT.BREAKPOINTS,
       statement: sql,
       parameters: [auth.tenantId, request.sessionId],
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId,
     });
     const rows = Array.isArray(result.rows) ? result.rows : [];
     return rows.map((row) => normalizeBreakpointRow(row));
@@ -459,7 +444,6 @@ class DebugMetadataStore {
     const auth = this.authorizeRequest(request.securityContext, ACTION.WRITE_SNAPSHOT);
     const sessionRow = await this.readSessionRow(
       auth.tenantId,
-      request.sessionId,
       request.sessionId,
     );
     if (!sessionRow) {
@@ -534,8 +518,6 @@ class DebugMetadataStore {
       tableName: DT.SNAPSHOTS,
       columns: SNAPSHOT_COLUMNS,
       row,
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId,
     });
 
     return normalizeSnapshotRow(row, true);
@@ -559,11 +541,10 @@ class DebugMetadataStore {
       ` ${SQL.WHERE} ${DPF.SNAPSHOT_ID} = ?1` +
       ` ${SQL.AND} ${DSF.TENANT_ID} = ?2` +
       ` ${SQL.LIMIT} 1`;
-    const result = await this.executeSql({
+    const result = await this.readRows({
+      tableName: DT.SNAPSHOTS,
       statement: sql,
       parameters: [request.snapshotId, auth.tenantId],
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId || request.snapshotId,
     });
 
     const row = Array.isArray(result.rows) ?
@@ -592,11 +573,10 @@ class DebugMetadataStore {
       ` ${SQL.AND} ${DPF.SESSION_ID} = ?2` +
       ` ${ORDER_BY_CAPTURED_DESC}` +
       `${DSQL.LIMIT}${limit}`;
-    const result = await this.executeSql({
+    const result = await this.readRows({
+      tableName: DT.SNAPSHOTS,
       statement: sql,
       parameters: [auth.tenantId, request.sessionId],
-      tenantId: auth.tenantId,
-      sessionId: request.sessionId,
     });
     const rows = Array.isArray(result.rows) ? result.rows : [];
     return rows.map((row) => normalizeSnapshotRow(row, false));
@@ -636,29 +616,35 @@ class DebugMetadataStore {
   }
 
   /**
-   * Execute a canonical SqlRequest.
-   * @param {Object} request
-   * @return {Promise<Object>}
+   * The owner route of the debug tables.
+   * @return {Object}
    */
-  async executeSql(request) {
-    if (!this.sqlQueryEngine ||
-      typeof this.sqlQueryEngine.executeRequest !== 'function') {
+  requireGateway() {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
       throw createDebugMetadataError(
-        CODE.ENGINE_REQUIRED,
-        ERR.ENGINE_REQUIRED,
+        CODE.GATEWAY_REQUIRED,
+        ERR.GATEWAY_REQUIRED,
       );
     }
+    return gateway;
+  }
 
-    const sqlRequest = this.createSqlRequest({
-      statement: request.statement,
-      parameters: request.parameters || [],
-      tenantId: request.tenantId,
-      sessionId: request.sessionId ||
-        `${DEF.SESSION_ID_PREFIX}-${this.now()}`,
-    });
-
-    const result = await this.sqlQueryEngine.executeRequest(sqlRequest);
-    if (result && result.success === false) {
+  /**
+   * Read debug rows through the gateway's authoritative read.
+   * @param {Object} request
+   * @param {string} request.tableName - One of the debug tables.
+   * @param {string} request.statement - SELECT statement.
+   * @param {Array} [request.parameters]
+   * @return {Promise<Object>}
+   */
+  async readRows(request) {
+    const result = await this.requireGateway().readAuthoritativeRows(
+      request.tableName,
+      request.statement,
+      request.parameters || [],
+    );
+    if (result?.success === false) {
       throw createDebugMetadataError(
         CODE.INVALID_REQUEST,
         result.error || LOCAL_STR_SQL_REQUEST_FAILED,
@@ -668,44 +654,44 @@ class DebugMetadataStore {
   }
 
   /**
-   * Insert/replace one row.
+   * Insert/replace one row through the gateway's UPSERT mutation.
    * @param {Object} request
+   * @param {string} request.tableName - One of the debug tables.
+   * @param {Array<string>} request.columns
+   * @param {Object} request.row
    * @return {Promise<void>}
    */
   async upsertRow(request) {
-    const placeholders = buildPlaceholders(request.columns.length);
-    const sql = `${DSQL.INSERT_OR_REPLACE_INTO} ${request.tableName}` +
-      ` (${request.columns.join(', ')})` +
-      ` ${SQL.VALUES} (${placeholders})`;
-    const parameters = request.columns.map((columnName) =>
-      request.row[columnName],
-    );
-
-    await this.executeSql({
-      statement: sql,
-      parameters,
-      tenantId: request.tenantId,
-      sessionId: request.sessionId,
+    const row = Object.fromEntries(request.columns.map((columnName) =>
+      [columnName, request.row[columnName]]));
+    const result = await this.requireGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: request.tableName,
+      row,
     });
+    if (result?.success === false) {
+      throw createDebugMetadataError(
+        CODE.INVALID_REQUEST,
+        result.error || LOCAL_STR_SQL_REQUEST_FAILED,
+      );
+    }
   }
 
   /**
    * Read one session row by tenant + session ID.
    * @param {string} tenantId
    * @param {string} sessionId
-   * @param {string} sqlSessionId
    * @return {Promise<Object|null>}
    */
-  async readSessionRow(tenantId, sessionId, sqlSessionId) {
+  async readSessionRow(tenantId, sessionId) {
     const sql = `${SQL.SELECT} * FROM ${DT.SESSIONS}` +
       ` ${SQL.WHERE} ${DSF.SESSION_ID} = ?1` +
       ` ${SQL.AND} ${DSF.TENANT_ID} = ?2` +
       ` ${SQL.LIMIT} 1`;
-    const result = await this.executeSql({
+    const result = await this.readRows({
+      tableName: DT.SESSIONS,
       statement: sql,
       parameters: [sessionId, tenantId],
-      tenantId,
-      sessionId: sqlSessionId,
     });
 
     const rows = Array.isArray(result.rows) ? result.rows : [];

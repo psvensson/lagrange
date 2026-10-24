@@ -148,9 +148,10 @@ class AdminWebSocketAPIBase {
     this.testRunService = options.testRunService || new AdminTestRunService();
     this.debugMetadataStore =
       options.debugMetadataStore ||
-      (this.sqlQueryEngine ?
-        new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
-        null);
+      new DebugMetadataStore({
+        getControlPlaneSystemTableGateway: () =>
+          this.resolveControlPlaneSystemTableGateway(),
+      });
     this.ownerOperations = new AdminOwnerOperations(
       options.adminOwnerProviders, this.nodeId);
     this.debugDapRouter = options.debugDapRouter || null;
@@ -282,6 +283,19 @@ class AdminWebSocketAPIBase {
     });
 
     this[ADMIN_FIELD.SUBSCRIBE_CHANGES]();
+  }
+  /**
+   * The control-plane system-table gateway, resolved at call time: the
+   * registered gateway may appear after the admin API starts.
+   * @return {Object|null}
+   */
+  resolveControlPlaneSystemTableGateway() {
+    this.controlPlaneSystemTableGateway =
+      this.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      this.sqlQueryEngine?.controlPlaneSystemTableGateway ||
+      null;
+    return this.controlPlaneSystemTableGateway;
   }
   subscribeToCacheNotifications() {
     if (
