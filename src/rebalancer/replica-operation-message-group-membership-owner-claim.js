@@ -7,6 +7,7 @@ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE, CONTROL_PLANE_READ_LEADER_MODE}
   from '../control-plane/control-plane-system-table-gateway-constants.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {OperationType} from './replica-status.js';
+import {REBALANCE_COORDINATOR_LOG_MSG} from './rebalancer-constants.js';
 import {REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
   REPLICA_OPERATION_OWNER_LEASE_ADOPTION, resolveOperationOwnerLeaseAdoption} from './replica-operation-owner-lease.js';
 import {decodeMembershipIdentity, decodeMembershipOwnerClaim,
@@ -22,6 +23,14 @@ const INITIAL_OBLIGATION = MEMBERSHIP_OBLIGATION.INTENT_RECORDED;
 const UNRESOLVED_OBLIGATION = MEMBERSHIP_OBLIGATION.UNKNOWN;
 const answer = (outcome, operation = null, claim = null) =>
   Object.freeze({outcome, operation, claim});
+const SQL_PREDICATE_JOIN = ' AND ';
+// A membership write whose answer was an error is neither committed nor lost:
+// the caller resolves it by exact authoritative readback. The error is named
+// here so an uncertain write is never silent.
+function noteUncertainMembershipWrite(repository, operationId, error) {
+  repository.logger?.debug?.(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_WRITE_UNCERTAIN,
+    {nodeId: repository.nodeId, operationId, error: error?.message || String(error)});
+}
 function sourceClaimMatches(encoded, identity) {
   try {
     const claim = JSON.parse(encoded);
@@ -149,7 +158,7 @@ function membershipRowWhere(row, fields = CLAIM_FIELDS) {
     params.push(row[field]);
     return `${column} = ?`;
   });
-  return {where: predicates.join(' AND '), params};
+  return {where: predicates.join(SQL_PREDICATE_JOIN), params};
 }
 function claimUpdate(row, next) {
   const fields = row.messageGroupMembershipOwnerClaim === null ?
@@ -158,19 +167,42 @@ function claimUpdate(row, next) {
   return {sql: `UPDATE replica_operations SET message_group_membership_owner_claim = ?
     WHERE ${basis.where}`, params: [next, ...basis.params]};
 }
-async function claimMessageGroupMembershipOwner(repository, request) {
-  if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
+// The request's fields with its decoded identity, or null when the request
+// is not a well-formed membership request for its own operation.
+function membershipRequestOf(request) {
+  if (!request || typeof request !== 'object') return null;
   const {operationId, identity: encodedIdentity, expectedClaim} = request;
   const identity = decodeMembershipIdentity(encodedIdentity);
-  if (!identity || identity.operationId !== operationId ||
-    (expectedClaim !== null && typeof expectedClaim !== 'string')) return answer(OUTCOME.INVALID);
-  if (!await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNAVAILABLE);
+  if (!identity || identity.operationId !== operationId) return null;
+  return {operationId, encodedIdentity, expectedClaim, identity};
+}
+// The operation observation under a current membership boot, or null when
+// either read is unavailable.
+async function observeMembershipOperationBeforeWrite(repository, operationId) {
+  if (!await membershipBootIsCurrent(repository)) return null;
   const before = await observeMembershipOperation(repository, operationId);
-  if (!before.available) return answer(OUTCOME.UNAVAILABLE);
+  return before.available ? before : null;
+}
+// The exact read-back after a write, or null when it is unavailable or the
+// membership boot changed.
+async function readBackMembershipOperation(repository, operationId) {
+  const after = await observeMembershipOperation(repository, operationId);
+  return after.available && await membershipBootIsCurrent(repository) ? after : null;
+}
+function claimableMembershipRow(row, identity, encodedIdentity) {
+  return membershipRowIdentityMatches(row, identity, encodedIdentity) &&
+    [INITIAL_OBLIGATION, UNRESOLVED_OBLIGATION]
+      .includes(row.messageGroupMembershipObligationState);
+}
+async function claimMessageGroupMembershipOwner(repository, request) {
+  const parsed = membershipRequestOf(request);
+  if (parsed === null || (parsed.expectedClaim !== null &&
+    typeof parsed.expectedClaim !== 'string')) return answer(OUTCOME.INVALID);
+  const {operationId, encodedIdentity, expectedClaim, identity} = parsed;
+  const before = await observeMembershipOperationBeforeWrite(repository, operationId);
+  if (before === null) return answer(OUTCOME.UNAVAILABLE);
   const row = before.row;
-  if (!membershipRowIdentityMatches(row, identity, encodedIdentity) ||
-    ![INITIAL_OBLIGATION, UNRESOLVED_OBLIGATION]
-      .includes(row.messageGroupMembershipObligationState)) {
+  if (!claimableMembershipRow(row, identity, encodedIdentity)) {
     return answer(OUTCOME.CONFLICT, row);
   }
   const next = claimCandidate(repository, row, identity, expectedClaim);
@@ -178,13 +210,12 @@ async function claimMessageGroupMembershipOwner(repository, request) {
   const {sql, params} = claimUpdate(row, next);
   try {
     await repository.executeOperationMutationWithRetry(sql, params);
-  } catch {
+  } catch (error) {
     // An uncertain write must be resolved by exact read-back, not assumed lost.
+    noteUncertainMembershipWrite(repository, operationId, error);
   }
-  const after = await observeMembershipOperation(repository, operationId);
-  if (!after.available || !await membershipBootIsCurrent(repository)) {
-    return answer(OUTCOME.UNKNOWN);
-  }
+  const after = await readBackMembershipOperation(repository, operationId);
+  if (after === null) return answer(OUTCOME.UNKNOWN);
   if (membershipRowIdentityMatches(after.row, identity, encodedIdentity) &&
     after.row.messageGroupMembershipOwnerClaim === next) {
     return answer(OUTCOME.RECORDED, after.row, next);
@@ -211,22 +242,23 @@ function isDefinitivelySettled(repository, row, identity, encodedIdentity) {
     exactTerminal(repository, row) && neverAuthorized(row) &&
     row.messageGroupMembershipObligationState === DEFINITIVE_NON_ADMISSION;
 }
+function settleableNonAdmission(repository, row, identity, encodedIdentity) {
+  return membershipRowIdentityMatches(row, identity, encodedIdentity) &&
+    exactTerminal(repository, row) && neverAuthorized(row) &&
+    row.messageGroupMembershipObligationState === INITIAL_OBLIGATION;
+}
 /** Resolve never-authorized terminal intent; no new holder or external grant. */
 async function settleMessageGroupMembershipNonAdmission(repository, request) {
-  if (!request || typeof request !== 'object') return answer(OUTCOME.INVALID);
-  const {operationId, identity: encodedIdentity} = request;
-  const identity = decodeMembershipIdentity(encodedIdentity);
-  if (!identity || identity.operationId !== operationId) return answer(OUTCOME.INVALID);
-  if (!await membershipBootIsCurrent(repository)) return answer(OUTCOME.UNAVAILABLE);
-  const before = await observeMembershipOperation(repository, operationId);
-  if (!before.available) return answer(OUTCOME.UNAVAILABLE);
+  const parsed = membershipRequestOf(request);
+  if (parsed === null) return answer(OUTCOME.INVALID);
+  const {operationId, encodedIdentity, identity} = parsed;
+  const before = await observeMembershipOperationBeforeWrite(repository, operationId);
+  if (before === null) return answer(OUTCOME.UNAVAILABLE);
   const row = before.row;
   if (isDefinitivelySettled(repository, row, identity, encodedIdentity)) {
     return answer(OUTCOME.RECORDED, row);
   }
-  if (!membershipRowIdentityMatches(row, identity, encodedIdentity) ||
-    !exactTerminal(repository, row) || !neverAuthorized(row) ||
-    row.messageGroupMembershipObligationState !== INITIAL_OBLIGATION) {
+  if (!settleableNonAdmission(repository, row, identity, encodedIdentity)) {
     return answer(OUTCOME.CONFLICT, row);
   }
   if (row.messageGroupMembershipOwnerClaim !== null &&
@@ -240,17 +272,17 @@ async function settleMessageGroupMembershipNonAdmission(repository, request) {
       `UPDATE replica_operations SET message_group_membership_lane_key = NULL,
         message_group_membership_obligation_state = ? WHERE ${basis.where}`,
       [DEFINITIVE_NON_ADMISSION, ...basis.params]);
-  } catch {
+  } catch (error) {
     // No reply cannot prove no mutation. Inspect the exact terminal row.
+    noteUncertainMembershipWrite(repository, operationId, error);
   }
-  const after = await observeMembershipOperation(repository, operationId);
-  if (!after.available || !await membershipBootIsCurrent(repository)) {
-    return answer(OUTCOME.UNKNOWN);
-  }
+  const after = await readBackMembershipOperation(repository, operationId);
+  if (after === null) return answer(OUTCOME.UNKNOWN);
   return isDefinitivelySettled(repository, after.row, identity, encodedIdentity) ?
     answer(OUTCOME.RECORDED, after.row) : answer(OUTCOME.UNKNOWN, after.row);
 }
-export {settleMessageGroupMembershipNonAdmission, membershipRowWhere, neverAuthorized};
+export {settleMessageGroupMembershipNonAdmission, membershipRowWhere, neverAuthorized,
+  noteUncertainMembershipWrite};
 
 // Reused by the recipient-side observation, never replaced by cache policy.
 export {READ as MEMBERSHIP_AUTHORIZATION_READ_OPTIONS};

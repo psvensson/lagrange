@@ -23,6 +23,8 @@ import {
   withWriteEntryIdentity,
 } from './query-executor-unknown-outcome.js';
 import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -556,7 +558,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             candidateState.requestRetryCurrentAddress();
             break;
           }
-          if (response.noHandler) {
+          if (classifyTransportDeliveryOutcome(response).reasonCode ===
+              TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
             const errorMessage =
               response.error || `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`;
             await candidateState.handleNoHandlerCandidate(
@@ -711,7 +714,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             !forRead &&
             this.isLeaderUnavailable(
               errorMessage,
-              error?.code || error?.errorCode,
+              classifyTransportDeliveryOutcome(error).errorCode,
             )
           ) {
             const controlPlaneWriteRetryDecision =

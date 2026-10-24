@@ -51,5 +51,4 @@ function createParticipantReleaseAuthorizationOwner(handler) {
   });
 }
 
-export {createParticipantReleaseAuthorizationOwner,
-  PARTICIPANT_RELEASE_AUTHORIZATION_KIND};
+export {createParticipantReleaseAuthorizationOwner};

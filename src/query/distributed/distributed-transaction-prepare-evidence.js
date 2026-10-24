@@ -31,4 +31,4 @@ function completePrepareEvidenceOf(value) {
   };
 }
 
-export {completePrepareEvidenceOf, isPositiveSafeInteger};
+export {completePrepareEvidenceOf};

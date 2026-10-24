@@ -207,16 +207,6 @@ function shouldSynthesizeMessageGroupDeliverySource(
   return !hasRouterVisibleDeliverySource(sourceContext?.payload);
 }
 
-function shouldDeferImmediateDeliveryRetry(result) {
-  return Boolean(
-    result &&
-    typeof result === 'object' &&
-    result.deferRetry === true &&
-    Number.isFinite(result.retryAfterMs) &&
-    result.retryAfterMs > 0,
-  );
-}
-
 function buildDeferredDeliveryError(deliveryResult) {
   const error = new Error(deliveryResult?.error || 'Message delivery deferred');
   if (
@@ -385,6 +375,5 @@ export {
   isWebSocketBasedMessageRouterTransport,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,
-  shouldDeferImmediateDeliveryRetry,
   wrapCdcProposeError,
 };

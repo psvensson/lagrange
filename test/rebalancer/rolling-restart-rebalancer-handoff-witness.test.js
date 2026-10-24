@@ -28,7 +28,7 @@ import {
 } from '../../src/rebalancer/replica-operation-repository.js';
 import {
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-} from '../../src/transport/transport-semantic-outcome.js';
+} from '../../src/transport/transport-error-codes.js';
 import {
   createNodeHosts,
   initializeTestEnvironment,

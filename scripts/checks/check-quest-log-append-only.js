@@ -21,11 +21,10 @@
  * rename is a deletion of the committed path and fails as one.
  *
  * The range comes from the repository's change-selection owner
- * (`resolvedCheckBase`) at the CLI boundary only, falling back to the merge
- * base with `origin/main` of the repository actually being audited: an
- * ambient base names a commit in THIS repository and is meaningless for any
- * other root, so the library never reads it,
- * so this check holds no branch-topology policy of its own. The publisher
+ * (`repositoryCheckBase`): the declared range for this repository, and the
+ * merge base with `origin/main` of any other root actually being audited -
+ * an ambient base names a commit in THIS repository and is meaningless for
+ * any other root - so this check holds no branch-topology policy of its own. The publisher
  * requires a fast-forward but does not forbid merges inside the range, so a
  * commit is compared against every parent rather than only the first, and
  * dropping one side's entries is exactly the history loss this refuses.
@@ -51,7 +50,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {isQuestLogPath} from '../solve/store.js';
-import {publicationBase, resolvedCheckBase} from './changed-paths.js';
+import {repositoryCheckBase} from './changed-paths.js';
 import {
   HEAD_REV, NO_EDGES, admittedEdges, baseFromArgv, changedPathsBetween,
   readBlobs, reportRecordOffences, trackedAt,
@@ -267,7 +266,7 @@ function workingTreeOffences(root) {
  */
 function questLogOffences(options = {}) {
   const root = options.root || REPO_ROOT;
-  const base = options.base || publicationBase(root);
+  const base = options.base || repositoryCheckBase(root);
   const offences = arrayFlatMap(commitsOf(admittedEdges(root, base)),
     ({child, parents}) => (parents.length > 1 ?
       mergeOffences(root, parents, child) :
@@ -276,8 +275,8 @@ function questLogOffences(options = {}) {
 }
 
 function main(argv) {
-  // The environment supplies the admitted range for this repository only.
-  const base = baseFromArgv(argv) || resolvedCheckBase();
+  // The flag names a range; without one the owner supplies this repository's.
+  const base = baseFromArgv(argv);
   return reportRecordOffences({argv, offences: questLogOffences(base ? {base} : {}),
     cleanMessage: CLEAN_MESSAGE, header: OFFENCE_HEADER, remediation: REMEDIATION});
 }

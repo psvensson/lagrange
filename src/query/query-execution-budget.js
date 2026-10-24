@@ -111,9 +111,7 @@ export function buildPartitionExecutionFailureResult({
     partitionId,
     success: false,
     error: errorMessage || ERRORS.QUERY_FAILED,
-    errorCode: normalizeParticipantFailureString(
-      details?.errorCode || details?.code,
-    ),
+    errorCode: normalizeParticipantFailureString(details?.errorCode),
     retryAfterMs: normalizeParticipantRetryAfterMs(details?.retryAfterMs),
     deferRetry: details?.deferRetry === true,
     participantNodeId: normalizeParticipantFailureString(

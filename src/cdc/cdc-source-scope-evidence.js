@@ -103,5 +103,4 @@ export {
   buildCdcSourceScopeEvidence,
   eventCdcSourceScope,
   isCdcSourceScopeEvidence,
-  sourceScopeMatchesService,
 };

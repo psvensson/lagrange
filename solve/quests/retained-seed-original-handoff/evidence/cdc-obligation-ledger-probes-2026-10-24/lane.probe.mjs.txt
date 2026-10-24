@@ -1,0 +1,76 @@
+import {resetFixtureSingletons, clearFixtureSingletons, startLeader, applyCommitted,
+  settleTicks, shutdownAll} from '../test/test-helpers/participant-transaction-fixture.js';
+import {countCdcObligations} from '../src/partition/partition-cdc-obligation-ledger.js';
+import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND} from '../src/partition/partition-cdc-obligation-constants.js';
+import {getSchemaByTableName} from '../src/bootstrap/system-table-schemas-constants.js';
+import {PARTITION_SERVICE_OPERATION as OP} from '../src/partition/partition-service-constants.js';
+import {buildCommittedCdcOutcome} from '../src/cdc/cdc-delivery-outcome.js';
+import {VirtualTimeSource} from '../src/time/time-source.js';
+
+let CLOCK = null;
+const stmt = (entryId, sql, params) => ({type: OP.QUERY, entryId, sql, params, timestamp: CLOCK.now().toString(), proposedBy: 'probe-elsewhere', proposedAt: 0});
+const logWrite = (i) => stmt(`l-${i}`, 'INSERT OR REPLACE INTO logs (log_id, timestamp, level, node_id, message, created_at) VALUES (?, ?, ?, ?, ?, ?)', [`log-${i}`, i, 'info', 'n', `m${i}`, i]);
+const userWrite = (i) => stmt(`u-${i}`, 'INSERT INTO test_table (id, value) VALUES (?, ?)', [`r-${i}`, `v-${i}`]);
+const ack = (e) => buildCommittedCdcOutcome([e], 'mg-probe', {index: 1, term: 1});
+const isAck = (e) => e.type === PARTITION_CDC_COMMAND.DELIVERED;
+async function applyAcks(leader, proposed, seen) { let n = 0; for (const c of proposed.filter(isAck)) { if (seen.has(c.entryId)) continue; seen.add(c.entryId); applyCommitted(leader, c); n++; } await settleTicks(); return n; }
+async function pump(ts, leader, proposed, seen, rounds = 40) {
+  for (let r = 0; r < rounds; r++) { ts.advance(BOUND.ACK_FLUSH_DEADLINE_MS); await settleTicks(); await applyAcks(leader, proposed, seen); }
+}
+const out = {};
+// L1 backlog dump + L2 head-of-line
+for (const mode of ['ack', 'refuse_first']) {
+  resetFixtureSingletons();
+  const ts = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({tableName: 'logs', schema: getSchemaByTableName('logs'), timeSource: ts});
+  CLOCK = leader.hlcClock;
+  const N = 600;
+  for (let i = 0; i < N; i++) applyCommitted(leader, logWrite(i));
+  await settleTicks();
+  const owedBefore = countCdcObligations(leader.db);
+  const seenEvents = []; let refused = 0;
+  const sub = async (e) => { seenEvents.push(e.eventKey); if (mode === 'refuse_first' && e.eventKey === 'entry:l-0') { refused++; return undefined; } return ack(e); };
+  const t0 = Date.now();
+  const hs = await leader.subscribeToCDCWithHandshake(sub, {subscriberId: 'probe-sub'});
+  const seen = new Set();
+  await pump(ts, leader, proposed, seen);
+  const diag = leader.cdcDelivery.getCdcObligationDiagnostics();
+  out[`L_${mode}`] = {N, owedBefore, handshakeCatchup: hs.catchup, deliveredCalls: seenEvents.length,
+    distinctEvents: new Set(seenEvents).size, refusedCalls: refused,
+    acksProposed: proposed.filter(isAck).length, ledgerAfter: countCdcObligations(leader.db),
+    lastDrive: diag.lastDrive, retryArmed: diag.retryArmed, wallMs: Date.now() - t0};
+  await shutdownAll(leader); clearFixtureSingletons();
+}
+// L3 sliding window duplicate path
+{
+  resetFixtureSingletons();
+  const ts = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource: ts});
+  CLOCK = leader.hlcClock;
+  const a = []; const b = [];
+  await leader.subscribeToCDCWithHandshake(async (e) => { a.push(e.eventKey); return ack(e); }, {subscriberId: 'A'});
+  for (let i = 0; i < 5; i++) applyCommitted(leader, userWrite(i));
+  await settleTicks();
+  const seen = new Set();
+  await pump(ts, leader, proposed, seen, 5);
+  const ledgerBeforeB = countCdcObligations(leader.db);
+  const windowSize = leader.cdcEventBuffer.getRecentEvents().length;
+  const hsB = await leader.subscribeToCDCWithHandshake(async (e) => { b.push({key: e.eventKey, replayOnly: e.replayOnly === true}); return ack(e); }, {subscriberId: 'B'});
+  await pump(ts, leader, proposed, seen, 5);
+  out.L3_window = {aReceived: a.length, ledgerBeforeB, windowSizeAtHandshake: windowSize,
+    bReceived: b.length, bReplayOnly: b.filter((x) => x.replayOnly).length, bKeys: b.map((x) => x.key),
+    handshakeB: hsB.catchup, ledgerAfterB: countCdcObligations(leader.db), acksTotal: proposed.filter(isAck).length};
+  // L3b: a third subscriber refusing in the window: does the handshake throw and skip the ledger drive?
+  let threw = null;
+  try { await leader.subscribeToCDCWithHandshake(async () => undefined, {subscriberId: 'C'}); } catch (e) { threw = e.code || e.message; }
+  const aBefore = a.length;
+  applyCommitted(leader, userWrite(99));
+  await settleTicks();
+  await pump(ts, leader, proposed, seen, 5);
+  out.L3b_window_refusal = {handshakeThrew: threw, subscribersRegistered: leader.cdcSubscribers.size,
+    aReceivedNewEvent: a.length - aBefore, ledgerAfterNewWrite: countCdcObligations(leader.db),
+    lastDrive: leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive};
+  await shutdownAll(leader); clearFixtureSingletons();
+}
+console.log(JSON.stringify(out, null, 1));
+setTimeout(() => process.exit(0), 50).unref();

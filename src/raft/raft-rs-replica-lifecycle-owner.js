@@ -385,6 +385,14 @@ function prepareReplicaLifecycleForSnapshot(request) {
   });
 }
 
+// The receiver's one lifecycle row names another group, peer or replica, or
+// carries no incarnation.
+function receiverRowIdentityMismatch(row, request) {
+  return row.group_id !== request.groupId ||
+    row.peer_id !== request.peerId || row.replica_identity !== request.replicaIdentity ||
+    typeof row.incarnation !== 'string' || row.incarnation.length === 0;
+}
+
 // A native FRESH_CREATE cannot replace established receiver history. Reseed or
 // live catchup needs its own existing authority; a valid checkpoint is not it.
 function snapshotReceiverRow(db, request, imported) {
@@ -400,9 +408,7 @@ function snapshotReceiverRow(db, request, imported) {
     db.prepare(`SELECT * FROM ${LIFECYCLE_TABLE} LIMIT 2`).all() : [];
   if (rows.length === 0 && !imported) return snapshotReceiverFresh(null);
   const row = rows[0];
-  if (rows.length !== 1 || row.group_id !== request.groupId ||
-      row.peer_id !== request.peerId || row.replica_identity !== request.replicaIdentity ||
-      typeof row.incarnation !== 'string' || row.incarnation.length === 0) {
+  if (rows.length !== 1 || receiverRowIdentityMismatch(row, request)) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED, SNAPSHOT_RECEIVER_REASON.IDENTITY);
   }
   if (row.state !== LIFECYCLE_STATE.ACTIVE) {

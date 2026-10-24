@@ -181,6 +181,7 @@ function fakeDeps(overrides = {}) {
       return 0;
     },
     lastGreen: () => true,
+    checkBase: () => null,
     commitAt: () => {
       calls.commit += 1;
       return 'a'.repeat(40);
@@ -335,12 +336,12 @@ test('a file red on a lab machine is decided on the controller and routed away a
   assert.equal(await runPlacedTestFiles(MANY, run.deps), 1);
   assert.deepEqual(run.calls.record, []);
 
-  // The lab machine is handed the controller's own retry and timeout policy,
-  // gets its deadline from its estimate, and is started before the
-  // controller's lanes block.
-  run = fakeDeps({env: {LAGRANGE_RETRY_FAILED_ONCE: '1', TAP_TIMEOUT: '900'}});
+  // The lab machine is handed the controller's retry and timeout policy and check
+  // base, gets its deadline from its estimate, and starts before the controller's lanes.
+  run = fakeDeps({env: {LAGRANGE_RETRY_FAILED_ONCE: '1', TAP_TIMEOUT: '900'}, checkBase: () => 'c0'});
   await runPlacedTestFiles(MANY, run.deps);
-  assert.deepEqual(run.calls.options[0].options.forward, {retry: '1', tapTimeout: '900'});
+  assert.deepEqual(run.calls.options[0].options.forward,
+    {retry: '1', tapTimeout: '900', checkBase: 'c0'});
   assert.equal(run.calls.options[0].options.deadlineMs, 30 * MINUTE,
     'never under half an hour');
   assert.deepEqual(run.calls.order, ['remote', 'local'], 'lab shards first, then this one');
@@ -349,6 +350,11 @@ test('a file red on a lab machine is decided on the controller and routed away a
   const {shard, options} = run.calls.options[0];
   assert.ok(shard.loadMs * 3 > 30 * MINUTE);
   assert.equal(options.deadlineMs, 3 * shard.loadMs, 'three times its estimate');
+
+  run = fakeDeps({checkBase: () => assert.fail('no commit: nope')});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.deepEqual([run.calls.remote, run.calls.local], [[], [MANY]]);
+  assert.ok(run.calls.lines.some((line) => /is unresolved: no commit: nope$/u.test(line)));
 
   // Past the cap it is breakage: red, and nothing runs twice.
   const many = Array.from({length: 60}, (_, index) => `test/g${index}.test.js`);
@@ -561,8 +567,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
     const real = placementDeps({root: ${JSON.stringify(fixture.root)}});
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
-      planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})),
-      commitAt: () => 'a'.repeat(40), lastGreen: () => true, runLocal: () => 1,
+      planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})), runLocal: () => 1,
+      commitAt: () => 'a'.repeat(40), checkBase: () => null, lastGreen: () => true,
       discover: async () => ({machines: [{name: 'lab', controller: false, speed: 1,
         avoid: []}], record: async () => {}}),
       runRemote: () => {
@@ -955,15 +961,15 @@ function labFixture(t, {realProducer = false} = {}) {
   const labLock = labLockFixture(scratch, env);
   const start = (files, options = {}) => startRemoteShard({machine, files},
     {sha, deadlineMs: 10 * MINUTE, root: controller, env, holder: FIXTURE_HOLDER, ...options});
-  return {node, controller, parent, machine, sha, env, start, labLock,
+  return {node, controller, parent, machine, sha, basis, env, start, labLock,
     releaseGate: () => fs.writeFileSync(gate, 'go')};
 }
 
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
   async (t) => {
-    const {node, controller, parent, machine, sha, env, start} = labFixture(t);
+    const {node, controller, parent, machine, sha, basis, env, start} = labFixture(t);
     const started = start([FAST_TEST], {runId: 'capped',
-      forward: {retry: '1', tapTimeout: '900'}});
+      forward: {retry: '1', tapTimeout: '900', checkBase: basis}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
     // The lab-side script as sent, read before its shard removes it and
     // asserted once the shard has settled, so a red leaves nothing running.
@@ -985,9 +991,10 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
       .stdout.trim());
     assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
-      `timeout:900 lanecap:${Math.max(1, cores - 1)}$`, 'mu'),
-    'its own budgets scaled, the controller\'s retry and timeout policy, never placed ' +
-      'again, and its lanes capped at its cores less one');
+      `timeout:900 lanecap:${Math.max(1, cores - 1)} base:${basis}$`, 'mu'),
+    'its own budgets scaled, the controller\'s retry and timeout policy and check base, ' +
+      'never placed again, and its lanes capped at its cores less one');
+    assert.match(sent, /else unset LAGRANGE_CHECK_BASE; fi$/mu, 'none forwarded, none kept');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');
     assert.match(green.log, /^placement-link=tools\/tla2tools\.jar$/mu,

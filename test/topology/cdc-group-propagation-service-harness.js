@@ -6,6 +6,10 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+
+const DURABLE_SOURCE_FORWARD_RETRY_MS = 20;
+const DURABLE_SOURCE_TERM = 1;
 
 export function setupConfig(propagationMode) {
   ConfigurationManager.resetInstance();
@@ -74,6 +78,34 @@ export function createSourceMessageGroupService() {
       calls.push({tableName, operation, data});
     },
   };
+}
+
+// The same source double with the durable surface the durable wave reads
+// (src/topology/cdc-group-propagation-durable-delivery.js): a stable group,
+// port and commit lifetime, the strict forward retry hint, and a batch apply
+// answered with the CDC outcome owner's committed receipt. A durable event
+// never takes the volatile applyCDCEvent path.
+export function createDurableSourceMessageGroupService(groupId) {
+  const source = createSourceMessageGroupService();
+  const batches = [];
+  return Object.assign(source, {
+    batches,
+    groupId,
+    initialized: true,
+    isShutdown: false,
+    raft: Object.freeze({}),
+    cdcCommitLifetime: Object.freeze({}),
+    canAcceptCDCEvent: () => true,
+    resolveStrictCdcForwardRetryAfterMs: () => DURABLE_SOURCE_FORWARD_RETRY_MS,
+    async applyCDCEvent() {
+      throw new Error('a durable CDC event must not take the volatile apply');
+    },
+    applyCDCBatch(events) {
+      batches.push(events);
+      return buildCommittedCdcOutcome(events, groupId,
+        {index: batches.length, term: DURABLE_SOURCE_TERM});
+    },
+  });
 }
 
 export function createMessageRouter(results = []) {
