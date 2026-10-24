@@ -644,3 +644,105 @@ C4 effect.
 sha256 `2febffec...`); scoped complexity on REP: 1 inherited (`applyCDCBatch` 31), none new;
 `test:metadata:refresh` zero drift. Scratch worktrees `v/wt3` (4406547c) and `v/wt3base` (bed8c6354)
 removed after the runs.
+
+---
+
+## Re-verification r3 (append-only), 2026-10-24: snapshot `refs/wip/lab-c1-4` = 5054eff4
+
+Subject: the STAGED tree in the same worktree (HEAD `bed8c6354`); `git write-tree` =
+`d83e2d6835c419b29513010b65aed5ac18bff4c8` = `5054eff4^{tree}`; the five changed src files and both
+test files `cmp`-identical to `5054eff4`; index-only. Bounded to `git diff 4406547c 5054eff4`:
+`message-group-service-runtime-support.js` (+15), FDM (+5/-4), NDM (+3/-2), RCV (+2/-2), REP (+5/-7),
+the one-line DEFER assertion, regenerated seal. Lines below are at 5054eff4 (RS =
+`src/message-group/message-group-service-runtime-support.js`).
+
+### Verdict r3: APPROVE for commit (5054eff4)
+
+r2-RC-1 and r2-RC-2 are applied as required; no new finding blocks the commit. Residual
+observations (not blockers) are listed under "Findings r3".
+
+### (1) r2-RC-1: the hop+1 rule is written once
+
+- `cdcRelaySendDepth(hopDepth)` (RS:95-105) sits beside `CDC_FORWARD_MAX_RELAY_DEPTH` (RS:93), which
+  is that constant's actual owner (my r2 text said "beside CDC_FORWARD_MAX_RELAY_DEPTH's owner"; the
+  coordinator read it as the constants module -- RS is the right place, better than a constants
+  module that would have had to import the max). It returns `hop + 1` and throws
+  `cdcDeliveryBudgetError(CDC_COMPLETION.INVALID)` when the result would exceed the max. The new
+  RS imports (`cdc-delivery-outcome.js`, `cdc-delivery-budget.js`) create no cycle: those owners
+  import only `message-group/constants.js`, and `npm run -s test:cycles` at 5054eff4 reports
+  0/0 cycle groups.
+- Consumers: NDM:182 (durable send, `relayDepth: cdcRelaySendDepth(options.relayDepth)`),
+  FDM:382-386 (`forwardCDCEventToLeader`) and FDM:418-422 (`forwardCDCBatchToLeader`), the two
+  ordinary send builders. REP:43-45 `forwardedCdcRelayDepth(options)` = `options.relayDepth ?? 0`
+  with no durability branch; REP:417 passes it as the hop. RCV:145 and RCV:271 pass `relayDepth`
+  (the hop). `forwardCDCPayloadToLeader` (FDM:528-) untouched; its `relayDepth` (FDM:549-550) is used
+  only for selection and the rejection log (FDM:671). `grep -rn relayDepth src/message-group
+  src/transport` (full list in my run log) shows NO other increment: every other site either reads
+  the hop as given (ACC:217, NDM:81-90 context, FDM:482-517 local convergence apply, FRM:512-516
+  convergence minimum -- a different concept) or evaluates the exhausted predicate against the single
+  constant (FRM:150 -> DEFER for the durable native decision; NDM:264 -> UNKNOWN before a durable
+  send; RCV:139 / RCV:267 -> throw `FORWARD_LEADER_UNKNOWN` for the non-durable receiver; NDM:82-85
+  -> INVALID for a received hop > max). Those are pre-existing refusals at the owners' own decision
+  points, each with its own typed outcome, all consuming `CDC_FORWARD_MAX_RELAY_DEPTH`; none
+  increments. One version of the increment: satisfied.
+- Observable outcome for the depth-2 input (case 16 `C4_THIRD_HOP_REFUSED`): unchanged. At 4406547c
+  REP computed 3 and `captureCdcForwardOptions` (FDM:367 -> NDM:82-85) threw INVALID; at 5054eff4
+  REP passes 2, `captureCdcForwardOptions` accepts the hop (2 <= 2) and `cdcRelaySendDepth(2)` throws
+  the same `cdcDeliveryBudgetError(INVALID)` (same code/deferRetry/retryable shape) at FDM:382,
+  before `forwardCDCPayloadToLeader` and before any transport call; REP wraps it identically. Case 16
+  asserts both (`error.code === INVALID`, `forward.calls.length` unchanged) and is green. For durable
+  input NDM:264 still returns UNKNOWN before the send, so the fence at NDM:182 is unreachable in
+  practice; for the non-durable receiver RCV:139/267 still refuse before forwarding; wire depths for
+  hops 0 and 1 are unchanged by construction (hop passed, +1 at send).
+- Is INVALID the right code/owner for "cannot forward further"? For the send owner, yes: the fence
+  guards a caller that forwards from the terminal hop, which every decision owner refuses earlier
+  (FRM:150, NDM:264, RCV:139/267); a contract violation is non-retryable (`retryable: false`),
+  consistent with the other fences of this unit (NDM:253 unadmitted forward, REP:32-38 unpaired
+  hooks). The one legitimate route that reaches it without an earlier owner refusal is an ordinary
+  (non-strict) owner-path forward from hop 2 (case 16's second input), where no decision owner
+  evaluates exhaustion; there INVALID is defensible (the caller cannot be served and must not
+  retry locally) but is not a "named relay-depth refusal". Recorded, not required: the same condition
+  is typed four ways across owners (DEFER / UNKNOWN / `FORWARD_LEADER_UNKNOWN` / INVALID), three of
+  them pre-existing; the receiver's `FORWARD_LEADER_UNKNOWN` for relay exhaustion (RCV:139-141,
+  267-269) is a misnomer belonging to the non-durable owner (S7, R17).
+
+### (2) r2-RC-2 applied
+
+`message-group-cdc-public-defer-repair.test.js:78` now `assert.equal(repairs.length, 2,
+'C1_PUBLIC_DEFER_REACHES_REPAIR')`; with `reads.length === 1` (:81) the single-flight cell is proven
+(two concurrent public receives, both request the repair, one read). Green in my run.
+
+### (3) Wire depths and neighbours unchanged (my runs at 5054eff4, `scratchpad/v/r4/`)
+
+- C1 file 16/16 (`c1.tap`); DEFER 1/1 (`defer.tap`).
+- Non-durable depth witnesses: `message-group-service-strict-cdc-forward-routing.test.js` (asserts
+  `payload.relayDepth === 1` on the first forward from hop 0, test:856-860) 74 pass / 1 red, the same
+  single leaf as at base and round 3 (status-double `buildPeerAddress ... before bootstrap hints`);
+  `message-group-service-strict-cdc-join-convergence.test.js` (hop-1 inputs) 50/50 at 5054eff4 and
+  50/50 at base; case 16 green; `message-group-native-provisional-route.test.js` red only at the
+  pre-existing lineage leaf (test:395, byte-identical to the implementer's base failure body) with
+  the depth assertions at 311/344/376 passing before it.
+- Four M1 files fail exactly the same leaves as round 3 (leaf sets identical): `cdc-non-leader-
+  propagation` 39 leaves / 21 red subtests, `strict-cdc-forward-routing` 2, `raft-replication-and-
+  cdc` 2, `message-group-service` 6 (also identical to base and to the implementer's c4 TAP).
+- Neighbours: `message-group-cdc-input-guard` 6/6, `message-group-native-mixed-vector` 3/3.
+- Statics: `node --check` + eslint clean on the five src files and both tests; scoped complexity on
+  RS + FDM identical to base modulo line numbers (6 inherited: `forwardCDCPayloadToLeader` 60,
+  `repairAuthoritativeForwardTopology` 24, `tryApplyAddressedStrictConvergencePayloadLocally` 26,
+  `createMessageGroupForwardingOwnerDeliveryMethods` 16, `resolveTransportDeliveryOptions` 16,
+  `wrapCdcProposeError` 14; my `cx-base.txt`/`cx-now.txt` agree with the implementer's);
+  `audit:impact-contracts` PASS (71/44, sha256 `2febffec...`); `test:metadata:refresh` zero drift;
+  `test:cycles` 0/0.
+
+### Findings r3 (recorded, none blocking)
+
+- F-r3-1 (K, non-durable owner, S7): relay exhaustion at the non-durable receiver is typed
+  `FORWARD_LEADER_UNKNOWN` (RCV:139-141, 267-269) while the durable owners type it DEFER/UNKNOWN and
+  the send fence types it INVALID. One condition, four typings; three pre-existing.
+- F-r3-2 (K): the exhausted predicate `hop >= CDC_FORWARD_MAX_RELAY_DEPTH` is evaluated at four
+  decision points (FRM:150, NDM:264, RCV:139, RCV:267) plus the send fence; all consume the single
+  constant and none increments, so the one-version requirement on the increment is met; a single
+  predicate helper would remove the remaining repetition (owner's choice).
+
+Scratch worktrees `v/wt4` (5054eff4) and `v/wt4base` (bed8c6354) removed after the runs; subject
+worktree untouched (still the 11 staged entries, no unstaged or untracked files).
