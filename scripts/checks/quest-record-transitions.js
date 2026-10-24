@@ -4,8 +4,9 @@
  * history, `check-closed-quest-shape.js` for closed-quest proof).
  *
  * Neither of those owns branch topology, so the admitted range comes from the
- * repository's change-selection owner at the CLI boundary and otherwise from
- * the merge base with `origin/main` of the repository being examined. The
+ * repository's change-selection owner (`repositoryCheckBase` in
+ * changed-paths.js): the declared range of this repository, or the merge base
+ * with `origin/main` of any other repository being examined. The
  * publisher requires a fast-forward but does not forbid merges inside the
  * range, so a commit is compared against every parent rather than the first.
  */
