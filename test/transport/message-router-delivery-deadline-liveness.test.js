@@ -30,7 +30,7 @@ const MODE = Object.freeze({
   NO_ACK: 'no-ack',
   ACK_NO_RESPONSE: 'ack-no-response',
   SHUTDOWN: 'shutdown',
-  INLINE_ACK: 'inline-ack',
+  ACK_AND_RESPONSE: 'ack-and-response',
 });
 
 function moduleUrl(relativePath) {
@@ -65,12 +65,15 @@ function childProgram(mode, deadlineMs) {
       send(bytes, _options, written) {
         written?.();
         if (mode !== ${JSON.stringify(MODE.ACK_NO_RESPONSE)} &&
-            mode !== ${JSON.stringify(MODE.INLINE_ACK)}) return;
+            mode !== ${JSON.stringify(MODE.ACK_AND_RESPONSE)}) return;
         const {messageId} = JSON.parse(String(bytes));
-        const inline = mode === ${JSON.stringify(MODE.INLINE_ACK)} ?
-          {result: {ok: true}} : {};
-        setImmediate(() => router.handleAcknowledgment({
-          type: 'ACK', messageId, acknowledged: true, ...inline}));
+        setImmediate(() => {
+          router.handleAcknowledgment({
+            type: 'ACK', messageId, acknowledged: true});
+          if (mode !== ${JSON.stringify(MODE.ACK_AND_RESPONSE)}) return;
+          setImmediate(() => router.handleServiceResponse({
+            type: 'SERVICE_RESPONSE', messageId, result: {ok: true}}));
+        });
       },
     });
     router.nodeConnections.set('node-b', {
@@ -152,8 +155,9 @@ test('router shutdown clears a pending delivery deadline', async (t) => {
 });
 
 test('a settled delivery disposes its deadline timer', async (t) => {
-  const run = runChild(MODE.INLINE_ACK, LONG_DEADLINE_MS);
-  t.equal(run.witness?.acknowledged, true, 'the inline ACK settles the delivery');
+  const run = runChild(MODE.ACK_AND_RESPONSE, LONG_DEADLINE_MS);
+  t.equal(run.witness?.acknowledged, true,
+    'the ACK and SERVICE_RESPONSE settle the delivery');
   t.notOk(run.witness?.settledResources.includes(TIMER_RESOURCE),
     'dispose cleared the deadline timer as soon as the delivery settled');
   assertNothingHeldOpen(t, run);

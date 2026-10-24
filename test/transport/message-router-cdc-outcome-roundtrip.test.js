@@ -29,7 +29,6 @@ import {normalizeDeliveryOutcome} from
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {SERVICE_RESPONSE_DISPOSITION_KIND} from
   '../../src/transport/message-router-shared-vocabulary.js';
-import {WebSocketTransport} from '../../src/transport/websocket-transport.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
@@ -40,9 +39,9 @@ const OTHER_GROUP = 'c2-other-group';
 const POSITION = Object.freeze({index: 7, term: 2});
 const RETRY_MS = 250;
 const NODE = Object.freeze({local: 'c2-local-node', sender: 'c2-sender-node',
-  remote: 'c2-remote-node', inline: 'c2-inline-ack-node'});
-const PATH = Object.freeze({LOCAL: 'LOCAL', SERVICE_RESPONSE: 'SERVICE_RESPONSE',
-  INLINE_ACK: 'INLINE_ACK'});
+  remote: 'c2-remote-node'});
+// The INLINE_ACK lane (a WebSocketTransport peer) was removed with that class.
+const PATH = Object.freeze({LOCAL: 'LOCAL', SERVICE_RESPONSE: 'SERVICE_RESPONSE'});
 
 function sourceEvent(index) {
   return {tableName: TABLES.CONFIG, operation: CDC_OPERATION.INSERT,
@@ -76,10 +75,7 @@ const CONTROLS = [
   {name: 'ORDINARY_SUCCESS_COMMITTED', kind: KIND.COMMITTED, reply: () => ({success: true})},
   {name: 'ORDINARY_SUCCESS_PROVISIONAL', kind: KIND.PROVISIONAL,
     reply: () => ({success: true})},
-  // An undefined reply produces a plain ACK frame on the inline-ACK peer, which
-  // is not the inline path; it is exercised only where it stays on its path.
-  {name: 'ACK_ONLY_COMMITTED', kind: KIND.COMMITTED, reply: () => undefined,
-    paths: [PATH.LOCAL, PATH.SERVICE_RESPONSE]},
+  {name: 'ACK_ONLY_COMMITTED', kind: KIND.COMMITTED, reply: () => undefined},
 ];
 
 const COMMITTED_CONFLICTS = [
@@ -120,7 +116,7 @@ const CONFLICTS = [...COMMITTED_CONFLICTS, ...PROVISIONAL_CONFLICTS];
 const CASES = [...CONTROLS, ...CONFLICTS];
 const CASE_BY_NAME = new Map(CASES.map((entry) => [entry.name, entry]));
 
-const fixture = {routers: [], inlinePeer: null, invocations: new Map(), addresses: {}};
+const fixture = {routers: [], invocations: new Map(), addresses: {}};
 
 function caseHandler(path) {
   return (envelope) => {
@@ -163,20 +159,10 @@ before(async () => {
     caseHandler(PATH.SERVICE_RESPONSE));
   await sender.router.connectToNode(NODE.remote, `ws://${HOST}:${remote.port}`);
   fixture.sender = sender.router;
-  // (c) inline ACK: WebSocketTransport is the in-tree peer whose ACK frame
-  // carries the handler result (buildServiceAcknowledgment).
-  const inlinePort = ports.getPort();
-  fixture.inlinePeer = new WebSocketTransport({localNodeId: NODE.inline});
-  await fixture.inlinePeer.initialize();
-  await fixture.inlinePeer.startServer(inlinePort, HOST);
-  fixture.addresses[PATH.INLINE_ACK] = address(NODE.inline, 'c2-inline');
-  fixture.inlinePeer.register(fixture.addresses[PATH.INLINE_ACK], caseHandler(PATH.INLINE_ACK));
-  await sender.router.connectToNode(NODE.inline, `ws://${HOST}:${inlinePort}`);
 });
 
 after(async () => {
   for (const router of fixture.routers) await router.shutdown();
-  await fixture.inlinePeer?.shutdown();
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
@@ -228,7 +214,6 @@ function suppliedText(entry, outcome) {
 for (const path of Object.values(PATH)) {
   test(`C2 ${path}: delivered CDC outcome keeps every supplied claim`, async (t) => {
     for (const entry of CASES) {
-      if (entry.paths && !entry.paths.includes(path)) continue;
       await t.test(entry.name, async () => {
         const raw = entry.reply();
         const valid = entry.valid === true;

@@ -49,7 +49,7 @@ const TRACE_STAGE_OWNER = Object.freeze({
   [TRACE_STAGE.OPERATION_PROGRESSED]:
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
   [TRACE_STAGE.REPLICA_APPEARED]:
-    'src/node/replica-lifecycle-manager.js',
+    'src/node/replica-handler-create-methods.js',
   [TRACE_STAGE.VOTER_ON_NEW_NODE]:
     'src/partition/partition-service-learner-promotion-methods.js',
   [TRACE_STAGE.HOLDERS_ADVANCED]:

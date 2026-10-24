@@ -235,9 +235,10 @@ const RATCHET_TARGETS = [
     // helpers (trace, native startup fixture, contender, schedules, stamp
     // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
     // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
-    // Q6 stage 1: tightened 679/25717 -> 677/25665 (no-handler property tests read the owner).
-    baselineCloneGroupCount: 677,
-    baselineDuplicatedLineCount: 25665,
+    // Alpha API removal: tightened 679/25717 -> 658/24752 (WebSocketTransport
+    // family and ReplicaLifecycleManager tests deleted).
+    baselineCloneGroupCount: 658,
+    baselineDuplicatedLineCount: 24752,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

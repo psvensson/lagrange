@@ -10,6 +10,26 @@ releases without a compatibility guarantee.
 
 ## [Unreleased]
 
+### Removed
+- Intentional public-API removal (alpha single-path mandate, owner decision
+  2026-10-26). These exports of the package root (`lagrange-server`,
+  `src/public-api.js`) were retired implementations with no production
+  constructor; `MessageRouter` is the one transport and `ReplicaHandler` with
+  `ReplicaStateMachine` is the one replica lifecycle path. No replacement
+  export is provided:
+  - Transport (from `src/transport/index.js`): `WebSocketTransport`, its
+    `ConnectionState`, `WebSocketTransportProvider`, `WS_PROVIDER_SUBSYSTEM`,
+    `WS_PROVIDER_LOG_MSG`, `WS_PROVIDER_ERROR_MSG`, `TransportProvider`,
+    `TransportRegistry`, `REGISTRY_SUBSYSTEM`, `REGISTRY_LOG_MSG`,
+    `REGISTRY_ERROR_MSG`, `ConnectionPool`, `POOL_SUBSYSTEM`,
+    `POOL_LOG_MSG`, `POOL_ERROR_MSG`. `MessageRouter`,
+    `RouterConnectionState`, `RouterMessageType` and `RPCClient` remain.
+  - Replica lifecycle (from `src/node/index.js`): `ReplicaLifecycleManager`,
+    `LifecycleReplicaStatus`, `VALID_STATUS_TRANSITIONS`,
+    `LifecycleMessageType`, `AckStatus`.
+- The unexported `RouterMessageHandler` module (a dead duplicate of the
+  router's inbound dispatch, imported by no module).
+
 ## [0.2.6] — 2026-09-30
 
 Consensus cutover to the Rust `raft-rs` core through the WASM operation

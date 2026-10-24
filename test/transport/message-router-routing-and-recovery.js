@@ -11,6 +11,7 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
   RAFT_RS_TRANSPORT_PROTOCOL,
@@ -589,13 +590,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         targetNodeId,
         correlationId,
       ) => {
-        return {
-          messageId,
-          correlationId,
-          acknowledged: true,
-          targetNodeId,
-          recovered: true,
-        };
+        return acknowledgeThenRespond(router, {messageId, correlationId,
+          result: {targetNodeId, recovered: true}});
       };
 
       const result = await router.deliver(

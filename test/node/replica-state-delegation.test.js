@@ -1,16 +1,14 @@
 /**
  * Unit tests verifying replica state delegation.
  *
- * Verifies that ReplicaLifecycleManager and ReplicaHandler do NOT
- * maintain independent replica lifecycle state maps. Their Maps are
- * operational bookkeeping (service references, concurrency guards,
- * request correlation) — not shadow copies of replica state.
+ * Verifies that ReplicaHandler does NOT maintain independent replica
+ * lifecycle state maps. Its Maps are operational bookkeeping (service
+ * references, concurrency guards) — not shadow copies of replica state.
  *
  * Requirements: 4.2, 4.3, 4.4
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
@@ -23,7 +21,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 /**
  * All replica lifecycle state values from both state enums.
  * These are the values that should NOT be stored as Map values
- * in ReplicaHandler or ReplicaLifecycleManager.
+ * in ReplicaHandler.
  */
 const REPLICA_STATE_VALUES = new Set([
   ...Object.values(ReplicaStatus),
@@ -87,54 +85,6 @@ test('Replica state delegation', async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
-
-  t.test(
-    'ReplicaLifecycleManager.pendingOperations stores ' +
-    'request correlation, not replica state',
-    async (t) => {
-      const cache = createMockCache();
-      const mockCDC = createMockCDCService();
-
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: '/tmp/test',
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
-
-      const manager = new ReplicaLifecycleManager({
-        nodeId: 'test-node',
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        replicaHandler: handler,
-      });
-
-      // pendingOperations is a Map keyed by request_id
-      t.ok(
-        manager.pendingOperations instanceof Map,
-        'pendingOperations is a Map',
-      );
-
-      // Verify the Map is empty initially — no pre-seeded state
-      t.equal(
-        manager.pendingOperations.size,
-        0,
-        'pendingOperations starts empty',
-      );
-
-      // Verify no Map keys match replica state values
-      for (const key of manager.pendingOperations.keys()) {
-        t.notOk(
-          REPLICA_STATE_VALUES.has(key),
-          `pendingOperations key "${key}" is not a replica state`,
-        );
-      }
-
-      manager.shutdown();
-      handler.shutdown();
-    },
-  );
 
   t.test(
     'ReplicaHandler.localServices stores service references, ' +
@@ -229,7 +179,7 @@ test('Replica state delegation', async (t) => {
   );
 
   t.test(
-    'Neither component has Maps/Sets keyed by replica state values',
+    'ReplicaHandler has no Maps/Sets keyed by replica state values',
     async (t) => {
       const cache = createMockCache();
       const mockCDC = createMockCDCService();
@@ -242,14 +192,7 @@ test('Replica state delegation', async (t) => {
         createPartitionService: createMockPartitionServiceFactory(),
       });
 
-      const manager = new ReplicaLifecycleManager({
-        nodeId: 'test-node',
-        systemTableCache: cache,
-        cdcIntegrationService: mockCDC,
-        replicaHandler: handler,
-      });
-
-      // Collect all Map/Set properties from both instances
+      // Collect all Map/Set properties from the handler
       const collectMapSetProps = (instance, name) => {
         const results = [];
         for (const prop of Object.keys(instance)) {
@@ -263,7 +206,6 @@ test('Replica state delegation', async (t) => {
 
       const collections = [
         ...collectMapSetProps(handler, 'ReplicaHandler'),
-        ...collectMapSetProps(manager, 'ReplicaLifecycleManager'),
       ];
 
       // No Map/Set should use replica state values as keys
@@ -281,7 +223,6 @@ test('Replica state delegation', async (t) => {
         }
       }
 
-      manager.shutdown();
       handler.shutdown();
     },
   );

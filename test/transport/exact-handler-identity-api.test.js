@@ -1,11 +1,11 @@
-// Witness for the exact handler identity API on the REAL transports (owner
+// Witness for the exact handler identity API on the REAL transport (owner
 // decision N2): a retiring generation removes only the handler it registered,
 // and a successor's handler at the same address survives. Every other test of
-// this rule runs against a fixture router; this one runs against
-// WebSocketTransport and MessageRouter themselves, so the fixture and the
-// implementations cannot drift apart unnoticed.
+// this rule runs against a fixture router; this one runs against MessageRouter
+// itself, so the fixture and the implementation cannot drift apart unnoticed.
+// MessageRouter is the one transport: the retired WebSocketTransport half of
+// this witness was removed with that class (alpha API removal, 2026-10-26).
 import {test} from '../../src/test-helpers/tap.js';
-import {WebSocketTransport} from '../../src/transport/websocket-transport.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -23,13 +23,6 @@ LoggingService.getInstance().initialize({level: 'error'});
 
 const ADDRESS = 'identity-node/partition/p-1';
 
-function makeWebSocketTransport() {
-  return new WebSocketTransport({
-    localNodeId: 'identity-node',
-    localAddress: 'ws://localhost:19999',
-  });
-}
-
 function makeMessageRouter() {
   return new MessageRouter({
     nodeId: 'identity-node',
@@ -37,10 +30,7 @@ function makeMessageRouter() {
   });
 }
 
-// Both implementations of the API, exercised by the same witness: the rule is
-// a property of the API, not of one class.
 const IMPLEMENTATIONS = Object.freeze([
-  {name: 'WebSocketTransport', create: makeWebSocketTransport},
   {name: 'MessageRouter', create: makeMessageRouter},
 ]);
 

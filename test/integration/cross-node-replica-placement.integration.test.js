@@ -9,13 +9,7 @@
  * goes through message groups as required by 4.13.
  */
 
-import {committedStampFor} from
-  '../node/replica-handler-bootstrap-stamps.js';
 import {test} from '../../src/test-helpers/tap.js';
-import {EventEmitter} from 'events';
-import {mkdtempSync} from 'fs';
-import {tmpdir} from 'os';
-import {join as joinPath} from 'path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -25,10 +19,8 @@ import {MessageGroupService} from '../../src/message-group/message-group-service
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
-import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   createAlwaysReadyControlPlaneReadinessService,
   createMockStorageAccountingService,
@@ -39,8 +31,6 @@ import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createLifecycleCdcServiceForCache} from
   '../test-helpers/lifecycle-state-store.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {bindRegisteredReplicaHandler} from
-  '../test-helpers/replica-handler-identity-fixture.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 // Port counter for unique ports per test
@@ -214,7 +204,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         bootstrapRouter: null,
         seedRouter: null,
         secondNodeRouter: null,
-        secondNodeLifecycleManager: null,
         partitionRebalancer: null,
       };
 
@@ -392,60 +381,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
           ready_lease_expires_at: readyLeaseExpiresAt,
         });
 
-        const createdReplicas = [];
-
-        resources.secondNodeLifecycleManager = new ReplicaLifecycleManager({
-          nodeId: secondNodeId,
-          messageGroupService: resources.messageGroup,
-          systemTableCache,
-          cdcIntegrationService,
-          createPartitionService: async (options) => {
-            createdReplicas.push({
-              partitionId: options.partitionId,
-              replicaId: options.replicaId,
-              nodeId: secondNodeId,
-            });
-
-            const mockPartition = new EventEmitter();
-            mockPartition.partitionId = options.partitionId;
-            mockPartition.replicaId = options.replicaId;
-            mockPartition.nodeId = secondNodeId;
-            mockPartition.initialize = async () => {};
-            mockPartition.shutdown = async () => {};
-
-            return bindRegisteredReplicaHandler(mockPartition, options);
-          },
-          dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
-        });
-
-        resources.secondNodeLifecycleManager.initialize();
-
-        const lifecycleAddress = `${secondNodeId}/lifecycle/manager`;
-        resources.secondNodeRouter.register(lifecycleAddress, async (envelope) => {
-          const message = envelope.payload || envelope;
-          if (message.type === 'CREATE_REPLICA') {
-            const ack =
-              await resources.secondNodeLifecycleManager.handleCreateReplica(message);
-            resources.messageGroup.emit('CREATE_REPLICA_ACK', ack);
-            return {acknowledged: true, result: ack};
-          } else if (message.type === 'REMOVE_REPLICA') {
-            const ack =
-              await resources.secondNodeLifecycleManager.handleRemoveReplica(message);
-            resources.messageGroup.emit('REMOVE_REPLICA_ACK', ack);
-            return {acknowledged: true, result: ack};
-          }
-          return {acknowledged: true};
-        });
-
-        // Also register on bootstrap router for routing
-        resources.bootstrapRouter.register(lifecycleAddress, async (envelope) => {
-          const handler = resources.secondNodeRouter.handlers.get(lifecycleAddress);
-          if (handler) {
-            return handler(envelope);
-          }
-          return {acknowledged: false, error: 'Handler not found'};
-        });
-
         // ========================================
         // PHASE 6: Trigger rebalancing
         // ========================================
@@ -497,9 +432,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         // CLEANUP: Ensure all resources are released
         // ========================================
-        if (resources.secondNodeLifecycleManager) {
-          resources.secondNodeLifecycleManager.shutdown();
-        }
         if (resources.partitionRebalancer) {
           resources.partitionRebalancer.cancelScheduledCheck();
           resources.partitionRebalancer.shutdown();
@@ -717,78 +649,5 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         rebalancer.cancelScheduledCheck();
       }
     }
-  });
-
-  t.test('replica lifecycle manager handles CREATE_REPLICA idempotently', async (t) => {
-    const nodeId = 'lifecycle-test-node';
-    const createdReplicas = [];
-    const lifecycleCache = new SystemTableCache();
-    const now = Date.now();
-    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-      table_id: 'test_table',
-      table_name: 'test_table',
-      schema_definition: JSON.stringify(createTestSchema('test_table')),
-    });
-    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-      partition_id: 'test-partition',
-      table_id: 'test_table',
-      partition_key_start: null,
-      partition_key_end: null,
-      leader_node_id: nodeId,
-    });
-    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-      service_id: 'test-partition-r1',
-      service_type: 'partition',
-      partition_id: 'test-partition',
-      node_id: nodeId,
-      raft_role: 'leader',
-      status: 'active',
-      address: `${nodeId}/partition/test-partition-r1`,
-      created_at: now,
-      updated_at: now,
-    });
-
-    const lifecycleManager = new ReplicaLifecycleManager({
-      nodeId,
-      systemTableCache: lifecycleCache,
-      cdcIntegrationService: createMockCDCService(lifecycleCache),
-      createPartitionService: async (options) => {
-        createdReplicas.push(options.replicaId);
-        const mock = new EventEmitter();
-        mock.replicaId = options.replicaId;
-        mock.initialize = async () => {};
-        mock.shutdown = async () => {};
-        // The exact transport handler the durable ACTIVE is bound to (N2, S-F2).
-        return bindRegisteredReplicaHandler(mock, options);
-      },
-      dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
-    });
-
-    lifecycleManager.initialize();
-
-    const message = {
-      type: 'CREATE_REPLICA',
-      request_id: 'idempotent-test-001',
-      partition_id: 'test-partition',
-      table_name: 'test_table',
-      replica_id: 'idempotent-replica-001',
-      leader_address: 'leader-node',
-      key_range: {start: null, end: null},
-      schema: createTestSchema('test_table'),
-      // The committed-membership stamp its creator produced (owner decision
-      // O1): a join of the group led by test-partition-r1.
-      bootstrap_membership: committedStampFor(['test-partition-r1']),
-    };
-
-    const ack1 = await lifecycleManager.handleCreateReplica(message);
-    t.equal(ack1.status, 'initiated', 'first call should return initiated');
-
-    const created = await waitFor(() => createdReplicas.length === 1, 2000);
-    t.ok(created, 'replica should be created asynchronously');
-
-    const ack2 = await lifecycleManager.handleCreateReplica(message);
-    t.equal(ack2.status, 'already_exists', 'second call should return already_exists');
-
-    t.equal(createdReplicas.length, 1, 'should only create replica once');
   });
 });

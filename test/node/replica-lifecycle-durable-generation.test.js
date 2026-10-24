@@ -1276,10 +1276,6 @@ test('cleanup markers are excluded and destructive paths share one classifier',
     const destructiveSources = [
       fs.readFileSync(new URL('../../src/node/replica-handler-runtime-methods.js',
         import.meta.url), 'utf8'),
-      fs.readFileSync(new URL('../../src/node/replica-lifecycle-manager.js',
-        import.meta.url), 'utf8'),
-      fs.readFileSync(new URL('../../src/node/replica-lifecycle-recovery.js',
-        import.meta.url), 'utf8'),
     ].join('\n');
     t.notMatch(destructiveSources, /unlinkSync\(/u,
       'T7 replica cleanup has no unclassified direct unlink path');
