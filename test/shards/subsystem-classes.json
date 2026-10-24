@@ -28,7 +28,7 @@
   "censusSize": 2461,
   "digest": "fnv1a32-8db296ae",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9ba04e15",
+  "observationDigest": "fnv1a32-8655a726",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -13904,6 +13904,7 @@
         "scripts",
         "scripts/checks",
         "solve",
+        "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/quests",
         "src",
@@ -14681,6 +14682,7 @@
         "scripts/solve",
         "solve",
         "solve/changes",
+        "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/epics/raft-rs-full-cutover",
         "solve/epics/solve-v2",
@@ -14745,6 +14747,7 @@
         "scripts/solve",
         "solve",
         "solve/changes",
+        "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/epics/raft-rs-full-cutover",
         "solve/epics/solve-v2",
@@ -16544,6 +16547,7 @@
         "scripts",
         "scripts/checks",
         "solve",
+        "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/epics/raft-rs-full-cutover",
         "solve/quests",
@@ -16559,6 +16563,7 @@
       "directories": [
         "scripts/checks",
         "solve",
+        "solve/changes/evidence-relocation",
         "solve/epics",
         "solve/quests"
       ]

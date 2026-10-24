@@ -960,3 +960,5 @@ and any host-side lease.
 <!-- END identity-open-refusal-native-prevote 2026-10-05 -->
 
 > Relocated evidence (2026-10-24): bulk evidence this document cites under `solve/` was moved to the `solve-evidence` release at source commit 31ee37359; look up any old path in `solve/quests/lineage-evidence-relocation/evidence/relocation-inventory.json` (bundle, sha256, URL per path).
+
+> Relocation records moved (2026-10-24, correction to the line above): the inventory now lives at `solve/changes/evidence-relocation/lineage-evidence-relocation/relocation-inventory.json` (shards in `relocation-inventory/`, verification in `relocation-verification.json` beside it), moved byte-identical out of the closed quest so it keeps its closed shape.

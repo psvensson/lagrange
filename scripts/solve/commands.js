@@ -30,8 +30,9 @@ import {
 } from './guards.js';
 import {
   EVIDENCE_REF_PREFIX, addingCommits, bundleBasename, deleteSharedEvidenceAsset,
-  parsePathsList, recordRelocation, relocationManifest, relocationRefusals,
-  relocationShard, removeRelocated, sourceBlobs, sourceRefusals, uploadAndVerify,
+  parsePathsList, recordRelocation, relocationManifest, relocationRecordsDir,
+  relocationRefusals, relocationShard, removeRelocated, sourceBlobs, sourceRefusals,
+  uploadAndVerify,
   verifyRelocationBundle, writeRelocationBundle,
 } from './evidence-store.js';
 
@@ -602,8 +603,9 @@ function relocationPlan(root, options) {
     `${quest.id}${LABEL_SUFFIX}`, sourceCommit,
   date: options.date || new Date().toISOString().slice(0, ISO_DATE_LENGTH)});
   const bytes = manifest.files.reduce((total, entry) => total + entry.bytes, 0);
+  const records = path.relative(root, relocationRecordsDir(root, recordTo));
   return {id: quest.id, recordTo, sourceCommit, blobs, manifest, basename,
-    summary: {id: quest.id, recordTo, sourceCommit, bundle: basename,
+    summary: {id: quest.id, recordTo, records, sourceCommit, bundle: basename,
       files: manifest.files.length, bytes}};
 }
 
@@ -620,14 +622,15 @@ function uploadRelocation(root, plan, options, scratch) {
     tmpdir: options.tmpdir,
     text: `relocated ${plan.summary.files} files (${plan.summary.bytes} B) at ` +
       `${plan.sourceCommit} into ${plan.basename}; inventory and verification ` +
-      `under ${plan.recordTo}`});
+      `under ${plan.summary.records}`});
 }
 
 /**
  * Relocate committed bulk evidence to the store: bundle with a manifest,
  * upload through `evidence add`, re-download and verify every member against
  * the manifest and the source-commit blob, record the inventory and the
- * verification on the record quest, and only then `git rm` the paths.
+ * verification in the record quest's relocation records directory (never its
+ * evidence/), and only then `git rm` the paths.
  * `--dry-run` stops after the plan.
  * @param {string} root
  * @param {{id: string, pathsFile: string, sourceCommit: string,
@@ -650,9 +653,9 @@ function evidenceRelocate(root, options) {
       refuse(`${RELOCATE_MESSAGE.UNVERIFIED} ${JSON.stringify({...verification,
         results: undefined})}`);
     }
-    const recorded = recordRelocation({evidenceRoot: evidenceDir(root, plan.recordTo),
-      shard, verification: {...verification, verified},
-      verifiedAt: new Date().toISOString()});
+    const recorded = recordRelocation({
+      recordsRoot: relocationRecordsDir(root, plan.recordTo), shard,
+      verification: {...verification, verified}, verifiedAt: new Date().toISOString()});
     const removed = removeRelocated(root, plan.manifest.files.map((entry) => entry.path));
     return {...plan.summary, uploaded: added.uploaded, entry: added.entry,
       recorded, removed};
