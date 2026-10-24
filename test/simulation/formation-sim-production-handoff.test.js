@@ -65,7 +65,7 @@ async function seedThroughHandoff() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment,
+  const host = await createProductionSeedSimHost(environment,
     {bootIncarnation: await reserveSimulatedBootIncarnation()});
   await runOnSimulationGenerationRoot(GENERATION, () =>
     runOnExecutionNode(NODE_ID, () => host.phaseInfrastructure()));

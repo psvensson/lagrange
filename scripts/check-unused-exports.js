@@ -48,7 +48,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 // 2026-10-05: replay and hysteresis tightened 1422 -> 1416: the participant
 // failure builder retired the executor's duplicate helpers and hysteresis
 // de-exported its managed-split metrics helpers on the combined tree.
-const BASELINE_UNUSED_EXPORT_COUNT = 1416;
+// 2026-10-25: tightened 1416 -> 1413 per checker hint (the rs-raft lineage
+// head already measured 1413).
+const BASELINE_UNUSED_EXPORT_COUNT = 1413;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

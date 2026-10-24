@@ -6,46 +6,25 @@
 // with its own runtime's identity, and the process configuration value must
 // never appear as the current identity of an explicitly constructed runtime.
 //
-// The witness exercises the real SeedInfrastructurePhase: the identity logic
-// under test is production's, and the delegate stub only records what the
-// phase tells it. Router establishment, unified-lifecycle owner init and the
+// The witness exercises the real SeedInfrastructurePhase the bootstrap owner
+// itself built, with the owner's composed delegates, over a seed that entered
+// the original attempt the way production does. The recorder only observes the
+// identity setters the phase calls, so a phase that never set an identity
+// records none. Router establishment, unified-lifecycle owner init and the
 // initial reconciler trigger are made inert, because they are not the subject.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {SeedInfrastructurePhase} from
-  '../../src/bootstrap/phases/seed-infrastructure-phase.js';
+import {createPreparedVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const WRONG_PROCESS_ID = 'wrong-process-id';
 const A = {nodeId: 'node-A', nodeAddress: 'virtual://node-A'};
 const B = {nodeId: 'node-B', nodeAddress: 'virtual://node-B'};
 
-// A recorder, not a reimplementation: every value here is one the phase set.
-function recordingDelegates(runtime) {
-  const recorded = {nodeId: null, nodeAddress: null, messageRouter: null};
-  return {
-    recorded,
-    delegates: {
-      getLogger: () => ({debug() {}, info() {}, warn() {}, error() {}}),
-      getConfig: () => ({wsPort: 0}),
-      getNodeId: () => runtime.nodeId,
-      getNodeAddress: () => recorded.nodeAddress ?? runtime.nodeAddress,
-      getWsPort: () => 0,
-      setNodeId: (value) => {
-        recorded.nodeId = value;
-      },
-      setNodeAddress: (value) => {
-        recorded.nodeAddress = value;
-      },
-      setMessageRouter: (value) => {
-        recorded.messageRouter = value;
-      },
-      setTransport: () => {},
-    },
-  };
-}
+const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
 
 function runtimeFor(runtime) {
   const nodeService = new NodeService();
@@ -54,17 +33,36 @@ function runtimeFor(runtime) {
   return nodeService;
 }
 
-function inertPhase(delegates, nodeService) {
-  const phase = new SeedInfrastructurePhase({delegates, nodeService});
+// The owner's own seed infrastructure phase on its own runtime. A recorder,
+// not a reimplementation: it observes the identity setters the phase calls on
+// the owner's delegates and forwards each one unchanged.
+async function recordedSeedPhase(t, runtime) {
+  const service = await createPreparedVirginSeedBootstrapService({
+    nodeId: runtime.nodeId, nodeAddress: runtime.nodeAddress,
+    nodeService: runtimeFor(runtime),
+  });
+  t.after(() => service.shutdown());
+  service.logger = QUIET;
+  const phase = service.seedInfrastructurePhase;
+  const recorded = {nodeId: null, nodeAddress: null};
+  const {setNodeId, setNodeAddress} = phase.delegates;
+  phase.delegates.setNodeId = (value) => {
+    recorded.nodeId = value;
+    setNodeId(value);
+  };
+  phase.delegates.setNodeAddress = (value) => {
+    recorded.nodeAddress = value;
+    setNodeAddress(value);
+  };
   // Not the subject of this witness.
   phase.createSeedMessageRouter = async () => ({hasSelfConnection: () => false});
   phase.initializeUnifiedLifecycleOwners = async () => {};
   phase.triggerBootstrapReconciler = async () => {};
-  return phase;
+  return {phase, recorded};
 }
 
 test('A1c. two seed infrastructure phases keep their own runtime identity',
-  async () => {
+  async (t) => {
     // The hostile witness. The process ConfigurationManager holds a node id
     // belonging to NEITHER runtime, and two real phases run back to back with
     // nothing reset. Each must end with its own runtime's identity; the
@@ -72,11 +70,11 @@ test('A1c. two seed infrastructure phases keep their own runtime identity',
     ConfigurationManager.resetInstance();
     ConfigurationManager.getInstance().initialize({node: {id: WRONG_PROCESS_ID}});
 
-    const a = recordingDelegates(A);
-    const b = recordingDelegates(B);
-    await inertPhase(a.delegates, runtimeFor(A)).phaseInfrastructure();
+    const a = await recordedSeedPhase(t, A);
+    const b = await recordedSeedPhase(t, B);
+    await a.phase.phaseInfrastructure();
     // No reset between them: that is the whole point.
-    await inertPhase(b.delegates, runtimeFor(B)).phaseInfrastructure();
+    await b.phase.phaseInfrastructure();
 
     assert.equal(a.recorded.nodeId, A.nodeId,
       'phase A ends with runtime A\'s identity');
@@ -90,17 +88,17 @@ test('A1c. two seed infrastructure phases keep their own runtime identity',
   });
 
 test('MUTATION: a phase that reacquires the singleton collapses the identities',
-  async () => {
+  async (t) => {
     // The revert at the most central consumer: ignore the supplied runtime
     // and resolve NodeService.getInstance(), as the phase did before.
     ConfigurationManager.resetInstance();
     ConfigurationManager.getInstance().initialize({node: {id: WRONG_PROCESS_ID}});
     NodeService.resetInstance();
 
-    const a = recordingDelegates(A);
-    const b = recordingDelegates(B);
-    const phaseA = inertPhase(a.delegates, runtimeFor(A));
-    const phaseB = inertPhase(b.delegates, runtimeFor(B));
+    const a = await recordedSeedPhase(t, A);
+    const b = await recordedSeedPhase(t, B);
+    const phaseA = a.phase;
+    const phaseB = b.phase;
     phaseA.nodeService = NodeService.getInstance();
     phaseB.nodeService = NodeService.getInstance();
     await phaseA.phaseInfrastructure();

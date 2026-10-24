@@ -30,7 +30,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {createPreparedVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {resolveHostedReplicaAuthorities} from
   '../../src/bootstrap/shared/hosted-replica-authorities.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -195,30 +196,42 @@ const settle = (delayMs) =>
   new Promise((resolve) => hostSetTimeout(resolve, delayMs));
 
 /**
- * A bootstrap service composed as lagrange-runtime-startup.js composes it:
- * its own node runtime, and no clock supplied to that runtime.
- * @return {BootstrapService}
+ * A seed bootstrap service on the given node runtime, entered into the
+ * original seed attempt as production enters it before its first phase, and
+ * shut down after the test.
+ * @param {Object} t - the test context.
+ * @param {NodeService} nodeService - the node runtime it hosts on.
+ * @return {Promise<BootstrapService>}
  */
-function productionBootstrapService() {
-  return new BootstrapService({
+async function seedBootstrapService(t, nodeService) {
+  const bootstrap = await createPreparedVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
-    nodeService: new NodeService(),
+    nodeService,
   });
+  t.after(() => bootstrap.shutdown());
+  return bootstrap;
+}
+
+/**
+ * A bootstrap service composed as lagrange-runtime-startup.js composes it:
+ * its own node runtime, and no clock supplied to that runtime.
+ * @param {Object} t - the test context.
+ * @return {Promise<BootstrapService>}
+ */
+function productionBootstrapService(t) {
+  return seedBootstrapService(t, new NodeService());
 }
 
 /**
  * The same composition on a node runtime that WAS supplied a clock - the
  * simulator's shape.
+ * @param {Object} t - the test context.
  * @param {SuppliedClock} clock - the runtime's clock.
- * @return {BootstrapService}
+ * @return {Promise<BootstrapService>}
  */
-function suppliedClockBootstrapService(clock) {
-  return new BootstrapService({
-    bootIncarnation: 1,
-    nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
-    nodeService: new NodeService({timeSource: clock}),
-  });
+function suppliedClockBootstrapService(t, clock) {
+  return seedBootstrapService(t, new NodeService({timeSource: clock}));
 }
 
 /**
@@ -397,9 +410,9 @@ function unclockedReconciler() {
   });
 }
 
-test('a seed-hosted replica schedules like a production replica', () =>
+test('a seed-hosted replica schedules like a production replica', (t) =>
   withHostedReplicas(async (open) => {
-    const bootstrap = productionBootstrapService();
+    const bootstrap = await productionBootstrapService(t);
     const authorities =
       resolveHostedReplicaAuthorities(bootstrap.seedPartitionsPhase.delegates);
     assert.equal(authorities.timeSource, undefined,
@@ -427,9 +440,9 @@ test('a seed-hosted replica schedules like a production replica', () =>
       'a seed-hosted message-group replica hops the same way');
   }));
 
-test('a seed-hosted and a joiner-hosted replica schedule alike', () =>
+test('a seed-hosted and a joiner-hosted replica schedule alike', (t) =>
   withHostedReplicas(async (open) => {
-    const bootstrap = productionBootstrapService();
+    const bootstrap = await productionBootstrapService(t);
     // What a seed phase spreads, against what every non-seed construction
     // site passes: on one production node these must not differ.
     const hosted = resolveHostedReplicaAuthorities(
@@ -461,9 +474,9 @@ test('a seed-hosted and a joiner-hosted replica schedule alike', () =>
   }));
 
 test('a supplied clock still owns hosted replica and reconciler scheduling',
-  () => withHostedReplicas(async (open) => {
+  (t) => withHostedReplicas(async (open) => {
     const clock = new SuppliedClock();
-    const bootstrap = suppliedClockBootstrapService(clock);
+    const bootstrap = await suppliedClockBootstrapService(t, clock);
     const authorities =
       resolveHostedReplicaAuthorities(bootstrap.seedPartitionsPhase.delegates);
     assert.equal(authorities.timeSource, clock,
@@ -514,9 +527,9 @@ test('a supplied clock still owns hosted replica and reconciler scheduling',
 // without a macrotask between actions a bootstrap batch starves the node's
 // own timers. setImmediate is that boundary in production.
 test('a production reconciler takes each per-action turn on setImmediate',
-  async () => {
+  async (t) => {
     LoggingService.getInstance().initialize({level: LOG_LEVEL});
-    const bootstrap = productionBootstrapService();
+    const bootstrap = await productionBootstrapService(t);
     const phase = bootstrap.seedInfrastructurePhase;
     await phase.initializeUnifiedLifecycleOwners();
     try {

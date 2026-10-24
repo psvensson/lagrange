@@ -1,7 +1,10 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {
-  BootstrapService,
-} from '../../src/bootstrap/bootstrap-service.js';
+import {createPreparedVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
+import {originalSeedPeerAddresses} from
+  '../../src/bootstrap/seed-original-allocation-declaration.js';
+import {INITIAL_MESSAGE_GROUP_ID, INITIAL_MESSAGE_GROUP_REPLICA_IDS} from
+  '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   NodeJoiningService,
 } from '../../src/bootstrap/node-joining-service.js';
@@ -19,11 +22,14 @@ const silentLogger = {
 };
 
 test('BootstrapService routes replica lifecycle through unified adapters', async (t) => {
-  const service = new BootstrapService({
+  // The seed phases consume the original seed attempt production enters
+  // before its first phase.
+  const service = await createPreparedVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId: 'seed-node-1',
     nodeAddress: 'ws://localhost:8080',
   });
+  t.teardown(() => service.shutdown());
   service.logger = silentLogger;
 
   let createCount = 0;
@@ -44,15 +50,25 @@ test('BootstrapService routes replica lifecycle through unified adapters', async
   await service.seedInfrastructurePhase
     .initializeUnifiedLifecycleOwners();
 
+  // One member of the seed's original allocation, queued with the options
+  // the seed message-groups phase queues it with.
+  const replicaIds = [...INITIAL_MESSAGE_GROUP_REPLICA_IDS];
+  const [replicaId] = replicaIds;
   const descriptor = service.seedInfrastructurePhase
     .createBootstrapServiceDescriptor(
       UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-      'mg-1-r0',
+      replicaId,
     );
   service.seedInfrastructurePhase
     .queueBootstrapServiceReplica(descriptor, {
       serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-      replicaId: 'mg-1-r0',
+      groupId: INITIAL_MESSAGE_GROUP_ID,
+      replicaId,
+      replicaIds,
+      replicaIndex: 0,
+      peerAddresses: originalSeedPeerAddresses(service.nodeId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP, replicaIds),
+      deferElection: true,
     });
 
   await service.seedInfrastructurePhase

@@ -346,7 +346,7 @@ test('Bootstrap sequence - server starts before services', async (t) => {
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,
@@ -420,7 +420,7 @@ test('BootstrapService - activates message-group rows after seed registration',
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = new BootstrapService({
+    const bootstrap = await createVirginSeedBootstrapService({
       bootIncarnation: 1,
       nodeId: 'bootstrap-activate-node',
       nodeAddress: 'ws://localhost:12001',
@@ -454,6 +454,11 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.initializeReplicaHandler = () => {
       order.push('replica-handler');
     };
+    // The registration step acquires these directly since e29e46abf.
+    bootstrap.acquireReplicaHandler = () => {
+      order.push('replica-handler');
+    };
+    bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
     bootstrap.initializeMessageGroupServiceHandler = () => {
       order.push('message-group-handler');
       bootstrap.messageGroupServiceHandler = {};
@@ -515,7 +520,7 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = new BootstrapService({
+    const bootstrap = await createVirginSeedBootstrapService({
       bootIncarnation: 1,
       nodeId: 'bootstrap-local-admin-node',
       nodeAddress: 'ws://localhost:12002',
@@ -539,6 +544,9 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     bootstrap.seedRegistrationPhase.phaseRegistration = async () => {};
     bootstrap.seedCacheHydrationPhase.phaseCacheHydration = async () => {};
     bootstrap.initializeReplicaHandler = () => {};
+    // The registration step acquires these directly since e29e46abf.
+    bootstrap.acquireReplicaHandler = () => {};
+    bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
     bootstrap.initializeMessageGroupServiceHandler = () => {
       bootstrap.messageGroupServiceHandler = {};
     };
@@ -587,7 +595,7 @@ test('Bootstrap sequence - self-connection established before services', async (
   const wsPort = getRandomPort();
   const nodeId = `test-node-${Date.now()}`;
 
-  const bootstrap = new BootstrapService({
+  const bootstrap = await createVirginSeedBootstrapService({
     bootIncarnation: 1,
     nodeId,
     nodeAddress: `ws://localhost:${wsPort}`,

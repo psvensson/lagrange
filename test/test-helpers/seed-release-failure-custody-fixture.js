@@ -7,11 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {AddressManager} from '../../src/address/address-manager.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BOOTSTRAP_EVENT} from '../../src/bootstrap/bootstrap-constants.js';
-import {resolveAutoRejoinStartupDecision} from '../../src/bootstrap/rejoin-hints.js';
-import {readSeedStartupStorageAdmission} from
-  '../../src/bootstrap/seed-startup-storage-admission.js';
 import {INITIAL_PARTITION_IDS} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -32,10 +28,14 @@ import {
   PARTICIPANT_RELEASE_TYPE,
 } from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../src/storage/data-directory-process-owner.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
+  createRetainedSeedBootstrapService,
   createVirginSeedBootstrapService,
   getUniquePort,
+  seedStartupAuthorityOf,
   initializeTestEnvironment,
 } from '../integration/helpers/cluster-test-helpers.js';
 
@@ -223,23 +223,21 @@ async function restartRetainedSeed(host) {
   // This new local bootstrap lifetime consumes the real readers. It is not
   // public process-lock reentry or proof that retained startup can succeed.
   await host.bootstrap.nodeService.shutdown();
-  const startupServicesAdmission = await readSeedStartupStorageAdmission(
-    host.directory, (acquisition) => acquisition);
-  const membership = await resolveAutoRejoinStartupDecision({
-    dataDir: host.directory, nodeId: NODE_ID, nodeAddress: host.nodeAddress,
-  });
-  host.retained = {startupServicesAdmission, membership};
-  assert.equal(membership.mode, 'seed',
-    `the actual membership reader must select seed ingress: ${membership.state}`);
-  const replacement = new BootstrapService({
+  const replacement = await createRetainedSeedBootstrapService({
     nodeId: NODE_ID, nodeAddress: host.nodeAddress, wsPort: host.wsPort,
     bootIncarnation: host.bootstrap.bootIncarnation + 1,
     nodeService: new NodeService(), config: SEED_CONFIG,
     dataDir: host.directory,
     dataDirectoryManager: host.bootstrap.dataDirectoryManager,
-    startupServicesAdmission,
-    membershipOwnerOutcome: membership.membershipOwnerOutcome,
+    // The same process still holds the directory: both bootstrap lifetimes
+    // consume the one live process owner, as production's process does.
+    dataDirectoryProcessOwner: host.directoryOwner,
   });
+  const authority = seedStartupAuthorityOf(replacement);
+  host.retained = {startupServicesAdmission: authority.startupServicesAdmission,
+    membership: authority.startupDecision};
+  assert.equal(host.retained.membership.mode, 'seed',
+    `the actual membership reader must select seed ingress: ${host.retained.membership.state}`);
   host.replacement = replacement;
   observeCreationRefusals(host, replacement);
   host.restartResult = await replacement.bootstrap();
@@ -279,8 +277,10 @@ async function closeFixture(host) {
       `retained directory ${host.directory}`));
   }
   if (failures.length > 0) {
+    // As production's cleanup ledger does, a failed cleanup retains custody.
     throw new AggregateError(failures, `Fixture cleanup failed; retained ${host.directory}`);
   }
+  host.directoryOwner?.release();
   LogsTableService.resetInstance();
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
@@ -294,6 +294,7 @@ async function closeFixture(host) {
 async function withSeedReleaseFailureCustody(measure) {
   const host = {
     directory: fs.mkdtempSync(path.join(os.tmpdir(), 'seed-release-custody-')),
+    directoryOwner: null,
     bootstrap: null, replacement: null, handler: null, selected: null,
     deliveries: [], restorations: [], lifecycle: [], closeCalls: [],
     observerFailures: [], creationRefusals: [], failureEvents: [],
@@ -309,9 +310,13 @@ async function withSeedReleaseFailureCustody(measure) {
     });
     host.wsPort = getUniquePort();
     host.nodeAddress = `ws://localhost:${host.wsPort}`;
+    // The process data directory owner, acquired as production startup
+    // acquires it and held across both local bootstrap lifetimes.
+    host.directoryOwner = acquireDataDirectoryProcessOwner(host.directory);
     host.bootstrap = await createVirginSeedBootstrapService({
       nodeId: NODE_ID, nodeAddress: host.nodeAddress, wsPort: host.wsPort,
       dataDir: host.directory, config: SEED_CONFIG,
+      dataDirectoryProcessOwner: host.directoryOwner,
       routerFactory: (options) => createFaultRouter(host, options),
     });
     host.bootstrap.on(BOOTSTRAP_EVENT.FAILED,

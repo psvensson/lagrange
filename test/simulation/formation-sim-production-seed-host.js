@@ -18,11 +18,8 @@ import {reserveSimulatedBootIncarnation} from
 import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
-import {createVirginSeedDataDirectoryManager} from
+import {createVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
-import {DURABLE_EVIDENCE_STATE} from
-  '../../src/bootstrap/rejoin-hints-constants.js';
 import {
   BOOTSTRAP_PHASE,
 } from '../../src/bootstrap/bootstrap-constants.js';
@@ -320,9 +317,9 @@ function leaderActivationSchedulers(bootstrap) {
  * @param {Object} options - {bootIncarnation (required; reserved through
  *   the boot incarnation owner), compositionRegistry}; precomposed
  *   infrastructure is refused.
- * @return {Object} the seed host.
+ * @return {Promise<Object>} the seed host.
  */
-function createProductionSeedSimHost(environment, options = {}) {
+async function createProductionSeedSimHost(environment, options = {}) {
   refusePrecomposedInfrastructure(options);
   const {
     nodeId, nodeAddress, wsPort, network, transcript, connectionEnvironment,
@@ -333,20 +330,18 @@ function createProductionSeedSimHost(environment, options = {}) {
   compositionRegistry.claim(nodeId, PRODUCTION_BOOTSTRAP_COMPOSER);
 
   const dataDir = mkdtempSync(join(tmpdir(), SIM_SEED_DATA_DIR_PREFIX));
-  const bootstrap = new BootstrapService({
+  // The simulated seed is virgin: an empty data directory. Its startup
+  // authorities - the data directory process owner, the startup membership
+  // outcome and the durable SERVICES admission - are the production owners'
+  // own answers, read in production startup order by the one virgin seed
+  // fixture, which also releases custody after a successful shutdown.
+  const bootstrap = await createVirginSeedBootstrapService({
     nodeId, nodeAddress, wsPort,
     dataDir,
-    dataDirectoryManager: createVirginSeedDataDirectoryManager(null, dataDir),
     // Acquired by the caller through the boot incarnation owner
     // (reserveSimulatedBootIncarnation), exactly as production startup does.
     bootIncarnation: options.bootIncarnation,
     nodeService: environment.nodeService, routerFactory, randomSource,
-    // The simulated seed is virgin: an empty data directory, so no durable SERVICES
-    // identity. Production reads this at startup (readSeedStartupStorageAdmission).
-    startupServicesAdmission: Object.freeze({
-      state: DURABLE_EVIDENCE_STATE.MISSING, rows: [], conflicting: false,
-      empty: true,
-    }),
   });
   // A seed phase is production's work, and production already owns the
   // boundary it is entered through: StartupPipelineRunner.run() is where
@@ -550,6 +545,10 @@ function createProductionSeedSimHost(environment, options = {}) {
       transcript.record('PHASE_INFRASTRUCTURE_STARTED', {
         nodeId, phase: PHASE_INFRASTRUCTURE,
       });
+      // Production enters the original seed attempt before the first seed
+      // phase (BootstrapService.bootstrap and startSeedNode), outside the
+      // pipeline runner; every phase consumes that one attempt.
+      await bootstrap.prepareOriginalSeedAttempt();
       await runSeedPhase(PHASE_INFRASTRUCTURE,
         () => bootstrap.seedInfrastructurePhase.phaseInfrastructure());
       if (bootstrap.messageRouter) {
@@ -726,7 +725,7 @@ function scenarioPhases(host, reach) {
 // armed and its ledger cleared, one generation named, the scenario's
 // surroundings, one node environment, the seed host on it, and the host-load
 // contract the closure authority will be given.
-function beginSeedScenario({
+async function beginSeedScenario({
   nodeId, nodeAddress, wsPort, hostLoad, observer, charging = null, generation,
   bootIncarnation,
 }) {
@@ -749,7 +748,7 @@ function beginSeedScenario({
     generation,
     scenario,
     environment,
-    host: createProductionSeedSimHost(environment, {bootIncarnation}),
+    host: await createProductionSeedSimHost(environment, {bootIncarnation}),
     owners: hostLoadOwners(hostLoad),
   };
 }
@@ -878,7 +877,7 @@ async function runSeedScenarioInRoot({
   charging, throughMessageGroups, throughPartitions, throughHandoff,
   generation, bootIncarnation,
 }) {
-  const {scenario, host, owners, environment} = beginSeedScenario({
+  const {scenario, host, owners, environment} = await beginSeedScenario({
     nodeId, nodeAddress, wsPort, hostLoad, observer, charging, generation,
     bootIncarnation,
   });
