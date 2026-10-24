@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2450,
+    "ordinary": 2451,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-bdaa0c93",
+  "censusSize": 2468,
+  "digest": "fnv1a32-dfdb1a4d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -157,6 +157,7 @@
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "ordinary",
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "ordinary",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "ordinary",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "ordinary",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "ordinary",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "ordinary",
     "test/bootstrap/join-cleanup.property.test.js": "ordinary",
