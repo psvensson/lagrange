@@ -7,11 +7,11 @@
  */
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {GIT_OUTPUT_BOUND, execGit} from '../../scripts/checks/git-invocation.js';
 import {
   alwaysLoadClosure, declaredRules, registeredVerbs, unregisteredOperationReferences,
 } from '../../scripts/checks/check-steering-diet.js';
@@ -26,7 +26,6 @@ const DISPOSITION = 'solve/epics/solve-v2/steering-disposition.json';
 const PACKAGE = 'package.json';
 const ROUTER_DIR = 'docs/steering';
 const RELOCATION_HEAD = 'c0670a2af496aa246a8c5ccd2d23efbe9e54fb52';
-const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 const PROOF_LADDERS_MD = 'test/guidelines/proof-ladders.md';
 const REGRESSION_POLICY_MD = 'test/guidelines/regression-policy.md';
 // A disposition and the bucket it lands in are one decision, recorded twice.
@@ -225,8 +224,8 @@ test('the recorded relocation delivered the material to every destination', () =
   }
   assert.ok(claimed.size > 0);
   for (const [destination, lines] of claimed) {
-    const relocated = execFileSync('git', ['show', `${RELOCATION_HEAD}:${destination}`],
-      {encoding: 'utf8', maxBuffer: GIT_MAX_BUFFER});
+    const relocated = execGit(['show', `${RELOCATION_HEAD}:${destination}`],
+      {encoding: 'utf8', bound: GIT_OUTPUT_BOUND.COMMAND});
     const held = countLines(relocated);
     assert.ok(held + RELOCATION_ALLOWANCE >= lines,
       `${destination} received ${held} lines of the ${lines} claimed at relocation`);
