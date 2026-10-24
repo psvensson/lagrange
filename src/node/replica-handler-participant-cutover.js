@@ -5,7 +5,6 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {TABLES} from '../constants/tables.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
-import {RAFT_LEADERSHIP_TRANSFER_SUCCESSOR} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
 import {raiseParticipantCutoverPause, readParticipantReleaseFacts} from
   '../partition/partition-participant-transaction-pause.js';
@@ -142,7 +141,7 @@ function controlReleaseAnswerValid(answer, targetBuildDigest) {
     Array.isArray(answer.census) &&
     answer.census.length > 0 && answer.census.every((facts) =>
     facts?.outcome === OUTCOME.OBSERVED && facts.buildDigest === targetBuildDigest &&
-    facts.origin !== null && facts.connection?.servedLegacy === false &&
+    facts.origin !== null &&
     facts.queryCensus !== null &&
     facts.queryCensus.enforcement?.state ===
       TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED);
@@ -216,35 +215,6 @@ async function proveCurrentControlCohort(handler, service, request,
   const refusal = resumed.find((answer) => answer.outcome !== OUTCOME.RESUMED);
   return refusal ?? releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
     {release, census: pausedCensus});
-}
-
-async function reopenCohort(handler, service, request, release, attempt, census) {
-  // Reopen followers before transferring leadership. The transfer answer
-  // means requested; a fresh attempt must observe the new term and cohort.
-  const dirtyFollowers = census.filter((facts) => facts.connection.servedLegacy &&
-    facts.generation.replicaId !== service.replicaId);
-  for (const facts of dirtyFollowers) {
-    const reopened = await askParticipantRelease(handler, facts.generation.nodeId,
-      requestFor(release, attempt, ACTION.REOPEN, facts));
-    if (reopened.outcome !== OUTCOME.REOPENED) return reopened;
-  }
-  if (dirtyFollowers.length > 0) return attemptRefusal(request, OUTCOME.STALE);
-  const own = census.find((facts) => facts.generation.replicaId === service.replicaId);
-  if (!own.connection.servedLegacy) return null;
-  if (own.membership.voters.length > 1) {
-    const voterIds = own.membership.voters.map((id) => own.membership.identities[id]);
-    const successor = census.find((facts) => facts.generation.replicaId !== service.replicaId &&
-      voterIds.includes(facts.generation.replicaId) && facts.connection.servedLegacy === false);
-    if (!successor) return attemptRefusal(request, OUTCOME.REOPEN_REQUIRED);
-    const transfer = await service.requestLeadershipTransfer({
-      successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-      replicaIdentity: successor.generation.replicaId});
-    return attemptRefusal(request, OUTCOME.STALE, {transfer});
-  }
-  const reopened = await askParticipantRelease(handler, handler.nodeId,
-    requestFor(release, attempt, ACTION.REOPEN, own));
-  return reopened.outcome === OUTCOME.REOPENED ?
-    attemptRefusal(request, OUTCOME.STALE, {reopened}) : reopened;
 }
 
 function localReleaseRefusal(handler, service, request) {
@@ -321,8 +291,6 @@ async function runPausedCutover(handler, service, request, release, attempt, coh
   const currentControl = await proveCurrentControlCohort(handler, service,
     request, release, attempt, census);
   if (currentControl !== null) return currentControl;
-  const reopened = await reopenCohort(handler, service, request, release, attempt, census);
-  if (reopened !== null) return reopened;
   const queryRelease = await settleQueryRelease(handler, service, release, attempt,
     cohort, census);
   if (queryRelease === null) {

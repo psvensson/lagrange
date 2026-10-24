@@ -136,7 +136,6 @@ function releaseFactsDefect(release, facts, options = {}) {
   if (!isReleaseDrained(facts.work)) return OUTCOME.DRAIN_PENDING;
   if (facts.topology !== null) return OUTCOME.TOPOLOGY_PENDING;
   if (!rowidValid(facts.rowid)) return OUTCOME.ROWID_CEILING_REACHED;
-  if (facts.connection.servedLegacy !== false) return OUTCOME.REOPEN_REQUIRED;
   if (facts.queryCensus !== null) {
     const query = facts.queryCensus;
     const invocationSettled = query.state === TRANSACTION_RELEASE_CENSUS_STATE.HELD &&

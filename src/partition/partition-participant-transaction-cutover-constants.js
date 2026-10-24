@@ -5,23 +5,21 @@ const PARTICIPANT_RELEASE_TYPE = 'PARTICIPANT_RELEASE';
 const PARTICIPANT_RELEASE_RESULT_FIELD = 'releaseResult';
 const PARTICIPANT_RELEASE_VERSION = 1;
 const PARTICIPANT_RELEASE_ACTION = Object.freeze({
-  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause',
-  REOPEN: 'reopen', ENABLE: 'enable',
+  RELEASE: 'release', INSPECT: 'inspect', PAUSE: 'pause', ENABLE: 'enable',
   OBSERVE_APPLIED_POSITION: 'observe_applied_position', RESUME: 'resume',
 });
 const PARTICIPANT_CUTOVER_PHASE = Object.freeze({
-  INSPECT: 'inspect', PAUSE: 'pause', REOPEN: 'reopen',
+  INSPECT: 'inspect', PAUSE: 'pause',
   ROWID_CENSUS: 'rowid_census', ENABLE: 'enable', REPLICA_CENSUS: 'replica_census',
   RESUME: 'resume',
 });
 const PARTICIPANT_CUTOVER_OUTCOME = Object.freeze({
   CUT_OVER: 'cut_over', OBSERVED: 'observed', PAUSED: 'paused',
-  DRAINED: 'drained', REOPENED: 'reopened', RESUMED: 'resumed',
+  DRAINED: 'drained', RESUMED: 'resumed',
   NOT_LEADER: 'not_leader', UNAVAILABLE: 'release_fact_unavailable',
   INVALID: 'release_request_invalid', STALE: 'release_generation_changed',
   BUILD_MISMATCH: 'release_build_mismatch', DRAIN_PENDING: 'release_drain_pending',
-  TOPOLOGY_PENDING: 'release_topology_pending', REOPEN_REQUIRED: 'reopen_required',
-  REOPEN_REFUSED: 'release_reopen_refused', OPERATOR_REQUIRED: 'release_operator_required',
+  TOPOLOGY_PENDING: 'release_topology_pending', OPERATOR_REQUIRED: 'release_operator_required',
   ROWID_CEILING_REACHED: 'rowid_ceiling_reached', ENABLE_REFUSED: 'enable_refused',
   ORIGIN_REPLICATION_PENDING: 'origin_replication_pending',
   QUERY_DRAIN_PENDING: 'query_transaction_drain_pending',
@@ -33,6 +31,7 @@ const PARTICIPANT_RELEASE_REASON = Object.freeze({
 });
 const PARTICIPANT_RELEASE_MISSING_FACT = Object.freeze({
   COMMITTED_REPLICA_ROUTES: 'committed_replica_routes',
+  CURRENT_REPLICA_GENERATION: 'current_replica_generation',
   CURRENT_CONTROL_OWNER: 'current_control_owner_fact',
   FRESH_STORAGE_OR_OPERATOR_AUTHORITY: 'fresh_storage_or_operator_authority',
   HOSTED_PARTITION: 'hosted_partition',
