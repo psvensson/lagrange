@@ -127,3 +127,32 @@ Required workflow:
 6. For CDC-replicated system-table lifecycle changes, include at least one
    regression that fails when writes are keyed by non-primary predicates instead
    of canonical primary key.
+
+## Test Doubles Consume the Owner (One Version of Every Shape)
+
+A test double that stands in for an owner (a consensus port, a message router,
+a lifecycle manager, a participant-release protocol, a CDC subscriber, a
+transport delivery outcome) must consume the owner's own builder or the one
+owner-provided fixture for that shape. It never restates the owner's shape by
+hand. A hand-written copy of an owner's answer is a second version of that
+logic: when the owner changes, the copy keeps the old contract and the test
+proves the past (R01, R03, R11).
+
+Rules:
+
+1. Build owner-shaped values through the owner's exported builder (for example
+   a transport delivery outcome through the transport owner's builder, a CDC
+   receipt through the CDC outcome owner) or through the one fixture under
+   `test/test-helpers/` or the owner's `test/<area>/*-fixture.js` that wraps
+   it. If neither exists, add exactly one fixture and use it everywhere; never
+   a per-test copy.
+2. A fake of a port or router fakes the transport or the seam the real owner
+   documents for that purpose (for example a port's committed-membership
+   handler), not the owner's decisions. Decisions stay with the real owner
+   composed into the test.
+3. When a verifier or a census finds two definitions of one shape, or a double
+   that re-implements an owner's answers, that is a unification finding to
+   record and fix at the owner, not a note.
+4. Owner directive (2026-10-24): no legacy anywhere; exactly one version of
+   any given logic in the codebase. Aliases, compatibility branches and
+   parallel implementations are defects to remove at the owner.
