@@ -25,6 +25,24 @@ function handlerIdentityApi(handlers) {
 }
 
 /**
+ * The handler registry of a delivery-decorating transport double, forwarded
+ * to the transport it wraps: registration and the exact-identity API, so a
+ * double that only reshapes `deliver` still consumes the owner's identity
+ * contract instead of restating it (and never removes by address).
+ * @param {Object} inner - The wrapped transport (register,
+ *   getRegisteredHandler, unregisterExact).
+ * @return {Object} {register, getRegisteredHandler, unregisterExact}.
+ */
+function forwardHandlerRegistry(inner) {
+  return {
+    register: (address, handler) => inner.register(address, handler),
+    getRegisteredHandler: (address) => inner.getRegisteredHandler(address),
+    unregisterExact: (address, handler) =>
+      inner.unregisterExact(address, handler),
+  };
+}
+
+/**
  * A minimal in-memory transport with the identity API.
  * @return {Object}
  */
@@ -104,6 +122,7 @@ export {
   bindRegisteredReplicaHandler,
   createIdentityTransport,
   createInProcessMockTransport,
+  forwardHandlerRegistry,
   handlerIdentityApi,
   withRegisteredActivationHandler,
 };

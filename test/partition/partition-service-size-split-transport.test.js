@@ -67,6 +67,8 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 
 beforeEach(() => {
@@ -840,8 +842,7 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
   async (t) => {
     const deliveries = [];
     const mockTransport = {
-      register: () => {},
-      unregister: () => {},
+      ...createIdentityTransport(),
       deliver: async (_address, _payload, options) => {
         deliveries.push(options);
         return {acknowledged: true};
@@ -897,8 +898,7 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
   'sender address', async (t) => {
   const deliveries = [];
   const mockTransport = {
-    register: () => {},
-    unregister: () => {},
+    ...createIdentityTransport(),
     deliver: async (_address, _payload, options) => {
       deliveries.push(options);
       return {acknowledged: true};
