@@ -50,6 +50,7 @@ import {
   settleTicks, shutdownAll, startLeader, startReplica, temporaryDbPath, track,
   transactionOperationOutcomes,
 } from '../test-helpers/participant-transaction-fixture.js';
+import {acknowledgingCdcSubscriber} from '../test-helpers/acknowledging-cdc-subscriber.js';
 
 const BOUND = PARTITION_CDC_OBLIGATION_BOUND;
 const DRIVE = PARTITION_CDC_OBLIGATION_DRIVE_STATE;
@@ -67,19 +68,15 @@ beforeEach(resetFixtureSingletons);
 afterEach(clearFixtureSingletons);
 
 // A recording subscriber: every delivered event, in order; `ready` gates it.
+// It answers the owner's committed receipt (the one acknowledging fixture), so
+// an acknowledgement is the delivery owner's decision, never a refusal.
 function recordingSubscriber(options = {}) {
-  const subscriber = {
-    ready: options.ready ?? true,
-    events: [],
-    applied: new Map(),
-    duplicates: 0,
-    canAcceptCDCEvent() {
-      return subscriber.ready ? true :
-        {ready: false, retryAfterMs: RETRY_AFTER_MS, reason: 'consumer not ready'};
-    },
-    async handleCDCEvent(event) {
-      subscriber.events.push(event);
-      // The consumer's de-duplication contract: identity, never a count.
+  const subscriber = acknowledgingCdcSubscriber({
+    canAcceptCDCEvent: () => subscriber.ready ? true :
+      {ready: false, retryAfterMs: RETRY_AFTER_MS, reason: 'consumer not ready'},
+    onEvent: (event) => {
+      // The consumer's de-duplication contract: identity, never a count. A
+      // duplicate is acknowledged again, applied once.
       const identity = buildEventIdentity(event);
       if (subscriber.applied.has(identity)) {
         subscriber.duplicates += 1;
@@ -87,8 +84,9 @@ function recordingSubscriber(options = {}) {
       }
       subscriber.applied.set(identity, event);
     },
-  };
-  return subscriber;
+  });
+  return Object.assign(subscriber, {ready: options.ready ?? true, applied: new Map(),
+    duplicates: 0});
 }
 const isAck = (entry) => entry.type === ACK;
 const acksOf = (proposed) => proposed.filter(isAck);
@@ -635,18 +633,18 @@ test('TX1 CDC O11: a stale subscriber completion cannot acknowledge for a new te
     const {leader, proposed} = await startLeader({timeSource});
     let finishOld;
     let calls = 0;
-    const consumer = {
-      async handleCDCEvent() {
-        calls += 1;
-        if (calls === 1) {
-          await new Promise((resolve) => {
-            finishOld = resolve;
-          });
-        } else {
-          throw new Error('successor subscriber is unavailable');
-        }
-      },
-    };
+    // The old completion answers the owner's committed receipt, so only the
+    // tenure guard can keep it from acknowledging.
+    const consumer = acknowledgingCdcSubscriber({onEvent: async () => {
+      calls += 1;
+      if (calls === 1) {
+        await new Promise((resolve) => {
+          finishOld = resolve;
+        });
+      } else {
+        throw new Error('successor subscriber is unavailable');
+      }
+    }});
     try {
       await leader.subscribeToCDCWithHandshake(consumer, {subscriberId: 'c11'});
       commitHandBuilt(leader, identityOf('c11'), [operationOf(ROW)]);
@@ -657,6 +655,11 @@ test('TX1 CDC O11: a stale subscriber completion cannot acknowledge for a new te
       leader.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED);
       await settleTicks();
       finishOld();
+      await settleTicks();
+      // The successor's drive joined the old invocation; once its cleanup
+      // closes, the lane redrives on its retry timer (still before the flush
+      // deadline), not in the same turn.
+      timeSource.advance(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS);
       await settleTicks();
       const beforeDeadline = {
         retried: calls > 1,
@@ -802,9 +805,12 @@ test('TX1 CDC O17: provisional metadata advances formation without acknowledging
     const seen = [];
     let provisional = true;
     try {
+      // Provisional first; then the owner's committed receipt through the one
+      // acknowledging fixture (was: undefined, which the receipt gate refuses).
+      const acknowledging = acknowledgingCdcSubscriber();
       await leader.subscribeToCDCWithHandshake(async (event) => {
         seen.push(event.data.id);
-        return provisional ? buildProvisionalCdcOutcome([event], 50) : undefined;
+        return provisional ? buildProvisionalCdcOutcome([event], 50) : acknowledging(event);
       });
       commitHandBuilt(leader, identityOf('c17'), [operationOf(ROW), operationOf(ROW_2)]);
       await settleTicks();
