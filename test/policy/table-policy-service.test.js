@@ -7,6 +7,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
 import {POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
+import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
   STORAGE_PLACEMENT_DEFAULT,
@@ -366,6 +367,35 @@ test('TablePolicyService - updateTablePolicy rejects invalid updates',
       'Should not have written to CDC');
     t.end();
   });
+
+test('TablePolicyService - updateTablePolicy refuses an external CDC request typed, ' +
+  'before any write (owner decision D2)', async (t) => {
+  const mockEngine = createMockSqlEngine({
+    tables: {'table-1': {table_id: 'table-1', table_policies: '{}'}},
+  });
+  const mockCDC = createMockCDCService();
+  const service = new TablePolicyService({
+    sqlQueryEngine: mockEngine,
+    cdcIntegrationService: mockCDC,
+  });
+  const refusals = [];
+  for (const updates of [{externalCdcAllowed: true},
+    {changeDataCapture: {externalCdcAllowed: true}}]) {
+    try {
+      await service.updateTablePolicy('table-1', updates);
+      refusals.push(null);
+    } catch (error) {
+      refusals.push(error.code ?? error.message);
+    }
+  }
+  await service.updateTablePolicy('table-1', {externalCdcAllowed: false});
+  t.same({refusals, writes: mockCDC.updates.length}, {
+    refusals: [CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED,
+      CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED],
+    writes: 1,
+  }, 'both request shapes are refused typed with no write; an explicit false is admitted');
+  t.end();
+});
 
 test('TablePolicyService - getSplitThresholds returns correct values',
   async (t) => {

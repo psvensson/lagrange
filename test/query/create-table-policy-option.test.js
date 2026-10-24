@@ -8,6 +8,7 @@ import {canonicalizeSchemaProvisioningIntent} from
   '../../src/query/schema-provisioning-intent.js';
 import {TableCreationService} from
   '../../src/query/table-creation-service.js';
+import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 
 const SPLIT_STORAGE_THRESHOLD_BYTES = 1048576;
 const CREATE_WITH_POLICY_SQL =
@@ -126,3 +127,24 @@ test('CREATE TABLE validates programmatic table-policy options before writes',
     await service.shutdown();
     t.end();
   });
+
+test('CREATE TABLE refuses a table policy that requests external CDC, typed, before ' +
+  'writes (owner decision D2)', async (t) => {
+  const submittedMutations = [];
+  const service = createService(submittedMutations);
+  const ast = new SQLParser(
+    'CREATE TABLE ratings (rating_id INTEGER PRIMARY KEY)',
+  ).parse();
+  ast.options = {tablePolicy: {externalCdcAllowed: true}};
+  let refusal = null;
+  try {
+    await service.executeCreateTableProvisioning(ast);
+  } catch (error) {
+    refusal = error.code ?? error.message;
+  }
+  t.same({refusal, writes: submittedMutations.length},
+    {refusal: CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED, writes: 0},
+    'an external CDC request is unsupported, never silently accepted');
+  await service.shutdown();
+  t.end();
+});

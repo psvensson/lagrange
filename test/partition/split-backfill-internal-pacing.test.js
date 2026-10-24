@@ -4,7 +4,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
-import {resumeFixtureParticipantAdmission} from
+import {CDC_TABLE, resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 
 const FOREGROUND_WRITE_BUDGET_MS = 15_000;
@@ -39,8 +39,8 @@ function createSnapshotDb(rows) {
 function createPartition(partitionId = 'ratings-source') {
   return new PartitionService(withFoundingStamp({
     partitionId,
-    tableId: 'tbl-ratings',
-    tableName: 'ratings',
+    tableId: `tbl-${CDC_TABLE}`,
+    tableName: CDC_TABLE,
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     schema: TABLE_SCHEMA,
@@ -124,7 +124,7 @@ test('split snapshot backfill reaches a foreground turn inside its original budg
           return;
         }
         foregroundResult = await source.executeQuery(
-          'INSERT INTO ratings (id, value) VALUES (?, ?)',
+          `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
           [10_000, 'foreground'],
         );
       };
@@ -141,17 +141,17 @@ test('split snapshot backfill reaches a foreground turn inside its original budg
       t.equal(foregroundResult?.success, true);
       t.ok(yieldElapsedMs[0] <= FOREGROUND_WRITE_BUDGET_MS);
       t.same(
-        source.db.prepare('SELECT id, value FROM ratings').all(),
+        source.db.prepare(`SELECT id, value FROM ${CDC_TABLE}`).all(),
         [{id: 10_000, value: 'foreground'}],
         'the foreground write commits exactly once',
       );
       t.same(
-        left.db.prepare('SELECT id FROM ratings ORDER BY id').all()
+        left.db.prepare(`SELECT id FROM ${CDC_TABLE} ORDER BY id`).all()
           .map((row) => row.id),
         rows.slice(0, 32).map((row) => row.id),
       );
       t.same(
-        right.db.prepare('SELECT id FROM ratings ORDER BY id').all()
+        right.db.prepare(`SELECT id FROM ${CDC_TABLE} ORDER BY id`).all()
           .map((row) => row.id),
         rows.slice(32).map((row) => row.id),
       );
@@ -163,7 +163,7 @@ test('split snapshot backfill reaches a foreground turn inside its original budg
 
       await source.routeSplitMirroredWrite(
         'ratings-left',
-        'INSERT OR REPLACE INTO ratings (id, value) VALUES (?, ?)',
+        `INSERT OR REPLACE INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`,
         [1, 'live-update'],
       );
       await settlePendingCdc(left);

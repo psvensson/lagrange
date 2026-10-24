@@ -38,12 +38,15 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
+import {CDC_TABLE} from './participant-transaction-fixture.js';
 import {attachPartitionReleaseOwners} from '../partition/partition-release-fixture.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
 import {createTransactionPersistenceGateway} from
   './transaction-persistence-gateway.js';
 
-const GROUP_TABLE = 'tx1_rows';
+// A CDC-carrying table: the TX1 witnesses measure the committed decision's
+// CDC obligation, which only a propagated table owes (owner decision D2).
+const GROUP_TABLE = CDC_TABLE;
 const GROUP_SCHEMA = Object.freeze({columns: [
   {name: 'id', type: 'TEXT', primaryKey: true},
   {name: 'value', type: 'TEXT'},

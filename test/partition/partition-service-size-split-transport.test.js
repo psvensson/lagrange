@@ -39,7 +39,7 @@ import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
-import {resumeFixtureParticipantAdmission} from
+import {CDC_TABLE, resumeFixtureParticipantAdmission} from
   '../test-helpers/participant-transaction-fixture.js';
 import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
   '../test-helpers/acknowledging-cdc-subscriber.js';
@@ -125,8 +125,8 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-leader-committed-cdc-failure',
-      tableId: 'cdc_test',
-      tableName: 'cdc_test',
+      tableId: CDC_TABLE,
+      tableName: CDC_TABLE,
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
@@ -158,7 +158,7 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
     // applies it and records its CDC obligation, which the lane delivers.
     // (Was: a hand-built raw propose without an entryId, which the durable
     // recorder now refuses as an application failure.)
-    await partition.insertData('cdc_test', {id: 'leader-failure-1', value: 7});
+    await partition.insertData(CDC_TABLE, {id: 'leader-failure-1', value: 7});
 
     await settlePendingCdcDeliveries(partition);
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -185,8 +185,8 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-cdc-retry-buffer',
-      tableId: 'cdc_test',
-      tableName: 'cdc_test',
+      tableId: CDC_TABLE,
+      tableName: CDC_TABLE,
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
@@ -212,7 +212,7 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       subscriberId: 'cdc-retry-subscriber',
     });
 
-    await partition.insertData('cdc_test', {id: 'retry-1', value: 1});
+    await partition.insertData(CDC_TABLE, {id: 'retry-1', value: 1});
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     t.equal(delivered.length, 0,
@@ -799,8 +799,8 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-14',
-    tableId: 'unsub_test',
-    tableName: 'unsub_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
@@ -822,12 +822,12 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
   // The subscription's own drive settles first: a write committed while a
   // drive is in flight joins it and is delivered on the owner's retry timer.
   await settlePendingCdcDeliveries(partition);
-  await partition.insertData('unsub_test', {id: 'item-1'});
+  await partition.insertData(CDC_TABLE, {id: 'item-1'});
   await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1);
 
   partition.unsubscribeFromCDC(subscriber);
-  await partition.insertData('unsub_test', {id: 'item-2'});
+  await partition.insertData(CDC_TABLE, {id: 'item-2'});
   await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1); // No new events after unsubscribe
 
