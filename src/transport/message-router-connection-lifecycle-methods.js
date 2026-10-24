@@ -290,7 +290,7 @@ class MessageRouterConnectionLifecycleMethods {
     };
     this.nodeConnections.set(nodeId, connectionInfo);
     try {
-      await this.establishConnection(connectionInfo);
+      await this.establishConnection(connectionInfo, options.connectBudgetMs);
     } catch (error) {
       if (options.autoReconnect !== false) {
         this.handleConnectionClose(nodeId, connectionInfo.connectionId);
@@ -301,10 +301,15 @@ class MessageRouterConnectionLifecycleMethods {
   /**
    * Establish WebSocket connection to a remote node.
    * @param {Object} connectionInfo - Connection information.
+   * @param {number} [connectBudgetMs] - Remaining grant of the delivery that
+   *   started this dial; the connect timer is min(connect limit, grant).
    * @return {Promise<void>}
    * @private
    */
-  async establishConnection(connectionInfo) {
+  async establishConnection(
+    connectionInfo,
+    connectBudgetMs = Number.POSITIVE_INFINITY,
+  ) {
     if (this.inProcessTransport) {
       return this.establishInProcessConnection(connectionInfo);
     }
@@ -334,6 +339,7 @@ class MessageRouterConnectionLifecycleMethods {
         const currentConnectTimeoutMs = Math.min(
           30000,
           this.connectTimeoutMs + attempts * 5000,
+          connectBudgetMs,
         );
         connectTimeout = this.timeSource.setTimeout(() => {
           reportConnectSpent(this, connectionInfo, ws,

@@ -22,13 +22,13 @@
     "storage-raft": 143,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 107,
+    "transport-messaging": 108,
     "wasm-toolchain": 74
   },
-  "censusSize": 2464,
-  "digest": "fnv1a32-9e5b00bc",
+  "censusSize": 2465,
+  "digest": "fnv1a32-6c665e44",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-51fdd3c3",
+  "observationDigest": "fnv1a32-42684a0d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2362,6 +2362,7 @@
     "test/transport/message-router-cdc-custody.test.js": "transport-messaging",
     "test/transport/message-router-cdc-encoding.test.js": "transport-messaging",
     "test/transport/message-router-cdc-response-boundary.test.js": "transport-messaging",
+    "test/transport/message-router-cold-reconnect-delivery-grant.test.js": "transport-messaging",
     "test/transport/message-router-critical-source-reserve.test.js": "transport-messaging",
     "test/transport/message-router-deliver-metrics.test.js": "transport-messaging",
     "test/transport/message-router-delivery-deadline-liveness.test.js": "transport-messaging",
@@ -17127,6 +17128,11 @@
     "test/transport/message-router-cdc-response-boundary.test.js": {
       "files": [
         "src/transport/message-router-shared-vocabulary.js"
+      ]
+    },
+    "test/transport/message-router-cold-reconnect-delivery-grant.test.js": {
+      "files": [
+        "src/transport/message-router.js"
       ]
     },
     "test/transport/message-router-delivery-deadline-liveness.test.js": {
