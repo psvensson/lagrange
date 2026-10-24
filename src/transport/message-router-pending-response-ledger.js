@@ -439,7 +439,6 @@ class MessageRouterPendingResponseLedger {
           if (this.pendingResponses.get(messageId) !== pending) return;
           arm();
         }, remaining);
-        pending.timeoutId?.unref?.();
       } catch (error) {
         expire(error);
       }
