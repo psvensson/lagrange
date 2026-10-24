@@ -86,3 +86,71 @@ Nothing else is required. F1-F5 below are reported for the lead to rule on and d
 - I did not run the full corpus or the lab myself. The lab classification rests on the implementer's `lab-red.txt`, `base-cls.txt` and paired TAPs, plus one local head run of each of the two files and the cross-record from VERIFY-mg-c1.
 - (c) is traced through `continueRetainedCreation` and the WASM `refuseStart` catch. I did not exhaustively prove that no other path delivers a WASM init refusal to `runtime-service-bound-creation-route.js:283`. Either way the observable there would be `consensus_init_refused` instead of `UNKNOWN`, which is the R07-correct direction.
 - The `# pass` counts are top-level; the 388/390 figures are `ok` lines including subtests. Both comparisons match the implementer's `before.txt` and `after.txt` exactly.
+
+---
+
+# Re-verification r2 (2026-10-25)
+
+## Verdict: APPROVE, keep 4a1015b8a
+
+There are no required changes. I found one edge difference that does not block (R2-N1).
+
+## Identity
+
+- **Subject.** `4a1015b8a95ef5a3ad9bb5e9b6277e97ddc7c5c0`, which is also `refs/wip/lab-cir-2` (checked with rev-parse).
+- **Parent.** `e629dc0b2`, a merge whose parents are a8a05f7ca and d04ae12ee.
+- **Scope.** I verified only `git diff e629dc0b2 4a1015b8a` plus a sanity check of the merge. That diff touches 6 src files, 1 test file and the impact-graph seal.
+- **Worktrees.** I used detached scratch worktrees at `.../scratchpad/vcir2/{head,base}` and removed both afterwards. The lane worktree is clean at 4a1015b8a.
+- **No repository edits.** I made two temporary mutations, each in a scratch worktree and reverted immediately.
+
+## Per-item table
+
+| # | Item | Result | Evidence |
+|---|---|---|---|
+| 1 | RC-1: comment placement | PASS | At 4a1015b8a, `raft-operation-port-constants.js:37-44` holds the refusal comment directly above `RAFT_CONSENSUS_STARTUP_OUTCOME`. Lines 46-49 hold `RAFT_OPERATION`'s comment directly above `const RAFT_OPERATION`. |
+| 2a | F1: owner helpers | PASS | `consensusOpeningFailure` is at `raft-operation-port.js:133-137` and returns either the refusal or the original error. `assertConsensusNotHeldAtOpen` is at :148-152. In src, the only call to `isRaftOpeningFailure(` is the owner's (:134). Calls to `isHeldByHostFailure(` are at :149 (the owner's at-open check) plus four running-group checks: hold-log :59/:75, release-recovery :67, write-kernel :357. That matches the claim exactly. Each port now builds one opening value: `partitionConsensusOpening`, `messageGroupConsensusOpening`, `wasmServiceConsensusOpening`. |
+| 2b | Per-port old→new behaviour | PASS (see R2-N1) | See "Per-port equivalence" below. |
+| 2c | Attack: `readStatus()` throws | No change in behaviour | See "Per-port equivalence" below. |
+| 3 | F3: WASM group id | PASS (equivalent on every reachable state) | `consensusCreation` is assigned only at `wasm-creation-opening.js:376` (`options.consensusCreation ?? null`), so it is either null or a captured creation. `captureWasmCreation` (:204-215) always attaches `identity` from `runtimeServiceConsensusIdentity`, which always computes a string `groupId`. The new explicit branch differs only on an unreachable malformed creation: there it now throws a TypeError where the old code silently fell back, which is the R07-correct direction. |
+| 4 | Owner test | PASS | Test leaf `ok 3 - consensus opening: an opening failure is the domain refusal, anything else stays itself`. For each of the three domains it checks: CORE_REFUSED, CORE_FATAL and HOST_FAILURE each become the domain refusal, carrying the identity and the exact answer. An unrelated throw is returned unchanged, and so is an error tagged CORE_OK. A held status throws a refusal carrying the exact status and the groupId. CORE_OK, and HOST_FAILURE with `recoveryRequired:false`, both return undefined. |
+| 5a | Merge: net delta | PASS | Compared hunk by hunk, `git diff d04ae12ee e629dc0b2` equals `git diff 9b78690a7 a8a05f7ca` with three exceptions. First, the de-exports the lineage had already composed (`consensusInitRefusedError` from the partition export, and `isPositiveSafeInteger` from prepare-evidence) are absent because they already landed. Second, the seal and observation digests differ, which is expected for derived files. Third, the decision-boundary baseline hunk is identical: the lineage's own edit to that file (the transport entry at :7208) does not overlap it, and the file still has 806 entries. |
+| 5b | `TRANSACTION_RELEASE_TERMINAL_STATUS` | PASS | It is defined once, at `distributed-transaction-release-census.js:14`. The r2 delta has 0 lines mentioning it. |
+| 5c | One `consensusInitRefusedError` | PASS | There is one definition, `raft-operation-port.js:103`, at 4a1015b8a. |
+| 5d | Inventory not regenerated | Acceptable | `git diff d04ae12ee e629dc0b2 -- solve` is empty, so the lineage's inventory was kept. `global-owner-debt-inventory/inventory.json` is derived material (R05). No gate checks it: the generator has no `--check` mode, and neither `audit:shards` nor `test:metadata:refresh` reads it. The hook's `REGEN_INVENTORIES` step rewrites and stages it on the next source commit (`.githooks/pre-commit:157-172`). Committing a copy regenerated in a different environment would have added noise; r1's replay showed an environment-dependent rewrite on the `--refresh` fallback. UNKNOWN: whether the hook regenerated anything at the 4a1015b8a commit. That commit carries only the seal. |
+| 6a | The 21 owning files | PASS | Base e629dc0b2: 337 top-level passes, 6 failures, 390 `ok` leaves. Head 4a1015b8a: 338 passes, 6 failures, 391 leaves. The not-ok sets are identical apart from fast-check seeds: runtime-opening-refusal 21/26/27, startup-cleanup 13, spread-cure-row 1, and dtx-coordinator property 1 and 6. The extra leaf is owner test 3. Logs: `vcir2/head.txt`, `vcir2/base.txt`, `vcir2/{head,base}-out/`, `vcir2/{head,base}-notok.txt`. |
+| 6b | eslint and `node --check` on the 7 files | PASS | Both clean. |
+| 6c | Unused-export ratchet | PASS | "Unused-export ratchet OK: 1413/1416", identical at head and base (`vcir2/unused-{head,base}.log`). The two new owner exports and `refusePartitionConsensusHeldAtOpen` all have src consumers. |
+| 6d | Cycles | PASS | 0/0. |
+| 6e | Duplication | PASS | Identical at head and base: src+scripts 46/46 and 1439/1439; test 689/689 and 26148/26148. There are no tighten hints (`vcir2/dup-{head,base}.log`). |
+| 6f | Metadata drift | PASS, zero drift | `audit:shards` passes. `npm run test:metadata:refresh` at head leaves an empty `git status`, and its snapshotDigest `d4c14129…` equals the committed seal. |
+| 6g | Scoped complexity, using the hook's form | PASS | The hook runs `node scripts/check-complexity.js --scoped "${CODE_JS_FILES[@]}" \|\| true` (`.githooks/pre-commit:121`, report-only). On the 6 src targets it reports 2 violations at both head and base, both inherited and both in `partition-service-raft-init-base.js`: `initializeUnserialized` (:305, complexity 31) and `applyRaftTimingConfig` (complexity 22; :691 at head, :695 at base, shifted by the 4 lines removed above it). There are no new violations (`vcir2/complexity-{head,base}.log`). |
+| 6h | Staged guideline checks on the 7 files | PASS | Decision-boundary: 0 new, 1 inherited. Ambient-intrinsics: 0. Silent-catch: 0. Hot-path: 0 (`vcir2/staged-checks.log`). |
+
+## Per-port equivalence (item 2b)
+
+**Partition**
+- **Constructor.** The old code used `isRaftOpeningFailure ? refusal : error` and passed the result into `cleanupRefusedPartitionStartup`. The new code passes `consensusOpeningFailure(error, opening)` into the same cleanup. The cleanup gets the same primary error in both cases.
+- **Held at open.** The old code read the status in `refuseConsensusHeldAtOpen`, did nothing if the group was not held, and otherwise called `refusePartitionConsensusStartup` (refusal, then cleanup, then throw). The new code reads the status once, as the argument to `refusePartitionConsensusHeldAtOpen`. That function wraps only the assert in a try and, on a refusal, calls the same `cleanupRefusedPartitionStartup`. That cleanup always throws (`partition-consensus-port-opening.js:65-79`), so the catch never swallows an error.
+- **Campaign.** It still goes through `refusePartitionConsensusStartup` (raft-init-base:601) and builds the same value.
+- **Load-bearing proof.** With `refusePartitionConsensusHeldAtOpen` turned into a no-op, `partition-unreadable-durable-record` subtest 4 goes red ("F-ap: a follower restarted while its record table is missing is refused at init…"; `vcir2/mutant-held.log`, 5 passes, 1 failure). The path is exercised, and its release assertions (raft and db both null) are green at head.
+
+**Message group and WASM**
+- **Constructor.** The old code rethrew a non-opening error unchanged and threw the refusal for an opening failure. The new code throws `consensusOpeningFailure(...)`, which gives the same result in both cases.
+- **Held at open.** The old code did one `readStatus()` after the try, then an inline check, then threw. The new code does one `readStatus()` after the try, as the first argument to `assertConsensusNotHeldAtOpen`. Arguments are evaluated left to right, and the opening-value builder is pure. Exception order is unchanged and there is a single status read.
+- **Message-group campaign.** It builds the same refusal from the opening value plus the answer.
+
+**Attack (item 2c): `readStatus()` throws.** In every version, old and new, `readStatus()` sits outside any try that classifies or cleans up errors. The MG and WASM status reads are after their try blocks. The partition status read happened in an un-guarded async method before, and now happens as a call argument before the helper's try. A throwing `readStatus` therefore propagates unclassified and without the opening cleanup, exactly as before. For MG and WASM, the caller's lifecycle releases resources (`releaseFailedOpen` and similar), also unchanged.
+
+## Non-blocking note
+
+- **R2-N1, an edge difference in the partition held-at-open path.** The new `catch (refusal)` (`partition-consensus-port-opening.js:47-51`) catches anything `assertConsensusNotHeldAtOpen` throws, not only the refusal.
+  - The one other possible throw is from building the refusal's message: `JSON.stringify(detail)` at `raft-operation-port.js:83-87` would throw on a BigInt or circular `failure.detail`.
+  - In that case the new code runs the cleanup with that TypeError as the primary error, and then throws it.
+  - The old code threw the TypeError while evaluating the argument, before calling the cleanup, so it rejected with no cleanup.
+  - The detail values are deep-frozen, JSON-shaped data from the runtime owner, so I believe this is unreachable. If it were reached, the new behaviour is the R11-safer one.
+  - Not required. If you want byte-exact parity, build the refusal outside the try.
+
+## Limits
+
+- I did not run a lab or corpus run for r2. The r1 lab classification stands; r2 changes only refusal plumbing that is pinned by the 21 files.
+- runtime-opening-refusal subtests 26 and 27 ("partition status/campaign refusal uses the same cleanup boundary") fail at both base and head on the precondition "the actual initializer must consume the controlled refusal". Those two integration tests are inherited reds and give no signal on the partition held and campaign paths. My mutation above stands in for them on the held path.
