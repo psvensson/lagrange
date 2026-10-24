@@ -1,5 +1,0 @@
-Scanned 2 JavaScript files
-Found 1 decision-boundary guideline violations
-Top files:
-- src/node/replica-handler-release-recovery.js: 1
-Matched 0 inherited decision-boundary baseline violations

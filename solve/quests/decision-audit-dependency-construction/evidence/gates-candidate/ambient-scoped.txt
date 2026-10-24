@@ -1,9 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:ambient-intrinsics
-> node scripts/check-guideline-ambient-intrinsics.js scripts/check-guideline-decision-boundaries.js scripts/checks/decision-boundary-construction.js
-
-Scanned 1 JavaScript files
-Found 14 ambient-intrinsic call violations
-Top files:
-- scripts/checks/decision-boundary-construction.js: 14
-Matched 0 inherited ambient-intrinsic baseline violations

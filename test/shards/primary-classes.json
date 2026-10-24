@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2129,
+    "unit": 2131,
     "integration": 109,
     "bootstrap": 214,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2459,
-  "digest": "fnv1a32-42fd6ea4",
+  "censusSize": 2461,
+  "digest": "fnv1a32-105a9fce",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2147,6 +2147,8 @@
     "test/scripts/distributed-matrix-cli.test.js": "unit",
     "test/scripts/dt-prove.test.js": "unit",
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": "unit",
+    "test/scripts/evidence-relocation-acceptance.test.js": "unit",
+    "test/scripts/evidence-relocation.test.js": "unit",
     "test/scripts/exact-election-evidence-same-turn-model-contract.test.js": "unit",
     "test/scripts/examples-build-upload-run.test.js": "unit",
     "test/scripts/formation-health.test.js": "unit",

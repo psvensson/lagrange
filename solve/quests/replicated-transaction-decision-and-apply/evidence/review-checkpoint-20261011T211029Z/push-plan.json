@@ -1,9 +1,0 @@
-{
-  "utc": "2026-10-11T21:10:29.182256+00:00",
-  "preservationOnly": true,
-  "newRefs": {
-    "refs/heads/checkpoint/rs-raft-preservation-20261011T211029Z/tx1-owner-wip": "22ca9251732cafe63e7d7e4c5b2ad6581cdf14b1"
-  },
-  "mainBefore": "878eb8ac059dab71deae5feb0fa88e0c5c610c93",
-  "scope": "Retained complete BEGIN round5 review, CDC runtime/native failed premise, and activation share replay evidence"
-}

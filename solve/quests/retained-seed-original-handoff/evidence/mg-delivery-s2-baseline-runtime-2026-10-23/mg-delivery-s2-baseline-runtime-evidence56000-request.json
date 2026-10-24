@@ -1,9 +1,0 @@
-{
-  "repository_full_name": "psvensson/lagrange-lab",
-  "title": "[lab-job] 96327aeae42c4682be10382f0cea34d8",
-  "body": "{\"controller_id\":\"b4a2e06c193c44b09f1b67d02e8d80f4\",\"created_at\":\"2026-10-23T10:10:39.790Z\",\"expires_at\":\"2026-10-23T12:10:39.790Z\",\"host\":\"lenovo-laptop\",\"job_id\":\"72bf9d0adf044252bee68e98d7a160d8\",\"length\":8000,\"offset\":56000,\"operation\":\"evidence\",\"request_id\":\"96327aeae42c4682be10382f0cea34d8\",\"schema\":\"lagrange-lab-job/v1\",\"stream_id\":\"48ed131278748255b73454b24e6dcee453c4b6955c1ac538f4f9b4edec091348\"}",
-  "comments": [],
-  "request_id": "96327aeae42c4682be10382f0cea34d8",
-  "request_sha256": "4f992be11811970a4ba6ae0feb53765664f91416c6d4155907f586c1598987c0",
-  "source_execution_by_generator": false
-}

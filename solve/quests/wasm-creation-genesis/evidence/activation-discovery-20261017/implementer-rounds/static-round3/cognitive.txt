@@ -1,2 +1,0 @@
-Scoped cognitive complexity ratchet: 0 violation(s) in 38 target(s) (threshold: 20).
-Saved cognitive complexity report to test-output/analysis/cognitive-complexity-scoped.json.

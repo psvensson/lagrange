@@ -1,5 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:cognitive:scoped:strict
-> node scripts/check-cognitive-complexity.js --scoped --strict src/partition/partition-local-mutation-admission.js src/partition/partition-service-leader-activation-methods.js src/partition/partition-service-participant-transaction-cadence-methods.js src/partition/partition-service-remote-query-methods.js src/partition/partition-service-removal-serving-methods.js
-
-No cognitive complexity violations (threshold: 20).

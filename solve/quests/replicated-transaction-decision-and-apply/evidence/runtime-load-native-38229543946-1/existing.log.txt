@@ -1,7 +1,0 @@
-# test-files planned=3
-classified lane ordinary: 3 file(s), jobs=4
-thermal: unmeasurable (no sensors)
-ok test/raft/raft-rs-backend/operation-port-provenance.test.js (1 assertions, 790ms)
-ok test/raft/raft-rs-backend/operation-port-ready-recovery.test.js (7 assertions, 909ms)
-ok test/raft/raft-rs-backend/operation-port-throw-containment.test.js (4 assertions, 3296ms)
-# test-files total=3 pass=3 fail=0 assertions=12

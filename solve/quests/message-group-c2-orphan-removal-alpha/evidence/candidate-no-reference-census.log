@@ -1,2 +1,0 @@
-command=rg -n --hidden --glob !node_modules/** --glob !solve/** --glob !test-output/** <retired-regex> src test scripts package.json .github
-count=0

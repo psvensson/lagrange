@@ -1,2 +1,0 @@
-command: git diff --check -- test/test-helpers/participant-transaction-fixture.js test/partition/participant-release-protocol.test.js test/node/replica-handler-release-recovery.test.js
-exit: 0

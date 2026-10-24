@@ -1,6 +1,0 @@
-mutated sha: 73a300d5064effd66b541edf33fbacc3d83c3ba79707771e5bba3d3f53eea37f
-catcher test/service/service-consensus-creation-intent.test.js rc=1
-not ok test/service/service-consensus-creation-intent.test.js (24 assertions, 827ms)
-not ok 4 - ServiceLifecycleManager resolves an applied intent write with lost reply
-  name: 'AssertionError'
-RESTORED_BYTE_IDENTICAL src/service/service-consensus-creation-intent.js

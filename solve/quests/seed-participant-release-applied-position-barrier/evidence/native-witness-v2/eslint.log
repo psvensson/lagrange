@@ -1,8 +1,0 @@
-
-/mnt/data/peter/projects/.worktrees/rs-raft-seed-native-startup-census-20261013/test/partition/participant-release-native-application-order.test.js
-  603:1  error  Expected indentation of 6 spaces but found 4  indent
-  606:1  error  Expected indentation of 6 spaces but found 4  indent
-
-✖ 2 problems (2 errors, 0 warnings)
-  2 errors and 0 warnings potentially fixable with the `--fix` option.
-

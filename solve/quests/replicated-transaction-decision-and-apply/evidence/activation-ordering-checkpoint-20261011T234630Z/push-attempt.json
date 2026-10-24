@@ -1,5 +1,0 @@
-{
-  "exitCode": 0,
-  "stdout": "[pre-push +0s] >> pushed-refs: reading pushed refs\n[pre-push +0s] >> tag-only-fast-path: tag-only fast path check\n[pre-push +0s] >> branch-preservation-fast-path: non-main branch preservation check\npre-push: non-main branch preservation push - skipping local proof gate\npre-push: remote preservation is NOT merge, Quest-land, release, or publication approval\npre-push: set LAGRANGE_PUSH_PROVE_BRANCH=1 to prove a feature branch locally before push\n[pre-push +0s] all stages green\n",
-  "stderr": "To github.com:psvensson/lagrange.git\n * [new branch]          8e022cc283807a45727c32dab1e3486fcb36c30d -> checkpoint/rs-raft-preservation-20261011T234630Z/activation-startup-wip\n * [new branch]          b99ed59b3fc4d5b8fecd939b480dd84a23c94f7f -> checkpoint/rs-raft-preservation-20261011T234630Z/tx1-owner-wip\n * [new branch]          54006d65f96aaf3dd7daa3c85778c897f31f8646 -> checkpoint/rs-raft-preservation-20261011T234630Z/freshmg-wip\n"
-}

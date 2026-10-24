@@ -1,3 +1,0 @@
-PASS real SQLQueryEngine initial INSERT/readback and successful result control
-PASS distinct raw row, captured row and own session descriptor observed before actual copy assignment
-FAIL B5-1 declared role-neutral record envelope covers strict own-data capture scratch: charge=201588 lower_bound=221334 shortfall=19746

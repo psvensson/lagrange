@@ -341,3 +341,5 @@ Reasoned from tree listings (`git ls-tree -r -l`), without running the tests on 
 - Whether the owner wants eviction from quests still in flight (D1), or wants an approach of the form "close or
   supersede the finished quests first, then prune them under R20". The second still leaves open-quest bytes over
   budget unless they move.
+
+> Relocated evidence (2026-10-24): bulk evidence this document cites under `solve/` was moved to the `solve-evidence` release at source commit 31ee37359; look up any old path in `solve/quests/lineage-evidence-relocation/evidence/relocation-inventory.json` (bundle, sha256, URL per path).

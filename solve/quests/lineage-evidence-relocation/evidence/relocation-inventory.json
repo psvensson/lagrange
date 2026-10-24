@@ -1,0 +1,302 @@
+{
+  "schema": "solve-relocation-inventory/1",
+  "bundles": [
+    {
+      "bundle": "seed-release-once-per-partition-cohort--seed-release-once-per-partition-cohort-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "664ab80d8069e468f1f39dcf3d7b84226ed413e942d95bab1d6adde45e3ab209",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-once-per-partition-cohort--seed-release-once-per-partition-cohort-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-release-once-per-partition-cohort/evidence/",
+      "files": 1,
+      "shard": "relocation-inventory/seed-release-once-per-partition-cohort--seed-release-once-per-partition-cohort-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "replicated-transaction-decision-and-apply--replicated-transaction-decision-and-apply-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "fbc8bab46cc57d222f22821502c163c96f728a7174fdb91f6bed0751a32d3a0f",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replicated-transaction-decision-and-apply--replicated-transaction-decision-and-apply-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/replicated-transaction-decision-and-apply/evidence/",
+      "files": 1539,
+      "shard": "relocation-inventory/replicated-transaction-decision-and-apply--replicated-transaction-decision-and-apply-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "wasm-creation-genesis--wasm-creation-genesis-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "9a344a1e8ee610ab93e85e025d53e6c20f148cf787d661624f144da278021530",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasm-creation-genesis--wasm-creation-genesis-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/wasm-creation-genesis/evidence/",
+      "files": 1394,
+      "shard": "relocation-inventory/wasm-creation-genesis--wasm-creation-genesis-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "seed-participant-release-applied-position-barrier--seed-participant-release-applied-position-barrier-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "ee45911a980249b00510d9866666e4efff8b809cf08188bf3333c36e37951c3c",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-participant-release-applied-position-barrier--seed-participant-release-applied-position-barrier-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-participant-release-applied-position-barrier/evidence/",
+      "files": 769,
+      "shard": "relocation-inventory/seed-participant-release-applied-position-barrier--seed-participant-release-applied-position-barrier-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "seed-control-current-proof-amortization--seed-control-current-proof-amortization-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "ded5182733ef02d5d97da45d7814da33c4727aa4e1b8f57126d632a61eae9399",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-current-proof-amortization--seed-control-current-proof-amortization-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-control-current-proof-amortization/evidence/",
+      "files": 389,
+      "shard": "relocation-inventory/seed-control-current-proof-amortization--seed-control-current-proof-amortization-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "tx1-single-path-alpha--tx1-single-path-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "ca979fdfe19e6d82d02ec39c39e48fabdc20fb4185074377a659794847dfb781",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/tx1-single-path-alpha--tx1-single-path-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/tx1-single-path-alpha/evidence/",
+      "files": 143,
+      "shard": "relocation-inventory/tx1-single-path-alpha--tx1-single-path-alpha-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "runtime-captured-inbound-extent--runtime-captured-inbound-extent-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "d30d6b407856121d1fbf7a0dc3b466e2f64b7b2d38b6d531f609f3402a046e1b",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-captured-inbound-extent--runtime-captured-inbound-extent-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/runtime-captured-inbound-extent/evidence/",
+      "files": 211,
+      "shard": "relocation-inventory/runtime-captured-inbound-extent--runtime-captured-inbound-extent-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "retained-seed-original-handoff--retained-seed-original-handoff-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "cac3683828f77051dab5ffa23868a9c7d176f3f145991e19ec0d9a0fe40656df",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--retained-seed-original-handoff-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/retained-seed-original-handoff/evidence/",
+      "files": 277,
+      "shard": "relocation-inventory/retained-seed-original-handoff--retained-seed-original-handoff-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "decision-audit-dependency-construction--decision-audit-dependency-construction-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "dca7a57151bc64e76c3b1f510968f418656d544845e06ecf2a773b49fa755055",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/decision-audit-dependency-construction--decision-audit-dependency-construction-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/decision-audit-dependency-construction/evidence/",
+      "files": 54,
+      "shard": "relocation-inventory/decision-audit-dependency-construction--decision-audit-dependency-construction-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "message-group-fresh-identity-membership--message-group-fresh-identity-membership-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "9895e70d3962669b2aa1c283d0154b3a93d38a3ca77032f90b43565cb3b95856",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-fresh-identity-membership--message-group-fresh-identity-membership-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/message-group-fresh-identity-membership/evidence/",
+      "files": 171,
+      "shard": "relocation-inventory/message-group-fresh-identity-membership--message-group-fresh-identity-membership-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "participant-release-completion-owner--participant-release-completion-owner-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "5379f41f005b8eae502f2173029bce8c70d730dd45723e2dd8ec6ca1c784910d",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-completion-owner--participant-release-completion-owner-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/participant-release-completion-owner/evidence/",
+      "files": 52,
+      "shard": "relocation-inventory/participant-release-completion-owner--participant-release-completion-owner-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "participant-release-held-recovery-continuation--participant-release-held-recovery-continuation-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "b05c9a9f945d9f59dd8dfc0c31f763e9b5c392f22dddcfe556348a75791c9fb9",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-held-recovery-continuation--participant-release-held-recovery-continuation-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/participant-release-held-recovery-continuation/evidence/",
+      "files": 199,
+      "shard": "relocation-inventory/participant-release-held-recovery-continuation--participant-release-held-recovery-continuation-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "cleanup-exception-audit-correspondence--cleanup-exception-audit-correspondence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "1ac8f7d83af273673bec00dc157563259a92ca613e0437b2cd74b5c4b0da7477",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cleanup-exception-audit-correspondence--cleanup-exception-audit-correspondence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/cleanup-exception-audit-correspondence/evidence/",
+      "files": 47,
+      "shard": "relocation-inventory/cleanup-exception-audit-correspondence--cleanup-exception-audit-correspondence-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "runtime-ordering-completion-consumer-proof--runtime-ordering-completion-consumer-proof-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "9f48f3de795e3669a50ca46dd28c154525ace1b2f5dc7fccdf06981cae496858",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/runtime-ordering-completion-consumer-proof--runtime-ordering-completion-consumer-proof-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/runtime-ordering-completion-consumer-proof/evidence/",
+      "files": 76,
+      "shard": "relocation-inventory/runtime-ordering-completion-consumer-proof--runtime-ordering-completion-consumer-proof-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "lineage-evidence-relocation--raft-rs-full-cutover-epic-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "408faf0e80e8f25dfde2ceac70f363a16de065e43796d61256576c3b80950579",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/lineage-evidence-relocation--raft-rs-full-cutover-epic-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/epics/raft-rs-full-cutover/evidence/",
+      "files": 21,
+      "shard": "relocation-inventory/lineage-evidence-relocation--raft-rs-full-cutover-epic-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "participant-control-refusal-provenance--participant-control-refusal-provenance-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "81cb6d5d59b344b1fe8f350d6b5dd886ac358151ffe76a5dd8516c26fb04da91",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-control-refusal-provenance--participant-control-refusal-provenance-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/participant-control-refusal-provenance/evidence/",
+      "files": 40,
+      "shard": "relocation-inventory/participant-control-refusal-provenance--participant-control-refusal-provenance-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "seed-release-failure-custody--seed-release-failure-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "9a264a2fe17296a471b331af7116bac2757a6d280675157235d65a998cb2d0c4",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-release-failure-custody--seed-release-failure-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-release-failure-custody/evidence/",
+      "files": 70,
+      "shard": "relocation-inventory/seed-release-failure-custody--seed-release-failure-custody-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "seed-participant-release-failure-projection-alpha--seed-participant-release-failure-projection-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "92bf4737b430e06211077e75c3dc5c287c7c1d357c72e29ad6098c02ff4caafd",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-participant-release-failure-projection-alpha--seed-participant-release-failure-projection-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/",
+      "files": 175,
+      "shard": "relocation-inventory/seed-participant-release-failure-projection-alpha--seed-participant-release-failure-projection-alpha-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "startup-refusal-cleanup-custody--startup-refusal-cleanup-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "920ba784b3c522acd55d4437fce7014582c6508c761803f9da9a627fe8bbf678",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/startup-refusal-cleanup-custody--startup-refusal-cleanup-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/startup-refusal-cleanup-custody/evidence/native-38261660054-1/",
+      "files": 101,
+      "shard": "relocation-inventory/startup-refusal-cleanup-custody--startup-refusal-cleanup-custody-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "lineage-evidence-relocation--seed-participant-release-native-startup-census-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "6f7bd69f95801303cb0cce22c6a634e95425d45f8820a5a278c85adc95c86ee4",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/lineage-evidence-relocation--seed-participant-release-native-startup-census-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-participant-release-native-startup-census/",
+      "files": 22,
+      "shard": "relocation-inventory/lineage-evidence-relocation--seed-participant-release-native-startup-census-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "replica-opening-history--replica-opening-history-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "76f0bd9e6465ab0d5e4c80304bfe930e14723f19046edd5bac11ec8bfa7a18b1",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replica-opening-history--replica-opening-history-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/replica-opening-history/evidence/native-38253337720-1/",
+      "files": 77,
+      "shard": "relocation-inventory/replica-opening-history--replica-opening-history-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "message-group-c2-orphan-removal-alpha--message-group-c2-orphan-removal-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "2f0374e6fa667c4c02e9a0208debb18309ab85043ecb5378b810b3a31f9e761c",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/message-group-c2-orphan-removal-alpha--message-group-c2-orphan-removal-alpha-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/message-group-c2-orphan-removal-alpha/evidence/",
+      "files": 92,
+      "shard": "relocation-inventory/message-group-c2-orphan-removal-alpha--message-group-c2-orphan-removal-alpha-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "cutover-transition-authority-review--cutover-transition-authority-review-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "5e026fc19a81bff8287ea49f31d53e91c648b2e81c38cc1349c8e7f3b545b95e",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/cutover-transition-authority-review--cutover-transition-authority-review-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/cutover-transition-authority-review/evidence/",
+      "files": 23,
+      "shard": "relocation-inventory/cutover-transition-authority-review--cutover-transition-authority-review-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "zero-liferaft-active-runtime--zero-liferaft-active-runtime-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "16b0d8c91f815167d7a491ffe729864bffc6dd7dac9c787d5b12231f11a7b32b",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/zero-liferaft-active-runtime--zero-liferaft-active-runtime-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/zero-liferaft-active-runtime/evidence/",
+      "files": 3,
+      "shard": "relocation-inventory/zero-liferaft-active-runtime--zero-liferaft-active-runtime-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "seed-control-authority-first-divergence--seed-control-authority-first-divergence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "e14b4f4bcf36f8f143377a37a001315c9a87726fa416a4418912428d442ad997",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/seed-control-authority-first-divergence--seed-control-authority-first-divergence-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/seed-control-authority-first-divergence/evidence/",
+      "files": 23,
+      "shard": "relocation-inventory/seed-control-authority-first-divergence--seed-control-authority-first-divergence-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "participant-release-owner-cycle-removal--participant-release-owner-cycle-removal-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "971cc9a19d930c9393d910237b5e1a906a02064a90411b9f13f39be4ae0e5c10",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-owner-cycle-removal--participant-release-owner-cycle-removal-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/participant-release-owner-cycle-removal/evidence/",
+      "files": 42,
+      "shard": "relocation-inventory/participant-release-owner-cycle-removal--participant-release-owner-cycle-removal-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "wasm-writer-slots-v1--wasm-writer-slots-v1-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "5759801d62494ffbf096fb65848bf01996479e422383c6f9bd7611e0f78450ec",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/wasm-writer-slots-v1--wasm-writer-slots-v1-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/wasm-writer-slots-v1/evidence/",
+      "files": 13,
+      "shard": "relocation-inventory/wasm-writer-slots-v1--wasm-writer-slots-v1-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "replica-cleanup-host-custody--replica-cleanup-host-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "18846728fa5641ee75faedff7b9e0c0df11fd235058a19dbd4b1e514670b7348",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/replica-cleanup-host-custody--replica-cleanup-host-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/replica-cleanup-host-custody/evidence/",
+      "files": 4,
+      "shard": "relocation-inventory/replica-cleanup-host-custody--replica-cleanup-host-custody-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "participant-release-deadline-recovery-witness--participant-release-deadline-recovery-witness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "3ac48ad13a9d2d2f7f03be8f3ee6015fa3d67f334839af5500512262d7bce370",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/participant-release-deadline-recovery-witness--participant-release-deadline-recovery-witness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/participant-release-deadline-recovery-witness/evidence/",
+      "files": 33,
+      "shard": "relocation-inventory/participant-release-deadline-recovery-witness--participant-release-deadline-recovery-witness-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "snapshot-receiver-admission--snapshot-receiver-admission-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "c8c2ef2e621da10fa1149d7fa343d35455544503ebf2e38639e762bed4ab2dc8",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/snapshot-receiver-admission--snapshot-receiver-admission-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/snapshot-receiver-admission/evidence/native-38288795997-1/",
+      "files": 4,
+      "shard": "relocation-inventory/snapshot-receiver-admission--snapshot-receiver-admission-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "exact-handler-fixture-custody--exact-handler-fixture-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "5471a7d921f1283d91bf13b6f5202a02cf35bbcae76ddc32c0654a9219fc8fc4",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/exact-handler-fixture-custody--exact-handler-fixture-custody-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/exact-handler-fixture-custody/evidence/",
+      "files": 20,
+      "shard": "relocation-inventory/exact-handler-fixture-custody--exact-handler-fixture-custody-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "rs-raft-admitted-inbound-liveness--rs-raft-admitted-inbound-liveness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "fa202b54cc70c56c9fe006c5e5c5090e3f2787459c5c033322f6b188b6abbe28",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/rs-raft-admitted-inbound-liveness--rs-raft-admitted-inbound-liveness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/quests/rs-raft-admitted-inbound-liveness/evidence/",
+      "files": 3,
+      "shard": "relocation-inventory/rs-raft-admitted-inbound-liveness--rs-raft-admitted-inbound-liveness-lineage-evidence-31ee37359-2026-10-24.json"
+    },
+    {
+      "bundle": "lineage-evidence-relocation--changes-global-owner-debt-inventory-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "bundleSha256": "bb3854176bf3f95b8227ea65128597fe1bf22d46d2f001d8b4dce6aefb1e7b22",
+      "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/lineage-evidence-relocation--changes-global-owner-debt-inventory-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+      "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+      "root": "solve/changes/global-owner-debt-inventory/",
+      "files": 1,
+      "shard": "relocation-inventory/lineage-evidence-relocation--changes-global-owner-debt-inventory-lineage-evidence-31ee37359-2026-10-24.json"
+    }
+  ]
+}

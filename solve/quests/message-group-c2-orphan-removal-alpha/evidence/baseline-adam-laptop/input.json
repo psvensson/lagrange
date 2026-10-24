@@ -1,9 +1,0 @@
-{
-  "sha": "d35d8828c630d1b9675b47f511c477b3cc9ee991",
-  "host": "adam-laptop",
-  "files": [
-    "test/integration/message-group-learner-runtime-authorization.integration.test.js",
-    "test/integration/message-group-membership-claim-cache.integration.test.js",
-    "test/integration/message-group-learner-process-loss.integration.test.js"
-  ]
-}

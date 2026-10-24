@@ -1,7 +1,0 @@
-FAIL: closed-slot contention is re-decided and closes only the exact token in the same call
-    failureType: 'testCodeFailure'
-    error: |-
-    Expected values to be strictly deep-equal:
-    + actual - expected
-    expected:
-    actual:

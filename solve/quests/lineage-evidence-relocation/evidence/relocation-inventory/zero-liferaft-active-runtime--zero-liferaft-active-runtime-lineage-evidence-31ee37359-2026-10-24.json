@@ -1,0 +1,13 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "zero-liferaft-active-runtime--zero-liferaft-active-runtime-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "16b0d8c91f815167d7a491ffe729864bffc6dd7dac9c787d5b12231f11a7b32b",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/zero-liferaft-active-runtime--zero-liferaft-active-runtime-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/zero-liferaft-active-runtime/evidence/",
+  "files": [
+    ["census-dispositions.mjs","42eef7e625b2a921d5f81a6026ef9a1fb65d29ead4823dc045cae8b41713e2c9",17432],
+    ["census.json","41081756fdbf313d7f97f780b01575bcd7eeb867185f2f7422d065aa903975b9",179490],
+    ["census.mjs","e86aa9f33e3fbe84aeff9e33dc2e4f5fab9c8cdaab2be4592c96ec033a0f5270",13347]
+  ]
+}

@@ -1,2 +1,0 @@
-$ node --check test/partition/participant-release-applied-position.test.js
-exit: 0

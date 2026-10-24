@@ -1,2 +1,0 @@
-{"file":"test/partition/partition-service-write-commit.test.js","attempt":1,"ok":false,"assertions":69,"durationMs":1256,"retriedOnce":false,"firstFailureLine":"not ok 2 - proposed write should carry a commit correlation id"}
-{"file":"test/partition/committed-statement-outcome.test.js","attempt":1,"ok":false,"assertions":19,"durationMs":2204,"retriedOnce":false,"firstFailureLine":"not ok 1 - B2: a duplicate primary key under a different entry identity is a failed statement, consumed and reported, never an acknowledged replay"}

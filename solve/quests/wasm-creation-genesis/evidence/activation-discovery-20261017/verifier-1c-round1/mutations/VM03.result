@@ -1,6 +1,0 @@
-mutated sha: 664b4aa00c4590399e231224b243be59486ea58eb65f3c94ed7d59dbf99952de
-catcher test/node/runtime-service-bound-route.test.js rc=1
-not ok test/node/runtime-service-bound-route.test.js (26 assertions, 909ms)
-    not ok 1 - C6-1 a retained creation answering HELD -> memo HELD + CREATE_HELD at the CREATING step
-      name: 'AssertionError'
-RESTORED_BYTE_IDENTICAL src/service/service-consensus-bootstrap.js

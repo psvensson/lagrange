@@ -1,6 +1,0 @@
-{
-  "test/partition/participant-release-delivery-recorder.js": "b9ebf98e232f7155b85ce27645ac7135d79f49d6b4683e5c1563a72674ec58d5",
-  "test/partition/participant-release-delivery-recorder.test.js": "9f2ce0d127e94f8e1374832b9ccb34788a58f04d6276890f0cb834110d532342",
-  "test/partition/participant-release-query-engine-fixture.js": "0637b058fdbf4ff6f8c6c05082513373e74d3cc3c12b7a24ac69bfa1430f3032",
-  "test/partition/participant-release-tx1-native-fixture.js": "6213d96961c4d65092a56bd472779a5e77140844c8dcdfd52f90506398b92d0d"
-}

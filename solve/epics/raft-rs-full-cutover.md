@@ -958,3 +958,5 @@ and any host-side lease.
 - With a quorum held or unreachable, the leader now steps down (no leader,
   term unchanged under pre-vote) instead of leading a group that cannot commit.
 <!-- END identity-open-refusal-native-prevote 2026-10-05 -->
+
+> Relocated evidence (2026-10-24): bulk evidence this document cites under `solve/` was moved to the `solve-evidence` release at source commit 31ee37359; look up any old path in `solve/quests/lineage-evidence-relocation/evidence/relocation-inventory.json` (bundle, sha256, URL per path).

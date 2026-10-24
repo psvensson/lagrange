@@ -1,7 +1,0 @@
-# test-files planned=3
-classified lane exclusive: 3 file(s), jobs=1
-thermal: unmeasurable (no sensors)
-ok test/wasm-service/wasm-creation-genesis.integration.test.js (14 assertions, 4304ms)
-ok test/wasm-service/wasm-retained-bootstrap.integration.test.js (16 assertions, 2563ms)
-ok test/wasm-service/wasm-creation-reconciliation.integration.test.js (1 assertions, 1469ms)
-# test-files total=3 pass=3 fail=0 assertions=31

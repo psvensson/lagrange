@@ -1,6 +1,0 @@
-Scoped complexity ratchet: 3 violation(s) in 22 target(s) (threshold: 12).
-src/runtime/service-runtime-lifecycle-operation-methods.js:153:5 Async method 'prepare' has a complexity of 16. Maximum allowed is 12.
-src/runtime/service-runtime-lifecycle-operation-methods.js:294:5 Async method 'start' has a complexity of 26. Maximum allowed is 12.
-src/runtime/service-runtime-lifecycle-operation-methods.js:468:5 Async method 'stop' has a complexity of 14. Maximum allowed is 12.
-Saved complexity report to test-output/analysis/complexity-scoped.json.
-EXIT=0

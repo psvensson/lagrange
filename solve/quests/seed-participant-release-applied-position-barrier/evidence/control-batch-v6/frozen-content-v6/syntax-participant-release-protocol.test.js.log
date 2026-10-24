@@ -1,1 +1,0 @@
-$ node --check test/partition/participant-release-protocol.test.js

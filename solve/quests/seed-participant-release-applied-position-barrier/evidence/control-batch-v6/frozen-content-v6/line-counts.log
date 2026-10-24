@@ -1,5 +1,0 @@
-  1172 test/test-helpers/participant-transaction-fixture.js
-   760 test/partition/participant-release-protocol.test.js
-  1416 test/node/replica-handler-release-recovery.test.js
-   930 test/partition/participant-release-applied-position.test.js
-  4278 total

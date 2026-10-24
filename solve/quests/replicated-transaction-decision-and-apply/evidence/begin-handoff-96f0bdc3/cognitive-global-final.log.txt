@@ -1,7 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:cognitive
-> node scripts/check-cognitive-complexity.js
-
-Cognitive complexity ratchet OK: 151/152 violations (threshold: 20).
-Saved cognitive complexity report to test-output/analysis/cognitive-complexity-src-scripts.json.
-Baseline can be tightened from 152 to 151 in scripts/check-cognitive-complexity.js: scripts/check-cognitive-complexity.js.

@@ -1,3 +1,0 @@
-Circular dependency ratchet FAILED: 1 cycle group(s) exceeds baseline of 0.
-
-["src/partition/partition-participant-transaction-pause.js","src/partition/partition-participant-release-contract.js","src/partition/partition-participant-release-facts.js"]

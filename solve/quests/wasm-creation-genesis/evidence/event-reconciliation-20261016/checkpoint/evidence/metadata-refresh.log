@@ -1,8 +1,0 @@
-
-> lagrange-server@0.2.6 test:metadata:refresh
-> node scripts/generate-test-primary-classes.js && node scripts/generate-test-resource-classes.js && node scripts/generate-test-subsystem-classes.js && node scripts/generate-global-owner-debt-inventory.js --refresh-import-graph-only
-
-wrote test/shards/primary-classes.json: 2403 tests, digest fnv1a32-900dcc7d
-wrote test/shards/resource-classes.json — 2403 tests, digest fnv1a32-b02479bb
-wrote test/shards/subsystem-classes.json — 2403 tests, 22 subsystems, digest fnv1a32-eb26f96f
-{"snapshotDigest":"51c8779d5e1a8e580795ef8b3dc778fe59b93887bff6e0e6307b5c049de4739c","graphByteDigest":"e31f6fe3bc2766a9fd5a30cc0faf4a0633fbfcd725c72d4a61e95033f1d8e1a2","sealByteDigest":"e31886b545462f5683bf427d25af0090c1c7d57048dc4a8c42b48203b55870b2"}

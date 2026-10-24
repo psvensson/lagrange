@@ -1,5 +1,0 @@
-
-> lagrange-server@0.2.6 test:complexity:scoped:strict
-> node scripts/check-complexity.js --scoped --strict src/query/distributed/distributed-begin-consumer.js src/query/distributed/distributed-transaction-creation-contract.js src/query/distributed/distributed-transaction-creation.js src/query/sql-query-engine-lifecycle-methods.js src/query/sql-query-engine-transaction-persistence-methods.js src/runtime/request-cell-invocation-owner.js test/query/transaction-begin-uncertain-handoff.test.js
-
-No complexity violations (threshold: 12).

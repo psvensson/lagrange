@@ -1,6 +1,0 @@
-00e60a3964970e37ee1bef33cb9e2ac3a7dddcfcb615b88df1c93d1091581f28  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/commands-and-results.md
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/eslint.txt
-a5987c467ea54d6b7efc5c165ab6991f9a8c6a631aadc29775d784b197f58136  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/implementation-report.md
-2c76c4ae234e1897ff12dc07465adaa89a08ca00e89b4526e51d2d9a678baa92  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime-test.txt
-5958b6bc0e8ddef830b6d97156470df537919d3163ba6f87b36c865a4fcdb921  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/selected-runtime.txt
-0b8961a699aab669ad84316afb469fea3e064e611e66317cb7b674b96a8b8d4d  solve/quests/replicated-transaction-decision-and-apply/evidence/cdc-transfer-owner-implementation-20261011T2236/source-sha256.txt

@@ -1,7 +1,0 @@
-
-> lagrange-server@0.2.6 audit:guideline:ambient-intrinsics
-> node scripts/check-guideline-ambient-intrinsics.js
-
-Scanned 551 JavaScript files
-Found 0 ambient-intrinsic call violations
-Matched 3850 inherited ambient-intrinsic baseline violations
