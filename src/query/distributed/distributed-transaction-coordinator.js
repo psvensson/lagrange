@@ -483,6 +483,8 @@ class DistributedTransactionCoordinator {
           expectedTransactionId),
       };
     }
+    const held = this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.COMMIT);
+    if (held) return withCommitPoint(held, tx);
     await this.freezeParticipantSet(tx);
     try {
       return withCommitPoint(await this.runCommitProtocol(tx), tx);
@@ -514,7 +516,8 @@ class DistributedTransactionCoordinator {
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
-    return this.runRollbackProtocol(tx);
+    return this.recoveryObligationStageRefusal(tx, QUERY_OPERATION.ROLLBACK) ??
+      this.runRollbackProtocol(tx);
   }
 
   /**

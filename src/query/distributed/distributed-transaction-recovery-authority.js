@@ -1,11 +1,12 @@
 /** A discovered ID is an obligation, not an execution snapshot. Restore its
  * authority from the existing transaction row under the request FIFO. */
-import {COMMIT_MODE, isCanonicalTransactionEpoch, PARTICIPANT_SET_STATE,
-  TRANSACTION_MODE} from '../../constants/transactions.js';
+import {isCanonicalTransactionEpoch, PARTICIPANT_SET_STATE} from
+  '../../constants/transactions.js';
 import {readParticipantSet} from './distributed-transaction-participant-set.js';
 import {decisionRecordOfRow, RECORDED_DECISION_STATE, isRecordedDecision} from
   './distributed-transaction-decision.js';
-import {hasExactDecisionParticipants} from './distributed-transaction-recovery-validation.js';
+import {validateRecoveredTransactionDecision} from
+  './distributed-transaction-recovery-validation.js';
 import {PARTICIPANT_STATUS, TRANSACTION_STATUS, TRANSACTION_DECISION_RECORDING} from
   './distributed-transaction-coordinator-constants.js';
 import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
@@ -13,6 +14,11 @@ import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
 import {QUERY_OPERATION} from '../query-constants.js';
 import {completePrepareEvidenceOf} from
   './distributed-transaction-prepare-evidence.js';
+
+const RECOVERY_AUTHORITY_LOG_MSG = Object.freeze({
+  READ_UNAVAILABLE: 'Transaction authority read unavailable',
+  FREEZE_UNRESOLVED: 'Transaction recovery freeze unresolved',
+});
 
 const TRANSACTION_AUTHORITY_STATE = Object.freeze({
   AVAILABLE: 'available', MISSING: 'missing', UNAVAILABLE: 'unavailable',
@@ -49,53 +55,60 @@ function restoredParticipants(tx, pairs, rows) {
   }));
 }
 
+// What an AVAILABLE authoritative read establishes: the restored candidate,
+// or the named state that holds it (a row without the admitted-set column is
+// legacy authority, any other refusal is invalid).
 function authorityCandidate(tx, payload) {
-  const row = payload?.transaction;
+  const row = payload.transaction;
+  const refused = {state: row?.participant_set_text == null ?
+    TRANSACTION_AUTHORITY_STATE.LEGACY : TRANSACTION_AUTHORITY_STATE.INVALID};
   if (row?.transaction_id !== tx.transactionId || row.session_id !== tx.sessionId ||
       !isCanonicalTransactionEpoch(row.transaction_epoch) ||
-      !Number.isFinite(row.timeout_deadline) || row.timeout_deadline < 0 ||
-      !Object.values(TRANSACTION_MODE).includes(row.transaction_mode)) return null;
+      !Number.isFinite(row.timeout_deadline) || row.timeout_deadline < 0) return refused;
   const pairs = readParticipantSet(tx.transactionId, row.participant_set_text);
   const participants = pairs && restoredParticipants(tx, pairs, payload.participants);
-  if (!participants) return null;
+  if (!participants) return refused;
   const frozen = row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN;
-  if ((!frozen && row.participant_set_state !== PARTICIPANT_SET_STATE.OPEN) ||
-      row.commit_mode !== (frozen ? COMMIT_MODE.TWO_PHASE_COMMIT : COMMIT_MODE.NOT_SELECTED) ||
-      row.frozen_participant_count !== (frozen ? pairs.length : 0)) return null;
   const record = decisionRecordOfRow(row, tx.transactionId);
   if (record.state === RECORDED_DECISION_STATE.INVALID ||
       (isRecordedDecision(record) && !frozen) || (tx.decision &&
         (!isRecordedDecision(record) || tx.decision.decisionText !== record.decisionText ||
-          tx.decision.decisionDigest !== record.decisionDigest))) return null;
+          tx.decision.decisionDigest !== record.decisionDigest))) return refused;
   const candidate = {...tx, participants, transactionEpoch: row.transaction_epoch,
     transactionMode: row.transaction_mode, timeoutDeadline: row.timeout_deadline,
     participantSetState: row.participant_set_state, participantSetText: row.participant_set_text,
     commitMode: row.commit_mode, frozenParticipantCount: row.frozen_participant_count,
     decision: isRecordedDecision(record) ? record : null, decisionReadState: record.state,
     status: frozen ? TRANSACTION_STATUS.PREPARING : TRANSACTION_STATUS.ACTIVE};
-  return candidate.decision && !hasExactDecisionParticipants(candidate, candidate.decision) ?
-    null : candidate;
+  try {
+    validateRecoveredTransactionDecision(candidate, row);
+  } catch {
+    // The one recovered-decision validator refuses the restored state.
+    return refused;
+  }
+  return {state: TRANSACTION_AUTHORITY_STATE.AVAILABLE, candidate};
 }
 
-async function refreshRecoveryAuthority(coordinator, tx) {
+async function readRecoveryAuthority(coordinator, tx) {
   let payload;
   try {
     payload = await coordinator.readTransactionRecoveryState?.(tx.transactionId);
   } catch (error) {
-    coordinator.logger?.warn?.('Transaction authority read unavailable', {
+    coordinator.logger?.warn?.(RECOVERY_AUTHORITY_LOG_MSG.READ_UNAVAILABLE, {
       transactionId: tx.transactionId, error: error?.message});
   }
-  if (payload?.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE) {
-    tx.decisionReadState = payload?.state ?? TRANSACTION_AUTHORITY_STATE.UNAVAILABLE;
+  return payload?.state === TRANSACTION_AUTHORITY_STATE.AVAILABLE ?
+    authorityCandidate(tx, payload) :
+    {state: payload?.state ?? TRANSACTION_AUTHORITY_STATE.UNAVAILABLE};
+}
+
+async function refreshRecoveryAuthority(coordinator, tx) {
+  const authority = await readRecoveryAuthority(coordinator, tx);
+  if (authority.state !== TRANSACTION_AUTHORITY_STATE.AVAILABLE) {
+    tx.decisionReadState = authority.state;
     return false;
   }
-  const candidate = authorityCandidate(tx, payload);
-  if (!candidate) {
-    tx.decisionReadState = payload.transaction?.participant_set_text == null ?
-      TRANSACTION_AUTHORITY_STATE.LEGACY : TRANSACTION_AUTHORITY_STATE.INVALID;
-    return false;
-  }
-  Object.assign(tx, candidate);
+  Object.assign(tx, authority.candidate);
   return true;
 }
 
@@ -110,7 +123,7 @@ async function redriveAuthoritativeRecovery(coordinator, tx) {
     try {
       await coordinator.freezeParticipantSet(tx);
     } catch (error) {
-      coordinator.logger?.warn?.('Transaction recovery freeze unresolved', {
+      coordinator.logger?.warn?.(RECOVERY_AUTHORITY_LOG_MSG.FREEZE_UNRESOLVED, {
         transactionId: tx.transactionId, error: error?.message});
       return held();
     }

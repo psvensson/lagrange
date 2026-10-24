@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 184,
+    "query-sql": 185,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 150,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-44281bcf",
+  "censusSize": 2468,
+  "digest": "fnv1a32-36e15fd2",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-220ee4db",
+  "observationDigest": "fnv1a32-710c2f81",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1578,6 +1578,7 @@
     "test/query/transaction-evidence-binding-production.test.js": "query-sql",
     "test/query/transaction-owned-commit-mode-guard.test.js": "query-sql",
     "test/query/transaction-participant-set-authority.test.js": "query-sql",
+    "test/query/transaction-recovery-decision-validation.test.js": "query-sql",
     "test/query/transaction-recovery-ownership.test.js": "query-sql",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "query-sql",
     "test/query/transaction-release-census.test.js": "query-sql",
@@ -11142,7 +11143,9 @@
       "files": [
         "src/cdc/cdc-routed-mutation-readiness.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-participant-set.js",
         "src/query/distributed/distributed-transaction-protocol.js",
+        "src/query/distributed/distributed-transaction-recovery-authority.js",
         "src/query/distributed/distributed-transaction-recovery-validation.js",
         "src/query/distributed/distributed-transaction-recovery.js",
         "src/query/sql-query-engine-write-execution.js",
@@ -11155,6 +11158,14 @@
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "test/test-helpers/transaction-persistence-gateway.js"
+      ]
+    },
+    "test/query/transaction-recovery-decision-validation.test.js": {
+      "files": [
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-decision.js",
+        "src/query/distributed/distributed-transaction-identity.js",
+        "src/query/distributed/distributed-transaction-participant-manifest.js"
       ]
     },
     "test/query/transaction-recovery-ownership.test.js": {
