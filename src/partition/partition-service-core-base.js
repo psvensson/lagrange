@@ -79,10 +79,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
-    this.externalCdcAllowed =
-      typeof options.externalCdcAllowed === PARTITION_SERVICE_LITERAL.BOOLEAN ?
-        options.externalCdcAllowed :
-        null;
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,

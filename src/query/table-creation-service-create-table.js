@@ -4,6 +4,7 @@ import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-s
 import {resolveControlPlaneSystemTableVisibilityState} from '../control-plane/control-plane-system-table-visibility-constants.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {validateTablePolicy} from '../policy/table-policy-validation.js';
+import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
@@ -25,6 +26,7 @@ const LOCAL_STR_COMMA_SPACE = ', ';
 
 function resolveCreateTablePolicy(ast) {
   const tablePolicy = ast?.options?.tablePolicy || {};
+  assertTablePolicyCdcRequestSupported(tablePolicy);
   const validation = validateTablePolicy(tablePolicy);
   if (!validation.valid) {
     throw new Error(

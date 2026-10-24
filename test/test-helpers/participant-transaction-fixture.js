@@ -29,6 +29,7 @@ import {
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
+import {TABLES} from '../../src/constants/index.js';
 import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {releaseIdentityOf, releaseMemberIds} from
@@ -64,6 +65,13 @@ const SESSION = 'tx1-v3-session';
 const EPOCH = 7;
 const ELSEWHERE = 'tx1-v3-elsewhere';
 const INSERT_SQL = 'INSERT INTO test_table (id, value) VALUES (?, ?)';
+// The fixture's two-column shape under a table whose committed writes owe a
+// durable CDC obligation. The CDC policy owner records obligations only for
+// the internally propagated system tables (owner decision D2: a user table
+// such as TABLE owes none), so the CDC-lane witnesses host their partition
+// under one of them, through the same `extra.tableName` as any other table.
+const CDC_TABLE = TABLES.LATENCY_GROUPS;
+const CDC_INSERT_SQL = `INSERT INTO ${CDC_TABLE} (id, value) VALUES (?, ?)`;
 const ROW = Object.freeze({id: 'row-1', value: 'value-1'});
 const ROW_2 = Object.freeze({id: 'row-2', value: 'value-2'});
 const OTHER_ROW = Object.freeze({id: 'row-9', value: 'other'});
@@ -1002,13 +1010,13 @@ const PREPARED = Object.freeze({outcome: PARTICIPANT_COMMIT_OUTCOME.UNKNOWN,
 const notCommitted = (state) => ({outcome: PARTICIPANT_COMMIT_OUTCOME.NOT_COMMITTED, state});
 
 // Run `measure(replica)` on two fresh follower replicas and return both facts.
-async function onTwoReplicas(measure) {
+async function onTwoReplicas(measure, extra) {
   const replicas = [];
   let result;
   let failure = null;
   try {
-    replicas.push(await startReplica(REPLICAS[1]));
-    replicas.push(await startReplica(REPLICAS[2]));
+    replicas.push(await startReplica(REPLICAS[1], extra));
+    replicas.push(await startReplica(REPLICAS[2], extra));
     const perReplica = [];
     for (const replica of replicas) {
       perReplica.push(await measure(replica));
@@ -1122,6 +1130,8 @@ export {
   UNKNOWN_ANSWER,
   UNKNOWN_FIELDS,
   EPOCH,
+  CDC_INSERT_SQL,
+  CDC_TABLE,
   INSERT_SQL,
   OTHER_ROW,
   PARTITION_ID,

@@ -69,13 +69,16 @@ import {countCdcObligations} from
   '../../src/partition/partition-cdc-obligation-ledger.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
 import {
+  CDC_TABLE,
   resumeFixtureParticipantAdmission,
   resumeFixtureParticipantGroupAdmission,
 } from '../test-helpers/participant-transaction-fixture.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
-const TABLE_NAME = 'statement_outcome_rows';
+// A CDC-carrying table: the witnesses below also measure the committed
+// write's CDC obligation, which only a propagated table owes (decision D2).
+const TABLE_NAME = CDC_TABLE;
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const SELECT_ROW_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
 // A schema error on the partition's own table (a write to any other table is

@@ -31,6 +31,17 @@ release is acceptable; do not build migration machinery for old snapshots.
   certification remain mandatory. Removal of historical code must not weaken
   any current safety assertion.
 
+## CDC obligation ledger: clean initialization (owner decision D3, 2026-10-26)
+
+The CDC recording rule records an obligation only for "required internal
+propagation OR supported external CDC" (`isTableCdcObligationRecorded`,
+`src/cache/cdc-table-policy.js`; decision D2). This release does not migrate
+the owed `_cdc_obligations` rows that earlier builds recorded for user tables
+and non-propagated system tables: no retirement command, purge or upgrade step
+exists for them. Qualification therefore runs on storage initialized by the
+current build. Restart and pending-work recovery are proven on current-build
+storage, and a data directory from an earlier build is unsupported.
+
 ## Current removal inventory and authority map (initial, not exhaustive)
 
 - `src/partition/partition-service-transaction-base.js`: obsolete

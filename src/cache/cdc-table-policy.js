@@ -9,8 +9,19 @@ const CDC_AUTHORITY_CLASS = Object.freeze({
 const CDC_POLICY_CLASS = Object.freeze({
   CONTROL_INTERNAL_PROPAGATION: 'control_internal_propagation',
   CONTROL_NO_INTERNAL_PROPAGATION: 'control_no_internal_propagation',
-  USER_EXTERNAL_CDC: 'user_external_cdc',
   USER_NO_CDC: 'user_no_cdc',
+});
+
+// The typed refusal of a table policy that asks for external user-table CDC
+// (owner decision D2, 2026-10-26): no external consumer path exists, so the
+// request is reported unsupported at admission, never silently accepted.
+const CDC_TABLE_POLICY_REFUSAL = Object.freeze({
+  EXTERNAL_CDC_UNSUPPORTED: 'external_cdc_unsupported',
+});
+const CDC_TABLE_POLICY_REFUSAL_MSG = Object.freeze({
+  EXTERNAL_CDC_UNSUPPORTED:
+    'External CDC for user tables is not supported: no external CDC consumer ' +
+    'path exists, so a table policy may not request externalCdcAllowed: true',
 });
 
 const CDC_BOOTSTRAP_HYDRATION_MODE = Object.freeze({
@@ -470,15 +481,8 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
   }),
 });
 
-const USER_TABLE_EXTERNAL_CDC_POLICY = createTablePolicy(null, {
-  policyClass: CDC_POLICY_CLASS.USER_EXTERNAL_CDC,
-  authorityClass: CDC_AUTHORITY_CLASS.USER,
-  internalCachePropagation: false,
-  readinessRelevant: false,
-  bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
-  externalCdcAllowed: true,
-});
-
+// A user table carries no CDC obligation (owner decision D2, 2026-10-26):
+// external user-table CDC is off until an implemented consumer path exists.
 const USER_TABLE_NO_CDC_POLICY = createTablePolicy(null, {
   policyClass: CDC_POLICY_CLASS.USER_NO_CDC,
   authorityClass: CDC_AUTHORITY_CLASS.USER,
@@ -516,28 +520,51 @@ function getSystemTableCdcPolicy(tableName) {
   return SYSTEM_TABLE_CDC_POLICIES[normalizedTableName] || null;
 }
 
-function getTableCdcPolicy(tableName, options = {}) {
+function getTableCdcPolicy(tableName) {
   const normalizedTableName = String(tableName || '');
-  const systemTablePolicy = getSystemTableCdcPolicy(normalizedTableName);
-  if (systemTablePolicy) {
-    return systemTablePolicy;
-  }
-  if (options.externalCdcAllowed === false) {
-    return createTablePolicy(normalizedTableName, USER_TABLE_NO_CDC_POLICY);
-  }
-  return createTablePolicy(normalizedTableName, USER_TABLE_EXTERNAL_CDC_POLICY);
+  return getSystemTableCdcPolicy(normalizedTableName) ||
+    createTablePolicy(normalizedTableName, USER_TABLE_NO_CDC_POLICY);
 }
 
-function isTableInternalCachePropagationEnabled(tableName, options = {}) {
-  return getTableCdcPolicy(tableName, options)?.internalCachePropagation === true;
+function isTableInternalCachePropagationEnabled(tableName) {
+  return getTableCdcPolicy(tableName).internalCachePropagation === true;
 }
 
-function isTableCdcReadinessRelevant(tableName, options = {}) {
-  return getTableCdcPolicy(tableName, options)?.readinessRelevant === true;
+function isTableCdcReadinessRelevant(tableName) {
+  return getTableCdcPolicy(tableName).readinessRelevant === true;
 }
 
-function isExternalCdcAllowedForTable(tableName, options = {}) {
-  return getTableCdcPolicy(tableName, options)?.externalCdcAllowed === true;
+/**
+ * The one recording rule of the durable CDC obligation ledger (owner decision
+ * D2): a committed write owes a CDC obligation only when its table needs
+ * internal cache propagation or supports external CDC. It is a pure function
+ * of the partition's table name and this static policy, so every replica of a
+ * group decides alike for the same committed entry; it never reads a
+ * subscriber's presence, a per-node cache or a table's stored policy JSON.
+ * @param {string} tableName - The table the partition holds.
+ * @return {boolean} Whether a committed write to it records an obligation.
+ */
+function isTableCdcObligationRecorded(tableName) {
+  const policy = getTableCdcPolicy(tableName);
+  return policy.internalCachePropagation === true ||
+    policy.externalCdcAllowed === true;
+}
+
+/**
+ * Admission of a table policy's CDC request: an explicit request for external
+ * CDC (top-level or under changeDataCapture) is unsupported and refused
+ * typed. An explicit false, or no CDC field, is admitted.
+ * @param {Object|null} tablePolicy - The table policy to admit.
+ * @return {void}
+ * @throws {Error} code CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED.
+ */
+function assertTablePolicyCdcRequestSupported(tablePolicy) {
+  const requested = tablePolicy?.externalCdcAllowed === true ||
+    tablePolicy?.changeDataCapture?.externalCdcAllowed === true;
+  if (!requested) return;
+  const error = new Error(CDC_TABLE_POLICY_REFUSAL_MSG.EXTERNAL_CDC_UNSUPPORTED);
+  error.code = CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED;
+  throw error;
 }
 
 export {
@@ -546,11 +573,13 @@ export {
   CDC_NON_PROPAGATED_TABLES,
   CDC_POLICY_CLASS,
   CDC_PROPAGATED_TABLES,
+  CDC_TABLE_POLICY_REFUSAL,
   SYSTEM_TABLE_CDC_POLICIES,
+  assertTablePolicyCdcRequestSupported,
   getSystemTableCdcPolicy,
   getTableCdcPolicy,
-  isExternalCdcAllowedForTable,
   isKnownSystemTable,
+  isTableCdcObligationRecorded,
   isTableCdcReadinessRelevant,
   isTableInternalCachePropagationEnabled,
 };

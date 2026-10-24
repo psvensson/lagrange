@@ -16,6 +16,7 @@ import {
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
@@ -305,7 +306,8 @@ class TablePolicyService extends EventEmitter {
       throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
-    // Validate the policy updates
+    // Validate the policy updates; a request for external CDC is refused typed.
+    assertTablePolicyCdcRequestSupported(policyUpdates);
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
       throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
