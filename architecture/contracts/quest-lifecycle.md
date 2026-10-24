@@ -1,12 +1,9 @@
 # Quest Lifecycle Contract
 
-> **Reading this contract.** The block immediately below is the machine-readable
-> `system-contract` consumed by `npm run model:contracts` — you do not need to
-> read the JSON. For the human narrative, jump to
-> [Operational Analysis](#operational-analysis); the
-> [Failure Classes](#failure-classes), [Invariants](#invariants),
-> [Runtime Bindings](#runtime-bindings), and [Model Bindings](#model-bindings)
-> sections render the same contract in prose.
+> **Reading this contract.** The block below is the machine-readable
+> `system-contract` consumed by `npm run model:contracts`. The prose sections
+> explain its runtime bindings and the workflow obligations that remain with
+> the author, independent reviewer and integration owner.
 
 <!-- system-contract
 {
@@ -20,84 +17,92 @@
     }
   ],
   "failureClasses": [
-    "Quest goalposts move after declaration",
-    "attempts are described in chat or commits without Solver event evidence",
-    "findings are lost because durable memory is not recorded in the Quest log",
-    "terminal state is claimed without live doneWhen evidence",
-    "a stalled frontier keeps receiving local patches without selected Quest theory",
-    "archived sprint/package theory state is treated as active implementation authority",
-    "latest evidence moves owner or boundary while the selected frontier theory remains unrecorded",
-    "broad mixed-scope source changes accumulate without scope-pressure visibility"
+    "Quest acceptance changes after sealing",
+    "attempts or findings exist only in chat and cannot be recovered from the Quest log",
+    "source changes land without current independent verification",
+    "a repair result is presented as distributed service or release acceptance",
+    "competing writers or unrelated work obscure the changed interaction",
+    "unavailable measurement is presented as success or terminal exhaustion",
+    "pending work has no real request, observer or next action",
+    "retired workflow operations are treated as current execution authority"
   ],
   "stateVariables": [
     "questStatus",
     "doneWhen",
-    "frontierStatus",
-    "rungIndex",
-    "pendingStep",
+    "sealedAt",
+    "seal",
     "attemptEvents",
     "findingEvents",
-    "theoryEvents",
-    "selectedFrontierTheory",
-    "selectedTheoryStale",
-    "activeSystemTheory",
-    "currentBlocker",
-    "blockerMovement",
-    "diagnosticMovement",
-    "scopePressure",
+    "lastVerification",
+    "verificationIsCurrent",
+    "attemptsSinceAltitudeCheck",
+    "blockedNextOwner",
+    "changedPaths",
+    "epicAuthorizes",
     "terminalEvidence"
   ],
   "safetyInvariants": [
     {
       "id": "sealed-goalposts-immutable",
-      "statement": "A Quest's doneWhen predicate and frontier metric definitions remain byte-identical to the sealed declaration event."
+      "statement": "After start seals the quest, doneWhen remains identical to the sealed specification; land refuses a difference."
     },
     {
-      "id": "attempts-require-diff-evidence",
-      "statement": "An attempt can receive progress credit only when metric evidence and a resolvable diff changeRef both exist."
+      "id": "sealing-requires-a-red-probe",
+      "statement": "start seals only a valid draft whose doneWhen measures red, and records the sealing head and measurement."
+    },
+    {
+      "id": "attempts-record-head-and-paths",
+      "statement": "note --attempt requires a sealed quest and records the current head and changed-path summary; the append-only log retains the work history."
+    },
+    {
+      "id": "source-landing-requires-current-verification",
+      "statement": "land refuses a current rejection and requires an approving subagent verification newer than the last attempt for changed src/ paths; review policy also binds approval to reviewed content and evidence."
     },
     {
       "id": "terminal-comes-from-solver",
-      "statement": "SOLVED and EXHAUSTED are produced only by Solver state projection, not worker self-report."
+      "statement": "Only land records solved after a green sealed probe, required guards, staged-tree proof and scoped commit; note may record blocked, exhausted or superseded with the required fields."
     },
     {
-      "id": "widen-scope-requires-frontier-theory",
-      "statement": "The widen-scope and later rungs must have a selected non-archive frontier theory before another supervised or autonomous attempt begins."
+      "id": "history-is-append-only",
+      "statement": "Recorded findings, attempts, verifications and terminal evidence are preserved; a correction is a later entry, and a terminal quest accepts no new entries."
     },
     {
-      "id": "model-rung-requires-system-theory-and-model-evidence",
-      "statement": "The model rung must have selected frontier theory, active system theory, and modelRef or modelNotApplicable evidence before commit."
+      "id": "scope-is-authorized",
+      "statement": "For a non-legacy epic, land refuses changed paths outside its authorizes scope and the quest/epic record paths; a scope change requires an explicit decision under existing authority."
     },
     {
-      "id": "archive-theory-is-not-selectable",
-      "statement": "Imported legacy theory-ledger entries are archive memory and cannot be selected for implementation without fresh Quest theory evidence."
-    },
-    {
-      "id": "stale-theory-cannot-authorize-widened-work",
-      "statement": "A selected frontier theory cannot authorize widen-scope, model, or change-approach work after latest evidence makes its owner/boundary stale unless a later theory result records the learning."
-    },
-    {
-      "id": "scope-pressure-comes-from-quest-diffs",
-      "statement": "Scope-pressure signals are computed from the Quest's own recorded diff artifacts, never from unrelated dirty worktree files."
+      "id": "acceptance-levels-remain-distinct",
+      "statement": "A bounded repair result proves only its sealed claim; the owning service milestone and exact-candidate publication or release gates retain their separate acceptance requirements."
     }
   ],
   "livenessExpectations": [
     {
-      "id": "stalled-frontier-climbs-finite-ladder",
-      "statement": "A stalled frontier climbs local-fix, widen-scope, model, change-approach, then park so the loop cannot patch the same surface indefinitely."
+      "id": "agents-use-existing-authority",
+      "statement": "Assigned author and integration agents exercise routine judgment, repair audits and land authorized work; independent verification and genuinely missing product/scope authority retain their own owners."
     },
     {
-      "id": "failed-theory-attempt-still-records-learning",
-      "statement": "A measured attempt linked to theory records supported, falsified, or needs-rerun learning so the next step does not rediscover the same path."
+      "id": "repeated-attempts-reassess-the-cause",
+      "statement": "The existing landing guard requires an altitude-check after more than three attempts since the previous one; reassess evidence, owner and scope without automatically escalating to the user or replacing the quest."
     },
     {
-      "id": "diagnostic-movement-narrows-next-theory",
-      "statement": "Evidence that moves owner, boundary, reason, or mechanism without metric movement still records diagnostic movement so the next theory can target the new current blocker."
+      "id": "review-converges-on-a-bounded-surface",
+      "statement": "Independent review consolidates all reachable material findings in the agreed interaction, then rechecks repairs and invalidated risks while retaining applicable unaffected findings."
+    },
+    {
+      "id": "accepted-repairs-integrate",
+      "statement": "One integration owner can close and integrate an accepted repair while a different service-scenario cause remains open; one writer owns each changing interaction and independent work may proceed concurrently."
+    },
+    {
+      "id": "pending-work-has-a-resumption-owner",
+      "statement": "A pending run names its actual request or run, revision, workload, status and observer/resumption owner or mechanism; work without a submitted request or active continuation is reported as such."
     }
   ],
   "knownResiduals": [
-    "Archived legacy workflow files remain historical evidence only; active execution must select and update a Quest.",
-    "The legacy theory ledger remains queryable archive memory while new durable memory is recorded as Quest findings."
+    "The CLI validates verifier identity format and log order; reviewers and the integration owner must establish actual independence, content identity and evidence applicability.",
+    "Role assignment, bounded review, WIP accounting and the current epic summary are workflow obligations, not an implemented scheduler or new Solver statuses.",
+    "class: fix and legacy epics do not receive the non-legacy epic path-scope guard; their author and reviewer must preserve the statement scope.",
+    "A blocked hold clears on a later attempt or typed finding in the projection; its owner must verify the missing input is actually resolved before recording that clearance.",
+    "Historical Solver v1 entries and the cited theory ledger remain archive evidence only; their frontier, rung and executor operations are not current commands."
   ],
   "runtimeBindings": [
     {
@@ -141,12 +146,12 @@
     {
       "kind": "statechart",
       "artifact": "docs/specs/statecharts/quest-lifecycle.json",
-      "properties": "legal Quest state transitions, theory-required gates, terminal states, and forbidden goalpost or closure shortcuts"
+      "properties": "current sealing, attempt, verification, blocked and terminal transitions, with forbidden goalpost, scope and closure shortcuts"
     },
     {
       "kind": "structural-constraint",
       "artifact": "scripts/check-system-contracts.js",
-      "properties": "contract records keep Quest refs, runtime bindings, model artifacts, and theory refs valid"
+      "properties": "contract records retain valid Quest refs, runtime bindings, model artifacts and archived theory refs"
     }
   ],
   "metrics": [
@@ -160,7 +165,7 @@
     },
     {
       "name": "Solver lifecycle regressions",
-      "probe": "npm run test:file -- test/solve/step.test.js test/solve/evidence.test.js test/solve/next.test.js"
+      "probe": "npm run test:file -- test/solve/commands.test.js test/solve/store.test.js test/solve/probes.test.js test/solve/guards.test.js"
     }
   ],
   "questRefs": [
@@ -172,57 +177,51 @@
   "failureAnalysis": {
     "fmea": [
       {
-        "failureMode": "Quest attempts happen outside the Solver log",
-        "severity": "medium - work appears complete while future agents cannot replay what moved the metric",
-        "detectability": "high - Quest status shows attempts and findings counts directly",
-        "mitigation": "drive active orientation through quest-context and require solve step/finding events for durable work history",
-        "probe": "npm run test:file -- test/solve/step.test.js"
+        "failureMode": "Acceptance is edited or solved is asserted without a measuring green probe",
+        "severity": "high - terminal status misrepresents the bounded result",
+        "detectability": "high - start, probe and land expose measurements and sealed-predicate mismatch",
+        "mitigation": "retain the seal, require land and its guards for solved, and explicitly supersede a changed premise",
+        "probe": "npm run test:file -- test/solve/commands.test.js test/solve/probes.test.js"
       },
       {
-        "failureMode": "same-frontier work widens or models without theory evidence",
-        "severity": "medium - the Quest can return to local patch loops after the first stall",
-        "detectability": "high - solve health emits theory-required and model-required signals",
-        "mitigation": "step begin/commit and run preflight enforce selected frontier theory and model rung evidence",
-        "probe": "npm run test:file -- test/solve/step-theory-gates.test.js"
+        "failureMode": "Source landing proceeds with a missing, stale or rejected verification",
+        "severity": "high - an unaccepted repair enters the baseline",
+        "detectability": "high for log-order violations; content coverage and independence also require reviewer evidence",
+        "mitigation": "record the reviewed content and consolidated findings, repair, append the next attempt and obtain current independent approval",
+        "probe": "npm run test:file -- test/solve/commands.test.js"
       },
       {
-        "failureMode": "latest blocker changes while an older selected theory continues to steer widened work",
-        "severity": "medium - attempts can optimize a no-longer-current owner path",
-        "detectability": "high - current blocker projection and solve health emit selected-theory-stale",
-        "mitigation": "record theory result movement or select a fresh owner-path theory before widened/model/change-approach attempts",
-        "probe": "npm run test:file -- test/solve/evidence.test.js"
+        "failureMode": "Unrelated work joins a quest or multiple writers change one interaction",
+        "severity": "medium - accepted results become difficult to attribute and integrate",
+        "detectability": "epic scope guards detect unauthorized paths; interaction ownership is checked during planning and review",
+        "mitigation": "use one writer per changing interaction, isolate unrelated work and retain the epic scope guard",
+        "probe": "npm run test:file -- test/solve/guards.test.js"
       },
       {
-        "failureMode": "Quest source edits silently spread across unrelated owner areas",
-        "severity": "medium - a single Quest can become hard to verify or hand off honestly",
-        "detectability": "medium - scope pressure is derived from recorded diff artifacts and shown in health/report",
-        "mitigation": "narrow the theory, split the Quest, or record a finding that justifies the mixed scope before more source work",
-        "probe": "npm run test:file -- test/solve/scope-pressure-precommit-enforcement.test.js"
+        "failureMode": "A blocked input or separate scenario failure becomes an endless repair loop",
+        "severity": "medium - accepted work waits or repeats without advancing the service milestone",
+        "detectability": "current epic summary, blocked records and linked request or run artifacts expose the next owner and evidence gap",
+        "mitigation": "evaluate bounded repair acceptance separately, route the remaining cause, and record a real continuation owner instead of inventing background progress",
+        "probe": "npm run test:file -- test/solve/store.test.js test/solve/commands.test.js"
       }
     ],
     "stpa": [
       {
         "controller": "workflow_tooling_owner",
-        "unsafeAction": "declares a Quest solved before the doneWhen probe is true or after changing the sealed goal",
-        "feedbackSignal": "solve status, solve report, quest-context latest probe, and honesty violations",
+        "unsafeAction": "lands a quest after altering its seal or without required proof and verification",
+        "feedbackSignal": "probe measurement, land refusal, attempt and verification entries, and terminal receipt",
         "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
       },
       {
         "controller": "workflow_tooling_owner",
-        "unsafeAction": "allows a stalled frontier to continue past widen-scope or model without selected Quest theory",
-        "feedbackSignal": "solve health theory-required signals, selected theory projection, and theory result events",
+        "unsafeAction": "presents repair acceptance or diagnostic movement as complete distributed service or release proof",
+        "feedbackSignal": "separate quest, epic and exact-candidate publication acceptance records",
         "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
       },
       {
         "controller": "workflow_tooling_owner",
-        "unsafeAction": "uses a selected theory after latest evidence moved the current blocker to a different owner or boundary",
-        "feedbackSignal": "current blocker movement, selected-theory-stale health signal, and recorded theory result outcomes",
-        "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
-      },
-      {
-        "controller": "workflow_tooling_owner",
-        "unsafeAction": "treats diagnostic blocker movement as scenario closure",
-        "feedbackSignal": "separate scenarioOutcome, theoryOutcome, metric, and doneWhen fields in evidence, theory results, and report",
+        "unsafeAction": "clears a hold or claims background execution without resolving or submitting the pending work",
+        "feedbackSignal": "blocked next owner, linked request or run status and current epic summary",
         "ownerBoundary": "workflow_tooling_owner / quest_lifecycle"
       }
     ]
@@ -232,39 +231,71 @@
 
 ## Failure Classes
 
-This contract covers Quest lifecycle failures: goalpost drift, unrecorded
-attempts, chat-only memory, stale selected theories, broad mixed-scope diffs,
-and premature closure claims.
+This contract covers changed acceptance, lost work history, stale verification,
+unowned interactions and premature closure. It also separates three claims:
+a bounded repair is accepted, the distributed service milestone is met, and an
+exact candidate satisfies publication or release gates. Each keeps its own
+existing authority and evidence.
 
 ## Invariants
 
-Quest goalposts are sealed by the first declaration event. Attempts require
-probe evidence plus a resolvable `diff:<path>` change reference. Terminal state
-comes from the Solver report projection. A selected frontier theory cannot keep
-authorizing widened work after latest evidence moves the current blocker unless
-that movement is recorded as theory learning. Scope pressure is projected only
-from the Quest's own diff artifacts, never from unrelated dirty files.
+`start` seals one measuring red `doneWhen`. `note --attempt` records the head
+and changed paths. Only `land` writes `solved`, after measuring that unchanged
+predicate green, enforcing scope and verification, proving the staged tree and
+committing it. Other terminal outcomes are recorded explicitly. Logs are
+append-only; terminal quests are not reopened by rewriting their history.
+
+For source landing, the runtime requires an approving `subagent:<id>` entry
+newer than the last attempt and refuses a current rejection. That check does
+not establish actual independence or review coverage. The author and reviewer
+must identify the reviewed content and evidence, consolidate material findings,
+and renew approval for repairs and risks they invalidate. The existing
+altitude guard requires a finding after more than three attempts since the
+previous altitude check; it does not require human permission or a new quest.
 
 ## Runtime Bindings
 
-`scripts/solve.js` owns the CLI (solve-v2: start, note, probe, land,
-evidence add, board). `scripts/solve/commands.js` owns the four commands and
-the landing sequence. `scripts/solve/store.js` owns the append-only log and
-derived quest state. `scripts/solve/schema.js` owns record shapes and
-vocabularies. `scripts/solve/probes.js` owns every doneWhen measurement.
-`scripts/solve/guards.js` owns the landing guards (change set, epic scope,
-static quality, coupled pairs, canonical import graph).
+`scripts/solve.js` owns dispatch. `scripts/solve/commands.js` owns sealing,
+notes, probe projection and the landing sequence. `scripts/solve/store.js`
+owns the record layout and derived state; `scripts/solve/schema.js` owns its
+vocabulary. `scripts/solve/probes.js` owns measurements and required proof
+artifacts. `scripts/solve/guards.js` owns changed-path, epic-scope, static,
+interaction and canonical import-graph checks. The generated
+[command reference](../../docs/steering/generated/solve-commands.md) lists
+supported operations. Historical v1 operations are not current authority.
 
 ## Model Bindings
 
-The statechart is the executable lifecycle model. The contract checker is the
-structural constraint that keeps Quest refs, runtime paths, model refs, and
-archived theory refs from drifting independently.
+The [statechart](../../docs/specs/statecharts/quest-lifecycle.json) models current
+sealing, attempts, review, blocked holds and terminal states. The contract
+checker validates reference structure. These checks do not implement a job
+queue or prove distributed service readiness. The legacy theory reference is
+retained for historical traceability and grants no implementation authority.
 
 ## Operational Analysis
 
-FMEA/STPA frame the workflow controller as a safety boundary: it must not issue
-progress credit or closure without Solver evidence, must not keep steering from
-a no-longer-current theory, and must keep mixed source scope visible before
-handoff. `quest-context` supplies the active handoff surface, while legacy
-workflow artifacts remain archive evidence only.
+The author owns routine diagnosis and repair; independent verification owns
+its verdict; one integration owner coordinates accepted work. Existing task
+authorization continues across attempts and sessions. The user is needed for real
+product/scope choices or missing authority. A recurring failure prompts a
+recorded reassessment of cause, evidence and owner, not another approval ritual.
+
+Use one writer per changing interaction, including its coupled boundary.
+Independent investigation, review and other interactions may proceed in
+parallel. Count waiting review, test and integration as work in progress.
+Consolidate findings within a bounded review surface and retain applicable
+unaffected evidence under the existing provenance and proof-selection rules.
+
+Keep one current summary in the owning epic, linking the baseline, blocker,
+accepted and pending work, evidence and next owner/action. The records it links
+remain authoritative. A standalone `class: fix` uses its existing quest record
+and log; no new epic is required solely for a summary. If a test or review
+cannot proceed, name its real request
+or run and resumption owner, or say that it has not been submitted and identify
+the next action. Unavailable measurement is neither success nor exhaustion.
+
+An accepted repair can close and integrate while a separate scenario cause
+remains open. The service milestone and exact-candidate publication or release
+gates retain their full requirements. FMEA/STPA identify where the runtime
+refuses invalid claims and where reviewer and integration judgment must supply
+the remaining evidence.

@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "steering-stabilization-20261022",
+  "class": "fix",
+  "statement": "Implement the user-authorized coordinated revision of all affected active steering, workflow, architecture explanation, roadmap, review, test and lab instructions; reconcile enforcing help and model descriptions; independently verify complete coverage without changing product acceptance or immutable history. Scope: AGENTS.md, docs/steering, docs/development, docs/specs/statecharts/quest-lifecycle.json, architecture/overview.md, architecture/runtime-contracts.md, architecture/contracts/quest-lifecycle.md, architecture/contracts/core-system-logic.md, test/guidelines, test/distributed/operational-ground-truth.md, scripts/gate-preflight.js, the active raft-rs-full-cutover and core-architecture-convergence epics and this revision evidence.",
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/steering-stabilization-20261022.json"
+    }
+  },
+  "constraints": [
+    {
+      "id": "product-acceptance",
+      "statement": "Preserve sealed runtime, service and release acceptance; do not claim core stability from a documentation change."
+    },
+    {
+      "id": "history",
+      "statement": "Do not rewrite recorded findings, attempts, verifications, terminal entries or historical capability evidence."
+    },
+    {
+      "id": "current-tooling",
+      "statement": "Use current registered commands and existing proof owners; do not invent a workflow engine, caching framework or stabilization runtime."
+    },
+    {
+      "id": "review",
+      "statement": "Target zero unresolved accepted-policy coverage items and material consistency findings, established by an independent verifier plus applicable existing checks; retain evidence and candidate identity."
+    }
+  ],
+  "sealedAt": "67c92b49629b5da765d19f8feaba1ff03427d28b"
+}

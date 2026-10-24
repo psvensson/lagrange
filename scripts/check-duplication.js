@@ -88,8 +88,8 @@ const RATCHET_TARGETS = [
     // measures 47/1462, so this quest claims no clone reduction.
     // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
     // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
-    // Q6 stages 1-2 on the API-removal tree: tightened 46/1439 -> 44/1383 on
-    // the checker hint.
+    // Alpha API removal: tightened 46/1439 -> 44/1383 (WebSocketTransport
+    // family, RouterMessageHandler and ReplicaLifecycleManager deleted).
     baselineCloneGroupCount: 44,
     baselineDuplicatedLineCount: 1383,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',

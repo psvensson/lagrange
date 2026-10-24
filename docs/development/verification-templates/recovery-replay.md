@@ -7,12 +7,12 @@ categories: [recovery-replay]
 For changes to restart recovery, cache-vs-authoritative reconciliation, or
 replay lanes. Each item requires an evidence path.
 
-1. **Never clobber live with stale.** Recovery that rebuilds in-memory
-   state from rows must skip LIVE (in-memory, non-terminal) entries — cache
-   rows lag CDC and rebuilt records start with empty registries. Enumerate
-   EVERY seam that writes recovered state (the run-23 clobber had four:
-   record replace, sub-registry overwrite, recovered-id enrollment,
-   list duplication).
+1. **Never clobber live with stale.** Show which durable authority, generation,
+   and retained obligations permit recovery to replace in-memory state. A
+   lagging cache row cannot erase current enlistment or recreate an old owner;
+   in-memory existence alone cannot override newer durable authority either.
+   Check each changed recovery write seam (record replacement, sub-registry,
+   recovered-id enrollment, and list membership) against that contract.
 2. **Restart vs live discrimination.** How does the code distinguish "I
    restarted, restore everything" from "I am live, fill gaps only"? Show
    the discriminator and its false-positive cost.
@@ -25,3 +25,7 @@ replay lanes. Each item requires an evidence path.
 5. **Absence-proves-nothing.** A row invisible during recovery is not
    evidence of completion or absence — verify no path treats
    unreadable-as-terminal (run-26 late-honor preempt-cancel).
+6. **Recovery completes useful work.** Trace admitted obligations across restart,
+   partial effect, lost acknowledgement, and replay through the real owner.
+   Under stated finite-failure assumptions, prove safety, eventual resolution,
+   and bounded retained state separately; refusing forever is not recovery.

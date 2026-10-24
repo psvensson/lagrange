@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Gate preflight — the runnable form of operational-ground-truth.md's
-// "deterministic-first; the gate is a LAST RESORT ONLY" requirements.
+// "deterministic-first; a statistical gate is a last resort" requirements.
 //
 // Before ANY docker statistical gate run you must write down (1) the exact
 // question the gate answers and (2) why no deterministic in-process test can
@@ -28,14 +28,16 @@ const LATENT_BLOCKER_HEADER =
   '## Latent-blocker census (do not spend a gate to learn what the ' +
   'corpus already reveals)\n\n';
 const ALLOWED_CATEGORIES_HEADER =
-  '\n## Allowed gate categories (all others: use a ' +
-  'deterministic in-process test)\n';
+  '\n## Allowed statistical gate categories\n' +
+  'Use deterministic proof for mechanistic claims. Bounded native, physical ' +
+  'or public-service scenarios may supply necessary integration evidence; ' +
+  'they do not establish a pass rate or waive sealed certification.\n';
 const CALIBRATION_HEADER =
   '\n## N calibration (smallest informative N; ' +
   'escalate only when the result forces it)\n';
 const OPERATIONAL_GROUND_TRUTH_SOURCE =
   '\nSource: test/distributed/operational-ground-truth.md ' +
-  '("Deterministic-first; the gate is a LAST RESORT ONLY").\n';
+  '("Deterministic-first; a statistical gate is a last resort").\n';
 const LATENT_BLOCKER_FAILURE =
   'gate:preflight: analyze:latent-blockers failed — resolve that before ' +
   'queuing any gate.\n';
@@ -58,7 +60,7 @@ const ALLOWED_GATE_CATEGORIES = [
 const N_CALIBRATION_TABLE = [
   '| Question                     | N    |',
   '| ---------------------------- | ---- |',
-  '| Mechanistic / does-it-engage | 3-4  |',
+  '| Mechanistic / does-it-engage | none; deterministic proof |',
   '| Rate or variance verdict     | >=8  |',
   '| Sealed-bar certification     | >=15 |',
 ];

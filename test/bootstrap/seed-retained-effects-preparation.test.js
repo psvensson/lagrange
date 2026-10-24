@@ -43,7 +43,7 @@ async function retainedFixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seed-retained-preparation-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: NODE_ID, buildDigest: build.digest};
-  const declaration = createSeedOriginalAllocation({...identity, now: DECLARED_AT});
+  const draft = createSeedOriginalAllocation({...identity, now: DECLARED_AT});
   const preparations = [];
   const startups = [];
   const nativeEntries = [];
@@ -82,7 +82,8 @@ async function retainedFixture(t) {
   });
   const issuer = createPreparation();
   assert.throws(() => issuer.foundationTimestamp(), hold(REASON.IDENTITY));
-  issuer.prepare(declaration);
+  // The issued declaration carries the stamps the lifecycle owner minted.
+  const declaration = issuer.prepare(draft);
   assert.equal(issuer.foundationTimestamp(), DECLARED_AT,
     'the actual preparation owns the declared registration timestamp');
   issuer.close();

@@ -7,10 +7,11 @@ audience: development
 Documents for people developing Lagrange itself — how work is planned,
 executed, and improved, including operating the agent/Solver workflow from the
 outside. Nothing here is needed to run, operate, or integrate the system
-(that lives in [`docs/`](../README.md) and the root [README](../../README.md)),
-and nothing here binds agents (that lives in [`AGENTS.md`](../../AGENTS.md)
-and [`docs/steering/`](../steering/)). Zoning rules:
-[`docs/steering/rules.md`](../steering/rules.md).
+(that lives in [`docs/`](../README.md) and the root [README](../../README.md)).
+[`AGENTS.md`](../../AGENTS.md) and [`docs/steering/`](../steering/) define the
+entry point and route to conditional owners. Routed documents here govern their
+particular development concerns; audience zoning does not remove that authority.
+Zoning is checked by `npm run audit:doc-audience`.
 
 - [../../CONTRIBUTING.md](../../CONTRIBUTING.md) — contribution policy and
   contributor entry point

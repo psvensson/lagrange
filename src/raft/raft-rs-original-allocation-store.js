@@ -3,14 +3,16 @@
 import {commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN, REPLICA_LIFECYCLE_TABLE as TABLE,
-  ORIGINAL_RIGHT_SUCCESSOR, originalAllocationError} from './raft-rs-original-allocation-constants.js';
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN, ORIGINAL_RIGHT_SUCCESSOR,
+  originalAllocationError} from './raft-rs-original-allocation-constants.js';
+import {LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE as TABLE} from
+  './raft-rs-replica-lifecycle-constants.js';
 
 function exactLifecycleRow(db, member) {
   const row = db.prepare(`SELECT * FROM ${TABLE}
     WHERE group_id = ? AND peer_id = ? AND replica_identity = ?`)
     .get(member.groupId, member.peerId, member.replicaId);
-  if (row?.incarnation !== member.incarnation || row?.state !== 'active') {
+  if (row?.incarnation !== member.incarnation || row?.state !== LIFECYCLE_STATE.ACTIVE) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
   return row;

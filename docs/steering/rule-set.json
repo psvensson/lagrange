@@ -1,12 +1,12 @@
 {
   "schema": "rule-set/1",
-  "revision": 3,
+  "revision": 4,
   "note": "The sealed rule set. One entry per independently violable invariant, each naming exactly one owner key, and docs/steering/rules.md carries exactly one body per entry in this order. This manifest is the criterion; the number of entries follows from it and is reported rather than asserted, so a further rule is a deliberate revision of this file and never an edit to a threshold.",
   "supersedes": {
-    "revision": 2,
-    "rules": 26,
-    "head": "d1459b97d24f2b3181d0e28d3566c22243aae0e8",
-    "reason": "Revision 2 had no rule for what a probe may do; a probe started a five-minute local formation demo on 2026-09-13. R27 seals the probe as read-only and the LAGRANGE_PROBE guard as its mechanism."
+    "revision": 3,
+    "rules": 27,
+    "head": "67c92b49629b5da765d19f8feaba1ff03427d28b",
+    "reason": "User-authorized coordinated steering revision of 2026-10-22: repair demonstrated causes, preserve semantics across owned representations, separate bounded repair from service and release acceptance, and execute within standing authority. Current workflow, review, evidence and roadmap owners change together; sealed product acceptance and recorded history remain intact."
   },
   "rules": [
     {
@@ -26,7 +26,7 @@
     },
     {
       "id": "R04",
-      "invariant": "a-symptom-is-an-owner-defect",
+      "invariant": "a-failure-is-repaired-at-its-proven-cause",
       "owner": "architecture"
     },
     {

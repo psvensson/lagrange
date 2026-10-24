@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-10
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** System-table mutation requirements and test-only code path rules. Index: [`INDEX.md`](INDEX.md).
@@ -63,7 +63,12 @@ It is FORBIDDEN to:
   scenario easier to set up.
 - Export internal implementation details solely so tests can reach them.
 
-If production code is hard to test, fix the design:
+A controlled substitute may isolate a dependency without changing the owner
+contract. Cite which real entry path and production owner the fixture exercises,
+what it substitutes, and the resulting evidence ceiling. A fixture-only success
+cannot prove native execution or independent physical failure domains.
+
+If production code is hard to test, choose the smallest justified design repair:
 
 1. **Extract and inject** - Break the hard-to-test dependency out and inject it
    so tests can supply a controlled substitute.
@@ -82,10 +87,11 @@ This section governs the inverse: a *production* feature flag that a test couple
 to. The test-only-paths rule and this flag-coupling rule together close the loop —
 neither tests nor production may smuggle a flag into the proof.
 
-- A test MUST assert the real, unconditional production behavior, and MUST NEVER
-  set, branch on, or pin a feature flag to make an assertion pass. A green test
-  that only holds while a flag is in one position proves the flag, not the
-  behavior.
+- A test MUST assert the real production contract, and MUST NEVER pin an
+  implementation feature flag merely to make an assertion pass. Tests may select
+  an existing supported deployment configuration when that configuration is the
+  claim being tested; name the envelope and prove its actual entry paths. This
+  does not authorize a new product mode or test-only bypass.
 - Production feature flags are within-session scaffolds only — NO flag survives
   the session that lands it (user directive 2026-06-26, re-affirmed 2026-07-02).
   By the end of the session a flag MUST be either baked in unconditionally (the
@@ -98,35 +104,32 @@ neither tests nor production may smuggle a flag into the proof.
   behavior in first, then update the test to assert that unconditional behavior;
   a test never pins a flag either way.
 
-## System Guideline Conformance Gate for New and Behavior-Meaningful Tests
+## Contract Review For Behavior-Meaningful Tests
 
-When adding a new test file, or making a behavior-meaningful change to an
-existing test — new or changed assertions about production behavior — you must
-also audit the code under test for System Guidelines violations and fix them as
-part of the same change. Mechanical test edits (renames, import updates,
-timeout adjustments, formatting) do NOT trigger this gate.
+A new test or changed assertion about production behavior must be reviewed
+against the actual owner contract. Mechanical changes such as names, imports,
+formatting, or harness budgets do not by themselves require a new architecture
+review; they still need the checks selected for their real effects.
 
-Required workflow:
-
-1. Identify the audit scope: the production files exercised by the new or
-   modified test plus their direct owner collaborators — the same bounded set
-   as the closure deep dive defined in [`proof-ladders.md`](proof-ladders.md)
-   ("Closure deep dive — scope"). Do not widen beyond that set.
-2. Check those files against `docs/steering/rules.md` with special
-   focus on:
-   - owner dependency routing
-   - duplicate logic and fallback paths
-   - single source of truth for state and row-field ownership
-3. If you find a violation, add a failing regression that captures it and fix
-   the production code before closing the test task.
-4. Do not land a test-only change that leaves a known System Guidelines
-   violation in the code path being tested.
-5. In test descriptions, name the owner path being verified (for example
-   "uses `storageAdmissionService.checkSplit`" or
-   "refreshes via `setRebalanceCoordinator`").
-6. For CDC-replicated system-table lifecycle changes, include at least one
-   regression that fails when writes are keyed by non-primary predicates instead
-   of canonical primary key.
+1. Identify the production owner and directly affected collaborators exercised
+   by the test. Use the bounded closure-review scope in
+   [`proof-ladders.md`](proof-ladders.md).
+2. Check owner routing, decision authority, and row-field ownership against
+   [`rules.md`](../../docs/steering/rules.md). A representation or adapter is not
+   a competing owner unless it independently decides runtime meaning.
+3. Make the regression fail for the intended invariant through the real seam.
+   Preserve first-failure output; setup, import, or missing-method errors do not
+   establish a product defect.
+4. Fix a contract violation that causes the defect, is introduced by the change,
+   or makes its proof unsafe. Record unrelated findings with an owner and next
+   action instead of making the test task an unbounded cleanup.
+5. Name the owner path in test descriptions, for example
+   `storageAdmissionService.checkSplit` or `setRebalanceCoordinator`.
+6. For CDC-replicated system-table lifecycle changes, include a regression that
+   fails when writes use non-primary predicates instead of the canonical key.
+7. Keep safety assertions distinct from recovery progress and resource bounds.
+   A fixture must demonstrate progress after the injected finite failure clears
+   when the contract promises it; refusal alone is insufficient.
 
 ## Test Doubles Consume the Owner (One Version of Every Shape)
 

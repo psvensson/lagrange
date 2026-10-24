@@ -1,10 +1,10 @@
 import {
   DURABLE_LIFECYCLE_READ,
-  LIFECYCLE_STATE,
   readDurableReplicaLifecycle,
   retireReplicaLifecycle,
   withReplicaLifecycleClaim,
 } from './raft-rs-replica-lifecycle-owner.js';
+import {LIFECYCLE_STATE} from './raft-rs-replica-lifecycle-constants.js';
 
 // Retire the exact runtime generation the caller holds (its own operation
 // port); never the current runtime of a reused logical name. A retirement

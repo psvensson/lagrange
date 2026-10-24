@@ -27,6 +27,16 @@ const SNAPSHOT_INSTALL = 'src/raft/snapshot-install.js';
 const SNAPSHOT_LIFECYCLE_PREPARE = 'prepareReplicaLifecycleForSnapshot';
 const SNAPSHOT_RECEIVER = 'src/raft/snapshot-receiver-admission.js';
 const SNAPSHOT_LIFECYCLE_INSPECT = 'inspectReplicaLifecycleForSnapshot';
+const ORIGINAL_ALLOCATION_PREPARATION =
+  'src/raft/raft-rs-original-allocation-preparation.js';
+const ORIGINAL_LIFECYCLE_PREPARE =
+  'prepareReplicaLifecycleForOriginalAllocation';
+// Each declared caller and the one named lifecycle operation it may import.
+const LIFECYCLE_OPERATION_CALLERS = Object.freeze([
+  Object.freeze([SNAPSHOT_INSTALL, SNAPSHOT_LIFECYCLE_PREPARE]),
+  Object.freeze([SNAPSHOT_RECEIVER, SNAPSHOT_LIFECYCLE_INSPECT]),
+  Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_LIFECYCLE_PREPARE]),
+]);
 const LIFECYCLE_ADMIN =
   'src/raft/raft-rs-lifecycle-administration.js';
 const LIFECYCLE_COORDINATOR =
@@ -266,14 +276,17 @@ function violation(file, code, detail) {
 // Symbol-limited boundary, not a file-wide lifecycle allowlist. Snapshot
 // installation can request staging but cannot import the class, registration,
 // retirement or general inspection controls. The receiver interaction gets only
-// its specific read-only inspection, never staging or mutation capabilities. Namespace/dynamic/re-exports fail.
-function isSnapshotStagingImport(fileName, node) {
-  return (fileName === SNAPSHOT_INSTALL || fileName === SNAPSHOT_RECEIVER) &&
-    node.type === AUDIT_AST.IMPORT_DECLARATION &&
+// its specific read-only inspection, never staging or mutation capabilities.
+// The original-allocation preparation gets only the owner-minted original
+// birth of a founder's row before native entry (owner decision 2026-10-26,
+// Q1), never the class, retirement, registration or another operation.
+// Each caller imports exactly its one symbol. Namespace/dynamic/re-exports fail.
+function isLifecycleOperationImport(fileName, node) {
+  return node.type === AUDIT_AST.IMPORT_DECLARATION &&
     node.specifiers.length === 1 &&
     node.specifiers[0].type === AUDIT_AST.IMPORT_SPECIFIER &&
-    node.specifiers[0].imported.name === (fileName === SNAPSHOT_INSTALL ?
-      SNAPSHOT_LIFECYCLE_PREPARE : SNAPSHOT_LIFECYCLE_INSPECT);
+    arraySome(LIFECYCLE_OPERATION_CALLERS, ([caller, operation]) =>
+      caller === fileName && node.specifiers[0].imported.name === operation);
 }
 
 function auditRaftRsOperationBoundary({root}) {
@@ -349,7 +362,7 @@ function auditRaftRsOperationBoundary({root}) {
         !arrayIncludes(
           [PORT_CONSTRUCTOR, LIFECYCLE_ADMIN, LIFECYCLE_OWNER],
           fileName,
-        ) && !isSnapshotStagingImport(fileName, node)) {
+        ) && !isLifecycleOperationImport(fileName, node)) {
         violations.push(violation(fileName,
           AUDIT_VIOLATION.LIFECYCLE_OWNER_IMPORT_BYPASS,
           String(specifier)));

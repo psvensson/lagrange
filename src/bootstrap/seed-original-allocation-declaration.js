@@ -1,5 +1,8 @@
 // The seed catalog remains the producer of its original allocation. This
 // immutable declaration pins births before any of its native replicas open.
+// The replica lifecycle owner, not this producer, mints each founder's
+// incarnation: the producer declares a draft without incarnations and the
+// complete declaration is formed from the lifecycle owner's returned stamps.
 import {createHash, randomUUID} from 'node:crypto';
 import path from 'node:path';
 import {types} from 'node:util';
@@ -20,6 +23,7 @@ const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_ENCODING = 'hex';
 const PROPERTY_VALUE = 'value';
 const ARRAY_LENGTH = 'length';
+const INCARNATION_FIELD = 'incarnation';
 
 function originalSeedPeerAddresses(nodeId, serviceType, replicaIds) {
   const entityType = serviceType === SERVICE_TYPE.MESSAGE_GROUP ?
@@ -64,6 +68,12 @@ function originalSeedAnchor(dataDir) {
     dbPath: getPartitionDbPath(dataDir, groupId, replicaId)});
 }
 
+/**
+ * Declare the original allocation's draft: every founder and its birth
+ * facts, without an incarnation (that is the lifecycle owner's to mint).
+ * @param {Object} request {dataDir, nodeId, buildDigest, now}.
+ * @return {Object} Deep-frozen draft for the original-allocation preparation.
+ */
 function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
   if (!Number.isSafeInteger(now) || now < 0 ||
       typeof nodeId !== 'string' || nodeId.length === 0 ||
@@ -74,7 +84,6 @@ function createSeedOriginalAllocation({dataDir, nodeId, buildDigest, now}) {
   const members = originalSeedMemberDescriptors(canonicalDataDir).map((member) => ({
     ...member,
     peerId: deriveRaftRsPeerId(member.replicaId),
-    incarnation: randomUUID(),
     createdAt: mintServiceRowCreatedAt(now),
     createAttemptToken: randomUUID(),
     membership: genesisStamp(member.replicaIds),
@@ -109,7 +118,37 @@ function assertPlainDeclarationData(value, ancestors = new Set()) {
   ancestors.delete(value);
 }
 
-function validateOriginalSeedDeclaration(declaration, {dataDir, nodeId, buildDigest}) {
+function validateOriginalSeedDeclaration(declaration, identity) {
+  return validateAllocation(declaration, identity, true);
+}
+
+/**
+ * Validate a draft before any I/O: the complete declaration except the
+ * incarnations, which a draft must not carry (a caller never chooses one).
+ * @param {Object} draft The declaration owner's draft.
+ * @param {Object} identity {dataDir, nodeId, buildDigest} bound at startup.
+ * @return {Object} The deep-frozen draft.
+ */
+function validateOriginalSeedDraft(draft, identity) {
+  return validateAllocation(draft, identity, false);
+}
+
+/**
+ * Form the complete declaration from a draft and the lifecycle owner's
+ * exact returned stamps, one per founder, and validate it whole.
+ * @param {Object} draft A draft this producer declared.
+ * @param {Map<string, string>} incarnations replicaId -> owner-minted stamp.
+ * @param {Object} identity {dataDir, nodeId, buildDigest} bound at startup.
+ * @return {Object} The deep-frozen complete declaration.
+ */
+function completeSeedOriginalAllocation(draft, incarnations, identity) {
+  validateOriginalSeedDraft(draft, identity);
+  return validateOriginalSeedDeclaration({...draft,
+    members: draft.members.map((member) => ({...member,
+      [INCARNATION_FIELD]: incarnations.get(member.replicaId)}))}, identity);
+}
+
+function validateAllocation(declaration, {dataDir, nodeId, buildDigest}, complete) {
   assertPlainDeclarationData(declaration);
   if (typeof nodeId !== 'string' || nodeId.length === 0 ||
       typeof buildDigest !== 'string' || buildDigest.length === 0 ||
@@ -132,26 +171,34 @@ function validateOriginalSeedDeclaration(declaration, {dataDir, nodeId, buildDig
   }
   const tokens = new Set();
   for (let index = 0; index < expected.length; index++) {
-    validateMember(declaration.members[index], expected[index], tokens);
+    validateMember(declaration.members[index], expected[index], tokens, complete);
   }
   return deepFreeze(declaration);
 }
 
-function validateMember(member, expected, tokens) {
+function validateMember(member, expected, tokens, complete) {
   const matches = Object.entries(expected).every(([key, value]) =>
     JSON.stringify(member?.[key]) === JSON.stringify(value));
   if (!matches || member.peerId !== deriveRaftRsPeerId(expected.replicaId) ||
       JSON.stringify(member.membership) !== JSON.stringify(genesisStamp(expected.replicaIds)) ||
-      typeof member.incarnation !== 'string' || member.incarnation.length === 0 ||
       typeof member.createAttemptToken !== 'string' || member.createAttemptToken.length === 0 ||
       !Number.isSafeInteger(member.createdAt) || member.createdAt < 0 ||
-      member.createAttemptToken === member.incarnation ||
-      tokens.has(member.createAttemptToken) || tokens.has(member.incarnation)) {
+      tokens.has(member.createAttemptToken) ||
+      incarnationRefused(member, tokens, complete)) {
     throw originalAllocationError(REASON.IDENTITY, expected.replicaId);
   }
   tokens.add(member.createAttemptToken);
-  tokens.add(member.incarnation);
+  if (complete) tokens.add(member.incarnation);
 }
 
-export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, originalSeedAnchor,
+// A complete member carries one fresh stamp distinct from every token; a
+// draft member carries none.
+function incarnationRefused(member, tokens, complete) {
+  if (!complete) return Object.hasOwn(member, INCARNATION_FIELD);
+  return typeof member.incarnation !== 'string' || member.incarnation.length === 0 ||
+    member.createAttemptToken === member.incarnation || tokens.has(member.incarnation);
+}
+
+export {createSeedOriginalAllocation, validateOriginalSeedDeclaration, validateOriginalSeedDraft,
+  completeSeedOriginalAllocation, originalSeedAnchor,
   originalSeedPeerAddresses};

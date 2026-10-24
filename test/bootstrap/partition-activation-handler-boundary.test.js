@@ -314,8 +314,11 @@ async (t) => {
     'the shared retirement waits on the owner\'s activation effect section');
   t.match(helper, /transport\.unregisterExact\(address, handler\)/u,
     'the shared retirement is exact-identity');
-  const shutdown = source.slice(source.indexOf('  async shutdown() {'));
-  t.ok(shutdown.indexOf('await retirePartitionTransportHandler(this);') <
-    shutdown.indexOf('closePartitionPersistenceResources(this);'),
+  const shutdownStart = source.indexOf('\n  shutdown() {');
+  t.ok(shutdownStart >= 0, 'the partition shutdown is located');
+  const shutdown = source.slice(shutdownStart);
+  const retireAt = shutdown.indexOf('await retirePartitionTransportHandler(this);');
+  t.ok(retireAt >= 0 &&
+    retireAt < shutdown.indexOf('closePartitionPersistenceResources(this);'),
   'shutdown retires the handler in the lane before closing the store');
 });

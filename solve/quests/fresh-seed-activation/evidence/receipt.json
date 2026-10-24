@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "measuredAt": "a51f4992965d4a1ec94bb7c3b1824795887be129",
+  "receipts": [
+    {
+      "id": "protected-activation-admitted-openings-only",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js",
+      "passed": false,
+      "reason": "Seal-time red at a51f49929: startLagrangeRuntime refused ORIGINAL_ALLOCATION_HOLD/original-handoff-continuation-unavailable at seed-partitions-phase.js:388 (startDeferredBootstrapReplicaElections -> assertOriginalSeedContinuation); no admitted opening may campaign."
+    },
+    {
+      "id": "original-rights-durable-monotonic-transfer",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js",
+      "passed": false,
+      "reason": "Seal-time red at a51f49929: every declared right observed only as [UNUSED]; registration is never reached behind the continuation hold."
+    },
+    {
+      "id": "public-admission-closed-until-handoff",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js",
+      "passed": false,
+      "reason": "Seal-time red at a51f49929: admission stayed closed (no sample), but the handoff never completes, so open-after is unmeasured."
+    },
+    {
+      "id": "public-write-and-read-served",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js",
+      "passed": false,
+      "reason": "Seal-time red at a51f49929: no runtime is returned, so no public write or read is attempted."
+    },
+    {
+      "id": "same-data-restart-served-or-typed-hold",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js",
+      "passed": false,
+      "reason": "Seal-time red at a51f49929: not reached; the first start does not serve."
+    },
+    {
+      "id": "retained-partial-uncertain-cold-states-keep-hold",
+      "passed": false,
+      "reason": "Unexecuted; measured by the existing owner witnesses named in DESIGN-fresh-seed-activation.md section 5 after the source change."
+    },
+    {
+      "id": "independent-verification-and-applicable-gates",
+      "passed": false,
+      "reason": "Unexecuted; requires an independent approving verification and the applicable land gates on the exact candidate."
+    }
+  ],
+  "limits": [
+    "No implementation or source acceptance.",
+    "No recovery proof: two-start, retained-handoff and cold mid-handoff obligations remain with retained-seed-original-handoff and the final cutover acceptance."
+  ]
+}

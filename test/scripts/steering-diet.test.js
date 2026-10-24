@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {GIT_OUTPUT_BOUND, execGit} from '../../scripts/checks/git-invocation.js';
 import {
   alwaysLoadClosure, declaredRules, registeredVerbs, unregisteredOperationReferences,
 } from '../../scripts/checks/check-steering-diet.js';
@@ -24,6 +25,9 @@ const INVENTORY = 'solve/epics/solve-v2/steering-inventory.json';
 const DISPOSITION = 'solve/epics/solve-v2/steering-disposition.json';
 const PACKAGE = 'package.json';
 const ROUTER_DIR = 'docs/steering';
+const RELOCATION_HEAD = 'c0670a2af496aa246a8c5ccd2d23efbe9e54fb52';
+const PROOF_LADDERS_MD = 'test/guidelines/proof-ladders.md';
+const REGRESSION_POLICY_MD = 'test/guidelines/regression-policy.md';
 // A disposition and the bucket it lands in are one decision, recorded twice.
 const BUCKET_OF = Object.freeze({
   'move': 'always-load-invariant',
@@ -32,9 +36,9 @@ const BUCKET_OF = Object.freeze({
   'illustrative-delete': 'explanation-example',
   'historical-delete': 'historical-retired',
 });
-// Relocation drops the retired front-matter keys that named the pack and its
-// parent index, so a destination may be a few lines shorter than the material
-// it received. It may not be a stub of it.
+// Relocation dropped retired front-matter keys. Preserve that historical
+// acceptance against the commit that performed the move, not against future
+// owner documents whose policy can be explicitly revised and simplified.
 const RELOCATION_ALLOWANCE = 4;
 // An authority that is only a heading routes nowhere.
 const MINIMUM_AUTHORITY = 10;
@@ -209,9 +213,9 @@ test('the disposition ledger disposes every inventory section exactly once', () 
     inventory.total, 'the disposition buckets sum to the whole frozen corpus');
 });
 
-test('no destination is a stub of the material the ledger sent to it', () => {
-  // "Moved to its owner" is only true if the owner actually holds it. A move
-  // into a one-line placeholder would otherwise pass every other check.
+test('the recorded relocation delivered the material to every destination', () => {
+  // The immutable relocation claim remains measurable even after an authorized
+  // policy revision changes the current document's wording or length.
   const ledger = JSON.parse(fs.readFileSync(DISPOSITION, 'utf8'));
   const claimed = new Map();
   for (const row of ledger.rows) {
@@ -220,11 +224,72 @@ test('no destination is a stub of the material the ledger sent to it', () => {
   }
   assert.ok(claimed.size > 0);
   for (const [destination, lines] of claimed) {
-    assert.equal(fs.existsSync(destination), true,
-      `${destination} does not exist`);
-    const held = countLines(fs.readFileSync(destination, 'utf8'));
+    const relocated = execGit(['show', `${RELOCATION_HEAD}:${destination}`],
+      {encoding: 'utf8', bound: GIT_OUTPUT_BOUND.COMMAND});
+    const held = countLines(relocated);
     assert.ok(held + RELOCATION_ALLOWANCE >= lines,
-      `${destination} holds ${held} lines of the ${lines} the ledger sent it`);
+      `${destination} received ${held} lines of the ${lines} claimed at relocation`);
+  }
+});
+
+test('every relocated owner still contains substantive current guidance', () => {
+  // A historical receipt cannot excuse replacing a live owner with a stub.
+  // Check every destination, including the conditional owners that are outside
+  // the representative always-load routes above.
+  const ledger = JSON.parse(fs.readFileSync(DISPOSITION, 'utf8'));
+  const destinations = new Set(ledger.rows.map((row) => row.destination).filter(Boolean));
+  assert.ok(destinations.size > 0);
+  for (const destination of destinations) {
+    assert.equal(fs.existsSync(destination), true, `${destination} does not exist`);
+    const current = fs.readFileSync(destination, 'utf8');
+    assert.ok(countLines(current) > MINIMUM_AUTHORITY,
+      `${destination} is a current owner stub`);
+    if (destination.endsWith('.json')) {
+      const entries = Object.entries(JSON.parse(current));
+      assert.ok(entries.length > 0, `${destination} describes no commands`);
+      for (const [command, description] of entries) {
+        const fields = typeof description === 'string' ? [description] :
+          [description?.summary, description?.usage];
+        for (const field of fields) {
+          assert.ok(typeof field === 'string' && field.trim().length > 0,
+            `${destination} has incomplete command guidance for ${command}`);
+        }
+      }
+      continue;
+    }
+    assert.match(current, /^# .+/mu, `${destination} has no document identity`);
+    const body = current.replace(/^---\n[\s\S]*?\n---\n/u, '')
+      .split('\n').filter((line) => line.trim() && !/^#+\s/u.test(line));
+    assert.ok(body.length > 0, `${destination} contains headings without guidance`);
+  }
+});
+
+test('revised proof owners retain behavioral evidence and closure obligations', () => {
+  // These are independent semantic expectations for the policies whose old
+  // paragraphs became shorter. Padding a file to its historical line count
+  // proves none of these requirements survived the revision.
+  const proof = fs.readFileSync(PROOF_LADDERS_MD, 'utf8').replace(/\s+/gu, ' ');
+  for (const requirement of [
+    /A Quest reaches `solved` only through the current landing command/u,
+    /do not weaken `doneWhen` retrospectively/u,
+    /Review is complete when the scoped surface is covered/u,
+    /Introduced regressions and required gate failures cannot be disposed of as unrelated debt/u,
+    /a relevant guardrail count increased/u,
+    /newly edited source-code files must finish within the per-scope thresholds/u,
+  ]) {
+    assert.match(proof, requirement, `proof owner lost ${requirement}`);
+  }
+  const regression = fs.readFileSync(REGRESSION_POLICY_MD, 'utf8').replace(/\s+/gu, ' ');
+  for (const requirement of [
+    /All bug fixes MUST be preceded by a failing test that reproduces the bug/u,
+    /named behavioral assertion must fail through the reported mechanism/u,
+    /Exercise the real production owner and entry path/u,
+    /A second bug at the same boundary is evidence to investigate, not an automatic requirement/u,
+    /existing soft-warning corpus guard remains a distinct enforcement rule/u,
+    /two most recent consecutive runs of that scenario/u,
+    /Preserve And Disposition Every Failure/u,
+  ]) {
+    assert.match(regression, requirement, `regression owner lost ${requirement}`);
   }
 });
 

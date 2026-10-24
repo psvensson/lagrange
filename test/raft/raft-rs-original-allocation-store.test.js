@@ -6,8 +6,10 @@ import {originalAllocationRow, prepareOriginalAllocationRow,
   markOriginalAllocationIssued, transitionOriginalRight} from
   '../../src/raft/raft-rs-original-allocation-store.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN, REPLICA_LIFECYCLE_TABLE as TABLE} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
+import {REPLICA_LIFECYCLE_TABLE as TABLE} from
+  '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
 

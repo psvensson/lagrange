@@ -62,3 +62,15 @@ Pasted by the owner into the lead session on 2026-10-26; recorded verbatim in su
    witnesses with their real semantics; compose and qualify the final candidate.
 Report format: one row per remaining service blocker (observable failure, owner, prerequisite,
 decisive witness, exact tested commit, next action).
+
+## Addendum 2026-10-27: system-table write admission approved
+
+Owner (pasted 2026-10-27): implement server-side admission for client-originated SQL, the four
+semantic admin operations, the debug store's narrow in-process owner route, SYSTEM_TABLE_WRITE_REFUSED,
+and deletion of the harness partition repair. The admission must cover every current client SQL entry
+point and preserve origin through forwarding and execution. Administrative operations must invoke the
+existing authoritative owners and retain their lifecycle, persistence and outcome semantics. In-process
+execution must not create a general system-table write exemption. Preserve the partition scenario when
+removing its repair, and verify the migration with focused behavioural evidence. Bring back a further
+decision only if implementation exposes a concrete missing owner contract or an unavoidable
+compatibility choice.
