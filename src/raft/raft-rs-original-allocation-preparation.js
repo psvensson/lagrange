@@ -85,8 +85,7 @@ function verifyMemberBinding(db, declaration, member) {
   if (reservations.length !== member.replicaIds.length ||
       !member.replicaIds.every((replicaId) =>
         reservations.some((reservation) => reservation.replicaIdentity === replicaId &&
-          reservation.learnerAdmission === undefined &&
-          reservation.promotionAdmission === undefined))) {
+          reservation.learnerAdmission === undefined))) {
     throw originalAllocationError(REASON.IDENTITY, member.replicaId);
   }
   return row;

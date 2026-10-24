@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3073185,
-        "sha256": "182325c7eacbccb58d096b572fc10df789446014a44a7afd5edc728dde1f7a06"
+        "bytes": 3073097,
+        "sha256": "8a2b7087a24654f2ca4e6379992b8fba7a3567b20fd645eaac405bdc78232e9b"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "c7ff19ffb595844bb6278e035ea06aceb83e9ddae3055292676ebedd0a368dca"
+    "inputDigest": "27f491b93cff08850b1f9658c5fa84276b9672e1367bd68c3be05f14ad0b50ef"
   },
   "reconciliation": {
     "complexity": {
@@ -167,17 +167,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3073185,
-        "sha256": "182325c7eacbccb58d096b572fc10df789446014a44a7afd5edc728dde1f7a06"
+        "bytes": 3073097,
+        "sha256": "8a2b7087a24654f2ca4e6379992b8fba7a3567b20fd645eaac405bdc78232e9b"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "62a86d4efb12a1121c44728ac13769fee344a33b8ae7854c8315afc3203312f2",
+      "sourceDigest": "e2ad7f54a9bef8bf95f3dc9c751c60656043b9d5ff4601fc5a62c2fcf3678300",
       "moduleCount": 5607,
-      "edgeCount": 29716,
+      "edgeCount": 29714,
       "unresolvedCount": 36
     }
   },
@@ -185,7 +185,7 @@
     "sourceSignalCount": 2502,
     "assignedSignalCount": 2502,
     "uniqueAssignmentCount": 2502,
-    "digest": "38a64facfe9003c3ab6be111e82ffab5ca4e689e23dbf5b3d1782c5ad8a05df7"
+    "digest": "cc18405fb2e82dc2a1a510bac1756adcaae6a7a235a8e7a437c2b273237f4844"
   },
   "signalCounts": {
     "cognitive": 151,
@@ -1585,7 +1585,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 243,
-      "importOut": 77,
+      "importOut": 76,
       "score": 32,
       "topPaths": [
         "src/raft/constants.js",
