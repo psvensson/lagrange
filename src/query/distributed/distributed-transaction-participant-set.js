@@ -88,5 +88,5 @@ const distributedTransactionParticipantSetMethods = {
   },
 };
 
-export {participantSetTextOf, readParticipantSet, incompleteParticipantSet,
+export {readParticipantSet, incompleteParticipantSet,
   distributedTransactionParticipantSetMethods};

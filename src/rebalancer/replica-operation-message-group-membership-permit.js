@@ -146,7 +146,7 @@ function messageGroupMembershipLaneKey(groupId) {
   return `${MEMBERSHIP_LANE_KEY_PREFIX}${groupId}`;
 }
 
-export {MEMBERSHIP_BRANCH, MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
+export {MEMBERSHIP_PHASE, MEMBERSHIP_PERMIT_STATE,
   MEMBERSHIP_AUTHORIZATION_OUTCOME, MEMBERSHIP_OBLIGATION,
   decodeMembershipIdentity, decodeMembershipPermit, membershipBranchSpec,
   decodeMembershipOwnerClaim, membershipOwnerClaimFence,

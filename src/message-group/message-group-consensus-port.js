@@ -246,7 +246,6 @@ function closeMessageGroupConsensus(service) {
 
 export {
   closeMessageGroupConsensus,
-  consensusInitRefusedError,
   leadLoneMessageGroup,
   openMessageGroupConsensusPort,
   readMessageGroupCommittedMembership,
