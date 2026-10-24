@@ -28,7 +28,7 @@
   "censusSize": 2468,
   "digest": "fnv1a32-ecdc514c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-515d28b6",
+  "observationDigest": "fnv1a32-be8803da",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8053,8 +8053,10 @@
     },
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": {
       "files": [
+        "src/query/application-database-result.js",
         "src/runtime/runtime-startup-wiring.js",
-        "src/sea-entry.js"
+        "src/sea-entry.js",
+        "src/service/service-lifecycle-command-contract.js"
       ]
     },
     "test/integration/services-p1-self-referential-write.integration.test.js": {

@@ -293,6 +293,22 @@ describe('the protocol handler sends what the mapper decides', () => {
       assert.deepEqual(errorStates(messages), [INTERNAL_ERROR_SQLSTATE]);
     });
 
+  it('an untaggable result with rows is refused before any row frame',
+    async () => {
+      const messages = await runSimpleQuery({
+        success: true,
+        columns: ['id'],
+        rows: [{id: 1}, {id: 2}],
+      }, 'SELECT id FROM t');
+      assert.deepEqual(messages.map((message) => message.type), [
+        PG_BACKEND_MSG.ERROR_RESPONSE,
+        PG_BACKEND_MSG.READY_FOR_QUERY,
+      ]);
+      const fields = errorFields(messages[0].body);
+      assert.equal(fields[SQLSTATE_FIELD], INTERNAL_ERROR_SQLSTATE);
+      assert.match(fields.M, /\(statement kind: null\)$/u);
+    });
+
   it('the engine\'s multi-statement refusal is a 0A000 ErrorResponse',
     async () => {
       const messages = await runSimpleQuery({
