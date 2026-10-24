@@ -13,6 +13,11 @@ import {
   RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
+import {
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  classifyTransportDeliveryOutcome,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
 
 function thenMaybe(value, continuation) {
   return value && typeof value.then === 'function' ?
@@ -71,13 +76,16 @@ function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
   return null;
 }
 
+// The transport owner alone decides whether the peer received the message;
+// a FAILED or DEFERRED outcome, including a contradictory one, is a failed
+// delivery.
 function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
-  if (delivery && typeof delivery === 'object' &&
-      (delivery.noHandler === true || delivery.deferRetry === true ||
-        delivery.acknowledged === false || delivery.error)) {
+  const outcome = classifyTransportDeliveryOutcome(delivery);
+  if (!isDeliveredTransportDeliveryOutcome(outcome)) {
     return peerDeliveryFailed(group, raftPeerId,
-      delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
-      delivery.error || delivery.reason, failedPeers);
+      outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
+        RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
+      outcome.error || outcome.reasonCode, failedPeers);
   }
   recordPeerDelivery(group, raftPeerId, {
     outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,

@@ -1,0 +1,68 @@
+// Read-only investigation probe (scratch tree only).
+import {resetFixtureSingletons, clearFixtureSingletons, startLeader, applyCommitted,
+  settleTicks, shutdownAll} from '../test/test-helpers/participant-transaction-fixture.js';
+import {countCdcObligations, readOwedCdcObligations} from '../src/partition/partition-cdc-obligation-ledger.js';
+import {getSchemaByTableName} from '../src/bootstrap/system-table-schemas-constants.js';
+import {PARTITION_SERVICE_OPERATION as OP, PARTITION_SERVICE_EVENT} from '../src/partition/partition-service-constants.js';
+import {getTableCdcPolicy} from '../src/cache/cdc-table-policy.js';
+
+const N = Number(process.env.N || 500);
+const ELSEWHERE = 'probe-elsewhere';
+const stmt = (entryId, sql, params) => ({type: OP.QUERY, entryId, sql, params,
+  timestamp: '', proposedBy: ELSEWHERE, proposedAt: 0});
+
+function ledgerBytes(db) {
+  try { return db.prepare('SELECT COALESCE(SUM(LENGTH(event_json)),0) AS b, COUNT(*) AS c FROM _cdc_obligations').get(); }
+  catch { return {b: 0, c: 0}; }
+}
+function ledgerPages(db) { try { return db.prepare("SELECT COALESCE(SUM(pgsize),0) AS b FROM dbstat WHERE name LIKE '_cdc_obligations%' OR name LIKE 'sqlite_autoindex__cdc_obligations%'").get().b; } catch (e) { return 'n/a ' + e.message; } }
+function dataRows(db, table) { return db.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get().c; }
+
+const CASES = {
+  user_default: {tableName: undefined, ext: undefined, write: (i) => stmt(`u-${i}`,
+    'INSERT INTO test_table (id, value) VALUES (?, ?)', [`r-${i}`, `v-${i}`]), table: 'test_table',
+    del: () => stmt('u-del', 'DELETE FROM test_table WHERE id LIKE ?', ['r-%'])},
+  user_external_false: {tableName: undefined, ext: false, write: (i) => stmt(`x-${i}`,
+    'INSERT INTO test_table (id, value) VALUES (?, ?)', [`r-${i}`, `v-${i}`]), table: 'test_table',
+    del: () => stmt('x-del', 'DELETE FROM test_table WHERE id LIKE ?', ['r-%'])},
+  logs: {tableName: 'logs', write: (i) => stmt(`l-${i}`,
+    'INSERT OR REPLACE INTO logs (log_id, timestamp, level, node_id, service_id, service_type, message, trace_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [`log-${i}`, 1000 + i, 'info', 'node-a', null, null, `message number ${i} from the logging service`, null, null, 1000 + i]),
+    table: 'logs', del: () => stmt('l-del', 'DELETE FROM logs WHERE timestamp < ?', [1000 + N])},
+};
+
+const which = process.argv[2];
+const c = CASES[which];
+resetFixtureSingletons();
+const extra = c.tableName ? {tableName: c.tableName, schema: getSchemaByTableName(c.tableName)} : {};
+const {leader, proposed} = await startLeader(extra);
+if (c.ext !== undefined) leader.externalCdcAllowed = c.ext;
+const out = {case: which, N, tableName: leader.tableName,
+  policy: (({policyClass, internalCachePropagation, externalCdcAllowed}) => ({policyClass, internalCachePropagation, externalCdcAllowed}))(getTableCdcPolicy(leader.tableName, c.ext === false ? {externalCdcAllowed: false} : {})),
+  shouldBufferWithoutSubscribers: leader.cdcDelivery.shouldBufferCdcWithoutSubscribers(leader.tableName),
+  subscribers: leader.cdcSubscribers.size};
+const pageBytes = () => leader.db.prepare('PRAGMA page_count').get().page_count * leader.db.prepare('PRAGMA page_size').get().page_size;
+const before = {ledger: countCdcObligations(leader.db), dbBytes: pageBytes()};
+let failures = 0;
+for (let i = 0; i < N; i++) { const e = applyCommitted(leader, c.write(i)); if (e) { failures++; if (failures < 3) out['err' + failures] = e; } }
+await settleTicks();
+const afterWrites = {ledger: countCdcObligations(leader.db), bytes: ledgerBytes(leader.db), dataRows: dataRows(leader.db, c.table), dbBytes: pageBytes(), ledgerPageBytes: ledgerPages(leader.db), failures,
+  lastDrive: leader.cdcDelivery.getCdcObligationDiagnostics().lastDrive?.state ?? null,
+  bufferedEvents: leader.getCDCSubscriptionDiagnostics().bufferedEvents};
+// retirement attempts that the owners have: drive, leader re-election redrive, the table's own retention DELETE
+const drive = await leader.cdcDelivery.driveCdcObligations('probe');
+leader.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {});
+await settleTicks();
+const del = applyCommitted(leader, c.del());
+await settleTicks();
+const afterRetention = {ledger: countCdcObligations(leader.db), bytes: ledgerBytes(leader.db), dataRows: dataRows(leader.db, c.table), dbBytes: pageBytes(), ledgerPageBytes: ledgerPages(leader.db), delErr: del, driveState: drive.state,
+  acksProposed: proposed.filter((e) => e.type === 'CDC_DELIVERED' || /cdc/i.test(String(e.type))).length};
+out.before = before; out.afterWrites = afterWrites; out.afterRetention = afterRetention;
+out.perWrite = {obligations: (afterWrites.ledger.owed - before.ledger.owed) / N, eventJsonBytes: Math.round(afterWrites.bytes.b / Math.max(1, afterWrites.bytes.c)),
+  dbBytesPerWrite: Math.round((afterWrites.dbBytes - before.dbBytes) / N)};
+const last = readOwedCdcObligations(leader.db, {limit: 100000}).at(-1);
+out.sampleFirst = readOwedCdcObligations(leader.db, {limit: 1})[0]?.eventJson; const all = readOwedCdcObligations(leader.db, {limit: 100000}); out.lastTwo = all.slice(-2).map((o) => ({logIndex: o.logIndex, key: o.eventKey, json: o.eventJson}));
+console.log(JSON.stringify(out, null, 1));
+await shutdownAll(leader);
+clearFixtureSingletons();
+setTimeout(() => process.exit(0), 50).unref();

@@ -29,6 +29,8 @@ import {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwne
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
+import {classifyTransportDeliveryOutcome, isDeferredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
   MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE,
@@ -164,7 +166,8 @@ class MessageGroupForwardingOwner {
     const normalizedErrorMessage = typeof errorMessage === 'string' ?
       errorMessage :
       '';
-    if (deliveryResult?.deferRetry === true) {
+    if (isDeferredTransportDeliveryOutcome(
+      classifyTransportDeliveryOutcome(deliveryResult))) {
       return true;
     }
     return this.service.isForwardTargetBackpressured(

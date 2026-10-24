@@ -1,0 +1,10 @@
+S0 learner-only image: readCheckpoint                                      "valid"
+S1 reservation keys read from the image                                    ["replicaIdentity","peerId","learnerAdmission","promotionAdmission"]
+S1 honest post-PROMOTE image: validateCheckpointDescriptor                 {"outcome":"corrupt_descriptor","reasons":["raftRs"]}
+S1 honest post-PROMOTE image: readCheckpoint                               "corrupt_descriptor"
+S2 descriptor w/o fact, payload fact index 50 > applied 10: readCheckpoint "valid"
+S2 payload promotion_admission column (installed verbatim)                 "50"
+S3 promotionAdmissionMatchesReservation(honest fact, image boundary)       true
+S3 promotionAdmissionMatchesReservation(future fact, image boundary)       false
+S3 ...(honest fact, other learnerAdmission)                                false
+S3 ...(honest fact, foreign group boundary)                                false

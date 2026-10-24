@@ -86,8 +86,10 @@ const RATCHET_TARGETS = [
     // 2026-10-13: tightened 47/1473 -> 47/1462 on the checker's measured
     // hint during the TX1 deletion audit. The exact e6 predecessor also
     // measures 47/1462, so this quest claims no clone reduction.
-    baselineCloneGroupCount: 47,
-    baselineDuplicatedLineCount: 1462,
+    // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
+    // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
+    baselineCloneGroupCount: 46,
+    baselineDuplicatedLineCount: 1439,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -231,9 +233,9 @@ const RATCHET_TARGETS = [
     // to the measured 26369 without changing the exact 697 groups.
     // 2026-10-24: the rs-raft lineage's test copies import their shared
     // helpers (trace, native startup fixture, contender, schedules, stamp
-    // oracle); tightened 697/26369 -> 692/26237 on the checker's hint.
-    baselineCloneGroupCount: 692,
-    baselineDuplicatedLineCount: 26237,
+    // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
+    baselineCloneGroupCount: 689,
+    baselineDuplicatedLineCount: 26148,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

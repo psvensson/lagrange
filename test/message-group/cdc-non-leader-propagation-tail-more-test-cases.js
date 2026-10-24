@@ -15,6 +15,8 @@ import {
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {
   ControllableConsensusPort,
@@ -99,7 +101,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
                 'remote-node-2',
                 64,
               ),
-              errorCode: 'OUTBOUND_QUEUE_BACKPRESSURED',
+              errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
             };
           }
           return {

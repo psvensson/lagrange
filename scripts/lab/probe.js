@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
-import {WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
+import {CHECK_BASE_ENV, WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
+import {resolvedCheckBaseCommit} from '../checks/changed-paths.js';
 import {GIT_OUTPUT_BOUND, isGitOutputTooLarge, spawnGit} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
@@ -1189,10 +1190,13 @@ const PLACEMENT_VERDICT_GREEN = 'ok';
 const PLACEMENT_VERDICT_PART = Object.freeze({VERDICT: 1, FILE: 2, ASSERTIONS: 3});
 // A bundle upload that has not finished by this is a stalled machine.
 const PLACEMENT_UPLOAD_DEADLINE_SECONDS = 300;
-// What the controller's own run policy hands a lab machine's runner.
+// What the controller's own run policy hands a lab machine's runner, and the
+// base its history walks measure from: the controller's, resolved to a
+// commit, since a lab checkout's own origin/main is whatever it last fetched.
 const PLACEMENT_FORWARDED_ENV = Object.freeze({
   RETRY: 'LAGRANGE_RETRY_FAILED_ONCE',
   TAP_TIMEOUT: 'TAP_TIMEOUT',
+  CHECK_BASE: CHECK_BASE_ENV,
 });
 // A closed terminal (SIGHUP) stops a placed run like an interrupt: the
 // controller child and the lab wrappers are detached, so nothing else would.
@@ -1289,6 +1293,7 @@ const PLACEMENT_TEXT = Object.freeze({
   NO_INVENTORY: 'the lab inventory could not be read: ',
   NO_REQUIREMENT: 'the placed commit\'s requirement could not be read: ',
   NO_DISCOVERY: 'lab discovery failed: ',
+  NO_CHECK_BASE: 'the check base a lab machine would be handed is unresolved: ',
   RED_THERE: ' file(s) red there are decided on the controller',
   OVER_CAP: 'remote reds exceed the rerun cap: breakage, reported red without a rerun',
   MISS: ' passed on the controller: routed away from ',
@@ -1670,16 +1675,15 @@ export async function runPlacedTestFiles(files, deps) {
     ...fleet.machines]);
   const remote = shards.filter((shard) => !shard.machine.controller);
   if (remote.length === 0) return local(PLACEMENT_TEXT.NO_GAIN);
-  if (!headroom.fit) write(`${PLACEMENT_TEXT.PREFIX}${FLEET_CONTROLLER_NAME}: ${headroom.reason}`);
-  write(`${PLACEMENT_TEXT.PREFIX}${files.length} files over ${shards.length} machines, ` +
-    `~${minutes(Math.max(...shards.map((shard) => shard.loadMs)))} min ` +
-    `(controller alone ~${minutes(aloneMs)} min)`);
-  for (const shard of shards) {
-    write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${shard.files.length} files, ` +
-      `~${minutes(shard.loadMs)} min`);
+  let checkBase;
+  try {
+    checkBase = deps.checkBase();
+  } catch (error) {
+    return local(`${PLACEMENT_TEXT.NO_CHECK_BASE}${error.message}`);
   }
+  reportPlacement({files, shards, headroom, aloneMs, write});
   // Every lab shard is on its way before the controller's own files start.
-  const context = {deps, sha, forward: forwardedPolicy(env), costs, write,
+  const context = {deps, sha, forward: forwardedPolicy(env, checkBase), costs, write,
     machines: fleet.machines, tried: new Set(remote.map((shard) => shard.machine.name)),
     runs: [], leftover: []};
   const started = await Promise.all(remote.map((shard) => startShard(shard, context)));
@@ -1712,18 +1716,37 @@ export async function runPlacedTestFiles(files, deps) {
   }
 }
 
+// The placement decision, as the lines a placed run starts with.
+function reportPlacement({files, shards, headroom, aloneMs, write}) {
+  if (!headroom.fit) write(`${PLACEMENT_TEXT.PREFIX}${FLEET_CONTROLLER_NAME}: ${headroom.reason}`);
+  write(`${PLACEMENT_TEXT.PREFIX}${files.length} files over ${shards.length} machines, ` +
+    `~${minutes(Math.max(...shards.map((shard) => shard.loadMs)))} min ` +
+    `(controller alone ~${minutes(aloneMs)} min)`);
+  for (const shard of shards) {
+    write(`${PLACEMENT_TEXT.PREFIX}${shard.machine.name}: ${shard.files.length} files, ` +
+      `~${minutes(shard.loadMs)} min`);
+  }
+}
+
 function discoveryFailureText(error) {
   if (REQUIREMENT_FAILURES.has(error?.code)) return PLACEMENT_TEXT.NO_REQUIREMENT;
   if (error?.code === DISCOVERY_FAILURE.INVENTORY_UNREADABLE) return PLACEMENT_TEXT.NO_INVENTORY;
   return PLACEMENT_TEXT.NO_DISCOVERY;
 }
 
-// The controller's own retry and timeout policy, handed to a lab machine.
-function forwardedPolicy(env) {
+// The controller's own retry and timeout policy, and its resolved check base
+// (a commit, or none), handed to a lab machine.
+function forwardedPolicy(env, checkBase) {
   return {
     retry: env[PLACEMENT_FORWARDED_ENV.RETRY] || EMPTY,
     tapTimeout: env[PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT] || EMPTY,
+    checkBase: checkBase || EMPTY,
   };
+}
+
+// The forwarded policy as the lab shell's positional arguments, none omitted.
+function forwardedArgs({retry, tapTimeout, checkBase}) {
+  return [retry || EMPTY, tapTimeout || EMPTY, checkBase || EMPTY];
 }
 
 // Interrupted, hung up or terminated: cut everything a run started and exit.
@@ -1803,8 +1826,8 @@ const PLACEMENT_IMPORT_GRAPH = Object.freeze({NAME: 'import-graph',
 const PLACEMENT_SCRIPT_HEAD = [
   'set -u',
   'repo="$1"; sha="$2"; node_major="$3"; factor="$4"; run="$5"; bundle="$6"',
-  'retry="$7"; tap_timeout="$8"; results="$9"; lock_wait="${10}"; holder_head="${11}"',
-  'expected_minutes="${12}"',
+  'retry="$7"; tap_timeout="$8"; check_base="$9"; results="${10}"; lock_wait="${11}"',
+  'holder_head="${12}"; expected_minutes="${13}"',
   // Before nvm, which reads its arguments (see the capability script).
   'set --',
   'pid=""; holding=""',
@@ -1912,6 +1935,9 @@ const PLACEMENT_SCRIPT_TAIL = [
     `${WORKSPACE_INJECTION_ENV}="$injected"`,
   `if [ -n "$retry" ]; then export ${PLACEMENT_FORWARDED_ENV.RETRY}="$retry"; fi`,
   `if [ -n "$tap_timeout" ]; then export ${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}="$tap_timeout"; fi`,
+  // The controller's check base, or none: never this checkout's own.
+  `if [ -n "$check_base" ]; then export ${PLACEMENT_FORWARDED_ENV.CHECK_BASE}="$check_base"; ` +
+    `else unset ${PLACEMENT_FORWARDED_ENV.CHECK_BASE}; fi`,
   // Every lane capped at this host's own processors less one, counted here at
   // run time: never a per-host constant, never a host's name.
   `unset ${LANE_JOBS_CAP_ENV}`,
@@ -1920,7 +1946,7 @@ const PLACEMENT_SCRIPT_TAIL = [
     `*) export ${LANE_JOBS_CAP_ENV}=$((cores - 1));; esac`,
   `echo "placement-env=factor:$${PLACEMENT_MACHINE_FACTOR_ENV} mode:$${PLACEMENT_ENV} ` +
     `retry:\${${PLACEMENT_FORWARDED_ENV.RETRY}:-} timeout:\${${PLACEMENT_FORWARDED_ENV.TAP_TIMEOUT}:-} ` +
-    `lanecap:\${${LANE_JOBS_CAP_ENV}:-}"`,
+    `lanecap:\${${LANE_JOBS_CAP_ENV}:-} base:\${${PLACEMENT_FORWARDED_ENV.CHECK_BASE}:-}"`,
   // Both locks (fds 8 and 9) stay with this shell: a test process that
   // outlived its run must not hold the machine busy after it.
   'setsid node scripts/run-classified-test-files.js --stdin < "$list" 8>&- 9>&- &',
@@ -2120,7 +2146,8 @@ function tailLines(file, stream, onLine) {
  * longest it waits for the machine lock (capped by the lab).
  * @param {{sha: string, deadlineMs: number, root: string,
  *   holder: {purpose: string, expectedMs: number},
- *   runId?: string, env?: Object, forward?: {retry?: string, tapTimeout?: string},
+ *   runId?: string, env?: Object,
+ *   forward?: {retry?: string, tapTimeout?: string, checkBase?: string},
  *   onLine?: Function, results?: string, gitRoot?: string}} options
  * @return {{done: Promise<Object>, stop: Function}}
  */
@@ -2151,7 +2178,7 @@ export function startRemoteShard(shard, {sha, deadlineMs, root, holder,
     bundleFile,
     run: commandLine(remoteCommand(machine, null, [machine.repoPath, sha,
       machine.nodeMajor || EMPTY, String(machine.factor || 1), runId, remoteBundle,
-      forward.retry || EMPTY, forward.tapTimeout || EMPTY, results,
+      ...forwardedArgs(forward), results,
       ...labLockArgs({waitMs: holder.expectedMs, purpose: holder.purpose,
         expectedMs: holder.expectedMs, sha, env})], {fromStdin: true})),
     scriptFile,
@@ -2354,7 +2381,7 @@ async function discoverPlacement(root, env, sha) {
 // this event loop had written found the non-blocking socket empty and died
 // with EAGAIN - every child, when this process was busy for 300 ms after the
 // spawn (found 2026-09-23). The file is unlinked once the child holds it.
-function runClassifiedChild(root, files, env, {onLine = null} = {}) {
+function runClassifiedChild(root, files, env, {onLine = null, checkBase = EMPTY} = {}) {
   const output = onLine ? PLACEMENT_STDIO_PIPE : PLACEMENT_STDIO_INHERIT;
   const listDir = path.join(root, PLACEMENT_LOG_PARENT);
   fs.mkdirSync(listDir, {recursive: true});
@@ -2367,7 +2394,8 @@ function runClassifiedChild(root, files, env, {onLine = null} = {}) {
   try {
     child = spawn(process.execPath, [PLACEMENT_RUNNER, PLACEMENT_RUNNER_STDIN], {
       cwd: root,
-      env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL},
+      env: {...env, [PLACEMENT_ENV]: PLACEMENT_LOCAL,
+        ...(checkBase ? {[PLACEMENT_FORWARDED_ENV.CHECK_BASE]: checkBase} : {})},
       stdio: [input, output, output],
       detached: true,
     });
@@ -2402,6 +2430,7 @@ export function placementDeps({root, failFast = false, env = process.env,
     failFast, env, planCosts, runLocal, lastGreen,
     runLocalChild: (files) => runClassifiedChild(root, files, env),
     commitAt: () => commitAt(root),
+    checkBase: () => resolvedCheckBaseCommit(null, env, root),
     discover: (sha) => discoverPlacement(root, env, sha),
     runRemote: (shard, options) => startRemoteShard(shard, {...options, root}),
     controllerHeadroom: () => controllerHeadroom({env}),
@@ -2784,7 +2813,10 @@ function startLabShare({machine, lanes}, {commit, deps, forward, results, costOf
     if (stream === PLACEMENT_STREAM.OUT) lines.push(line);
     if (!line.startsWith(PLACEMENT_RESULTS_PREFIX)) write(relayedLine(machine.name, line));
   };
-  if (machine.controller) return {machine, files, lines, run: deps.runLocalChild(files, {onLine})};
+  if (machine.controller) {
+    return {machine, files, lines,
+      run: deps.runLocalChild(files, {onLine, checkBase: forward.checkBase})};
+  }
   const loadMs = labShareEstimateMs(machine, files, costOf);
   const run = deps.runRemote({machine, files}, {sha: commit.sha, gitRoot: commit.gitRoot,
     deadlineMs: deadlineFor({loadMs}), forward, results, onLine,
@@ -2841,15 +2873,17 @@ async function settleLabShares(shares, {root, write}) {
  * each machine's lines as they land, and end with the runner's own summary,
  * merged over the machines. The planning checkout is released once every
  * share has its commit. Interrupted, every share is cut.
+ * `checkBase` is the commit every share's history walks measure from (the
+ * operator's --base-sha or the controller's own base, resolved), or null.
  * @param {{plan: Array<Object>, costs?: Array<Object>, commit: Object,
- *   on?: string|null, split?: boolean, root: string, results?: string,
- *   env?: Object, write?: Function}} request
+ *   checkBase?: string|null, on?: string|null, split?: boolean, root: string,
+ *   results?: string, env?: Object, write?: Function}} request
  * @param {Object} deps labTestDeps' collaborators (discover, runRemote,
  *   runLocalChild, commitAt; signals and exit optional)
  * @return {Promise<number>} exit status
  */
-export async function runLabTest({plan, costs = [], commit, on = null, split = false, root,
-  results = LAB_TEST_RESULTS_FILE, env = process.env,
+export async function runLabTest({plan, costs = [], commit, checkBase, on = null,
+  split = false, root, results = LAB_TEST_RESULTS_FILE, env = process.env,
   write = (line) => process.stdout.write(`${line}${PLACEMENT_NEWLINE}`)}, deps) {
   let shares = [];
   try {
@@ -2864,7 +2898,8 @@ export async function runLabTest({plan, costs = [], commit, on = null, split = f
       throw new Error(`${LAB_TEST_TEXT.CONTROLLER_TREE}${commit.sha}`);
     }
     const costOf = new Map(costs.map((cost) => [cost.file, cost.ms / cost.jobs]));
-    const context = {commit, deps, forward: forwardedPolicy(env), results, costOf, write};
+    const context = {commit, deps, forward: forwardedPolicy(env, checkBase), results, costOf,
+      write};
     shares = assignments.map((assignment) => startLabShare(assignment, context));
   } finally {
     commit.release();

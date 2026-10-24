@@ -16,6 +16,10 @@ const TRANSACTION_SCHEMA_ENFORCEMENT_ERROR = Object.freeze({
   MIGRATION: 'transaction_coordinator_schema_protected',
 });
 const STATE = TRANSACTION_SCHEMA_ENFORCEMENT_STATE;
+const DIGEST_ALGORITHM = 'sha256';
+const DIGEST_ENCODING = 'hex';
+const MIGRATION_REFUSAL_MESSAGE =
+  'The coordinator ledger schema changes only through its fixed committed owner';
 const ERROR = TRANSACTION_SCHEMA_ENFORCEMENT_ERROR;
 const TRIGGER_NAME = 'sql_transactions_initial_lineage_v1';
 const SCHEMA_SQL = 'PRAGMA table_info(sql_transactions)';
@@ -42,7 +46,7 @@ WHEN COALESCE((
 BEGIN SELECT RAISE(ABORT, '${ERROR.INITIAL_ROW}'); END`;
 
 function digestOf(value) {
-  return createHash('sha256').update(value).digest('hex');
+  return createHash(DIGEST_ALGORITHM).update(value).digest(DIGEST_ENCODING);
 }
 
 function enforcementResult(state, columns = [], trigger = null, missingColumns = []) {
@@ -128,10 +132,10 @@ function installTransactionSchemaEnforcement(database) {
 function coordinatorTableSchemaRefusal(tableName) {
   return isCoordinatorTable(tableName) ?
     Object.freeze({success: false, failureCode: ERROR.MIGRATION, errorCode: ERROR.MIGRATION,
-      error: 'The coordinator ledger schema changes only through its fixed committed owner'}) : null;
+      error: MIGRATION_REFUSAL_MESSAGE}) : null;
 }
 
 export {readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
   assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal,
   transactionSchemaWriteRefusal, TRANSACTION_SCHEMA_ENFORCEMENT_STATE,
-  TRANSACTION_SCHEMA_ENFORCEMENT_VERSION, TRANSACTION_SCHEMA_ENFORCEMENT_ERROR};
+  TRANSACTION_SCHEMA_ENFORCEMENT_ERROR};

@@ -7208,8 +7208,8 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/transport/transport-semantic-outcome.js",
-      "line": 82,
+      "filePath": "src/transport/transport-query-semantic-outcome.js",
+      "line": 35,
       "column": 3,
       "functionName": "resolveTransportSemanticReasonCode",
       "kind": "raw_null_empty_state_outcome",

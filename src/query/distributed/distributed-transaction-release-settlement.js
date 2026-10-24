@@ -19,27 +19,25 @@ import {buildDecisionRecord} from
 import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_RESULT} from
   '../../partition/partition-coordinator-settlement-constants.js';
 import {QUERY_OPERATION} from '../query-constants.js';
+import {PARTICIPANT_COMMIT_OUTCOME} from '../../constants/transactions.js';
 import {readParticipantSet} from './distributed-transaction-participant-manifest.js';
 import {decisionRecordOfRow, RECORDED_DECISION_STATE} from
   './distributed-transaction-decision-record.js';
 import {TRANSACTION_AUTHORITY_STATE} from
   './distributed-transaction-recovery-authority.js';
-import {TRANSACTION_STATUS} from
-  './distributed-transaction-coordinator-constants.js';
 import {canonicalTransactionSettlementResult,
   TRANSACTION_SETTLEMENT_KIND as KIND,
   TRANSACTION_SETTLEMENT_OUTCOME as SETTLEMENT_OUTCOME} from
   './distributed-transaction-settlement.js';
-import {TRANSACTION_RELEASE_CENSUS_STATE} from
+import {TRANSACTION_RELEASE_CENSUS_STATE,
+  TRANSACTION_RELEASE_TERMINAL_STATUS as TERMINAL_STATUS} from
   './distributed-transaction-release-census.js';
 import {participantAnswerSnapshotOf} from
   '../sql-query-engine-participant-wire.js';
 
 const RELEASE_PROOF_KIND = 'transaction_release_invocation_v1';
-const TERMINAL_STATUS = Object.freeze({
-  [DECISION.COMMIT]: TRANSACTION_STATUS.COMMITTED,
-  [DECISION.ROLLBACK]: TRANSACTION_STATUS.ROLLED_BACK,
-});
+// No readable release authority: the transaction is not settled this turn.
+const NO_RELEASE_AUTHORITY = null;
 const RESULT_FIELDS = Object.freeze(['transactionId', 'decision',
   'decisionDigest', 'terminalStatus', 'participantIds']);
 
@@ -111,38 +109,40 @@ async function readAuthority(engine, transactionId, now) {
       now,
     );
   } catch {
-    return null;
+    return NO_RELEASE_AUTHORITY;
   }
 }
 
 async function ensureFrozen(engine, service, authority, now) {
-  if (authority === null) return null;
+  if (authority === NO_RELEASE_AUTHORITY) return NO_RELEASE_AUTHORITY;
   if (authority.row.participant_set_state === PARTICIPANT_SET_STATE.FROZEN) {
     return authority;
   }
   if (!authority.expired || authority.decision.state !== RECORDED_DECISION_STATE.ABSENT ||
-      await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) return null;
+      await applySettlement(service, settlementOf(KIND.FREEZE, authority)) === null) {
+    return NO_RELEASE_AUTHORITY;
+  }
   return readAuthority(engine, authority.row.transaction_id, now);
 }
 
 async function ensureDecision(engine, service, authority, now) {
   if (authority?.decision.state === RECORDED_DECISION_STATE.RECORDED) return authority;
   if (!authority || authority.row.participant_set_state !== PARTICIPANT_SET_STATE.FROZEN ||
-      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) return null;
+      authority.decision.state !== RECORDED_DECISION_STATE.ABSENT) return NO_RELEASE_AUTHORITY;
   const record = buildDecisionRecord(authority.row.transaction_id, DECISION.ROLLBACK,
     authority.pairs.map(([participantId]) => [participantId, null]));
   if (!record || await applySettlement(service, settlementOf(KIND.DECIDE, authority, {
     decision: record.decision,
     decisionText: record.decisionText,
     decisionDigest: record.decisionDigest,
-  })) === null) return null;
+  })) === null) return NO_RELEASE_AUTHORITY;
   return readAuthority(engine, authority.row.transaction_id, now);
 }
 
 function participantAnswerComplete(decision, answer, expected) {
   const captured = participantAnswerSnapshotOf(answer, expected);
   return captured?.success === true && (decision === DECISION.COMMIT ?
-    captured.outcome === 'COMMITTED' :
+    captured.outcome === PARTICIPANT_COMMIT_OUTCOME.COMMITTED :
     captured.state === PARTICIPANT_STATE.ROLLED_BACK);
 }
 

@@ -17,9 +17,6 @@ const DIRECT_DISPATCH_WAKEUP_DELIVERY_OPTION_FIELD = Object.freeze({
   TARGET_NODE_ID: 'targetNodeId',
   TIMEOUT_MS: 'timeoutMs',
 });
-const DIRECT_DISPATCH_WAKEUP_CLASSIFY_OPTION_FIELD = Object.freeze({
-  DEFAULT_RETRY_AFTER_MS: 'defaultRetryAfterMs',
-});
 
 /**
  * Direct owner wake-up methods attached to the dispatch service prototype.
@@ -132,10 +129,6 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
             ownerNodeId,
           ),
         ),
-        {
-          [DIRECT_DISPATCH_WAKEUP_CLASSIFY_OPTION_FIELD.DEFAULT_RETRY_AFTER_MS]:
-            this.operationDispatchRetryAfterMs,
-        },
       );
       const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
         operation.operationId,
