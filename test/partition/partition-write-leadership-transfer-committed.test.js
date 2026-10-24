@@ -31,11 +31,13 @@
 // later.
 
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -177,7 +179,13 @@ async function withTransferToCutOffVoter(raftTiming, body) {
   const transportDeliver = network.deliver;
   const cutOffAddress = group.addressOf(MEMBERS[2]);
   const proposals = [];
+  let owners = null;
   try {
+    // Released by the real release owners, as production releases a group.
+    owners = await attachPartitionReleaseOwners(group.services,
+      {directory: path.dirname(group.dbFileOf(MEMBERS[0])),
+        budgetMs: FORMATION_BUDGET_MS});
+    await owners.release(PARTITION_ID);
     assert.equal((await writeRow(leader, 'row-before', 'before')).success,
       true, 'setup: the group serves a write');
     network.deliver = (address, ...rest) => (address === cutOffAddress ?
@@ -203,6 +211,7 @@ async function withTransferToCutOffVoter(raftTiming, body) {
   } finally {
     setActualCoreEntryObserver(null);
     network.deliver = transportDeliver;
+    await owners?.dispose();
     await group.dispose();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();

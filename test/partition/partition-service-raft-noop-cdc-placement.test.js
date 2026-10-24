@@ -16,6 +16,8 @@ import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   INITIAL_PARTITION_IDS,
   SERVICES_SCHEMA,
@@ -142,6 +144,7 @@ function createServicesPartition() {
       (replicaId) => `test-node/partition/${replicaId}`,
     ),
     schema: SERVICES_SCHEMA,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }, new ControllableConsensusPort());
 }
@@ -175,6 +178,7 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     const partition = createServicesPartition();
     await partition.initialize();
     partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
     await partition.subscribeToCDCWithHandshake((event) => {
       cache.applySystemTableChange(
         event.tableName,

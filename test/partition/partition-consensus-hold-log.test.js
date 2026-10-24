@@ -38,7 +38,10 @@ import {
 import {RUNTIME_PHASE} from '../../src/raft/raft-rs-runtime-owner-constants.js';
 import {recoveryRetryWindowMsOf} from
   '../../src/raft/raft-rs-runtime-tuning.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const TEMP_PREFIX = 'partition-consensus-hold-log-';
 const DB_FILE = 'partition.sqlite';
@@ -140,6 +143,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'hold-log-node',
+    systemTableCache: new SystemTableCache(),
     dbPath: path.join(directory, DB_FILE),
     schema: {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
@@ -151,6 +155,7 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
     entry.payload?.phase === RUNTIME_PHASE.UNEXPECTED_THROW);
   try {
     await service.initialize();
+    await resumeFixtureParticipantAdmission(service);
     assert.equal((await insert(service, 'row-0', 'setup', 'fan-setup'))
       .success, true, 'setup: the lone leader serves a write');
     const window = recoveryRetryWindowMsOf(service.raftTimingConfig);
@@ -193,6 +198,9 @@ test('F-an: a hold on a contained unexpected throw is named once at error ' +
 
     unsubscribe();
     await sleep(window + WINDOW_MARGIN_MS);
+    // The reconstructed runtime is a new admission generation: production's
+    // release recovery resumes it on the existing origin before it serves.
+    await resumeFixtureParticipantAdmission(service);
     assert.equal((await insert(service, 'row-2', 'healed', 'fan-healed'))
       .success, true, 'the group serves again once the listener no longer ' +
       'throws');

@@ -9,7 +9,10 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -32,6 +35,7 @@ function createPartition(id) {
     tableName: 'test_table',
     replicaId: `${id}-r1`,
     replicaIds: [`${id}-r1`],
+    systemTableCache: new SystemTableCache(),
     schema: {
       columns: [
         {name: 'id', type: 'TEXT', primaryKey: true},
@@ -56,6 +60,7 @@ test('executeQuery emits metrics.partition.sqlite on SELECT',
   async (t) => {
     const partition = createPartition('sqlite-metrics-1');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     await partition.insertData('test_table', {id: 'r1', value: 'a'});
@@ -125,6 +130,7 @@ test('executeQuery sqlite metric does not break query on logger failure',
   async (t) => {
     const partition = createPartition('sqlite-metrics-4');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     await partition.insertData('test_table', {id: 'r1', value: 'a'});

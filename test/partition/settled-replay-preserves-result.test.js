@@ -32,6 +32,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -55,6 +56,9 @@ import {RAFT_RS_ENTRY_TYPE} from
 import {setCoreFaultInjector} from
   '../../src/raft/raft-rs-runtime-owner.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} = outcomeConstants;
 // The named replay state (undefined before the repair: every assertion on it
@@ -179,11 +183,14 @@ async function withLonePartitions(body, raft = {}) {
       replicaId: `${partitionId}-r1`,
       replicaIds: [`${partitionId}-r1`],
       nodeId: 'settled-replay-node',
+      systemTableCache: new SystemTableCache(),
       dbPath,
     }));
     services.push(partition);
     await partition.initialize();
     partition.startElection();
+    // Every lifetime, a reopen included, is released before it serves.
+    await resumeFixtureParticipantAdmission(partition);
     return {partition, dbPath};
   };
   try {
@@ -471,7 +478,12 @@ test('W3: on a three-replica group a retry answered by another replica, a ' +
   });
   const {services, dbFileOf} = group;
   const [leader, follower] = services;
+  let owners = null;
   try {
+    // Released by the real release owners, as production releases a group.
+    owners = await attachPartitionReleaseOwners(services,
+      {directory: path.dirname(dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
+    await owners.release(partitionId);
     for (const id of ['a', 'b']) {
       assert.equal((await write(leader, INSERT_SQL, [id, 'v'],
         `w3-setup-${id}`)).success, true, `setup ${id}`);
@@ -514,6 +526,7 @@ test('W3: on a three-replica group a retry answered by another replica, a ' +
     assert.deepEqual(valuesOf(dbFileOf(members[1])).map((row) => row.value),
       ['u', 'u'], 'the UPDATE applied once');
   } finally {
+    await owners?.dispose();
     await group.dispose();
     resetEnvironment();
   }

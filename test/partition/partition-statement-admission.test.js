@@ -26,6 +26,7 @@
  * and every routed path (A10); the apply-side refusal layer (A11).
  */
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {afterEach, beforeEach, test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -35,6 +36,7 @@ import {PARTITION_SERVICE_OPERATION} from '../../src/partition/partition-service
 import {readAdmittedPartitionRows} from '../../src/partition/partition-statement-admission.js';
 import Database from 'better-sqlite3';
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {
   INSERT_SQL,
   INT64_MAX,
@@ -356,7 +358,12 @@ test('TX1 admission A4: on a real three-replica group the B1 shapes are refused 
       `VALUES (${INT64_MAX}, 'top'), (NULL, 'new')`, layer: LAYER.ROWID_ALIAS}];
   const fields = ['success', 'failureCode', 'refusalLayer'];
   const facts = {wire: [], ingress: []};
+  let owners = null;
   try {
+    // Released by the real release owners, as production releases a group.
+    owners = await attachPartitionReleaseOwners(group.services,
+      {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: 8000});
+    await owners.release(partitionId);
     const leader = group.services[0];
     const before = appliedIndexOf(group, members[0], partitionId);
     for (const shape of shapes) {
@@ -379,6 +386,7 @@ test('TX1 admission A4: on a real three-replica group the B1 shapes are refused 
     facts.refusedRows = states[0].outcomes.filter((row) =>
       row.failure_code === V3.CODE.WRITE_STATEMENT_REFUSED).length;
   } finally {
+    await owners?.dispose();
     await group.dispose();
   }
   const refusals = shapes.map((shape) => ({success: false, ...refusedAs(shape.layer)}));

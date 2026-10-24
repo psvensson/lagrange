@@ -39,6 +39,8 @@ import {
   ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -250,10 +252,12 @@ test('PartitionService - calculates partition size', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -953,10 +957,12 @@ test('PartitionService - handleTransportMessage handles application messages', a
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 

@@ -22,6 +22,7 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -107,10 +108,16 @@ async function withTransferRunning(partitionId, body) {
   const network = leader.transport;
   const deliver = network.deliver;
   const transfereeAddress = group.addressOf(members[2]);
-  network.deliver = (address, ...rest) => (address === transfereeAddress ?
-    Promise.resolve({acknowledged: true}) :
-    deliver.call(network, address, ...rest));
+  let owners = null;
   try {
+    // The group is released the way production releases it: the real
+    // release owners run the cohort cutover before the group serves.
+    owners = await attachPartitionReleaseOwners(group.services,
+      {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
+    await owners.release(partitionId);
+    network.deliver = (address, ...rest) => (address === transfereeAddress ?
+      Promise.resolve({acknowledged: true}) :
+      deliver.call(network, address, ...rest));
     assert.equal((await insert(leader, 'row-0', 'setup')).success, true,
       'setup: the group serves a write');
     transferee.raft.stopScheduling();
@@ -134,6 +141,7 @@ async function withTransferRunning(partitionId, body) {
     await body({leader, status});
   } finally {
     network.deliver = deliver;
+    await owners?.dispose();
     await group.dispose();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
