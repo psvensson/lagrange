@@ -23,6 +23,9 @@ import {
   beforeEach,
   test,
 } from '../../src/test-helpers/tap.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
@@ -50,6 +53,7 @@ function createSelfOnlyPartition(id) {
     replicaId: `${id}-r5`,
     replicaIds: [`${id}-r5`],
     peerAddresses: [`test-node/partition/${id}-r5`],
+    systemTableCache: new SystemTableCache(),
     schema: {
       columns: [
         {name: 'id', type: 'TEXT', primaryKey: true},
@@ -93,6 +97,7 @@ test('stale self-only replica with a known remote leader rejects forwarded write
   async (t) => {
     const partition = createSelfOnlyPartition('stale-remote-leader');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
 
     // Reproduce the r5 churn state: the replica knows a remote leader (it
     // replicated from it moments ago) but its replica list collapsed to
@@ -133,6 +138,7 @@ test('stale self-only replica contradicted by the published leader pointer rejec
   async (t) => {
     const partition = createSelfOnlyPartition('stale-leader-pointer');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
 
     // No raft-observed leader this time — only the published partitions-row
     // leader pointer (an ACTUAL, written by leadership publication) says the
@@ -178,6 +184,7 @@ test('rejected query-routed writes propagate the failure through the response en
   async (t) => {
     const partition = createSelfOnlyPartition('query-envelope');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
 
     // The split-brain-candidate shape: the local replica still believes it
     // is leader (so the QUERY ingress role gate lets the write through to
@@ -229,6 +236,7 @@ test('single-replica placement under a replica_count>1 partition row keeps accep
   async (t) => {
     const partition = createSelfOnlyPartition('single-node-target-3');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
 
     // The single-node-cluster shape: CREATE TABLE writes replica_count from
     // the config default (minimum 3) BEFORE placement clamps to one visible
@@ -288,6 +296,7 @@ test('metadata publication helpers are wired for CAS-miss guard refresh', async 
 test('genuine single-replica groups keep accepting direct writes', async (t) => {
   const partition = createSelfOnlyPartition('genuine-single');
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
 
   // A real single-replica group self-promotes at initialize: leaderId is
   // itself and no partitions-row witness contradicts the list, so the

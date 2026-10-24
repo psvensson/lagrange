@@ -2,7 +2,10 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const FOREGROUND_WRITE_BUDGET_MS = 15_000;
 const PROPOSAL_COST_MS = 300;
@@ -41,6 +44,7 @@ function createPartition(partitionId = 'ratings-source') {
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     schema: TABLE_SCHEMA,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 }
@@ -87,6 +91,9 @@ test('split snapshot backfill reaches a foreground turn inside its original budg
         left.initialize(),
         right.initialize(),
       ]);
+      for (const partition of [source, left, right]) {
+        await resumeFixtureParticipantAdmission(partition);
+      }
       left.subscribeToCDC((event) => childCdcEvents.push(event));
       right.subscribeToCDC((event) => childCdcEvents.push(event));
       source.sqlQueryEngine = {

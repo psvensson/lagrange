@@ -15,7 +15,10 @@ import {SQLQueryEnginePartitionRoutingReadiness} from
 import {createContractMessageRouterStub} from
   '../contract/message-router-contract-support.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
@@ -278,12 +281,14 @@ test('stale split and merge delta replay uses the target registry and ' +
         {name: 'id', type: 'TEXT', primaryKey: true},
         {name: 'value', type: 'TEXT'},
       ]},
+      systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
       deferElection: true,
     }));
     await target.initialize();
     try {
       await target.raft.campaign();
+      await resumeFixtureParticipantAdmission(target);
       const queryExecutor = {executeOnPartition: async (
         partitionId, sql, params, _forRead, _preferLeader,
         _preferSameLatencyGroup, executionOptions) => {

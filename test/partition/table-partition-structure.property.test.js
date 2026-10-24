@@ -9,6 +9,9 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   PartitionService,
   RaftRole,
@@ -235,6 +238,7 @@ test('Property 4: Partition data is persisted in SQLite', async (t) => {
         };
 
         const partition = new PartitionService(withFoundingStamp({
+          systemTableCache: new SystemTableCache(),
           partitionId: `${tableId}-p1`,
           tableId,
           tableName: tableId,
@@ -246,6 +250,7 @@ test('Property 4: Partition data is persisted in SQLite', async (t) => {
 
         try {
           await partition.initialize();
+          await resumeFixtureParticipantAdmission(partition);
           await new Promise((resolve) => setTimeout(resolve, 500));
 
           // Insert records

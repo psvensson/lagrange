@@ -33,8 +33,8 @@ import {readCommittedStatementOutcome} from
   '../../src/partition/partition-committed-statement-outcome.js';
 import {releaseIdentityOf, releaseMemberIds} from
   '../../src/partition/partition-participant-release-contract.js';
-import {raiseParticipantCutoverPause, readParticipantReleaseFacts,
-  resumeParticipantCutoverAdmission} from
+import {invalidateParticipantReleaseAdmission, raiseParticipantCutoverPause,
+  readParticipantReleaseFacts, resumeParticipantCutoverAdmission} from
   '../../src/partition/partition-participant-transaction-pause.js';
 import {enableParticipantTransactionAdmission} from
   '../../src/partition/partition-participant-transaction-request.js';
@@ -519,6 +519,9 @@ async function resumeFixtureParticipantAdmission(leader) {
   }
   const handler = {nodeId: leader.nodeId, ownerIncarnation: 1,
     localServices: new Map([[leader.replicaId, leader]])};
+  // As release recovery does before it runs a cutover: an admission whose
+  // proof no longer matches the current runtime is closed first.
+  invalidateParticipantReleaseAdmission(leader);
   const facts = await readParticipantReleaseFacts(handler, leader);
   const release = releaseIdentityOf({partitionId: leader.partitionId,
     targetBuildDigest: facts.buildDigest,

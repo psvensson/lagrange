@@ -48,12 +48,11 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
-import {enableParticipantTransactionAdmission} from
-  '../../src/partition/partition-participant-transaction-request.js';
 import {
   commitMessage,
   identityOf,
   prepareMessage,
+  resumeFixtureParticipantAdmission,
   send,
   txMessage,
   beginMessage,
@@ -390,6 +389,7 @@ test('PartitionService - persists a participant commit outcome across restart, k
     },
     replicaId: 'outcome-p1-r1',
     nodeId: 'node-1',
+    systemTableCache: new SystemTableCache(),
     dbPath,
   }));
   const transaction = (transactionId, transactionEpoch) => identityOf(transactionId,
@@ -402,7 +402,7 @@ test('PartitionService - persists a participant commit outcome across restart, k
   const committed = transaction('outcome-committed', 7);
   const first = buildPartition();
   await first.initialize();
-  await enableParticipantTransactionAdmission(first);
+  await resumeFixtureParticipantAdmission(first);
   await send(first, beginMessage(committed));
   const unprepared = await send(first, commitMessage(committed, 'f'.repeat(64)));
   const prepared = await send(first, prepareMessage(committed));
@@ -412,6 +412,9 @@ test('PartitionService - persists a participant commit outcome across restart, k
   const restarted = buildPartition();
   try {
     await restarted.initialize();
+    // A restart is a new admission lifetime; release recovery resumes it on
+    // the durable origin the first lifetime enabled.
+    await resumeFixtureParticipantAdmission(restarted);
     t.strictSame({unprepared: unprepared.failureCode, prepared: prepared.state,
       decided: decided.state}, {unprepared: 'participant_transaction_not_prepared',
       prepared: 'PREPARED', decided: 'COMMITTED'}, 'a COMMIT applies only to PREPARED');
@@ -827,10 +830,12 @@ test('PartitionService - creates table from schema', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'], // Single replica becomes leader
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
 
   // Single replica becomes leader immediately
   await Promise.resolve();
@@ -863,10 +868,12 @@ test('PartitionService - executeQuery for SELECT', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'], // Single replica becomes leader
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
 
   // Single replica becomes leader immediately
   await Promise.resolve();
@@ -943,10 +950,12 @@ test('PartitionService - updateData modifies records', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -986,10 +995,12 @@ test('PartitionService - deleteData removes records', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -1023,10 +1034,12 @@ test('PartitionService - generates CDC events on insert', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -1195,10 +1208,12 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   await Promise.resolve();
 
   const cdcEvents = [];
