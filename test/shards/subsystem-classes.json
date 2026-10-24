@@ -4,11 +4,11 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 329,
-    "cdc-metadata": 64,
+    "bootstrap-membership": 330,
+    "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 216,
-    "convergence-topology": 82,
+    "convergence-topology": 83,
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
@@ -18,17 +18,17 @@
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 194,
+    "storage-partition": 197,
     "storage-raft": 143,
-    "test-infrastructure": 145,
+    "test-infrastructure": 146,
     "transactions": 16,
-    "transport-messaging": 97,
+    "transport-messaging": 105,
     "wasm-toolchain": 74
   },
-  "censusSize": 2444,
-  "digest": "fnv1a32-0422fc97",
+  "censusSize": 2460,
+  "digest": "fnv1a32-4ed9e720",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6251f7ec",
+  "observationDigest": "fnv1a32-9359f50d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -151,6 +151,7 @@
     "test/bootstrap/cdc-initial-subscription-leader-fallback.test.js": "bootstrap-membership",
     "test/bootstrap/cdc-leader-only-replication.test.js": "bootstrap-membership",
     "test/bootstrap/cdc-propagation-message-group-selection.test.js": "bootstrap-membership",
+    "test/bootstrap/cdc-propagation-source-owner-currentness.test.js": "bootstrap-membership",
     "test/bootstrap/cdc-subscription-consistency.property.test.js": "bootstrap-membership",
     "test/bootstrap/cleanup-ownership-order-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/cluster-identity-join-gate.test.js": "bootstrap-membership",
@@ -345,10 +346,12 @@
     "test/cdc/cdc-confirmation-tracker.test.js": "cdc-metadata",
     "test/cdc/cdc-confirmation-wiring.test.js": "cdc-metadata",
     "test/cdc/cdc-delete-cache-absence-convergence.test.js": "cdc-metadata",
+    "test/cdc/cdc-delivery-complete-vector.test.js": "cdc-metadata",
     "test/cdc/cdc-delivery-outcome.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.property.test.js": "cdc-metadata",
     "test/cdc/cdc-emitter.test.js": "cdc-metadata",
     "test/cdc/cdc-event-delivery.property.test.js": "cdc-metadata",
+    "test/cdc/cdc-event-envelope.test.js": "cdc-metadata",
     "test/cdc/cdc-event-handler.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service-authoritative-reads.test.js": "cdc-metadata",
     "test/cdc/cdc-integration-service-execute-sql-and-delivery.test.js": "cdc-metadata",
@@ -1111,10 +1114,15 @@
     "test/message-group/error-message-consistency.property.test.js": "transport-messaging",
     "test/message-group/maximum-retry-limiting.property.test.js": "transport-messaging",
     "test/message-group/message-delivery-reliability.property.test.js": "transport-messaging",
+    "test/message-group/message-group-cdc-input-guard.test.js": "transport-messaging",
+    "test/message-group/message-group-cdc-receiver-admission.test.js": "transport-messaging",
     "test/message-group/message-group-failover-cdc-continuity.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-promotion.test.js": "transport-messaging",
     "test/message-group/message-group-fresh-learner-snapshot.test.js": "transport-messaging",
+    "test/message-group/message-group-native-application-membership.test.js": "transport-messaging",
     "test/message-group/message-group-native-custody-handoff.test.js": "transport-messaging",
+    "test/message-group/message-group-native-mixed-vector.test.js": "transport-messaging",
+    "test/message-group/message-group-native-provisional-route.test.js": "transport-messaging",
     "test/message-group/message-group-proposal-deadline-wait-bound-spent.test.js": "transport-messaging",
     "test/message-group/message-group-rebalancer-leadership-readiness-hysteresis.test.js": "transport-messaging",
     "test/message-group/message-group-registration-exact-birth.test.js": "transport-messaging",
@@ -1301,9 +1309,12 @@
     "test/partition/participant-release-protocol.test.js": "storage-partition",
     "test/partition/participant-release-retention-native.test.js": "storage-partition",
     "test/partition/partition-admission-redrive-wakes.test.js": "storage-partition",
+    "test/partition/partition-cdc-delivery-progress.test.js": "storage-partition",
     "test/partition/partition-cdc-generator.test.js": "storage-partition",
+    "test/partition/partition-cdc-invocation-custody.test.js": "storage-partition",
     "test/partition/partition-cdc-obligation.test.js": "storage-partition",
     "test/partition/partition-cdc-parameterized-insert-or-ignore.test.js": "storage-partition",
+    "test/partition/partition-cdc-topology-progress-currentness.test.js": "storage-partition",
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": "storage-partition",
     "test/partition/partition-consensus-hold-log.test.js": "storage-partition",
     "test/partition/partition-coordinator-settlement.test.js": "storage-partition",
@@ -2160,6 +2171,7 @@
     "test/scripts/formation-health.test.js": "test-infrastructure",
     "test/scripts/formation-release-handoff-gcp-analysis-retained-uncompleted-teardown.test.js": "test-infrastructure",
     "test/scripts/gen-solve-commands-index.test.js": "test-infrastructure",
+    "test/scripts/git-invocation-owner.test.js": "test-infrastructure",
     "test/scripts/helper-import-closure.test.js": "test-infrastructure",
     "test/scripts/historical-record-exemptions.test.js": "test-infrastructure",
     "test/scripts/home-lab-cli-guidelines.test.js": "test-infrastructure",
@@ -2315,6 +2327,7 @@
     "test/topology/cdc-group-propagation-closure-lifecycle-bounded.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-closure-memory.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "convergence-topology",
+    "test/topology/cdc-group-propagation-foreground-boundary.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "convergence-topology",
@@ -2343,6 +2356,9 @@
     "test/transport/location-transparent-communication.property.test.js": "transport-messaging",
     "test/transport/loopback-connection.property.test.js": "transport-messaging",
     "test/transport/message-router-api.property.test.js": "transport-messaging",
+    "test/transport/message-router-cdc-custody.test.js": "transport-messaging",
+    "test/transport/message-router-cdc-encoding.test.js": "transport-messaging",
+    "test/transport/message-router-cdc-response-boundary.test.js": "transport-messaging",
     "test/transport/message-router-critical-source-reserve.test.js": "transport-messaging",
     "test/transport/message-router-deliver-metrics.test.js": "transport-messaging",
     "test/transport/message-router-endpoint-address-change-redial.test.js": "transport-messaging",
@@ -2862,6 +2878,13 @@
         "src/bootstrap/shared/startup-sql-runtime-handoff.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/cache/cdc-table-policy.js"
+      ]
+    },
+    "test/bootstrap/cdc-propagation-source-owner-currentness.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-selection.js",
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-outcome.js"
       ]
     },
     "test/bootstrap/cleanup-ownership-order-characterization.test.js": {
@@ -3563,12 +3586,22 @@
         "src/cdc/cdc-integration-service-cache-visibility-authority.js"
       ]
     },
+    "test/cdc/cdc-delivery-complete-vector.test.js": {
+      "files": [
+        "src/cdc/cdc-delivery-outcome.js"
+      ]
+    },
     "test/cdc/cdc-delivery-outcome.test.js": {
       "files": [
         "src/cdc/cdc-source-scope-evidence.js",
         "src/message-group/constants.js",
         "src/topology/cdc-group-propagation-constants.js",
         "src/transport/transport-semantic-outcome.js"
+      ]
+    },
+    "test/cdc/cdc-event-envelope.test.js": {
+      "files": [
+        "src/cdc/cdc-source-scope-evidence.js"
       ]
     },
     "test/cdc/cdc-integration-service-authoritative-reads.test.js": {
@@ -8079,6 +8112,20 @@
         "test/test-helpers/controllable-consensus-port.js"
       ]
     },
+    "test/message-group/message-group-cdc-input-guard.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/cdc/cdc-source-scope-evidence.js",
+        "test/helpers/hostile-intrinsics.js"
+      ]
+    },
+    "test/message-group/message-group-cdc-receiver-admission.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/message-group/message-group-forwarding-owner-constants.js"
+      ]
+    },
     "test/message-group/message-group-failover-cdc-continuity.test.js": {
       "files": [
         "src/raft/raft-operation-port-constants.js",
@@ -8112,6 +8159,11 @@
         "test/test-helpers/boot-incarnation-fixture.js"
       ]
     },
+    "test/message-group/message-group-native-application-membership.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js"
+      ]
+    },
     "test/message-group/message-group-native-custody-handoff.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-selection.js",
@@ -8130,7 +8182,37 @@
         "src/raft/raft-rs-application-transaction-owner.js",
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
+        "src/topology/cdc-group-propagation-constants.js",
         "test/message-group/message-group-native-custody-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ],
+      "env": [
+        "RAFT_TICK_INTERVAL_MS"
+      ]
+    },
+    "test/message-group/message-group-native-mixed-vector.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/message-group/message-group-forwarding-owner-constants.js"
+      ]
+    },
+    "test/message-group/message-group-native-provisional-route.test.js": {
+      "files": [
+        "src/bootstrap/shared/message-group-selection.js",
+        "src/bootstrap/shared/message-group-transport-handler.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/partition/partition-committed-statement-outcome-constants.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/message-group/message-group-native-provisional-route-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
@@ -9373,6 +9455,53 @@
         "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
+    "test/partition/partition-cdc-delivery-progress.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-cdc-invocation-custody.test.js": {
+      "files": [
+        "src/cdc/cdc-delivery-invocation.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/partition/partition-cdc-obligation.test.js": {
       "files": [
         "src/partition/partition-committed-statement-outcome.js",
@@ -9393,6 +9522,32 @@
         "src/raft/raft-rs-ready-loop-constants.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/partition/partition-cdc-topology-progress-currentness.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/cdc-topology-progress-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
     "test/partition/partition-commit-deadline-wait-bound-spent.test.js": {
@@ -14513,6 +14668,7 @@
         "examples/service-data-affinity/run-affinity-demo.js",
         "package.json",
         "scripts/checks/formation-health.js",
+        "scripts/checks/git-invocation.js",
         "scripts/checks/wait-for-thermal-headroom.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/test-helpers/probe-guard.js",
@@ -14540,6 +14696,16 @@
       "directories": [
         "scripts",
         "scripts/solve",
+        "src",
+        "test"
+      ]
+    },
+    "test/scripts/git-invocation-owner.test.js": {
+      "files": [
+        "scripts/checks/git-invocation.js"
+      ],
+      "directories": [
+        "scripts",
         "src",
         "test"
       ]
@@ -16404,6 +16570,34 @@
         "TEST_FILE_ID"
       ]
     },
+    "test/topology/cdc-group-propagation-foreground-boundary.test.js": {
+      "files": [
+        "src/bootstrap/shared/partition-cdc-propagation-subscriber.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/partition/partition-cdc-obligation-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-service.js",
+        "test/test-helpers/cdc-topology-progress-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
+      ]
+    },
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
       "files": [
         "src/topology/cdc-group-propagation-constants.js",
@@ -16483,6 +16677,25 @@
     "test/transport/immediate-ack-ordering.property.test.js": {
       "files": [
         "src/transport/router-message-handler.js"
+      ]
+    },
+    "test/transport/message-router-cdc-custody.test.js": {
+      "files": [
+        "src/transport/inproc-transport.js",
+        "src/transport/message-router-shared-vocabulary.js",
+        "test/test-helpers/message-router-cdc-fixture.js"
+      ]
+    },
+    "test/transport/message-router-cdc-encoding.test.js": {
+      "files": [
+        "src/cdc/cdc-delivery-budget.js",
+        "src/transport/message-router-shared-vocabulary.js",
+        "test/test-helpers/message-router-cdc-fixture.js"
+      ]
+    },
+    "test/transport/message-router-cdc-response-boundary.test.js": {
+      "files": [
+        "src/transport/message-router-shared-vocabulary.js"
       ]
     },
     "test/transport/message-router-ping-wait-bound-spent.test.js": {

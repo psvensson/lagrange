@@ -49,6 +49,7 @@ import {
   SELECTION_REFUSED,
 } from './change-selection-constants.js';
 import {resolvedCheckRange} from './changed-paths.js';
+import {spawnGit} from './git-invocation.js';
 import {
   SUBSYSTEM_MANIFEST_PATH,
 } from './test-subsystem-classification-constants.js';
@@ -119,7 +120,6 @@ const LABEL_RANGE = 'proof range:';
 const LABEL_SELECTION = 'selection:';
 const LABEL_MODE = 'test stage:';
 const stringTrim = Function.call.bind(String.prototype.trim);
-const GIT_BINARY = 'git';
 const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
 const TEXT_ENCODING = 'utf8';
 const LABEL_BECAUSE = 'because:';
@@ -298,9 +298,8 @@ export function recordCorpusProof(sha, options = {}) {
 // Already an ancestor of origin/main: the receipt's own push is then exempt
 // from the gate, so recording cannot re-enter it.
 function commitIsPublished(sha, options = {}) {
-  const {git = spawnSync} = options;
-  const ancestor = git(GIT_BINARY,
-    [...ANCESTOR_ARGUMENTS, sha, MAIN_REMOTE_REF],
+  const {git = spawnGit} = options;
+  const ancestor = git([...ANCESTOR_ARGUMENTS, sha, MAIN_REMOTE_REF],
     {cwd: root, encoding: TEXT_ENCODING});
   return ancestor?.status === EXIT_SUCCESS;
 }
@@ -308,14 +307,14 @@ function commitIsPublished(sha, options = {}) {
 // HEAD is this sha and nothing is modified: the tree the corpus ran against
 // is the commit the receipt would speak for.
 function treeIsCommit(sha, options = {}) {
-  const {git = spawnSync} = options;
-  const head = git(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+  const {git = spawnGit} = options;
+  const head = git([...HEAD_REVISION_ARGUMENTS],
     {cwd: root, encoding: TEXT_ENCODING});
   if (head?.status !== EXIT_SUCCESS ||
       stringTrim(String(head.stdout || EMPTY_TEXT)) !== sha) {
     return false;
   }
-  const status = git(GIT_BINARY, [...STATUS_ARGUMENTS],
+  const status = git([...STATUS_ARGUMENTS],
     {cwd: root, encoding: TEXT_ENCODING});
   return status?.status === EXIT_SUCCESS &&
     stringTrim(String(status.stdout || EMPTY_TEXT)) === EMPTY_TEXT;
@@ -358,7 +357,7 @@ export function runDecision(plan, decision, runners = {}) {
 }
 
 function headRevision() {
-  const result = spawnSync(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
     {cwd: root, encoding: TEXT_ENCODING});
   const sha = stringTrim(String(result.stdout || ''));
   return sha.length > 0 ? sha : null;

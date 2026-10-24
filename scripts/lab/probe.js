@@ -6,6 +6,7 @@ import path from 'node:path';
 import {StringDecoder} from 'node:string_decoder';
 
 import {WORKSPACE_INJECTION_ENV} from '../checks/change-selection-constants.js';
+import {GIT_OUTPUT_BOUND, isGitOutputTooLarge, spawnGit} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH} from '../checks/impact-proof-cone-constants.js';
 import {LANE_JOBS_CAP_ENV} from '../checks/test-resource-classification-constants.js';
@@ -1245,7 +1246,6 @@ const TEXT_UTF8 = 'utf8';
 const PLACEMENT_SHELL = 'sh';
 const PLACEMENT_SHELL_STDIN = Object.freeze(['-s', '--']);
 const PLACEMENT_SHELL_COMMAND = '-c';
-const PLACEMENT_GIT = 'git';
 const PLACEMENT_GIT_HAS_COMMIT = Object.freeze(['cat-file', '-e']);
 const PLACEMENT_GIT_IS_ANCESTOR = Object.freeze(['merge-base', '--is-ancestor']);
 const PLACEMENT_GIT_HEAD = Object.freeze(['rev-parse', 'HEAD']);
@@ -1264,12 +1264,6 @@ const REQUIREMENT_TEXT = Object.freeze({
   TOO_LARGE: ' is larger than the requirement read bound of ',
   BYTES: ' bytes',
 });
-// Git output this module reads whole (`git show <sha>:package-lock.json`,
-// status, rev-parse). spawnSync's default is 1 MiB, and a lockfile past it
-// would leave every placed run with no requirement; the bound is generous
-// (the lockfile is ~0.6 MiB) and exceeding it is a failure of its own.
-const GIT_OUTPUT_MAX_BYTES = 32 * 1024 * 1024;
-const GIT_OUTPUT_OVERFLOW = 'ENOBUFS';
 // Why discovery for a placed run failed, as a code a caller can name.
 const DISCOVERY_FAILURE = Object.freeze({
   REQUIREMENT_UNREADABLE: 'lab-requirement-unreadable',
@@ -1997,9 +1991,12 @@ function streamLines(readable, stream, onLine) {
 
 // Git here addresses the checkout it is given, never a repository pointer
 // inherited from a hook (the push gate runs this inside pre-push).
+// Git output this module reads whole (`git show <sha>:package-lock.json`,
+// status, rev-parse) is bounded by the git invocation owner: a lockfile past
+// spawnSync's 1 MiB default would otherwise leave every placed run with no
+// requirement, and exceeding the bound is a failure of its own.
 function gitAt(root, args) {
-  return spawnSync(PLACEMENT_GIT, args, {cwd: root, env: gitProcessEnvironment(),
-    encoding: TEXT_UTF8, maxBuffer: GIT_OUTPUT_MAX_BYTES});
+  return spawnGit(args, {cwd: root, env: gitProcessEnvironment(), encoding: TEXT_UTF8});
 }
 
 function gitSucceeds(root, args) {
@@ -2278,7 +2275,7 @@ function holdEnded(code, lines, errors) {
  * both are read from that commit - the one a run places - and a commit that
  * cannot be read throws rather than falling back; with none they are the
  * working tree's, and `source` says which. A commit's file larger than
- * GIT_OUTPUT_MAX_BYTES throws its own failure (REQUIREMENT_TOO_LARGE).
+ * GIT_OUTPUT_BOUND.COMMAND throws its own failure (REQUIREMENT_TOO_LARGE).
  * @param {string} root
  * @param {string|null} [sha]
  * @return {{source: string, lockGraphSha256: string|null, nodeMinimum: string}}
@@ -2286,11 +2283,14 @@ function holdEnded(code, lines, errors) {
 export function fleetRequirement(root, sha = null) {
   const read = (file) => {
     if (!sha) return fs.readFileSync(path.join(root, file), TEXT_UTF8);
-    const shown = gitAt(root, ['show', `${sha}:${file}`]);
-    if (shown.error?.code === GIT_OUTPUT_OVERFLOW) {
+    let shown;
+    try {
+      shown = gitAt(root, ['show', `${sha}:${file}`]);
+    } catch (error) {
+      if (!isGitOutputTooLarge(error)) throw error;
       throw discoveryFailure(DISCOVERY_FAILURE.REQUIREMENT_TOO_LARGE,
         `${file}${REQUIREMENT_TEXT.AT}${sha}${REQUIREMENT_TEXT.TOO_LARGE}` +
-        `${GIT_OUTPUT_MAX_BYTES}${REQUIREMENT_TEXT.BYTES}`, shown.error);
+        `${GIT_OUTPUT_BOUND.COMMAND}${REQUIREMENT_TEXT.BYTES}`, error);
     }
     if (shown.status !== 0) {
       throw discoveryFailure(DISCOVERY_FAILURE.REQUIREMENT_UNREADABLE,
@@ -2893,5 +2893,5 @@ export function labTestDeps({root, env = gitProcessEnvironment()}) {
   };
 }
 
-export {DISCOVERY_FAILURE, GIT_OUTPUT_MAX_BYTES, LAB_TEST_RESULTS_FILE, PLACEMENT_ENV,
+export {DISCOVERY_FAILURE, LAB_TEST_RESULTS_FILE, PLACEMENT_ENV,
   PLACEMENT_EXIT, PLACEMENT_LOCAL, PLACEMENT_MIN_PLAN_MS};

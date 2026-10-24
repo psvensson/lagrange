@@ -25,8 +25,6 @@
 // and if it crosses a subsystem boundary both owners must be proved. Static
 // checks consume the paths that still exist; the selector consumes both sides.
 
-import {execFileSync} from 'node:child_process';
-
 import {
   CHANGE_ADDED,
   CHANGE_DELETED,
@@ -51,6 +49,7 @@ import {
   sortStrings,
   stringCollectionHas,
 } from './change-proof-string-collections.js';
+import {execGit, isGitOutputTooLarge} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
 // Intrinsics captured at module load. Every string below arrives from `git`,
@@ -64,13 +63,11 @@ const stringSplit = Function.call.bind(String.prototype.split);
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const UTF8 = 'utf8';
-const MAX_BUFFER = 64 * 1024 * 1024;
 const NEWLINE = '\n';
 const TAB = '\t';
 const DEFAULT_HEAD = 'HEAD';
 const RENAME_DETECTION = '-M';
 const NAME_STATUS = '--name-status';
-const GIT = 'git';
 const DIFF = 'diff';
 const CACHED = '--cached';
 const LS_FILES = 'ls-files';
@@ -84,17 +81,19 @@ const PATH_SEPARATOR = '/';
 const MERGE_BASE = 'merge-base';
 const PUBLICATION_REMOTE = 'origin/main';
 
+// Null when git cannot answer (no base, not a repository). Output past the
+// git output bound is not that: it is a failure of its own and propagates.
 function git(root, args) {
   try {
     return arrayFilter(
-      stringSplit(execFileSync(GIT, args, {
+      stringSplit(execGit(args, {
         cwd: root,
         encoding: UTF8,
-        maxBuffer: MAX_BUFFER,
         env: gitProcessEnvironment(),
       }), NEWLINE),
       Boolean);
-  } catch {
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
     return null;
   }
 }

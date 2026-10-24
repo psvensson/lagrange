@@ -21,6 +21,8 @@
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
 
+import {spawnGit} from './git-invocation.js';
+
 const REQUIRED_PASSES = 3;
 const WORKFLOW_NAME = 'ci';
 const CONCLUSION_SUCCESS = 'success';
@@ -42,7 +44,7 @@ const stringTrim = Function.call.bind(String.prototype.trim);
 const stringSlice = Function.call.bind(String.prototype.slice);
 
 function headSha() {
-  const result = spawnSync('git', ['rev-parse', 'HEAD'], {encoding: UTF8});
+  const result = spawnGit(['rev-parse', 'HEAD'], {encoding: UTF8});
   return stringTrim(result.stdout || '');
 }
 

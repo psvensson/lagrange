@@ -14,11 +14,11 @@
  * strict-zero audit remains the Quest's terminal proof.
  */
 
-import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import {printRatchetTighteningHint} from '../metric-check-helpers.js';
+import {spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 import {
   FIXED_SCAN_SCOPE,
@@ -44,7 +44,6 @@ const RATCHET_TEXT = Object.freeze({
   MISSING_BASELINE: 'the ratchet refuses to run without a baseline',
   ONE_WAY: 'ratchet baselines are one-way',
 });
-const GIT_BINARY = 'git';
 const GIT_HAS_HEAD = Object.freeze(['rev-parse', '--verify', '--quiet',
   'HEAD']);
 const GIT_BASELINE_REVISIONS = Object.freeze([
@@ -56,7 +55,7 @@ const EXIT_RATCHET_FAILED = 1;
 const EXIT_UNREADABLE = 2;
 
 function runGit(root, args) {
-  return spawnSync(GIT_BINARY, args, {
+  return spawnGit(args, {
     cwd: root,
     env: gitProcessEnvironment(),
     encoding: RATCHET_TEXT.UTF8,

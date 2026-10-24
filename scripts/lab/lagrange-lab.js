@@ -26,6 +26,7 @@ import {
 } from '../run-classified-test-files.js';
 import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
+import {execGitAsync} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
@@ -376,14 +377,14 @@ async function commandProvision(args) {
   const manifest = JSON.parse(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_PACKAGE), FLEET_TEXT));
   // Git asks this checkout, never a repository a hook exported GIT_DIR for.
   const gitEnv = {env: gitProcessEnvironment()};
-  const head = await capture('git', ['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD'],
-    gitEnv);
+  const gitText = async (args) => (await execGitAsync(args, gitEnv)).stdout.trim();
+  const head = await gitText(['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD']);
   const script = workerSetupScript({
     workflow: parseYaml(readFileSync(joinPath(FLEET_REPO_ROOT, PROVISION_WORKFLOW), FLEET_TEXT)),
     // The engines floor has one reader: the fleet requirement's.
     nodeMinimum: fleetRequirement(FLEET_REPO_ROOT).nodeMinimum,
     repoUrl: workerCloneUrl(
-      await capture('git', ['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'], gitEnv)),
+      await gitText(['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'])),
     authorizedKeys: await controllerPublicKeys(node?.ssh),
     generatedFrom: `${manifest.name} ${head}`,
   });

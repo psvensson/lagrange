@@ -4,7 +4,7 @@
 // shown red on a seeded reference, in a filename and in content, in any case.
 
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +18,7 @@ import {
   auditRetiredConsensusReferences,
   isInFixedScope,
 } from '../../scripts/checks/no-legacy-consensus-reference-audit.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '..', '..');
@@ -73,7 +74,7 @@ function fixture(files) {
     fs.mkdirSync(path.dirname(path.join(root, relative)), {recursive: true});
     fs.writeFileSync(path.join(root, relative), content);
   }
-  execFileSync('git', ['init', '-q'], {cwd: root});
+  execGit(['init', '-q'], {cwd: root});
   return root;
 }
 

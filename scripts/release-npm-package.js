@@ -3,6 +3,7 @@
 import {spawnSync} from 'node:child_process';
 
 import {ACTION, authorizeAction, isAuthorized} from './action-authority.js';
+import {spawnGit} from './checks/git-invocation.js';
 import {createHash} from 'node:crypto';
 import {
   access,
@@ -166,7 +167,11 @@ class NpmReleaseError extends Error {
 }
 
 function commandFailureMessage(command, args, result) {
-  return `${command} ${args.join(ARGUMENT_SEPARATOR)} failed with status ${result.status}` +
+  return commandLineFailureMessage(`${command} ${args.join(ARGUMENT_SEPARATOR)}`, result);
+}
+
+function commandLineFailureMessage(commandLine, result) {
+  return `${commandLine} failed with status ${result.status}` +
     `\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`;
 }
 
@@ -273,9 +278,7 @@ function parsePackOutput(output) {
 }
 
 function resolveGitHead(explicitGitHead) {
-  const gitHead = explicitGitHead || runChecked(
-    'git', ['rev-parse', 'HEAD'], {}, RELEASE_OUTCOME.PACK_FAILED,
-  ).trim();
+  const gitHead = explicitGitHead || headCommit();
   if (!/^[0-9a-f]{40}$/u.test(gitHead)) {
     throw new NpmReleaseError(
       RELEASE_OUTCOME.PACKAGE_MANIFEST_INVALID,
@@ -283,6 +286,22 @@ function resolveGitHead(explicitGitHead) {
     );
   }
   return gitHead;
+}
+
+// Git is started by the git invocation owner, never through `run`.
+function headCommit() {
+  const args = ['rev-parse', 'HEAD'];
+  const result = spawnGit(args, {
+    cwd: REPOSITORY_ROOT,
+    encoding: TEXT_ENCODING,
+    env: process.env,
+    timeout: COMMAND_TIMEOUT_MS,
+  });
+  if (result.status !== 0) {
+    throw new NpmReleaseError(RELEASE_OUTCOME.PACK_FAILED,
+      commandLineFailureMessage(`git ${args.join(ARGUMENT_SEPARATOR)}`, result));
+  }
+  return result.stdout.trim();
 }
 
 async function buildNpmPackage(options = {}) {

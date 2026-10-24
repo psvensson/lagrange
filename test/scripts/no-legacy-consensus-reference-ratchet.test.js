@@ -18,6 +18,7 @@ import {
   BASELINE_FILE,
   findBaselineIncrease,
 } from '../../scripts/checks/no-legacy-consensus-reference-ratchet.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)),
   '..', '..');
@@ -30,7 +31,7 @@ const RUNTIME = ['Life', 'Raft'].join('');
 const EXIT = Object.freeze({OK: 0, RED: 1, UNREADABLE: 2});
 
 function git(root, args) {
-  const result = spawnSync('git', args,
+  const result = spawnGit(args,
     {cwd: root, env: gitProcessEnvironment(), encoding: 'utf8'});
   assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
   return result.stdout.trim();

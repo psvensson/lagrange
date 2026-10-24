@@ -38,16 +38,17 @@
 // belongs to the top-level runner, so that a selector returning nothing still
 // leaves the spine - including this module's own contract tests - executing.
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import {testsForSubsystem} from '../check-subsystem.js';
+import {execGit} from './git-invocation.js';
 import {
   OBSERVATION_DRIFT_PROBLEM,
   observationDrift,
   observersOf,
 } from './test-subsystem-classification.js';
+import {isTestCensusPath} from './test-primary-classification.js';
 import {withoutWorkspaceInjections} from './changed-paths.js';
 import {
   helperImportClosure,
@@ -136,11 +137,9 @@ const objectValues = Object.values;
 const UTF8 = 'utf8';
 const TEST_SUFFIX = '.test.js';
 const AMBIGUITY_SEPARATOR = ' + ';
-const MAX_GIT_BUFFER = 64 * 1024 * 1024;
 const REASON_SEPARATOR = ': ';
 const PROBLEM_SEPARATOR = ', ';
 const NEWLINE = '\n';
-const GIT = 'git';
 const LS_FILES = 'ls-files';
 const OTHERS = '--others';
 const EXCLUDE_STANDARD = '--exclude-standard';
@@ -281,8 +280,8 @@ export function packageChangeRequiresRelease(
 // exhaustiveness - waiting for `git add` would let it evade the check exactly
 // when a human is least likely to notice.
 export function candidatePaths(root) {
-  const list = (args) => arrayFilter(stringSplit(execFileSync(GIT, args,
-    {cwd: root, encoding: UTF8, maxBuffer: MAX_GIT_BUFFER}), NEWLINE), Boolean);
+  const list = (args) => arrayFilter(stringSplit(execGit(args,
+    {cwd: root, encoding: UTF8}), NEWLINE), Boolean);
   // `git ls-files` includes an index entry whose worktree file has been
   // deleted. That path matters to changed-path selection (which carries an
   // explicit vanished set), but it is not part of the CURRENT taxonomy
@@ -319,7 +318,10 @@ export function categoryForPath(candidatePath, classes) {
     isReleaseSurfacePath(candidatePath)) {
     return {category: CATEGORY_RELEASE_PROOF};
   }
-  if (stringEndsWith(candidatePath, TEST_SUFFIX)) {
+  // A test candidate is a member of the test census, never a path that merely
+  // ends in .test.js: an evidence copy under solve/ is data and falls through
+  // to the inert rules.
+  if (isTestCensusPath(candidatePath)) {
     return classes[candidatePath] ?
       {category: CATEGORY_TEST} :
       {category: null, problem: REFUSED_UNCLASSIFIED_TEST_PROBLEM};
@@ -534,7 +536,7 @@ function collectChangeEvidence({
     const changedPath = changedPaths[index];
     admitObservers(evidence, changedPath, observations, classes);
     if (isInertPath(changedPath)) continue;
-    if (stringEndsWith(changedPath, TEST_SUFFIX)) {
+    if (isTestCensusPath(changedPath)) {
       admitChangedTest(evidence, changedPath, classes, vanished);
       continue;
     }

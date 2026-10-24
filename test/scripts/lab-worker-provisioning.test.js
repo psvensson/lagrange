@@ -16,6 +16,7 @@ import {
   WORKER_CANARY_STEPS, WORKER_SETUP_FILE, WORKER_SYSTEM_PACKAGES, WORKER_TOOL_SOURCES,
   copyWorkerSetup, parseCapability, workerCloneUrl, workerSetupScript,
 } from '../../scripts/lab/probe.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const CANARY = '.github/workflows/full-corpus-canary.yml';
 const KEY = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyOnlyForTheWitness controller@lab';
@@ -221,7 +222,7 @@ test('the worker setup moves a checkout to main only when nothing is lost', (t) 
   t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
   // Git addresses these scratch repositories only, never one a hook exported
   // GIT_DIR for (verifier round 2).
-  const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+  const git = (cwd, ...args) => spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t',
     ...args], {cwd, encoding: 'utf8', env: gitProcessEnvironment()}).stdout.trim();
   // Inside a push hook git exports GIT_DIR for the pusher's repository: this
   // decoy stands in for it and must see nothing, from the first git on (verifier round 2).
@@ -279,7 +280,7 @@ test('the worker setup moves a checkout to main only when nothing is lost', (t) 
   assert.equal(head('mainAhead'), before.mainAhead,
     'main with local commits is left alone, never merged');
   delete process.env.GIT_DIR;
-  assert.equal(spawnSync('git', ['rev-parse', '--verify', '--quiet', 'HEAD'], {cwd: decoy,
+  assert.equal(spawnGit(['rev-parse', '--verify', '--quiet', 'HEAD'], {cwd: decoy,
     env: gitProcessEnvironment()}).status, 1, 'the repository GIT_DIR named got no commit');
 });
 

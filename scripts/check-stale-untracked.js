@@ -4,7 +4,9 @@
 // test) sat untracked overnight in the shared tree — the commit-on-completion
 // posture depends on end-of-session attention, which is exactly when it fails.
 // Quest attempts are auto-committed by the step machinery; this covers the gap
-// (tool/process work done outside a step). Warn-only (always exits 0): the shared
+// (tool/process work done outside a step). Warn-only: every staleness verdict
+// exits 0, and the one nonzero exit is the check's own read failing (an
+// untracked list past the git output bound). The shared
 // tree is legitimately dirty across parallel sessions, so "finished" cannot be
 // gated mechanically — this only surfaces UNTRACKED source/test/script files old
 // enough (>12h) that no live session is plausibly still working on them. Run via
@@ -12,9 +14,8 @@
 // .claude/settings.json.
 
 import fs from 'node:fs';
-import {execFileSync} from 'node:child_process';
+import {execGit, isGitOutputTooLarge} from './checks/git-invocation.js';
 
-const GIT_EXECUTABLE = 'git';
 const GIT_UNTRACKED_ARGUMENTS = Object.freeze([
   'ls-files',
   '--others',
@@ -33,12 +34,13 @@ const STALE_WARNING =
 
 let output;
 try {
-  output = execFileSync(
-    GIT_EXECUTABLE,
+  output = execGit(
     [...GIT_UNTRACKED_ARGUMENTS, ...WATCHED_ROOTS],
     {encoding: TEXT_ENCODING, stdio: CHILD_PROCESS_STDIO},
   );
-} catch {
+} catch (error) {
+  // An untracked list past the git output bound is a failure of its own.
+  if (isGitOutputTooLarge(error)) throw error;
   process.exit(0); // Not a repo / git unavailable — nothing to check.
 }
 

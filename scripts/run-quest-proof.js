@@ -10,7 +10,7 @@
 //   node scripts/run-quest-proof.js --diff-base <git-ref>
 //   node scripts/run-quest-proof.js --dry-run ...   (print selection, do not run)
 
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -27,6 +27,7 @@ import {
   SELECTION_CHANGED_TEST,
   SELECTION_SAFETY_FLOOR,
 } from './checks/impact-proof-cone-constants.js';
+import {execGit} from './checks/git-invocation.js';
 
 const CHANGED_FLAG = '--changed';
 const DIFF_BASE_FLAG = '--diff-base';
@@ -36,7 +37,6 @@ const DEFAULT_JOBS = '4';
 const TEST_RUNNER = 'scripts/run-test-files.js';
 const UTF8_ENCODING = 'utf8';
 const FILES_PER_INVOCATION = 100;
-const GIT_EXECUTABLE = 'git';
 const GIT_DIFF_NAME_ONLY_ARGS = ['diff', '--name-only', '--end-of-options'];
 const GIT_HEAD_REF = 'HEAD';
 
@@ -63,7 +63,7 @@ for (let index = 0; index < args.length; index += 1) {
 }
 
 if (diffBase) {
-  const output = execFileSync(GIT_EXECUTABLE, [
+  const output = execGit([
     ...GIT_DIFF_NAME_ONLY_ARGS,
     diffBase,
     GIT_HEAD_REF,

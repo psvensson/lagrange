@@ -7,7 +7,6 @@
 // safety spine alone and looks entirely healthy.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,12 +27,12 @@ import {
   SOURCE_SUBSYSTEM_RULES,
   WORKSPACE_INJECTION_ENV,
 } from '../../scripts/checks/change-selection-constants.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 const root = process.cwd();
 const UTF8 = 'utf8';
-const MAX_BUFFER = 64 * 1024 * 1024;
 
-const tracked = execFileSync('git', ['ls-files'],
-  {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER})
+const tracked = execGit(['ls-files'],
+  {cwd: root, encoding: UTF8})
   .split('\n').filter(Boolean);
 
 test('EXHAUSTIVE: the four categories partition the candidate universe', () => {
@@ -140,10 +139,10 @@ test('the current taxonomy census excludes tracked worktree deletions', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'taxonomy-deletion-'));
   const deletedPath = 'test/deleted.test.js';
   try {
-    execFileSync('git', ['init', '--quiet'], {cwd: fixture});
+    execGit(['init', '--quiet'], {cwd: fixture});
     fs.mkdirSync(path.join(fixture, 'test'));
     fs.writeFileSync(path.join(fixture, deletedPath), 'export {};\n');
-    execFileSync('git', ['add', deletedPath], {cwd: fixture});
+    execGit(['add', deletedPath], {cwd: fixture});
     fs.rmSync(path.join(fixture, deletedPath));
     const census = candidatePaths(fixture);
     assert.ok(!census.tracked.includes(deletedPath));
@@ -168,7 +167,7 @@ test('a declared workspace link never enters the candidate universe', (t) => {
     fs.rmSync(fixture, {recursive: true, force: true});
   });
   const link = 'tools/alloy-6.2.0';
-  execFileSync('git', ['init', '--quiet', 'checkout'], {cwd: fixture});
+  execGit(['init', '--quiet', 'checkout'], {cwd: fixture});
   const checkout = path.join(fixture, 'checkout');
   fs.writeFileSync(path.join(checkout, '.gitignore'), 'tools/alloy-*/\n');
   fs.mkdirSync(path.join(fixture, 'alloy-6.2.0'));

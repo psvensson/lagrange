@@ -5,12 +5,13 @@
 // worktree, so a caller can run/revert/experiment without ever mutating the live tree.
 // Used by dt-prove.js (red-on-revert proof) and available for per-session isolation.
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+
+import {execGit} from './checks/git-invocation.js';
 
 const DEFAULT_ENCODING = 'utf8';
 const BUFFER_ENCODING = 'buffer';
@@ -24,9 +25,8 @@ function reportCleanupWarning(error) {
 }
 
 function git(root, args, options = {}) {
-  return execFileSync('git', ['-C', root, ...args], {
+  return execGit(['-C', root, ...args], {
     encoding: DEFAULT_ENCODING,
-    maxBuffer: 256 * 1024 * 1024,
     ...options,
   });
 }

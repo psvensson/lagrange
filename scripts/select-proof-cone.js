@@ -10,7 +10,6 @@
 // non-zero when the selector fails closed with problems; --full-suite prints
 // the entire census instead (the caller then runs the normal lanes).
 
-import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -19,6 +18,7 @@ import {
   NEWLINE_SEPARATOR,
   SELECTION_SAFETY_FLOOR,
 } from './checks/impact-proof-cone-constants.js';
+import {execGit} from './checks/git-invocation.js';
 import {
   assertRunnableProofSelection,
   selectProofCone,
@@ -34,7 +34,6 @@ const LINE_SEPARATOR = '\n';
 const FAILURE_EXIT_CODE = 1;
 const JSON_FLAG = '--json';
 const UTF8_ENCODING = 'utf8';
-const GIT_EXECUTABLE = 'git';
 const GIT_DIFF_NAME_ONLY_ARGS = ['diff', '--name-only', '--end-of-options'];
 const GIT_HEAD_REF = 'HEAD';
 
@@ -85,7 +84,7 @@ for (let index = 0; index < args.length; index += 1) {
 }
 
 if (diffBase) {
-  const output = execFileSync(GIT_EXECUTABLE, [
+  const output = execGit([
     ...GIT_DIFF_NAME_ONLY_ARGS,
     diffBase,
     GIT_HEAD_REF,

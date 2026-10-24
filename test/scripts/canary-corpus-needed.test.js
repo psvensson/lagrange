@@ -6,7 +6,6 @@
 // proved for that sha (74 min, 2026-09-17).
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,6 +17,7 @@ import {
 import {
   CORPUS_FULL_PROOF, PROOF, recordProof, resolveCorpusProof, resolveProof,
 } from '../../scripts/proof-authority.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const SHA = 'a'.repeat(40);
 const OTHER_SHA = 'b'.repeat(40);
@@ -27,7 +27,7 @@ const NEVER = () => {
 };
 
 function git(cwd, ...args) {
-  return execFileSync('git', args, {cwd, encoding: UTF8}).trim();
+  return execGit(args, {cwd, encoding: UTF8}).trim();
 }
 
 // A real commit in a real repository with a real remote: the receipt this

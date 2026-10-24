@@ -9,9 +9,9 @@
 //
 // Run via `npm run audit:no-kiro` (wired into test:static).
 
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {execGit} from './checks/git-invocation.js';
 import {isQuestLogPath} from './solve/store.js';
 
 // Locations where a `.kiro/` reference is allowed because the content is an
@@ -36,11 +36,7 @@ function trackedHits() {
   let out = '';
   try {
     // -I skips binary files; list "file:line:text" for the literal token.
-    out = execFileSync(
-      'git',
-      ['grep', '-nI', '--', '.kiro/'],
-      {encoding: 'utf8', maxBuffer: 64 * 1024 * 1024},
-    );
+    out = execGit(['grep', '-nI', '--', '.kiro/'], {encoding: 'utf8'});
   } catch (err) {
     // git grep exits 1 when there are no matches — that is the success path.
     if (err.status === 1 && !err.stdout) return [];

@@ -23,7 +23,6 @@
 // third test below fails if anyone implements it that way.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,12 +40,13 @@ import {
 } from '../../scripts/checks/change-selection-constants.js';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
 const INJECTED = {[WORKSPACE_INJECTION_ENV]: 'node_modules,data'};
 
 function git(repo, args) {
-  execFileSync('git', args, {
+  execGit(args, {
     cwd: repo,
     encoding: UTF8,
     stdio: 'pipe',
@@ -93,7 +93,7 @@ const repo = buildInjectedWorktree();
 test('git reports the injected symlinks as untracked repository content', () => {
   // The premise. If git ever stops reporting them the rest of this file goes
   // vacuous, so it is asserted rather than assumed.
-  const untracked = execFileSync('git',
+  const untracked = execGit(
     ['ls-files', '--others', '--exclude-standard'],
     {cwd: repo, encoding: UTF8, env: gitProcessEnvironment()},
   ).split('\n').filter(Boolean);
