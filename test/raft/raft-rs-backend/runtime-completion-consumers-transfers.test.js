@@ -152,8 +152,8 @@ test('paused participant admission stays closed through accepted transfer and re
       assert.equal(released.outcome, RELEASE.CUT_OVER);
       assert.ok(f.views().every((view) => view.admission.state === ADMISSION.OPEN));
       assert.ok(BigInt(durableConsumerView(target).term) > BigInt(before[0].durable.term));
-      // Current native connections are stamped clean. The historical
-      // reopenCohort servedLegacy=true branch is not exercised by this test.
+      // Current native connections are stamped clean; the cutover has no
+      // leadership transfer of its own.
     } finally {
       await gate.restore();
     }

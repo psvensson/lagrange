@@ -6,15 +6,7 @@
  * removed) and the replacement-target election (leadership moves to the
  * replica asked). Both are one leadership transfer, asked of the partition's
  * one issuer (PartitionService.requestLeadershipTransfer): the source hands
- * leadership to its most caught-up voter, or to the other voter its caller
- * names (the participant release cutover hands a leader whose connection
- * served the legacy path to a clean voter), and the target names itself.
- * Whether a named successor is a transferable voter is the core's decision,
- * made from its own configuration in the same queued turn as the step (the
- * port answers TARGET_UNRESERVED or TARGET_NOT_VOTER, carried as REFUSED);
- * this owner refuses only what no transfer can mean: a successor that is the
- * replica itself, or one named for the replacement election, which names
- * the replica asked by definition.
+ * leadership to its most caught-up voter, the target names itself.
  *
  * Every handoff resolves to a typed result naming the branch taken and the
  * tracked role it judged, so a role-gated no-op (COMPLETED without asking
@@ -46,7 +38,6 @@ const REPLICA_HANDLER_LEADER_HANDOFF_BRANCH = Object.freeze({
   TRANSFER_FORWARDED: 'transfer_forwarded',
   ALREADY_LEADER: 'already_leader',
   TRANSFER_REFUSED: 'transfer_refused',
-  NAMED_SUCCESSOR_REFUSED: 'named_successor_refused',
   PROVIDER_UNSUPPORTED: 'provider_unsupported',
   REPLICA_NOT_TRACKED: 'replica_not_tracked',
   SOURCE_DEMOTION_ROLE_NO_OP: 'source_demotion_role_no_op',
@@ -88,17 +79,9 @@ function handoffOfTransferAnswer(answer, trackedRole) {
       answer ?? null);
 }
 
-// Whether a named successor is one this owner can ask a transfer for: none
-// named, or another replica named for the source-side handoff.
-function namedSuccessorAdmissible(reason, replicaId, successorReplicaId) {
-  return successorReplicaId === null ||
-    (successorReplicaId !== replicaId &&
-      reason !== ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION);
-}
-
 // The transfer each handoff reason asks for, from the role the replica is
 // tracked in; null when the role makes the handoff a named no-op.
-function transferRequestOf(reason, replicaId, trackedRole, successorReplicaId) {
+function transferRequestOf(reason, replicaId, trackedRole) {
   if (reason === ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION) {
     // The replacement election names the replica that SHOULD lead. When it
     // already leads (an ambient election won the race with this request),
@@ -109,15 +92,9 @@ function transferRequestOf(reason, replicaId, trackedRole, successorReplicaId) {
       replicaIdentity: replicaId,
     } : null;
   }
-  if (trackedRole !== RAFT_ROLE.LEADER) {
-    return null;
-  }
-  return successorReplicaId === null ? {
+  return trackedRole === RAFT_ROLE.LEADER ? {
     successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.MOST_CAUGHT_UP,
-  } : {
-    successor: RAFT_LEADERSHIP_TRANSFER_SUCCESSOR.NAMED,
-    replicaIdentity: successorReplicaId,
-  };
+  } : null;
 }
 
 function roleNoOpBranchOf(reason) {
@@ -131,17 +108,13 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
     /**
      * Hand a tracked partition replica's leadership on, as the step-down
      * reason asks: to the replica itself for the replacement-target
-     * election, away from it otherwise - to the named successor when one is
-     * given, to its most caught-up voter when none is.
+     * election, away from it (to its most caught-up voter) otherwise.
      * @param {string} replicaId - Replica asked.
      * @param {string|null} reason - The STEP_DOWN_REPLICA reason.
-     * @param {string|null} successorReplicaId - The other voter the
-     *   source-side handoff names, or null for its most caught-up voter.
      * @return {Promise<Object>} Frozen typed leader-handoff result.
      * @private
      */
-    async requestTrackedPartitionLeaderHandoff(replicaId, reason = null,
-      successorReplicaId = null) {
+    async requestTrackedPartitionLeaderHandoff(replicaId, reason = null) {
       const service = this.getTrackedService(replicaId);
       if (!service) {
         return buildLeaderHandoffResult(
@@ -151,15 +124,7 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
         );
       }
       const trackedRole = this.getTrackedReplicaRole(replicaId);
-      if (!namedSuccessorAdmissible(reason, replicaId, successorReplicaId)) {
-        return buildLeaderHandoffResult(
-          REPLICA_HANDLER_LEADER_HANDOFF_STATE.REFUSED,
-          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.NAMED_SUCCESSOR_REFUSED,
-          trackedRole,
-        );
-      }
-      const transferRequest = transferRequestOf(reason, replicaId, trackedRole,
-        successorReplicaId);
+      const transferRequest = transferRequestOf(reason, replicaId, trackedRole);
       if (transferRequest === null) {
         return buildLeaderHandoffResult(
           REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,

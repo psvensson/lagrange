@@ -4,9 +4,9 @@
 //   participant store's open hook on each connection it opens, which records
 //   the stamp here with its generation (opens counted in this process);
 // - participant admission is enabled only on a connection with a proved clean
-//   stamp. For any other connection the cutover reopens it through the
-//   lifecycle owner (shutdown, then initialize on the same database) after
-//   the drain.
+//   stamp. A connection the hook never stamped has no generation, so the
+//   release owner's facts refuse it (no valid replica generation) and enable
+//   refuses it (CONNECTION_SERVED_LEGACY); nothing reopens it.
 
 // Per connection: its stamp, written by the open hook.
 const STAMPS = new WeakMap();

@@ -366,13 +366,6 @@ const PARTICIPANT_TRANSACTION_LOG_MSG = Object.freeze({
     'read the PREPARED rows; staging sessions are still swept',
   WRITE_PARKED: 'Write parked unproposed while a prepared participant ' +
     'transaction reserves the partition',
-  // The replica-side observation of the L6 reopen obligation (0.0.15): the
-  // origin applied on a connection whose stamp says it served a legacy
-  // session since its open. On this build such a session set no connection
-  // state (every legacy statement is admitted first), so this is a
-  // diagnostic for the release owner, never a refusal at apply.
-  ORIGIN_APPLIED_ON_LEGACY_CONNECTION: 'Partition write generation origin ' +
-    'applied on a connection that served a legacy session since its open',
   ADDED_COORDINATOR_COLUMN: 'Added a coordinator decision-record column to ' +
     'a transaction system table',
 });

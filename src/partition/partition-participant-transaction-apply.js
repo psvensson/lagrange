@@ -60,8 +60,6 @@ import {
 import {captureCommittedOperationCdc, recordCommittedOperationCdc} from
   './partition-cdc-obligation.js';
 import {noteExecutionEnvelope} from './partition-transaction-execution-envelope.js';
-import {participantConnectionStampOf} from
-  './partition-participant-transaction-connection.js';
 import {
   carriedOriginIndexOf,
   decisionBindingRefusalOf,
@@ -572,27 +570,10 @@ function applyGenerationOrigin(service, committed) {
   committed.afterCommit(() => {
     service.logger.info(LOG_MSG.ORIGIN_RECORDED, {
       partitionId: service.partitionId, originIndex: index, originTerm: term});
-    observeOriginConnection(service, index);
   });
   answerProposer(service, committed, {success: true, originIndex: index,
     originTerm: term});
   return OUTCOME.APPLIED;
-}
-
-// The replica-side observation of the L6 reopen obligation (design 0.0.15):
-// the origin applied on a connection whose stamp says it served a legacy
-// session since its open. On this build every legacy statement is admitted
-// before any prepare, so such a session set no connection state and the
-// apply stays identical on every replica; the enabling leader's own
-// connection is refused by enable instead. A diagnostic for the release
-// owner, after the commit, never a disposition.
-function observeOriginConnection(service, originIndex) {
-  const stamp = participantConnectionStampOf(service.db);
-  if (stamp.servedLegacy) {
-    service.logger.warn(LOG_MSG.ORIGIN_APPLIED_ON_LEGACY_CONNECTION, {
-      partitionId: service.partitionId, replicaId: service.replicaId,
-      connectionGeneration: stamp.generation, originIndex});
-  }
 }
 
 const PARTICIPANT_COMMAND_APPLIERS = Object.freeze({

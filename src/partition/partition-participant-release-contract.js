@@ -7,6 +7,10 @@ import {COMMITTED_MEMBERSHIP_MAX_PEERS} from '../raft/raft-committed-membership-
 import {PARTITION_ROWID_LIMIT} from './partition-statement-admission-constants.js';
 import {TRANSACTION_RELEASE_CENSUS_STATE} from
   '../query/distributed/distributed-transaction-release-census.js';
+import {TRANSACTION_STATUS} from
+  '../query/distributed/distributed-transaction-coordinator-constants.js';
+import {PARTICIPANT_TRANSACTION_DECISION as DECISION} from
+  './partition-participant-transaction-constants.js';
 import {PARTICIPANT_CUTOVER_OUTCOME as OUTCOME, PARTICIPANT_RELEASE_VERSION} from
   './partition-participant-transaction-cutover-constants.js';
 
@@ -47,8 +51,10 @@ function transactionReleaseProofValid(proof, {release, attempt, census}) {
   return proof.transactions.every((entry, index) =>
     exactRecord(entry, RELEASE_PROOF_RESULT_FIELDS) &&
     entry.transactionId === census.recoverableTransactionIds[index] &&
-    ((entry.decision === 'COMMIT' && entry.terminalStatus === 'COMMITTED') ||
-      (entry.decision === 'ROLLBACK' && entry.terminalStatus === 'ROLLED_BACK')) &&
+    ((entry.decision === DECISION.COMMIT &&
+      entry.terminalStatus === TRANSACTION_STATUS.COMMITTED) ||
+      (entry.decision === DECISION.ROLLBACK &&
+        entry.terminalStatus === TRANSACTION_STATUS.ROLLED_BACK)) &&
     DIGEST_PATTERN.test(entry.decisionDigest) && Array.isArray(entry.participantIds) &&
     entry.participantIds.every(nonempty));
 }
@@ -136,7 +142,6 @@ function releaseFactsDefect(release, facts, options = {}) {
   if (!isReleaseDrained(facts.work)) return OUTCOME.DRAIN_PENDING;
   if (facts.topology !== null) return OUTCOME.TOPOLOGY_PENDING;
   if (!rowidValid(facts.rowid)) return OUTCOME.ROWID_CEILING_REACHED;
-  if (facts.connection.servedLegacy !== false) return OUTCOME.REOPEN_REQUIRED;
   if (facts.queryCensus !== null) {
     const query = facts.queryCensus;
     const invocationSettled = query.state === TRANSACTION_RELEASE_CENSUS_STATE.HELD &&

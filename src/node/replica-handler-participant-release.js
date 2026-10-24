@@ -1,11 +1,10 @@
 // The lifecycle recipient survives a PartitionService replacement. Each
 // mutation checks the canonical release, leader term and exact target
-// lifetime. Reopen uses retained-storage admission and the production factory.
+// lifetime.
 import {RAFT_ROLE} from '../raft/constants.js';
 import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from '../raft/raft-committed-membership-constants.js';
-import {buildReplacementServiceOptions} from '../partition/partition-reopen-options.js';
-import {isReleaseDrained, originEqual, participantReleaseGenerationValid,
+import {originEqual, participantReleaseGenerationValid,
   releaseAnswer, releaseCensusDefect, releaseIdentityValid, sameReplicaGeneration} from
   '../partition/partition-participant-release-contract.js';
 import {participantCutoverPauseOf, participantReleaseReplicaGenerationOf,
@@ -28,6 +27,10 @@ import {REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND as DISPATCH_KIND} from
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
 const RELEASE_NESTED_FIELDS = objectFreeze(['release', 'attempt', 'target', 'origin']);
+// The leader fields an observation's status and its captured context must
+// each carry (null allowed) before they can be compared.
+const OBSERVATION_FIELD = objectFreeze({STATUS_LEADER: 'leaderId',
+  CONTEXT_LEADER: 'leaderReplicaId'});
 
 function nonempty(value) {
   return typeof value === 'string' && value.length > 0;
@@ -46,9 +49,8 @@ function record(value) {
 }
 
 function actionRequiresIdentity(action) {
-  return action === ACTION.PAUSE || action === ACTION.REOPEN ||
-    action === ACTION.ENABLE || action === ACTION.OBSERVE_APPLIED_POSITION ||
-    action === ACTION.RESUME;
+  return action === ACTION.PAUSE || action === ACTION.ENABLE ||
+    action === ACTION.OBSERVE_APPLIED_POSITION || action === ACTION.RESUME;
 }
 
 function releaseScalarsValid(release) {
@@ -165,42 +167,11 @@ function attemptMatches(request, facts) {
     request.release.membershipGenerationIndex === facts.membership.membershipGenerationIndex;
 }
 
-async function reopenReplica(handler, service, request, facts) {
-  if (!isReleaseDrained(facts.work)) return releaseAnswer(OUTCOME.DRAIN_PENDING, request);
-  if (facts.connection.servedLegacy === false) return facts;
-  if (facts.role === RAFT_ROLE.LEADER && facts.membership.voters.length > 1) {
-    return releaseAnswer(OUTCOME.REOPEN_REQUIRED, request);
-  }
-  try {
-    await handler.requireActiveReplicaStorageAdmission(service.replicaId, service.partitionId);
-    const current = await readParticipantReleaseFacts(handler, service);
-    if (current.outcome !== OUTCOME.OBSERVED || !attemptMatches(request, current) ||
-        !sameReplicaGeneration(request.target, current.generation) ||
-        !isReleaseDrained(current.work)) return releaseAnswer(OUTCOME.STALE, request);
-    const options = buildReplacementServiceOptions(service);
-    await service.shutdown();
-    const replacement = await handler.createPartitionService(options);
-    // The lifecycle factory can return an initialized service, as snapshot
-    // install does. Initialization is idempotent; never reinitialize old.
-    await replacement.initialize();
-    raiseParticipantCutoverPause(replacement);
-    handler.replaceLocalReplicaService(service.replicaId, replacement);
-    return releaseAnswer(OUTCOME.REOPENED, request,
-      {replicaId: replacement.replicaId, reconstructionRequired: true});
-  } catch (error) {
-    return releaseAnswer(OUTCOME.REOPEN_REFUSED, request,
-      {owner: 'replica-lifecycle', reason: String(error?.message ?? error),
-        operatorRequired: service.isShutdown === true});
-  }
-}
-
 async function executeReleaseAction(handler, service, request, facts) {
   switch (request.action) {
   case ACTION.PAUSE:
     raiseParticipantCutoverPause(service);
     return readParticipantReleaseFacts(handler, service);
-  case ACTION.REOPEN:
-    return reopenReplica(handler, service, request, facts);
   case ACTION.ENABLE: {
     if (facts.role !== RAFT_ROLE.LEADER) return releaseAnswer(OUTCOME.NOT_LEADER, request);
     const defect = releaseCensusDefect(request.release, request.census, facts,
@@ -287,13 +258,13 @@ function observationStatusDisposition(handler, service, request, context, status
       !Number.isSafeInteger(status.membershipGenerationIndex) ||
       status.membershipGenerationIndex < 0 ||
       !nonempty(status.configurationKey) ||
-      !objectHasOwn(status, 'leaderId') ||
+      !objectHasOwn(status, OBSERVATION_FIELD.STATUS_LEADER) ||
       (status.leaderId !== null && !nonempty(status.leaderId)) ||
       !Number.isSafeInteger(context.appliedIndex) || context.appliedIndex < 0 ||
       !Number.isSafeInteger(context.membershipGenerationIndex) ||
       context.membershipGenerationIndex < 0 ||
       !nonempty(context.configurationKey) ||
-      !objectHasOwn(context, 'leaderReplicaId')) return OUTCOME.UNAVAILABLE;
+      !objectHasOwn(context, OBSERVATION_FIELD.CONTEXT_LEADER)) return OUTCOME.UNAVAILABLE;
 
   return releaseStatusMatches(service, request, status) &&
     status.membershipGenerationIndex === request.release.membershipGenerationIndex &&
@@ -340,7 +311,7 @@ function adjudicateParticipantReleaseObservation(handler, service, request,
     return {answer: assessment.answer.outcome === OUTCOME.UNAVAILABLE ?
       observationAnswer(request, assessment.answer) :
       releaseAnswer(OUTCOME.UNAVAILABLE, request, {
-        missingFact: 'current_replica_generation'}), refreshEligible: false};
+        missingFact: MISSING_FACT.CURRENT_REPLICA_GENERATION}), refreshEligible: false};
   }
   return {answer: observationAnswer(request, assessment.answer),
     refreshEligible: assessment.refreshEligible};

@@ -679,40 +679,20 @@ function answerParticipantSessionQuery(service, payload) {
  * under its deterministic entryId, after the release owner's L6 drain; an
  * origin already applied here is answered from the generation row and nothing
  * is proposed. Until the origin has applied, BEGIN is refused
- * GENERATION_ORIGIN_PENDING. The leader's connection must have served no
- * legacy session since its open (0.0.14, the L6 clause): one that did is
- * refused CONNECTION_SERVED_LEGACY, and the cutover reopens it through the
- * lifecycle owner first (partition-participant-transaction-connection.js).
+ * GENERATION_ORIGIN_PENDING. The leader's connection must carry the
+ * lifecycle owner's open stamp (0.0.14, the L6 clause): an unstamped one is
+ * refused CONNECTION_SERVED_LEGACY
+ * (partition-participant-transaction-connection.js).
  * @param {Object} service - The partition (its leader).
  * @return {Promise<Object>} The origin's answer ({success, originIndex,
  *   originTerm}), or a typed refusal.
  */
 async function enableParticipantTransactionAdmission(service) {
-  const recorded = readPartitionWriteOrigin(service.db);
-  const coordinatorEnforcement = service.tableName === TABLES.SQL_TRANSACTIONS ?
-    readTransactionSchemaEnforcement(service.db) : null;
-  if (recorded !== null &&
-      coordinatorEnforcement?.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED) {
-    if (coordinatorEnforcement !== null &&
-        coordinatorEnforcement.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED) {
-      return {success: false,
-        failureCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
-        errorCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
-        error: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
-        partitionId: service.partitionId, enforcement: coordinatorEnforcement};
-    }
-    return {success: true, alreadyEnabled: true,
-      partitionId: service.partitionId, ...recorded};
-  }
-  const leadership = partitionWriteLeadershipRefusalOf(service);
-  if (leadership !== null) {
-    return leadership;
-  }
   const payload = {partitionId: service.partitionId};
-  const connection = participantConnectionStampOf(service.db);
-  if (connection.servedLegacy) {
-    return refusalOf(service, payload, CODE.CONNECTION_SERVED_LEGACY,
-      {connectionGeneration: connection.generation});
+  const decided = recordedOriginAnswer(service) ??
+    originProposalRefusal(service, payload);
+  if (decided !== null) {
+    return decided;
   }
   const command = buildGenerationOriginCommand(service.partitionId,
     stampOf(service));
@@ -724,6 +704,42 @@ async function enableParticipantTransactionAdmission(service) {
     answerOf(service, payload, await startPartitionRaftWriteCommit(service,
       {entry: command, phaseTimings: null,
         applyStartMs: service.timeSource.now()}));
+}
+
+// What an origin already applied here answers - enabled, or the coordinator
+// schema refusal while its enforcement is incomplete - or null when the
+// origin is still to be proposed (none recorded, or the coordinator schema
+// enforcement still REQUIRED).
+function recordedOriginAnswer(service) {
+  const recorded = readPartitionWriteOrigin(service.db);
+  const coordinatorEnforcement = service.tableName === TABLES.SQL_TRANSACTIONS ?
+    readTransactionSchemaEnforcement(service.db) : null;
+  if (recorded === null ||
+      coordinatorEnforcement?.state === TRANSACTION_SCHEMA_ENFORCEMENT_STATE.REQUIRED) {
+    return null;
+  }
+  return coordinatorEnforcement !== null &&
+    coordinatorEnforcement.state !== TRANSACTION_SCHEMA_ENFORCEMENT_STATE.ENFORCED ? {
+      success: false,
+      failureCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+      errorCode: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+      error: TRANSACTION_SCHEMA_ENFORCEMENT_ERROR.SCHEMA,
+      partitionId: service.partitionId, enforcement: coordinatorEnforcement,
+    } : {success: true, alreadyEnabled: true,
+      partitionId: service.partitionId, ...recorded};
+}
+
+// Why this replica may not propose the origin now - it does not lead, or
+// its connection carries no lifecycle open stamp - or null.
+function originProposalRefusal(service, payload) {
+  const leadership = partitionWriteLeadershipRefusalOf(service);
+  if (leadership !== null) {
+    return leadership;
+  }
+  const connection = participantConnectionStampOf(service.db);
+  return connection.servedLegacy ?
+    refusalOf(service, payload, CODE.CONNECTION_SERVED_LEGACY,
+      {connectionGeneration: connection.generation}) : null;
 }
 
 export {
