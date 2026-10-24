@@ -54,12 +54,16 @@ export const EMPTY_REPLICA_STATE_MACHINE_HANDLE = Object.freeze({
  * Install the minimum lifecycle-owner handle required by phase-only seed
  * fixtures. These fixtures replace the registration phase itself, but the
  * workflow still enforces that a lifecycle owner exists before crossing the
- * registration checkpoint.
+ * registration checkpoint, and (since e29e46abf) the registration step itself
+ * acquires the replica handler and the SQL query engine before the phase it
+ * replaces; with the phases stubbed there is no cache for either to bind.
  * @param {BootstrapService} bootstrap Phase-only bootstrap fixture.
  * @return {BootstrapService} The same fixture for fluent setup.
  */
 export function installMinimumSeedBootstrapLifecycleFixture(bootstrap) {
   bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+  bootstrap.acquireReplicaHandler = () => {};
+  bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
   return bootstrap;
 }
 

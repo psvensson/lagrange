@@ -52,11 +52,11 @@ async function firstSeedStart(dataDir) {
   }));
 }
 
-async function laterSeedStart(t, dataDir) {
+async function laterSeedStart(dataDir, retain) {
   const service = await createRetainedSeedBootstrapService({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, dataDir,
   });
-  t.after(() => service.shutdown());
+  retain(service);
   await service.prepareOriginalSeedAttempt();
   return attachRouter(service);
 }
@@ -75,7 +75,13 @@ test('a seed message-group founder reopened on its lost database is ' +
   'refused reseed-required at open, through the seed phase',
 async (t) => {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seed-mg-open-'));
-  t.after(() => fs.rmSync(dataDir, {recursive: true, force: true}));
+  let reopened = null;
+  // Shut the later start down (releasing its custody) before its directory
+  // is removed.
+  t.after(async () => {
+    await reopened?.shutdown();
+    fs.rmSync(dataDir, {recursive: true, force: true});
+  });
   const dbFile = getMessageGroupDbPath(dataDir, INITIAL_MESSAGE_GROUP_ID,
     REPLICA_ID);
   const first = await firstSeedStart(dataDir);
@@ -90,12 +96,11 @@ async (t) => {
   // Red by design today: the later start holds at
   // original-retained-history-classification-unavailable (owned by Quest
   // retained-seed-original-handoff) before this phase can reopen the founder.
-  let reopened = null;
-  await assert.rejects(laterSeedStart(t, dataDir).then((service) => {
+  await assert.rejects(laterSeedStart(dataDir, (service) => {
     reopened = service;
-    return service.seedMessageGroupsPhase.createBootstrapMessageGroupReplica(
-      {replicaOptions: FOUNDER});
-  }), (error) => {
+  }).then((service) =>
+    service.seedMessageGroupsPhase.createBootstrapMessageGroupReplica(
+      {replicaOptions: FOUNDER})), (error) => {
     assert.equal(error.consensus?.reason,
       COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
       `refused at open, not ${error.code}: ${error.reason ?? error.message}`);

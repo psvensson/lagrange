@@ -12,7 +12,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {
   BOOTSTRAP_EVENT,
@@ -36,7 +35,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {installMinimumSeedBootstrapLifecycleFixture} from
+import {createVirginSeedBootstrapService,
+  installMinimumSeedBootstrapLifecycleFixture} from
   '../integration/helpers/cluster-test-helpers.js';
 
 // -- Suite-local fixture constants --
@@ -149,12 +149,21 @@ function stubJoinServiceForSubPhaseTests(service) {
 // Bootstrap sub-phase transition characterization (reference behavior)
 // ---------------------------------------------------------------------------
 
+// A seed composed the way production startup composes it (the data
+// directory owner, the membership decision, the storage admission), shut down
+// after the test so its directory custody is released.
+async function createOwnedSeed(t, options) {
+  const bootstrap = await createVirginSeedBootstrapService(options);
+  t.teardown(() => bootstrap.shutdown());
+  return bootstrap;
+}
+
 test('Bootstrap executePhase updates lifecycle sub-phases during phase execution',
   async (t) => {
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedSeed(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -225,7 +234,7 @@ test('Bootstrap terminal sub-phase CACHE_HYDRATION auto-advances to CONNECTING',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedSeed(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,

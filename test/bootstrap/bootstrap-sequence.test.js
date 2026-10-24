@@ -30,6 +30,7 @@ import {ControlPlaneSetup} from
 import {
   createVirginSeedBootstrapService,
   EMPTY_REPLICA_STATE_MACHINE_HANDLE,
+  installMinimumSeedBootstrapLifecycleFixture,
 } from '../integration/helpers/cluster-test-helpers.js';
 import {
   FIXTURE_ENDPOINT_INCARNATION,
@@ -420,12 +421,13 @@ test('BootstrapService - activates message-group rows after seed registration',
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = await createVirginSeedBootstrapService({
-      bootIncarnation: 1,
-      nodeId: 'bootstrap-activate-node',
-      nodeAddress: 'ws://localhost:12001',
-      wsPort: 12001,
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      await createVirginSeedBootstrapService({
+        bootIncarnation: 1,
+        nodeId: 'bootstrap-activate-node',
+        nodeAddress: 'ws://localhost:12001',
+        wsPort: 12001,
+      }));
 
     bootstrap.seedInfrastructurePhase.phaseInfrastructure =
       async () => {
@@ -454,11 +456,6 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.initializeReplicaHandler = () => {
       order.push('replica-handler');
     };
-    // The registration step acquires these directly since e29e46abf.
-    bootstrap.acquireReplicaHandler = () => {
-      order.push('replica-handler');
-    };
-    bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
     bootstrap.initializeMessageGroupServiceHandler = () => {
       order.push('message-group-handler');
       bootstrap.messageGroupServiceHandler = {};
@@ -520,21 +517,22 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     initializeTestEnvironment();
 
     const order = [];
-    const bootstrap = await createVirginSeedBootstrapService({
-      bootIncarnation: 1,
-      nodeId: 'bootstrap-local-admin-node',
-      nodeAddress: 'ws://localhost:12002',
-      wsPort: 12002,
-      onLocalAdminRuntimeReady: async ({owner, systemTableCache, messageRouter}) => {
-        order.push('local-admin-runtime');
-        t.equal(owner, bootstrap,
-          'callback should receive the active bootstrap owner');
-        t.same(systemTableCache, bootstrap.systemTableCache,
-          'callback should receive the current system cache');
-        t.same(messageRouter, bootstrap.messageRouter,
-          'callback should receive the current message router');
-      },
-    });
+    const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
+      await createVirginSeedBootstrapService({
+        bootIncarnation: 1,
+        nodeId: 'bootstrap-local-admin-node',
+        nodeAddress: 'ws://localhost:12002',
+        wsPort: 12002,
+        onLocalAdminRuntimeReady: async ({owner, systemTableCache, messageRouter}) => {
+          order.push('local-admin-runtime');
+          t.equal(owner, bootstrap,
+            'callback should receive the active bootstrap owner');
+          t.same(systemTableCache, bootstrap.systemTableCache,
+            'callback should receive the current system cache');
+          t.same(messageRouter, bootstrap.messageRouter,
+            'callback should receive the current message router');
+        },
+      }));
 
     bootstrap.systemTableCache = {cache: true};
     bootstrap.messageRouter = {router: true};
@@ -544,9 +542,6 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     bootstrap.seedRegistrationPhase.phaseRegistration = async () => {};
     bootstrap.seedCacheHydrationPhase.phaseCacheHydration = async () => {};
     bootstrap.initializeReplicaHandler = () => {};
-    // The registration step acquires these directly since e29e46abf.
-    bootstrap.acquireReplicaHandler = () => {};
-    bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
     bootstrap.initializeMessageGroupServiceHandler = () => {
       bootstrap.messageGroupServiceHandler = {};
     };

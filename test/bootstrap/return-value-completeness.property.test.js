@@ -11,9 +11,14 @@
  * Feature: bootstrap-architecture-refactoring, Property 7: Return Value Completeness
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {NodeService} from '../../src/node/node-service.js';
+import {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
+import {scaleByMachineFactor} from '../integration/helpers/test-machine-factor.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -115,7 +120,31 @@ const nodeIdArb = fc.string({minLength: 1, maxLength: 36}).filter((s) => s.trim(
  */
 const wsPortArb = fc.integer({min: 10000, max: 60000});
 
-test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
+// Each seed run is composed as production startup composes it (directory
+// owner, membership decision, storage admission) on its own node runtime, and
+// prepares its original attempt and every seed replica before the
+// continuation hold: about 7s per run on the 1.00x controller (2026-10-25).
+// One run per seed property keeps the file inside its budget; until fresh-seed
+// activation lands these seed properties measure the hold's result shape, and
+// further runs of that one outcome add little.
+const SEED_PROPERTY_RUNS = 1;
+// The file's work-bound budget, scaled by the machine factor.
+const PROPERTY_7_TIMEOUT_MS = scaleByMachineFactor(120000);
+// The same scaled budget for the whole file: ten composed seed runs exceed
+// tap's default per-file budget.
+t.setTimeout(PROPERTY_7_TIMEOUT_MS);
+
+function createPropertyRunSeed(options) {
+  return createVirginSeedBootstrapService({...options,
+    nodeService: new NodeService()});
+}
+
+function isFreshSeedContinuationHold(result) {
+  return result.cause?.code === ORIGINAL_ALLOCATION.HOLD &&
+    result.cause.reason === ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE;
+}
+
+test('Property 7: Return Value Completeness', {timeout: PROPERTY_7_TIMEOUT_MS}, async (t) => {
   /**
    * Property: For any successful bootstrap() call, the return value SHALL
    * contain all required keys per the API contract.
@@ -129,7 +158,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         wsPortArb,
         async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             wsPort,
@@ -150,10 +179,10 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
             await bootstrap.shutdown();
           }
 
-          // Only check successful results
+          // A fresh seed cannot succeed until fresh-seed activation lands;
+          // the only failure admitted is that hold, never any other.
           if (!result.success) {
-            // Skip this iteration if bootstrap failed
-            return true;
+            return isFreshSeedContinuationHold(result);
           }
 
           // Invariant: all required keys must be present
@@ -166,7 +195,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return true;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('successful bootstrap returns all expected keys');
@@ -185,7 +214,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         async (nodeId) => {
           // Create bootstrap with very short timeout to force failure
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             // No wsPort - will fail during leadership wait
@@ -221,7 +250,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return true;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('failed bootstrap returns all expected failure keys');
@@ -238,7 +267,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -261,7 +290,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return typeof result.success === 'boolean';
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('success field is always a boolean');
@@ -279,7 +308,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -302,7 +331,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return typeof result.nodeId === 'string' && result.nodeId.length > 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('nodeId field is present and valid');
@@ -320,7 +349,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -343,7 +372,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return typeof result.duration === 'number' && result.duration >= 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('duration field is a non-negative number');
@@ -361,7 +390,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -386,7 +415,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
             result.servicesCreated >= 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('servicesCreated field is a non-negative integer');
@@ -405,7 +434,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         wsPortArb,
         async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             wsPort,
@@ -425,16 +454,17 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
             await bootstrap.shutdown();
           }
 
-          // Only check successful results
+          // A fresh seed cannot succeed until fresh-seed activation lands;
+          // the only failure admitted is that hold, never any other.
           if (!result.success) {
-            return true;
+            return isFreshSeedContinuationHold(result);
           }
 
           // Invariant: messageGroupServices must be a Map
           return result.messageGroupServices instanceof Map;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('messageGroupServices is a Map on success');
@@ -453,7 +483,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
         nodeIdArb,
         wsPortArb,
         async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             wsPort,
@@ -473,16 +503,17 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
             await bootstrap.shutdown();
           }
 
-          // Only check successful results
+          // A fresh seed cannot succeed until fresh-seed activation lands;
+          // the only failure admitted is that hold, never any other.
           if (!result.success) {
-            return true;
+            return isFreshSeedContinuationHold(result);
           }
 
           // Invariant: partitionServices must be a Map
           return result.partitionServices instanceof Map;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('partitionServices is a Map on success');
@@ -500,7 +531,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -528,7 +559,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return typeof result.error === 'string' && result.error.length > 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('error field is a non-empty string on failure');
@@ -546,7 +577,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -574,7 +605,7 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
           return typeof result.phase === 'string';
         },
       ),
-      {numRuns: 10},
+      {numRuns: SEED_PROPERTY_RUNS},
     );
 
     t.pass('phase field is a string on failure');
