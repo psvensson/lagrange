@@ -7,10 +7,9 @@
 
 import {requireInstance} from '../control-plane/owners/service-instance-contract.js';
 import {
+  assertConsensusNotHeldAtOpen,
   assertRaftOperationSucceeded,
-  consensusInitRefusedError,
-  isHeldByHostFailure,
-  isRaftOpeningFailure,
+  consensusOpeningFailure,
 } from '../raft/raft-operation-port.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {CONSENSUS_CREATION_OPENING as OPENING} from '../service/service-consensus-creation-intent.js';
@@ -101,16 +100,18 @@ function assertFoundingReplicaSet(replicaId, replicaIds) {
  * @return {string} The group id.
  */
 function wasmServiceConsensusGroupId(replica) {
-  return replica.consensusCreation?.identity.groupId ?? replica.serviceDefinitionId;
+  if (replica.consensusCreation === null) {
+    return replica.serviceDefinitionId;
+  }
+  return replica.consensusCreation.identity.groupId;
 }
 
-// The replica's typed startup refusal is the port's one refusal, in the
-// WASM-service domain, for the group the port was opened for.
-function wasmServiceConsensusInitRefusal(replica, answer) {
-  return consensusInitRefusedError({domain: ENTITY_TYPE.WASM_SERVICE,
+// The replica's opening: the WASM-service domain, for the group the port was
+// opened for. Its typed startup refusal is the port's one refusal.
+function wasmServiceConsensusOpening(replica) {
+  return {domain: ENTITY_TYPE.WASM_SERVICE,
     identity: {groupId: wasmServiceConsensusGroupId(replica),
-      replicaId: replica.replicaId},
-    answer});
+      replicaId: replica.replicaId}};
 }
 
 /**
@@ -216,15 +217,10 @@ function openWasmServiceConsensusPort(replica) {
     replica.raft = createRaftRsOperationPort(
       wasmServiceConsensusRequest(replica));
   } catch (error) {
-    if (!isRaftOpeningFailure(error)) {
-      throw error;
-    }
-    throw wasmServiceConsensusInitRefusal(replica, error.consensus);
+    throw consensusOpeningFailure(error, wasmServiceConsensusOpening(replica));
   }
-  const opened = replica.raft.readStatus();
-  if (isHeldByHostFailure(opened)) {
-    throw wasmServiceConsensusInitRefusal(replica, opened);
-  }
+  assertConsensusNotHeldAtOpen(replica.raft.readStatus(),
+    wasmServiceConsensusOpening(replica));
   return replica.raft;
 }
 

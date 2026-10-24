@@ -7,10 +7,10 @@
 // reproduces one.
 
 import {
+  assertConsensusNotHeldAtOpen,
   assertRaftOperationSucceeded,
   consensusInitRefusedError,
-  isHeldByHostFailure,
-  isRaftOpeningFailure,
+  consensusOpeningFailure,
 } from '../raft/raft-operation-port.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import fs from 'node:fs';
@@ -35,14 +35,13 @@ import {committedMembershipRefusal} from
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 import {retireCdcCommitWaiters} from './message-group-cdc-committed-acceptance.js';
 
-// The replica's typed startup refusal is the port's one refusal, in the
-// message-group domain: the runtime owner refused to open the group, the
-// port opened it held by its host failure, or a lone replica's campaign was
-// refused.
-function messageGroupConsensusInitRefusal(service, answer) {
-  return consensusInitRefusedError({domain: ENTITY_TYPE.MESSAGE_GROUP,
-    identity: {groupId: service.groupId, replicaId: service.replicaId},
-    answer});
+// The replica's opening: the message-group domain, for its group. Its typed
+// startup refusal is the port's one refusal - the runtime owner refused to
+// open the group, the port opened it held by its host failure, or a lone
+// replica's campaign was refused.
+function messageGroupConsensusOpening(service) {
+  return {domain: ENTITY_TYPE.MESSAGE_GROUP,
+    identity: {groupId: service.groupId, replicaId: service.replicaId}};
 }
 
 /**
@@ -147,15 +146,10 @@ function openMessageGroupConsensusPort(service) {
     service.raft = service.createOperationPort(
       messageGroupConsensusRequest(service, service.cdcCommitLifetime));
   } catch (error) {
-    if (!isRaftOpeningFailure(error)) {
-      throw error;
-    }
-    throw messageGroupConsensusInitRefusal(service, error.consensus);
+    throw consensusOpeningFailure(error, messageGroupConsensusOpening(service));
   }
-  const opened = service.raft.readStatus();
-  if (isHeldByHostFailure(opened)) {
-    throw messageGroupConsensusInitRefusal(service, opened);
-  }
+  assertConsensusNotHeldAtOpen(service.raft.readStatus(),
+    messageGroupConsensusOpening(service));
   return service.raft;
 }
 
@@ -174,7 +168,8 @@ async function leadLoneMessageGroup(service) {
   }
   const campaign = await service.raft.campaign();
   if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-    throw messageGroupConsensusInitRefusal(service, campaign);
+    throw consensusInitRefusedError({...messageGroupConsensusOpening(service),
+      answer: campaign});
   }
 }
 

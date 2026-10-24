@@ -121,6 +121,36 @@ function isConsensusInitRefusal(error, domain) {
     error.domain === domain;
 }
 
+/**
+ * What a failed port construction is to the opening service: the runtime
+ * owner's opening failure is the domain's typed init refusal; any other
+ * throw is the original error, never relabeled.
+ * @param {*} error - What the port constructor threw.
+ * @param {{domain: string, identity: Object}} opening - The opening
+ *   service kind (ENTITY_TYPE) and the group/replica it opened.
+ * @return {*} The typed refusal, or the original error.
+ */
+function consensusOpeningFailure(error, {domain, identity}) {
+  return isRaftOpeningFailure(error) ?
+    consensusInitRefusedError({domain, identity, answer: error.consensus}) :
+    error;
+}
+
+/**
+ * Refuse a port that opened its group held by its host failure (its durable
+ * record could not be read at open): that status is the domain's typed init
+ * refusal. A status that does not hold the group passes.
+ * @param {Object} status - The port's status read at open.
+ * @param {{domain: string, identity: Object}} opening - The opening
+ *   service kind (ENTITY_TYPE) and the group/replica it opened.
+ * @throws {Error} The typed init refusal when the group is held.
+ */
+function assertConsensusNotHeldAtOpen(status, {domain, identity}) {
+  if (isHeldByHostFailure(status)) {
+    throw consensusInitRefusedError({domain, identity, answer: status});
+  }
+}
+
 // Preserve the exact original error and owner answer when its existing
 // service lifecycle cleanup also fails. This composes data only: no resource,
 // retry, deadline, or cleanup permission lives in the public port module.
@@ -150,8 +180,10 @@ function assertRaftOperationSucceeded(result) {
 
 export {
   RAFT_OPERATION_PORT_METHODS,
+  assertConsensusNotHeldAtOpen,
   assertRaftOperationSucceeded,
   consensusInitRefusedError,
+  consensusOpeningFailure,
   createRaftOperationPort,
   deepFreeze,
   isConsensusInitRefusal,

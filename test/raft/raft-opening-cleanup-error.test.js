@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {
+  assertConsensusNotHeldAtOpen,
   consensusInitRefusedError,
+  consensusOpeningFailure,
   isConsensusInitRefusal,
   isHeldByHostFailure,
   isRaftOpeningFailure,
@@ -55,6 +57,37 @@ test('held by host failure: only a host failure that requires recovery holds the
     false);
   assert.equal(isHeldByHostFailure({outcome: OUTCOME.CORE_OK, recoveryRequired: true}), false);
   assert.equal(isHeldByHostFailure(null), false);
+});
+
+test('consensus opening: an opening failure is the domain refusal, anything else stays itself', () => {
+  for (const domain of OPENING_DOMAINS) {
+    const opening = {domain, identity: {groupId: `${domain}-group`, replicaId: `${domain}-r1`}};
+    for (const outcome of [OUTCOME.CORE_REFUSED, OUTCOME.CORE_FATAL, OUTCOME.HOST_FAILURE]) {
+      const answer = Object.freeze({outcome, phase: 'construct', reason: 'refused'});
+      const opened = Object.assign(new Error('port constructor refused'), {consensus: answer});
+      const refusal = consensusOpeningFailure(opened, opening);
+      assert.equal(isConsensusInitRefusal(refusal, domain), true, `${domain} ${outcome}`);
+      assert.deepEqual(refusal.identity, opening.identity);
+      assert.equal(refusal.consensus, answer);
+    }
+    const ordinary = new Error('unrelated constructor throw');
+    assert.equal(consensusOpeningFailure(ordinary, opening), ordinary,
+      'an unrelated throw is never relabeled');
+    const okStatus = Object.assign(new Error('core ok is no opening failure'),
+      {consensus: {outcome: OUTCOME.CORE_OK}});
+    assert.equal(consensusOpeningFailure(okStatus, opening), okStatus);
+
+    const held = Object.freeze({outcome: OUTCOME.HOST_FAILURE, recoveryRequired: true,
+      phase: 'durable-record-read', reason: 'unreadable'});
+    assert.throws(() => assertConsensusNotHeldAtOpen(held, opening), (error) =>
+      isConsensusInitRefusal(error, domain) && error.consensus === held &&
+      error.identity.groupId === opening.identity.groupId);
+    for (const status of [{outcome: OUTCOME.CORE_OK},
+      {outcome: OUTCOME.HOST_FAILURE, recoveryRequired: false}]) {
+      assert.equal(assertConsensusNotHeldAtOpen(status, opening), undefined,
+        'a status that does not hold the group passes');
+    }
+  }
 });
 
 test('startup cleanup custody: immutable primary errors retain metadata without reclassifying ordinary failures', () => {

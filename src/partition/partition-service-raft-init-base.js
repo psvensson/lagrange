@@ -45,6 +45,7 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
 import {
+  refusePartitionConsensusHeldAtOpen,
   refusePartitionConsensusStartup,
   openPartitionConsensusPort,
 } from './partition-consensus-port-opening.js';
@@ -52,7 +53,6 @@ import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
 import {openParticipantTransactionStore} from
   './partition-participant-transaction-store.js';
-import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
 const {
@@ -653,11 +653,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @private
    */
   async refuseConsensusHeldAtOpen() {
-    const opened = this.raft.readStatus();
-    if (!isHeldByHostFailure(opened)) {
-      return;
-    }
-    await refusePartitionConsensusStartup(this, opened);
+    await refusePartitionConsensusHeldAtOpen(this, this.raft.readStatus());
   }
   /**
    * Start the Raft election timer.
