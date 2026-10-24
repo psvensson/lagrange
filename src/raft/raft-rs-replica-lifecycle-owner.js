@@ -11,10 +11,9 @@ import {commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_TABLE} from './raft-rs-durable-store-constants.js';
 import {RAFT_RS_OPENING_HISTORY, RAFT_RS_OPENING_HISTORY_ERROR} from
   './raft-rs-opening-history-constants.js';
-import {REPLICA_LIFECYCLE_TABLE} from
-  './raft-rs-original-allocation-constants.js';
+import {LIFECYCLE_STATE, REPLICA_LIFECYCLE_TABLE as LIFECYCLE_TABLE} from
+  './raft-rs-replica-lifecycle-constants.js';
 
-const LIFECYCLE_TABLE = REPLICA_LIFECYCLE_TABLE;
 const SNAPSHOT_RECEIVER_REASON = Object.freeze({
   FRESH: 'snapshot-receiver-fresh',
   HISTORY: 'snapshot-receiver-history-present',
@@ -36,10 +35,6 @@ const FILE_ABSENT_CODE = 'ENOENT';
 // verified group-retirement evidence a retirement recorded with the row.
 const LIFECYCLE_ADDED_COLUMNS = Object.freeze(['incarnation',
   'retirement_evidence', 'native_history_state']);
-const LIFECYCLE_STATE = Object.freeze({
-  ACTIVE: 'active',
-  RETIRED: 'retired',
-});
 // Durable lifecycle generation is the persistent authority. Runtime-instance
 // identity is the exact process-local projection of that generation: the
 // registry holds one entry per opened runtime (the frozen operation port a
@@ -62,6 +57,8 @@ const LIFECYCLE_REASON = Object.freeze({
   CLAIM_SETTLED: 'lifecycle-claim-settled',
   OBSERVATION_UNAVAILABLE: 'lifecycle-observation-unavailable',
   STAGING_PREPARED: 'snapshot-lifecycle-prepared',
+  ORIGINAL_PREPARED: 'original-allocation-lifecycle-prepared',
+  ORIGINAL_ROW_PRESENT: 'original-allocation-lifecycle-row-present',
   IDENTITY_MISMATCH: 'lifecycle-identity-mismatch',
   RETIRED: 'retired',
   STALE_RUNTIME_GENERATION: 'runtime-generation-not-registered',
@@ -92,6 +89,35 @@ function addMissingLifecycleColumns(db) {
   }
 }
 
+// The one table definition; an older table gains the columns added since.
+function ensureLifecycleTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ${LIFECYCLE_TABLE} (
+      group_id TEXT NOT NULL,
+      peer_id TEXT NOT NULL,
+      replica_identity TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('active', 'retired')),
+      reason TEXT,
+      changed_at TEXT NOT NULL,
+      incarnation TEXT,
+      retirement_evidence TEXT,
+      native_history_state TEXT,
+      PRIMARY KEY (group_id, peer_id),
+      UNIQUE (group_id, replica_identity)
+    )
+  `);
+  addMissingLifecycleColumns(db);
+}
+
+// The row holding either half of this replica's identity in its group.
+function lifecycleIdentityRow(db, {groupId, peerId, replicaIdentity}) {
+  return db.prepare(`
+    SELECT peer_id, replica_identity, state, reason
+    FROM ${LIFECYCLE_TABLE}
+    WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
+  `).get(groupId, peerId, replicaIdentity);
+}
+
 // A row born before the stamp existed gets one, once: the update never
 // replaces a stamp.
 function stampUnstampedRow(db, {groupId, peerId, mintIncarnation}) {
@@ -118,27 +144,8 @@ class RaftRsReplicaLifecycleOwner {
     this.#groupId = groupId;
     this.#peerId = peerId;
     this.#replicaIdentity = replicaIdentity;
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS ${LIFECYCLE_TABLE} (
-        group_id TEXT NOT NULL,
-        peer_id TEXT NOT NULL,
-        replica_identity TEXT NOT NULL,
-        state TEXT NOT NULL CHECK (state IN ('active', 'retired')),
-        reason TEXT,
-        changed_at TEXT NOT NULL,
-        incarnation TEXT,
-        retirement_evidence TEXT,
-        native_history_state TEXT,
-        PRIMARY KEY (group_id, peer_id),
-        UNIQUE (group_id, replica_identity)
-      )
-    `);
-    addMissingLifecycleColumns(db);
-    const row = db.prepare(`
-      SELECT peer_id, replica_identity, state, reason
-      FROM ${LIFECYCLE_TABLE}
-      WHERE group_id = ? AND (peer_id = ? OR replica_identity = ?)
-    `).get(groupId, peerId, replicaIdentity);
+    ensureLifecycleTable(db);
+    const row = lifecycleIdentityRow(db, {groupId, peerId, replicaIdentity});
     if (row === undefined) {
       const raftTables = db.prepare(`
         SELECT name FROM sqlite_master
@@ -383,6 +390,39 @@ function prepareReplicaLifecycleForSnapshot(request) {
     return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
       LIFECYCLE_REASON.STAGING_PREPARED, Object.freeze({incarnation}));
   });
+}
+
+/**
+ * Birth the lifecycle row of one founder of an original seed allocation,
+ * before any native effect and inside the caller's open transaction (the
+ * original-allocation preparation commits it with its peer-identity rows).
+ * This owner mints the incarnation; the caller supplies only the identity,
+ * and the declaration consumes the returned stamp. Birth is once: any row
+ * already holding this identity, in any state, is refused and left
+ * unchanged, as is durable native history without a row. The row is born
+ * NEVER_OPENED and is never marked established here. No owner, runtime
+ * handle, registration or retirement capability is returned.
+ * @param {Object} request - {db, groupId, peerId, replicaIdentity}.
+ * @return {Object} Frozen {outcome, reason, detail: {incarnation}|null}.
+ */
+function prepareReplicaLifecycleForOriginalAllocation(request) {
+  const {db, groupId, peerId, replicaIdentity} = request;
+  if (!db.inTransaction) {
+    throw new Error(RAFT_RS_OPENING_HISTORY_ERROR.TRANSACTION_REQUIRED);
+  }
+  const identity = {groupId, peerId, replicaIdentity};
+  ensureLifecycleTable(db);
+  if (lifecycleIdentityRow(db, identity) !== undefined) {
+    return frozenResult(RAFT_OPERATION_OUTCOME.CORE_REFUSED,
+      LIFECYCLE_REASON.ORIGINAL_ROW_PRESENT);
+  }
+  // Only the identity reaches the owner: its own mint stamps the row.
+  const owner = new RaftRsReplicaLifecycleOwner({db, ...identity});
+  const admission = owner.admission();
+  if (admission.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) return admission;
+  return frozenResult(RAFT_OPERATION_OUTCOME.CORE_OK,
+    LIFECYCLE_REASON.ORIGINAL_PREPARED,
+    Object.freeze({incarnation: owner.incarnation}));
 }
 
 // The receiver's one lifecycle row names another group, peer or replica, or
@@ -681,10 +721,10 @@ function readDurableReplicaLifecycle(dbPath, groupId, replicaIdentity) {
 
 export {
   DURABLE_LIFECYCLE_READ,
-  LIFECYCLE_STATE,
   RaftRsReplicaLifecycleOwner,
   readDurableReplicaLifecycle,
   prepareReplicaLifecycleForSnapshot,
+  prepareReplicaLifecycleForOriginalAllocation,
   inspectReplicaLifecycleForSnapshot,
   registerRuntimeLifecycle,
   retireReplicaLifecycle,

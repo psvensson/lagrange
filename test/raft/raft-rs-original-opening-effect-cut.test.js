@@ -31,9 +31,9 @@ function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-effect-cut-'));
   const directoryOwner = acquireDataDirectoryProcessOwner(dataDir);
   const identity = {dataDir, nodeId: 'original-node', buildDigest: 'effect-cut-build'};
-  const declaration = createSeedOriginalAllocation({...identity, now: 1234});
+  const draft = createSeedOriginalAllocation({...identity, now: 1234});
   const preparation = new RaftRsOriginalAllocationPreparation({directoryOwner, ...identity});
-  let db;
+  let db = null;
   let port;
   t.after(() => {
     setActualCoreEntryObserver(null);
@@ -43,8 +43,9 @@ function fixture(t) {
     directoryOwner.release();
     fs.rmSync(dataDir, {recursive: true, force: true});
   });
-  preparation.prepare(declaration);
-  const member = declaration.members.find((entry) => entry.replicaId === declaration.anchorReplicaId);
+  const declaration = preparation.prepare(draft);
+  const member = declaration.members.find((entry) =>
+    entry.replicaId === declaration.anchorReplicaId);
   db = new Database(member.dbPath, {fileMustExist: true});
   const entries = [];
   setActualCoreEntryObserver((entry) => entries.push(entry));

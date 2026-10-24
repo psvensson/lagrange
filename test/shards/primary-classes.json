@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2137,
+    "unit": 2138,
     "integration": 109,
     "bootstrap": 215,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2468,
-  "digest": "fnv1a32-0a86442d",
+  "censusSize": 2469,
+  "digest": "fnv1a32-406e8a62",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1682,6 +1682,7 @@
     "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js": "unit",
     "test/raft/raft-rs-original-allocation-cold-inspection.test.js": "unit",
     "test/raft/raft-rs-original-allocation-custody.test.js": "unit",
+    "test/raft/raft-rs-original-allocation-lifecycle-operation.test.js": "unit",
     "test/raft/raft-rs-original-allocation-preparation.test.js": "unit",
     "test/raft/raft-rs-original-allocation-store.test.js": "unit",
     "test/raft/raft-rs-original-opening-authority.test.js": "unit",
