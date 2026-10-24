@@ -378,6 +378,15 @@ configuration; `--base-sha` pairs with `--sha` as the other end of the range.
 It applies only to the `changed` profile. It narrows what the lab runs; the
 push gate still proves the full range against `origin/main`.
 
+The same base, resolved on the controller to a commit, reaches every share of
+the run as `LAGRANGE_CHECK_BASE` - the range owner's one declaration
+(`repositoryCheckBase` in `scripts/checks/changed-paths.js`) - and so does the
+controller's own base for a placed `npm test` run. A lab checkout's
+`origin/main` is whatever it last fetched, often weeks behind, so a history
+walk measured from it (closed-quest shape, quest-log append-only) would cover
+a range nobody named; with no base on the controller the lab exports none.
+The `placement-env=` line shows the base each host was handed.
+
 ### Split a run over the lab: the controller is a reserve
 
 Test work is parallelized on the lab machines as much as possible (owner,

@@ -17,6 +17,7 @@ import {test} from 'node:test';
 import {
   OFFENCE, closedQuestShapeOffences,
 } from '../../scripts/checks/check-closed-quest-shape.js';
+import {CHECK_BASE_ENV} from '../../scripts/checks/change-selection-constants.js';
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const ENCODING = 'utf8';
@@ -152,6 +153,32 @@ test('prose naming an artifact cannot legalize it', (t) => {
   commit(root, 'close a quest that names a file in prose');
   assert.deepEqual(closedQuestShapeOffences({root}), [{quest: 'plain-quest',
     path: smuggled, reason: OFFENCE.UNREQUIRED, at: WORKING_TREE}]);
+});
+
+test('a declared range is this repository\'s, never a fixture\'s', (t) => {
+  // The range owner applies LAGRANGE_CHECK_BASE to the repository this
+  // process runs from alone: a commit it names is meaningless in any other
+  // root, so a fixture is still measured from its own publication base (here
+  // none, so its whole history). Applied there, this one would not resolve.
+  const root = repo(t);
+  const receipt = 'solve/quests/receipt-quest/evidence/receipt.json';
+  closedQuest(root, 'receipt-quest', {probe: 'test-receipt',
+    args: {file: receipt, requiredReceipts: ['r1']}});
+  write(root, receipt, {schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'r1', passed: true}]});
+  commit(root, 'close a quest whose claim cites a receipt');
+  write(root, receipt, {schema: 'test-receipt/1', status: 'pass',
+    receipts: [{id: 'r1', passed: true, detail: 'rewritten after closure'}]});
+  const mutated = commit(root, 'rewrite retained proof');
+  const ambient = process.env[CHECK_BASE_ENV];
+  t.after(() => {
+    if (ambient === undefined) delete process.env[CHECK_BASE_ENV];
+    else process.env[CHECK_BASE_ENV] = ambient;
+  });
+  process.env[CHECK_BASE_ENV] = '0'.repeat(40);
+  assert.deepEqual(closedQuestShapeOffences({root}), [{quest: 'receipt-quest',
+    path: receipt, reason: OFFENCE.MUTATED, at: mutated}],
+  'the fixture\'s own history is walked, edge by edge');
 });
 
 test('the repository itself is clean under the general rule', () => {

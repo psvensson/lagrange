@@ -22,10 +22,14 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {fileURLToPath} from 'node:url';
+
 import {
   changedRecords,
   publicationBase,
+  repositoryCheckBase,
   resolvedCheckBase,
+  resolvedCheckBaseCommit,
   resolvedCheckRange,
   semanticPaths,
 } from '../../scripts/checks/changed-paths.js';
@@ -38,6 +42,9 @@ import {gitProcessEnvironment} from
 import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
+// The repository this test runs from: the one a declared range names.
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 function git(repo, args) {
   return execGit(args, {
@@ -180,4 +187,42 @@ test('an unreachable base is reported, never silently narrowed', () => {
   const missing = '0'.repeat(40);
   assert.equal(changedRecords({root: repo, base: missing, head: shas.d}), null,
     'an undiffable range returns null so the caller fails closed');
+});
+
+// The history walks (closed-quest shape, quest-log append-only) ask ONE owner
+// for their base. The witness for "a lab checkout walks the range its
+// controller declared": a checkout whose own origin/main is absent or stale is
+// never consulted while a declaration exists.
+test('the repository base: declared for this repository, its own for any other root', () => {
+  const {clone, published} = buildPublishedClone();
+  const declared = {[CHECK_BASE_ENV]: shas.a};
+  // A declaration names a commit in THIS repository, so another root - a
+  // fixture, an audited clone - is measured from its own publication base.
+  assert.equal(repositoryCheckBase(clone, declared), published);
+  assert.equal(repositoryCheckBase(repo, declared), null,
+    'a root without the publication ref has no base: its whole history is walked');
+  // This repository: the declaration wins, and without one its publication
+  // base - the behaviour of a primary checkout with origin/main.
+  assert.equal(repositoryCheckBase(REPOSITORY_ROOT, declared), shas.a);
+  assert.equal(repositoryCheckBase(REPOSITORY_ROOT, {}), publicationBase(REPOSITORY_ROOT));
+});
+
+test('the base handed to another checkout is a full commit id, or none', () => {
+  const {clone, published} = buildPublishedClone();
+  assert.equal(resolvedCheckBaseCommit(null, {}, clone), published,
+    'with the publication ref: its merge base');
+  assert.equal(resolvedCheckBaseCommit('origin/main', {}, clone), published,
+    'a remote name is resolved here, never sent for another checkout to reread');
+  assert.equal(resolvedCheckBaseCommit(null, {}, repo), null,
+    'without the publication ref and with no declaration: none, as a named absence');
+  assert.equal(resolvedCheckBaseCommit(shas.b.slice(0, 12), {}, repo), shas.b,
+    'an abbreviation becomes the full id');
+  assert.equal(resolvedCheckBaseCommit(null, {[CHECK_BASE_ENV]: 'HEAD'}, repo), shas.d,
+    'HEAD means this checkout\'s HEAD, so it is resolved here');
+  assert.throws(() => resolvedCheckBaseCommit('0'.repeat(40), {}, repo),
+    /the declared check base does not name a commit here: 0{40}/u,
+    'a declared base that names no commit is refused, never dropped');
+  assert.throws(() => resolvedCheckBaseCommit(null, {[CHECK_BASE_ENV]: 'origin/main'}, repo),
+    /does not name a commit here: origin\/main/u,
+    'a declared remote ref this checkout lacks is refused too');
 });

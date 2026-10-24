@@ -25,6 +25,9 @@
 // and if it crosses a subsystem boundary both owners must be proved. Static
 // checks consume the paths that still exist; the selector consumes both sides.
 
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
 import {
   CHANGE_ADDED,
   CHANGE_DELETED,
@@ -80,6 +83,15 @@ const INJECTION_SEPARATOR = ',';
 const PATH_SEPARATOR = '/';
 const MERGE_BASE = 'merge-base';
 const PUBLICATION_REMOTE = 'origin/main';
+const REV_PARSE = 'rev-parse';
+const VERIFY = '--verify';
+const QUIET = '--quiet';
+const END_OF_OPTIONS = '--end-of-options';
+const COMMIT_PEEL = '^{commit}';
+const UNRESOLVED_BASE = 'the declared check base does not name a commit here: ';
+// The repository this process runs from: the one a declared range names.
+const REPOSITORY_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 // Null when git cannot answer (no base, not a repository). Output past the
 // git output bound is not that: it is a failure of its own and propagates.
@@ -180,6 +192,42 @@ export function resolvedCheckRange(explicitBase = null, env = process.env,
 export function resolvedCheckBase(explicitBase = null, env = process.env,
   root = null) {
   return resolvedCheckRange(explicitBase, env, root).base;
+}
+
+/**
+ * The base an edge walk over the repository at `root` measures from. A
+ * declared range (LAGRANGE_CHECK_BASE) names a commit in the repository this
+ * process runs from, so it applies to that repository alone; any other root -
+ * a fixture, an audited clone - is measured from its own publication base.
+ * Every check that walks history from "the base" asks here, so a placed lab
+ * run, a land, the push gate and CI walk exactly the range they declared,
+ * never a checkout's own (possibly stale) origin/main.
+ * @param {string} root
+ * @param {Object} [env]
+ * @return {string|null}
+ */
+export function repositoryCheckBase(root, env = process.env) {
+  return path.resolve(root) === REPOSITORY_ROOT ?
+    resolvedCheckBase(null, env, root) : publicationBase(root);
+}
+
+/**
+ * The resolved check base as a full commit id, or null when there is none -
+ * what is handed to another checkout of this history, where a name such as
+ * HEAD or origin/main would mean something else. A declared base that names
+ * no commit here is refused, never dropped.
+ * @param {string|null} explicitBase
+ * @param {Object} env
+ * @param {string} root
+ * @return {string|null}
+ */
+export function resolvedCheckBaseCommit(explicitBase, env, root) {
+  const base = resolvedCheckBase(explicitBase, env, root);
+  if (!base) return null;
+  const lines = git(root, [REV_PARSE, VERIFY, QUIET, END_OF_OPTIONS,
+    `${base}${COMMIT_PEEL}`]);
+  if (!lines || lines.length !== 1) throw new Error(`${UNRESOLVED_BASE}${base}`);
+  return lines[0];
 }
 
 // What the assembling layer declared it injected into this worktree. Empty in
