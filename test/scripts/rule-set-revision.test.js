@@ -1,7 +1,7 @@
 /**
  * The rule set is governed by a sealed manifest, not by a count.
  *
- * The previous revision held the rules to exactly twenty-five, and when
+ * An earlier revision held the rules to exactly twenty-five, and when
  * adversarial verification found a twenty-sixth independently violable
  * invariant the number is what bent the model: two invariants were folded into
  * one rule to keep the integer. These scenarios make the manifest the
@@ -43,6 +43,7 @@ const SCOPE_FIXTURE = Object.freeze({
   outside: Object.freeze(['docs/a.md', 'src/partition/partition-service.js']),
 });
 const RED_HEAD = '1111111111111111111111111111111111111111';
+const OTHER_RED_HEAD = '2222222222222222222222222222222222222222';
 const AUTHORITY_FIXTURE = Object.freeze({
   context: Object.freeze({redHead: RED_HEAD}),
   authorised: Object.freeze({action: ACTION.PUBLISH_HEAD_ON_RED,
@@ -58,7 +59,7 @@ const RUN_COMMAND = /`npm run ([\w:-]+)`/gu;
 const IMPLEMENTATION_IDENTITY = /[\w-]+\.(?:js|json|md|sh)\b|\/|npm run |--[a-z]/u;
 const RULE_FIELDS = Object.freeze(['Invariant', 'Owner', 'On conflict']);
 const MINIMUM_AUTHORITY = 10;
-// The head this rule set's current revision supersedes.
+// An actual historical head used by the synthetic supersession scenarios.
 const PUBLISHED_HEAD = 'c0670a2af496aa246a8c5ccd2d23efbe9e54fb52';
 // The tasks an agent starts from, and the owner each must still reach.
 const REPRESENTATIVE_TASKS = Object.freeze([
@@ -122,7 +123,7 @@ test('one independently violable invariant per rule', () => {
     assert.ok(typeof entry.invariant === 'string' && entry.invariant.length > 0,
       `${entry.id} names no invariant`);
   }
-  // The two rules this revision split are the ones whose independence is
+  // The two rules the earlier revision split are the ones whose independence is
   // modelled; the model is what proves the split was not editorial.
   const modelled = new Set([SCOPE_RULE, AUTHORIZATION_RULE]);
   for (const id of modelled) {
@@ -172,17 +173,20 @@ test('R16 owns all of R16 and none of R26', () => {
   }
   assert.match(scope.fields.Invariant, /scope/iu,
     `${SCOPE_RULE} still states the scope invariant`);
-  // And the action vocabulary lives in exactly one rule, so it cannot be
-  // folded back into a second one without this failing.
-  // And the converse: the authorization rule must not have become a second
-  // statement of the scope invariant.
+  // The converse concerns the invariant, not every word in its instructions.
+  // R26 must bound continued authorization to the same scope without becoming
+  // a second rule about which repository paths a work unit may change.
   const authority = ruleById(AUTHORIZATION_RULE);
-  const authorityText =
-    [authority.title, ...RULE_FIELDS.map((field) => authority.fields[field])].join(' ');
   for (const word of ['scope', 'only what', 'stays inside', 'was told to']) {
-    assert.equal(authorityText.toLowerCase().includes(word), false,
+    assert.equal(authority.fields.Invariant.toLowerCase().includes(word), false,
       `${AUTHORIZATION_RULE} restates the scope invariant: ${word}`);
   }
+  assert.match(authority.fields['On conflict'], /missing authority/iu,
+    'R26 asks for authority that is absent');
+  assert.match(authority.fields['On conflict'], /authorization for the same scope persists/iu,
+    'R26 retains authorization for the same action scope');
+  assert.match(authority.fields['On conflict'], /unrelated authorization does not extend it/iu,
+    'R26 does not transfer unrelated authorization');
   const carriers = declaredRules().filter((rule) =>
     /irreversible|outward/iu.test(
       [rule.title, ...RULE_FIELDS.map((field) => rule.fields[field])].join(' ')));
@@ -289,6 +293,34 @@ test('scope left with valid authorization fails R16 only', () => {
     'the change set reaches a path the sealed scope does not authorise');
   assert.equal(authorityVerdict('authorised'), 'holds',
     'the outward action carries the operator signal it needs');
+});
+
+test('existing authorization continues for the same outward action and target', () => {
+  const request = {
+    action: ACTION.PUBLISH_HEAD_ON_RED,
+    signal: AUTHORITY_FIXTURE.authorised,
+    context: AUTHORITY_FIXTURE.context,
+  };
+  assert.equal(isAuthorized(authorizeAction(request)), true);
+  assert.equal(isAuthorized(authorizeAction({...request, signal: null})), false,
+    'a separate request without the required authority remains refused');
+  assert.equal(isAuthorized(authorizeAction(request)), true,
+    'the existing matching authorization is not consumed by the first decision');
+  assert.equal(isAuthorized(authorizeAction({
+    ...request, context: {redHead: OTHER_RED_HEAD},
+  })), false, 'authority for one red head does not authorize a different repair');
+  assert.equal(isAuthorized(authorizeAction({
+    ...request, action: ACTION.PUBLISH_PACKAGE, context: {version: '0.2.6'},
+  })), false, 'authority for a repair does not authorize package publication');
+});
+
+test('standing publication authority does not authorize a missing red-repair signal', () => {
+  const publish = authorizeAction({action: ACTION.PUBLISH_HEAD});
+  assert.equal(isAuthorized(publish), true,
+    'ordinary publication carries its existing registered authority');
+  assert.equal(publish.standing, true);
+  assert.equal(authorityVerdict('absent'), 'violated',
+    'standing publication does not supply the exceptional red-repair authority');
 });
 
 test('neither verdict moves with the other rule\'s input', () => {

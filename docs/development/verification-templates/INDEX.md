@@ -6,12 +6,14 @@ prompt MUST include that template's checklist — filled in with the change's
 specifics — so review quality does not depend on the prompt author
 remembering each classic failure mode.
 
-Every checklist item cites the closure record or quest finding that put it on
-the list. Every item demands an EVIDENCE PATH (file:line, log line, test
-name), never a yes/no. **Anti-theater rule:** if a template item "passes"
-review and the same defect class still ships twice, the item is either
-promoted to a machine check (guideline audit / guard test) or deleted — a
-checklist entry that catches nothing is noise.
+Every applicable item needs an evidence path (source, contract, test, model,
+or immutable run artifact) and the invariant that evidence supports. Mark an
+item inapplicable with a concrete scope reason. Label source-derived hypotheses
+and unexecuted checks explicitly; neither is measured proof. When the same
+causal error survives review repeatedly, the author and independent reviewer
+reassess the assumption, witness, and checklist together. Improve an existing
+guard when it can catch the error; do not automatically add another approval
+stage or delete a useful question because a review missed it.
 
 | Change category | Template |
 | --- | --- |
@@ -34,24 +36,38 @@ overlapping questions. Do not include unrelated templates merely to make the
 checklist longer, and do not defer an already-applicable template until after the
 first verdict.
 
-**Category-complete rounds:** a verifier must enumerate ALL findings and group
-them by category; a rejection round must be category-complete — never stop at
-the first defect. One defect per round turned an 11-item checklist into 11
-full attempt-verify cycles on `comparative-efficiency-opportunity-calculator`
-(2026-07-27).
+## Review scope and verdict
 
-**Sealed bars:** a quest may declare `verificationTemplates: [<category>, ...]`
-in its sealed declaration — that list becomes the rejection bar, bounding the
-NUMBER of rounds the way category-complete bounds each round's yield. Rejection
-findings are recorded per category (`--finding "<category>: <summary>"`); a
-category outside the bar passes once as `out-of-bar:<slug>`, and repeating it
-requires a `verification-bar-expansion` amendment. Category-complete rounds
-alone did not converge when the bar itself was open-ended (4 further rounds on
-`benchmark-statistical-capacity-protocol`, 2026-07-27, each surfacing new
-requirement categories).
+The author identifies the causal repair, candidate, changed contract, affected
+callers, and relevant categories before review. The independent reviewer checks
+that scope against the actual diff and its reachable consequences. A category
+list guides coverage; it never excuses a concrete safety defect introduced by
+the candidate. Use the current Quest findings and verification entry described
+in [`solver-runbook.md`](../solver-runbook.md), not retired v1 review-bar commands.
+
+Return one consolidated pass over the agreed surface. Group all discovered
+findings by category and give each the violated invariant, reachable path,
+evidence, and effect on the repair claim. Do not stop at the first defect or
+expand routine review into an unrestricted architecture audit. Follow-up review
+checks corrections and their affected consequences, reusing still-applicable
+evidence through the existing provenance and proof-selection owners.
+
+For each claim, separate safety, recovery progress under stated finite-failure
+assumptions, and resource bounds. A safe refusal does not prove eventual useful
+service; a successful request does not prove recovery or bounded retained work.
+State whether the evidence is deterministic, native, or from real physical
+failure domains, and distinguish a product failure, fixture failure, verifier
+error, and unavailable execution. Preserve the first failing artifact.
+
+An unrelated finding gets an owner and disposition in the existing record.
+It blocks this repair only when it invalidates the repair's contract, proof, or
+safe integration; otherwise the integration owner carries it forward without
+rewriting the scenario or release verdict. The three acceptance claims are
+defined in [`release-gate.md`](../../../test/guidelines/release-gate.md).
+Repeated refutation of the same causal assumption triggers reassessment by the
+current roles; a round count alone creates no new reviewer or mandatory gate.
 
 Design-time counterpart: [design-note-template.md](design-note-template.md)
-structures a Quest design note before the design-vet subagent runs, covering
-the four refutation categories that recurred on every rung of the S1–S6
-snapshot epic (uncited consumed surfaces, untyped failure edges, stale
-cached views, unanchored identity).
+structures a design note when the change needs design review. It covers consumed
+surfaces, typed failure edges, cached views, and identity without requiring a
+separate design stage for every bounded repair.

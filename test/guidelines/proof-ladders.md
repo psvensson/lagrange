@@ -3,7 +3,7 @@ scope: testing
 status: canonical
 always_load: false
 source_of_truth: self
-last_reviewed: 2026-07-22
+last_reviewed: 2026-10-22
 ---
 
 > **Canonical source.** Quest-driven validation, static guardrail preflight, file-size ratchet. Index: [`INDEX.md`](INDEX.md).
@@ -12,57 +12,47 @@ last_reviewed: 2026-07-22
 
 ## Quest-Driven Validation Policy
 
-All non-trivial implementation work should have validation owned by its active
-Quest.
+The active Quest owns the validation for its bounded causal repair. Declare the
+invariant, real entry and owner paths, affected consumers, and proof required
+for that claim before implementation. Use the acceptance distinctions in
+[`release-gate.md`](release-gate.md): repair completion, representative service
+success, and release acceptance have separate verdicts.
 
-Required workflow:
+A Quest reaches `solved` only through the current landing command after its
+sealed validation, relevant guards, and independent review pass. If the declared
+claim changes, record the decision and use the existing supersession lifecycle;
+do not weaken `doneWhen` retrospectively. A second concern gets a finding,
+responsible owner, and disposition instead of silently widening the repair.
+A shared-contract change includes the direct status, diagnostics, admin,
+harness, and reporting consumers affected by that change.
 
-1. The active Quest must define the required validation surface.
-2. Tests added during the change must match the Quest concern rather than an
-   unrelated umbrella scope.
-3. A Quest must not report SOLVED until its required validation has passed.
-4. If validation reveals a second concern, record a finding and add or author a
-   frontier instead of silently widening the current one.
-5. After the Quest validation surface is green, perform the required closure
-   deep dive across the affected area before claiming SOLVED (scope and stop
-   condition defined under "Closure deep dive — scope" below).
-6. If that deep dive finds mistakes, irregularities, or doctrine/system
-   guideline violations in the affected area, fix them before claiming SOLVED.
-7. If a Quest changes a shared contract, validation must prove not only the
-   runtime owner path, but also the direct status, diagnostics, admin, harness,
-   or reporting surfaces that consume that contract.
-8. A Quest is not validation-complete while tail-consumer proof is still
-   missing, even if the main owner tests are green.
-9. When residual closure moves to a follow-on Quest or frontier, the original
-   Quest must stop short of SOLVED until the split is explicit in a finding or
-   the current Quest report.
+### Closure review - scope and stop condition
 
-This keeps test closure aligned with bounded implementation scope instead of
-letting validation sprawl across unrelated concerns.
+Review the changed semantic boundary and its directly affected collaborators
+and callers. Check the actual diff and reachable consequences for:
 
-The Quest is not SOLVED merely because the named tests pass. Test closure and
-Quest closure both require the final affected-area deep dive defined next, which is
-the same obligation named in
-[`docs/steering/rules.md`](../../docs/steering/rules.md) §13 ("Closure
-Requires Proof, Review, And Truth Repair").
+1. Introduced or exposed violations of the changed contract and assumptions
+   necessary for the repair to be correct.
+2. Consumers whose meaning changed without a corresponding update or proof.
+3. Scaffolds, test-only paths, or dead branches introduced or made obsolete by
+   the repair.
+4. Safety, recovery progress, and resource obligations within the declared
+   finite-failure and deployment assumptions.
 
-### Closure deep dive — scope
+Use the relevant
+[`verification templates`](../../docs/development/verification-templates/INDEX.md)
+to return one consolidated set of concrete findings. Every finding identifies an
+invariant, reachable path, evidence, and closure consequence. A source hypothesis
+is not measured evidence. Do not turn closure into an unrestricted architecture
+review or a requirement to fix every pre-existing issue in a touched file.
 
-The "affected area" is bounded, not the whole repo: it is the files the Quest
-changed plus their **direct owner collaborators** — the owners and tail consumers
-(status, diagnostics, admin, harness, reporting) named in the diff. The deep dive
-re-reads exactly that set for:
-
-1. doctrine / system-guideline violations introduced by the change, **and**
-   pre-existing violations in the same semantic boundary (one owner / one concern);
-2. tail-consumer surfaces of any changed shared contract that were not updated;
-3. leftover scaffolds — a flag, test-only path, or dead branch the change should
-   have removed.
-
-The deep dive is **complete** when every file in that bounded set has been checked
-and each finding is either fixed or recorded as an explicitly out-of-scope
-follow-on frontier. It does not require reading files outside the touched owner
-boundary.
+Review is complete when the scoped surface is covered and each finding is either
+fixed or explicitly routed with an owner. An outside-scope finding blocks this
+repair only if it invalidates its contract, proof, or safe integration; it remains
+visible to the integration owner otherwise. Introduced regressions and required
+gate failures cannot be disposed of as unrelated debt. Repeated refutation of the
+same causal assumption prompts a concise reassessment by the existing roles.
+It does not automatically create another reviewer, Quest, or approval gate.
 
 ## Static Guardrail Preflight And Closure Policy
 
@@ -72,7 +62,7 @@ drift while fixing behavior.
 Required workflow:
 
 1. Before editing production code, capture the relevant static guardrail status
-   in the Quest attempt summary or finding.
+   in the existing Quest attempt or finding.
 2. Choose guardrails by boundary, not by convenience (each maps to a concrete
    command):
    - decision-boundary audit (`npm run audit:guideline:decision-boundaries`) for
@@ -105,11 +95,10 @@ Required workflow:
      metadata-gateway, or owner-ingress violation
    - the Quest weakens a guard, expands an allowlist, or moves code out of
      scan scope to make validation pass
-6. Existing violations in touched files must be fixed when they are part of the
-   same semantic boundary (one owner / one concern, per system-guidelines §2 One
-   Semantic Owner Per Concern). If they are genuinely outside scope, the Quest must
-   name the excluded boundary and record a follow-on Quest/frontier before
-   closure.
+6. Repair existing violations that cause the defect or invalidate the changed
+   contract. Route unrelated inherited debt with its boundary, evidence, and
+   owner in the existing record. A new architecture task is warranted by the
+   demonstrated cause, not merely by touching a file that contains debt.
 7. Static guardrail proof is required even when focused unit and integration
    tests pass. Green behavior tests do not override a failed owner-path guard.
 

@@ -20,8 +20,13 @@ response classification. Each item requires an evidence path.
    mapping, `deferRetry`, `retryAfterMs` — and verify the retryable-error
    classifier accepts what must be retried.
 4. **Undeliverable never hangs.** Missing handler / no connection must
-   resolve with a retryable signal within a bounded time, never hang the
-   awaiting workflow.
+   resolve within the owning budget with the canonical typed delivery outcome.
+   Prove its retryability classification and caller behavior against the
+   contract; do not reinterpret every failure as retryable.
 5. **Stub fidelity.** Any test stub of the router in the change: does it
    honor the contract suite (register/deliver semantics, undeliverable
    shape)? Prefer `createContractMessageRouterStub`.
+6. **Effect and obligation continuity.** For lost or late responses, show the
+   owner of the possibly completed effect, safe retry identity, and retained
+   obligation. Under finite delivery failure, prove useful recovery without
+   duplicate effects or unbounded waiter/retry state.
