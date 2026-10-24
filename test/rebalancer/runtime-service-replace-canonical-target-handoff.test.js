@@ -165,7 +165,13 @@ async function drainImmediateWork() {
 function createLifecycleManager(cache, activeEffects, activationRecord) {
   return {
     // The production-shaped manager without a journal (design
-    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2) answers UNAVAILABLE.
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2, with the U1 v3
+    // hydration addendum): the journal-only read the deferred CREATE runs
+    // before any resume answers UNAVAILABLE, so a native_js definition keeps
+    // the generic create path.
+    async readRetainedCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async resumeConsensusCreation() {
       return {outcome: 'UNAVAILABLE'};
     },
