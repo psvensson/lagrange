@@ -224,18 +224,8 @@ function pendingRouteSnapshot(f) {
       // Read the captured handle: the diagnostic owner's laneOf can change tenure.
       retryArmed: lane.retryTimer.handle !== null, flushArmed: lane.flushTimer !== null,
       lastDrive: lane.lastDrive, lastFlush: lane.lastFlush},
-    topology: {state: topology.state, immediateTimers: topology.immediateBatchTimers.size,
-      backgroundTimers: topology.backgroundRetryTimers.size,
-      backgroundEntries: topology.backgroundRetryEntriesByKey.size,
-      retrySleeps: topology.retrySleepReleases.size,
-      immediateEntries: [...topology.immediateBatchEntriesByKey].map(([key, entry]) => ({
-        key, sourceGroupId: entry.sourceGroupId, targets: structuredClone(entry.targets),
-        timerPresent: entry.timer !== null, resolvers: entry.resolvers.length,
-        pendingEvents: [...entry.pendingEventsByKey.values()].map((event) => ({
-          eventKey: event.eventKey, tableName: event.tableName, operation: event.operation,
-          serviceId: event.data?.service_id,
-        })),
-      }))},
+    topology: {state: topology.state, retrySleeps: topology.retrySleepReleases.size,
+      activeWave: topology.activeDurablePropagation !== null},
   };
 }
 

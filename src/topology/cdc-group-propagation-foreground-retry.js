@@ -1,4 +1,4 @@
-// One foreground retry wait decision for ordinary and source-owned durable waves.
+// One foreground retry wait decision for the source-owned durable wave.
 // The prepared wave owns its duration and wait; this owner applies attempt and
 // lifecycle bounds before returning the observed decision to the delivery loop.
 import {reportCdcPropagationRetryScheduled} from './cdc-group-propagation-retry-wait-report.js';
@@ -22,10 +22,8 @@ async function waitForForegroundRetry(owner, wave, attempt, maxAttempts) {
     failureCount: wave.failureCount(),
   });
   await wave.wait(retryDelayMs);
-  const observed = owner.isPropagationStopped() ?
+  return owner.isPropagationStopped() ?
     {state: CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED} : wait;
-  if (observed.state === CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) wave.afterWait?.();
-  return observed;
 }
 
 export {waitForForegroundRetry};

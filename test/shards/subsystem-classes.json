@@ -8,7 +8,7 @@
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
-    "convergence-topology": 84,
+    "convergence-topology": 78,
     "distributed-harness": 177,
     "examples-e2e": 7,
     "pgwire-compat": 21,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2473,
-  "digest": "fnv1a32-864a4308",
+  "censusSize": 2467,
+  "digest": "fnv1a32-44281bcf",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-6ba8e10d",
+  "observationDigest": "fnv1a32-88045e27",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2329,15 +2329,9 @@
     "test/time/dt4-seam-collapse.test.js": "runtime-primitives",
     "test/time/pct-scheduler.test.js": "runtime-primitives",
     "test/time/time-source.test.js": "runtime-primitives",
-    "test/topology/cdc-group-propagation-background-retry-bounded.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-background-retry-preservation.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-lifecycle-bounded.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-memory.property.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-closure-preservation.property.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-foreground-boundary.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-service.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": "convergence-topology",
-    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": "convergence-topology",
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": "convergence-topology",
     "test/topology/group-selection-service.test.js": "convergence-topology",
     "test/topology/latency-group-manager.test.js": "convergence-topology",
@@ -17225,7 +17219,6 @@
         "src/raft/raft-rs-membership-transition.js",
         "src/raft/raft-rs-ready-loop-constants.js",
         "src/topology/cdc-group-propagation-constants.js",
-        "src/topology/cdc-group-propagation-service.js",
         "test/test-helpers/cdc-topology-progress-fixture.js",
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-transaction-fixture.js",
@@ -17233,20 +17226,23 @@
         "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
-    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
+    "test/topology/cdc-group-propagation-service.test.js": {
       "files": [
-        "src/topology/cdc-group-propagation-constants.js",
-        "src/topology/cdc-group-propagation-delivery-methods.js",
-        "src/topology/cdc-group-propagation-lifecycle-methods.js",
-        "src/topology/cdc-group-propagation-routing.js",
-        "src/topology/cdc-group-propagation-service.js",
-        "src/topology/latency-topology-constants.js"
+        "src/cache/cdc-propagation-delivery-profile.js"
       ]
     },
-    "test/topology/cdc-group-propagation-stop-settles-deliveries.test.js": {
+    "test/topology/cdc-group-propagation-stop-arms-nothing.test.js": {
       "files": [
         "src/bootstrap/shared/latency-topology-setup.js",
+        "src/cdc/cdc-delivery-outcome.js",
         "src/topology/cdc-group-propagation-constants.js",
+        "src/topology/cdc-group-propagation-delivery-methods.js",
+        "src/topology/cdc-group-propagation-durable-delivery.js",
+        "src/topology/cdc-group-propagation-durable-plan.js",
+        "src/topology/cdc-group-propagation-foreground-retry.js",
+        "src/topology/cdc-group-propagation-lifecycle-methods.js",
+        "src/topology/cdc-group-propagation-retry-wait-report.js",
+        "src/topology/cdc-group-propagation-routing.js",
         "src/topology/cdc-group-propagation-service.js",
         "src/topology/latency-topology-constants.js"
       ]
@@ -17254,7 +17250,8 @@
     "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js": {
       "files": [
         "src/topology/cdc-group-propagation-service.js",
-        "src/transport/transport-semantic-outcome.js"
+        "src/transport/transport-semantic-outcome.js",
+        "test/topology/cdc-group-propagation-service-harness.js"
       ]
     },
     "test/topology/topology-anti-entropy-reconciler.test.js": {

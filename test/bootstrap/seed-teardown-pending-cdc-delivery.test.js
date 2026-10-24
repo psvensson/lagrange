@@ -15,11 +15,10 @@
 // CDCGroupPropagationService; the teardown steps are the seed cleanup's own,
 // in its order (LatencyTopologySetup.stop, then ReplicaHandler.shutdown).
 // Since 4151a3ab4 the partition's CDC is a durable obligation: its delivery
-// is a durable propagation wave, which never enters the immediate batch
-// window (cdc-group-propagation-durable-delivery.js header). The hold is the
-// wave's own retry delay between attempts (the service's sleep, which stop()
-// owns), entered because the target's answer is the CDC outcome owner's
-// typed unknown; settlement is observed by turns, never by a clock.
+// is a durable propagation wave, the service's one propagation path. The hold
+// is the wave's own retry delay between attempts (the service's sleep, which
+// stop() owns), entered because the target's answer is the CDC outcome
+// owner's typed unknown; settlement is observed by turns, never by a clock.
 
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
@@ -109,7 +108,6 @@ function startPropagationService() {
     }),
     messageRouter: createMessageRouter([unknownCdcAcceptance()]),
     latencyTreeService: {getRoutingOrder: () => ['g-1', 'g-2']},
-    // Replaced: the immediate batch window no longer holds a durable payload; the wave's retry delay is the hold now.
     deliveryRetryDelayMs: HELD_RETRY_DELAY_MS,
   });
   service.initialize();
@@ -187,8 +185,8 @@ test('the seed teardown completes when the latency topology stops inside a ' +
     'settled when the propagation service stopped');
   assert.equal(partition.pendingCDCEventDeliveries.size, 0,
     'no CDC delivery is left pending on the partition');
-  assert.equal(propagation.immediateBatchTimers.size, 0,
-    'no batch timer is left armed');
+  assert.equal(propagation.activeDurablePropagation, null,
+    'no propagation wave is left in flight');
   assert.equal(propagation.retrySleepReleases.size, 0,
     'no retry delay is left held');
   await shutdown.done;
