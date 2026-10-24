@@ -128,5 +128,5 @@ async function withParticipantReleaseProtocol(measure, table = {tableId: TABLE, 
   if (failure !== null) throw failure;
 }
 
-export {CONTROL_NODE, CONTROL_PARTITION, CONTROL_REPLICA, NODE, PARTITION,
-  REPLICA, SQL, TABLE, cache, withParticipantReleaseProtocol};
+export {CONTROL_PARTITION, CONTROL_REPLICA, NODE, PARTITION, REPLICA, SQL, cache,
+  withParticipantReleaseProtocol};

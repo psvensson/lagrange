@@ -34,17 +34,23 @@ function emit(f, kind, detail = {}) {
   f.events.push({ordinal: f.events.length + 1, phase: f.phase, kind, ...detail});
 }
 
+// The schedule holds an envelope when it crosses the isolated leader, or when
+// it is the leader's entry-carrying APPEND while entries are held.
+function scheduleHolds(f, item) {
+  const from = item.envelope.message.from;
+  const leader = f.services[0];
+  const cutsLeader = f.isolateLeader &&
+    (item.address === leader.unifiedAddress || from === f.leaderPeer);
+  const carriesEntry = f.holdEntries && from === f.leaderPeer &&
+    item.envelope.message.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
+    item.envelope.message.entries?.some((entry) => entry.data);
+  return Boolean(cutsLeader || carriesEntry);
+}
+
 async function pump(f) {
   for (let round = 0; round < DELIVERY_ROUNDS; round += 1) {
     for (const item of f.queue.splice(0)) {
-      const from = item.envelope.message.from;
-      const leader = f.services[0];
-      const cutsLeader = f.isolateLeader &&
-        (item.address === leader.unifiedAddress || from === f.leaderPeer);
-      const carriesEntry = f.holdEntries && from === f.leaderPeer &&
-        item.envelope.message.msgType === RAFT_RS_MESSAGE_TYPE.APPEND &&
-        item.envelope.message.entries?.some((entry) => entry.data);
-      if (cutsLeader || carriesEntry) {
+      if (scheduleHolds(f, item)) {
         f.held.push(item);
         emit(f, 'transport-held-native-envelope', item);
       } else {

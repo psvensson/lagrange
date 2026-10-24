@@ -229,8 +229,11 @@ const RATCHET_TARGETS = [
     // surface to the measured 697 groups / 26385 lines.
     // Reservation's shared dispatch/restart witnesses tighten the line count
     // to the measured 26369 without changing the exact 697 groups.
-    baselineCloneGroupCount: 697,
-    baselineDuplicatedLineCount: 26369,
+    // 2026-10-24: the rs-raft lineage's test copies import their shared
+    // helpers (trace, native startup fixture, contender, schedules, stamp
+    // oracle); tightened 697/26369 -> 692/26237 on the checker's hint.
+    baselineCloneGroupCount: 692,
+    baselineDuplicatedLineCount: 26237,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

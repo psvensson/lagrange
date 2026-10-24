@@ -5,7 +5,7 @@ import {genesisStamp} from '../../../src/raft/raft-committed-membership-stamp.js
 import {VirtualTimeSource} from '../../../src/time/time-source.js';
 
 export const HISTORY_ID = Object.freeze({groupId: 'native-history', peerId: 'history-r1'});
-export function historyRequest(db, overrides = {}) {
+function historyRequest(db, overrides = {}) {
   return {groupId: HISTORY_ID.groupId, peerId: HISTORY_ID.peerId,
     peerAddress: 'history://r1', bootstrapPeerIds: [HISTORY_ID.peerId],
     bootstrapMembership: genesisStamp([HISTORY_ID.peerId]), durableStorage: db,
@@ -22,6 +22,12 @@ export function historyDb(file) {
   db.exec('CREATE TABLE IF NOT EXISTS history_witness (marker TEXT PRIMARY KEY, log_index INTEGER)');
   return db;
 }
-export function openHistory(db, overrides) { return createRaftRsOperationPort(historyRequest(db, overrides)); }
-export function lifecycle(db) { return db.prepare('SELECT * FROM _raft_rs_replica_lifecycle').get(); }
-export function applicationRows(db) { return db.prepare('SELECT marker FROM history_witness ORDER BY log_index').pluck().all(); }
+export function openHistory(db, overrides) {
+  return createRaftRsOperationPort(historyRequest(db, overrides));
+}
+export function lifecycle(db) {
+  return db.prepare('SELECT * FROM _raft_rs_replica_lifecycle').get();
+}
+export function applicationRows(db) {
+  return db.prepare('SELECT marker FROM history_witness ORDER BY log_index').pluck().all();
+}

@@ -215,6 +215,6 @@ function assertRetired(e, old, operationId) {
   assert.equal(old.host.lifecycle.creationRetirements.has(old.origin.operationId), false);
 }
 
-export {publishedWorld, retainSuccessor, dispatchCreates, assertServing, outcomes, physical,
+export {publishedWorld, retainSuccessor, dispatchCreates, assertServing, outcomes,
   serviceRow, endpointRow, journalRow, resource, localRecord, waitFor, holdExactEndpointDeletion,
   failExactNativeClose, removeAndSettle, assertRetired, withCleanup};

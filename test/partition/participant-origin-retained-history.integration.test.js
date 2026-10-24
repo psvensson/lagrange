@@ -119,6 +119,27 @@ function settledGroup(group, members, partitionId, observation) {
       raftRsConfStateKey(first.record.confState)) ? first : null;
 }
 
+// The leader's packet to exactly this follower, in the leader's term.
+function isLeaderPacketToFollower(address, packet, carrier) {
+  return address === carrier.address &&
+    packet?.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
+    packet.groupId === carrier.partitionId && String(packet.from) === carrier.leaderPeer &&
+    String(packet.to) === carrier.followerPeer &&
+    String(packet.message?.term) === carrier.term;
+}
+
+// An APPEND or HEARTBEAT that advances the follower's commit index.
+function carriesCommitBeyond(message, commitIndex) {
+  return (message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND ||
+    message?.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT) &&
+    BigInt(message.commit ?? '0') > BigInt(commitIndex);
+}
+
+function isFollowerCommitCarrier([address, packet], carrier) {
+  return isLeaderPacketToFollower(address, packet, carrier) &&
+    carriesCommitBeyond(packet.message, carrier.commitIndex);
+}
+
 async function closeServices(services, pending, directory) {
   const settled = await Promise.allSettled(services.map((service) => service.shutdown()));
   const errors = settled.filter(({status}) => status === 'rejected').map(({reason}) => reason);
@@ -242,17 +263,12 @@ test('one real RF3 ENABLE is locally uncommitted then committed-pending before n
     assert.equal(before.native.appliedIndex, settled.appliedIndex);
     let firstCarrier = null;
     let heldCarriers = 0;
+    const carrier = {address: group.addressOf(followerMember), partitionId, leaderPeer,
+      followerPeer, term: String(leaderStatus.term), commitIndex: before.native.commitIndex};
     const deliver = function(...args) {
-      const packet = args[1];
-      const message = packet?.message;
-      const matches = args[0] === group.addressOf(followerMember) &&
-        packet?.protocol === RAFT_RS_TRANSPORT_PROTOCOL &&
-        packet.groupId === partitionId && String(packet.from) === leaderPeer &&
-        String(packet.to) === followerPeer && String(message?.term) === String(leaderStatus.term) &&
-        (message?.msgType === RAFT_RS_MESSAGE_TYPE.APPEND ||
-          message?.msgType === RAFT_RS_MESSAGE_TYPE.HEARTBEAT) &&
-        BigInt(message.commit ?? '0') > BigInt(before.native.commitIndex);
-      if (!matches) return Reflect.apply(originalDeliver, this, args);
+      if (!isFollowerCommitCarrier(args, carrier)) {
+        return Reflect.apply(originalDeliver, this, args);
+      }
       heldCarriers++;
       if (firstCarrier === null) firstCarrier = {receiver: this, args};
       return Promise.resolve({acknowledged: true});

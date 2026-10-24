@@ -142,4 +142,5 @@ function assertInitializationRefusal(kind, error, replicaId, shared = null) {
 }
 
 
-export {createFixture, buildService, assertInitializationRefusal, KINDS};
+export {createFixture, buildService, assertInitializationRefusal, KINDS, EXISTING_GROUP,
+  EXISTING_REPLICA};

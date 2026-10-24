@@ -109,65 +109,94 @@ async function outcomesOf(ctx, identity) {
   return answers;
 }
 
+// The first coordinator stops at the write that follows its decision record:
+// the commit point's status, before any decision fanout.
+async function interruptCommitAfterDecision(ctx) {
+  const insert = insertOf(ctx.table);
+  const hold = createPersistenceHold(
+    statusWriteOf(TRANSACTION_STATUS.COMMITTING));
+  const first = ctx.createCoordinator({hold});
+  const begun = await first.executeQuery('BEGIN', [], {sessionId: SESSION});
+  assert.equal(begun.success, true, `BEGIN must actually be admitted: ${JSON.stringify(begun)}`);
+  const transactionId = begun.transactionId;
+  const staged = [];
+  for (const params of STAGED) {
+    staged.push((await first.executeQuery(insert, [...params],
+      {sessionId: SESSION})).success === true);
+  }
+  const generationBefore = ctx.replicaStates().map((state) =>
+    state.generation);
+  const interruptedCommit = track(first.executeQuery('COMMIT', [],
+    {sessionId: SESSION}));
+  const stopped = await within(hold.reached, STOP_WAIT_MS);
+  await ctx.settle();
+  const recorded = storeRowOf(ctx, transactionId);
+  const atInterruption = {
+    stoppedBeforeFanout: stopped !== null,
+    row: recorded && {status: recorded.status,
+      decision: recorded.decision},
+    decisionNames: recorded?.decision_text ?
+      JSON.parse(recorded.decision_text).participants : null,
+    retained: storeParticipantsOf(ctx, transactionId).map((row) =>
+      row.prepared_digest),
+    replicas: replicaFactsOf(ctx, transactionId),
+  };
+  return {begun, transactionId, staged, generationBefore, interruptedCommit, recorded,
+    atInterruption};
+}
+
+// A recovering coordinator drives the recorded decision forward.
+async function recoverRecordedDecision(ctx, {begun, transactionId, recorded,
+  interruptedCommit}) {
+  const participantId = `${transactionId}:${ctx.partitionId}`;
+  const recovering = ctx.createCoordinator({recoverRows: true});
+  const replay = await recovering.activateDistributedTransactionRecovery();
+  await ctx.settle();
+  const final = storeRowOf(ctx, transactionId);
+  return {
+    replay: {totalRecovered: replay.totalRecovered,
+      resumed: replay.resumed, failed: replay.failed},
+    row: final && {status: final.status, decision: final.decision,
+      sameDecisionRecord: final.decision_digest === recorded?.decision_digest},
+    replicas: replicaFactsOf(ctx, transactionId),
+    outcomes: await outcomesOf(ctx, {sessionId: SESSION, transactionId,
+      participantId, commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
+      transactionEpoch: begun.transactionEpoch}),
+    interruptedCommitAnswered: interruptedCommit.settled,
+  };
+}
+
+function digestFactsOf(atInterruption, afterRecovery, recorded) {
+  return {
+    preparedOnEveryReplica: new Set(atInterruption.replicas.flatMap(
+      (replica) => replica.transactions.map((row) => row.preparedDigest)))
+      .size,
+    retainedIsPrepared: atInterruption.retained[0] ===
+      atInterruption.replicas[0].transactions[0]?.preparedDigest,
+    decisionNamesPrepared: atInterruption.decisionNames?.[0]?.[1] ===
+      atInterruption.retained[0],
+    decisionAppliedIsRecorded: afterRecovery.replicas.every((replica) =>
+      replica.transactions[0]?.decisionDigest ===
+        recorded?.decision_digest),
+  };
+}
+
 test('TX1 restart milestone: a COMMIT decision recorded before an ' +
   'interrupted fanout is driven forward by a recovered coordinator after the ' +
   'participant group changes leader, to one committed effect on every ' +
   'replica under the same transaction identity', {timeout: TEST_TIMEOUT_MS},
 async () => {
   const facts = await withTransactionGroup('tx1-restart', async (ctx) => {
-    const insert = insertOf(ctx.table);
-    // The first coordinator stops at the write that follows its decision
-    // record: the commit point's status, before any decision fanout.
-    const hold = createPersistenceHold(
-      statusWriteOf(TRANSACTION_STATUS.COMMITTING));
-    const first = ctx.createCoordinator({hold});
-    const begun = await first.executeQuery('BEGIN', [], {sessionId: SESSION});
-    assert.equal(begun.success, true, `BEGIN must actually be admitted: ${JSON.stringify(begun)}`);
-    const transactionId = begun.transactionId;
-    const participantId = `${transactionId}:${ctx.partitionId}`;
-    const staged = [];
-    for (const params of STAGED) {
-      staged.push((await first.executeQuery(insert, [...params],
-        {sessionId: SESSION})).success === true);
-    }
-    const generationBefore = ctx.replicaStates().map((state) =>
-      state.generation);
-    const interruptedCommit = track(first.executeQuery('COMMIT', [],
-      {sessionId: SESSION}));
-    const stopped = await within(hold.reached, STOP_WAIT_MS);
-    await ctx.settle();
-    const recorded = storeRowOf(ctx, transactionId);
-    const atInterruption = {
-      stoppedBeforeFanout: stopped !== null,
-      row: recorded && {status: recorded.status,
-        decision: recorded.decision},
-      decisionNames: recorded?.decision_text ?
-        JSON.parse(recorded.decision_text).participants : null,
-      retained: storeParticipantsOf(ctx, transactionId).map((row) =>
-        row.prepared_digest),
-      replicas: replicaFactsOf(ctx, transactionId),
-    };
+    const interrupted = await interruptCommitAfterDecision(ctx);
+    const {begun, transactionId, staged, generationBefore, recorded,
+      atInterruption} = interrupted;
 
     const leaderBefore = ctx.leader()?.replicaId ?? null;
     const successorIndex = ctx.services().findIndex((service) =>
       service.replicaId !== leaderBefore);
     const leadershipMoved = await ctx.transferLeadershipTo(successorIndex);
 
-    const recovering = ctx.createCoordinator({recoverRows: true});
-    const replay = await recovering.activateDistributedTransactionRecovery();
-    await ctx.settle();
-    const final = storeRowOf(ctx, transactionId);
-    const afterRecovery = {
-      replay: {totalRecovered: replay.totalRecovered,
-        resumed: replay.resumed, failed: replay.failed},
-      row: final && {status: final.status, decision: final.decision,
-        sameDecisionRecord: final.decision_digest === recorded?.decision_digest},
-      replicas: replicaFactsOf(ctx, transactionId),
-      outcomes: await outcomesOf(ctx, {sessionId: SESSION, transactionId,
-        participantId, commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
-        transactionEpoch: begun.transactionEpoch}),
-      interruptedCommitAnswered: interruptedCommit.settled,
-    };
+    const afterRecovery = await recoverRecordedDecision(ctx, interrupted);
 
     const again = ctx.createCoordinator({recoverRows: true});
     const secondReplay = await again.activateDistributedTransactionRecovery();
@@ -185,18 +214,7 @@ async () => {
       secondRecovery: {resumed: secondReplay.resumed,
         failed: secondReplay.failed,
         replicas: replicaFactsOf(ctx, transactionId)},
-      digests: {
-        preparedOnEveryReplica: new Set(atInterruption.replicas.flatMap(
-          (replica) => replica.transactions.map((row) => row.preparedDigest)))
-          .size,
-        retainedIsPrepared: atInterruption.retained[0] ===
-          atInterruption.replicas[0].transactions[0]?.preparedDigest,
-        decisionNamesPrepared: atInterruption.decisionNames?.[0]?.[1] ===
-          atInterruption.retained[0],
-        decisionAppliedIsRecorded: afterRecovery.replicas.every((replica) =>
-          replica.transactions[0]?.decisionDigest ===
-            recorded?.decision_digest),
-      },
+      digests: digestFactsOf(atInterruption, afterRecovery, recorded),
     };
   });
 

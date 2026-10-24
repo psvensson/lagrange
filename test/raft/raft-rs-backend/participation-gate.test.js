@@ -33,6 +33,7 @@ import {
   durableLog,
   foldAt,
   logFold,
+  oracleCommittedStamp,
   reservedIdentities,
 } from './committed-membership-oracles.js';
 import {
@@ -42,13 +43,10 @@ import {
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {
-  COMMITTED_MEMBERSHIP_STAMP_KIND,
   PARTICIPATION_GATE,
 } from '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_OPERATION_PORT_REQUEST} from
   '../../../src/raft/raft-operation-port-request.js';
-import {raftRsConfStateKey} from
-  '../../../src/raft/raft-rs-conf-state-key.js';
 import {RealTimeSource} from '../../../src/time/time-source.js';
 import {
   REPLACE_COMPLETION_VERDICT,
@@ -175,28 +173,10 @@ function genesisPeerIds(cluster, founders) {
 // The COMMITTED stamp a correct leader answers, built from the oracles.
 function oracleStamp(cluster, leader, genesis) {
   const dbFile = cluster.replica(leader).dbFile;
-  const applied = durableAppliedState(dbFile, PARTITION_ID);
-  const voters = foldAt(logFold(dbFile, PARTITION_ID, genesis),
-    applied.appliedIndex).voters;
-  assert.deepEqual(voters, applied.voters,
+  const stamp = oracleCommittedStamp(dbFile, PARTITION_ID, genesis, leader);
+  assert.deepEqual(stamp.voters, durableAppliedState(dbFile, PARTITION_ID).voters,
     'setup: the leader applied configuration is the fold at its index');
-  const reserved = reservedIdentities(dbFile);
-  return {
-    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
-    learnersNext: [],
-    appliedIndex: applied.appliedIndex,
-    configurationKey: raftRsConfStateKey({voters}),
-    membershipGenerationIndex: applied.membershipGenerationIndex,
-    commitIndex: applied.appliedIndex,
-    term: 1,
-    leaderId: leader,
-    gateOpen: true,
-    identities: Object.fromEntries(voters.map((peerId) =>
-      [peerId, reserved.get(peerId)])),
-  };
+  return stamp;
 }
 
 function addTarget(cluster, stamp) {

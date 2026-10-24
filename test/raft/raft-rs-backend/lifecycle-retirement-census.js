@@ -35,6 +35,24 @@ function isNonReference(node, parent) {
     (parent?.type === 'Property' && parent.key === node && !parent.computed && !parent.shorthand);
 }
 
+const INVOCATION = Object.freeze({DIRECT: 'direct', REFUSED: 'refused'});
+
+// How one binding reference is used: a direct `binding.method(...)` call with a
+// static method name, or the reason the census refuses it.
+function directInvocationOf(node, parent, parents) {
+  const call = parents.get(parent);
+  if (parent?.type !== 'MemberExpression' || parent.object !== node ||
+      call?.type !== 'CallExpression' || call.callee !== parent) {
+    return {kind: INVOCATION.REFUSED,
+      reason: 'lifecycle administration binding escapes direct invocation'};
+  }
+  const method = parent.computed ? parent.property.value : parent.property.name;
+  if (typeof method !== 'string') {
+    return {kind: INVOCATION.REFUSED, reason: 'dynamic lifecycle administration method'};
+  }
+  return {kind: INVOCATION.DIRECT, call, method};
+}
+
 function inspectLifecycleRetirements(source, {file, ownerFile}) {
   const ast = parse(source, {ecmaVersion: 'latest', sourceType: 'module', loc: true});
   const bindings = new Set();
@@ -81,20 +99,16 @@ function inspectLifecycleRetirements(source, {file, ownerFile}) {
         aliasNodes.has(node) || isNonReference(node, parent)) return;
     // Import renames and const object aliases are supported. Escapes and
     // shadowing fail closed rather than silently disappearing from the census.
-    const call = parents.get(parent);
-    if (parent?.type !== 'MemberExpression' || parent.object !== node ||
-        call?.type !== 'CallExpression' || call.callee !== parent) {
-      report(node, 'lifecycle administration binding escapes direct invocation');
+    const invocation = directInvocationOf(node, parent, parents);
+    if (invocation.kind === INVOCATION.REFUSED) {
+      report(node, invocation.reason);
       return;
     }
-    const method = parent.computed ? parent.property.value : parent.property.name;
-    if (typeof method !== 'string') {
-      report(node, 'dynamic lifecycle administration method');
-      return;
-    }
-    if (method !== 'retireReplica') return;
+    if (invocation.method !== 'retireReplica') return;
     calls.push({file, line: node.loc.start.line});
-    if (!runtimeIsExplicit(call)) report(node, 'retirement requires an explicit non-overwritten runtime');
+    if (!runtimeIsExplicit(invocation.call)) {
+      report(node, 'retirement requires an explicit non-overwritten runtime');
+    }
   });
   return {calls, violations};
 }

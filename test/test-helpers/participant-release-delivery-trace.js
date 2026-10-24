@@ -289,4 +289,4 @@ function emitParticipantReleaseDeliveryTrace(trace) {
     incompleteCount: report.incompleteCount}));
 }
 
-export {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace};
+export {createParticipantReleaseDeliveryTrace, emitParticipantReleaseDeliveryTrace, traceErrorOf};

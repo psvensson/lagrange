@@ -174,5 +174,5 @@ async function realCdcPeer(f) {
   return peer;
 }
 
-export {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, delayedTimerClock,
-  nextTurn, realCdcPeer, watchSettlement};
+export {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, realCdcPeer,
+  watchSettlement};
