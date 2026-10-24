@@ -30,6 +30,7 @@ import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
+import {scaleByMachineFactor} from './test-machine-factor.js';
 import {URL} from 'url';
 import {mkdirSync, mkdtempSync, rmSync} from 'fs';
 import {tmpdir} from 'os';
@@ -391,6 +392,39 @@ export function seedStartupAuthorityOf(bootstrap) {
  */
 export function createVirginSeedBootstrapService(options = {}) {
   return createSeedBootstrapServiceFixture(options, admitVirginSeedStorage);
+}
+
+// One composed virgin seed run to the fresh-seed continuation hold: owner,
+// membership decision, storage admission, original attempt and every seed
+// replica. Measured at most 9.7s per seed on the 1.00x controller
+// (2026-10-25, return-value-completeness; the round-5 verifier measured
+// <= 8.5s). Production has no seed-start budget constant to derive this from:
+// startup acquisition is bounded by its abort signal (awaitStartupAcquisition),
+// not by a duration.
+const VIRGIN_SEED_COMPOSE_REFERENCE_MS = 10000;
+
+/**
+ * The work-bound budget for composing a number of virgin seeds, scaled by
+ * the machine factor.
+ * @param {number} seedCount Seeds the test composes.
+ * @return {number} Budget in milliseconds.
+ */
+export function virginSeedComposeBudgetMs(seedCount) {
+  return seedCount * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS);
+}
+
+/**
+ * A virgin seed fixture owned by one test: its shutdown is bound to the
+ * test's after hook, and that shutdown releases the directory custody and
+ * then removes a fixture-owned directory (bindVirginSeedStartupCustody).
+ * @param {Object} t The test context (node:test or tap).
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export async function createOwnedVirginSeedBootstrapService(t, options = {}) {
+  const bootstrap = await createVirginSeedBootstrapService(options);
+  t.after(() => bootstrap.shutdown());
+  return bootstrap;
 }
 
 /**

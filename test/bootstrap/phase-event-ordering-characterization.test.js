@@ -28,10 +28,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {NUM} from '../../src/constants/index.js';
-import {createVirginSeedBootstrapService,
-  installMinimumSeedBootstrapLifecycleFixture} from
+import {createOwnedVirginSeedBootstrapService,
+  installMinimumSeedBootstrapLifecycleFixture, virginSeedComposeBudgetMs} from
   '../integration/helpers/cluster-test-helpers.js';
-import {scaleByMachineFactor} from '../integration/helpers/test-machine-factor.js';
 
 // -- Suite-local fixture constants --
 
@@ -95,28 +94,19 @@ function initializeTestEnvironment() {
 // Seed bootstrap phase event ordering
 // ---------------------------------------------------------------------------
 
-// Every seed test composes the production startup authorities and prepares
-// its original attempt (about 1-2s of build measurement each). The file
-// measured 12-13s on the 1.00x controller (2026-10-25) and ~50s under host
-// contention, past tap's default 30s per-file budget. A work-bound budget,
-// scaled by the machine factor.
-t.setTimeout(scaleByMachineFactor(120000));
-
-// A seed composed the way production startup composes it (the data
-// directory owner, the membership decision, the storage admission), shut down
-// after the test so its directory custody is released.
-async function createOwnedSeed(t, options) {
-  const bootstrap = await createVirginSeedBootstrapService(options);
-  t.teardown(() => bootstrap.shutdown());
-  return bootstrap;
-}
+// The seed tests below compose eight virgin seeds through the production
+// startup authorities; the file's budget is that count of composed seeds,
+// scaled by the machine factor (tap's default 30s per-file budget is not
+// derived from the work).
+const COMPOSED_SEED_COUNT = 8;
+t.setTimeout(virginSeedComposeBudgetMs(COMPOSED_SEED_COUNT));
 
 test('Seed bootstrap - emits phase:start and phase:complete in correct order',
   async (t) => {
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      await createOwnedSeed(t, {
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -187,7 +177,7 @@ test('Seed bootstrap - emits BOOTSTRAP_EVENT.PHASE_START/COMPLETE in correct ord
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      await createOwnedSeed(t, {
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -251,7 +241,7 @@ test('Seed bootstrap - emits COMPLETE event after all phases', async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    await createOwnedSeed(t, {
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -316,7 +306,7 @@ test('Seed bootstrap - phase failure emits phase:failed and phaseFailed events',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      await createOwnedSeed(t, {
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -697,7 +687,7 @@ test('Seed bootstrap - phase event payloads include phase and nodeId',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      await createOwnedSeed(t, {
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -830,7 +820,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    await createOwnedSeed(t, {
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -933,7 +923,7 @@ async (t) => {
   initializeTestEnvironment();
 
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    await createOwnedSeed(t, {
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -1121,7 +1111,7 @@ async (t) => {
 
   // Collect seed payloads
   const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-    await createOwnedSeed(t, {
+    await createOwnedVirginSeedBootstrapService(t, {
       bootIncarnation: 1,
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,

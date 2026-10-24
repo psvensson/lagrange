@@ -18,6 +18,7 @@ import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {acquireDataDirectoryProcessOwner, ownsDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  isOriginalAllocationHold,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
@@ -42,7 +43,7 @@ function fixture(t, identityOverride = {}) {
 }
 
 function hold(reason) {
-  return (error) => error.code === STATE.HOLD && error.reason === reason;
+  return (error) => isOriginalAllocationHold(error, reason);
 }
 
 function refuseBeforeFiles(f, declaration, reason, operation) {

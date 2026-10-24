@@ -30,7 +30,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import {createPreparedVirginSeedBootstrapService} from
+import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
 import {resolveHostedReplicaAuthorities} from
   '../../src/bootstrap/shared/hosted-replica-authorities.js';
@@ -204,12 +204,12 @@ const settle = (delayMs) =>
  * @return {Promise<BootstrapService>}
  */
 async function seedBootstrapService(t, nodeService) {
-  const bootstrap = await createPreparedVirginSeedBootstrapService({
+  const bootstrap = await createOwnedVirginSeedBootstrapService(t, {
     bootIncarnation: 1,
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT,
     nodeService,
   });
-  t.after(() => bootstrap.shutdown());
+  await bootstrap.prepareOriginalSeedAttempt();
   return bootstrap;
 }
 

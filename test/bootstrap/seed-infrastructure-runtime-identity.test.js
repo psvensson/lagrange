@@ -17,7 +17,7 @@ import {test} from 'node:test';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {createPreparedVirginSeedBootstrapService} from
+import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
 
 const WRONG_PROCESS_ID = 'wrong-process-id';
@@ -37,11 +37,11 @@ function runtimeFor(runtime) {
 // not a reimplementation: it observes the identity setters the phase calls on
 // the owner's delegates and forwards each one unchanged.
 async function recordedSeedPhase(t, runtime) {
-  const service = await createPreparedVirginSeedBootstrapService({
+  const service = await createOwnedVirginSeedBootstrapService(t, {
     nodeId: runtime.nodeId, nodeAddress: runtime.nodeAddress,
     nodeService: runtimeFor(runtime),
   });
-  t.after(() => service.shutdown());
+  await service.prepareOriginalSeedAttempt();
   service.logger = QUIET;
   const phase = service.seedInfrastructurePhase;
   const recorded = {nodeId: null, nodeAddress: null};

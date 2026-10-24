@@ -23,13 +23,13 @@ import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  isOriginalAllocationHold,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
 
-const hold = (reason) => (error) =>
-  error.code === STATE.HOLD && error.reason === reason;
+const hold = (reason) => (error) => isOriginalAllocationHold(error, reason);
 
 function completeStorageFixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-cold-inspection-'));

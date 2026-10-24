@@ -15,7 +15,8 @@ import {acquireDataDirectoryProcessOwner} from
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
 import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
-import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON} from
+import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  isOriginalAllocationHold} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
@@ -67,7 +68,7 @@ function requestFor(f, member, extra = {}) {
 }
 
 function hold(reason) {
-  return (error) => error.code === STATE.HOLD && error.reason === reason;
+  return (error) => isOriginalAllocationHold(error, reason);
 }
 
 for (const [name, grant] of [

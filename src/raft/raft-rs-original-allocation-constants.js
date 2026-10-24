@@ -59,5 +59,13 @@ function originalAllocationError(reason, detail = null, cause = undefined) {
   });
 }
 
+// The owner that mints the hold classifies it: an original-allocation hold,
+// and when a reason is named, a hold for exactly that reason.
+function isOriginalAllocationHold(error, reason = undefined) {
+  return error?.code === ORIGINAL_ALLOCATION.HOLD &&
+    (reason === undefined || error.reason === reason);
+}
+
 export {ORIGINAL_ALLOCATION, ORIGINAL_ALLOCATION_REASON,
-  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR, originalAllocationError};
+  ORIGINAL_ALLOCATION_COLUMN, ORIGINAL_RIGHT_SUCCESSOR, isOriginalAllocationHold,
+  originalAllocationError};

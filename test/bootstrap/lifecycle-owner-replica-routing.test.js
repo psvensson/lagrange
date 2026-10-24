@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {createPreparedVirginSeedBootstrapService} from
+import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
 import {originalSeedPeerAddresses} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
@@ -24,12 +24,12 @@ const silentLogger = {
 test('BootstrapService routes replica lifecycle through unified adapters', async (t) => {
   // The seed phases consume the original seed attempt production enters
   // before its first phase.
-  const service = await createPreparedVirginSeedBootstrapService({
+  const service = await createOwnedVirginSeedBootstrapService(t, {
     bootIncarnation: 1,
     nodeId: 'seed-node-1',
     nodeAddress: 'ws://localhost:8080',
   });
-  t.teardown(() => service.shutdown());
+  await service.prepareOriginalSeedAttempt();
   service.logger = silentLogger;
 
   let createCount = 0;

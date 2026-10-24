@@ -40,7 +40,7 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {createPreparedVirginSeedBootstrapService} from
+import {createOwnedVirginSeedBootstrapService} from
   '../integration/helpers/cluster-test-helpers.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -229,10 +229,10 @@ async function createSeedCompletionHost(t) {
       getLogger: () => QUIET_LOGGER,
     },
   });
-  const seed = await createPreparedVirginSeedBootstrapService({
+  const seed = await createOwnedVirginSeedBootstrapService(t, {
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
   });
-  t.after(() => seed.shutdown());
+  await seed.prepareOriginalSeedAttempt();
   // The witness's subject: the handoff owner whose steady-state owners it
   // composed, and the node's router those owners write through.
   Object.assign(seed, {
