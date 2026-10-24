@@ -6,7 +6,7 @@ import {encodeDeliveryMessage} from './message-router-delivery-encoding.js';
 
 const DELIVERY_SETTLEMENT_REJECTED = 'rejected';
 
-const {ROUTER_ADDRESS, RouterMessageType, WebSocket} =
+const {ROUTER_ADDRESS, ROUTER_LOG_MSG, RouterMessageType, WebSocket} =
   MESSAGE_ROUTER_SHARED;
 const ACK_WAIT = Object.freeze({
   wait: 'MESSAGE_TIMEOUT_MS (delivery ACK)',
@@ -23,8 +23,11 @@ function rejectBeforeSend(router, connection, targetNodeId, reject) {
     try {
       if (typeof staleWs?.terminate === 'function') staleWs.terminate();
       else if (typeof staleWs?.close === 'function') staleWs.close();
-    } catch (_closeError) {
-      // Connection closure remains owned by the existing reconnect owner.
+    } catch (error) {
+      router.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+        nodeId: targetNodeId, connectionId: active.connectionId,
+        error: error?.message ?? String(error),
+      });
     }
   }
   reject(router.buildConnectionClosedError(targetNodeId, {beforeSend: true, retryAfterMs}));

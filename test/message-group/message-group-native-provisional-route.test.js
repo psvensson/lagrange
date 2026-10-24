@@ -221,7 +221,8 @@ function pendingRouteSnapshot(f) {
     sourceLane: {tenureCurrent: lane.tenure === f.producerLeader.leadershipTenure,
       inFlight: lane.inFlight, rerun: lane.rerun, scan: structuredClone(lane.scan),
       pending: lane.pending.size, commands: lane.commands.size,
-      retryArmed: lane.retryTimer !== null, flushArmed: lane.flushTimer !== null,
+      // Read the captured handle: the diagnostic owner's laneOf can change tenure.
+      retryArmed: lane.retryTimer.handle !== null, flushArmed: lane.flushTimer !== null,
       lastDrive: lane.lastDrive, lastFlush: lane.lastFlush},
     topology: {state: topology.state, immediateTimers: topology.immediateBatchTimers.size,
       backgroundTimers: topology.backgroundRetryTimers.size,

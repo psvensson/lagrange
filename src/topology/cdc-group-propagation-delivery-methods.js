@@ -9,14 +9,15 @@ import {PRESSURE_GOVERNOR_ACTION, PressureGovernor} from '../control-plane/press
 import {
   reportCdcPropagationBackgroundRetrySpent,
   reportCdcPropagationForegroundRetrySpent,
+  reportCdcPropagationRetryScheduled,
 } from './cdc-group-propagation-retry-wait-report.js';
+import {waitForForegroundRetry} from './cdc-group-propagation-foreground-retry.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from './latency-topology-constants.js';
 import {
   CDC_GROUP_FOREGROUND_CONTINUATION,
   CDC_GROUP_FOREGROUND_DELIVERY_STATE,
   CDC_GROUP_FOREGROUND_RETRY_STATE,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
-  CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_STATE,
 } from './cdc-group-propagation-constants.js';
@@ -54,12 +55,6 @@ function stableSerialize(value) {
 
 function answeredForegroundDelivery(answer) {
   return {state: CDC_GROUP_FOREGROUND_DELIVERY_STATE.ANSWERED, answer};
-}
-
-function foregroundRetryState(owner, attempt, maxAttempts) {
-  return owner.isPropagationStopped() ? CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED :
-    attempt >= maxAttempts ? CDC_GROUP_FOREGROUND_RETRY_STATE.ATTEMPTS_EXHAUSTED :
-      CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE;
 }
 
 function prepareOrdinaryForegroundWave(owner, options, events, deliveryLabel) {
@@ -121,21 +116,8 @@ class CDCGroupPropagationDeliveryMethods {
     return wave.result();
   }
 
-  async waitForForegroundRetry(wave, attempt, maxAttempts) {
-    const state = foregroundRetryState(this, attempt, maxAttempts);
-    if (state !== CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) return {state};
-    const retryDelayMs = this.computeRetryDelayMs(attempt);
-    const wait = wave.prepareWait(retryDelayMs);
-    if (wait.state !== CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) return wait;
-    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
-      nodeId: this.nodeId, ...wave.deliveryLabel, attempt, retryDelayMs,
-      failureCount: wave.failureCount(),
-    });
-    await wave.wait(retryDelayMs);
-    const observed = this.isPropagationStopped() ?
-      {state: CDC_GROUP_FOREGROUND_RETRY_STATE.STOPPED} : wait;
-    if (observed.state === CDC_GROUP_FOREGROUND_RETRY_STATE.ADVANCE) wave.afterWait?.();
-    return observed;
+  waitForForegroundRetry(wave, attempt, maxAttempts) {
+    return waitForForegroundRetry(this, wave, attempt, maxAttempts);
   }
 
   prepareOrdinaryForegroundDelivery(options) {
@@ -445,8 +427,7 @@ class CDCGroupPropagationDeliveryMethods {
       return;
     }
     const retryDelayMs = this.computeRetryDelayMs(attempt);
-    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
-      nodeId: this.nodeId,
+    reportCdcPropagationRetryScheduled(this, {
       tableName: entry.tableName,
       operation: entry.operation,
       attempt,

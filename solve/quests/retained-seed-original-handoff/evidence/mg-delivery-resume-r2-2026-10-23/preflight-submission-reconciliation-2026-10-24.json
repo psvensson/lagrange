@@ -1,0 +1,38 @@
+{
+  "schema": "mg-delivery-preflight-submission-reconciliation/v1",
+  "observed_at": "2026-10-24T06:38:12Z",
+  "reviewer": "subagent:/root/preflight_receipt_recovery",
+  "repository": "psvensson/lagrange-lab",
+  "status": "submission_unconfirmed_no_matching_issue_or_receipt_found",
+  "requests": [
+    {
+      "operation": "ping",
+      "request_id": "820eddf1eda7434e8b7886437d1630fd",
+      "file": "ping-request.json",
+      "file_sha256": "772512c31f0d0d3746f0051a5830793fcd9e1fd8ba18907594df021c57650eb1",
+      "envelope_sha256": "67924f06fcefdc5cb1e5005e154ea03709cc78dd311238689e5ffddbceca9750",
+      "expires_at": "2026-10-23T23:53:06.725Z",
+      "exact_id_search_matches": 0
+    },
+    {
+      "operation": "lab-fleet-observe",
+      "request_id": "361e210b7bdb4d9792dba17d9d1485f4",
+      "file": "fleet-request.json",
+      "file_sha256": "7a92b375cc4f415af2182aee895d40dbb10837a286a2528e84ec1c0308087627",
+      "envelope_sha256": "893e22791858b12f79a4e44b35fa6b510ae9ce3b233f4c56ff2e5be903fc83d7",
+      "expires_at": "2026-10-23T23:53:07.203Z",
+      "exact_id_search_matches": 0
+    }
+  ],
+  "inventory_query": "https://api.github.com/repos/psvensson/lagrange-lab/issues?state=all&sort=created&direction=desc&per_page=100&page=1&since=2026-10-23T21%3A50%3A00Z",
+  "inventory_count": 20,
+  "inventory_issue_range": [
+    1194,
+    1213
+  ],
+  "request_id_matches_in_returned_titles_or_bodies": 0,
+  "limits": "Current exact-ID search and bounded recent inventory establish no observed matching issue; they do not prove that an issue never existed historically. No current health or machine availability claim.",
+  "source_executing_work_in_requests": false,
+  "requests_replayed": false,
+  "jobs_cancelled": false
+}

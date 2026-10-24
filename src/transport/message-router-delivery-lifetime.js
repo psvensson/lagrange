@@ -84,8 +84,9 @@ function createDeliveryLifetime(router, options) {
     timeoutId = clock.setTimeout(() => {
       try {
         armTimer(remaining());
-      } catch (_expired) {
-        // remaining() owns refusal, including a delayed timer callback.
+      } catch (error) {
+        // Idempotent when remaining() already refused; timer failures use the same owner.
+        refuse(error);
       }
     }, remainingMs);
     timeoutId?.unref?.();

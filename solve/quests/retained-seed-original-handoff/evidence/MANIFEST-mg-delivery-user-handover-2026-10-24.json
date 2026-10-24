@@ -1,0 +1,156 @@
+{
+  "schema": "mg-delivery-user-handover-preservation-manifest/v1",
+  "recorded_at": "2026-10-24T06:40:47.050291+00:00",
+  "base_commit": "1e2fcc2da391ab72883132a22fbfbde39b2313f7",
+  "branch": "work/mg-delivery-resume-r2-20261023",
+  "purpose": "User-requested exact WIP preservation; no implementation continuation or runtime execution.",
+  "files": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/log.ndjson",
+      "status": " M",
+      "bytes": 65608,
+      "sha256": "5940600af415e5f0a8a3b640b13156fff4e49e5b49c3e9ae273afcd6629dc536"
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation-delivery.js",
+      "status": " M",
+      "bytes": 27695,
+      "sha256": "e75b632711407fe62a0a988db8289f92b92d75c7dcfb48a19725f4bf93b53e5b"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-delivery-methods.js",
+      "status": " M",
+      "bytes": 28087,
+      "sha256": "c01fd917454bcb9b2e66453c646628cea36f1b22943cedc1feeb65d690ccf4bc"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-retry-wait-report.js",
+      "status": " M",
+      "bytes": 5095,
+      "sha256": "e40e7b51b0e642035f698c33e08e9738e277a268606ea36e8bf6fabefd47ae93"
+    },
+    {
+      "path": "src/transport/message-router-ack-delivery.js",
+      "status": " M",
+      "bytes": 7241,
+      "sha256": "cafcf8d5c232b7ef2bde63df07755ca20970a4488f9030bf3228b72b555f65e2"
+    },
+    {
+      "path": "src/transport/message-router-delivery-lifetime.js",
+      "status": " M",
+      "bytes": 8885,
+      "sha256": "4040ac08be6f4dc085f2d5fcab7c9677c9581c7c6eb0f1a4b9ed8f2f95947b4b"
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route.test.js",
+      "status": " M",
+      "bytes": 24331,
+      "sha256": "43cd093c6a10a69a49c7795f8a137f481fd1723f47f85b7544c4296312b3b751"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-foreground-boundary-resume-r2-2026-10-23.md",
+      "status": "??",
+      "bytes": 8469,
+      "sha256": "2859ccb9fef7a6997ad23d2f8e78df2692a1481ec3612b40dde273882589ef10"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-receiver-admission-predecessor-resume-r2-2026-10-23.md",
+      "status": "??",
+      "bytes": 13367,
+      "sha256": "026dc0ff0d086265c94058db45fa0631b777e8e6481585581049ce0880544bcf"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-receiver-admission-predecessor-resume-r2b-2026-10-23.md",
+      "status": "??",
+      "bytes": 6960,
+      "sha256": "d77c08d0f2ecd66fbbd1abc4bd1c581a66e10bc41319e622dfcc50d3e098f5a3"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-static-foreground-source-resume-r2-2026-10-23.md",
+      "status": "??",
+      "bytes": 10064,
+      "sha256": "e864b5c7573b0a428bbb225fb34340bcb78fa066fa66dd25143a9cf4196681c9"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/fleet-request.json",
+      "status": "??",
+      "bytes": 593,
+      "sha256": "7a92b375cc4f415af2182aee895d40dbb10837a286a2528e84ec1c0308087627"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/ping-request.json",
+      "status": "??",
+      "bytes": 580,
+      "sha256": "772512c31f0d0d3746f0051a5830793fcd9e1fd8ba18907594df021c57650eb1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/preflight-submission-reconciliation-2026-10-24.json",
+      "status": "??",
+      "bytes": 1734,
+      "sha256": "67d68f44b988b1fb52bb55f6d4a9315053e3f79ba0256d3399214b83c31558f1"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/run-lab-request.py",
+      "status": "??",
+      "bytes": 513,
+      "sha256": "dad8d81399a57eb5bc65b17172c8cfa812a69de4650b89a9c71bfaf5f16be45e"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/static-foreground-receipt.json",
+      "status": "??",
+      "bytes": 10255,
+      "sha256": "a976ace0dac40616b3fb5609d14904112fca47519321c5170561a63c4c27d086"
+    },
+    {
+      "path": "src/topology/cdc-group-propagation-foreground-retry.js",
+      "status": "??",
+      "bytes": 1535,
+      "sha256": "664f0d4e8d71eb68f291850c7e808ff7ccd6a42443a2fd3f36653bf2addd6712"
+    },
+    {
+      "path": "test/message-group/message-group-cdc-receiver-admission.test.js",
+      "status": "??",
+      "bytes": 17006,
+      "sha256": "697d8f40301fc87ad410b22ddb3464244b44b027b70d15c73debd2861fdc6072"
+    },
+    {
+      "path": "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+      "status": "??",
+      "bytes": 12802,
+      "sha256": "22e431a614636d34a8903b963608ca5245370046668b4825ae9661e1cce5e123"
+    }
+  ],
+  "self_excluded": true,
+  "source_file_count": 6,
+  "test_file_count": 3,
+  "runtime_executed": false,
+  "canonical_metadata_refreshed": false,
+  "final_composed_static_complete": false,
+  "independent_auditor": "subagent:/root/preservation_audit_r2",
+  "external_original_archive": {
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "bytes": 732117,
+    "sha256": "c0eb799e1651a8feb0a3f4d349ed5d25d88ca83432ebe38348115167ee0656c6"
+  },
+  "preserved_new_wrapper": {
+    "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-r2-2026-10-23/run-lab-request.py",
+    "sha256": "dad8d81399a57eb5bc65b17172c8cfa812a69de4650b89a9c71bfaf5f16be45e"
+  },
+  "original_external_dependencies": [
+    {
+      "path": "measurement-and-static/mg-delivery-candidate-lab-request.py",
+      "sha256": "4d07e125ebb1bf5db596933fdabc565023a7205fdcb5524c8fa65ea84a330b47",
+      "custody": "original archive"
+    },
+    {
+      "path": "measurement-and-static/retained-effects-canonical-tests-with-tap-r2.py",
+      "sha256": "ae248b12797118ec5bbfdb671262337cec22f6599cb92208c93208911f1c1aa1",
+      "custody": "original archive"
+    },
+    {
+      "path": "lab-contract/lab_pool_work_contract.py",
+      "sha256": "2d6e5e3c2f032e205c37cbc8ecd1bb7fded442196fa22d91fc5c0fe4625f6586",
+      "custody": "psvensson/lagrange-lab at 53e262450fada3b4e706898201a3c732811ae4d0, upgrades/v0.2.2/lab_pool_work_contract.py"
+    }
+  ]
+}
