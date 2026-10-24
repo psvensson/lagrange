@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 330,
+    "bootstrap-membership": 331,
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2467,
-  "digest": "fnv1a32-44281bcf",
+  "censusSize": 2468,
+  "digest": "fnv1a32-ecdc514c",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-220ee4db",
+  "observationDigest": "fnv1a32-aafbab91",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -177,6 +177,7 @@
     "test/bootstrap/fresh-join-multi-peer-contact.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-registration-runtime-replacement.integration.test.js": "bootstrap-membership",
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": "bootstrap-membership",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "bootstrap-membership",
     "test/bootstrap/hydrate-system-cache-from-bootstrap.test.js": "bootstrap-membership",
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": "bootstrap-membership",
     "test/bootstrap/join-cleanup.property.test.js": "bootstrap-membership",
@@ -2946,6 +2947,14 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/bootstrap/fresh-seed-activation.integration.test.js": {
+      "files": [
+        "src/raft/raft-rs-opening-history-constants.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
       ]
     },
     "test/bootstrap/join-checkpoint-progression-characterization.test.js": {
