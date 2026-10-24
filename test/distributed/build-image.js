@@ -7,15 +7,13 @@
  * module is self-contained (run.js re-exports them for its existing callers).
  */
 
-import {execFile} from 'node:child_process';
+import {execGitAsync, isGitOutputTooLarge} from '../../scripts/checks/git-invocation.js';
 import {DockerProvider} from './harness/docker-provider.js';
 import {readBaseImages} from './harness/certification-image-identity.js';
 
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_LINE_EMPTY = '';
-const GIT_HASH_COMMAND = 'git';
 const GIT_HASH_ARGS = Object.freeze(['rev-parse', '--short=12', 'HEAD']);
-const GIT_STATUS_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain']);
 const GIT_HASH_FALLBACK = 'unknown';
 const IMAGE_LABEL_GIT_HASH = 'ddb.git-hash';
@@ -51,16 +49,15 @@ const LOCAL_DOCKER_HOST = 'local docker socket';
  * @return {Promise<string>}
  */
 async function resolveGitHash(cwd = process.cwd()) {
-  return new Promise((resolveHash) => {
-    execFile(GIT_HASH_COMMAND, GIT_HASH_ARGS, {cwd}, (error, stdout) => {
-      if (error) {
-        resolveHash(GIT_HASH_FALLBACK);
-        return;
-      }
-      const hash = String(stdout || DOCKER_LINE_EMPTY).trim();
-      resolveHash(hash || GIT_HASH_FALLBACK);
-    });
-  });
+  let stdout;
+  try {
+    ({stdout} = await execGitAsync(GIT_HASH_ARGS, {cwd}));
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
+    return GIT_HASH_FALLBACK;
+  }
+  const hash = String(stdout || DOCKER_LINE_EMPTY).trim();
+  return hash || GIT_HASH_FALLBACK;
 }
 
 /**
@@ -69,15 +66,15 @@ async function resolveGitHash(cwd = process.cwd()) {
  * @return {Promise<boolean>}
  */
 async function resolveGitDirty(cwd = process.cwd()) {
-  return new Promise((resolveDirty) => {
-    execFile(GIT_STATUS_COMMAND, GIT_STATUS_ARGS, {cwd}, (error, stdout) => {
-      if (error) {
-        resolveDirty(false);
-        return;
-      }
-      resolveDirty(String(stdout || DOCKER_LINE_EMPTY).trim().length > 0);
-    });
-  });
+  let stdout;
+  try {
+    ({stdout} = await execGitAsync(GIT_STATUS_ARGS, {cwd}));
+  } catch (error) {
+    // A status past the git output bound is not a clean workspace.
+    if (isGitOutputTooLarge(error)) throw error;
+    return false;
+  }
+  return String(stdout || DOCKER_LINE_EMPTY).trim().length > 0;
 }
 
 function defaultExtractBuildProgressLine(event) {

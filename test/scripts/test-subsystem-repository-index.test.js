@@ -4,10 +4,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
 import {test} from 'node:test';
 import {observationSurfacesOf} from '../../scripts/checks/test-subsystem-classification.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const observer = 'test/scripts/observer.test.js';
 const trackedPath = 'src/tracked.js';
@@ -22,8 +22,8 @@ function write(root, name, content) {
 }
 
 function git(root, args, input) {
-  const result = spawnSync('git', args, {cwd: root, input, encoding: 'utf8',
-    env: {...gitProcessEnvironment(), LC_ALL: 'C'}, maxBuffer: 8 * 1024 * 1024});
+  const result = spawnGit(args, {cwd: root, input, encoding: 'utf8',
+    env: {...gitProcessEnvironment(), LC_ALL: 'C'}});
   assert.equal(result.error, undefined, 'fixture Git invocation must start and settle');
   assert.equal(result.signal, null);
   assert.equal(result.status, 0, result.stderr);

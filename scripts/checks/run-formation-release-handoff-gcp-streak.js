@@ -18,11 +18,11 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {readQuest} from '../solve/store.js';
+import {execGitAsync} from './git-invocation.js';
 import {
   NOT_CERTIFICATION_EVIDENCE,
 } from '../../test/distributed/harness/certification-evidence-statement.js';
@@ -59,7 +59,6 @@ const RUNS_FLAG = '--runs';
 const RUNS_FLAG_WITH_EQUALS = '--runs=';
 const FIXED_VARIANT = 'fixed';
 const FIRST_RUN_INDEX = 1;
-const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain', '--', 'src']);
 const SOURCE_SUBDIR = 'src';
 const NEWLINE_SEPARATOR = '\n';
@@ -178,18 +177,11 @@ async function readSealedConsecutive({
 }
 
 // Default `src/` dirtiness reader: porcelain git status scoped to src/.
-function readSourceDirtyPaths() {
-  return new Promise((resolvePromise, rejectPromise) => {
-    execFile(GIT_COMMAND, GIT_STATUS_ARGS, {cwd: ROOT}, (error, stdout) => {
-      if (error) {
-        rejectPromise(error);
-        return;
-      }
-      const lines = stringSplit(stringTrim(stringConstructor(stdout)),
-        NEWLINE_SEPARATOR);
-      resolvePromise(lines[0] === EMPTY_STRING ? [] : lines);
-    });
-  });
+async function readSourceDirtyPaths() {
+  const {stdout} = await execGitAsync(GIT_STATUS_ARGS, {cwd: ROOT});
+  const lines = stringSplit(stringTrim(stringConstructor(stdout)),
+    NEWLINE_SEPARATOR);
+  return lines[0] === EMPTY_STRING ? [] : lines;
 }
 
 function computeCandidateFingerprint() {

@@ -16,6 +16,7 @@ import {promisify} from 'node:util';
 import {
   runGuardTestScenarios,
 } from './guard-test-scenario-runner.js';
+import {execGitAsync} from './git-invocation.js';
 
 const execFileAsync = promisify(execFile);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -51,7 +52,6 @@ const PROBE_MISSING_EXIT_CODE = 17;
 const localText = Object.freeze({
   DIRECTED_FAILURE:
     'heterogeneous Lagrange capacity/resource observation adapter absent',
-  GIT: 'git',
   GIT_WORKTREE_ADD: 'add',
   GIT_WORKTREE_DETACH: '--detach',
   GIT_WORKTREE_FORCE: '--force',
@@ -187,8 +187,7 @@ async function createPredecessorCheckout() {
   ));
   let registered = false;
   try {
-    await execFileAsync(
-      localText.GIT,
+    await execGitAsync(
       [
         localText.GIT_WORKTREE,
         localText.GIT_WORKTREE_ADD,
@@ -199,7 +198,6 @@ async function createPredecessorCheckout() {
       {
         cwd: process.cwd(),
         encoding: localText.UTF8,
-        maxBuffer: EXECUTION_BUFFER_BYTES,
       },
     );
     registered = true;
@@ -211,8 +209,7 @@ async function createPredecessorCheckout() {
     return {
       predecessorRoot,
       async cleanup() {
-        await execFileAsync(
-          localText.GIT,
+        await execGitAsync(
           [
             localText.GIT_WORKTREE,
             localText.GIT_WORKTREE_REMOVE,
@@ -223,15 +220,13 @@ async function createPredecessorCheckout() {
           {
             cwd: process.cwd(),
             encoding: localText.UTF8,
-            maxBuffer: EXECUTION_BUFFER_BYTES,
           },
         );
       },
     };
   } catch (error) {
     if (registered) {
-      await execFileAsync(
-        localText.GIT,
+      await execGitAsync(
         [
           localText.GIT_WORKTREE,
           localText.GIT_WORKTREE_REMOVE,
@@ -242,7 +237,6 @@ async function createPredecessorCheckout() {
         {
           cwd: process.cwd(),
           encoding: localText.UTF8,
-          maxBuffer: EXECUTION_BUFFER_BYTES,
         },
       ).catch(() => {});
     }

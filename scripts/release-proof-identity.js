@@ -12,7 +12,6 @@
 //
 // The hash form is owned by src/diagnostics/source-fingerprint.js.
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -21,6 +20,7 @@ import {
   SOURCE_FINGERPRINT_ALGORITHM,
   computeContentRecordsFingerprint,
 } from '../src/diagnostics/source-fingerprint.js';
+import {execGit} from './checks/git-invocation.js';
 
 const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 const stringReplaceAll = Function.call.bind(String.prototype.replaceAll);
@@ -34,10 +34,8 @@ const RELEASE_PROOF_IDENTITY_ALGORITHM =
   `release-proof-identity-v1-${SOURCE_FINGERPRINT_ALGORITHM}`;
 const UTF8 = 'utf8';
 const NUL_SEPARATOR = '\u0000';
-const GIT_BIN = 'git';
 const GIT_DIR_FLAG = '-C';
 const GIT_LS_FILES_ARGS = Object.freeze(['ls-files', '-z']);
-const LS_FILES_MAX_BUFFER = 64 * 1024 * 1024;
 const PACKAGE_JSON = 'package.json';
 const VERSION_PLACEHOLDER = '<release-version>';
 // Paths whose content never reaches the shipped logic.
@@ -54,8 +52,7 @@ const VERSION_AUTHORITIES = Object.freeze([
 ]);
 
 function listIdentityFiles(root) {
-  const stdout = execFileSync(GIT_BIN, [GIT_DIR_FLAG, root, ...GIT_LS_FILES_ARGS],
-    {encoding: UTF8, maxBuffer: LS_FILES_MAX_BUFFER});
+  const stdout = execGit([GIT_DIR_FLAG, root, ...GIT_LS_FILES_ARGS], {encoding: UTF8});
   return arrayFilter(stringSplit(stdout, NUL_SEPARATOR), (relativePath) =>
     relativePath.length > 0 &&
     !arraySome(EXCLUDED_PREFIXES, (prefix) => stringStartsWith(relativePath, prefix)) &&

@@ -2,7 +2,6 @@
 // CLASSIFIER is deterministic and its first-missing-transition rule is
 // pinned on replayed fixtures. The live formation run is timing-dependent;
 // nothing here is.
-import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +13,7 @@ import {
   classifyPlacementTrace,
   comparePlacementTraces,
 } from '../integration/helpers/critical-placement-trace-classifier.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dirname, '..', '..');
 const PARTITION_ID = 'services-p1';
@@ -225,7 +225,7 @@ test('trace-changes-no-behaviour', () => {
   // S6a repairs nothing: the quest's source surface is test/ and scripts/
   // only. Pin that historical landing commit rather than the current working
   // tree, which may legitimately contain another Quest's staged source patch.
-  const delta = execFileSync('git', ['diff-tree', '--no-commit-id',
+  const delta = execGit(['diff-tree', '--no-commit-id',
     '--name-only', '-r', TRACE_QUEST_LANDING_COMMIT, '--', 'src'], {
     cwd: REPOSITORY_ROOT,
     encoding: 'utf8',

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 // The hooks installer runs as npm's `prepare` lifecycle, so `npm pack --json`
 // captures whatever it writes to stdout. A single diagnostic line there makes
@@ -23,7 +24,7 @@ test('install-git-hooks writes no diagnostics to stdout', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'install-hooks-'));
   t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
   const env = gitProcessEnvironment();
-  spawnSync('git', ['init', '-q'], {cwd: dir, env});
+  spawnGit(['init', '-q'], {cwd: dir, env});
   const run = spawnSync(process.execPath, [INSTALLER], {
     cwd: dir,
     encoding: 'utf8',
@@ -53,7 +54,7 @@ test('a merge of two regenerated branches keeps ours instead of conflicting', as
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'merge-driver-'));
   t.teardown(() => fs.rmSync(dir, {recursive: true, force: true}));
   const env = gitProcessEnvironment();
-  const git = (args) => spawnSync('git', args, {cwd: dir, encoding: 'utf8', env});
+  const git = (args) => spawnGit(args, {cwd: dir, encoding: 'utf8', env});
   const write = (relative, content) => {
     fs.mkdirSync(path.dirname(path.join(dir, relative)), {recursive: true});
     fs.writeFileSync(path.join(dir, relative), content);

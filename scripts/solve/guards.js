@@ -3,6 +3,7 @@
 // registry are not reimplemented here: the guards only call them.
 
 import crypto from 'node:crypto';
+import {spawnGit} from '../checks/git-invocation.js';
 import {sealBindsGraph} from '../checks/helper-import-closure.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +25,6 @@ import {EPICS_DIR, QUESTS_DIR} from './schema.js';
 
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
-const GIT = 'git';
 const SPAWN_MAX_BUFFER = 64 * 1024 * 1024;
 const SOURCE_PREFIX = 'src/';
 const SOLVE_PREFIX = 'solve/';
@@ -68,8 +68,7 @@ const OUTSIDE_SCOPE_INFIX = ' authorizes: ';
 // --- git ----------------------------------------------------------------------
 
 function git(root, args, options = {}) {
-  const result = spawnSync(GIT, args, {cwd: root, encoding: TEXT_ENCODING,
-    maxBuffer: SPAWN_MAX_BUFFER, ...options});
+  const result = spawnGit(args, {cwd: root, encoding: TEXT_ENCODING, ...options});
   if (result.status !== 0 && !options.allowFailure) {
     throw new Error(`git ${args.join(ARGUMENT_SEPARATOR)} failed: ${result.stderr || result.stdout}`);
   }

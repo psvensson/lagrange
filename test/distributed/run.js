@@ -119,9 +119,7 @@ const DOCKER_OP_CONTAINER_REMOVE = 'container.remove';
 const DOCKER_OP_NETWORK_CONNECT = 'network.connect';
 const DOCKER_OP_NETWORK_DISCONNECT = 'network.disconnect';
 const DOCKER_LINE_EMPTY = '';
-const GIT_HASH_COMMAND = 'git';
 const GIT_HASH_ARGS = Object.freeze(['rev-parse', '--short=12', 'HEAD']);
-const GIT_STATUS_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain']);
 const GIT_HASH_FALLBACK = 'unknown';
 const IMAGE_LABEL_GIT_HASH = 'ddb.git-hash';
@@ -324,9 +322,7 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   DOCKER_OP_NETWORK_CONNECT,
   DOCKER_OP_NETWORK_DISCONNECT,
   DOCKER_LINE_EMPTY,
-  GIT_HASH_COMMAND,
   GIT_HASH_ARGS,
-  GIT_STATUS_COMMAND,
   GIT_STATUS_ARGS,
   GIT_HASH_FALLBACK,
   IMAGE_LABEL_GIT_HASH,

@@ -20,6 +20,7 @@ import {
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
 import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const MINUTE = 60000;
 // A pure unit file of about 50 ms: the witnesses below wait on events, not on
@@ -273,7 +274,7 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   // The real commit check: clean is a commit, modified or untracked is not.
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-commit-'));
   try {
-    const git = (...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    const git = (...args) => spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t',
       ...args], {cwd: repo, encoding: 'utf8', env: gitProcessEnvironment()});
     git('init', '-q');
     fs.writeFileSync(path.join(repo, 'a.txt'), 'a\n');
@@ -806,7 +807,7 @@ test('the controller child gets its file list even while this process is busy', 
 });
 
 function git(cwd, ...args) {
-  const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+  const result = spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
     {cwd, encoding: 'utf8', env: gitProcessEnvironment()});
   assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
   return result.stdout.trim();

@@ -33,6 +33,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
+import {spawnGit} from './checks/git-invocation.js';
 import {
   appendArrayValue,
   copyOwnDataArray,
@@ -275,7 +276,7 @@ function hasPotentiallyLossyJsonNumber(text) {
 }
 
 function jsonFromRevision(relativePath, revision, gitRoot) {
-  const result = spawnSync('git', ['show', `${revision}:${relativePath}`],
+  const result = spawnGit(['show', `${revision}:${relativePath}`],
     {cwd: gitRoot, encoding: UTF8});
   return result.status === 0 ? parseJson(result.stdout) : null;
 }
@@ -704,11 +705,10 @@ export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
 }
 
 const stringTrimValue = Function.call.bind(String.prototype.trim);
-const GIT_BINARY = 'git';
 const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
 
 function headSha(gitRoot = root) {
-  const result = spawnSync(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
     {cwd: gitRoot, encoding: UTF8});
   const sha = stringTrimValue(String(result.stdout || ''));
   return sha.length > 0 ? sha : null;

@@ -28,7 +28,6 @@
  * of the container, not by the node itself.
  */
 
-import {execFileSync} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {join} from 'node:path';
@@ -39,6 +38,7 @@ import {
   buildImageContext,
   dockerfileContextRoots,
 } from './docker-build-context.js';
+import {execGit} from '../../../scripts/checks/git-invocation.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -57,7 +57,6 @@ const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 const ZERO = 0;
 const SHA_PATTERN = /^[0-9a-f]{40}$/u;
-const GIT = 'git';
 const LINE_SEPARATOR = '\n';
 const DEFAULT_DOCKERFILE = 'Dockerfile';
 const GIT_HEAD_ARGS = Object.freeze(['rev-parse', 'HEAD']);
@@ -78,7 +77,7 @@ const CERTIFICATION_IMAGE_LABEL = Object.freeze({
 });
 
 function defaultGit(args, cwd) {
-  return execFileSync(GIT, args, {cwd, encoding: 'utf8'});
+  return execGit(args, {cwd, encoding: 'utf8'});
 }
 
 function outputLines(text) {

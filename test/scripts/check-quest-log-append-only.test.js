@@ -8,7 +8,6 @@
  */
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,6 +16,7 @@ import {test} from 'node:test';
 import {
   OFFENCE, questLogOffences,
 } from '../../scripts/checks/check-quest-log-append-only.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const QUEST_ID = 'demo-quest';
 const LOG = `solve/quests/${QUEST_ID}/log.ndjson`;
@@ -27,7 +27,7 @@ const WORKING_TREE = 'working tree';
 
 function git(root, args, options = {}) {
   try {
-    return execFileSync('git', [...GIT_USER, ...args], {cwd: root, encoding: ENCODING});
+    return execGit([...GIT_USER, ...args], {cwd: root, encoding: ENCODING});
   } catch (error) {
     if (options.allowFailure) return '';
     throw error;

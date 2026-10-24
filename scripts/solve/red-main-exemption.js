@@ -24,13 +24,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+
+import {execGit} from '../checks/git-invocation.js';
 
 const EXEMPTION_DIR_SEGMENTS = ['lagrange-sessions', 'red-main-exemptions'];
 const TEXT_ENCODING = 'utf8';
 const JSON_EXTENSION = '.json';
-const GIT_BINARY = 'git';
 const GIT_COMMON_DIR_ARGUMENTS = Object.freeze(['rev-parse', '--git-common-dir']);
 const REASON_FLAG = '--reason';
 const EXIT_USAGE = 2;
@@ -54,8 +54,7 @@ const LOCAL_TEXT = Object.freeze({
 
 function gitCommonDir(root) {
   return path.resolve(
-    root, execFileSync(GIT_BINARY, GIT_COMMON_DIR_ARGUMENTS,
-      {cwd: root, encoding: TEXT_ENCODING}).trim());
+    root, execGit(GIT_COMMON_DIR_ARGUMENTS, {cwd: root, encoding: TEXT_ENCODING}).trim());
 }
 
 export function exemptionDir(root) {

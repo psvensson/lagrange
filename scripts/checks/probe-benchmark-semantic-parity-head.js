@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import {execFileSync} from 'node:child_process';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {dirname, resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
+
+import {execGit} from './git-invocation.js';
 
 const ZERO = 0;
 const EXPECTED_SUCCESS_COUNT = 7;
@@ -140,8 +141,7 @@ const outputPath = readArgument('--output');
 if (!repoPath || !outputPath) {
   throw new Error(USAGE);
 }
-const baseCommit = execFileSync(
-  'git',
+const baseCommit = execGit(
   ['-C', repoPath, 'rev-parse', 'HEAD'],
   {encoding: 'utf8'},
 ).trim();

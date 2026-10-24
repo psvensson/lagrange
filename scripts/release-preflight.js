@@ -23,10 +23,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 import {CLI_VERSION} from '../src/cli/cli-constants.js';
+import {execGit} from './checks/git-invocation.js';
 import {ENTRYPOINT_VERSION} from '../src/constants/entrypoint.js';
 import {extractChangelogSection} from './release-notes.js';
 import {OUTCOME as PROOF_OUTCOME, PROOF, resolveProof} from './proof-authority.js';
@@ -43,7 +43,6 @@ const PACKAGE_JSON = 'package.json';
 const PACKAGE_LOCK = 'package-lock.json';
 const CHANGELOG = 'CHANGELOG.md';
 const CHART_YAML = 'charts/lagrange-node/Chart.yaml';
-const GIT_BINARY = 'git';
 const SOLVE_EXCLUSION = ':!solve';
 const LINE_SEPARATOR = '\n';
 const ABSENT_LABEL = 'absent';
@@ -114,7 +113,7 @@ function readText(root, relativePath) {
 }
 
 function gitViaChild(root) {
-  return (args) => execFileSync(GIT_BINARY, args, {cwd: root})
+  return (args) => execGit(args, {cwd: root})
     .toString(TEXT_ENCODING).trim();
 }
 

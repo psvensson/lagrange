@@ -11,7 +11,7 @@
 
 import {after, describe, it} from 'node:test';
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -30,6 +30,7 @@ import {
 import {CLI} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
 import {createDistributedRunArgHelpers} from '../../run-args-helpers.js';
+import {execGit} from '../../../../scripts/checks/git-invocation.js';
 
 // Module-load captures (the harness tree's ambient-intrinsics rule).
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -78,7 +79,7 @@ function stubDaemon(t, initialLabels) {
 }
 
 function git(cwd, ...args) {
-  return stringTrim(execFileSync('git', args, {cwd, encoding: 'utf8'}));
+  return stringTrim(execGit(args, {cwd, encoding: 'utf8'}));
 }
 
 // A real git checkout with a Dockerfile whose context is src/, vendor/x/

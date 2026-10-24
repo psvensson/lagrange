@@ -24,9 +24,10 @@
  * convention, owned by `countLines`, so no two counters can disagree.
  */
 
-import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+
+import {execGit} from './git-invocation.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BASELINE = '60bd588f5ea3e8635d87cbdc9572f9bddf4dff2b';
@@ -47,8 +48,6 @@ const EMPTY_TEXT = '';
 const SECTION_HEADING = /^## (.+)$/u;
 const FRONT_MATTER_SECTION = '(front matter)';
 const SECTION_SEPARATOR = '#';
-const MAX_BUFFER = 64 * 1024 * 1024;
-const GIT = 'git';
 const GIT_ROOT_FLAG = '-C';
 const JSON_INDENT = 2;
 const ARGV_OFFSET = 2;
@@ -75,8 +74,7 @@ function countLines(text) {
 }
 
 function git(args) {
-  return execFileSync(GIT, [GIT_ROOT_FLAG, REPO_ROOT, ...args],
-    {encoding: TEXT_ENCODING, maxBuffer: MAX_BUFFER});
+  return execGit([GIT_ROOT_FLAG, REPO_ROOT, ...args], {encoding: TEXT_ENCODING});
 }
 
 /**

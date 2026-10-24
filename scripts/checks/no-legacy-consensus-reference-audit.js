@@ -15,11 +15,11 @@
  * its own target permanently non-zero.
  */
 
-import {spawnSync} from 'node:child_process';
 import {Buffer} from 'node:buffer';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {spawnGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -68,8 +68,6 @@ const AUDIT_TEXT = Object.freeze({
 const GIT_LIST_VISIBLE_FILES = Object.freeze([
   'ls-files', '-z', '--cached', '--others', '--exclude-standard',
 ]);
-const GIT_BINARY = 'git';
-const GIT_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
 const BINARY_NUL = 0;
 const FILENAME_LINE = 0;
 const FIRST_LINE_NUMBER = 1;
@@ -102,11 +100,10 @@ function isInFixedScope(relativePath) {
 }
 
 function listVisibleFiles(root) {
-  const listing = spawnSync(GIT_BINARY, GIT_LIST_VISIBLE_FILES, {
+  const listing = spawnGit(GIT_LIST_VISIBLE_FILES, {
     cwd: root,
     env: gitProcessEnvironment(),
     encoding: AUDIT_TEXT.UTF8,
-    maxBuffer: GIT_MAX_BUFFER_BYTES,
   });
   if (listing.status !== EXIT_OK) {
     throw new Error(`${AUDIT_TEXT.NAME}: git ls-files failed in ${root}: ` +

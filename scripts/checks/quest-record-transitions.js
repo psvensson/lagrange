@@ -10,12 +10,10 @@
  * range, so a commit is compared against every parent rather than the first.
  */
 
-import {execFileSync} from 'node:child_process';
+import {GIT_OUTPUT_BOUND, execGit} from './git-invocation.js';
 
-const GIT_BINARY = 'git';
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
-const MAX_BUFFER_BYTES = 512 * 1024 * 1024;
 const HEAD_REV = 'HEAD';
 const SHA_SEPARATOR = ' ';
 const BATCH_MISSING = 'missing';
@@ -32,9 +30,10 @@ const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
+// Every read here is bounded as a history read: one cat-file answer carries
+// every quest record revision the admitted range touched.
 function git(root, args, options = {}) {
-  return execFileSync(GIT_BINARY, args, {cwd: root,
-    maxBuffer: MAX_BUFFER_BYTES, ...options});
+  return execGit(args, {cwd: root, bound: GIT_OUTPUT_BOUND.HISTORY_BLOB_BATCH, ...options});
 }
 
 /**

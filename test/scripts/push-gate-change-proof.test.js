@@ -31,6 +31,7 @@ import {
   OBSERVATION_KIND_FILE,
   SUBSYSTEM_MANIFEST_PATH,
 } from '../../scripts/checks/test-subsystem-classification-constants.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 import {loadSealedImporters} from '../../scripts/checks/helper-import-closure.js';
 import {CORPUS_FULL_PROOF} from '../../scripts/proof-authority.js';
 import {buildExecutionPlan} from '../../scripts/select-change-tests.js';
@@ -310,7 +311,7 @@ const EXEMPTIONS = Object.freeze(FULL_CORPUS_TRIGGER_RULES.flatMap((rule) =>
 const EXEMPT_FILES = Object.freeze(EXEMPTIONS.map(({file}) => file));
 
 function trackedFiles() {
-  const result = spawnSync('git', ['ls-files', '-z'], {encoding: UTF8});
+  const result = spawnGit(['ls-files', '-z'], {encoding: UTF8});
   assert.equal(result.status, 0, result.stderr);
   return result.stdout.split('\0').filter(Boolean);
 }
@@ -410,7 +411,7 @@ function gateReadCode() {
 // no less.
 function codeNaming(file) {
   const name = path.posix.basename(file);
-  const result = spawnSync('git',
+  const result = spawnGit(
     ['grep', '-l', '-z', '-F', name, '--', ...CONSUMER_ROOTS], {encoding: UTF8});
   assert.ok(result.status === 0 || result.status === GIT_GREP_NO_MATCH,
     result.stderr);
@@ -662,7 +663,7 @@ const ANCESTOR_ARGUMENTS = Object.freeze(['merge-base', '--is-ancestor']);
 // records what it was asked, because the question matters: dropping
 // --untracked-files=no is what makes a smuggled fixture block the receipt,
 // and an unpinned flag list could regress silently (verifier round 3).
-const provingTree = (sha, asked = []) => (command, args) => {
+const provingTree = (sha, asked = []) => (args) => {
   asked.push(args);
   return args[0] === 'rev-parse' ? {status: 0, stdout: `${sha}\n`} :
     {status: 0, stdout: ''};
@@ -707,7 +708,7 @@ test('an unpublished commit defers its receipt to the publisher', () => {
   const lines = [];
   const asked = [];
   assert.equal(recordCorpusProof(PROVED_SHA, {
-    git: (command, args) => {
+    git: (args) => {
       asked.push(args);
       if (args[0] === 'rev-parse') return {status: 0, stdout: `${PROVED_SHA}\n`};
       if (args[0] === 'merge-base') return {status: 1, stdout: ''};
@@ -727,7 +728,7 @@ test('an unpublished commit defers its receipt to the publisher', () => {
 // commit, so the tree must BE the commit (verifier round 1).
 test('only a tree that is the commit may mint its receipt', () => {
   for (const [label, git] of [
-    ['a modified tree', (command, args) => args[0] === 'rev-parse' ?
+    ['a modified tree', (args) => args[0] === 'rev-parse' ?
       {status: 0, stdout: `${PROVED_SHA}\n`} :
       {status: 0, stdout: ' M src/raft/log.js\n'}],
     ['another commit checked out', () => ({status: 0, stdout: `${'e'.repeat(40)}\n`})],

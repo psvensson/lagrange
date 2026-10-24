@@ -12,7 +12,6 @@
 //   c0 (origin/main) -- c1 (Dockerfile) -- c2 (docs/notes.md)   head = c2
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,6 +29,7 @@ import {
   SELECTION_REFUSED,
 } from '../../scripts/checks/change-selection-constants.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
 const SELECTOR_BASE_FLAG = '--base';
@@ -40,7 +40,7 @@ const SPINE_TEST = 'test/spine.test.js';
 const NO_RANGE_ENV = Object.freeze({});
 
 function git(repo, args) {
-  return execFileSync('git', args,
+  return execGit(args,
     {cwd: repo, encoding: UTF8, stdio: 'pipe', env: gitProcessEnvironment()}).trim();
 }
 

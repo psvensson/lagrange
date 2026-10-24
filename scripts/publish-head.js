@@ -16,6 +16,7 @@ import {
 } from './checks/change-selection-constants.js';
 import {parseLaneArgs, planLane} from './plan-test-lane.js';
 import {THERMAL_REFUSAL_EXIT} from './checks/wait-for-thermal-headroom.js';
+import {spawnGit} from './checks/git-invocation.js';
 
 const ZERO_SHA = '0'.repeat(40);
 const PIPE_STDIO = 'pipe';
@@ -71,7 +72,6 @@ function reportPublishFailure(error) {
 
 const SELF_HOSTED_RUNNER_MARKER = '[ci:self-hosted]';
 const ARG_SEPARATOR = ' ';
-const GIT_COMMAND = 'git';
 const RUNNER_GITHUB = 'github';
 const RUNNER_SELF_HOSTED = 'self-hosted';
 const INVALID_RUNNER_ERROR = 'publish: --runner must be github|self-hosted';
@@ -180,12 +180,12 @@ const DEPENDENCY_LINK_ERROR =
 const DIRECTORY_LINK_TYPE = 'dir';
 const FILE_LINK_TYPE = 'file';
 
-function checked(run, command, args, options = {}) {
-  const result = run(command, args, {
+function childOptions(options) {
+  return {
     cwd: options.cwd,
     env: options.env || process.env,
     input: options.input,
-    encoding: 'utf8',
+    encoding: UTF8,
     // Stream long-running child output (the gate's own [pre-push] stage
     // lines) straight to the operator instead of buffering it into the
     // captured result - a 30-minute silent gate is not a user experience
@@ -193,26 +193,36 @@ function checked(run, command, args, options = {}) {
     ...(options.streamOutput === true ?
       {stdio: [PIPE_STDIO, INHERIT_STDIO, INHERIT_STDIO]} :
       {}),
-  });
+  };
+}
+
+function checkedResult(result, commandLine, options) {
   if (result.error) throw result.error;
   if (result.status !== 0 && options.allowFailure !== true) {
     const detail = String(result.stderr || result.stdout || '').trim();
-    throw new Error(
-      `${command} ${args.join(ARG_SEPARATOR)} failed${detail ? `: ${detail}` : ''}`);
+    throw new Error(`${commandLine} failed${detail ? `: ${detail}` : ''}`);
   }
   return result;
 }
 
-function output(run, command, args, options = {}) {
-  return String(checked(run, command, args, options).stdout || '').trim();
+function checked(run, command, args, options = {}) {
+  return checkedResult(run(command, args, childOptions(options)),
+    `${command} ${args.join(ARG_SEPARATOR)}`, options);
 }
 
-function git(run, root, args, options = {}) {
-  return output(run, GIT_COMMAND, args, {cwd: root, ...options});
+// Git is never routed through the injectable runner: it is started by the
+// git invocation owner, whose output bound and overflow failure hold here.
+function checkedGit(args, options = {}) {
+  return checkedResult(spawnGit(args, childOptions(options)),
+    `git ${args.join(ARG_SEPARATOR)}`, options);
 }
 
-function remoteMainSha(run, root) {
-  const line = git(run, root, ['ls-remote', 'origin', 'refs/heads/main']);
+function git(root, args, options = {}) {
+  return String(checkedGit(args, {cwd: root, ...options}).stdout || '').trim();
+}
+
+function remoteMainSha(root) {
+  const line = git(root, ['ls-remote', 'origin', 'refs/heads/main']);
   return line ? line.split(/\s+/u)[0] : ZERO_SHA;
 }
 
@@ -280,11 +290,11 @@ const REBASED_MESSAGE_SUFFIX = ' inert data commit(s) on origin/main';
 
 // Whether every commit origin/main carries beyond head touches only inert
 // data paths.
-function remoteAdvanceIsInert(run, root, head) {
-  const listed = git(run, root, [REV_LIST_COMMAND, `${head}..${ORIGIN_REMOTE}/${MAIN_BRANCH}`]);
+function remoteAdvanceIsInert(root, head) {
+  const listed = git(root, [REV_LIST_COMMAND, `${head}..${ORIGIN_REMOTE}/${MAIN_BRANCH}`]);
   const shas = listed ? listed.split(NEWLINE) : [];
   for (const sha of shas) {
-    const changed = git(run, root, [...DIFF_TREE_ARGUMENTS, sha]);
+    const changed = git(root, [...DIFF_TREE_ARGUMENTS, sha]);
     const paths = changed ? changed.split(NEWLINE) : [];
     if (paths.some((candidate) => !INERT_REBASE_PATHS.includes(candidate))) {
       return {inert: false, count: shas.length};
@@ -296,32 +306,30 @@ function remoteAdvanceIsInert(run, root, head) {
 // A fast-forward, or a rebase of the local commits over inert data commits
 // only; anything else refuses. Returns the head to publish and the remote sha
 // it must fast-forward.
-function ensureFastForward(run, root, remoteSha, head) {
+function ensureFastForward(root, remoteSha, head) {
   if (remoteSha === ZERO_SHA) return {head, remoteSha};
-  checked(run, GIT_COMMAND,
-    [FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
-  const result = checked(
-    run, 'git', ['merge-base', '--is-ancestor', remoteSha, head],
+  checkedGit([FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
+  const result = checkedGit(
+    ['merge-base', '--is-ancestor', remoteSha, head],
     {cwd: root, allowFailure: true},
   );
   if (result.status === 0) return {head, remoteSha};
-  const advance = remoteAdvanceIsInert(run, root, head);
+  const advance = remoteAdvanceIsInert(root, head);
   if (!advance.inert) throw new Error(FAST_FORWARD_ERROR);
-  if (git(run, root, [...TRACKED_STATUS_ARGUMENTS])) {
+  if (git(root, [...TRACKED_STATUS_ARGUMENTS])) {
     throw new Error(DIRTY_BEFORE_REBASE_ERROR);
   }
-  const rebase = checked(run, GIT_COMMAND,
-    [REBASE_COMMAND, QUIET_ARGUMENT, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`],
+  const rebase = checkedGit([REBASE_COMMAND, QUIET_ARGUMENT, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`],
     {cwd: root, allowFailure: true});
   if (rebase.status !== 0) {
-    checked(run, GIT_COMMAND, [REBASE_COMMAND, REBASE_ABORT_ARGUMENT],
+    checkedGit([REBASE_COMMAND, REBASE_ABORT_ARGUMENT],
       {cwd: root, allowFailure: true});
     throw new Error(REBASE_CONFLICT_ERROR);
   }
   process.stdout.write(
     `${REBASED_MESSAGE_PREFIX}${advance.count}${REBASED_MESSAGE_SUFFIX}${NEWLINE}`);
-  return {head: git(run, root, [REV_PARSE_COMMAND, HEAD_REF]),
-    remoteSha: git(run, root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`])};
+  return {head: git(root, [REV_PARSE_COMMAND, HEAD_REF]),
+    remoteSha: git(root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`])};
 }
 
 function ciRunUrl(run, root, head) {
@@ -332,8 +340,8 @@ function ciRunUrl(run, root, head) {
   return result.status === 0 ? String(result.stdout || '').trim() : '';
 }
 
-function receiptPath(run, root, head) {
-  const common = git(run, root, ['rev-parse', '--git-common-dir']);
+function receiptPath(root, head) {
+  const common = git(root, ['rev-parse', '--git-common-dir']);
   const commonDir = path.resolve(root, common);
   return path.join(commonDir, RECEIPT_DIRECTORY, `${head}.json`);
 }
@@ -460,7 +468,7 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
   });
   assertWorkspaceDependencyLinks(dependencyLinks);
   for (const dependencyLink of dependencyLinks) fs.unlinkSync(dependencyLink.link);
-  const gateStatus = git(run, worktree, [
+  const gateStatus = git(worktree, [
     STATUS_COMMAND, PORCELAIN_ARGUMENT,
   ]);
   if (gateStatus) {
@@ -479,11 +487,11 @@ function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
     throw new Error(`${PUSH_REFUSED_PREFIX}${decision.outcome}: ` +
       `${decision.because}`);
   }
-  checked(run, GIT_COMMAND, [PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
+  checkedGit([PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
     cwd: worktree,
     env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},
   });
-  const remoteAfter = remoteMainSha(run, root);
+  const remoteAfter = remoteMainSha(root);
   if (remoteAfter !== head) {
     throw new Error(
       `publish: remote verification failed (expected ${head}, got ${remoteAfter})`,
@@ -671,8 +679,8 @@ const LOCAL_CORPUS_COVERING = new Set([LOCAL_CORPUS_STATE.RUNNING, LOCAL_CORPUS_
 
 // Where the local corpus keeps its records (the git common dir, shared by
 // every worktree) and where it runs from (the main checkout that holds it).
-function localCorpusPlaces(run, root) {
-  const common = path.resolve(root, git(run, root, [...LOCAL_CORPUS_COMMON_DIR]));
+function localCorpusPlaces(root) {
+  const common = path.resolve(root, git(root, [...LOCAL_CORPUS_COMMON_DIR]));
   return {
     stateDir: path.join(common, LOCAL_CORPUS_DIRECTORY),
     mainRoot: path.basename(common) === LOCAL_CORPUS_GIT_DIR_NAME ?
@@ -1027,30 +1035,28 @@ function postMergeRefusal(refusal, detail) {
 // Whether sha is a head of origin/main as the remote holds it now: a commit on
 // its first-parent history, which is what a merge through GitHub leaves. A
 // branch commit reached only through a merge commit was never a main head.
-function isMainHead(run, root, sha) {
-  checked(run, GIT_COMMAND,
-    [FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
-  const heads = git(run, root,
+function isMainHead(root, sha) {
+  checkedGit([FETCH_COMMAND, QUIET_ARGUMENT, ORIGIN_REMOTE, MAIN_BRANCH], {cwd: root});
+  const heads = git(root,
     [...POST_MERGE_FIRST_PARENT, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]);
   return heads.split(NEWLINE).includes(sha);
 }
 
 // The whole corpus at sha, read from a clean temporary checkout of it that is
 // always removed.
-function mergedHeadCorpus(run, root, sha, wholeCorpus) {
+function mergedHeadCorpus(root, sha, wholeCorpus) {
   const parent = path.join(root, ...PUBLISH_WORKTREE_PARENT);
   fs.mkdirSync(parent, {recursive: true});
   const worktree = fs.mkdtempSync(path.join(parent, PUBLISH_WORKTREE_PREFIX));
   let added = false;
   try {
-    checked(run, GIT_COMMAND,
-      [WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, sha],
+    checkedGit([WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, sha],
       {cwd: root});
     added = true;
     return wholeCorpus(worktree);
   } finally {
     if (added) {
-      checked(run, GIT_COMMAND, [WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
+      checkedGit([WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
         {cwd: root, allowFailure: true});
     } else {
       fs.rmSync(worktree, {recursive: true, force: true});
@@ -1090,7 +1096,7 @@ function assertMergedHeadOwed(run, root, sha) {
   if (!POST_MERGE_FULL_SHA.test(String(sha))) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.NOT_A_SHA, POST_MERGE_TEXT.NOT_A_SHA);
   }
-  if (!isMainHead(run, root, sha)) {
+  if (!isMainHead(root, sha)) {
     throw postMergeRefusal(POST_MERGE_REFUSAL.NOT_ON_MAIN, `${sha}${POST_MERGE_TEXT.NOT_ON_MAIN}`);
   }
   const proof = corpusProofAnswer(run, root, sha);
@@ -1137,13 +1143,13 @@ export function proveMergedHead(root, sha, options = {}) {
   const run = options.run || spawnSync;
   const write = options.write || ((line) => process.stdout.write(`${line}${NEWLINE}`));
   assertMergedHeadOwed(run, root, sha);
-  const places = localCorpusPlaces(run, root);
+  const places = localCorpusPlaces(root);
   const stateDir = options.localCorpusDir || places.stateDir;
   reconcileLocalCorpus(stateDir);
   reportLocalCorpus(stateDir, write);
-  const isTip = git(run, root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]) === sha;
+  const isTip = git(root, [REV_PARSE_COMMAND, `${ORIGIN_REMOTE}/${MAIN_BRANCH}`]) === sha;
   assertLocalCorpusFree(stateDir, sha, isTip);
-  const files = mergedHeadCorpus(run, root, sha, options.wholeCorpus || wholeCorpusFiles);
+  const files = mergedHeadCorpus(root, sha, options.wholeCorpus || wholeCorpusFiles);
   if (isTip) supersedeLocalCorpus(stateDir, sha, write);
   const pid = startLocalCorpus({root: places.mainRoot, stateDir, head: sha, files,
     spawnProcess: options.spawnProcess || spawn});
@@ -1156,9 +1162,9 @@ export function proveMergedHead(root, sha, options = {}) {
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   publishStage(PUBLISH_STAGE_LABEL.RESOLVE_HEAD);
-  let head = git(run, root, [REV_PARSE_COMMAND, HEAD_REF]);
-  const headMessage = git(run, root, ['log', '-1', '--format=%B', head]);
-  let remoteBefore = remoteMainSha(run, root);
+  let head = git(root, [REV_PARSE_COMMAND, HEAD_REF]);
+  const headMessage = git(root, ['log', '-1', '--format=%B', head]);
+  let remoteBefore = remoteMainSha(root);
   publishStage(PUBLISH_STAGE_LABEL.VALIDATE_REQUEST +
     head.slice(0, PUBLISH_SHORT_SHA_LENGTH));
   const runner = validatePublishRequest({
@@ -1172,14 +1178,14 @@ export function publishExactHead(root, args = {}, options = {}) {
   // `remoteBefore` silently produced undefined, and the gate's proof base and
   // identity line carried that word instead of the sha this publish read.
   ({head, remoteSha: remoteBefore} = ensureFastForward(
-    run, root, remoteBefore, head));
+    root, remoteBefore, head));
   assertWorkspaceDependencySources(root, args,
     options.log || ((line) => process.stdout.write(line)));
   const writeLine = options.write || ((line) => process.stdout.write(`${line}${NEWLINE}`));
   const localCorpus = {write: writeLine, spawnProcess: options.spawnProcess || spawn,
     wholeCorpus: options.wholeCorpus || wholeCorpusFiles, stateDir: null, mainRoot: root};
   localCorpusBookkeeping(writeLine, () => {
-    const places = localCorpusPlaces(run, root);
+    const places = localCorpusPlaces(root);
     localCorpus.stateDir = options.localCorpusDir || places.stateDir;
     localCorpus.mainRoot = places.mainRoot;
     reconcileLocalCorpus(localCorpus.stateDir);
@@ -1193,7 +1199,7 @@ export function publishExactHead(root, args = {}, options = {}) {
   let added = false;
   let retained = null;
   try {
-    checked(run, GIT_COMMAND, [
+    checkedGit([
       WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, head,
     ],
     {cwd: root});
@@ -1212,7 +1218,7 @@ export function publishExactHead(root, args = {}, options = {}) {
     retained = null;
     const receipt = buildPublishReceipt(
       {head, remoteBefore, remoteAfter, runner, ciUrl}, args);
-    const file = receiptPath(run, root, head);
+    const file = receiptPath(root, head);
     fs.mkdirSync(path.dirname(file), {recursive: true});
     fs.writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
     return {...receipt, receipt: file};
@@ -1222,8 +1228,7 @@ export function publishExactHead(root, args = {}, options = {}) {
   } finally {
     if (retained) process.stderr.write(`${RETAINED_PREFIX}${retained}\n`);
     if (added) {
-      checked(run, GIT_COMMAND,
-        [WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
+      checkedGit([WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],
         {cwd: root, allowFailure: true});
     } else {
       fs.rmSync(worktree, {recursive: true, force: true});
@@ -1266,7 +1271,7 @@ function main() {
   if (argv[0] === LOCAL_CORPUS_ARGUMENT && argv.length === 2) {
     const root = process.cwd();
     process.exitCode = runLocalCorpus(root, argv[1],
-      {stateDir: localCorpusPlaces(spawnSync, root).stateDir});
+      {stateDir: localCorpusPlaces(root).stateDir});
     return;
   }
   try {
