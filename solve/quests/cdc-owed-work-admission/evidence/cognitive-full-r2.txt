@@ -1,0 +1,3 @@
+Cognitive complexity ratchet OK: 150/152 violations (threshold: 20).
+Saved cognitive complexity report to test-output/analysis/cognitive-complexity-src-scripts.json.
+Baseline can be tightened from 152 to 150 in scripts/check-cognitive-complexity.js: scripts/check-cognitive-complexity.js.

@@ -2,16 +2,20 @@
   "schema": "test-receipt/1",
   "status": "pass",
   "sourceManifest": "source-manifest.json",
-  "sourceManifestSha256": "19a0361b753b0c6ef8bf5c9847a9d6d344b44b831b5cb0fbbfd5653982aa4d16",
+  "sourceManifestSha256": "52e0f40c8b3d372c7878900a52da4549fac7edc363febdc7703909b9f8fb75ea",
   "validation": {
-    "command": "npm run test:file -- <13 files listed in final-cone.txt>",
-    "files": 13,
-    "passed": 13,
+    "command": "npm run test:file -- <14 files listed in dispatch-final-cone.txt>",
+    "files": 14,
+    "passed": 14,
     "failed": 0,
-    "assertions": 295,
-    "log": "final-cone.txt",
+    "assertions": 299,
+    "log": "dispatch-final-cone.txt",
     "independentApproval": false,
-    "wholeCandidateAcceptance": false
+    "wholeCandidateAcceptance": false,
+    "currentDisposition": "Author dispatch simplification passes focused/native rerun and scoped cognitive0. Exact revised checkpoint and independent delta approval pending. Original01d214 REVISE preserved in VERIFY-F2-r1.md.",
+    "fullCognitiveCount": 150,
+    "cognitiveBaseline": 150,
+    "baselineDisposition": "Measured full150/152 printed tightening hint; baseline reduced to150, matching already-tightened integration policy. No increase."
   },
   "receipts": [
     {

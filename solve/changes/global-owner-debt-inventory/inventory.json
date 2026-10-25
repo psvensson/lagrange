@@ -10,8 +10,8 @@
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 34848,
-        "sha256": "7ac70161821a168e8cf99a23c9f40e6a7919338a323cc028fa4e4c56d91c6eae"
+        "bytes": 34620,
+        "sha256": "145919ab9cece92f5745795749baa78276401f9b3f7302783317e8610a1666c5"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3067017,
-        "sha256": "4cfd98aed548a79f20047a833da7d1e6a3c8f368926ea447f5fd6acc0e29d3ea"
+        "sha256": "a1c065f85289f483e550f15a4a2e166477ce224db7b5ee829cffeb6d4f14ea17"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "946eb6c602699a76689df0392473cddeac7df69f739a4106bdcbc88233546985"
+        "sha256": "f7368fd6ec6f843c4459cb8355b39ecf12b1ff86c80540831d5b3bf173fae88f"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "20adcac195a4aeeef8d36b3591e3291b4db0b46ea12cc20ca2d01c1c195c9a5b"
+    "inputDigest": "de05b23b719fefc7455a2c0546ca47f6f9e83c4c8c526cad612ac733125431c8"
   },
   "reconciliation": {
     "complexity": {
@@ -78,12 +78,12 @@
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 34848,
-        "sha256": "7ac70161821a168e8cf99a23c9f40e6a7919338a323cc028fa4e4c56d91c6eae"
+        "bytes": 34620,
+        "sha256": "145919ab9cece92f5745795749baa78276401f9b3f7302783317e8610a1666c5"
       },
-      "declaredCount": 151,
-      "observedCount": 151,
-      "assignedCount": 151
+      "declaredCount": 150,
+      "observedCount": 150,
+      "assignedCount": 150
     },
     "fileSize": {
       "authority": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "946eb6c602699a76689df0392473cddeac7df69f739a4106bdcbc88233546985"
+          "sha256": "f7368fd6ec6f843c4459cb8355b39ecf12b1ff86c80540831d5b3bf173fae88f"
         },
         "cloneGroups": 44,
         "duplicatedLines": 1383,
@@ -168,34 +168,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 3067017,
-        "sha256": "4cfd98aed548a79f20047a833da7d1e6a3c8f368926ea447f5fd6acc0e29d3ea"
+        "sha256": "a1c065f85289f483e550f15a4a2e166477ce224db7b5ee829cffeb6d4f14ea17"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "1b2c1d8b24d37c4e639de7ef62abb17a3dda9b01645c4a02da9c4c4d6e77a5ea",
+      "sourceDigest": "2ebc59eed8577754b6b785fe6d2158401281dadcc0ae67c8e3dfb593cd8ca333",
       "moduleCount": 5595,
       "edgeCount": 29683,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2480,
-    "assignedSignalCount": 2480,
-    "uniqueAssignmentCount": 2480,
-    "digest": "f098af655595fd90ed443de1d35dfda9574fd908689770610367c8c40f17c5fe"
+    "sourceSignalCount": 2479,
+    "assignedSignalCount": 2479,
+    "uniqueAssignmentCount": 2479,
+    "digest": "dcb5583609666dd52a1bec4ab401a34edcb055c941bc4e3b14eae1c79dff01a3"
   },
   "signalCounts": {
-    "cognitive": 151,
+    "cognitive": 150,
     "complexity": 1766,
     "duplication": 478,
     "fileSize": 46,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1272,
+    "filesWithDebt": 1271,
     "rankedBoundaryCount": 113,
     "semanticBoundaryCount": 20,
     "fallbackBoundaryCount": 93,
@@ -1015,34 +1015,6 @@
       ]
     },
     {
-      "key": "semantic:partition_service_owner/partition_service_workflow",
-      "owner": "partition_service_owner",
-      "boundary": "partition_service_workflow",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/partition"
-      ],
-      "fileCount": 8,
-      "signalCount": 17,
-      "complexity": 13,
-      "cognitive": 2,
-      "oversizedFiles": 0,
-      "duplicatedLines": 150,
-      "cloneTouches": 4,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 21,
-      "importOut": 83,
-      "score": 83,
-      "topPaths": [
-        "src/partition/partition-service-raft-init-base.js",
-        "src/partition/partition-service-core-base.js",
-        "src/partition/partition-service-metadata-delivery-methods.js",
-        "src/partition/partition-service-write-metrics-base.js",
-        "src/partition/partition-service-entry-apply-base.js"
-      ]
-    },
-    {
       "key": "area:test/cache",
       "owner": null,
       "boundary": "test/cache",
@@ -1068,6 +1040,34 @@
         "test/cache/leader-readiness-gate.property.test.js",
         "test/cache/hydration-no-cdc-generation.property.test.js",
         "test/cache/concurrent-services-table-writes.property.test.js"
+      ]
+    },
+    {
+      "key": "semantic:partition_service_owner/partition_service_workflow",
+      "owner": "partition_service_owner",
+      "boundary": "partition_service_workflow",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/partition"
+      ],
+      "fileCount": 7,
+      "signalCount": 16,
+      "complexity": 13,
+      "cognitive": 1,
+      "oversizedFiles": 0,
+      "duplicatedLines": 150,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 19,
+      "importOut": 63,
+      "score": 75,
+      "topPaths": [
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-metadata-delivery-methods.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/partition/partition-service-learner-promotion-count-check-methods.js"
       ]
     },
     {
