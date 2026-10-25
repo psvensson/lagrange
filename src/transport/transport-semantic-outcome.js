@@ -286,11 +286,12 @@ function forwardedDeliveryAnswer(delivery) {
 
 // A thrown Error is the one other representation a delivery failure takes:
 // its message is the error text, its code the error code (the JavaScript error
-// convention), and its own value fields are carried as they are.
+// convention), and its own metadata is validated by the same builder. A
+// carried FAILED state is not erased by retry hints; no Error supplies an ACK.
 function thrownErrorOutcome(error) {
   const outcome = {errorCode: error.code ?? null, error: error.message,
     recoverableBeforeSend: error.recoverableBeforeSend === true};
-  for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
+  for (const field of TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS) {
     if (field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ERROR_CODE &&
         objectHasOwn(error, field)) {
       outcome[field] = error[field];

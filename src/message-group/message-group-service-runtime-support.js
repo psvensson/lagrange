@@ -215,6 +215,7 @@ function buildDirectDeliveryError(delivery, fallbackMessage) {
   const outcome = deliveryTransportOf(delivery);
   return Object.assign(new Error(outcome.error || fallbackMessage), {
     code: outcome.errorCode,
+    deliveryState: outcome.deliveryState,
     reasonCode: outcome.reasonCode,
     noHandler: outcome.noHandler,
     deferRetry: outcome.deferRetry,

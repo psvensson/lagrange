@@ -1574,7 +1574,8 @@
         "test/partition/raft-rs-transport-demux.test.js",
         "test/partition/participant-release-native-application-order.test.js",
         "test/partition/partition-cdc-topology-progress-currentness.test.js",
-        "test/topology/cdc-group-propagation-foreground-boundary.test.js"
+        "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+        "test/message-group/message-group-service-role-publication-and-delivery.test.js"
       ]
     },
     "transport-handler-identity": {
@@ -3198,7 +3199,8 @@
         "test/query/router-envelope-lost-write-answer.test.js",
         "test/query/transaction-coordinator-participant-protocol.test.js",
         "test/transport/router-envelope-pre-send-failure.test.js",
-        "test/query/transaction-release-settlement.test.js"
+        "test/query/transaction-release-settlement.test.js",
+        "test/message-group/message-group-service-role-publication-and-delivery.test.js"
       ]
     },
     "router-envelope-cdc-forwarding": {

@@ -145,7 +145,8 @@ MG callback mocks whose result is ignored also no longer invent an ACK answer.
 Explicit adversarial/ACK-only refusal cases, arbitrary opaque answer generation,
 internal ACK-frame/queue inputs, builder input matrices and distinct telemetry/
 recorded-history facts remain. `all-ack-fixtures-final.txt` and the migration
-manifests record this classification. No production file changed after dc51106ff.
+manifests record this classification. The fixture-only checkpoint 761ae27bd preserves dc51106ff production bytes;
+the final metadata correction below is a separately measured source delta.
 
 The CDC topology fixture had an actual remaining flat branch:
 `transport ? {...answer, acknowledged:true} : answer`. That branch is deleted;
@@ -180,3 +181,19 @@ above, using `noop-tests.log`, `noop-extra-tests.log`, `ingress-retest.log`,
 `native-final.log` and `noop-base.log`. Failed intermediate attempts remain on disk;
 the ingress mechanical replacement error was fixed before freeze and its 67
 assertions pass. This is bounded evidence, not the repaired full-lab gate.
+
+## Final R2 state-preservation attack
+
+A final actual MG direct-only probe found another discriminator dropped at the
+Error boundary: a canonical FAILED outcome carrying retry hints became DEFERRED,
+while still naming contradictory_delivery_state. `mg-state-red.log` records the
+engaged failing assertion at 761ae27bd. MG now carries deliveryState, and the
+existing thrown-error conversion feeds its own metadata through the one canonical
+builder. A thrown error never supplies an ACK, so even an explicit delivered
+claim fails closed. There is no alternate error decoder or compatibility shape.
+The final five-file run passes 262 assertions: actual MG contradictory/failure/
+deferral state matrix, thrown-success refusal, metadata owner matrices, actual
+pre-send/after-engagement QUERY provenance with prior debt and finite same-entry
+recovery, handler-throw symmetry and full transport-field rewrite protection.
+See `mg-state-final.log`. This source delta is included in the final normal-hook
+checkpoint and needs independent delta review along with the native fixture fix.
