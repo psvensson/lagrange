@@ -42,13 +42,15 @@ role maintains it using
 [`documentation-lifecycle.md`](../../docs/development/documentation-lifecycle.md).
 The contracts and immutable records it links remain the acceptance authorities.
 
-Codex takeover, checked 2026-10-25 at 06:31 UTC. This summary replaces the
+Codex takeover, refreshed 2026-10-25 after bounded TX1 integration at `b48494624`. This summary replaces the
 imported main-only coordination snapshot; the dated evidence below remains
 unchanged. The user's existing implementation authority and
 [owner decisions](raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md)
 persist. Diagnose each failure across the complete owner interaction, search
 project history for previous occurrences, and use primary sources from comparable
 systems to challenge assumptions before concluding that a defect is local.
+The user reiterates one implementation per semantic concern: migrate every
+consumer and remove superseded logic, aliases and compatibility fallbacks.
 
 | Field | Current observation |
 | --- | --- |
@@ -58,15 +60,15 @@ systems to challenge assumptions before concluding that a defect is local.
 | First established service blocker | [Fresh-seed activation](../quests/fresh-seed-activation/quest.json) is sealed but has no accepted implementation. `assertOriginalSeedContinuation` still refuses ordinary registration/election with the original-allocation continuation hold. Its current [receipt](../quests/fresh-seed-activation/evidence/receipt.json) is red; no successful public startup is claimed. |
 | Accepted prerequisites | Lifecycle Q1-Q5, CDC D2, D4 stage A, initial TX1 validation repair, Q6 stages 1-2, retired public-API removal and PG-wire tag-first correction are composed. Their bounded approvals do not close service or release acceptance. |
 | Release evidence | [Full-cutover oracle](../oracle/raft-rs-full-cutover.json) remains metric 8 with no terminal evidence. Retained-seed, FreshMG, transaction, snapshot and WASM receipts remain incomplete; W7/W9 and exact-candidate certification are still required. |
-| Lab observation | Five discovered workers ready and unlocked at 06:31 UTC: adam-laptop, adams-gamla, carinas-windows, lenovo-laptop, tv-dator; distinct boot IDs and matching dependency graphs. This is capacity observation only, not a submitted proof. Use canonical placement and machine locks. |
+| Lab observation | Q6 candidate8104 original2148-file placement is incomplete: controller2715321 ended while detached locked workers continued. Root reconciles the original per-host logs and holder records; no duplicate submission and no acceptance from partial output. |
 
 | Interaction / work | Exact input and current owner | Next action |
 | --- | --- | --- |
-| Fresh-seed activation | `/root/fresh_seed`, Astra xhigh, isolated `work/codex-fresh-seed-activation-20261025` from `af8a0381b` | Implement the sealed live-issuer activation, monotonic handoff and public-admission contract; independent review follows. |
-| Router envelope Q6 stage 3b | `/root/q6_resume`, Astra high, isolated `work/codex-router-envelope-q6-20261025` from `f0060ff36`; 357 interrupted paths copied and byte-verified | Complete the approved transport/answer migration and handler-identity unit. Original dirty tree is untouched; preservation manifest is in `/tmp/codex-rs-raft-20261025/q6-preservation`. |
+| Fresh-seed activation | `/root/fresh_seed`, Astra xhigh; isolated work from `af8a0381b`. Early independent review REVISE | Public witness8/8 and native owner negatives green; repair role-change retry of original submitted row and remove duplicate BootstrapAPI option path. Frozen final delta, canonical receipt and acceptance remain pending. |
+| Router envelope Q6 stage 3b | `8104e974a10de6b88246593e6e0dfabc1ede569f` independently REVISE by `/root/q6_review`, Astra xhigh; author `/root/q6_resume`, Astra high | Repair source-owned forwarded START uncertainty, QUERY/MG pre-send provenance and redundant ACK fields. [Review](raft-rs-full-cutover/evidence/owner-review-2026-10-26/VERIFY-q6-stage3b-codex-2026-10-25.md); full-corpus controller custody is being reconciled from original per-host logs. |
 | CDC D1 reclamation | Candidate `e1d26e0eb` independently REVISE by `/root/cdc_d1_review`, Astra xhigh; [report](raft-rs-full-cutover/evidence/cdc-lifecycle-2026-10-26/VERIFY-cdc-d1-codex-2026-10-25.md) | Root owns repair preparation: F1 compact position falsely accepts arbitrary old event identity; F2 admitted owed debt lacks a bound. Preserve positive race/restart/reclamation proof; no composition or completion. |
 | TX1 recovery-owner registry | Independently APPROVED by `/root/cdc_d1_review`, Astra xhigh; [review](../quests/replicated-transaction-decision-and-apply/evidence/VERIFY-recovery-owner-key-codex-2026-10-25.md), tested composition `bc8a68193cae6d198f355124322b84ce9668d923` | Composed without runtime changes from `7722a365`. Six focused suites206 assertions; independent multiple-old-obligation/live-session and generic registry probes pass candidate/composition, fail base. Inherited poison fixtures and overall transaction/release receipts remain open. |
-| Seed-harness completion | `/root/seed_harness_review`, Astra high, reviews `c261ff1b4b0dd5c643133fd031b00cde71e2a405` | Round6 delta verification running; root measured allocation owner suites and return-value properties green, existing characterization hold reds retained. Fresh-seed fixture integration waits for this verdict. |
+| Seed-harness completion | `c261ff1b4b0dd5c643133fd031b00cde71e2a405` independently REVISE; root repair isolated on `work/codex-seed-harness-repair-20261025`, same reviewer Astra high | Capture startup authority before awaiting; exactly-once hardware scaling through one leaf owner, old helper deleted. Delta review running; original full-lab failure leaves retained. [Review](../quests/retained-seed-original-handoff/evidence/VERIFY-seed-harness-r6-codex-2026-10-25.md). |
 | SQL admission / admin operations | `8fee98abecb29133815f9ffab9c096019692f24b`; independent review queued, not running | Resume xhigh review; resolve the missing PG-wire scaling contract and concrete remaining raw-writer migrations before composition. |
 | CDC D4 window deletion | `06e3cfcf7d2084799718a61dc7757510e0d35330`, held for W-D4b | Run the declared distributed handoff witness after fresh-seed activation, then independently review the deletion. Joining-group fan-out admission remains a recorded design question. |
 
