@@ -1497,6 +1497,25 @@
         "test/rebalancer/runtime-service-entity.test.js",
         "test/runtime/pgwire-runtime-module.test.js"
       ]
+    },
+    "exact-logical-table-identity": {
+      "description": "Parser-preserved logical table case is shared by reserved system names, DML routing/admission, runtime grants and durable user CREATE/resume identity; no cache presence or case-fold alias grants creation or writes.",
+      "owners": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
+        "src/control-plane/owners/runtime-access-policy-owner.js",
+        "src/query/schema-provisioning-intent.js",
+        "src/query/user-table-create-intent.js",
+        "src/query/table-creation-service-durable-job.js",
+        "src/query/table-creation-service-create-table.js",
+        "src/query/sql-statement-ingress.js",
+        "src/query/sql-query-engine-table-routing-methods.js",
+        "src/runtime/pgwire-result-mapper.js"
+      ],
+      "tests": [
+        "test/query/sql-query-engine-system-table-write-admission.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/control-plane/runtime-access-policy-owner.test.js"
+      ]
     }
   },
   "coupledPairs": {

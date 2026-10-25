@@ -10,6 +10,9 @@
  * to the partition, which refuses a client system-table write itself.
  */
 import {test} from '../../src/test-helpers/tap.js';
+import Database from 'better-sqlite3';
+import {openParticipantTransactionStore} from
+  '../../src/partition/partition-participant-transaction-store.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
@@ -45,7 +48,6 @@ if (!logging.isInitialized()) {
 
 const SYSTEM_TABLE_WRITES = Object.freeze([
   'UPDATE tables SET table_policies = \'{}\' WHERE table_id = \'tbl-1\'',
-  'UPDATE TABLES SET table_policies = \'{}\' WHERE table_id = \'tbl-1\'',
   'UPDATE "nodes" SET status = \'draining\' WHERE node_id = \'n1\'',
   'DELETE FROM nodes WHERE node_id = \'n1\'',
   'INSERT INTO config (config_key, config_value) VALUES (\'k\', \'v\')',
@@ -69,10 +71,13 @@ function partitionRow(partitionId, tableName) {
 function createSystemCache() {
   const tables = [
     {table_name: 'orders', table_id: 'tbl-orders', primaryKey: 'id'},
+    {table_name: 'Logs', table_id: 'tbl-Logs', primaryKey: 'id',
+      active_partition_version: 1},
     {table_name: 'tables', table_id: 'tables', primaryKey: 'table_id'},
   ];
   const partitions = [
     partitionRow('orders-p1', 'orders'),
+    partitionRow('Logs-p1', 'Logs'),
     partitionRow('tables-p1', 'tables'),
   ];
   const services = partitions.map((p) => ({
@@ -104,7 +109,7 @@ function createSystemCache() {
   };
 }
 
-function createEngine() {
+function createEngine(queryHandler = null) {
   const delivered = [];
   const engine = new SQLQueryEngine({
     systemCache: createSystemCache(),
@@ -112,6 +117,7 @@ function createEngine() {
       async deliver(address, message) {
         if (message.type === 'QUERY') {
           delivered.push({address, message});
+          if (queryHandler) return queryHandler(message);
           return {acknowledged: true, success: true, rows: [], changes: 1};
         }
         if (message.type === 'TRANSACTION') {
@@ -282,4 +288,70 @@ test('a partition refuses a routed client write to its system table',
     });
     t.equal(ownerWrite.success, true, 'the owner write applies');
     t.equal(applied.length, 1);
+  });
+
+// Catalog identity is exact-case; SQLite identifier folding happens only after
+// the logical partition has been selected, inside that partition's database.
+test('Logs user DML preserves exact parser identity and client origin through ' +
+  'routing and partition execution', async (t) => {
+  const db = new Database(':memory:');
+  t.teardown(() => db.close());
+  openParticipantTransactionStore(db);
+  db.exec('CREATE TABLE Logs (id TEXT PRIMARY KEY, total INTEGER)');
+  db.prepare('INSERT INTO Logs VALUES (?, ?)').run('a1', 0);
+  const partition = Object.assign(
+    Object.create(PARTITION_SERVICE_REMOTE_QUERY_METHODS), {
+      role: 'leader',
+      tableName: 'Logs',
+      tableId: 'tbl-Logs',
+      systemTableCache: createSystemCache(),
+      db,
+      partitionId: 'Logs-p1',
+      replicaId: 'Logs-p1-r1',
+      logger: {debug() {}, error() {}, warn() {}, info() {}},
+      async executeQuery(sql, params) {
+        return {success: true, changes: db.prepare(sql).run(...params).changes};
+      },
+    });
+  const {engine, delivered} = createEngine((message) =>
+    partition.handleRemoteQuery(message));
+  const names = ['Logs', '"Logs"'];
+  for (const [index, name] of names.entries()) {
+    const result = await engine.executeRequest(clientRequest(
+      `UPDATE ${name} SET total = ${index + 1} WHERE id = 'a1'`));
+    t.equal(result.success, true, `${name} admitted and applied`, {result});
+    t.equal(db.prepare('SELECT total FROM Logs').get().total, index + 1,
+      `${name} reached the selected user partition database`);
+  }
+  t.equal(delivered.length, names.length, 'one route per user mutation');
+  t.ok(delivered.every(({address, message}) =>
+    address.endsWith('/Logs-p1') &&
+      message[STATEMENT_INGRESS_FIELD] === STATEMENT_INGRESS.CLIENT),
+  'logical user partition and client origin retained');
+  t.equal(engine.getTableInfo('Logs').table_id, 'tbl-Logs');
+  t.equal(engine.getTableInfo('logs'), null, 'lookup does not alias case');
+  const refused = await engine.executeRequest(clientRequest(
+    'UPDATE logs SET total = 99 WHERE id = \'a1\''));
+  assertRefused(t, refused, 'exact system table');
+  t.equal(delivered.length, names.length, 'system write never routed');
+  const absent = await engine.executeRequest(clientRequest(
+    'UPDATE LOGS SET total = 99 WHERE id = \'a1\''));
+  t.equal(absent.success, false, 'distinct missing user name fails lookup');
+  t.not(absent.errorCode, QUERY_ERROR_CODE.SYSTEM_TABLE_WRITE_REFUSED,
+    'missing uppercase logical name is not a reserved-name alias');
+});
+
+test('PG wire CREATE reserved name returns the owner refusal before persistence',
+  async (t) => {
+    const {engine, delivered} = createEngine();
+    const adapter = createTestPostgresWireAdapter({sqlCore: engine});
+    await adapter.authenticate('pg-create', {tenantId: 'tenant-a'});
+    for (const name of ['logs', '"logs"', '"global.logs"']) {
+      const result = await adapter.execute('pg-create',
+        `CREATE TABLE ${name} (id TEXT PRIMARY KEY)`);
+      t.equal(result.success, false, name);
+      t.equal(result.errorCode, QUERY_ERROR_CODE.SYSTEM_TABLE_NAME_RESERVED);
+      t.equal(resolveFailureSqlState(result), '42501');
+    }
+    t.equal(delivered.length, 0, 'no catalog or data mutation reached transport');
   });

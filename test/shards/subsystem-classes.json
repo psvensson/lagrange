@@ -28,7 +28,7 @@
   "censusSize": 2478,
   "digest": "fnv1a32-732d5d90",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9b17fae2",
+  "observationDigest": "fnv1a32-18df9ce1",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -11123,6 +11123,7 @@
     },
     "test/query/schema-provisioning-job-owner.test.js": {
       "files": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
         "src/control-plane/owner-contract-outcome.js",
         "src/control-plane/timeout-budget.js",
         "src/query/schema-provisioning-intent.js",
@@ -11249,6 +11250,7 @@
       "files": [
         "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/partition/partition-participant-transaction-constants.js",
+        "src/partition/partition-participant-transaction-store.js",
         "src/partition/partition-service-remote-query-methods.js",
         "src/query/application-database-statement-policy.js",
         "src/query/pg/postgres-wire-adapter.js",

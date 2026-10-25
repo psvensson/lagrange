@@ -2,7 +2,7 @@ import {TABLES} from '../../constants/index.js';
 import {deriveRequestServiceDefinitionId} from
   './request-binding-service-definition-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
-import {isSystemTableName} from
+import {isSystemTableName, resolveLogicalTableName} from
   '../../bootstrap/system-table-schema-shared-constants.js';
 
 const RUNTIME_ACCESS_POLICY_OWNER_NAME = 'runtime-access-policy-owner';
@@ -21,7 +21,7 @@ const RUNTIME_ACCESS_POLICY_MAX_TABLE_SLOTS = 1024;
 const RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS = 64;
 const RUNTIME_ACCESS_POLICY_EMPTY_CALLS = Object.freeze([]);
 const RUNTIME_ACCESS_POLICY_TABLE_PATTERN =
-  /^table:global\.[a-z_][a-z0-9_]*$/u;
+  /^table:global\.[a-zA-Z_][a-zA-Z0-9_]*$/u;
 const RUNTIME_ACCESS_POLICY_BINDING_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
 const RUNTIME_ACCESS_POLICY_SERVICE_ID_PATTERN = /^[a-z0-9-]{1,256}$/u;
 const RUNTIME_ACCESS_POLICY_TABLE_IDENTITY_PREFIX = 'table:';
@@ -351,12 +351,9 @@ function normalizeStoredPolicy(value, serviceId) {
 }
 
 function canonicalTableIdentity(tableName) {
-  if (typeof tableName !== 'string' || tableName.length === 0) return null;
-  const withoutNamespace = tableName.startsWith('global.') ?
-    tableName.slice('global.'.length) :
-    tableName;
-  const normalized = withoutNamespace.toLowerCase();
-  const canonical = `table:global.${normalized}`;
+  const logicalName = resolveLogicalTableName(tableName);
+  if (!logicalName) return null;
+  const canonical = `table:global.${logicalName}`;
   return RUNTIME_ACCESS_POLICY_TABLE_PATTERN.test(canonical) ?
     canonical :
     null;

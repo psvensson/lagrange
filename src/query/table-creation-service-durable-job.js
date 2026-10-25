@@ -1,20 +1,4 @@
-import {
-  QUERY_ERROR_CODE,
-  QUERY_ERROR_MSG,
-} from './query-constants.js';
-
-function validateDurableCreateIntent(ast = {}) {
-  if (Array.isArray(ast.primaryKey) && ast.primaryKey.length > 0) {
-    return;
-  }
-  const error = new Error(
-    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${ast.tableName}` +
-    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
-    QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
-  );
-  error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
-  throw error;
-}
+import {validateUserTableCreateIntent} from './user-table-create-intent.js';
 
 const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
   executeDurableSchemaProvisioningJob(ast, job) {
@@ -30,7 +14,7 @@ const TABLE_CREATION_DURABLE_JOB_METHODS = Object.freeze({
   },
 
   async createTable(ast, options = {}) {
-    validateDurableCreateIntent(ast);
+    validateUserTableCreateIntent(ast);
     return this.schemaProvisioningJobOwner.execute(
       ast,
       {

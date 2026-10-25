@@ -1,3 +1,4 @@
+import {validateUserTableCreateIntent} from './user-table-create-intent.js';
 import {v4 as uuidv4} from 'uuid';
 import {STATE, TABLES} from '../constants/index.js';
 import {CONTROL_PLANE_MUTATION_OPERATION} from '../control-plane/control-plane-system-table-gateway.js';
@@ -83,19 +84,6 @@ function requireDurableMetadataGateway(service, options) {
 
 function firstTruthyValue(...values) {
   return values.find(Boolean) || null;
-}
-
-function assertCreateTablePrimaryKey(tableName, primaryKey) {
-  if (Array.isArray(primaryKey) && primaryKey.length > 0) {
-    return;
-  }
-  const error = new Error(
-    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_PREFIX}${tableName}` +
-    `${QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_SUFFIX}. ` +
-    QUERY_ERROR_MSG.PRIMARY_KEY_REQUIRED_DETAIL,
-  );
-  error.code = QUERY_ERROR_CODE.PRIMARY_KEY_REQUIRED;
-  throw error;
 }
 
 function createTableExistsError(tableName) {
@@ -355,13 +343,13 @@ async function executeUnpersistedCreateTable(service, context, options) {
 
 const tableCreationCreateTableMethods = {
   async executeCreateTableProvisioning(ast, options = {}) {
+    validateUserTableCreateIntent(ast);
     this.logger.info(QUERY_LOG_MSG.TABLE_CREATE_START, {
       tableName: ast.tableName,
       columnCount: ast.columns.length,
       primaryKey: ast.primaryKey,
       ifNotExists: ast.ifNotExists,
     });
-    assertCreateTablePrimaryKey(ast.tableName, ast.primaryKey);
 
     const existingTable = await this.findExistingTableRecord(ast.tableName);
     if (existingTable) {

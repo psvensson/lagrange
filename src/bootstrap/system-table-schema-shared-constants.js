@@ -71,30 +71,27 @@ const SYSTEM_TABLE_NAMESPACE_PREFIX = 'global.';
 const LOCAL_STR_STRING = 'string';
 
 /**
- * The one canonical form of a table name for the system-table predicate:
- * the optional global namespace is dropped and the name lower-cased
- * (SQLite identifiers are case-insensitive). Non-names answer null.
+ * Resolve an optional global namespace without changing logical catalog case.
+ * Partition-local SQLite identifier rules do not define catalog identity.
  * @param {*} tableName
  * @return {string|null}
  */
-function canonicalSystemTableName(tableName) {
+function resolveLogicalTableName(tableName) {
   if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0) {
     return null;
   }
-  const lowerCased = tableName.toLowerCase();
-  return lowerCased.startsWith(SYSTEM_TABLE_NAMESPACE_PREFIX) ?
-    lowerCased.slice(SYSTEM_TABLE_NAMESPACE_PREFIX.length) :
-    lowerCased;
+  return tableName.startsWith(SYSTEM_TABLE_NAMESPACE_PREFIX) ?
+    tableName.slice(SYSTEM_TABLE_NAMESPACE_PREFIX.length) :
+    tableName;
 }
 
 /**
- * The one system-table predicate: whether a table name (in any spelling the
- * canonical form folds) names one of the system tables.
+ * The one system-table predicate uses exact logical catalog identity.
  * @param {*} tableName
  * @return {boolean}
  */
 function isSystemTableName(tableName) {
-  const canonical = canonicalSystemTableName(tableName);
+  const canonical = resolveLogicalTableName(tableName);
   return canonical !== null && SYSTEM_TABLE_NAMES.has(canonical);
 }
 
@@ -102,4 +99,5 @@ export {
   COLUMN_TYPE,
   SYSTEM_TABLE_NAME,
   isSystemTableName,
+  resolveLogicalTableName,
 };
