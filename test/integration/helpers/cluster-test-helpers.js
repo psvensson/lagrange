@@ -30,7 +30,6 @@ import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
-import {scaleByMachineFactor} from './test-machine-factor.js';
 import {URL} from 'url';
 import {mkdirSync, mkdtempSync, rmSync} from 'fs';
 import {tmpdir} from 'os';
@@ -400,18 +399,11 @@ export function createVirginSeedBootstrapService(options = {}) {
 // (2026-10-25, return-value-completeness; the round-5 verifier measured
 // <= 8.5s). Production has no seed-start budget constant to derive this from:
 // startup acquisition is bounded by its abort signal (awaitStartupAcquisition),
-// not by a duration.
-const VIRGIN_SEED_COMPOSE_REFERENCE_MS = 10000;
-
-/**
- * The work-bound budget for composing a number of virgin seeds, scaled by
- * the machine factor.
- * @param {number} seedCount Seeds the test composes.
- * @return {number} Budget in milliseconds.
- */
-export function virginSeedComposeBudgetMs(seedCount) {
-  return seedCount * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS);
-}
+// not by a duration. A test declares its budget as a seed count times this
+// reference, statically, because the test runner reads timeout declarations
+// statically (scripts/checks/test-timeout-declarations.js) and lifts the file
+// cap to them; a call such as scaleByMachineFactor() is refused there.
+export const VIRGIN_SEED_COMPOSE_REFERENCE_MS = 10000;
 
 /**
  * A virgin seed fixture owned by one test: its shutdown is bound to the

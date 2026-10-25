@@ -11,15 +11,14 @@
  * Feature: bootstrap-architecture-refactoring, Property 7: Return Value Completeness
  */
 
-import t, {test} from '../../src/test-helpers/tap.js';
+import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {NodeService} from '../../src/node/node-service.js';
 import {ORIGINAL_ALLOCATION_REASON, isOriginalAllocationHold} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
-import {createVirginSeedBootstrapService, getUniquePort,
-  virginSeedComposeBudgetMs} from
+import {VIRGIN_SEED_COMPOSE_REFERENCE_MS, createVirginSeedBootstrapService,
+  getUniquePort} from
   '../integration/helpers/cluster-test-helpers.js';
-import {scaleByMachineFactor} from '../integration/helpers/test-machine-factor.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -141,11 +140,9 @@ const SEED_CLASSES = Object.freeze([
       leadershipWaitInitialDelayMs: 1, leadershipWaitMaxDelayMs: 1,
       leadershipWaitBackoffMultiplier: 1}}}),
 ]);
-// The join properties below compose no seed: measured under 8s on the 1.00x
-// controller (2026-10-25).
-const JOIN_PROPERTIES_REFERENCE_MS = 10000;
-t.setTimeout(virginSeedComposeBudgetMs(SEED_CLASSES.length) +
-  scaleByMachineFactor(JOIN_PROPERTIES_REFERENCE_MS));
+// The seed test's budget is its composed seed count times the measured
+// per-seed reference (declared statically for the test runner).
+const SEED_CLASS_COUNT = 3;
 
 async function composedSeedResult(seedClass) {
   const bootstrap = await createVirginSeedBootstrapService({
@@ -162,8 +159,9 @@ const isContinuationHold = (result) => isOriginalAllocationHold(result.cause,
   ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE);
 
 test('Property 7: Return Value Completeness',
-  {timeout: virginSeedComposeBudgetMs(SEED_CLASSES.length)}, async (t) => {
+  {timeout: SEED_CLASS_COUNT * VIRGIN_SEED_COMPOSE_REFERENCE_MS}, async (t) => {
     initializeTestEnvironment();
+    t.equal(SEED_CLASSES.length, SEED_CLASS_COUNT, 'the budget counts every seed');
     const results = [];
     for (const seedClass of SEED_CLASSES) {
       results.push({name: seedClass.name,
