@@ -80,6 +80,19 @@ window, gate bypass, raised ratchet or substitute test environment is authorized
 | CDC handoff and remaining acceptance | D4 still requires the declared three-node joining-group witness, more than 256 updates plus delete, positioned hydration/live convergence and authoritative equality before window deletion. Retained-seed, FreshMG, transaction, snapshot, WASM and W7/W9 remain open. | Resolve joining-group admission at its owner. Preserve W7 ordering/eventual native acknowledgement and W9's actual 2 MiB input, 65 remote targets and over-64 vector semantics. |
 | Final candidate qualification | The resumed composition's normal-hook report measures cyclomatic count 1761 against unchanged baseline 1755, still failing. Cognitive count is 150 against 150 and the measured import graph has zero cycle groups; these observations are not full gate certification. No final frozen candidate has been qualified. Full static/corpus, representative service/recovery, multi-machine certification, independent closeout, publication and exact-main proof remain outstanding. | Freeze one candidate after bounded repairs and caller migrations compose, then use the existing final gates. A preservation commit or partial test count does not close this row. |
 
+**Package 2 original Lab submission (15:50 UTC, 25 October):** Harnessd accepted
+the exact-source seven-file request as [Lab #2035](https://github.com/psvensson/lagrange-lab/issues/2035);
+the independent [status #2037](https://github.com/psvensson/lagrange-lab/issues/2037)
+reports `QUEUED`, `WAITING_FOR_CAPACITY`, and no source execution. Both the
+[initial health](https://github.com/psvensson/lagrange-lab/issues/2033) and
+[refreshed health](https://github.com/psvensson/lagrange-lab/issues/2038)
+show the installed controller `paused: true`, despite a free Node-capable
+`tv-dator` in the [read-only fleet observation](https://github.com/psvensson/lagrange-lab/issues/2034).
+The request expires at **17:16:26.435 UTC**. [Full immutable request and
+receipt boundaries](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/PACKAGE2-HARNESSD-QUEUED-20261025.md).
+There is **no original Lab test verdict**; resume through the installed
+operator owner only after resolving the pause's physical-custody basis.
+
 **Evidence recovery:** all 32 omitted manifest-bound artifacts were supplied by
 the user and independently verified against their original hashes and byte
 counts. Both manifests are byte-identical to `709dc2b`. Two directly linked blocked-hook
