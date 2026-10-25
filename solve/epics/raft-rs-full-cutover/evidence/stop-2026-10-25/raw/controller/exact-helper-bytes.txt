@@ -1,0 +1,61 @@
+let activeChild;
+let stopRequested;
+function onStop(signal) {
+  stopRequested = signal;
+  log({event: 'stop-requested', signal, pgid: activeChild?.pid ?? null});
+  if (activeChild?.pid) killGroup(activeChild);
+}
+const onInt = () => onStop('SIGINT');
+const onTerm = () => onStop('SIGTERM');
+process.on('SIGINT', onInt);
+process.on('SIGTERM', onTerm);
+function groupExists(pid) {
+  try { process.kill(-pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+}
+// Only this controller's two known commands enter these groups. Local placement
+// keeps the sealed writer's descendants inside the inherited writer group.
+async function drainOwnedGroup(child) {
+  if (!child.pid) return;
+  let observationReported = false;
+  let terminationSent = false;
+  for (;;) {
+    try {
+      if (!groupExists(child.pid)) {
+        log({event: 'group-absent', pgid: child.pid, terminationSent});
+        return;
+      }
+      if (!terminationSent) {
+        log({event: 'terminate-owned-group', pgid: child.pid});
+        killGroup(child);
+        terminationSent = true;
+      }
+    } catch (error) {
+      if (!observationReported) {
+        log({event: 'custody-retained-observation-failed', pgid: child.pid, error: error.message});
+        observationReported = true;
+      }
+    }
+    // No deadline is allowed to turn uncertain cleanup into released custody.
+    await delay(100);
+  }
+}
+async function runHeldCommand(label, args) {
+  if (stopRequested) throw new Error(`Controller stopped: ${stopRequested}`);
+  const child = spawn(process.execPath, args, {cwd: root, env, detached: true, stdio: ['ignore', stdout, stderr]});
+  activeChild = child;
+  let spawnError;
+  child.once('error', error => { spawnError = error; log({event: 'child-error', label, error: error.message}); });
+  child.once('exit', (code, signal) => log({event: 'child-exit', label, pgid: child.pid ?? null, code, signal}));
+  const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({code, signal})));
+  log({event: 'child-started', label, pgid: child.pid ?? null, args});
+  let outcome;
+  try { outcome = await closed; }
+  finally { await drainOwnedGroup(child); activeChild = undefined; }
+  if (spawnError) throw spawnError;
+  if (stopRequested || outcome.code !== 0) {
+    const error = new Error(`${label} failed: exit=${outcome.code} signal=${outcome.signal} controllerStop=${stopRequested ?? 'none'}`);
+    error.exitCode = outcome.code;
+    throw error;
+  }
+}

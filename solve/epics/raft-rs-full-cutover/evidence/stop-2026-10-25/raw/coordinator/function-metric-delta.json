@@ -1,0 +1,1037 @@
+{
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "files": {
+    "src/query/distributed/distributed-transaction-schema-enforcement.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 48,
+          "text": "function digestOf(value) {",
+          "message": "Function 'digestOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 52,
+          "text": "function enforcementResult(state, columns = [], trigger = null, missingColumns = []) {",
+          "message": "Function 'enforcementResult' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 52,
+          "text": "function enforcementResult(state, columns = [], trigger = null, missingColumns = []) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 61,
+          "text": "function readTransactionSchemaEnforcement(database) {",
+          "message": "Function 'readTransactionSchemaEnforcement' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 61,
+          "text": "function readTransactionSchemaEnforcement(database) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 64,
+          "text": "const byName = new Map(columns.map((column) => [column.name, column]));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 65,
+          "text": "const missing = SQL_TRANSACTIONS_SCHEMA.columns.filter((column) =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 66,
+          "text": "!byName.has(column.name)).map((column) => column.name);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 71,
+          "text": "SQL_TRANSACTIONS_SCHEMA.columns.every((column) => !byName.has(column.name) ||",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 83,
+          "text": "function enforcementError() {",
+          "message": "Function 'enforcementError' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 87,
+          "text": "function isCoordinatorTable(tableName) {",
+          "message": "Function 'isCoordinatorTable' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 87,
+          "text": "function isCoordinatorTable(tableName) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 94,
+          "text": "function transactionSchemaWriteRefusal(database, tableName, originPresent) {",
+          "message": "Function 'transactionSchemaWriteRefusal' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 94,
+          "text": "function transactionSchemaWriteRefusal(database, tableName, originPresent) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 103,
+          "text": "function assertTransactionSchemaWriteEnforced(database, tableName, originPresent) {",
+          "message": "Function 'assertTransactionSchemaWriteEnforced' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 103,
+          "text": "function assertTransactionSchemaWriteEnforced(database, tableName, originPresent) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 113,
+          "text": "function installTransactionSchemaEnforcement(database) {",
+          "message": "Function 'installTransactionSchemaEnforcement' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 113,
+          "text": "function installTransactionSchemaEnforcement(database) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 121,
+          "text": "const column = SQL_TRANSACTIONS_SCHEMA.columns.find((candidate) => candidate.name === name);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 132,
+          "text": "function coordinatorTableSchemaRefusal(tableName) {",
+          "message": "Function 'coordinatorTableSchemaRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 132,
+          "text": "function coordinatorTableSchemaRefusal(tableName) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 50,
+          "text": "function digestOf(value) {",
+          "message": "Function 'digestOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 54,
+          "text": "function enforcementResult(state, columns = [], trigger = null, missingColumns = []) {",
+          "message": "Function 'enforcementResult' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 54,
+          "text": "function enforcementResult(state, columns = [], trigger = null, missingColumns = []) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 63,
+          "text": "function readTransactionSchemaEnforcement(database) {",
+          "message": "Function 'readTransactionSchemaEnforcement' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 63,
+          "text": "function readTransactionSchemaEnforcement(database) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 66,
+          "text": "const byName = new Map(columns.map((column) => [column.name, column]));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 67,
+          "text": "const missing = SQL_TRANSACTIONS_SCHEMA.columns.filter((column) =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 68,
+          "text": "!byName.has(column.name)).map((column) => column.name);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 73,
+          "text": "SQL_TRANSACTIONS_SCHEMA.columns.every((column) => !byName.has(column.name) ||",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 85,
+          "text": "function enforcementError() {",
+          "message": "Function 'enforcementError' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 89,
+          "text": "function isCoordinatorTable(tableName) {",
+          "message": "Function 'isCoordinatorTable' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 95,
+          "text": "function transactionSchemaWriteRefusal(database, tableName, originPresent) {",
+          "message": "Function 'transactionSchemaWriteRefusal' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 95,
+          "text": "function transactionSchemaWriteRefusal(database, tableName, originPresent) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 104,
+          "text": "function assertTransactionSchemaWriteEnforced(database, tableName, originPresent) {",
+          "message": "Function 'assertTransactionSchemaWriteEnforced' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 104,
+          "text": "function assertTransactionSchemaWriteEnforced(database, tableName, originPresent) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 114,
+          "text": "function installTransactionSchemaEnforcement(database) {",
+          "message": "Function 'installTransactionSchemaEnforcement' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 114,
+          "text": "function installTransactionSchemaEnforcement(database) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 122,
+          "text": "const column = SQL_TRANSACTIONS_SCHEMA.columns.find((candidate) => candidate.name === name);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 133,
+          "text": "function coordinatorTableSchemaRefusal(tableName) {",
+          "message": "Function 'coordinatorTableSchemaRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 133,
+          "text": "function coordinatorTableSchemaRefusal(tableName) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        }
+      ]
+    },
+    "src/query/distributed/distributed-transaction-participant-admission.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 13,
+          "text": "function coordinatorTableParticipantRefusal(tableName) {",
+          "message": "Function 'coordinatorTableParticipantRefusal' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 13,
+          "text": "function coordinatorTableParticipantRefusal(tableName) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 13,
+          "text": "function coordinatorTableParticipantRefusal(tableName) {",
+          "message": "Function 'coordinatorTableParticipantRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 13,
+          "text": "function coordinatorTableParticipantRefusal(tableName) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        }
+      ]
+    },
+    "src/partition/partition-participant-transaction-apply.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 110,
+          "text": "function messageOf(text, code) {",
+          "message": "Function 'messageOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 116,
+          "text": "function answerProposer(service, committed, answer) {",
+          "message": "Function 'answerProposer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 118,
+          "text": "committed.afterCommit(() => service.resolveCommittedWrite(command.entryId, {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 126,
+          "text": "function consumedRefusal(service, committed, failureCode, fields = {}) {",
+          "message": "Function 'consumedRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 141,
+          "text": "function alarmRefusal(service, committed, failureCode, fields) {",
+          "message": "Function 'alarmRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 151,
+          "text": "function rowAnswer(service, identity) {",
+          "message": "Function 'rowAnswer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 159,
+          "text": "function validationTextHereOf(service) {",
+          "message": "Function 'validationTextHereOf' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 159,
+          "text": "function validationTextHereOf(service) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 168,
+          "text": "function runCarriedOperation(service, operation) {",
+          "message": "Function 'runCarriedOperation' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 184,
+          "text": "function deterministicRefusalOf(service, error, causes) {",
+          "message": "Function 'deterministicRefusalOf' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 184,
+          "text": "function deterministicRefusalOf(service, error, causes) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 197,
+          "text": "function dryRunCarriedOperations(service, operationsText) {",
+          "message": "Function 'dryRunCarriedOperations' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 197,
+          "text": "function dryRunCarriedOperations(service, operationsText) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 205,
+          "text": "service.db.transaction(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 205,
+          "text": "service.db.transaction(() => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 220,
+          "text": "function preparedRowOf(committed, fields) {",
+          "message": "Function 'preparedRowOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 239,
+          "text": "function refusePrepare(service, committed, {cause, detail}) {",
+          "message": "Function 'refusePrepare' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 256,
+          "text": "function prepareOverRow(service, committed, row) {",
+          "message": "Function 'prepareOverRow' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 256,
+          "text": "function prepareOverRow(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 281,
+          "text": "function refuseOriginMismatch(service, committed) {",
+          "message": "Function 'refuseOriginMismatch' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 291,
+          "text": "function applyParticipantPrepare(service, committed) {",
+          "message": "Function 'applyParticipantPrepare' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 291,
+          "text": "function applyParticipantPrepare(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 332,
+          "text": "function decidedOf(committed, state, refusal = null) {",
+          "message": "Function 'decidedOf' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 356,
+          "text": "function operationResultsOf(service, row) {",
+          "message": "Function 'operationResultsOf' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 357,
+          "text": "return (operationsOf(row.operationsText) ?? []).map((_operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 370,
+          "text": "function scheduleCommitEffects(service, committed, operations, events) {",
+          "message": "Function 'scheduleCommitEffects' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 372,
+          "text": "committed.afterCommit(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 372,
+          "text": "committed.afterCommit(() => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 381,
+          "text": "function releaseReservation(service, committed) {",
+          "message": "Function 'releaseReservation' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 382,
+          "text": "committed.afterCommit(() => readmitReservedWrites(service));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 386,
+          "text": "function refuseCommit(service, committed, refusal) {",
+          "message": "Function 'refuseCommit' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 395,
+          "text": "function runCommittedOperations(service, committed, operations) {",
+          "message": "Function 'runCommittedOperations' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 398,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 398,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 398,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 414,
+          "text": "function commitPrepared(service, committed, row) {",
+          "message": "Function 'commitPrepared' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 414,
+          "text": "function commitPrepared(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 443,
+          "text": "function decideOverPrepared(service, committed, row) {",
+          "message": "Function 'decideOverPrepared' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 443,
+          "text": "function decideOverPrepared(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 460,
+          "text": "function replayDecision(service, committed, row) {",
+          "message": "Function 'replayDecision' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 460,
+          "text": "function replayDecision(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 470,
+          "text": "function answerRefusedRollback(service, committed, row) {",
+          "message": "Function 'answerRefusedRollback' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 481,
+          "text": "[STATE.COMMITTED]: (service, committed, row) =>",
+          "message": "Method has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 481,
+          "text": "[STATE.COMMITTED]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 487,
+          "text": "[STATE.ROLLED_BACK]: (service, committed, row) =>",
+          "message": "Method has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 487,
+          "text": "[STATE.ROLLED_BACK]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 493,
+          "text": "[STATE.REFUSED]: (service, committed, row) =>",
+          "message": "Method has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 493,
+          "text": "[STATE.REFUSED]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 503,
+          "text": "function decideAbsent(service, committed) {",
+          "message": "Function 'decideAbsent' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 503,
+          "text": "function decideAbsent(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 528,
+          "text": "function applyParticipantDecision(service, committed) {",
+          "message": "Function 'applyParticipantDecision' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 528,
+          "text": "function applyParticipantDecision(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 552,
+          "text": "function applyGenerationOrigin(service, committed) {",
+          "message": "Function 'applyGenerationOrigin' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 552,
+          "text": "function applyGenerationOrigin(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 570,
+          "text": "committed.afterCommit(() => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 585,
+          "text": "function applyParticipantCommand(service, committed) {",
+          "message": "Function 'applyParticipantCommand' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 585,
+          "text": "function applyParticipantCommand(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 593,
+          "text": "committed.afterRollback(() =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 611,
+          "text": "function applyCommittedTransactionCommand(service, committed) {",
+          "message": "Function 'applyCommittedTransactionCommand' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 614,
+          "text": "committed.afterCommit(() => service.emit(",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 633,
+          "text": "function settleReservedCommittedStatement(service, {command, afterCommit}) {",
+          "message": "Function 'settleReservedCommittedStatement' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 639,
+          "text": "afterCommit(() => reparkReservedWrite(service, command.entryId) ||",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 109,
+          "text": "function messageOf(text, code) {",
+          "message": "Function 'messageOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 115,
+          "text": "function answerProposer(service, committed, answer) {",
+          "message": "Function 'answerProposer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 117,
+          "text": "committed.afterCommit(() => service.resolveCommittedWrite(command.entryId, {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 125,
+          "text": "function consumedRefusal(service, committed, failureCode, fields = {}) {",
+          "message": "Function 'consumedRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 140,
+          "text": "function alarmRefusal(service, committed, failureCode, fields) {",
+          "message": "Function 'alarmRefusal' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 150,
+          "text": "function rowAnswer(service, identity) {",
+          "message": "Function 'rowAnswer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 158,
+          "text": "function validationTextHereOf(service) {",
+          "message": "Function 'validationTextHereOf' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 158,
+          "text": "function validationTextHereOf(service) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 167,
+          "text": "function runCarriedOperation(service, operation) {",
+          "message": "Function 'runCarriedOperation' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 183,
+          "text": "function deterministicRefusalOf(service, error, causes) {",
+          "message": "Function 'deterministicRefusalOf' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 183,
+          "text": "function deterministicRefusalOf(service, error, causes) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 196,
+          "text": "function dryRunCarriedOperations(service, operationsText) {",
+          "message": "Function 'dryRunCarriedOperations' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 196,
+          "text": "function dryRunCarriedOperations(service, operationsText) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 204,
+          "text": "service.db.transaction(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 204,
+          "text": "service.db.transaction(() => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 219,
+          "text": "function preparedRowOf(committed, fields) {",
+          "message": "Function 'preparedRowOf' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 238,
+          "text": "function refusePrepare(service, committed, {cause, detail}) {",
+          "message": "Function 'refusePrepare' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 255,
+          "text": "function prepareOverRow(service, committed, row) {",
+          "message": "Function 'prepareOverRow' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 255,
+          "text": "function prepareOverRow(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 280,
+          "text": "function refuseOriginMismatch(service, committed) {",
+          "message": "Function 'refuseOriginMismatch' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 290,
+          "text": "function applyParticipantPrepare(service, committed) {",
+          "message": "Function 'applyParticipantPrepare' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 290,
+          "text": "function applyParticipantPrepare(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 331,
+          "text": "function decidedOf(committed, state, refusal = null) {",
+          "message": "Function 'decidedOf' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 355,
+          "text": "function operationResultsOf(service, row) {",
+          "message": "Function 'operationResultsOf' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 356,
+          "text": "return (operationsOf(row.operationsText) ?? []).map((_operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 369,
+          "text": "function scheduleCommitEffects(service, committed, operations, events) {",
+          "message": "Function 'scheduleCommitEffects' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 371,
+          "text": "committed.afterCommit(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 371,
+          "text": "committed.afterCommit(() => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 380,
+          "text": "function releaseReservation(service, committed) {",
+          "message": "Function 'releaseReservation' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 381,
+          "text": "committed.afterCommit(() => readmitReservedWrites(service));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 385,
+          "text": "function refuseCommit(service, committed, refusal) {",
+          "message": "Function 'refuseCommit' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 394,
+          "text": "function runCommittedOperations(service, committed, operations) {",
+          "message": "Function 'runCommittedOperations' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 397,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 397,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 397,
+          "text": "const results = service.db.transaction(() => operations.map((operation, ordinal) => {",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 413,
+          "text": "function commitPrepared(service, committed, row) {",
+          "message": "Function 'commitPrepared' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 413,
+          "text": "function commitPrepared(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 442,
+          "text": "function decideOverPrepared(service, committed, row) {",
+          "message": "Function 'decideOverPrepared' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 442,
+          "text": "function decideOverPrepared(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 459,
+          "text": "function replayDecision(service, committed, row) {",
+          "message": "Function 'replayDecision' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 459,
+          "text": "function replayDecision(service, committed, row) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 469,
+          "text": "function answerRefusedRollback(service, committed, row) {",
+          "message": "Function 'answerRefusedRollback' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 480,
+          "text": "[STATE.COMMITTED]: (service, committed, row) =>",
+          "message": "Method has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 480,
+          "text": "[STATE.COMMITTED]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 486,
+          "text": "[STATE.ROLLED_BACK]: (service, committed, row) =>",
+          "message": "Method has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 486,
+          "text": "[STATE.ROLLED_BACK]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 492,
+          "text": "[STATE.REFUSED]: (service, committed, row) =>",
+          "message": "Method has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 492,
+          "text": "[STATE.REFUSED]: (service, committed, row) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 502,
+          "text": "function decideAbsent(service, committed) {",
+          "message": "Function 'decideAbsent' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 502,
+          "text": "function decideAbsent(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 527,
+          "text": "function applyParticipantDecision(service, committed) {",
+          "message": "Function 'applyParticipantDecision' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 527,
+          "text": "function applyParticipantDecision(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 551,
+          "text": "function applyGenerationOrigin(service, committed) {",
+          "message": "Function 'applyGenerationOrigin' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 551,
+          "text": "function applyGenerationOrigin(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 569,
+          "text": "committed.afterCommit(() => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 584,
+          "text": "function applyParticipantCommand(service, committed) {",
+          "message": "Function 'applyParticipantCommand' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 584,
+          "text": "function applyParticipantCommand(service, committed) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 592,
+          "text": "committed.afterRollback(() =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 610,
+          "text": "function applyCommittedTransactionCommand(service, committed) {",
+          "message": "Function 'applyCommittedTransactionCommand' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 613,
+          "text": "committed.afterCommit(() => service.emit(",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 632,
+          "text": "function settleReservedCommittedStatement(service, {command, afterCommit}) {",
+          "message": "Function 'settleReservedCommittedStatement' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 638,
+          "text": "afterCommit(() => reparkReservedWrite(service, command.entryId) ||",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        }
+      ]
+    }
+  }
+}

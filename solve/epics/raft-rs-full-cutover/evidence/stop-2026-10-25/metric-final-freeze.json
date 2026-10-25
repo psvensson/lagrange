@@ -1,0 +1,179 @@
+{
+  "sha": "5485381b70d7c963f30e1468c5e8ca17d156f569",
+  "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+  "worktree": "/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025",
+  "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+  "sourceFiles": [
+    {
+      "path": "scripts/check-circular-dependencies.js",
+      "bytes": 2527,
+      "sha256": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c"
+    },
+    {
+      "path": "scripts/metric-cycle-analyzer.js",
+      "bytes": 6012,
+      "sha256": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70"
+    },
+    {
+      "path": "scripts/metric-cycle-input-facts.js",
+      "bytes": 3663,
+      "sha256": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a"
+    },
+    {
+      "path": "scripts/metric-report-constants.js",
+      "bytes": 2017,
+      "sha256": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423"
+    },
+    {
+      "path": "scripts/metric-report-inputs.js",
+      "bytes": 5131,
+      "sha256": "a90579739a5dd635cd92ed703af5653990a82e6138bee4611b4d4c3d8a5d3543"
+    },
+    {
+      "path": "scripts/metric-report-provenance.js",
+      "bytes": 3740,
+      "sha256": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133"
+    },
+    {
+      "path": "test/scripts/metric-cycle-custody.test.js",
+      "bytes": 4067,
+      "sha256": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e"
+    },
+    {
+      "path": "test/scripts/metric-cycle-resolution.test.js",
+      "bytes": 5574,
+      "sha256": "0b44ddabccd3959ef53be420e03243795ab5850e00361dfc9867eace435928cc"
+    },
+    {
+      "path": "test/scripts/metric-duplication-inputs.test.js",
+      "bytes": 1531,
+      "sha256": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a"
+    },
+    {
+      "path": "test/scripts/metric-report-fixture.js",
+      "bytes": 2829,
+      "sha256": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731"
+    },
+    {
+      "path": "test/scripts/metric-report-inputs.test.js",
+      "bytes": 5972,
+      "sha256": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89"
+    }
+  ],
+  "changedPaths": [
+    "scripts/check-circular-dependencies.js",
+    "scripts/metric-cycle-analyzer.js",
+    "scripts/metric-cycle-input-facts.js",
+    "scripts/metric-report-constants.js",
+    "scripts/metric-report-inputs.js",
+    "scripts/metric-report-provenance.js",
+    "solve/changes/global-owner-debt-inventory/inventory.json",
+    "solve/quests/metric-report-provenance/evidence/REVIEW-M1-c95.md",
+    "solve/quests/metric-report-provenance/evidence/m1-broad-refresh.json",
+    "solve/quests/metric-report-provenance/evidence/m1-fast-path.json",
+    "solve/quests/metric-report-provenance/evidence/m1-function-metrics.json",
+    "solve/quests/metric-report-provenance/evidence/m1-installed-analyzer-identities.json",
+    "solve/quests/metric-report-provenance/evidence/m1-project-route-coverage.json",
+    "solve/quests/metric-report-provenance/evidence/m1-source-freeze.json",
+    "solve/quests/metric-report-provenance/evidence/receipt.json",
+    "solve/quests/metric-report-provenance/log.ndjson",
+    "test/scripts/metric-cycle-custody.test.js",
+    "test/scripts/metric-cycle-resolution.test.js",
+    "test/scripts/metric-duplication-inputs.test.js",
+    "test/scripts/metric-report-fixture.js",
+    "test/scripts/metric-report-inputs.test.js",
+    "test/shards/impact-graph-seal.json",
+    "test/shards/primary-classes.json",
+    "test/shards/resource-classes.json",
+    "test/shards/subsystem-classes.json"
+  ],
+  "clean": true,
+  "normalHook": {
+    "exitCode": 0,
+    "elapsedSeconds": 20.7435377050424,
+    "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+    "sha": "5485381b70d7c963f30e1468c5e8ca17d156f569"
+  },
+  "broadRefresh": {
+    "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+    "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+    "command": "node scripts/generate-global-owner-debt-inventory.js --refresh",
+    "exitCode": 0,
+    "elapsedSeconds": 165.32138469896745
+  },
+  "fastPath": {
+    "exitCode": 0,
+    "elapsedSeconds": 2.0857613389380276,
+    "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+    "before": {
+      "complexity": {
+        "path": "test-output/analysis/complexity-src-test.json",
+        "bytes": 418731,
+        "ino": 224434280,
+        "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+      },
+      "cognitive": {
+        "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+        "bytes": 36361,
+        "ino": 224434265,
+        "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+      },
+      "cycles": {
+        "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+        "bytes": 4280553,
+        "ino": 224434266,
+        "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+      },
+      "duplicationSource": {
+        "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+        "bytes": 909277,
+        "ino": 224565573,
+        "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+      },
+      "duplicationTest": {
+        "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+        "bytes": 2500210,
+        "ino": 224535717,
+        "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+      }
+    },
+    "after": {
+      "complexity": {
+        "path": "test-output/analysis/complexity-src-test.json",
+        "bytes": 418731,
+        "ino": 224434280,
+        "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+      },
+      "cognitive": {
+        "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+        "bytes": 36361,
+        "ino": 224434265,
+        "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+      },
+      "cycles": {
+        "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+        "bytes": 4280553,
+        "ino": 224434266,
+        "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+      },
+      "duplicationSource": {
+        "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+        "bytes": 909277,
+        "ino": 224565573,
+        "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+      },
+      "duplicationTest": {
+        "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+        "bytes": 2500210,
+        "ino": 224535717,
+        "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+      }
+    },
+    "allFiveReportBytesAndInodesUnchanged": true,
+    "inventoryBefore": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+    "inventoryAfter": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+    "inventoryBytesUnchanged": true
+  },
+  "processCustody": "All owned processes completed; broad window released to root.",
+  "status": "WIP frozen for independent delta review; no Quest/release acceptance"
+}

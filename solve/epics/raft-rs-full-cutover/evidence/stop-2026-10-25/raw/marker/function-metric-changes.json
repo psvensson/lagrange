@@ -1,0 +1,186 @@
+[
+  {
+    "path": "src/admin/admin-owner-operations.js",
+    "rule": "complexity",
+    "header": "async appendDiagnosticMarker(body) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Async method 'appendDiagnosticMarker' has a complexity of 3. Maximum allowed is 0."
+  },
+  {
+    "path": "src/admin/admin-owner-operations.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "async appendDiagnosticMarker(body) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+  },
+  {
+    "path": "src/admin/admin-owner-operations.js",
+    "rule": "complexity",
+    "header": "async (request, reply) => sendAnswer(reply,",
+    "occurrence": 6,
+    "base": null,
+    "current": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/logs-owner.js",
+    "rule": "complexity",
+    "header": "constructor(options = {}) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Constructor has a complexity of 3. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/logs-owner.js",
+    "rule": "complexity",
+    "header": "async appendDiagnosticMarker(request, nodeId, options = {}) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Async method 'appendDiagnosticMarker' has a complexity of 6. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/logs-owner.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "async appendDiagnosticMarker(request, nodeId, options = {}) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function markerError(code, message, fields = {}) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'markerError' has a complexity of 2. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function diagnosticMarkerLogId(markerId) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'diagnosticMarkerLogId' has a complexity of 1. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function validateMarkerRequest(request) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'validateMarkerRequest' has a complexity of 10. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function validateMarkerRequest(request) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "Object.keys(request).some((key) => !MARKER_FIELDS.has(key)) ||",
+    "occurrence": 1,
+    "base": null,
+    "current": "Arrow function has a complexity of 1. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function compileDiagnosticMarker(request, nodeId, now) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'compileDiagnosticMarker' has a complexity of 5. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function compileDiagnosticMarker(request, nodeId, now) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function diagnosticMarkerWasApplied(result) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'diagnosticMarkerWasApplied' has a complexity of 5. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function diagnosticMarkerWasApplied(result) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function recordedDiagnosticMarker(row) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'recordedDiagnosticMarker' has a complexity of 1. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function unconfirmedDiagnosticMarker(cause = null) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'unconfirmedDiagnosticMarker' has a complexity of 3. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function unconfirmedDiagnosticMarker(cause = null) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function hasRecordedMarkerIdentity(row, intended) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'hasRecordedMarkerIdentity' has a complexity of 5. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function hasRecordedMarkerIdentity(row, intended) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "complexity",
+    "header": "function reconcileDiagnosticMarker(observation, intended, cause = null) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Function 'reconcileDiagnosticMarker' has a complexity of 10. Maximum allowed is 0."
+  },
+  {
+    "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+    "rule": "sonarjs/cognitive-complexity",
+    "header": "function reconcileDiagnosticMarker(observation, intended, cause = null) {",
+    "occurrence": 1,
+    "base": null,
+    "current": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+  },
+  {
+    "path": "src/entrypoint-runtime-admin-composition.js",
+    "rule": "complexity",
+    "header": "getLogsOwner: () => options.owner?.systemMetadataOwners?.logsOwner || null,",
+    "occurrence": 1,
+    "base": null,
+    "current": "Method 'getLogsOwner' has a complexity of 4. Maximum allowed is 0."
+  }
+]

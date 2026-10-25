@@ -1,0 +1,20 @@
+{
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "state": "pre-hook source; independent review pending",
+  "files": {
+    "docs/admin-api-reference.md": "c61171bc860feda7243fcc921a5515e676e7efdbece61b8fd0fb8059ae3ae669",
+    "solve/quests/admin-owner-mutation-outcomes/evidence/receipt.json": "3c5be20179b84d8c931246dfcf04541d705bd2fe412f6a7469dca500ab95ad7d",
+    "solve/quests/admin-owner-mutation-outcomes/log.ndjson": "af6012be0686f69a0107182af7d5dd441c4fe7b1dcefaf713497f45941582852",
+    "solve/quests/admin-owner-mutation-outcomes/quest.json": "8edbb5a2b0d27b90d0aa792b79043025e0a67ab0b94f72d88892413c21ccdde8",
+    "src/admin/admin-owner-operations.js": "8bfd27e8ad13dd3a494e4912b260a21733f9b6de7ff57658989801a82a1e340e",
+    "src/config/config-constants.js": "a78e75f3d34099a421768ddf3332591b323fbba5ddc76db9b8e24d0d36c44d3e",
+    "src/config/dynamic-config-service.js": "e8a0887a7510e960efab1ce8d88cd66ef50575d2a04b32b58fc1617807b6436a",
+    "src/control-plane/control-plane-single-row-confirmation.js": "05fd1fdedce2f10a89b14362a1bc07bde3bec67268c2595cf68a7b60ac409aa5",
+    "src/policy/policy-constants.js": "284e6df5ac8dd4221146ebf078d1a28cec2e4a5b08884ecc34f1a5241c1fb734",
+    "src/policy/table-policy-service.js": "45703fcffc6be17390e3a5437f7f09a6b8c5486558459df92667ab994008fbd7",
+    "test/admin/admin-owner-mutation-outcomes.test.js": "99ce82ede2982d700aac19bd963204c02bec186fbd2cb5d534157c6c2fcf06b1",
+    "test/config/dynamic-config-service.test.js": "db3283e79ae861adf6482f5e132b3b29c25d1cdaada31d869dad0fcb59fb1896",
+    "test/policy/table-policy-service.test.js": "8be923dfb2ad286e679d1827bb48c82a44aaf87cc843f2b49a6f45b6a1701346",
+    "test/shards/impact-contracts.json": "60fbb9f28b50c86e8736349a2f07bb3cec55734cc908fb1fc97bef84666dc4a7"
+  }
+}

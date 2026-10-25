@@ -1,0 +1,33 @@
+{
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "state": "pre-hook source; broader fixture cone pending",
+  "files": {
+    "solve/quests/admin-partition-cohort-readback/evidence/receipt.json": "ab74574106c9645e5667e98d47f7678ec874f6cdc5a9bdd874cf9206c0723715",
+    "solve/quests/admin-partition-cohort-readback/log.ndjson": "6f962ff63a70349d4ab1f3454440cf70c711fbfc0ad578d2d1096e173f73ae4b",
+    "solve/quests/admin-partition-cohort-readback/quest.json": "1b880b789e22b02a89b6bb3747e7c5416e4f4f26cc09c544dd9573f58c22724c",
+    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "c52d22cd6e0d82d5f0529bec98dc82e511c1f72b8323f19727550a12fb61d5c3",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js": "32a87a20b233bb41adaae9d8767b738eee6e662446d2a56cb766d6a6cc396fa8",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+    "test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+    "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+    "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+    "test/shards/impact-contracts.json": "ab4367582dbce07c934874558ec7ddfe053325047d45a5c8ecca82dc250cfe7a"
+  }
+}
