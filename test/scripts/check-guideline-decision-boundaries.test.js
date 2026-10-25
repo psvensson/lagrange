@@ -996,3 +996,147 @@ test('raw-state audit requires unchanged caught values and an immediate aggregat
     t.equal(emptyStateFindings(deferredThrow, 'releaseResources').length, 1,
       'a throw in a deferred callback does not settle the current exception');
   });
+
+const LOCAL_FORWARDING_POSITIVES = Object.freeze([
+  'return new Consumer({cache, db});',
+  'return new Consumer({left: deps.cache, right: deps.sqlEngine, path: options.dbPath});',
+  'return new constructors.Consumer({left: deps?.cache, right: deps?.sqlEngine});',
+  'const left = cache; const right = db; return new Consumer({left, right});',
+  'const cacheHandle = deps.cache; const sqlHandle = deps.sqlEngine; ' +
+    'const left = cacheHandle; const right = sqlHandle; return new Consumer({left, right});',
+  'const sqlHandle = deps.sqlEngine; return new Consumer({cache: obtainCache(), sqlHandle});',
+]);
+
+for (const body of LOCAL_FORWARDING_POSITIVES) {
+  test(`local constructor forwarding: ${body}`, async (t) => {
+    t.same(mixedFindingsFor(`export function assemble() { ${body} }`), [],
+      'reference forwarding does not claim either source is decision truth');
+  });
+}
+
+const LOCAL_FORWARDING_NEGATIVES = Object.freeze([
+  'const left = cache; const right = db; return new Consumer({left: 0, right: 0});',
+  'const left = cache; const right = db; return new Consumer({a: deps.left, b: deps.right});',
+  'const Left = cache; const Right = db; new Left(); new Right();',
+  'const left = cache; const right = db; return new Consumer({});',
+  'return new Consumer({value: cache ?? db});',
+  'return new Consumer({value: cache ? db : other});',
+  'return new Consumer({value: cache === db});',
+  'return new Consumer({value: cache + db});',
+  'return new Consumer({value: [cache, db]});',
+  'return new Consumer({value: {cache, db}});',
+  'return new Consumer({...cache, ...db});',
+  'return new Consumer({[cache]: db});',
+  'return new constructors[selected]({cache, db});',
+  'return new Consumer({left: deps[cache], right: deps[db]});',
+  'return new Consumer({left: cache.get(), right: db.query()});',
+  'return new Consumer({left: cache?.get?.(), right: db?.query?.()});',
+  'return new Consumer({left: cache[operation](), right: db[operation]()});',
+  'return new Consumer({read: () => cache ?? db});',
+  'return new Consumer({get row() { return cache ?? db; }});',
+  'const left = cache; const right = db; observe(left, right); ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, value: left.get() ?? right.query()});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, read: () => left ?? right});',
+  'const left = cache; const right = db; if (left === right) return other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; return new Consumer({left, right}) || left || right;',
+  'let left = cache; let right = db; left = other; right = other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; left.value = other; right.value = other; ' +
+    'return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    '{ const left = other; const right = other; use(left, right); } ' +
+    'return new Consumer({left, right});',
+  'const {cache: left, db: right} = deps; return new Consumer({left, right});',
+  'const left = cache; const right = db; ' +
+    'return new Consumer({left, right, alias: unknown(left, right)});',
+]);
+
+for (const body of LOCAL_FORWARDING_NEGATIVES) {
+  test(`local constructor active or unclassified use: ${body}`, async (t) => {
+    t.equal(mixedFindingsFor(`export function assemble() { ${body} }`).length, 1,
+      'only individual proven forwarding references can become passive');
+  });
+}
+
+test('actual seed constructor is local forwarding, not transitive provider purity', async (t) => {
+  const filePath = 'src/bootstrap/phases/seed-partitions-phase.js';
+  const source = await fs.readFile(filePath, 'utf8');
+  const method = 'createBootstrapPartitionReplica';
+  t.same(mixedFindingsFor(source, filePath, method), [],
+    'unchanged real method forwards handles and path without SQL truth use');
+  const renamed = source.replaceAll('PartitionService', 'Consumer')
+    .replaceAll('createBootstrapPartitionReplica', 'assemble')
+    .replaceAll('getSystemTableCache', 'obtainCache')
+    .replaceAll('sqlQueryEngine', 'dbHandle');
+  t.same(mixedFindingsFor(renamed), [], 'equivalent names do not grant authority');
+  const anchor = '      await partition.initialize();';
+  t.equal(source.split(anchor).length, 2, 'one actual operation insertion point');
+  for (const read of [
+    'd.getSystemTableCache().get("key"); cdcIntegrationService.sqlQueryEngine.query("SELECT 1");',
+    'const left = d.getSystemTableCache(); const right = cdcIntegrationService.sqlQueryEngine; ' +
+      'observe(left, right);',
+    'const {get: readCache} = d.getSystemTableCache(); ' +
+      'const {query: readSql} = cdcIntegrationService.sqlQueryEngine; ' +
+      'readCache("key") ?? readSql("SELECT 1");',
+    'return cachedRow ?? sqlRow;',
+    'new Consumer({left: cache.get("key"), right: db.query("SELECT 1")});',
+    'unknown(cache, db);',
+  ]) {
+    const changed = source.replace(anchor, `${read}\n${anchor}`);
+    t.equal(mixedFindingsFor(changed, filePath, method).length, 1,
+      `active or unclassified local evidence in same method: ${read}`);
+  }
+});
+
+test('opaque provider effects remain audited at their own local operation', async (t) => {
+  const source = [
+    'export function assemble() {',
+    '  return new Consumer({cache: providers.obtainCache(), engine: providers.sqlEngine});',
+    '}',
+    'export function obtainCache() { return cache.get("key") ?? db.query("SELECT 1"); }',
+  ].join('\n');
+  t.same(mixedFindingsFor(source), [], 'caller does not claim transitive purity');
+  t.equal(mixedFindingsFor(source, CONSTRUCTION_FIXTURE_PATH, 'obtainCache').length, 1,
+    'provider mixed truth use is still classified at its own body');
+});
+
+const ADDITIONAL_FORWARDING_OWNERS = Object.freeze([
+  {
+    path: 'src/migration/migration-composition.js',
+    method: 'createMigrationWorkflowOwners',
+    anchor: '  const migrationCoordinator = new MigrationCoordinator({',
+    read: '  options.systemTableCache.get("key"); options.sqlCore.query("SELECT 1");',
+  },
+  {
+    path: 'src/live-query/live-query-manager.js',
+    method: 'registerLiveQuery',
+    anchor: '    const clientId = client.id || client.clientId;',
+    read: '    this.systemCache.get("key"); this.sqlQueryEngine.query("SELECT 1");',
+  },
+]);
+
+for (const fixture of ADDITIONAL_FORWARDING_OWNERS) {
+  test(`local forwarding in actual ${fixture.method}`, async (t) => {
+    const source = await fs.readFile(fixture.path, 'utf8');
+    t.equal(source.split(fixture.anchor).length, 2, 'one real owner insertion site');
+    t.same(mixedFindingsFor(source, fixture.path, fixture.method), [],
+      'raw dependency forwarding is the only removed mixed evidence');
+    const active = source.replace(fixture.anchor, `${fixture.read}\n${fixture.anchor}`);
+    t.equal(mixedFindingsFor(active, fixture.path, fixture.method).length, 1,
+      'actual cache and SQL reads in the same owner remain visible');
+  });
+}
+
+test('filesystem collector uses the same local policy without provider context', async (t) => {
+  const file = 'src/bootstrap/phases/seed-partitions-phase.js';
+  const report = await collectDecisionBoundaryViolations([file]);
+  t.equal(report.scannedFileCount, 1, 'actual caller file is scanned');
+  t.same(report.violations.filter((finding) =>
+    finding.kind === VIOLATION_KIND.MIXED_CACHE_AND_SQL &&
+    finding.functionName === 'createBootstrapPartitionReplica'), [],
+  'ordinary collector and pure-source checker share one local policy');
+});
