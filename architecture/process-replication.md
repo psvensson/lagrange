@@ -127,9 +127,10 @@ Operational consequences by adapter:
   install**, not full log replay, once its required prefix has been compacted
   away — this is the production recovery path the learner-promotion code was
   written to accommodate.
-- **In-memory message-group logs still grow without bound** — that adapter's
-  weaker durability contract forbids deleting committed entries while it is
-  live, so it retains its full prefix and relies on full replay.
+- **Message-group logs are persistent SQLite logs**, opened by the message-group
+  consensus owner and written through the raft-rs operation port. The partition
+  snapshot cadence described above does not establish a message-group retention
+  bound; durability and prefix reclamation are separate guarantees.
 
 ## The write path
 
@@ -272,17 +273,19 @@ trigger an election while it catches up.
 
 ### Stage 4 — Promoted; group healthy again
 
-Promotion is **time-based, not progress-based** — the detail most likely to
-mislead you when reading this code. The promotion check waits a fixed delay
-(30 s; 5 s for priority control-plane partitions, re-polled every second) and
-then requires only a discovered leader plus voter-count safety arithmetic: no
-overflow past the target replica count, and no even voter count. It does **not**
-compare the learner's log index against the leader's. Even though SQLite
-partitions now have a production snapshot-install catch-up path (a far-behind
-follower can be rebuilt by install rather than long replay), promotion timing
-is unchanged and still does not check the index — so a learner that has not
-finished catching up can in principle be promoted before it is genuinely
-current.
+Promotion requires a **current leader's progress proof**. After the scheduling
+delay and local voter-count checks, the partition requests that proof from its
+discovered leader. The leader grants it only when the learner's match index
+reaches the safe promotion index, derived from the committed index, for the
+current term and membership epoch.
+
+After the round trip, the partition validates the proof against its current
+leader identity, term, membership epoch and learner role before becoming a
+follower. A missing, stale or refused proof defers promotion with a typed reason
+and a scheduled recheck. The delay schedules the check; elapsed time alone
+does not authorize promotion. The implementation owners are
+`src/partition/partition-service-learner-promotion-methods.js` and
+`src/raft/learner-promotion-progress.js`.
 
 Learner mode is not universal either: replicas created during fresh bootstrap,
 or when no viable leader row is visible, start as voters and skip the learner
