@@ -46,6 +46,10 @@ const ERRORS = Object.freeze({
   WRITE_CUTOVER_PAUSED:
     'The partition paused mutation admission for its participant ' +
     'transaction cutover; the write was not proposed and may be retried',
+  WRITE_CDC_CAPACITY:
+    'Partition CDC debt is at capacity; this attempt changed no data and may be retried',
+  WRITE_CDC_DEMAND_EXCEEDS_CAPACITY:
+    'The carried operation batch exceeds the partition CDC capacity; no data changed',
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   NO_HANDLER_FOR_ADDRESS: 'No handler registered for address',
 });
@@ -69,6 +73,7 @@ const REROUTABLE_WRITE_ERROR_FRAGMENTS = Object.freeze([
   ERRORS.WRITE_COMMIT_DEADLINE_EXCEEDED,
   ERRORS.WRITE_RESERVED,
   ERRORS.WRITE_CUTOVER_PAUSED,
+  ERRORS.WRITE_CDC_CAPACITY,
 ]);
 
 /**

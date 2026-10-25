@@ -43,6 +43,8 @@ import {
   isCdcCommandType,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
+import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
+  './partition-cdc-owed-admission.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
@@ -665,6 +667,10 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         // A PREPARED participant transaction holds every other statement.
         if (isPartitionReserved(this.db)) {
           return settleReservedCommittedStatement(this, {command, afterCommit});
+        }
+        const cdcAdmission = admitCdcOwedWork(this, command);
+        if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
+          return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
         }
         let info;
         try {

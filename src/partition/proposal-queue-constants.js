@@ -9,6 +9,8 @@
  * Default configuration values for the ProposalQueue.
  * @type {Object}
  */
+const PROPOSAL_QUEUE_ADMISSION_CLASS = Object.freeze({ORDINARY: 'ordinary'});
+
 const PROPOSAL_QUEUE_DEFAULT = Object.freeze({
   MAX_CAPACITY: 1000,
   // The queue's backpressure policy: how long a proposer it refused at
@@ -24,6 +26,7 @@ const PROPOSAL_QUEUE_DEFAULT = Object.freeze({
 const PROPOSAL_QUEUE_ERROR_MSG = Object.freeze({
   BACKPRESSURE: 'Proposal queue at capacity — backpressure applied',
   DUPLICATE_ENTRY: 'Proposal queue already owns this entry ID',
+  INVALID_RESERVED_CAPACITY: 'Proposal queue reserved capacities must fit its total capacity',
 });
 
 /**
@@ -67,6 +70,7 @@ const PROPOSAL_QUEUE_LOG_MSG = Object.freeze({
 });
 
 export {
+  PROPOSAL_QUEUE_ADMISSION_CLASS,
   PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,

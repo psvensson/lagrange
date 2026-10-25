@@ -32,6 +32,8 @@
 // proposed that meets the reservation at apply is parked again under its
 // entryId instead of answered.
 
+import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
+  './partition-cdc-owed-admission.js';
 import {ERRORS} from '../constants/errors.js';
 import {TABLES} from '../constants/tables.js';
 import {installTransactionSchemaEnforcement} from
@@ -320,6 +322,10 @@ function applyParticipantPrepare(service, committed) {
   const dryRun = dryRunCarriedOperations(service, command.operationsText);
   if (dryRun !== DRY_RUN_PASSED) {
     return refusePrepare(service, committed, dryRun);
+  }
+  const cdcAdmission = admitCdcOwedWork(service, command);
+  if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
+    return settleCdcOwedRefusal(service, committed, cdcAdmission.answer);
   }
   insertParticipantTransactionRow(service.db,
     preparedRowOf(committed, {state: STATE.PREPARED}));

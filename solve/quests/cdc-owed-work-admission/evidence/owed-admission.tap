@@ -1,0 +1,35 @@
+TAP version 13
+# Subtest: refusing subscriber bounds actual write ingress and admits retry after committed acknowledgement
+ok 1 - refusing subscriber bounds actual write ingress and admits retry after committed acknowledgement
+  ---
+  duration_ms: 3932.752466
+  type: 'test'
+  ...
+# Subtest: concurrent proposals obey one committed-prefix capacity and losing same-entry retry remains live
+ok 2 - concurrent proposals obey one committed-prefix capacity and losing same-entry retry remains live
+  ---
+  duration_ms: 3864.978129
+  type: 'test'
+  ...
+# Subtest: the existing control-plane retry owner continues the same entry after ACK progress without new traffic
+ok 3 - the existing control-plane retry owner continues the same entry after ACK progress without new traffic
+  ---
+  duration_ms: 2525.748188
+  type: 'test'
+  ...
+# Subtest: owed-event admission preserves the supported 2 MiB ordinary payload
+ok 4 - owed-event admission preserves the supported 2 MiB ordinary payload
+  ---
+  duration_ms: 43.206805
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10379.480352
+# time=11169ms

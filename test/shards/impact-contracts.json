@@ -1417,7 +1417,8 @@
         "src/transport/transport-semantic-outcome.js",
         "src/utils/canonical-json-data.js",
         "src/topology/cdc-group-propagation-retry-wait-report.js",
-        "src/transport/transport-query-semantic-outcome.js"
+        "src/transport/transport-query-semantic-outcome.js",
+        "src/partition/partition-cdc-owed-admission.js"
       ],
       "tests": [
         "test/cdc/cdc-delivery-outcome.test.js",
@@ -1458,7 +1459,11 @@
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js",
-        "test/partition/partition-cdc-obligation-reclamation.test.js"
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/partition/partition-cdc-owed-admission.test.js",
+        "test/partition/partition-cdc-prepared-capacity.test.js",
+        "test/partition/partition-cdc-drain-admission.test.js",
+        "test/partition/partition-cdc-owed-admission-native.test.js"
       ]
     }
   },
@@ -2949,7 +2954,8 @@
             "src/topology/cdc-group-propagation-durable-plan.js",
             "src/topology/cdc-group-propagation-routing.js",
             "src/utils/canonical-json-data.js",
-            "src/topology/cdc-group-propagation-retry-wait-report.js"
+            "src/topology/cdc-group-propagation-retry-wait-report.js",
+            "src/partition/partition-cdc-owed-admission.js"
           ]
         },
         {
@@ -3020,7 +3026,11 @@
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js",
-        "test/partition/partition-cdc-obligation-reclamation.test.js"
+        "test/partition/partition-cdc-obligation-reclamation.test.js",
+        "test/partition/partition-cdc-owed-admission.test.js",
+        "test/partition/partition-cdc-prepared-capacity.test.js",
+        "test/partition/partition-cdc-drain-admission.test.js",
+        "test/partition/partition-cdc-owed-admission-native.test.js"
       ]
     }
   }

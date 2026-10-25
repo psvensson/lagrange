@@ -69,6 +69,8 @@ const PARTITION_CDC_OBLIGATION_BYTES = Object.freeze({
 //   exceeds what one command can add (ACK_BATCH_MAX_EVENTS) plus the retained
 //   bound, so a backlog shrinks with every acknowledgement.
 const PARTITION_CDC_OBLIGATION_BOUND = Object.freeze({
+  // Durable owed-work capacity; no new per-event payload or fan-out cap.
+  OWED_MAX_EVENTS: NUM.FOUR * NUM.FOUR * NUM.TWO_HUNDRED_FIFTY_SIX,
   ACK_BATCH_MAX_EVENTS: NUM.TWO_HUNDRED_FIFTY_SIX,
   ACK_MAX_OUTSTANDING_BATCHES: NUM.TWO,
   ACK_BATCH_MAX_BYTES: NUM.SIXTY_FOUR * NUM.BYTES_PER_KIB,

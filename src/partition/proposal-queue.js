@@ -10,6 +10,7 @@
  */
 
 import {
+  PROPOSAL_QUEUE_ADMISSION_CLASS,
   PROPOSAL_QUEUE_BACKPRESSURE_CODE,
   PROPOSAL_QUEUE_DEFAULT,
   PROPOSAL_QUEUE_ERROR_MSG,
@@ -38,10 +39,18 @@ class ProposalQueue {
    * @param {Object} [options={}] - Configuration options.
    * @param {number} [options.maxCapacity] - Maximum queue capacity.
    *   Defaults to PROPOSAL_QUEUE_DEFAULT.MAX_CAPACITY.
+   * @param {Object<string, number>} [options.reservedCapacities] - Protected
+   *   capacity per owner-defined admission class, within the same total bound.
    */
   constructor(options = {}) {
     this.maxCapacity =
       options.maxCapacity || PROPOSAL_QUEUE_DEFAULT.MAX_CAPACITY;
+    this.reservedCapacities = new Map(Object.entries(options.reservedCapacities ?? {}));
+    const reserved = [...this.reservedCapacities.values()];
+    if (reserved.some((count) => !Number.isSafeInteger(count) || count < 0) ||
+        reserved.reduce((sum, count) => sum + count, 0) > this.maxCapacity) {
+      throw new Error(PROPOSAL_QUEUE_ERROR_MSG.INVALID_RESERVED_CAPACITY);
+    }
     this.pendingCommits = new Map();
     // Proposal state and optional raw-operation custody share this existing
     // queue metadata. A retired response can still consume its original slot.
@@ -100,14 +109,15 @@ class ProposalQueue {
    * @param {string} entryId - Unique identifier for the proposal.
    * @param {Object} entry - Proposal entry containing resolve/reject
    *   callbacks and timeout information.
+   * @param {string} [admissionClass=PROPOSAL_QUEUE_ADMISSION_CLASS.ORDINARY] - Owner-selected capacity class.
    * @throws {Error} Backpressure error when queue is at capacity, typed with
    *   PROPOSAL_QUEUE_BACKPRESSURE_CODE and the queue's retryAfterMs.
    */
-  enqueue(entryId, entry) {
+  enqueue(entryId, entry, admissionClass = PROPOSAL_QUEUE_ADMISSION_CLASS.ORDINARY) {
     if (this.pendingCommits.has(entryId)) {
       throw new Error(PROPOSAL_QUEUE_ERROR_MSG.DUPLICATE_ENTRY);
     }
-    if (this.isFull) {
+    if (this.size >= this.capacityFor(admissionClass)) {
       throw Object.assign(new Error(PROPOSAL_QUEUE_ERROR_MSG.BACKPRESSURE), {
         code: PROPOSAL_QUEUE_BACKPRESSURE_CODE,
         retryAfterMs: PROPOSAL_QUEUE_DEFAULT.BACKPRESSURE_RETRY_AFTER_MS,
@@ -115,7 +125,22 @@ class ProposalQueue {
     }
     this.pendingCommits.set(entryId, entry);
     this.proposals.set(entryId, {state: PROPOSAL_QUEUE_PROPOSAL_STATE.QUEUED,
-      responsePending: true, rawOperation: null});
+      responsePending: true, rawOperation: null, admissionClass});
+  }
+
+  // Capacity not currently used by another reserved class stays available
+  // to that class. All classes share the remaining slots and one hard bound.
+  capacityFor(admissionClass) {
+    let unavailable = 0;
+    for (const [kind, reserved] of this.reservedCapacities) {
+      if (kind === admissionClass) continue;
+      let used = 0;
+      for (const proposal of this.proposals.values()) {
+        if (proposal.admissionClass === kind) used += 1;
+      }
+      unavailable += Math.max(0, reserved - used);
+    }
+    return this.maxCapacity - unavailable;
   }
 
   /**
