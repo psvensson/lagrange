@@ -701,34 +701,6 @@ class BootstrapService extends EventEmitter {
       recovery,
     });
   }
-
-  /**
-   * Bootstrap and exit on failure.
-   * This is the main entry point for seed node startup.
-   * @param {Object} options - Bootstrap options; bootIncarnation is required
-   *   (the constructor refuses its absence before any side effect).
-   * @return {Promise<Object>} Bootstrap result.
-   */
-  static async bootstrapOrExit(options = {}) {
-    const bootstrap = new BootstrapService(options);
-    const result = await bootstrap.bootstrap();
-
-    if (!result.success) {
-      const loggingService = LoggingService.getInstance();
-      const logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
-
-      logger.error(BootstrapLog.BOOTSTRAP_EXIT_FAILED, {
-        nodeId: result.nodeId,
-        error: result.error,
-        phase: result.phase,
-      });
-
-      // Exit with non-zero code (Requirement 6.16)
-      process.exit(1);
-    }
-
-    return result;
-  }
 }
 
 Object.assign(

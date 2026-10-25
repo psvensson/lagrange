@@ -850,26 +850,6 @@ async (t) => {
         seedNodeAddress: SEED_ADDRESS, dataDir, bootIncarnation,
       })), 'NodeJoiningService', label);
   }
-  const initialize = EventEmitter.init;
-  let entryEmitters = 0;
-  EventEmitter.init = function(...args) {
-    entryEmitters += 1;
-    return initialize.apply(this, args);
-  };
-  let entryRefusal = null;
-  try {
-    await BootstrapService.bootstrapOrExit({
-      nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001', nodeService,
-    });
-  } catch (error) {
-    entryRefusal = error;
-  } finally {
-    EventEmitter.init = initialize;
-  }
-  t.same([entryRefusal?.code, entryRefusal?.subject, entryEmitters],
-    [BOOT_INCARNATION_REQUIRED, 'BootstrapService', 0],
-    'the static seed entry point refuses at the service boundary before ' +
-    'any initialization');
   t.same([runtime.tracker.owners.size,
     runtime.nodeTimeSource.pendingTimerCount(),
     nodeService.getLifecycleStateMachine?.() ?? null,

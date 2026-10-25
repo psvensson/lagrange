@@ -327,7 +327,6 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   WS_ALREADY_RUNNING: 'WebSocket server already running',
   WS_SERVER_STARTED: 'WebSocket server started for cross-node communication',
   SHUTDOWN: 'Shutting down bootstrap service',
-  BOOTSTRAP_EXIT_FAILED: 'Bootstrap failed, exiting with non-zero exit code',
   FAILED_BOOTSTRAP_CLEANUP_START:
     'Starting failed bootstrap cleanup in reverse phase order',
   FAILED_BOOTSTRAP_CLEANUP_CACHE:

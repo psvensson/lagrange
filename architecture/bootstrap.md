@@ -47,8 +47,10 @@ node/process startup -> reserveBootIncarnation(dataDir) -> incarnation G
   and fails closed on unreadable reservation state
   (`BOOT_INCARNATION_STATE_UNREADABLE`) or a missing data directory
   (`BOOT_INCARNATION_DATA_DIR_REQUIRED`).
-- `BootstrapService` requires `bootIncarnation`, including through
-  `BootstrapService.bootstrapOrExit`.
+- The public startup owner (`startLagrangeRuntime`) reserves the seed boot
+  incarnation before constructing `BootstrapService`, which requires it.
+  Bootstrap failures return to that startup owner for cleanup and error
+  propagation.
 - `NodeJoiningService` requires `bootIncarnation`.
 - The caller obtains it from the boot incarnation owner; neither service
   reserves one. A new join attempt after an abandoned one is a new boot

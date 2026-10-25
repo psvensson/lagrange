@@ -1,6 +1,7 @@
 /**
- * Tests for Bootstrap Sequence.
- * Verifies the ordering: server → self-connect → services
+ * Characterizes BootstrapService's internal phase checkpoints and the
+ * infrastructure self-connection. Public startup, error cleanup, and
+ * readiness are exercised by the public runtime startup witnesses.
  * Requirements: 8.1, 8.2, 8.3, 8.4
  */
 
@@ -341,7 +342,7 @@ test('BootstrapService - seed checkpoint rerun guards consume the checkpoint sna
     await bootstrap.shutdown();
   });
 
-test('Bootstrap sequence - server starts before services', async (t) => {
+test('BootstrapService phase checkpoints start with infrastructure', async (t) => {
   initializeTestEnvironment();
 
   const wsPort = getRandomPort();
@@ -584,7 +585,7 @@ test('BootstrapService - notifies local admin runtime before seed self-publicati
     }
   });
 
-test('Bootstrap sequence - self-connection established before services', async (t) => {
+test('BootstrapService has a self-connection before message-group phase', async (t) => {
   initializeTestEnvironment();
 
   const wsPort = getRandomPort();
@@ -626,7 +627,7 @@ test('Bootstrap sequence - self-connection established before services', async (
   }
 });
 
-test('Bootstrap sequence - services created after self-connection', async (t) => {
+test('BootstrapService retains the self-connection after creating replicas', async (t) => {
   initializeTestEnvironment();
 
   const wsPort = getRandomPort();
