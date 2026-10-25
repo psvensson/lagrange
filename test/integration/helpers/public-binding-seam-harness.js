@@ -6,13 +6,10 @@
  * a single embedded runtime that has no product surface for it:
  *
  *  - PG-wire enablement. The built-in sys-postgres-wire definition ships
- *    `replica_count = 0` in trust mode (src/wasm-service/meta-service-
- *    factory.js) and no configuration key, environment variable, or
- *    lifecycle statement raises it, so an embedded runtime never binds a
- *    PostgreSQL listener on its own. The harness performs the one operator
- *    step that exists - a direct desired-state write of that definition -
- *    and the REAL rebalancer then places the REAL listener, which
- *    publishes its `service_endpoints` row. Recorded as a finding.
+ *    `replica_count = 0` in trust mode. The harness submits desired state
+ *    through the supported admin owner scale operation. The real rebalancer
+ *    places the listener and publishes its `service_endpoints` row; caller
+ *    tests independently connect and authenticate through that endpoint.
  *  - Table split. Policy splits run on a >= 60 s evaluation cadence, so
  *    the harness drives the engine's managed split once (as the
  *    call-binding demo does) to give the table two partitions.
@@ -30,6 +27,9 @@ import net from 'node:net';
 import path from 'node:path';
 
 import {RUNTIME_KIND} from '../../../src/constants/runtime.js';
+import {ADMIN_OWNER_OPERATION_PATH} from '../../../src/admin/admin-owner-operations.js';
+import {POSTGRES_WIRE_SCALE_STATE} from
+  '../../../src/control-plane/owners/postgres-wire-scale-contract.js';
 import {canonicalJson} from
   '../../../src/control-plane/owners/deployment-binding-contract.js';
 import {createEmbeddedLagrangeHandle} from
@@ -70,9 +70,8 @@ const PGWIRE_HOST = '127.0.0.1';
 const PGWIRE_PASSWORD_MODE = 'password';
 const PGWIRE_TLS_DISABLED = 'disable';
 const PGWIRE_ENABLED_REPLICA_COUNT = 1;
-const PGWIRE_ENABLE_SQL =
-  'UPDATE service_definitions SET replica_count = ?, runtime_config = ? ' +
-  'WHERE service_id = ?';
+const HTTP_POST = 'POST';
+const JSON_HEADERS = Object.freeze({'content-type': 'application/json'});
 const READYZ_PATH = '/readyz';
 const HTTP_OK = 200;
 const PGWIRE_EVIDENCE_SQL = Object.freeze({
@@ -86,7 +85,7 @@ const PGWIRE_REPLICAS_SQL =
   'SELECT service_id FROM services WHERE service_id LIKE ?';
 const PGWIRE_REPLICA_SUFFIX_PATTERN = '-r%';
 const PGWIRE_ENDPOINT_SQL =
-  'SELECT address, port FROM service_endpoints WHERE protocol = ?';
+  'SELECT address, port FROM service_endpoints WHERE protocol = ? AND service_id = ?';
 const REDUCE_WITNESS_SQL =
   'SELECT result_id, source_snapshot_json FROM call_cell_reduce_results';
 const SPLIT_PARTITION_COUNT = 2;
@@ -113,6 +112,7 @@ const MANIFEST_HASH_ALGORITHM = 'sha256';
 const MANIFEST_HASH_ENCODING = 'hex';
 const HARNESS_ERROR = Object.freeze({
   ENDPOINT_TIMEOUT: 'sys-postgres-wire did not publish a postgresql endpoint',
+  SCALE_REFUSED: 'sys-postgres-wire desired state was not persisted',
   READY_TIMEOUT: 'the embedded runtime never reported /readyz 200',
   WITNESS_TIMEOUT: 'no new reduce result snapshot became readable',
   MANIFEST_INVALID: 'seam manifest rejected by the manifest owner',
@@ -236,28 +236,40 @@ async function enablePasswordPgwire(db, port, wait) {
   // The documented operator order: wait for traffic readiness first.
   await pollUntil(async () => isReady(wait.restPort), wait,
     HARNESS_ERROR.READY_TIMEOUT);
-  await harnessQuery(db, PGWIRE_ENABLE_SQL, [
-    PGWIRE_ENABLED_REPLICA_COUNT,
-    JSON.stringify({
-      authMode: PGWIRE_PASSWORD_MODE,
-      host: PGWIRE_HOST,
-      port,
-      tlsMode: PGWIRE_TLS_DISABLED,
-    }),
-    PGWIRE_SERVICE_ID,
-  ]);
+  const response = await fetch(
+    `http://${PGWIRE_HOST}:${wait.restPort + ADMIN_PORT_OFFSET}` +
+      ADMIN_OWNER_OPERATION_PATH.postgresWireScale, {
+      method: HTTP_POST,
+      headers: JSON_HEADERS,
+      signal: globalThis.AbortSignal.timeout(Math.max(1, wait.deadlineMs - Date.now())),
+      body: JSON.stringify({replicaCount: PGWIRE_ENABLED_REPLICA_COUNT, runtimeConfig: {
+        authMode: PGWIRE_PASSWORD_MODE,
+        host: PGWIRE_HOST,
+        port,
+        tlsMode: PGWIRE_TLS_DISABLED,
+      }}),
+    });
+  const desiredStateResult = await response.json();
+  if (!response.ok || desiredStateResult.success !== true ||
+      desiredStateResult.scaleState !== POSTGRES_WIRE_SCALE_STATE.DESIRED_STATE_PERSISTED) {
+    throw Object.assign(new Error(desiredStateResult.error || HARNESS_ERROR.SCALE_REFUSED), {
+      code: desiredStateResult.errorCode, outcome: desiredStateResult.outcome,
+      retryAfterMs: desiredStateResult.retryAfterMs,
+    });
+  }
   let row;
   try {
     row = await pollUntil(async () => {
       const result = await harnessQuery(
-        db, PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL]);
-      return result.rows[0] || null;
+        db, PGWIRE_ENDPOINT_SQL, [PGWIRE_PROTOCOL, PGWIRE_SERVICE_ID]);
+      return result.rows.find((endpoint) => endpoint.address === PGWIRE_HOST &&
+        Number(endpoint.port) === port) || null;
     }, wait, HARNESS_ERROR.ENDPOINT_TIMEOUT);
   } catch (error) {
     throw new Error(`${error.message}: ${
       JSON.stringify(await pgwirePlacementEvidence(db))}`);
   }
-  return Object.freeze({host: row.address, port: Number(row.port)});
+  return Object.freeze({host: row.address, port: Number(row.port), desiredStateResult});
 }
 
 function acceptsConnections(host, port) {

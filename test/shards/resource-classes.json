@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2458,
+    "ordinary": 2461,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2475,
-  "digest": "fnv1a32-23a3af8f",
+  "censusSize": 2478,
+  "digest": "fnv1a32-75c7f916",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -600,6 +600,7 @@
     "test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js": "ordinary",
     "test/control-plane/owner-outcome-contract.test.js": "ordinary",
     "test/control-plane/phase-exit-criteria.test.js": "ordinary",
+    "test/control-plane/postgres-wire-scale.test.js": "ordinary",
     "test/control-plane/pressure-governor.test.js": "ordinary",
     "test/control-plane/priority-partition-census-self-diagnosis-adversarial.test.js": "ordinary",
     "test/control-plane/priority-partition-census-self-diagnosis.test.js": "ordinary",
@@ -1016,6 +1017,8 @@
     "test/integration/cdc-subscription-catchup.integration.test.js": "ordinary",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "ordinary",
     "test/integration/control-plane-node-terminal-removal.integration.test.js": "ordinary",
+    "test/integration/control-plane-pgwire-scale-callers.integration.test.js": "ordinary",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js": "ordinary",
     "test/integration/control-plane-rebalance.integration.test.js": "ordinary",
     "test/integration/convergence-control-snapshot.integration.test.js": "ordinary",
     "test/integration/create-table-partition-provisioning.integration.test.js": "ordinary",

@@ -4,9 +4,8 @@ audience: human
 
 # Admin API Reference
 
-How admin commands are structured and routed. All admin mutations are owned
-by two replicated meta-services; the WebSocket endpoint is an adapter ingress
-only, never a node-local mutation owner:
+How admin commands are structured and routed. The WebSocket endpoint is an
+adapter ingress; its commands route through replicated meta-services:
 
 - `sys-admin-meta` - cluster/node state queries, cache dumps
 - `sys-wasm-meta` - WASM module and service lifecycle
@@ -56,6 +55,16 @@ lifecycle SQL statements (`INSTALL SERVICE`, `CREATE BINDING`,
 `CONFIGURE SERVICE ACCESS`) described in that guide's section 5.
 
 ## Operational Diagnostics Endpoints
+
+The operator-only built-in PostgreSQL wire scale operation is
+`POST /api/admin/services/sys-postgres-wire/scale`, with JSON
+`{"replicaCount": 1, "runtimeConfig": {"host": "127.0.0.1", "authMode": "password", "tlsMode": "disable"}}`.
+It delegates to `ServiceDefinitionsOwner` and reports
+`scaleState: "desired_state_persisted"`. Placement, running listeners, and their
+current configuration must be observed separately. Configuration applies when
+a replica next starts; this operation does not restart existing listeners.
+See [PostgreSQL wire scale operations](../architecture/postgres-wire.md#postgresql-wire-scale-operations)
+for outcomes and the existing ingress trust requirements.
 
 Admin ingress exposes unified operational diagnostics:
 

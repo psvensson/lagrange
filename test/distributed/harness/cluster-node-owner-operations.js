@@ -10,6 +10,7 @@ import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 const {FETCH_TIMEOUT_MS, httpRequest, resolvePositiveTimeoutMs} =
   CLUSTER_BASE_LAYER;
 const HTTP_METHOD_PATCH = 'PATCH';
+const HTTP_METHOD_POST = 'POST';
 const NO_ANSWER = 'admin owner operation returned no answer';
 
 /**
@@ -38,4 +39,19 @@ async function requestTablePolicyUpdate(node, tableId, policy, options = {}) {
   return {...body, status: response?.status};
 }
 
-export {requestTablePolicyUpdate};
+/** Submit built-in listener intent; this answer does not prove a listener. */
+async function requestPostgresWireScale(node, desiredState, options = {}) {
+  const response = await httpRequest({
+    url: 'http://' + node.ip + ':' + node.adminApiPort +
+      ADMIN_OWNER_OPERATION_PATH.postgresWireScale,
+    timeoutMs: resolvePositiveTimeoutMs(options.timeoutMs, FETCH_TIMEOUT_MS),
+    method: HTTP_METHOD_POST,
+    body: desiredState,
+    includeBody: true,
+  });
+  const body = response?.body && typeof response.body === 'object' ?
+    response.body : {success: false, error: NO_ANSWER};
+  return {...body, status: response?.status};
+}
+
+export {requestPostgresWireScale, requestTablePolicyUpdate};

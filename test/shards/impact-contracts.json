@@ -1480,6 +1480,23 @@
         "test/cli/admin-cli-owner-operations.test.js",
         "test/cli/core/command-parser.test.js"
       ]
+    },
+    "postgres-wire-owner-scale": {
+      "description": "Operator scale for the exact built-in PostgreSQL listener persists only validated desired count/config through ServiceDefinitionsOwner and the existing gateway. HTTP/harness adapters retain typed outcomes; placement, running configuration and endpoint readiness remain separate owner observations.",
+      "owners": [
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/admin/admin-owner-operations.js",
+        "src/entrypoint-runtime-admin-composition.js"
+      ],
+      "tests": [
+        "test/control-plane/postgres-wire-scale.test.js",
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/integration/control-plane-pgwire-scale-callers.integration.test.js",
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/rebalancer/runtime-service-entity.test.js",
+        "test/runtime/pgwire-runtime-module.test.js"
+      ]
     }
   },
   "coupledPairs": {

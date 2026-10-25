@@ -16,6 +16,8 @@
 
 import {HTTP_STATUS} from '../constants/index.js';
 import {NODE_REMOVAL_ERROR_CODE} from '../control-plane/owners/nodes-owner.js';
+import {POSTGRES_WIRE_SCALE_ERROR_CODE} from
+  '../control-plane/owners/postgres-wire-scale-contract.js';
 import {CONFIG_ERROR_CODE} from '../config/config-constants.js';
 import {POLICY_ERROR_CODE} from '../policy/policy-constants.js';
 import {CONTROL_PLANE_MUTATION_OUTCOME} from
@@ -30,6 +32,7 @@ const ADMIN_OWNER_OPERATION_ROUTE = Object.freeze({
   NODE_BY_ID: '/api/admin/nodes/:nodeId',
   NODE_DRAIN: '/api/admin/nodes/:nodeId/drain',
   TABLE_POLICY: '/api/admin/tables/:tableId/policy',
+  POSTGRES_WIRE_SCALE: '/api/admin/services/sys-postgres-wire/scale',
 });
 
 // The concrete path of each operation, for its clients (CLI, harness).
@@ -41,6 +44,7 @@ const ADMIN_OWNER_OPERATION_PATH = Object.freeze({
     `/api/admin/nodes/${encodeURIComponent(nodeId)}/drain`,
   tablePolicy: (tableId) =>
     `/api/admin/tables/${encodeURIComponent(tableId)}/policy`,
+  postgresWireScale: ADMIN_OWNER_OPERATION_ROUTE.POSTGRES_WIRE_SCALE,
 });
 
 // The named outcome of one admin owner operation (R07).
@@ -77,6 +81,8 @@ const REFUSAL_STATUS_BY_CODE = new Map([
   [NODE_REMOVAL_ERROR_CODE.INCARNATION_REQUIRED, HTTP_STATUS.BAD_REQUEST],
   [NODE_REMOVAL_ERROR_CODE.TERMINAL_STATUS_REQUIRED, HTTP_STATUS.BAD_REQUEST],
   [NODE_REMOVAL_ERROR_CODE.OBSERVATION_CHANGED, HTTP_STATUS.CONFLICT],
+  [POSTGRES_WIRE_SCALE_ERROR_CODE.REQUEST_INVALID, HTTP_STATUS.BAD_REQUEST],
+  [POSTGRES_WIRE_SCALE_ERROR_CODE.DEFINITION_MISMATCH, HTTP_STATUS.CONFLICT],
   [CONFIG_ERROR_CODE.VALUE_INVALID, HTTP_STATUS.BAD_REQUEST],
   [POLICY_ERROR_CODE.TABLE_ID_REQUIRED, HTTP_STATUS.BAD_REQUEST],
   [POLICY_ERROR_CODE.POLICY_INVALID, HTTP_STATUS.BAD_REQUEST],
@@ -169,6 +175,7 @@ class AdminOwnerOperations {
    * @param {Function} [providers.getDynamicConfigService]
    * @param {Function} [providers.getTablePolicyService]
    * @param {Function} [providers.getNodesOwner]
+   * @param {Function} [providers.getServiceDefinitionsOwner]
    * @param {Function} [providers.submitLocalDrainIntent]
    * @param {string} nodeId - The serving node.
    */
@@ -177,6 +184,7 @@ class AdminOwnerOperations {
     this.getDynamicConfigService = providers.getDynamicConfigService;
     this.getTablePolicyService = providers.getTablePolicyService;
     this.getNodesOwner = providers.getNodesOwner;
+    this.getServiceDefinitionsOwner = providers.getServiceDefinitionsOwner;
     this.submitLocalDrainIntent = providers.submitLocalDrainIntent;
   }
 
@@ -258,6 +266,17 @@ class AdminOwnerOperations {
     }
   }
 
+  /** Persist desired built-in listener state through its authoritative owner. */
+  async scalePostgresWireListener(body) {
+    const owner = resolveOwner(this.getServiceDefinitionsOwner);
+    if (!owner) return ownerNotReady();
+    try {
+      return applied(await owner.scalePostgresWireListener(body));
+    } catch (error) {
+      return answerOwnerFailure(error);
+    }
+  }
+
   /**
    * Merge policy overrides into one table's policy through its owner.
    * @param {string} tableId
@@ -286,6 +305,9 @@ function sendAnswer(reply, result) {
  * @param {AdminOwnerOperations} operations
  */
 function registerAdminOwnerOperationRoutes(fastify, operations) {
+  fastify.post(ADMIN_OWNER_OPERATION_ROUTE.POSTGRES_WIRE_SCALE,
+    async (request, reply) => sendAnswer(reply,
+      await operations.scalePostgresWireListener(request.body)));
   fastify.put(ADMIN_OWNER_OPERATION_ROUTE.CONFIG_BY_KEY,
     async (request, reply) => sendAnswer(reply,
       await operations.setConfig(request.params.configKey, request.body)));

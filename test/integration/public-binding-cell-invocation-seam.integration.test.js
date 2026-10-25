@@ -314,8 +314,8 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     nodeId: NODE_ID,
     restPort,
   });
-  // Harness: the application facade reads system tables and performs the
-  // operator PG-wire enablement; the consumer only gets host:port.
+  // Harness: admin owner operation enables PG-wire; the application facade
+  // reads endpoint evidence and the consumer gets the resulting host:port.
   const db = runtime.handle.openApplicationDatabase({
     applicationId: APPLICATION_ID,
   });
@@ -340,6 +340,7 @@ test('public Binding invocation through the authenticated PostgreSQL-wire ' +
     Math.round(startLoopDelay.percentile(LOOP_DELAY_PERCENTILE) / NANOS_PER_MS)}`);
   endpoint = await enablePasswordPgwire(
     db, pgwirePort, {...wait(), restPort});
+  t.comment(`listener desired state: ${JSON.stringify(endpoint.desiredStateResult)}`);
   mark('pgwireListening');
 
   // The application owns its schema through the public facade.

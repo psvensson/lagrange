@@ -1,0 +1,44 @@
+{
+  "schema": "solve-quest/2",
+  "id": "postgres-wire-owner-scale",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The supported operator scale operation for the built-in sys-postgres-wire listener delegates to ServiceDefinitionsOwner, validates the desired replica count and existing PG-wire runtime configuration contract, and conditionally updates only replica_count and runtime_config for the exact active built-in native_js PostgreSQL runtime. A known applied single-row effect reports durable desired state, not achieved placement or listener reconfiguration. Typed refusal and unavailable-effect outcomes survive HTTP and harness boundaries. Both supported harnesses use this operation while retaining their actual endpoint/client checks.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/postgres-wire-owner-scale/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-validation-exact-runtime-and-effects",
+        "http-owner-gateway-durable-desired-state",
+        "existing-placement-and-lifecycle-contract",
+        "two-harnesses-and-five-scenario-caller-migration",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-owner",
+      "statement": "ServiceDefinitionsOwner and its private SystemMetadataOwnerBase row owner own validation and the existing gateway update; use one fixed built-in identity/runtime/protocol/status predicate and frozen desired values. No general service scaling API, SQL exemption, caller runtime identity, alternate scheduler or new mutable store."
+    },
+    {
+      "id": "lifecycle",
+      "statement": "Retain current CDC persistence, RuntimeServiceRebalancerOwner leadership/wake, UnifiedRebalancer policy/placement, RuntimeServiceHandler lifecycle and endpoint ownership. Existing listeners are not restarted by a config edit; configuration applies when a replica starts. No claim of listener convergence from persisted desired state or cache readback."
+    },
+    {
+      "id": "scope",
+      "statement": "Scope is the exact PG-wire scale operation, its HTTP composition, the distributed node-handle operator adapter, both raw scaling harness callers and their five public-service scenario consumers, docs and bounded proof. Node checkpoint e701ca2b remains frozen. Reserved-name behavior and other raw SQL writers remain separate. No merge/publication, raised baseline, timeout extension, hook bypass or generic internal override."
+    },
+    {
+      "id": "proof",
+      "statement": "Seal before production edits and retain baseline refusal/missing supported operation witness. Prove real HTTP -> owner -> gateway -> CDC -> SQLite effect, validation, identity/runtime mismatch, zero/unknown/deferred effects, retries and immutable request intent; retain existing owner wake/planner/lifecycle evidence and caller-level actual checks. Canonical runner retries zero and thermal/controller coordination; independent review before composition."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "retry-loops",
+    "harness-fidelity"
+  ],
+  "sealedAt": "e701ca2b35b9f682dcd051997d521fe3134bfc89"
+}

@@ -571,6 +571,8 @@ function buildAdminOwnerProviders(options) {
     getTablePolicyService: () => options.owner?.tablePolicyService || null,
     getNodesOwner: () =>
       options.owner?.systemMetadataOwners?.nodesOwner || null,
+    getServiceDefinitionsOwner: () =>
+      options.owner?.systemMetadataOwners?.serviceDefinitionsOwner || null,
     submitLocalDrainIntent: (drainOptions) => submitLocalNodeDrainIntent({
       membershipLifecycleController:
         options.membershipLifecycleController || null,

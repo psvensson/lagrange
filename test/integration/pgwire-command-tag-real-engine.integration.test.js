@@ -133,6 +133,7 @@ async function startRuntime(t) {
     pause: () => managedSleep(t, POLL_MS),
   });
   endpoint = await enablePasswordPgwire(db, pgwirePort, {...wait(), restPort});
+  t.comment(`listener desired state: ${JSON.stringify(endpoint.desiredStateResult)}`);
   useSingleNodeReplicaShape(runtime.engine);
   const client = await openConsumerSession({...endpoint, ...CREDENTIALS});
   t.teardown(() => client.end());

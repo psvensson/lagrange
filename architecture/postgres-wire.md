@@ -90,6 +90,39 @@ PG Client (psql, pg driver, ORM)
 
 Scaling `sys-postgres-wire` follows the unified rebalancer model:
 
+Operators submit `POST /api/admin/services/sys-postgres-wire/scale` on the
+admin HTTP port, with JSON containing exactly `replicaCount` (a non-negative
+integer) and `runtimeConfig` (the PostgreSQL wire descriptor object):
+
+```json
+{
+  "replicaCount": 1,
+  "runtimeConfig": {
+    "host": "127.0.0.1",
+    "authMode": "password",
+    "tlsMode": "disable"
+  }
+}
+```
+
+`ServiceDefinitionsOwner` validates the configuration and conditionally updates
+only the active built-in PostgreSQL wire runtime. This operation has no arbitrary
+service identity or runtime override. Raw client SQL DML against
+`service_definitions` is refused. The admin ingress trust and external-binding
+requirements above still apply; credentials and TLS key material retain their
+existing owners and are not fields in this request.
+
+A successful response names `scaleState: "desired_state_persisted"` and returns
+the accepted `desiredState`. It proves the metadata write, not achieved replica
+count, listener readiness or a running listener's configuration. Observe healthy
+`service_endpoints` and connect with the intended authentication/TLS settings to
+establish those separately. Configuration is consumed on subsequent replica
+starts; this operation does not reconfigure or restart existing listeners.
+Repeated identical requests assign the same desired values. Invalid requests
+return HTTP 400, a missing or mismatched built-in runtime returns HTTP 409, and
+an unavailable owner or unconfirmed write effect returns HTTP 503 with a typed
+error. An uncertain answer does not prove that the desired-state write failed.
+
 1. `replica_count` in `service_definitions` is cluster-global.
    The rebalancer spreads replicas across available nodes.
 2. Scale-up: increase `replica_count` -> rebalancer plans `ADD`

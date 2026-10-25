@@ -1,6 +1,6 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
-import {requestTablePolicyUpdate} from './cluster-node-owner-operations.js';
+import {requestPostgresWireScale, requestTablePolicyUpdate} from './cluster-node-owner-operations.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -1024,6 +1024,12 @@ class NodeHandle {
   updateTablePolicy(tableId, policy, options = {}) {
     return requestTablePolicyUpdate({ip: this.ip,
       adminApiPort: this._adminApiPort}, tableId, policy, options);
+  }
+
+  /** Persist built-in PG-wire desired state through its owner (no SQL). */
+  scalePostgresWireListener(desiredState, options = {}) {
+    return requestPostgresWireScale({ip: this.ip,
+      adminApiPort: this._adminApiPort}, desiredState, options);
   }
 
   /** Read the node-owned process resource sample from its diagnostics route. */

@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 66,
     "cli-tooling": 97,
-    "control-plane": 219,
+    "control-plane": 222,
     "convergence-topology": 78,
     "distributed-harness": 178,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2475,
-  "digest": "fnv1a32-025fba69",
+  "censusSize": 2478,
+  "digest": "fnv1a32-732d5d90",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-e6e9f695",
+  "observationDigest": "fnv1a32-9b17fae2",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -620,6 +620,7 @@
     "test/control-plane/owner-membership-reconcile-wait-bound-spent.test.js": "control-plane",
     "test/control-plane/owner-outcome-contract.test.js": "control-plane",
     "test/control-plane/phase-exit-criteria.test.js": "control-plane",
+    "test/control-plane/postgres-wire-scale.test.js": "control-plane",
     "test/control-plane/pressure-governor.test.js": "control-plane",
     "test/control-plane/priority-partition-census-self-diagnosis-adversarial.test.js": "control-plane",
     "test/control-plane/priority-partition-census-self-diagnosis.test.js": "control-plane",
@@ -1036,6 +1037,8 @@
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
     "test/integration/control-plane-node-terminal-removal.integration.test.js": "control-plane",
+    "test/integration/control-plane-pgwire-scale-callers.integration.test.js": "control-plane",
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js": "control-plane",
     "test/integration/control-plane-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/convergence-control-snapshot.integration.test.js": "control-plane",
     "test/integration/create-table-partition-provisioning.integration.test.js": "storage-partition",
@@ -4557,6 +4560,13 @@
         "src/logging/wait-bound-spent.js"
       ]
     },
+    "test/control-plane/postgres-wire-scale.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/partition/partition-committed-statement-outcome-constants.js"
+      ]
+    },
     "test/control-plane/priority-recovery-decision-provenance.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -6748,6 +6758,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -6766,6 +6777,7 @@
       "files": [
         "Dockerfile",
         "src/admin/static/playback-viewer.html",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "test/distributed/config/local.json",
         "test/raft/raft-rs-backend/single-path-partition-cutover.test.js"
       ],
@@ -7015,6 +7027,7 @@
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
@@ -7641,6 +7654,46 @@
         "src/partition/partition-committed-statement-outcome-constants.js"
       ]
     },
+    "test/integration/control-plane-pgwire-scale-callers.integration.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-authoritative-repair-policy.js",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/control-plane/priority-recovery-observation-snapshot.js",
+        "src/control-plane/publication-recovery-evidence.js",
+        "src/embedded-lagrange.js",
+        "src/service/call-cell-batch-executor.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "src/utils/canonical-json-data.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-gate-closure-classification.js",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/container-memory-working-set.js",
+        "test/distributed/harness/publication-evidence-contract.js",
+        "test/distributed/harness/startup-readiness-evidence.js",
+        "test/wasm-service/fixtures/call-cell-world/guest.js"
+      ],
+      "directories": [
+        "solve/epics/raft-rs-full-cutover",
+        "wit"
+      ],
+      "env": [
+        "LAGRANGE_CAPTURE_LOGS",
+        "LAGRANGE_DEBUG_LOGS"
+      ]
+    },
+    "test/integration/control-plane-postgres-wire-scale.integration.test.js": {
+      "files": [
+        "src/admin/admin-owner-operations.js",
+        "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/service-definitions-owner.js"
+      ]
+    },
     "test/integration/control-plane-rebalance.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
@@ -7811,6 +7864,7 @@
     "test/integration/managed-split-writes-after-cutover.integration.test.js": {
       "files": [
         "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
         "src/service/service-local-oci-layout-builder.js",
@@ -8015,6 +8069,7 @@
     "test/integration/pgwire-command-tag-real-engine.integration.test.js": {
       "files": [
         "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
         "src/service/service-local-oci-layout-builder.js",
@@ -8061,6 +8116,7 @@
     "test/integration/public-binding-cell-invocation-seam.integration.test.js": {
       "files": [
         "src/control-plane/owners/deployment-binding-contract.js",
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
         "src/embedded-lagrange.js",
         "src/service/call-cell-batch-executor.js",
         "src/service/service-local-oci-layout-builder.js",
