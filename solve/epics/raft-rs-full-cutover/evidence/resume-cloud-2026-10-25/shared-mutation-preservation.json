@@ -1,0 +1,25 @@
+{
+  "recordedAt": "2026-10-25T13:21:47.793474+00:00",
+  "unit": "shared-control-plane mutation proposal and first predecessor witness",
+  "branch": "work/cloud-shared-mutation-ownership-20261025",
+  "localNormalHookCommit": "be2225ccc8ab0dfd145c00a92ad99c9ba5e2dfb4",
+  "remoteCommit": "d2b49a9c4667bc8e01d6f104adc59ca4f0a71941",
+  "tree": "0467d7e4678dc97814490a81e7a581b34f661442",
+  "parent": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "remoteTreeMatchesLocal": true,
+  "remoteRefVerifiedWithLsRemote": true,
+  "normalHook": {
+    "exitCode": 0,
+    "bytes": 4666,
+    "sha256": "624daf578f2278fb3a03a34bd16e8df0e829ba359dd428a0275bb44e134519b2"
+  },
+  "independentSourceVerdict": "APPROVE preservation of unsealed proposal and first witness; production implementation and runtime approval absent",
+  "reviewSha256": "9d1eff22eb74eb32b718a7e99bc4e5cd916cab941057be2d345af8da573ba159",
+  "posthookAttestationSha256": "87ff542af13155a7aeabecef9868cb44f202806d297ead6a48df4aba5b5286dd",
+  "productionChanges": false,
+  "runtimeRun": false,
+  "questSealed": false,
+  "receiptPresent": false,
+  "includedInIntegration": false,
+  "nextAction": "Run predecessor harness once in existing lab custody; retain actual measured red or contradictory outcome; review before sealing or production migration"
+}

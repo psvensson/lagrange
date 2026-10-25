@@ -1,0 +1,204 @@
+{
+  "schema": "original-lab-evidence-collector-source-review/1",
+  "reviewer": "subagent:/root/metric_review",
+  "verdict": "approve-bounded-source",
+  "runtimeExecuted": false,
+  "files": [
+    {
+      "path": "collect-original-lab-evidence.py",
+      "bytes": 4689,
+      "sha256": "04d8b1994a234cfeff80777d6b8b1dad1feb22acda087326c78eaab3f872c886"
+    },
+    {
+      "path": "README.md",
+      "bytes": 12796,
+      "sha256": "5f799397d3b9c191140bb7a261c0e8dde1d9aead7a8d89b05f79715fa0effd9c"
+    },
+    {
+      "path": "jobs.json",
+      "bytes": 36838,
+      "sha256": "2727b266877054b269c2e7943eb11b03204d90d6e025f9f4028ea13fae27a4c6"
+    },
+    {
+      "path": "launch-canonical-startup.sh",
+      "bytes": 2492,
+      "sha256": "0850464c4c09578c0a99c3ec81c1bfda26bc6bd8d6e3b6a1ae611951437e06a1"
+    },
+    {
+      "path": "prepared-native/work.sh",
+      "bytes": 7745,
+      "sha256": "3dc5e10b6f83bd0313799c8032148d5b5076ceb4faa7abfe892e66c6c005d1df"
+    },
+    {
+      "path": "prepared-metric/work.sh",
+      "bytes": 5798,
+      "sha256": "9fd252cc8391bbc81884de9c892148c8199be45769a3ad71f9934faa8f1adb4d"
+    },
+    {
+      "path": "prepared-cohort/work.sh",
+      "bytes": 5270,
+      "sha256": "180d9e42dbe66a15a5ae5d47277e0bb38237e049db17cabf5f12b2e0555ba04a"
+    }
+  ],
+  "jobs": [
+    {
+      "job": "native",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/cloud-native-fixture-envelopes-20261025",
+        "sha": "a781064f8382eef7b6f016b52262513d8c87d978"
+      },
+      "expectedShaLine": "expected_sha=a781064f8382eef7b6f016b52262513d8c87d978",
+      "selectedTests": [
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+        "test/message-group/message-group-native-custody-handoff.test.js",
+        "test/message-group/message-group-native-mixed-vector.test.js",
+        "test/message-group/message-group-native-application-membership.test.js",
+        "test/message-group/message-group-cdc-input-guard.test.js",
+        "test/message-group/message-group-cdc-receiver-admission.test.js",
+        "test/message-group/message-group-native-provisional-route.test.js",
+        "test/message-group/message-group-cdc-public-defer-repair.test.js",
+        "test/wasm-service/wasm-strong-write-native-completion.test.js",
+        "test/wasm-service/wasm-strong-write-v1-native-completion.test.js",
+        "test/wasm-service/wasm-creation-bound-native.test.js",
+        "test/wasm-service/wasm-retained-bootstrap.integration.test.js",
+        "test/wasm-service/wasm-creation-genesis.integration.test.js",
+        "test/wasm-service/wasm-creation-reconciliation.integration.test.js",
+        "test/wasm-service/wasm-creation-publication.integration.test.js",
+        "test/wasm-service/bound-creation-handler-embedding.integration.test.js",
+        "test/wasm-service/bound-creation-physical-custody.integration.test.js",
+        "test/wasm-service/bound-creation-restart.integration.test.js",
+        "test/wasm-service/bound-remove-physical-operation.integration.test.js"
+      ],
+      "collectorEqualsStandalone": true,
+      "jobDataEqualsPreparedScript": true,
+      "retryEnvironment": {
+        "LAGRANGE_RETRY_FAILED_ONCE": "0",
+        "LAGRANGE_PLACEMENT": "local",
+        "LAGRANGE_LANE_JOBS_CAP": "1"
+      },
+      "exactHeadAndCleanWorktreeBeforeCommand": true,
+      "commandFailurePrecedesCollectorFailure": true
+    },
+    {
+      "job": "metric",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/cloud-metric-home-context-20261025",
+        "sha": "0e6923bb82fb83db3015b51e7f48ae1336d5f581"
+      },
+      "expectedShaLine": "expected_sha=0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "selectedTests": [
+        "test/scripts/metric-report-provenance.test.js",
+        "test/scripts/metric-report-inputs.test.js",
+        "test/scripts/metric-cycle-resolution.test.js",
+        "test/scripts/metric-cycle-custody.test.js",
+        "test/scripts/metric-duplication-inputs.test.js",
+        "test/scripts/inventory-ordinal-segments.test.js",
+        "test/scripts/complexity-ratchet-closure.test.js"
+      ],
+      "collectorEqualsStandalone": true,
+      "jobDataEqualsPreparedScript": true,
+      "retryEnvironment": {
+        "LAGRANGE_RETRY_FAILED_ONCE": "0",
+        "LAGRANGE_PLACEMENT": "local",
+        "LAGRANGE_LANE_JOBS_CAP": "1"
+      },
+      "exactHeadAndCleanWorktreeBeforeCommand": true,
+      "commandFailurePrecedesCollectorFailure": true
+    },
+    {
+      "job": "cohort",
+      "source": {
+        "repo": "psvensson/lagrange",
+        "ref": "refs/heads/work/cloud-cohort-hook-repair-20261025",
+        "sha": "606660b0aea63016bc5344da0f545a3af0ce9a29"
+      },
+      "expectedShaLine": "expected_sha=606660b0aea63016bc5344da0f545a3af0ce9a29",
+      "selectedTests": [
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "collectorEqualsStandalone": true,
+      "jobDataEqualsPreparedScript": true,
+      "retryEnvironment": {
+        "LAGRANGE_RETRY_FAILED_ONCE": "0",
+        "LAGRANGE_PLACEMENT": "local",
+        "LAGRANGE_LANE_JOBS_CAP": "1"
+      },
+      "exactHeadAndCleanWorktreeBeforeCommand": true,
+      "commandFailurePrecedesCollectorFailure": true
+    }
+  ],
+  "labOwnerSource": {
+    "repository": "psvensson/lagrange-lab",
+    "commit": "715151f808247d719076be368d6c0491f52511f7",
+    "independentlyFetchedSource": [
+      {
+        "path": "upgrades/v0.2.2/generic_worker.py",
+        "gitBlobSha": "62665800b053aa5982949737e4ae6ee334c72610",
+        "reviewedFacts": [
+          "host_env.LAB_WORK_DIR is run_dir/work",
+          "evidence length 1..8000; original custody and stream checks",
+          "complete only terminal, EOF and not truncated"
+        ]
+      },
+      {
+        "path": "upgrades/v0.2.2/generic_scope.py",
+        "gitBlobSha": "6f33f71163f1b5063708f817cbfec1ea6cf5e66f",
+        "reviewedFacts": [
+          "LogSink retains all bytes when limit is None",
+          "explicit limit retains prefix and reports truncation while hashing/draining full output"
+        ]
+      },
+      {
+        "path": "upgrades/v0.2.2/current_runtime.py",
+        "gitBlobSha": "0a50a391761bd1cfb6e1e97f40d2e3b7bd15fc80",
+        "reviewedFacts": [
+          "evidence cursor, decoded count, checksum and custody validation"
+        ]
+      },
+      {
+        "path": "upgrades/v0.2.2/RUN_RETENTION.md",
+        "gitBlobSha": "00cfb754ce8c5f9a75be74419ce45b6864801354",
+        "reviewedFacts": [
+          "work subtree disposable after scope closure",
+          "raw-log policy seven days and 1GiB per collector root; installed policy not attested"
+        ]
+      }
+    ]
+  },
+  "runnerOwnerSource": [
+    {
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "path": "scripts/run-test-files.js",
+      "gitBlobSha": "5d2d697c654f1eaba86b3a3b6cb6b20a9b205119",
+      "reviewedFacts": [
+        "named TAP/stderr output paths",
+        "both files opened for writing before test starts",
+        "original append-only per-file ledger path"
+      ]
+    },
+    {
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "path": "scripts/run-test-files.js",
+      "gitBlobSha": "5d2d697c654f1eaba86b3a3b6cb6b20a9b205119",
+      "reviewedFacts": [
+        "named TAP/stderr output paths",
+        "both files opened for writing before test starts",
+        "original append-only per-file ledger path"
+      ]
+    },
+    {
+      "sourceCommit": "606660b0aea63016bc5344da0f545a3af0ce9a29",
+      "path": "scripts/run-test-files.js",
+      "gitBlobSha": "e40cda7cb2f2f206f37e6ace1fbb5c5937096e76",
+      "reviewedFacts": [
+        "named TAP/stderr output paths",
+        "both files opened for writing before test starts",
+        "original append-only per-file ledger path"
+      ]
+    }
+  ],
+  "installedLogLimit": "unknown",
+  "finalPacketOrNewJobsApprovedByThisRecord": false
+}

@@ -1,0 +1,212 @@
+{
+  "schema": "resumed-compact-record-manifest/3",
+  "recordedAt": "2026-10-25T13:21:47.794692+00:00",
+  "scope": "Current compact preservation records. Earlier manifests retain their historical scope. Raw evidence remains outside Git.",
+  "files": [
+    {
+      "path": "ADMIN-INDEPENDENT-REVIEW.md",
+      "bytes": 27179,
+      "sha256": "7de63d52c96531428fd658258a93d8a72537fbcef84d4d0208ddc4ed3b1417c0"
+    },
+    {
+      "path": "COMPOSITION-PRESERVATION.json",
+      "bytes": 2536,
+      "sha256": "5e1611321042b59aea3f03c800040537162a90897dd76f32d81e174fa2e006d0"
+    },
+    {
+      "path": "HOOK-REPAIR-PRESERVATION.json",
+      "bytes": 3274,
+      "sha256": "cde6fd6d9d13838046d433c8e65969dab3d0fb16be60b8bed32c894511fbee7e"
+    },
+    {
+      "path": "MUTATION-OWNERSHIP-CAUSAL-MAP.md",
+      "bytes": 26027,
+      "sha256": "d64f68ea164bfde3a4804979a3c95d987c90a27e81edaf2fc2ab6edac498283f"
+    },
+    {
+      "path": "NATIVE-FIXTURE-SOURCE-REVIEW.md",
+      "bytes": 6379,
+      "sha256": "7eb46c03089e404c193a5a4c90be3ae331825351f7a092c7dbd6cbed9d4f0b84"
+    },
+    {
+      "path": "REVIEW-ADMIN-COMPOSITION-R1.md",
+      "bytes": 5607,
+      "sha256": "29a9399482d2c21beacafbe2596235cb883f39098e0358e22a7ebd915b8afda2"
+    },
+    {
+      "path": "REVIEW-ADMIN-COMPOSITION-R2.md",
+      "bytes": 13966,
+      "sha256": "a5d8fb2248330e3307d9082ffaf5a86d251522f85f4e4457d3ed059539d2b59c"
+    },
+    {
+      "path": "REVIEW-COMMITTED-COMPOSITION-APPLICABILITY.md",
+      "bytes": 1893,
+      "sha256": "f727e176d97b06fa0c892ca7142369727d830a2fee37f447a0abd1d95e387a56"
+    },
+    {
+      "path": "REVIEW-COMPOSITION-PRESERVATION-ADDENDUM.md",
+      "bytes": 3721,
+      "sha256": "efab0d3b061ae44fd99bb3ab2e090a31209bc8d512bf271b883c49147a5d693b"
+    },
+    {
+      "path": "REVIEW-MARKER-FROZEN-SOURCE.md",
+      "bytes": 15817,
+      "sha256": "d1a863aa5000e75e71449e3d7470aa4fcb061373210099b9757341d7df3f8c5c"
+    },
+    {
+      "path": "REVIEW-OFFLINE-LAUNCH-PACKET.md",
+      "bytes": 4845,
+      "sha256": "244446752a201a1c2ab4fbdd0310d073f69a6d93396180671daf19e5a2abf613"
+    },
+    {
+      "path": "REVIEW-ORIGINAL-EVIDENCE-COLLECTOR.md",
+      "bytes": 5305,
+      "sha256": "600c63b8b5a9c12cf23c11275eb968c6c1c14ac8d3a1d3456ab7cc9a89ab3fa5"
+    },
+    {
+      "path": "REVIEW-SHARED-MUTATION-PROPOSAL.md",
+      "bytes": 10013,
+      "sha256": "9d1eff22eb74eb32b718a7e99bc4e5cd916cab941057be2d345af8da573ba159"
+    },
+    {
+      "path": "SOURCE-COMPOSITION-CHECKPOINT.md",
+      "bytes": 2962,
+      "sha256": "2b881f27ee5d7f2cea8164122f2b31449e629166e50e9f9bea761aca15cad1e2"
+    },
+    {
+      "path": "TEXT-BOUNDARY-SOURCE-CENSUS.md",
+      "bytes": 9701,
+      "sha256": "274a62f8173cce02511683854fa6c97ad90f98703542d78ce68e9e116cdcb067"
+    },
+    {
+      "path": "admin-composition-focused-tests.json",
+      "bytes": 12046,
+      "sha256": "5999513400b500081f59f1936610fdf82adfd60930733ed3da2c87a852d64785"
+    },
+    {
+      "path": "admin-composition-focused-tests.txt",
+      "bytes": 4005,
+      "sha256": "bdc02b79c5f920445433e4b01a7e9a4b2c4f7e778bd1a178275d9d15934f2556"
+    },
+    {
+      "path": "admin-composition-source-freeze-r1.json",
+      "bytes": 26495,
+      "sha256": "a8e5e792b74a712e296db374f55e5deee338ad22bf8a11fe641755280b8573ab"
+    },
+    {
+      "path": "admin-composition-source-freeze-r2.json",
+      "bytes": 26877,
+      "sha256": "f65d4035b2725b87e2a919ab9830b91da634f4e5fac4d6b3a79679ce5ee3f613"
+    },
+    {
+      "path": "approved-unit-composition-source-check-r1.json",
+      "bytes": 9761,
+      "sha256": "49267699e9aeb973d4c4a9368c714ea97a48ee981d2bdfd1513c834f60334d82"
+    },
+    {
+      "path": "approved-unit-composition-source-check-r2.json",
+      "bytes": 10014,
+      "sha256": "e30b83d38410b41ffbe6efcbb25d314fcb64014f89a1ddbce7d7b682f500d8b4"
+    },
+    {
+      "path": "cohort-committed-source-attestation.json",
+      "bytes": 12560,
+      "sha256": "badc4aa803dc2c43de0b6a92a48c3df95fd9e4bc9aff111c003d40c8fa19fc38"
+    },
+    {
+      "path": "committed-composition-applicability.json",
+      "bytes": 63341,
+      "sha256": "39dd09fd955bfe7532f2021eeb02cf0fabefca676df24b0416918adc5e338c10"
+    },
+    {
+      "path": "compact-record-manifest-r2.json",
+      "bytes": 5682,
+      "sha256": "9d85398a8a482ff13c32fb55e60db0355b6a1be9d171848e0a5296ae76199f97"
+    },
+    {
+      "path": "compact-record-manifest.json",
+      "bytes": 2779,
+      "sha256": "31268a4ee89129c9036a2bc2fa85b77316a3ba4efc338d6f30b67d47f41d0ffa"
+    },
+    {
+      "path": "composition-posthook-source-check.json",
+      "bytes": 57511,
+      "sha256": "4604f8fe1aa7c375edd03b1df94a3aa6c61f779d1dedac7e8ac257247b791e76"
+    },
+    {
+      "path": "composition-source-binding-check-r2.json",
+      "bytes": 32953,
+      "sha256": "2f43bc12ab408f7848498c05aca7c972d7896041b85a90af94c7f3df39f95c4c"
+    },
+    {
+      "path": "coordinator-source-receipt-check.json",
+      "bytes": 963,
+      "sha256": "cac105e49a87121879248b809ef9c521542389451edbb7a24451b523b07d6a50"
+    },
+    {
+      "path": "marker-committed-source-attestation.json",
+      "bytes": 8303,
+      "sha256": "6e831ed85b41a505aeb562d9e7f395868e3be09396fd0c5dedfc7d4bc6f0413d"
+    },
+    {
+      "path": "metric-task-preservation.json",
+      "bytes": 1020,
+      "sha256": "b87b65020c389007461bae4d6740e8da118c24c8c48729f2eeb4d1f56e07b7fe"
+    },
+    {
+      "path": "mutation-classifier-current-census.json",
+      "bytes": 7271,
+      "sha256": "15bd183ae747d34e8bbb7d7c173d554584f40d6aedea137eb3e6ca6954903ed6"
+    },
+    {
+      "path": "native-fixture-reviewed-source.json",
+      "bytes": 1678,
+      "sha256": "c3a1682e0011ce9b9f6f8a0aa63c24c6f01f2676124691172d5dea192b087583"
+    },
+    {
+      "path": "original-evidence-collector-source-binding.json",
+      "bytes": 7946,
+      "sha256": "a7b128882663c3d205defe56d1024117ebcf3742951ce6f47adf1451b1990f72"
+    },
+    {
+      "path": "preservation-addendum-source-binding.json",
+      "bytes": 45564,
+      "sha256": "75c31ae57841601247c07f3a4bbd480d7f02c31e740b7e45e83a95c025a05501"
+    },
+    {
+      "path": "preservation-cdc-comments.patch",
+      "bytes": 1052,
+      "sha256": "a4430d1e29c98f7321204e22c6f71a87359c195a4f01dfca630f3c9d65a381cf"
+    },
+    {
+      "path": "preservation-metric-comments.patch",
+      "bytes": 561,
+      "sha256": "f8b762916eae382cc54f531a86132f2b5eef90e4ba29228e0d76577a31fdbd3f"
+    },
+    {
+      "path": "published-task-trees-r1.json",
+      "bytes": 1994,
+      "sha256": "91be60620dc4fd05d95cb2951a93dca410de3e67c826445058824debf967e943"
+    },
+    {
+      "path": "recovered-admin-evidence-review.json",
+      "bytes": 10846,
+      "sha256": "f5997a9ceaebf4418a5ae7b665f37b022e8cb3522b542ed35787a2f2d22010f7"
+    },
+    {
+      "path": "recovered-evidence-verification.json",
+      "bytes": 6233,
+      "sha256": "b50c1318fc69fdd2b70e913534ee20dde9b5f8f9a5e3681b6f727f0397ed68a4"
+    },
+    {
+      "path": "shared-mutation-preservation.json",
+      "bytes": 1301,
+      "sha256": "bb62ebc53b2af9de478d5047c323269b4fec16d244c98fc25bcee9aa10ec3175"
+    },
+    {
+      "path": "text-boundary-source-bindings.json",
+      "bytes": 3842,
+      "sha256": "b7f57fe3ba34834426cc830fd2d22ea2afb4036386bf2d0965280afbe7fee40f"
+    }
+  ]
+}

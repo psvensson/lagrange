@@ -1,0 +1,70 @@
+{
+  "recordedAt": "2026-10-25T13:13:46.556505+00:00",
+  "purpose": "Reviewed source preservation; no release or runtime acceptance",
+  "branch": "work/cloud-raft-rs-resume-20261025",
+  "localNormalHookCommit": "f30060e714d080ba438f5657b8d15f4bb992b107",
+  "remoteCommit": "13cdfe4ef1b620037c0c5f326dd6ff0193f0a70d",
+  "tree": "5659709d5010bdfa26a3dc545ef948772d8daa51",
+  "parent": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "remoteTreeMatchesLocal": true,
+  "remoteRefVerifiedWithLsRemote": true,
+  "normalHook": {
+    "normalHookExitCode": 0,
+    "normalHookBytes": 16809,
+    "normalHookSha256": "ce44a23251ed500d41a9a2b1ebab53b37d52b39c7584e619cb69c482ab4aa4fd"
+  },
+  "reviewedJsCount": 156,
+  "allReviewedJsCommittedExactly": true,
+  "unboundChangedJs": [],
+  "worktreeCleanAfterCommit": true,
+  "runtimeAcceptance": "not executed",
+  "normalHookProducedReports": [
+    {
+      "path": "test-output/analysis/complexity-src-test.json",
+      "bytes": 417875,
+      "sha256": "5664a29b4d99498879eb8d5552d7b28e4ab1cc28023d027de9cc5c37809013f7",
+      "observations": {
+        "targetThreshold": 12,
+        "baselineCount": 1755,
+        "scoped": false,
+        "targets": [
+          "src/",
+          "test/"
+        ],
+        "count": 1761
+      }
+    },
+    {
+      "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+      "bytes": 36555,
+      "sha256": "bf77757808ac499daef4e7abd46826875aff1264eab88ee6011f4379f5d14c11",
+      "observations": {
+        "targetThreshold": 20,
+        "baselineCount": 150,
+        "scoped": false,
+        "targets": [
+          "src/",
+          "scripts/"
+        ],
+        "count": 150
+      }
+    },
+    {
+      "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+      "bytes": 3922918,
+      "sha256": "fee657d62892bb6a47503c95a3d063d424a4cc3fe12f4bc822c5c2dc46cbf4d7",
+      "observations": {
+        "cycleGroupCount": 0
+      }
+    }
+  ],
+  "qualification": "cyclomatic count is 1761 against baseline 1755; still failing. Other observed counts do not certify full static/corpus or release gates.",
+  "evidencePublication": "original raw logs/reports retained outside Git; existing solve-evidence upload pending",
+  "independentCommittedApplicabilityReview": {
+    "reviewer": "subagent:/root/metric_review",
+    "report": "REVIEW-COMMITTED-COMPOSITION-APPLICABILITY.md",
+    "sha256": "f727e176d97b06fa0c892ca7142369727d830a2fee37f447a0abd1d95e387a56",
+    "allReviewedJsPaths": 156,
+    "remoteTreeAndParentIndependentlyFetched": true
+  }
+}

@@ -1,0 +1,1108 @@
+{
+  "localCommit": "f30060e714d080ba438f5657b8d15f4bb992b107",
+  "tree": "5659709d5010bdfa26a3dc545ef948772d8daa51",
+  "parent": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "normalHookExitCode": 0,
+  "normalHookBytes": 16809,
+  "normalHookSha256": "ce44a23251ed500d41a9a2b1ebab53b37d52b39c7584e619cb69c482ab4aa4fd",
+  "worktreeClean": true,
+  "reviewedJsCount": 156,
+  "allReviewedJsCommittedExactly": true,
+  "unboundChangedJs": [],
+  "changedPathCount": 245,
+  "runtimeRun": false,
+  "files": [
+    {
+      "path": "src/admin/admin-debug-handlers.js",
+      "expected": "cc9073af837b418ede6f0b8033633c7149817109d77954aeaf94ff3e215831c3",
+      "actual": "cc9073af837b418ede6f0b8033633c7149817109d77954aeaf94ff3e215831c3",
+      "committed": "cc9073af837b418ede6f0b8033633c7149817109d77954aeaf94ff3e215831c3",
+      "matches": true
+    },
+    {
+      "path": "src/admin/admin-owner-operations.js",
+      "expected": "436de2843d4bfb295ed416d8ec71d274771c48483881a5f9cbcfa3d917dcd1ca",
+      "actual": "436de2843d4bfb295ed416d8ec71d274771c48483881a5f9cbcfa3d917dcd1ca",
+      "committed": "436de2843d4bfb295ed416d8ec71d274771c48483881a5f9cbcfa3d917dcd1ca",
+      "matches": true
+    },
+    {
+      "path": "src/admin/admin-websocket-api-base.js",
+      "expected": "e790cd9868fd4af80872fe64dfd688a2d094301e38f5325503d3bca9b2f8ab78",
+      "actual": "e790cd9868fd4af80872fe64dfd688a2d094301e38f5325503d3bca9b2f8ab78",
+      "committed": "e790cd9868fd4af80872fe64dfd688a2d094301e38f5325503d3bca9b2f8ab78",
+      "matches": true
+    },
+    {
+      "path": "src/admin/admin-websocket-lifecycle-methods.js",
+      "expected": "edd7dc25073140ca2a0b69695bb0aa60b624b6f4d7f462dbdc61e86ee4a575af",
+      "actual": "edd7dc25073140ca2a0b69695bb0aa60b624b6f4d7f462dbdc61e86ee4a575af",
+      "committed": "edd7dc25073140ca2a0b69695bb0aa60b624b6f4d7f462dbdc61e86ee4a575af",
+      "matches": true
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "expected": "3e49ab25c596356416d950d67d9f0eaa4b57b77945defdd249e24fba152f932e",
+      "actual": "3e49ab25c596356416d950d67d9f0eaa4b57b77945defdd249e24fba152f932e",
+      "committed": "3e49ab25c596356416d950d67d9f0eaa4b57b77945defdd249e24fba152f932e",
+      "matches": true
+    },
+    {
+      "path": "src/bootstrap/node-joining-delegate-bundles.js",
+      "expected": "606292391f51b57859a4f002f39060b9465f594efbf747f4eabfbc866f533c47",
+      "actual": "606292391f51b57859a4f002f39060b9465f594efbf747f4eabfbc866f533c47",
+      "committed": "606292391f51b57859a4f002f39060b9465f594efbf747f4eabfbc866f533c47",
+      "matches": true
+    },
+    {
+      "path": "src/bootstrap/system-table-schema-shared-constants.js",
+      "expected": "e14b82c572edd5229a5dae23bb84f144c9804af841d2b86fc34d1daec90361ef",
+      "actual": "e14b82c572edd5229a5dae23bb84f144c9804af841d2b86fc34d1daec90361ef",
+      "committed": "e14b82c572edd5229a5dae23bb84f144c9804af841d2b86fc34d1daec90361ef",
+      "matches": true
+    },
+    {
+      "path": "src/cdc/cdc-cache-deletion-visibility.js",
+      "expected": "54a7203eee4aeb689dc60e8a5716f88a0ccd04c884e60c3e64bc272980fb1a2a",
+      "actual": "54a7203eee4aeb689dc60e8a5716f88a0ccd04c884e60c3e64bc272980fb1a2a",
+      "committed": "54a7203eee4aeb689dc60e8a5716f88a0ccd04c884e60c3e64bc272980fb1a2a",
+      "matches": true
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "expected": "8145f6cac81498dce4de3ffa63b502b2982ebe73ae1042fd6074b17102ac22f4",
+      "actual": "8145f6cac81498dce4de3ffa63b502b2982ebe73ae1042fd6074b17102ac22f4",
+      "committed": "8145f6cac81498dce4de3ffa63b502b2982ebe73ae1042fd6074b17102ac22f4",
+      "matches": true
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutations.js",
+      "expected": "82f6ce2b0fb8550ad09764d264d130aac65f8286220fb9b9979f880d9a0d154b",
+      "actual": "82f6ce2b0fb8550ad09764d264d130aac65f8286220fb9b9979f880d9a0d154b",
+      "committed": "82f6ce2b0fb8550ad09764d264d130aac65f8286220fb9b9979f880d9a0d154b",
+      "matches": true
+    },
+    {
+      "path": "src/cli/admin-cli-action-methods.js",
+      "expected": "a6b4315577843e48d106c4ba402f0029325dcecbe0f46c4bfd986f4883c193a4",
+      "actual": "a6b4315577843e48d106c4ba402f0029325dcecbe0f46c4bfd986f4883c193a4",
+      "committed": "a6b4315577843e48d106c4ba402f0029325dcecbe0f46c4bfd986f4883c193a4",
+      "matches": true
+    },
+    {
+      "path": "src/cli/admin-cli-local-constants.js",
+      "expected": "a388cf39092b9d86446983c22a31d33471f020db5ede41cb3466cae83a4d93f3",
+      "actual": "a388cf39092b9d86446983c22a31d33471f020db5ede41cb3466cae83a4d93f3",
+      "committed": "a388cf39092b9d86446983c22a31d33471f020db5ede41cb3466cae83a4d93f3",
+      "matches": true
+    },
+    {
+      "path": "src/cli/admin-cli-navigation-methods.js",
+      "expected": "0a5000192316062a7487c285234c80d3eb43ab24b7ed4ae617714dc4ec0259dd",
+      "actual": "0a5000192316062a7487c285234c80d3eb43ab24b7ed4ae617714dc4ec0259dd",
+      "committed": "0a5000192316062a7487c285234c80d3eb43ab24b7ed4ae617714dc4ec0259dd",
+      "matches": true
+    },
+    {
+      "path": "src/cli/cli-constants.js",
+      "expected": "d4c09c1868265c5b1a85a8de865f756db3aaf5f47cac1203656d9ee5d449c97e",
+      "actual": "d4c09c1868265c5b1a85a8de865f756db3aaf5f47cac1203656d9ee5d449c97e",
+      "committed": "d4c09c1868265c5b1a85a8de865f756db3aaf5f47cac1203656d9ee5d449c97e",
+      "matches": true
+    },
+    {
+      "path": "src/cli/core/connection-manager.js",
+      "expected": "0aa3a4de9f243acb06be80b549a634ca741e548eb438aefa7575a747a38fbd63",
+      "actual": "0aa3a4de9f243acb06be80b549a634ca741e548eb438aefa7575a747a38fbd63",
+      "committed": "0aa3a4de9f243acb06be80b549a634ca741e548eb438aefa7575a747a38fbd63",
+      "matches": true
+    },
+    {
+      "path": "src/config/config-constants.js",
+      "expected": "a78e75f3d34099a421768ddf3332591b323fbba5ddc76db9b8e24d0d36c44d3e",
+      "actual": "a78e75f3d34099a421768ddf3332591b323fbba5ddc76db9b8e24d0d36c44d3e",
+      "committed": "a78e75f3d34099a421768ddf3332591b323fbba5ddc76db9b8e24d0d36c44d3e",
+      "matches": true
+    },
+    {
+      "path": "src/config/dynamic-config-service.js",
+      "expected": "e8a0887a7510e960efab1ce8d88cd66ef50575d2a04b32b58fc1617807b6436a",
+      "actual": "e8a0887a7510e960efab1ce8d88cd66ef50575d2a04b32b58fc1617807b6436a",
+      "committed": "e8a0887a7510e960efab1ce8d88cd66ef50575d2a04b32b58fc1617807b6436a",
+      "matches": true
+    },
+    {
+      "path": "src/control-plane/control-plane-single-row-confirmation.js",
+      "expected": "05fd1fdedce2f10a89b14362a1bc07bde3bec67268c2595cf68a7b60ac409aa5",
+      "actual": "05fd1fdedce2f10a89b14362a1bc07bde3bec67268c2595cf68a7b60ac409aa5",
+      "committed": "05fd1fdedce2f10a89b14362a1bc07bde3bec67268c2595cf68a7b60ac409aa5",
+      "matches": true
+    },
+    {
+      "path": "src/control-plane/owners/nodes-owner.js",
+      "expected": "6011d690f4590181644a79f9a7b295af1c2649f868e2b04af260226af58ee535",
+      "actual": "6011d690f4590181644a79f9a7b295af1c2649f868e2b04af260226af58ee535",
+      "committed": "6011d690f4590181644a79f9a7b295af1c2649f868e2b04af260226af58ee535",
+      "matches": true
+    },
+    {
+      "path": "src/control-plane/owners/postgres-wire-scale-contract.js",
+      "expected": "ff2c21b0ae4bfa5576414f77d76ba078c9394d7141324d0960ae0d47b173599e",
+      "actual": "ff2c21b0ae4bfa5576414f77d76ba078c9394d7141324d0960ae0d47b173599e",
+      "committed": "ff2c21b0ae4bfa5576414f77d76ba078c9394d7141324d0960ae0d47b173599e",
+      "matches": true
+    },
+    {
+      "path": "src/control-plane/owners/runtime-access-policy-owner.js",
+      "expected": "c532e5b35bad8d6b13856c0e692a5c5284679ea574ab7fefa600b685174e9928",
+      "actual": "c532e5b35bad8d6b13856c0e692a5c5284679ea574ab7fefa600b685174e9928",
+      "committed": "c532e5b35bad8d6b13856c0e692a5c5284679ea574ab7fefa600b685174e9928",
+      "matches": true
+    },
+    {
+      "path": "src/control-plane/owners/service-definitions-owner.js",
+      "expected": "bed46bc98929c22e9aa5d3c7bc35f525f88131bbfd7ec6b202e19e9ccd4abcc9",
+      "actual": "bed46bc98929c22e9aa5d3c7bc35f525f88131bbfd7ec6b202e19e9ccd4abcc9",
+      "committed": "bed46bc98929c22e9aa5d3c7bc35f525f88131bbfd7ec6b202e19e9ccd4abcc9",
+      "matches": true
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service-constants.js",
+      "expected": "76c80e747f0f86b3a526f58f268ac561fb04eea03d1e18f58c9037d94ed444f4",
+      "actual": "76c80e747f0f86b3a526f58f268ac561fb04eea03d1e18f58c9037d94ed444f4",
+      "committed": "76c80e747f0f86b3a526f58f268ac561fb04eea03d1e18f58c9037d94ed444f4",
+      "matches": true
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service-value-helpers.js",
+      "expected": "a9bc6744e7c08143b71e8eb6bdee6ba5c711bc2fc36d696ce3464664fa2baefe",
+      "actual": "a9bc6744e7c08143b71e8eb6bdee6ba5c711bc2fc36d696ce3464664fa2baefe",
+      "committed": "a9bc6744e7c08143b71e8eb6bdee6ba5c711bc2fc36d696ce3464664fa2baefe",
+      "matches": true
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service.js",
+      "expected": "a2e8be9b3799527e3d0903ca5654c3c5ec05f1df28f16bdbb90c10f672f58676",
+      "actual": "a2e8be9b3799527e3d0903ca5654c3c5ec05f1df28f16bdbb90c10f672f58676",
+      "committed": "a2e8be9b3799527e3d0903ca5654c3c5ec05f1df28f16bdbb90c10f672f58676",
+      "matches": true
+    },
+    {
+      "path": "src/entrypoint-runtime-admin-composition.js",
+      "expected": "db788865cf8ff8702b32dfad464aa5c53effab112600b653bbdc40defc8c11af",
+      "actual": "db788865cf8ff8702b32dfad464aa5c53effab112600b653bbdc40defc8c11af",
+      "committed": "db788865cf8ff8702b32dfad464aa5c53effab112600b653bbdc40defc8c11af",
+      "matches": true
+    },
+    {
+      "path": "src/entrypoint-runtime-shutdown-lifecycle.js",
+      "expected": "324b3720390f58976a5713a2a12c317645afebb9478ca457249bd701f00fe0c5",
+      "actual": "324b3720390f58976a5713a2a12c317645afebb9478ca457249bd701f00fe0c5",
+      "committed": "324b3720390f58976a5713a2a12c317645afebb9478ca457249bd701f00fe0c5",
+      "matches": true
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "expected": "dffbe8a7e681fc0dfc956763eb877c05c08b5f274a02d542d13864149858a998",
+      "actual": "dffbe8a7e681fc0dfc956763eb877c05c08b5f274a02d542d13864149858a998",
+      "committed": "dffbe8a7e681fc0dfc956763eb877c05c08b5f274a02d542d13864149858a998",
+      "matches": true
+    },
+    {
+      "path": "src/node/index.js",
+      "expected": "4737961388205b9636dbce66d9b4771d4da3faee85549c79e2a3cc478b909f43",
+      "actual": "4737961388205b9636dbce66d9b4771d4da3faee85549c79e2a3cc478b909f43",
+      "committed": "4737961388205b9636dbce66d9b4771d4da3faee85549c79e2a3cc478b909f43",
+      "matches": true
+    },
+    {
+      "path": "src/node/local-node-drain.js",
+      "expected": "632accd77448c74d028b0cedf254679b9fbcead9f290f4e1141481206ffc71da",
+      "actual": "632accd77448c74d028b0cedf254679b9fbcead9f290f4e1141481206ffc71da",
+      "committed": "632accd77448c74d028b0cedf254679b9fbcead9f290f4e1141481206ffc71da",
+      "matches": true
+    },
+    {
+      "path": "src/node/node-constants.js",
+      "expected": "93dfc96b9d07f5825dd31f6855557e0206ee35f6d29d8ba04249c35ea878675f",
+      "actual": "93dfc96b9d07f5825dd31f6855557e0206ee35f6d29d8ba04249c35ea878675f",
+      "committed": "93dfc96b9d07f5825dd31f6855557e0206ee35f6d29d8ba04249c35ea878675f",
+      "matches": true
+    },
+    {
+      "path": "src/node/node-lifecycle-service.js",
+      "expected": null,
+      "actual": null,
+      "committed": null,
+      "matches": true
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-apply.js",
+      "expected": "c86d65ffa4e64cca5cee5fa9870042010e101071d78abbe3d7f6526ea7d43800",
+      "actual": "c86d65ffa4e64cca5cee5fa9870042010e101071d78abbe3d7f6526ea7d43800",
+      "committed": "c86d65ffa4e64cca5cee5fa9870042010e101071d78abbe3d7f6526ea7d43800",
+      "matches": true
+    },
+    {
+      "path": "src/partition/partition-service-remote-query-methods.js",
+      "expected": "88626ebd7943beb78aef6922c4e9b0ece238eb84caeead0232a1e201956fb008",
+      "actual": "88626ebd7943beb78aef6922c4e9b0ece238eb84caeead0232a1e201956fb008",
+      "committed": "88626ebd7943beb78aef6922c4e9b0ece238eb84caeead0232a1e201956fb008",
+      "matches": true
+    },
+    {
+      "path": "src/policy/policy-constants.js",
+      "expected": "284e6df5ac8dd4221146ebf078d1a28cec2e4a5b08884ecc34f1a5241c1fb734",
+      "actual": "284e6df5ac8dd4221146ebf078d1a28cec2e4a5b08884ecc34f1a5241c1fb734",
+      "committed": "284e6df5ac8dd4221146ebf078d1a28cec2e4a5b08884ecc34f1a5241c1fb734",
+      "matches": true
+    },
+    {
+      "path": "src/policy/table-policy-service.js",
+      "expected": "bd255821273bbad6d73b5a8e0e89e5f760b5d077775b2378fb0f7b6f128eca87",
+      "actual": "bd255821273bbad6d73b5a8e0e89e5f760b5d077775b2378fb0f7b6f128eca87",
+      "committed": "bd255821273bbad6d73b5a8e0e89e5f760b5d077775b2378fb0f7b6f128eca87",
+      "matches": true
+    },
+    {
+      "path": "src/query/application-database-statement-policy.js",
+      "expected": "cd3456687860f400e2fc67149d59483a5035c34cac6ed0dee4f708fc0976fa6f",
+      "actual": "cd3456687860f400e2fc67149d59483a5035c34cac6ed0dee4f708fc0976fa6f",
+      "committed": "cd3456687860f400e2fc67149d59483a5035c34cac6ed0dee4f708fc0976fa6f",
+      "matches": true
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-participant-admission.js",
+      "expected": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "actual": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "committed": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "matches": true
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "expected": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "actual": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "committed": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "matches": true
+    },
+    {
+      "path": "src/query/query-constants.js",
+      "expected": "9dec00eb3ae2f30486f28be13d707924859bbc614e007bc1c03a9d3b84b9c6b7",
+      "actual": "9dec00eb3ae2f30486f28be13d707924859bbc614e007bc1c03a9d3b84b9c6b7",
+      "committed": "9dec00eb3ae2f30486f28be13d707924859bbc614e007bc1c03a9d3b84b9c6b7",
+      "matches": true
+    },
+    {
+      "path": "src/query/query-executor-partition-request-builders.js",
+      "expected": "75c5e5df57e733a65614ec35de2af1139cd38ab95069decb0c71953eb999fa8c",
+      "actual": "75c5e5df57e733a65614ec35de2af1139cd38ab95069decb0c71953eb999fa8c",
+      "committed": "75c5e5df57e733a65614ec35de2af1139cd38ab95069decb0c71953eb999fa8c",
+      "matches": true
+    },
+    {
+      "path": "src/query/schema-provisioning-intent.js",
+      "expected": "a5b5c9536fe930b6cd8c452c8ca560b7a3f57883fbbe4456af10aef98d32087d",
+      "actual": "a5b5c9536fe930b6cd8c452c8ca560b7a3f57883fbbe4456af10aef98d32087d",
+      "committed": "a5b5c9536fe930b6cd8c452c8ca560b7a3f57883fbbe4456af10aef98d32087d",
+      "matches": true
+    },
+    {
+      "path": "src/query/sql-query-engine-request-dispatch.js",
+      "expected": "f90ac32cfd0d822b11fe4b93a1e9390540d5e3a1460c4ac115008a3172fe4e94",
+      "actual": "f90ac32cfd0d822b11fe4b93a1e9390540d5e3a1460c4ac115008a3172fe4e94",
+      "committed": "f90ac32cfd0d822b11fe4b93a1e9390540d5e3a1460c4ac115008a3172fe4e94",
+      "matches": true
+    },
+    {
+      "path": "src/query/sql-query-engine-statement-execution.js",
+      "expected": "4dffc675d78972ebffa1a0f97de62309e5d55ada09ccae50452efb0001ca1f92",
+      "actual": "4dffc675d78972ebffa1a0f97de62309e5d55ada09ccae50452efb0001ca1f92",
+      "committed": "4dffc675d78972ebffa1a0f97de62309e5d55ada09ccae50452efb0001ca1f92",
+      "matches": true
+    },
+    {
+      "path": "src/query/sql-query-engine-table-routing-methods.js",
+      "expected": "2400461d88f287995068239dda665b13b09ef398b9f9aed32e8c4cdaa2e210a2",
+      "actual": "2400461d88f287995068239dda665b13b09ef398b9f9aed32e8c4cdaa2e210a2",
+      "committed": "2400461d88f287995068239dda665b13b09ef398b9f9aed32e8c4cdaa2e210a2",
+      "matches": true
+    },
+    {
+      "path": "src/query/sql-query-engine-write-execution.js",
+      "expected": "63ecd94f470be84dc43ef4fffb18d9c219bc0518b404fa7a3cb941aa7ed7ee6c",
+      "actual": "63ecd94f470be84dc43ef4fffb18d9c219bc0518b404fa7a3cb941aa7ed7ee6c",
+      "committed": "63ecd94f470be84dc43ef4fffb18d9c219bc0518b404fa7a3cb941aa7ed7ee6c",
+      "matches": true
+    },
+    {
+      "path": "src/query/sql-statement-ingress.js",
+      "expected": "ca984bcbee876cfd08deb2375963f9085e13d90af7c34d15c1dfe7e16ddf81cb",
+      "actual": "ca984bcbee876cfd08deb2375963f9085e13d90af7c34d15c1dfe7e16ddf81cb",
+      "committed": "ca984bcbee876cfd08deb2375963f9085e13d90af7c34d15c1dfe7e16ddf81cb",
+      "matches": true
+    },
+    {
+      "path": "src/query/table-creation-service-create-table.js",
+      "expected": "4b8f43f7310bcb94c652a28ca64252b06964b487298ac2b174a3248f44d7db9e",
+      "actual": "4b8f43f7310bcb94c652a28ca64252b06964b487298ac2b174a3248f44d7db9e",
+      "committed": "4b8f43f7310bcb94c652a28ca64252b06964b487298ac2b174a3248f44d7db9e",
+      "matches": true
+    },
+    {
+      "path": "src/query/table-creation-service-durable-job.js",
+      "expected": "4b8cb03ba48a862c50eed0de438900ae0b18c72f46cf0ba0d2ed7432c3adb4a2",
+      "actual": "4b8cb03ba48a862c50eed0de438900ae0b18c72f46cf0ba0d2ed7432c3adb4a2",
+      "committed": "4b8cb03ba48a862c50eed0de438900ae0b18c72f46cf0ba0d2ed7432c3adb4a2",
+      "matches": true
+    },
+    {
+      "path": "src/query/user-table-create-intent.js",
+      "expected": "9ef287a7d07b8b086093e610ce99076147f26ee482ad0b6a091f3dd3928f6357",
+      "actual": "9ef287a7d07b8b086093e610ce99076147f26ee482ad0b6a091f3dd3928f6357",
+      "committed": "9ef287a7d07b8b086093e610ce99076147f26ee482ad0b6a091f3dd3928f6357",
+      "matches": true
+    },
+    {
+      "path": "src/runtime/pgwire-protocol-constants.js",
+      "expected": "4fb2a9ead54375a960faaf5d5093c8f1fdb4d4dc795fa02f110096cb7b4b2008",
+      "actual": "4fb2a9ead54375a960faaf5d5093c8f1fdb4d4dc795fa02f110096cb7b4b2008",
+      "committed": "4fb2a9ead54375a960faaf5d5093c8f1fdb4d4dc795fa02f110096cb7b4b2008",
+      "matches": true
+    },
+    {
+      "path": "src/runtime/pgwire-result-mapper.js",
+      "expected": "0932472df96637049b624c830478359d5cebbe5812d6f4dad495b2de999a130e",
+      "actual": "0932472df96637049b624c830478359d5cebbe5812d6f4dad495b2de999a130e",
+      "committed": "0932472df96637049b624c830478359d5cebbe5812d6f4dad495b2de999a130e",
+      "matches": true
+    },
+    {
+      "path": "test/admin/admin-owner-mutation-outcomes.test.js",
+      "expected": "1bbd9bb7bad3fde7491f54633c382df8fb4e76cc9fff440a3d029d47c1f36a2d",
+      "actual": "1bbd9bb7bad3fde7491f54633c382df8fb4e76cc9fff440a3d029d47c1f36a2d",
+      "committed": "1bbd9bb7bad3fde7491f54633c382df8fb4e76cc9fff440a3d029d47c1f36a2d",
+      "matches": true
+    },
+    {
+      "path": "test/admin/admin-owner-operations.test.js",
+      "expected": "f283ebddf0418ac449e98397e5ecee21c7562b04dad5c5910e0404ba7b9a1340",
+      "actual": "f283ebddf0418ac449e98397e5ecee21c7562b04dad5c5910e0404ba7b9a1340",
+      "committed": "f283ebddf0418ac449e98397e5ecee21c7562b04dad5c5910e0404ba7b9a1340",
+      "matches": true
+    },
+    {
+      "path": "test/cdc/cdc-delete-cache-absence-convergence.test.js",
+      "expected": "a65af545085b24d2258a18b01983de28bebaaea98221978b3f4a8fba182687ed",
+      "actual": "a65af545085b24d2258a18b01983de28bebaaea98221978b3f4a8fba182687ed",
+      "committed": "a65af545085b24d2258a18b01983de28bebaaea98221978b3f4a8fba182687ed",
+      "matches": true
+    },
+    {
+      "path": "test/cli/admin-cli-owner-operations.test.js",
+      "expected": "ce1c22d86aaa8296ef60a176bd5207cea7361fbb1e5afffee4cef75f7087cb53",
+      "actual": "ce1c22d86aaa8296ef60a176bd5207cea7361fbb1e5afffee4cef75f7087cb53",
+      "committed": "ce1c22d86aaa8296ef60a176bd5207cea7361fbb1e5afffee4cef75f7087cb53",
+      "matches": true
+    },
+    {
+      "path": "test/cli/core/command-parser.test.js",
+      "expected": "54662ef14aedcc85180d8628a1a2a5951301d1031d2a291805129df8514beadb",
+      "actual": "54662ef14aedcc85180d8628a1a2a5951301d1031d2a291805129df8514beadb",
+      "committed": "54662ef14aedcc85180d8628a1a2a5951301d1031d2a291805129df8514beadb",
+      "matches": true
+    },
+    {
+      "path": "test/cli/index.test.js",
+      "expected": "d734cf181e6ff64dd95b09987634c4598c37950fd7611499ee452f0307826146",
+      "actual": "d734cf181e6ff64dd95b09987634c4598c37950fd7611499ee452f0307826146",
+      "committed": "d734cf181e6ff64dd95b09987634c4598c37950fd7611499ee452f0307826146",
+      "matches": true
+    },
+    {
+      "path": "test/config/dynamic-config-service.test.js",
+      "expected": "db3283e79ae861adf6482f5e132b3b29c25d1cdaada31d869dad0fcb59fb1896",
+      "actual": "db3283e79ae861adf6482f5e132b3b29c25d1cdaada31d869dad0fcb59fb1896",
+      "committed": "db3283e79ae861adf6482f5e132b3b29c25d1cdaada31d869dad0fcb59fb1896",
+      "matches": true
+    },
+    {
+      "path": "test/control-plane/node-lifecycle-writer-census.js",
+      "expected": "9b0f907423558925a4be9c23a636f8cdc2f314a80826283898b97ec7c5ceb7ec",
+      "actual": "9b0f907423558925a4be9c23a636f8cdc2f314a80826283898b97ec7c5ceb7ec",
+      "committed": "9b0f907423558925a4be9c23a636f8cdc2f314a80826283898b97ec7c5ceb7ec",
+      "matches": true
+    },
+    {
+      "path": "test/control-plane/node-terminal-removal.test.js",
+      "expected": "7469fddabd7b18510b9cbf8e0a7eaecc0c64f3c9ead27907dc850de6f049f05d",
+      "actual": "7469fddabd7b18510b9cbf8e0a7eaecc0c64f3c9ead27907dc850de6f049f05d",
+      "committed": "7469fddabd7b18510b9cbf8e0a7eaecc0c64f3c9ead27907dc850de6f049f05d",
+      "matches": true
+    },
+    {
+      "path": "test/control-plane/postgres-wire-scale.test.js",
+      "expected": "2a3b5ed55c41076a79bb68b5d95748c51454b7d89d312d85315543dd104c7d88",
+      "actual": "2a3b5ed55c41076a79bb68b5d95748c51454b7d89d312d85315543dd104c7d88",
+      "committed": "2a3b5ed55c41076a79bb68b5d95748c51454b7d89d312d85315543dd104c7d88",
+      "matches": true
+    },
+    {
+      "path": "test/control-plane/runtime-access-policy-owner.test.js",
+      "expected": "4dd9780091c64289abe8f46fe4db1831a71f55726e1d9914d6da0ce6a1739782",
+      "actual": "4dd9780091c64289abe8f46fe4db1831a71f55726e1d9914d6da0ce6a1739782",
+      "committed": "4dd9780091c64289abe8f46fe4db1831a71f55726e1d9914d6da0ce6a1739782",
+      "matches": true
+    },
+    {
+      "path": "test/control-plane/system-metadata-owner-modules.test.js",
+      "expected": "a0edefbc17d01ff100b7b65606e81dd5109a1650db98aaa8967625bcea6eb965",
+      "actual": "a0edefbc17d01ff100b7b65606e81dd5109a1650db98aaa8967625bcea6eb965",
+      "committed": "a0edefbc17d01ff100b7b65606e81dd5109a1650db98aaa8967625bcea6eb965",
+      "matches": true
+    },
+    {
+      "path": "test/debug-runtime/debug-metadata-service.test.js",
+      "expected": "12f14ac9f202f08d19859ebf43634746cd91e06b096476b20f407992980ac135",
+      "actual": "12f14ac9f202f08d19859ebf43634746cd91e06b096476b20f407992980ac135",
+      "committed": "12f14ac9f202f08d19859ebf43634746cd91e06b096476b20f407992980ac135",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+      "expected": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "actual": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "committed": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
+      "expected": "79cf080b630e603fdc4b5ebdd05bc1c2ccaffe1a57de1285ff33450030645623",
+      "actual": "79cf080b630e603fdc4b5ebdd05bc1c2ccaffe1a57de1285ff33450030645623",
+      "committed": "79cf080b630e603fdc4b5ebdd05bc1c2ccaffe1a57de1285ff33450030645623",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js",
+      "expected": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "actual": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "committed": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js",
+      "expected": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "actual": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "committed": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
+      "expected": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "actual": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "committed": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js",
+      "expected": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "actual": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "committed": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js",
+      "expected": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "actual": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "committed": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
+      "expected": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "actual": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "committed": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js",
+      "expected": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "actual": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "committed": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js",
+      "expected": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "actual": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "committed": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js",
+      "expected": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "actual": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "committed": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js",
+      "expected": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "actual": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "committed": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js",
+      "expected": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "actual": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "committed": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js",
+      "expected": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "actual": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "committed": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js",
+      "expected": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "actual": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "committed": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js",
+      "expected": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "actual": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "committed": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
+      "expected": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "actual": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "committed": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
+      "expected": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "actual": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "committed": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js",
+      "expected": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "actual": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "committed": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js",
+      "expected": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "actual": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "committed": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js",
+      "expected": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "actual": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "committed": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js",
+      "expected": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "actual": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "committed": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js",
+      "expected": "0ad2a52cadec56d235ea5f099c65a77ce5c437664d478c189d97defe61076ccf",
+      "actual": "0ad2a52cadec56d235ea5f099c65a77ce5c437664d478c189d97defe61076ccf",
+      "committed": "0ad2a52cadec56d235ea5f099c65a77ce5c437664d478c189d97defe61076ccf",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js",
+      "expected": "6ab97686c5d862ed9414cbe7b18c65a521505d80217e340b2e7b3528bfcebf81",
+      "actual": "6ab97686c5d862ed9414cbe7b18c65a521505d80217e340b2e7b3528bfcebf81",
+      "committed": "6ab97686c5d862ed9414cbe7b18c65a521505d80217e340b2e7b3528bfcebf81",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+      "expected": "1ea0269b76b2463148897e2bf16e68ee3b3e0bc9e00e7f4a8f9f98a86c14a4a1",
+      "actual": "1ea0269b76b2463148897e2bf16e68ee3b3e0bc9e00e7f4a8f9f98a86c14a4a1",
+      "committed": "1ea0269b76b2463148897e2bf16e68ee3b3e0bc9e00e7f4a8f9f98a86c14a4a1",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js",
+      "expected": "fb737f236db48bf868438cf61592f76a8a962fae74ed445d4425e6d7c156cedc",
+      "actual": "fb737f236db48bf868438cf61592f76a8a962fae74ed445d4425e6d7c156cedc",
+      "committed": "fb737f236db48bf868438cf61592f76a8a962fae74ed445d4425e6d7c156cedc",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-distribution-scenario.test.js",
+      "expected": "28859170b514f3a4d28963bfed1da651179d4e818e5a83dfdb6f8d759d19d9f0",
+      "actual": "28859170b514f3a4d28963bfed1da651179d4e818e5a83dfdb6f8d759d19d9f0",
+      "committed": "28859170b514f3a4d28963bfed1da651179d4e818e5a83dfdb6f8d759d19d9f0",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-scenario.test.js",
+      "expected": "3a00af5e19fa7ce17e6bbb1598575f75abada513edb239dc7f8a23c5ecc40cb8",
+      "actual": "3a00af5e19fa7ce17e6bbb1598575f75abada513edb239dc7f8a23c5ecc40cb8",
+      "committed": "3a00af5e19fa7ce17e6bbb1598575f75abada513edb239dc7f8a23c5ecc40cb8",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
+      "expected": "7f474048a2e48849448a665325e808b67e9ce6a27b2c1f60b0791e38434fd63a",
+      "actual": "7f474048a2e48849448a665325e808b67e9ce6a27b2c1f60b0791e38434fd63a",
+      "committed": "7f474048a2e48849448a665325e808b67e9ce6a27b2c1f60b0791e38434fd63a",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-table-partition-distribution-scenario.test.js",
+      "expected": "0785f78583f3591fc6424cb4c4af23562477c64cacf7deecf128c77767cea99a",
+      "actual": "0785f78583f3591fc6424cb4c4af23562477c64cacf7deecf128c77767cea99a",
+      "committed": "0785f78583f3591fc6424cb4c4af23562477c64cacf7deecf128c77767cea99a",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/table-distribution-helpers-scenario-policy.test.js",
+      "expected": "0910c1bde97bdd9bc63db60f8392c3e820423a271ef9fbbe6db088234658c001",
+      "actual": "0910c1bde97bdd9bc63db60f8392c3e820423a271ef9fbbe6db088234658c001",
+      "committed": "0910c1bde97bdd9bc63db60f8392c3e820423a271ef9fbbe6db088234658c001",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js",
+      "expected": "1ae35f6c3092ef74d55e5ed9b63ed0c0c352ac9e8844281c3ec3c6ea900092d8",
+      "actual": "1ae35f6c3092ef74d55e5ed9b63ed0c0c352ac9e8844281c3ec3c6ea900092d8",
+      "committed": "1ae35f6c3092ef74d55e5ed9b63ed0c0c352ac9e8844281c3ec3c6ea900092d8",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/cluster-node-handle-layer.js",
+      "expected": "30da9b169409bd39ba8e59571d7d1d61b30c92ca8c483f2992b34dff68ee03d6",
+      "actual": "30da9b169409bd39ba8e59571d7d1d61b30c92ca8c483f2992b34dff68ee03d6",
+      "committed": "30da9b169409bd39ba8e59571d7d1d61b30c92ca8c483f2992b34dff68ee03d6",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/harness/cluster-node-owner-operations.js",
+      "expected": "8d9c1028a5d44aeb840455f9f6ab10a5b5058968a6acfda34f93a15ebd4d8f75",
+      "actual": "8d9c1028a5d44aeb840455f9f6ab10a5b5058968a6acfda34f93a15ebd4d8f75",
+      "committed": "8d9c1028a5d44aeb840455f9f6ab10a5b5058968a6acfda34f93a15ebd4d8f75",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
+      "expected": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "actual": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "committed": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js",
+      "expected": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "actual": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "committed": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability-client.js",
+      "expected": "8d959c9f691d5ad267780fbb3cc769c5045d54d455b12fcceb762565cd4fcfd9",
+      "actual": "8d959c9f691d5ad267780fbb3cc769c5045d54d455b12fcceb762565cd4fcfd9",
+      "committed": "8d959c9f691d5ad267780fbb3cc769c5045d54d455b12fcceb762565cd4fcfd9",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability-constants.js",
+      "expected": "f0294e3b9982efe57641f8bc32e3b8afb09defe48959bcf9e46cb2e33e553457",
+      "actual": "f0294e3b9982efe57641f8bc32e3b8afb09defe48959bcf9e46cb2e33e553457",
+      "committed": "f0294e3b9982efe57641f8bc32e3b8afb09defe48959bcf9e46cb2e33e553457",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability.js",
+      "expected": "2d310b5912fae49227f172770e9094501f2fb9d5a7c8e2c2b762333697c368ef",
+      "actual": "2d310b5912fae49227f172770e9094501f2fb9d5a7c8e2c2b762333697c368ef",
+      "committed": "2d310b5912fae49227f172770e9094501f2fb9d5a7c8e2c2b762333697c368ef",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-control-query.js",
+      "expected": "7e0a647e7e91f62b85a3f7f01b55b568d376e596eb17fa347ab249ae636643e9",
+      "actual": "7e0a647e7e91f62b85a3f7f01b55b568d376e596eb17fa347ab249ae636643e9",
+      "committed": "7e0a647e7e91f62b85a3f7f01b55b568d376e596eb17fa347ab249ae636643e9",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
+      "expected": "0bc0d74dbe730c4f2fd377b0e5c3f2767e912e231a305a39751b49745315f320",
+      "actual": "0bc0d74dbe730c4f2fd377b0e5c3f2767e912e231a305a39751b49745315f320",
+      "committed": "0bc0d74dbe730c4f2fd377b0e5c3f2767e912e231a305a39751b49745315f320",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js",
+      "expected": "0cd15b0dd8b563c4ac370847ce579322ca4fe124f5a6c2913b2a0809bab0cb89",
+      "actual": "0cd15b0dd8b563c4ac370847ce579322ca4fe124f5a6c2913b2a0809bab0cb89",
+      "committed": "0cd15b0dd8b563c4ac370847ce579322ca4fe124f5a6c2913b2a0809bab0cb89",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-table-bootstrap.js",
+      "expected": "a43bb15fcf28391539317e117ac9b40d68a2a75ecb809158e870ab13a8c6c009",
+      "actual": "a43bb15fcf28391539317e117ac9b40d68a2a75ecb809158e870ab13a8c6c009",
+      "committed": "a43bb15fcf28391539317e117ac9b40d68a2a75ecb809158e870ab13a8c6c009",
+      "matches": true
+    },
+    {
+      "path": "test/distributed/scenarios/user-table-topology-helpers.js",
+      "expected": "3972ee3183423c33e652283dfb7941448c4151eabd772aed791a7db45d9c1801",
+      "actual": "3972ee3183423c33e652283dfb7941448c4151eabd772aed791a7db45d9c1801",
+      "committed": "3972ee3183423c33e652283dfb7941448c4151eabd772aed791a7db45d9c1801",
+      "matches": true
+    },
+    {
+      "path": "test/integration/benchmark-system-table-read-path.integration.test.js",
+      "expected": "04a861be369da52bcf26e11adc990a51666a2f9a5ab1ebc711e59e2105f87cf3",
+      "actual": "04a861be369da52bcf26e11adc990a51666a2f9a5ab1ebc711e59e2105f87cf3",
+      "committed": "04a861be369da52bcf26e11adc990a51666a2f9a5ab1ebc711e59e2105f87cf3",
+      "matches": true
+    },
+    {
+      "path": "test/integration/control-plane-node-terminal-removal.integration.test.js",
+      "expected": "79cf1854d76cdf9d1f6865671a556b16db1d988220eb316889bde8c80782b7f9",
+      "actual": "79cf1854d76cdf9d1f6865671a556b16db1d988220eb316889bde8c80782b7f9",
+      "committed": "79cf1854d76cdf9d1f6865671a556b16db1d988220eb316889bde8c80782b7f9",
+      "matches": true
+    },
+    {
+      "path": "test/integration/control-plane-pgwire-scale-callers.integration.test.js",
+      "expected": "dbc08f6bfe9dc14dd04af80662ea2c77341717eeda1b260c735ddb36ca959e26",
+      "actual": "dbc08f6bfe9dc14dd04af80662ea2c77341717eeda1b260c735ddb36ca959e26",
+      "committed": "dbc08f6bfe9dc14dd04af80662ea2c77341717eeda1b260c735ddb36ca959e26",
+      "matches": true
+    },
+    {
+      "path": "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+      "expected": "8750ee27b83672150ef2abe671c367ab5a27bd3d8b101f899dfdbe801be46545",
+      "actual": "8750ee27b83672150ef2abe671c367ab5a27bd3d8b101f899dfdbe801be46545",
+      "committed": "8750ee27b83672150ef2abe671c367ab5a27bd3d8b101f899dfdbe801be46545",
+      "matches": true
+    },
+    {
+      "path": "test/integration/helpers/public-binding-seam-harness.js",
+      "expected": "6132d91eddfaabf198ed2a93187aac46d7ff652ca1983f58f28e27a53a23cfcd",
+      "actual": "6132d91eddfaabf198ed2a93187aac46d7ff652ca1983f58f28e27a53a23cfcd",
+      "committed": "6132d91eddfaabf198ed2a93187aac46d7ff652ca1983f58f28e27a53a23cfcd",
+      "matches": true
+    },
+    {
+      "path": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "expected": "61f52ed4000827ffc53d2d59569bee29219c7c6ddbc6d578dd010b5a8ace4db1",
+      "actual": "61f52ed4000827ffc53d2d59569bee29219c7c6ddbc6d578dd010b5a8ace4db1",
+      "committed": "61f52ed4000827ffc53d2d59569bee29219c7c6ddbc6d578dd010b5a8ace4db1",
+      "matches": true
+    },
+    {
+      "path": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "expected": "6456235b675438a30f1ded5fab5d679f189f29412346347d56ffb383c7f0f6dd",
+      "actual": "6456235b675438a30f1ded5fab5d679f189f29412346347d56ffb383c7f0f6dd",
+      "committed": "6456235b675438a30f1ded5fab5d679f189f29412346347d56ffb383c7f0f6dd",
+      "matches": true
+    },
+    {
+      "path": "test/integration/strict-benchmark-local-readiness.integration.test.js",
+      "expected": "775a514b4ee8c45c8ceff545f2b3cab71bd8a08864c212cd773853378f168034",
+      "actual": "775a514b4ee8c45c8ceff545f2b3cab71bd8a08864c212cd773853378f168034",
+      "committed": "775a514b4ee8c45c8ceff545f2b3cab71bd8a08864c212cd773853378f168034",
+      "matches": true
+    },
+    {
+      "path": "test/integration/strict-load-lane-table-probe.integration.test.js",
+      "expected": "07513c5fe6d49e45836f032aa3c87b27d41162d477b678664819658b5acb491b",
+      "actual": "07513c5fe6d49e45836f032aa3c87b27d41162d477b678664819658b5acb491b",
+      "committed": "07513c5fe6d49e45836f032aa3c87b27d41162d477b678664819658b5acb491b",
+      "matches": true
+    },
+    {
+      "path": "test/integration/strict-preload-pressure-reproducer.integration.test.js",
+      "expected": "af8919c0e06781b1732dd11ab72f208279a45abb5f0120c1549a551131279097",
+      "actual": "af8919c0e06781b1732dd11ab72f208279a45abb5f0120c1549a551131279097",
+      "committed": "af8919c0e06781b1732dd11ab72f208279a45abb5f0120c1549a551131279097",
+      "matches": true
+    },
+    {
+      "path": "test/integration/versioned-cdc-readiness-convergence.integration.test.js",
+      "expected": "09f90185d916f34e5a18f75d1bb13fbac9d2736b9543e9470109fadbcaebeb44",
+      "actual": "09f90185d916f34e5a18f75d1bb13fbac9d2736b9543e9470109fadbcaebeb44",
+      "committed": "09f90185d916f34e5a18f75d1bb13fbac9d2736b9543e9470109fadbcaebeb44",
+      "matches": true
+    },
+    {
+      "path": "test/node/failure-detection-delegation.property.test.js",
+      "expected": "50b155bd7246725cd70351c662b355753016813267a8af49e51d58c417db4c13",
+      "actual": "50b155bd7246725cd70351c662b355753016813267a8af49e51d58c417db4c13",
+      "committed": "50b155bd7246725cd70351c662b355753016813267a8af49e51d58c417db4c13",
+      "matches": true
+    },
+    {
+      "path": "test/node/node-lifecycle-service.test.js",
+      "expected": null,
+      "actual": null,
+      "committed": null,
+      "matches": true
+    },
+    {
+      "path": "test/node/state-machine-cdc-consistency.property.test.js",
+      "expected": "0619243c4395467263ba33a433e92430d7daca2488e663ed37a27b9a250b3bfa",
+      "actual": "0619243c4395467263ba33a433e92430d7daca2488e663ed37a27b9a250b3bfa",
+      "committed": "0619243c4395467263ba33a433e92430d7daca2488e663ed37a27b9a250b3bfa",
+      "matches": true
+    },
+    {
+      "path": "test/partition/coordinator-table-exact-identity.test.js",
+      "expected": "72d40dc445a03fc5f606c406a9e268385cf60ca3b84067ff1ab3b78e5cd35a87",
+      "actual": "72d40dc445a03fc5f606c406a9e268385cf60ca3b84067ff1ab3b78e5cd35a87",
+      "committed": "72d40dc445a03fc5f606c406a9e268385cf60ca3b84067ff1ab3b78e5cd35a87",
+      "matches": true
+    },
+    {
+      "path": "test/policy/table-policy-service.test.js",
+      "expected": "b985340d2d5fda712a8f64d827f386d3bdcfaa4259d49e99d788da20762537f4",
+      "actual": "b985340d2d5fda712a8f64d827f386d3bdcfaa4259d49e99d788da20762537f4",
+      "committed": "b985340d2d5fda712a8f64d827f386d3bdcfaa4259d49e99d788da20762537f4",
+      "matches": true
+    },
+    {
+      "path": "test/query/schema-provisioning-job-owner.test.js",
+      "expected": "3cc37d4d6b4e20d50611ab7d7557f55ed31944be9030bc375f21374a678798e2",
+      "actual": "3cc37d4d6b4e20d50611ab7d7557f55ed31944be9030bc375f21374a678798e2",
+      "committed": "3cc37d4d6b4e20d50611ab7d7557f55ed31944be9030bc375f21374a678798e2",
+      "matches": true
+    },
+    {
+      "path": "test/query/sql-query-engine-system-table-write-admission.test.js",
+      "expected": "1a97e2f6e63d9178b6ee1abb8cb676c3e5cce123621a1b2e9696bdd3c4e4a131",
+      "actual": "1a97e2f6e63d9178b6ee1abb8cb676c3e5cce123621a1b2e9696bdd3c4e4a131",
+      "committed": "1a97e2f6e63d9178b6ee1abb8cb676c3e5cce123621a1b2e9696bdd3c4e4a131",
+      "matches": true
+    },
+    {
+      "path": "test/query/transaction-schema-enforcement.test.js",
+      "expected": "1cbd497a49e88bc0706395d13f909516470e547e1483f41ba2f5abb6bef2d42c",
+      "actual": "1cbd497a49e88bc0706395d13f909516470e547e1483f41ba2f5abb6bef2d42c",
+      "committed": "1cbd497a49e88bc0706395d13f909516470e547e1483f41ba2f5abb6bef2d42c",
+      "matches": true
+    },
+    {
+      "path": "test/runtime/pgwire-runtime-module.test.js",
+      "expected": "9dcd9b64a25a6d0f59244e67a6753e74b7b0834fe609e53b2aa9e4a8de432159",
+      "actual": "9dcd9b64a25a6d0f59244e67a6753e74b7b0834fe609e53b2aa9e4a8de432159",
+      "committed": "9dcd9b64a25a6d0f59244e67a6753e74b7b0834fe609e53b2aa9e4a8de432159",
+      "matches": true
+    },
+    {
+      "path": "scripts/check-circular-dependencies.js",
+      "expected": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c",
+      "actual": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c",
+      "committed": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c",
+      "matches": true
+    },
+    {
+      "path": "scripts/check-cognitive-complexity.js",
+      "expected": "44ee16aac1204a900cd9c4dc48a74cee6e0ee706bb6b366fa1961e72bbfe52bd",
+      "actual": "44ee16aac1204a900cd9c4dc48a74cee6e0ee706bb6b366fa1961e72bbfe52bd",
+      "committed": "44ee16aac1204a900cd9c4dc48a74cee6e0ee706bb6b366fa1961e72bbfe52bd",
+      "matches": true
+    },
+    {
+      "path": "scripts/check-complexity.js",
+      "expected": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b",
+      "actual": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b",
+      "committed": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b",
+      "matches": true
+    },
+    {
+      "path": "scripts/check-duplication.js",
+      "expected": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1",
+      "actual": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1",
+      "committed": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1",
+      "matches": true
+    },
+    {
+      "path": "scripts/checks/write-complexity-ratchet-closure-oracle.js",
+      "expected": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6",
+      "actual": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6",
+      "committed": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6",
+      "matches": true
+    },
+    {
+      "path": "scripts/generate-global-owner-debt-inventory.js",
+      "expected": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e",
+      "actual": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e",
+      "committed": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e",
+      "matches": true
+    },
+    {
+      "path": "scripts/global-owner-debt-inventory/constants.js",
+      "expected": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd",
+      "actual": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd",
+      "committed": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-check-helpers.js",
+      "expected": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165",
+      "actual": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165",
+      "committed": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-cycle-analyzer.js",
+      "expected": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70",
+      "actual": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70",
+      "committed": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-cycle-input-facts.js",
+      "expected": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a",
+      "actual": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a",
+      "committed": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-report-constants.js",
+      "expected": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423",
+      "actual": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423",
+      "committed": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-report-inputs.js",
+      "expected": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "actual": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "committed": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "matches": true
+    },
+    {
+      "path": "scripts/metric-report-provenance.js",
+      "expected": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133",
+      "actual": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133",
+      "committed": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-cycle-custody.test.js",
+      "expected": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e",
+      "actual": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e",
+      "committed": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-cycle-resolution.test.js",
+      "expected": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c",
+      "actual": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c",
+      "committed": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-duplication-inputs.test.js",
+      "expected": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a",
+      "actual": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a",
+      "committed": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-report-fixture.js",
+      "expected": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731",
+      "actual": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731",
+      "committed": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-report-inputs.test.js",
+      "expected": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89",
+      "actual": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89",
+      "committed": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89",
+      "matches": true
+    },
+    {
+      "path": "test/scripts/metric-report-provenance.test.js",
+      "expected": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3",
+      "actual": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3",
+      "committed": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3",
+      "matches": true
+    },
+    {
+      "path": "test/message-group/message-group-native-custody-fixture.js",
+      "expected": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "actual": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "committed": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "matches": true
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route-fixture.js",
+      "expected": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "actual": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "committed": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "matches": true
+    },
+    {
+      "path": "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+      "expected": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "actual": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "committed": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "matches": true
+    },
+    {
+      "path": "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "expected": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "actual": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "committed": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "matches": true
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-bound-native-fixture.js",
+      "expected": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "actual": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "committed": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "matches": true
+    },
+    {
+      "path": "test/wasm-service/wasm-retained-bootstrap-fixture.js",
+      "expected": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "actual": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "committed": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "matches": true
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-fixture.js",
+      "expected": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "actual": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "committed": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "matches": true
+    },
+    {
+      "path": "src/cache/cdc-table-policy.js",
+      "expected": "5d35cbbc9af28dacf72986dc00068da93dba72b40a486a1523599daaeaa891a3",
+      "actual": "5d35cbbc9af28dacf72986dc00068da93dba72b40a486a1523599daaeaa891a3",
+      "committed": "5d35cbbc9af28dacf72986dc00068da93dba72b40a486a1523599daaeaa891a3",
+      "matches": true
+    }
+  ]
+}
