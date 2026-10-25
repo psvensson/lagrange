@@ -14,7 +14,8 @@ test('CommandParser', async (t) => {
     const commands = parser.getCommandNames();
     t.ok(commands.includes('connect'), 'has connect command');
     t.ok(commands.includes('drain'), 'has drain command');
-    t.ok(commands.includes('activate'), 'has activate command');
+    t.notOk(commands.includes('activate'),
+      'no activate command: no undrain contract exists');
     t.ok(commands.includes('remove-node'), 'has remove-node command');
     t.ok(commands.includes('refresh'), 'has refresh command');
     t.ok(commands.includes('filter'), 'has filter command');
@@ -263,8 +264,8 @@ test('CommandParser', async (t) => {
   await t.test('remove-node alias parses to canonical command', async (t) => {
     const parser = new CommandParser();
 
-    const result = parser.parse('rm-node node-2');
-    t.same(result, {command: 'remove-node', args: ['node-2']});
+    const result = parser.parse('rm-node node-2 1 stopped');
+    t.same(result, {command: 'remove-node', args: ['node-2', '1', 'stopped']});
   });
 
   await t.test('since command parses with a required argument', async (t) => {

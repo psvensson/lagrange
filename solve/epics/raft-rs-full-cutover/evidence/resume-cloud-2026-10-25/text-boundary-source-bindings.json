@@ -1,0 +1,98 @@
+{
+  "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+  "rows": [
+    {
+      "path": "src/control-plane/owners/log-diagnostic-marker-contract.js",
+      "sha256": "bb2d40e3d3c7a308f5a4affb6fa57fe857a8af409772c09a60efc270bbb8aa00"
+    },
+    {
+      "path": "src/control-plane/owners/logs-owner.js",
+      "sha256": "eef1bf5a64dd48b349b983c5165b9c30b09add64e54f203fe0b82ba34f877ccc"
+    },
+    {
+      "path": "src/control-plane/owners/system-metadata-owner-base.js",
+      "sha256": "151296c6f4dfc74282f88d41dc214f956233ab44e2fdce67598ee642e6f32d6f"
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+      "sha256": "e07d2b4c81da638dccb4a44fdf670a8cb7ffbcefa9aa09c597e3ee296c833acc"
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+      "sha256": "4c7553da2e6b58f750c1f796c5ad0aff2b0c20a82309f98ca1ce8624f99c04de"
+    },
+    {
+      "path": "src/control-plane/system-row-normalizers.js",
+      "sha256": "0c787c6dd615ac2f35d4ca4fa1d4165d73cddd863ede0608b15fde6aed1821b6"
+    },
+    {
+      "path": "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+      "sha256": "b0e112465dcb0e9d17073a8ac117ba24d3c8d8ab2f8983cd49576d9af5b67655"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-insert-normalization.js",
+      "sha256": "1e79db49e14c189af67f82cbe9eb4a09931847e4df0c137930935d5cae9f3289"
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutation-operations.js",
+      "sha256": "b8c5ef4919632b3c2c8745cd8069bca1de2841ecb1c4eb3f857df0d8f32c0088"
+    },
+    {
+      "path": "src/query/application-database-input.js",
+      "sha256": "a268208e0a3c074d24bb7bb7c3559b0d99bbb32c85876055e856de8cd30fd482"
+    },
+    {
+      "path": "src/query/sql-request.js",
+      "sha256": "2e667eaf064f5fe22e4e8d47251bf1e699f03c83301ae55ed8599111672e0607"
+    },
+    {
+      "path": "src/partition/partition-statement-admission.js",
+      "sha256": "c9981b6390f5bc1c5fd8749d2897fcdfe86f1ce5ded83744a7aee7ec6400072f"
+    },
+    {
+      "path": "src/config/dynamic-config-service.js",
+      "sha256": "01c8d28e3ae098ad802e135884fe6805198eea09d489be4dca6a03c321a40771"
+    },
+    {
+      "path": "src/policy/table-policy-service.js",
+      "sha256": "cba87b0d6e3f3dfbfeacc2bbe43c37ec60a973ae6b08c1dc8f6066f634df5153"
+    },
+    {
+      "path": "src/runtime/oci-host-agent-json.js",
+      "sha256": "69abf032fe71b2c6bbebb4972ff2e2736fbea93b49960b8a471523c5b7654203"
+    },
+    {
+      "path": "src/runtime/oci-host-agent-schema.js",
+      "sha256": "efab119123b12fa55f65cd51d9e2b17ad9f4ae756cdb42c53e7ec32630e51c8e"
+    },
+    {
+      "path": "src/runtime/pgwire-message-parsers.js",
+      "sha256": "e6d88cd7bbf863f4f7bd7556a370883103f6de8efc176e8386433201748c1933"
+    },
+    {
+      "path": "src/runtime/pgwire-buffer-codec.js",
+      "sha256": "2fa8a009a6c9df17cd8844f9a782389c948a614bb23134890a1ef2e56357ced8"
+    },
+    {
+      "path": "src/query/sqlite-identifier.js",
+      "sha256": "5230d74be55aef972bb9a93034fc87f52acb276ffd873fbfeebc6afc9d8510e0"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/design-query-begin-uncertain-insert-resolution-2026-10-11.md",
+      "sha256": "8022864f276b139cab472cf6484a302dff00c553594285e309e8d3e4e0f747de"
+    },
+    {
+      "path": "solve/quests/replicated-transaction-decision-and-apply/log.ndjson",
+      "sha256": "fc7521494db0177c7d1afeb649649330181aa4b2d778d7821877e2fe6c756a74"
+    },
+    {
+      "path": "node_modules/better-sqlite3/package.json",
+      "sha256": "58e81504576abccfacbfd08dc9432dc3a00d0fc0454685cb7a76aaf976cf25a9"
+    },
+    {
+      "path": "node_modules/better-sqlite3/src/better_sqlite3.cpp",
+      "sha256": "551abc7d9feea0ad2acb97f33125c5e8800d6d84a1da4390512d08743f924b1e"
+    }
+  ],
+  "runtimeExecuted": false
+}

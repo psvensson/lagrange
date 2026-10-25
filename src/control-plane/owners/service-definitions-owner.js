@@ -15,6 +15,8 @@ import {
   requestBindingServiceDefinitionRowsMatch,
 } from './request-binding-service-definition-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+import {POSTGRES_WIRE_SCALE_PREDICATE, compilePostgresWireScaleRequest,
+  describePostgresWireScaleResult} from './postgres-wire-scale-contract.js';
 
 const LOCAL_STR_SERVICE_DEFINITIONS_OWNER = 'service-definitions-owner';
 const SERVICE_DEFINITION_ROW_OWNERS = new WeakMap();
@@ -119,6 +121,14 @@ class ServiceDefinitionsOwner {
 
   async listServiceDefinitions(options = {}) {
     return rowOwnerFor(this).listRows(options);
+  }
+
+  /** Persist built-in listener intent; existing placement owns convergence. */
+  async scalePostgresWireListener(request, options = {}) {
+    const desired = compilePostgresWireScaleRequest(request);
+    const result = await rowOwnerFor(this).updateWhere(
+      POSTGRES_WIRE_SCALE_PREDICATE, desired, options);
+    return describePostgresWireScaleResult(result, desired);
   }
 
   async runSerialized(key, operation) {

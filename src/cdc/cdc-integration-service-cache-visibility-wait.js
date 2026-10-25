@@ -14,11 +14,12 @@ import {
   applyAuthoritativeCacheRepair,
   applyAuthoritativeCacheSweep,
   authoritativeReadRowsAreValid,
-  cacheRecordChangedDuringAuthoritativeAbsenceRead,
   captureAuthoritativeCacheSweepSnapshot,
   captureCacheRecordBeforeAbsenceRepair,
   resolveCacheVisibilityRepairReadAuthority,
 } from './cdc-integration-service-cache-visibility-authority.js';
+import {isDeletedRowObservationSatisfied, repairDeletedRowVisibility} from
+  './cdc-cache-deletion-visibility.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const {
@@ -424,7 +425,8 @@ class CDCIntegrationServiceCacheVisibilityWait {
       return true;
     }
     if (!expectPresent) {
-      return false;
+      return isDeletedRowObservationSatisfied(this,
+        this.getCacheRecord(tableName, key), expectedFields);
     }
     const record = this.getCacheRecord(tableName, key);
     return (
@@ -677,62 +679,11 @@ class CDCIntegrationServiceCacheVisibilityWait {
         cacheRepaired,
       });
     }
-    if (rows.length > 0) {
-      return buildSystemTableVisibilityResult({
-        visibilityState: null,
-      });
-    }
-    if (cacheRecordChangedDuringAuthoritativeAbsenceRead(
-      tableName,
-      cachedRecordBeforeAuthoritativeRead,
-      cachedRecordAfterAuthoritativeRead,
-    )) {
-      return buildSystemTableVisibilityResult({
-        visibilityState: null,
-      });
-    }
-    let cacheRepaired = false;
-    if (cachedRecord) {
-      this.emitCacheVisibilityDivergence(
-        tableName,
-        key,
-        READ_MODEL_DIVERGENCE_TYPE.AUTHORITATIVE_MISSING,
-        cachedRecord,
-        null,
-        [primaryKeyField],
-        phase,
-      );
-    }
-    const absenceRepairRow = cachedRecord ||
-      cachedRecordBeforeAuthoritativeRead?.record ||
-      {[primaryKeyField]: key};
-    cacheRepaired = this.applyAuthoritativeCacheRepair(
-      tableName,
-      CDC_OPERATION.DELETE,
-      absenceRepairRow,
-      key,
-      {
-        authoritativeObservedAtMs:
-          queryResult.readAuthorityWitness?.observedAtMs,
-      },
-    );
-    const authoritativeAbsentRecovered =
-      cacheRepaired && !this.hasCacheRecord(tableName, key);
-    this.recordAuthoritativeFallbackSignal({
-      tableName,
-      key,
-      expectPresent,
-      phase,
-      outcome: resolveAuthoritativeFallbackOutcome(
-        authoritativeAbsentRecovered,
-      ),
-    });
-    return buildSystemTableVisibilityResult({
-      visibilityState: this.hasCacheRecord(tableName, key) ?
-        SYSTEM_TABLE_VISIBILITY_STATE.PENDING_VISIBILITY :
-        SYSTEM_TABLE_VISIBILITY_STATE.VISIBLE,
-      authoritativeVisibilityConfirmed: true,
-      cacheRepaired,
+    return repairDeletedRowVisibility(this, {
+      tableName, key, primaryKeyField, expectedFields, rows, phase,
+      authoritativeObservedAtMs: queryResult.readAuthorityWitness?.observedAtMs,
+      projectionBeforeRead: cachedRecordBeforeAuthoritativeRead,
+      projectionAfterRead: cachedRecordAfterAuthoritativeRead,
     });
   }
 

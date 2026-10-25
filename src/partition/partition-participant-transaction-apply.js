@@ -35,8 +35,7 @@
 import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
   './partition-cdc-owed-admission.js';
 import {ERRORS} from '../constants/errors.js';
-import {TABLES} from '../constants/tables.js';
-import {installTransactionSchemaEnforcement} from
+import {isCoordinatorTable, installTransactionSchemaEnforcement} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
 import {
   PARTITION_COMMITTED_COMMAND_OUTCOME as OUTCOME,
@@ -565,7 +564,7 @@ function applyGenerationOrigin(service, committed) {
   // The query row owner is installed by the same application transaction as
   // the origin and applied index. A replay repairs a missing enforcer without
   // changing the original origin or write generation.
-  if (service.tableName === TABLES.SQL_TRANSACTIONS) {
+  if (isCoordinatorTable(service.tableName)) {
     installTransactionSchemaEnforcement(service.db);
   }
   const recorded = readPartitionWriteOrigin(service.db);

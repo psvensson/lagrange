@@ -38,6 +38,16 @@ function createApplicationDatabaseExecutionOptions(
   return objectFreeze(options);
 }
 
+/**
+ * Whether execution options belong to an embedded application session (the
+ * private session marker the facade sets).
+ * @param {Object} options - SqlCore execution options.
+ * @return {boolean}
+ */
+function isApplicationDatabaseSession(options) {
+  return options?.[APPLICATION_DATABASE_SESSION] === true;
+}
+
 function enforceApplicationDatabaseStatementPolicy(ast, options) {
   if (options?.[APPLICATION_DATABASE_SESSION] !== true) {
     return APPLICATION_STATEMENT_POLICY_ALLOW;
@@ -86,4 +96,5 @@ export {
   createApplicationDatabaseExecutionOptions,
   enforceApplicationDatabaseExplainPolicy,
   enforceApplicationDatabaseStatementPolicy,
+  isApplicationDatabaseSession,
 };

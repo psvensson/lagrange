@@ -4,6 +4,8 @@
 import {createHash} from 'node:crypto';
 import {SQL_TRANSACTIONS_SCHEMA} from '../../bootstrap/system-table-workflow-schema-definitions.js';
 import {TABLES} from '../../constants/tables.js';
+import {resolveLogicalTableName} from
+  '../../bootstrap/system-table-schema-shared-constants.js';
 
 const TRANSACTION_SCHEMA_ENFORCEMENT_STATE = Object.freeze({
   ENFORCED: 'enforced', REQUIRED: 'install_required',
@@ -85,8 +87,7 @@ function enforcementError() {
 }
 
 function isCoordinatorTable(tableName) {
-  return typeof tableName === 'string' &&
-    tableName.toLowerCase() === TABLES.SQL_TRANSACTIONS;
+  return resolveLogicalTableName(tableName) === TABLES.SQL_TRANSACTIONS;
 }
 
 /** Source and committed apply consume this same verifier. Before the
@@ -135,7 +136,7 @@ function coordinatorTableSchemaRefusal(tableName) {
       error: MIGRATION_REFUSAL_MESSAGE}) : null;
 }
 
-export {readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
+export {isCoordinatorTable, readTransactionSchemaEnforcement, installTransactionSchemaEnforcement,
   assertTransactionSchemaWriteEnforced, coordinatorTableSchemaRefusal,
   transactionSchemaWriteRefusal, TRANSACTION_SCHEMA_ENFORCEMENT_STATE,
   TRANSACTION_SCHEMA_ENFORCEMENT_ERROR};

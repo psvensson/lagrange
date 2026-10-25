@@ -9,11 +9,13 @@
  * are refactored. Update BASELINE_COUNT when violations are fixed.
  */
 
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
   collectRuleViolations,
-  writeJsonReport,
 } from './metric-check-helpers.js';
 
 
@@ -112,8 +114,8 @@ const ARG_SEPARATOR = '--';
 const LOCAL_STR_TEST_GITKEEP = 'test/.gitkeep';
 const LOCAL_STR_COMPLEXITY = 'complexity';
 const LOCAL_STR_ERROR = 'error';
-const DEFAULT_LINT_TARGETS = ['src/', 'test/'];
-const REPORT_RELATIVE_PATH = 'test-output/analysis/complexity-src-test.json';
+const DEFAULT_LINT_TARGETS = METRIC_REPORTS.complexity.targets;
+const REPORT_RELATIVE_PATH = METRIC_REPORTS.complexity.reportPath;
 const SCOPED_REPORT_RELATIVE_PATH =
   'test-output/analysis/complexity-scoped.json';
 const PRINT_LIMIT = 40;
@@ -161,12 +163,15 @@ const eslint = new LegacyESLint({
   useEslintrc: false,
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
+const measurement = beginMetricMeasurement('complexity', {
+  targets: lintTargets, reportPath: reportRelativePath,
+});
 const results = await eslint.lintFiles(lintTargets);
 const violations = collectRuleViolations(results, LOCAL_STR_COMPLEXITY);
 
 const count = violations.length;
 
-writeJsonReport(reportRelativePath, {
+finishMetricMeasurement(measurement, {
   targetThreshold: TARGET_THRESHOLD,
   baselineCount: BASELINE_COUNT,
   scoped,

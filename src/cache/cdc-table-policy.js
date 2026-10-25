@@ -555,11 +555,9 @@ function isTableCdcObligationRecorded(tableName) {
  * CDC (top-level or under changeDataCapture) is unsupported and refused
  * typed. An explicit false, or no CDC field, is admitted. The two admission
  * owners call it: CREATE TABLE and TablePolicyService.updateTablePolicy.
- * Known gap: a raw client `UPDATE tables SET table_policies = ...` (admin
- * WebSocket SQL -> statement dispatch -> partition-routed write) passes no
- * system-table write admission, so such a request is admitted but inert:
- * the recording rule never reads table_policies. It stays so until the
- * system-table write admission unit lands.
+ * Client INSERT/UPDATE/DELETE against system tables is refused by the
+ * sql-statement-ingress owner at engine and routed partition admission.
+ * The recording rule remains independent of stored table_policies.
  * @param {Object|null} tablePolicy - The table policy to admit.
  * @return {void}
  * @throws {Error} code CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED.

@@ -90,6 +90,28 @@ This is distinct from the legacy `ctx.call()` in `ExecutionContext`:
 - Both route through `SQLQueryEngine.executeQuery()` — one query path, no
   duplication.
 
+### Logical table names and client DML
+
+Logical catalog names preserve the case returned by the SQL parser. `Logs` and
+`logs` are distinct names: routing selects a logical partition before SQLite
+interprets identifiers inside that partition's database. Table creation and its
+durable provisioning identity retain that spelling across restart. Runtime
+access grants compare the same exact case; ASCII uppercase letters are accepted
+in grant table identifiers as well as lowercase letters. No case alias is added.
+
+The system-table predicate owns reserved names, including the existing optional
+`global.` namespace representation. User CREATE rejects an exact reserved name
+before recording a schema job and again when provisioning or resuming a job,
+independently of catalog-cache presence. Bootstrap owns those tables.
+
+Client SQL admission covers `INSERT`, `UPDATE` and `DELETE`, including their
+supported replacement forms. It refuses system-table targets at engine entry
+and preserves client origin through forwarding to partition execution. Reads
+remain available; supported administrative changes use their semantic owners.
+This DML admission is not a general DDL authorization policy. CREATE's reserved
+name rule is a separate creation invariant; it does not claim to secure every
+ALTER or DROP operation.
+
 ### Execution-Mode Dispatch (Active)
 `SqlCore.executeRequest(SqlRequest)` is the single owner for execution-mode
 dispatch. All three adapters produce frozen `SqlRequest` objects and delegate:

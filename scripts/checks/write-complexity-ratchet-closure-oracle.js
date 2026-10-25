@@ -11,23 +11,24 @@
 import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import {METRIC_REPORTS} from '../metric-report-constants.js';
+import {readCurrentMetricReport} from '../metric-report-provenance.js';
 
 const ROOT = process.cwd();
 const ORACLE_PATH = 'solve/oracle/complexity-ratchet-closure-wave1.json';
 const RATCHETS = Object.freeze([
   {
     key: 'cognitive',
-    command: ['scripts/check-cognitive-complexity.js'],
-    report: 'test-output/analysis/cognitive-complexity-src-scripts.json',
+    id: 'cognitive',
   },
   {
     key: 'cyclomatic',
-    command: ['scripts/check-complexity.js'],
-    report: 'test-output/analysis/complexity-src-test.json',
+    id: 'complexity',
   },
 ]);
 
-function runRatchet({command, report}) {
+function runRatchet({id}) {
+  const {command} = METRIC_REPORTS[id];
   // The check writes its report before exiting non-zero on a ratchet failure,
   // so the exit code is recorded but the counts come from the report itself.
   let exitCode = 0;
@@ -39,8 +40,8 @@ function runRatchet({command, report}) {
   } catch (error) {
     exitCode = typeof error.status === 'number' ? error.status : 1;
   }
-  const parsed = JSON.parse(
-    fs.readFileSync(path.join(ROOT, report), 'utf8'));
+  const parsed = readCurrentMetricReport(ROOT, id);
+  if (!parsed) throw new Error(`ratchet report is not current: ${id}`);
   return {
     exitCode,
     count: parsed.count,

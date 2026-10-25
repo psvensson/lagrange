@@ -40,6 +40,11 @@ const SPLIT_SPREAD_GATE = 'split-leader-host-spread';
 const REPLAY_FIXTURE_DIR = 'test/fixtures/scenario-ground-truth/';
 const REPLAY_BUDGET_MS = 180_000;
 
+const STUB_TABLE_POLICY_APPLIED = Object.freeze({
+  success: true,
+  outcome: 'applied',
+});
+
 function childRow(partitionId, leaderNodeId, keyStart, keyEnd) {
   return {
     leader_node_id: leaderNodeId,
@@ -129,8 +134,7 @@ function buildQueryHandler(state) {
       return {rows: state.endpointRows};
     }
     if (stringStartsWith(sql, 'CREATE TABLE') ||
-        stringStartsWith(sql, 'INSERT') ||
-        stringStartsWith(sql, 'UPDATE tables')) {
+        stringStartsWith(sql, 'INSERT')) {
       return {rows: []};
     }
     if (stringStartsWith(sql, 'SELECT table_id FROM tables')) {
@@ -267,6 +271,7 @@ function buildStubCluster(state) {
     id,
     ip: `10.0.0.${index + 1}`,
     query: queryHandler,
+    updateTablePolicy: async () => STUB_TABLE_POLICY_APPLIED,
     role: index === 0 ? 'seed' : 'member',
   }));
   const clock = {

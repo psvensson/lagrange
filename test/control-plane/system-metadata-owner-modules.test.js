@@ -276,7 +276,7 @@ test('System metadata owners route typed read and mutation methods through the g
           whereClause,
           options,
         });
-        return {success: true};
+        return {success: true, outcome: 'applied', affectedRows: 1};
       },
     };
 
@@ -291,7 +291,8 @@ test('System metadata owners route typed read and mutation methods through the g
         // No generic NODES upsert (D-7): registration is monotonic.
         upsertMethod: null,
         updateMethod: 'updateNode',
-        deleteMethod: 'removeNode',
+        deleteMethod: 'removeTerminalNode',
+        deleteObservation: {bootIncarnation: 1, status: 'stopped'},
         row: {node_id: 'node-1'},
       },
       {
@@ -384,7 +385,7 @@ test('System metadata owners route typed read and mutation methods through the g
           'SERVICES authority is INSERT-only and exposes no generic upsert');
       }
       await owner[ownerSpec.updateMethod](ownerSpec.key, {status: 'active'});
-      await owner[ownerSpec.deleteMethod](ownerSpec.key);
+      await owner[ownerSpec.deleteMethod](ownerSpec.key, ownerSpec.deleteObservation);
 
       const mutationOffset = ownerSpec.upsertMethod ? 0 : -1;
 

@@ -153,7 +153,7 @@ describe('postgres-baseline-comparison scenario', () => {
               return {rows: [], changes: 1};
             }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },
@@ -284,7 +284,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -435,7 +435,7 @@ describe('postgres-baseline-comparison scenario', () => {
               return {rows: [], changes: 1};
             }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },
@@ -566,7 +566,7 @@ describe('postgres-baseline-comparison scenario', () => {
               return {rows: [], changes: 1};
             }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },
@@ -694,7 +694,7 @@ describe('postgres-baseline-comparison scenario', () => {
               return {rows: [], changes: 1};
             }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },
@@ -859,7 +859,7 @@ describe('postgres-baseline-comparison scenario', () => {
               return {rows: [], changes: 1};
             }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },

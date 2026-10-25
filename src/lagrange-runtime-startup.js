@@ -315,6 +315,9 @@ async function startJoinNode(options) {
       owner: nodeJoiningService.runtimeDependencyOwner,
       messageRouter: joinResult.messageRouter,
       partitionServices: joinResult.partitionServices,
+      dynamicConfigWiring: joinDynamicConfigWiring,
+      membershipLifecycleController,
+      bootstrapAPI,
     }),
     assertActive: () => throwIfStartupAborted(options.signal),
     register: (runtime) => options.cleanupLedger.defer(() =>
@@ -558,6 +561,8 @@ async function startSeedNode(options) {
       owner: bootstrapService.runtimeDependencyOwner,
       messageRouter: bootstrapResult.messageRouter,
       partitionServices: bootstrapResult.partitionServices,
+      dynamicConfigWiring: seedDynamicConfigWiring,
+      bootstrapAPI,
     }),
     assertActive: () => throwIfStartupAborted(options.signal),
     register: (runtime) => options.cleanupLedger.defer(() =>

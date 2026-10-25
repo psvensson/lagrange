@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-25T12:46:32.732455+00:00",
+  "mechanism": "Connected GitHub Git-object API; CLI HTTPS push had no credentials. Each remote tree exactly matched the normal-hook local Git tree before branch creation. Each remote branch was then independently verified using git ls-remote. Commit metadata differs; source bytes do not.",
+  "refs": [
+    {
+      "unit": "native fixture envelopes",
+      "branch": "work/cloud-native-fixture-envelopes-20261025",
+      "localHookCommit": "0094ec4ee142949577db1599bddfc266bcaadde1",
+      "remoteCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "tree": "80558ecc9013ac08cd71eb39baac14c238057b35",
+      "parent": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+      "normalHook": "passed",
+      "sourceReview": "approved",
+      "runtimeAcceptance": "pending"
+    },
+    {
+      "unit": "marker intrinsic hook repair",
+      "branch": "work/cloud-marker-hook-repair-20261025",
+      "localHookCommit": "93c86b07d0cbeff46ae963a2b23d046e1b6512b1",
+      "remoteCommit": "701d7c6af40ba25afa88cdc2ba1b2b30534bb213",
+      "tree": "644aee510125b2bea2196b6fcad21febb9ff93b8",
+      "parent": "6a228ced9439af07216b492bb8fdbba5540c3671",
+      "normalHook": "passed after preserved sandbox EPERM attempt",
+      "sourceReview": "capture correction approved; implementation HOLD for unmeasured shared text-boundary hypothesis",
+      "runtimeAcceptance": "pending"
+    },
+    {
+      "unit": "cohort readback and intrinsic hook repair",
+      "branch": "work/cloud-cohort-hook-repair-20261025",
+      "localHookCommit": "9a7aeca9e2dde7d009643d62c904bc789b70c97d",
+      "remoteCommit": "606660b0aea63016bc5344da0f545a3af0ce9a29",
+      "tree": "f0a979259276f12cf5c6f8746a8f3441e568306b",
+      "parent": "a97f79c35b7e1f6428032493918e16e623339688",
+      "normalHook": "passed",
+      "sourceReview": "bounded implementation and intrinsic correction approved",
+      "runtimeAcceptance": "corrected witness/composition pending"
+    }
+  ]
+}

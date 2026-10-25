@@ -24,7 +24,8 @@ import {
   WASM_SERVICE_HEALTH_STATUS,
   WASM_SERVICE_PROTOCOL,
 } from '../../../src/wasm-service/wasm-service-constants.js';
-import {SD_COL} from '../../../src/wasm-service/wasm-service-models.js';
+import {POSTGRES_WIRE_SCALE_STATE} from
+  '../../../src/control-plane/owners/postgres-wire-scale-contract.js';
 import {REQUEST_CELL_AUTH} from '../harness/constants.js';
 import {
   PUBLIC_SEAM_CERTIFICATION,
@@ -50,9 +51,7 @@ const SELECT_PUBLIC_ENDPOINTS_SQL =
   `AND ${EP_COL.SERVICE_ID} = ?`;
 const SELECT_PARTITION_IDS_SQL =
   `SELECT ${COLUMN.PARTITION_ID} FROM ${TABLES.PARTITIONS}`;
-const PROVISION_LISTENER_SQL =
-  `UPDATE ${TABLES.SERVICE_DEFINITIONS} SET ${SD_COL.REPLICA_COUNT} = ?, ` +
-  `${SD_COL.RUNTIME_CONFIG} = ? WHERE ${SD_COL.SERVICE_ID} = ?`;
+const LISTENER_SCALE_REFUSED = 'PostgreSQL wire desired state was not persisted';
 
 function rowsOf(result) {
   if (Array.isArray(result)) {
@@ -226,17 +225,23 @@ async function listHarnessTopologyIdentifiers(ctx) {
  * replica per node (the documented operator scale path).
  * @param {Object} adminNode
  * @param {number} replicaCount
- * @return {Promise<void>}
+ * @return {Promise<Object>} Persisted desired state, not listener readiness.
  */
 async function provisionPublicListener(adminNode, replicaCount) {
-  const runtimeConfig = JSON.stringify({
+  const runtimeConfig = {
     [PGWIRE_CONFIG_FIELD.HOST]: PUBLIC_SEAM_LISTENER.BIND_ALL_HOST,
     [PGWIRE_CONFIG_FIELD.AUTH_MODE]: PGWIRE_AUTH_MODE.PASSWORD,
     [PGWIRE_CONFIG_FIELD.TLS_MODE]: PGWIRE_TLS_MODE.DISABLE,
-  });
-  await adminNode.query(PROVISION_LISTENER_SQL, [
-    replicaCount, runtimeConfig, META_SERVICE_ID.POSTGRES_WIRE,
-  ]);
+  };
+  const result = await adminNode.scalePostgresWireListener({replicaCount, runtimeConfig});
+  if (result?.success !== true || result?.scaleState !==
+      POSTGRES_WIRE_SCALE_STATE.DESIRED_STATE_PERSISTED) {
+    throw Object.assign(new Error(result?.error || LISTENER_SCALE_REFUSED), {
+      code: result?.errorCode, outcome: result?.outcome,
+      retryAfterMs: result?.retryAfterMs,
+    });
+  }
+  return result;
 }
 
 /**

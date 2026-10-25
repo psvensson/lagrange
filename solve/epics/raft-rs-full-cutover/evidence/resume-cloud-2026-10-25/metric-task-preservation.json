@@ -1,0 +1,22 @@
+{
+  "recordedAt": "2026-10-25T12:57:25.271399+00:00",
+  "unit": "complete metric provenance repair with effective home binding",
+  "branch": "work/cloud-metric-home-context-20261025",
+  "localHookCommit": "8cb43bde45d5d496ae6400dc2ec2f6e08f2ba99a",
+  "remoteCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+  "tree": "b3c1d7539e85bdaf6d55632fe089ad8d9e5bc439",
+  "parent": "5485381b70d7c963f30e1468c5e8ca17d156f569",
+  "sourceHashes": {
+    "scripts/metric-report-inputs.js": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+    "test/scripts/metric-cycle-resolution.test.js": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c"
+  },
+  "normalHook": {
+    "exitCode": 0,
+    "sha256": "448f749e010c4aca1813c2681bf32da152ae450469ff2061fcbca17abf64d712"
+  },
+  "remoteTreeMatchesLocal": true,
+  "remoteRefVerifiedWithLsRemote": true,
+  "sourceReview": "combined independent APPROVE",
+  "officialRegression": "pending",
+  "rawEvidenceUpload": "pending existing solve-evidence owner"
+}

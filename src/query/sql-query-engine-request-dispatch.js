@@ -10,6 +10,7 @@ import {SERVICE_LIFECYCLE_EXECUTION_DISPOSITION} from
   './service-lifecycle-sql-contract.js';
 import {classifyTransactionControlStatement} from
   './sql-transaction-control-grammar.js';
+import {CLIENT_STATEMENT_INGRESS} from './sql-statement-ingress.js';
 import {
   STATEMENT_ADMISSION,
   TRANSACTION_END_TYPES,
@@ -141,6 +142,9 @@ class SQLQueryEngineRequestDispatch extends
         sqlRequest.statement,
         sqlRequest.parameters,
         {
+          // Every SqlRequest statement is client SQL: its origin is set
+          // here, by the engine's client entry, never by the caller.
+          [CLIENT_STATEMENT_INGRESS]: true,
           sessionId: sqlRequest.sessionId,
           tenantId: sqlRequest.tenantId,
           dialect: sqlRequest.dialect,

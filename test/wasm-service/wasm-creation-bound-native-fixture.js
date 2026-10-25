@@ -9,6 +9,7 @@ import {join} from 'node:path';
 import {createCreationSqliteFixture} from '../control-plane/service-instance-creation-sqlite-fixture.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {DataDirectoryManager} from '../../src/storage/data-directory-manager.js';
 import {ModuleMirror} from '../../src/wasm-service/module-mirror.js';
 import {PortAllocator} from '../../src/wasm-service/port-allocator.js';
@@ -234,7 +235,7 @@ async function createGroup(t, w, request) {
     const item = {address, envelope: structuredClone(envelope), options};
     f.queue.push(item);
     record(f, 'transport-custody', item);
-    return Promise.resolve({delivered: true});
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
   };
   setActualCoreEntryObserver((event) => record(f, 'native-entry', event));
   const priorRows = w.metadata.db.prepare('SELECT count(*) AS n FROM wasm_operations').get().n;

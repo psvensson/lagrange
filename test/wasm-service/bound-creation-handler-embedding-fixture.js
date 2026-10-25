@@ -32,6 +32,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {acquireDataDirectoryProcessOwner} from '../../src/storage/data-directory-process-owner.js';
 import {DataDirectoryManager} from '../../src/storage/data-directory-manager.js';
 import {ModuleMirror} from '../../src/wasm-service/module-mirror.js';
@@ -67,7 +68,7 @@ const QUIET = {debug() {}, info() {}, warn() {}, error() {}};
 const BOOT_INCARNATION_BASE = 40;
 // A host restart mints a new boot incarnation (R1-F, R9): never the old one.
 const BOOT_INCARNATION_RESTART_STEP = 10;
-const RETIRED_ADDRESS_ANSWER = Object.freeze({acknowledged: true, noHandler: true});
+const RETIRED_ADDRESS_OUTCOME = buildDeliveryEnvelope({acknowledged: true, noHandler: true});
 // The node address owners of the three hosts: the entrypoint's host:port
 // NODE_ADDRESS (what nodes.node_address carries); host 3 also advertises a
 // WebSocket address, which the endpoint host owner prefers (RV3.1, cell e).
@@ -197,12 +198,14 @@ async function embedding(t) {
   e.transport = createLoopbackTransport();
   const loopbackDeliver = e.transport.deliver;
   e.deliver = function(address, envelope, ...options) {
-    if (this.getRegisteredHandler(address) === null) return Promise.resolve(RETIRED_ADDRESS_ANSWER);
+    if (this.getRegisteredHandler(address) === null) {
+      return Promise.resolve(RETIRED_ADDRESS_OUTCOME);
+    }
     return Reflect.apply(loopbackDeliver, this, [address, envelope, ...options]);
   };
   e.transport.deliver = (address, envelope, ...options) => {
     e.queue.push({address, envelope: structuredClone(envelope), options});
-    return Promise.resolve({delivered: true});
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
   };
   e.intentFor = (slot, binding = metadata.intent.consensusBinding,
     operationId = metadata.slotRequest(slot).operationId) => {

@@ -10,6 +10,9 @@ import {canonicalizeSchemaProvisioningIntent} from
 import {createTimeoutBudget} from
   '../../src/control-plane/timeout-budget.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {SQLParser} from '../../src/query/sql-parser.js';
+import {SYSTEM_TABLE_NAME} from
+  '../../src/bootstrap/system-table-schema-shared-constants.js';
 
 function createAst(extraColumn = null) {
   return {
@@ -614,3 +617,63 @@ test('runtime recovery activation resumes durable schema jobs', async (t) => {
   t.equal(schemaResumes, 1,
     'actual READY recovery activation invokes schema replay');
 });
+
+test('every exact reserved name is rejected before durable intent with an empty ' +
+  'catalog', async (t) => {
+  const gateway = createGateway();
+  const calls = [];
+  const service = createService(gateway, calls);
+  t.teardown(() => service.shutdown());
+  for (const tableName of Object.values(SYSTEM_TABLE_NAME)) {
+    await t.rejects(service.createTable({...createAst(), tableName}),
+      {code: 'SYSTEM_TABLE_NAME_RESERVED'}, tableName);
+  }
+  t.equal(gateway.writes.length, 0, 'no intent or metadata mutation');
+  t.equal(calls.length, 0, 'no physical provisioning');
+});
+
+test('reserved pending intent is refused by real durable resume before table ' +
+  'metadata or provisioning', async (t) => {
+  const gateway = createGateway();
+  const service = createService(gateway, []);
+  t.teardown(() => service.shutdown());
+  await service.schemaProvisioningJobOwner.insertOrAttach(
+    canonicalizeSchemaProvisioningIntent({...createAst(), tableName: 'logs'}));
+  const calls = [];
+  const resumed = createService(gateway, calls);
+  t.teardown(() => resumed.shutdown());
+  const [result] = await resumed.resumeDurableProvisioningJobs();
+  t.equal(result.success, false);
+  t.equal(result.errorCode, 'SYSTEM_TABLE_NAME_RESERVED');
+  t.equal(calls.length, 0);
+  t.ok(gateway.writes.every((mutation) =>
+    mutation.tableName === 'schema_operations'),
+  'only existing job failure state may be persisted');
+});
+
+test('Logs case survives schema job identity, metadata creation and restart',
+  async (t) => {
+    const gateway = createGateway();
+    const first = createService(gateway, []);
+    t.teardown(() => first.shutdown());
+    const ast = new SQLParser('CREATE TABLE "Logs" (id TEXT PRIMARY KEY)').parse();
+    const intent = canonicalizeSchemaProvisioningIntent(ast);
+    t.equal(intent.tableIdentityKey, 'global.Logs');
+    t.not(intent.jobId, canonicalizeSchemaProvisioningIntent({
+      ...ast, tableName: 'logs',
+    }).jobId, 'distinct logical names have distinct durable identity');
+    await first.schemaProvisioningJobOwner.insertOrAttach(intent);
+    const calls = [];
+    const resumed = createService(gateway, calls);
+    t.teardown(() => resumed.shutdown());
+    const [result] = await resumed.resumeDurableProvisioningJobs();
+    t.equal(result.success, true);
+    t.equal(result.tableName, 'Logs');
+    t.equal(calls.length, 1);
+    t.equal(calls[0].tableName, 'Logs');
+    t.equal(gateway.rows.get(`tables:${intent.tableId}`).table_name, 'Logs');
+    t.equal((await resumed.findExistingTableRecord('Logs')).table_id,
+      intent.tableId, 'authoritative catalog resolves exact name');
+    t.equal(await resumed.findExistingTableRecord('logs'), null,
+      'authoritative catalog does not resolve a case alias');
+  });

@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from
   '../../src/constants/index.js';
@@ -116,7 +117,7 @@ async function fixture(t, label) {
     const item = {address, envelope: structuredClone(envelope), options};
     f.queue.push(item);
     record(f, 'transport-custody', item);
-    return Promise.resolve({delivered: true});
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
   };
   const cache = new SystemTableCache();
   for (const replicaId of REPLICAS) {

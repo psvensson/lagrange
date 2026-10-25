@@ -4,9 +4,8 @@ audience: human
 
 # Admin API Reference
 
-How admin commands are structured and routed. All admin mutations are owned
-by two replicated meta-services; the WebSocket endpoint is an adapter ingress
-only, never a node-local mutation owner:
+How admin commands are structured and routed. The WebSocket endpoint is an
+adapter ingress; its commands route through replicated meta-services:
 
 - `sys-admin-meta` - cluster/node state queries, cache dumps
 - `sys-wasm-meta` - WASM module and service lifecycle
@@ -56,6 +55,28 @@ lifecycle SQL statements (`INSTALL SERVICE`, `CREATE BINDING`,
 `CONFIGURE SERVICE ACCESS`) described in that guide's section 5.
 
 ## Operational Diagnostics Endpoints
+
+`PUT /api/admin/config/:configKey` and
+`PATCH /api/admin/tables/:tableId/policy` report applied success only after
+their semantic owner confirms one affected row through the mutation gateway.
+An observed zero-row effect returns HTTP 409 with
+`CONFIG_MUTATION_OBSERVATION_CHANGED` or
+`TABLE_POLICY_MUTATION_OBSERVATION_CHANGED`. An uncertain count or pending
+visibility returns HTTP 503 with the corresponding
+`*_MUTATION_OUTCOME_UNCONFIRMED` code; this does not establish that the write
+failed to commit. Gateway refusals retain their original error and mutation
+outcome. Unconfirmed writes do not publish successful-write statistics,
+invalidate the policy cache, or emit a policy-updated event.
+
+The operator-only built-in PostgreSQL wire scale operation is
+`POST /api/admin/services/sys-postgres-wire/scale`, with JSON
+`{"replicaCount": 1, "runtimeConfig": {"host": "127.0.0.1", "authMode": "password", "tlsMode": "disable"}}`.
+It delegates to `ServiceDefinitionsOwner` and reports
+`scaleState: "desired_state_persisted"`. Placement, running listeners, and their
+current configuration must be observed separately. Configuration applies when
+a replica next starts; this operation does not restart existing listeners.
+See [PostgreSQL wire scale operations](../architecture/postgres-wire.md#postgresql-wire-scale-operations)
+for outcomes and the existing ingress trust requirements.
 
 Admin ingress exposes unified operational diagnostics:
 

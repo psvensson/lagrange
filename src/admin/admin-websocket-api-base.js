@@ -5,6 +5,10 @@ import {
 import {
   ADMIN_WEBSOCKET_LIFECYCLE_STATE,
 } from './admin-websocket-lifecycle-state.js';
+import {
+  AdminOwnerOperations,
+  registerAdminOwnerOperationRoutes,
+} from './admin-owner-operations.js';
 
 const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
@@ -144,9 +148,12 @@ class AdminWebSocketAPIBase {
     this.testRunService = options.testRunService || new AdminTestRunService();
     this.debugMetadataStore =
       options.debugMetadataStore ||
-      (this.sqlQueryEngine ?
-        new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
-        null);
+      new DebugMetadataStore({
+        getControlPlaneSystemTableGateway: () =>
+          this.resolveControlPlaneSystemTableGateway(),
+      });
+    this.ownerOperations = new AdminOwnerOperations(
+      options.adminOwnerProviders, this.nodeId);
     this.debugDapRouter = options.debugDapRouter || null;
     this.traceCollector = options.traceCollector || new TraceCollector();
     this.serviceDispatcher =
@@ -276,6 +283,19 @@ class AdminWebSocketAPIBase {
     });
 
     this[ADMIN_FIELD.SUBSCRIBE_CHANGES]();
+  }
+  /**
+   * The control-plane system-table gateway, resolved at call time: the
+   * registered gateway may appear after the admin API starts.
+   * @return {Object|null}
+   */
+  resolveControlPlaneSystemTableGateway() {
+    this.controlPlaneSystemTableGateway =
+      this.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      this.sqlQueryEngine?.controlPlaneSystemTableGateway ||
+      null;
+    return this.controlPlaneSystemTableGateway;
   }
   subscribeToCacheNotifications() {
     if (
@@ -483,6 +503,7 @@ class AdminWebSocketAPIBase {
     this.fastify.post(ADMIN_ROUTE.DEBUG_DAP_REQUEST, async (request, reply) => {
       return this.debugHandlers.handleDebugDapRequest(request, reply);
     });
+    registerAdminOwnerOperationRoutes(this.fastify, this.ownerOperations);
 
     this.fastify.get(ADMIN_ROUTE.PLAYBACK_VIEWER, async (_request, reply) => {
       return this.debugHandlers.handlePlaybackViewerPage(reply);

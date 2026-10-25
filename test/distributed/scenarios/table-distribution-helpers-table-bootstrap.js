@@ -56,9 +56,6 @@ const {
   SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX,
   SQL_CREATE_TABLE_PREFIX,
   SQL_CREATE_TABLE_SUFFIX,
-  SQL_UPDATE_TABLE_POLICIES_PREFIX,
-  SQL_UPDATE_TABLE_POLICIES_MID,
-  SQL_UPDATE_TABLE_POLICIES_SUFFIX,
   SQL_CONTROL_SNAPSHOT,
   SQL_CONTROL_SNAPSHOT_FORCE_REPAIR,
   SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX,
@@ -138,6 +135,9 @@ const {
   advanceMutationVisibilitySummary,
   shouldDeferAuthoritativeRepair,
 } = TABLE_DISTRIBUTION_LOAD_NODE_PLANNING_HELPERS;
+const TABLE_POLICY_OWNER_OUTCOME_REFUSED = 'refused';
+const TABLE_POLICY_OWNER_NOT_APPLIED = 'table policy owner did not apply';
+const TABLE_POLICY_OWNER_REFUSED_WARNING_PREFIX = 'table_policy_owner_refused:';
 
 const {
   TABLE_BOOTSTRAP_SQL_ENGINE_UNAVAILABLE_GRACE_MS,
@@ -978,23 +978,17 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     options.tablePolicies && typeof options.tablePolicies === 'object' ?
       options.tablePolicies :
       DEFAULT_TABLE_SPLIT_POLICIES;
-  const policySql =
-    SQL_UPDATE_TABLE_POLICIES_PREFIX +
-    escapeSql(JSON.stringify(tablePolicies)) +
-    SQL_UPDATE_TABLE_POLICIES_MID +
-    escapeSql(ensured.tableId) +
-    SQL_UPDATE_TABLE_POLICIES_SUFFIX;
 
-  // Table metadata can still receive asynchronous updates shortly after
-  // CREATE TABLE. Re-apply policy until read-back is stable so we do not
-  // proceed with split checks against a reverted default "{}" payload.
+  // The policy is written by its owner (TablePolicyService through the
+  // admin table-policy operation). Table metadata can still receive
+  // asynchronous updates shortly after CREATE TABLE, so re-apply until the
+  // read-back is stable; a typed owner refusal ends preparation at once.
   const visibilityDeadline = Date.now() + POLICY_APPLY_TIMEOUT_MS;
   let applyAttemptCount = ZERO;
   let policyVisible = false;
   let observedPolicy = null;
   let stableMatchCount = ZERO;
-  let noOpApplyCount = ZERO;
-  let policyUpdateNoOpDetected = false;
+  let policyOwnerRefusal = null;
   let positivePolicyMutationObserved = false;
   let lastPolicyApplyError = null;
   let lastPolicyVisibilityError = null;
@@ -1005,27 +999,28 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
   while (Date.now() <= visibilityDeadline) {
     try {
       applyAttemptCount += 1;
-      const applyResult = await queryControl(seedNode, policySql, [], {
-        timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
-        lane: CONTROL_QUERY_LANE_CONTROL,
-        executionMode: CONTROL_QUERY_EXECUTION_MODE.MUTATION_SINGLE_FLIGHT,
-        queryNodes: options.queryNodes,
-        fallbackNodes: options.fallbackNodes,
-      });
-      lastPolicyApplySummary = summarizeMutationResult(applyResult);
-      policyApplyVisibilitySummary = advanceMutationVisibilitySummary(
-        policyApplyVisibilitySummary,
-        applyResult,
+      const applyResult = await seedNode.updateTablePolicy(
+        ensured.tableId,
+        tablePolicies,
+        {timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS},
       );
-      const affectedRows = affectedRowCountFromResult(applyResult);
-      if (affectedRows === ZERO) {
-        noOpApplyCount += 1;
-      } else {
-        noOpApplyCount = ZERO;
-        if (Number.isFinite(affectedRows) && affectedRows > ZERO) {
-          positivePolicyMutationObserved = true;
-        }
+      lastPolicyApplySummary = {
+        status: applyResult?.status ?? null,
+        outcome: applyResult?.outcome ?? null,
+        errorCode: applyResult?.errorCode ?? null,
+      };
+      if (applyResult?.outcome === TABLE_POLICY_OWNER_OUTCOME_REFUSED) {
+        policyOwnerRefusal = applyResult.errorCode || applyResult.outcome;
+        break;
       }
+      if (applyResult?.success !== true) {
+        throw Object.assign(new Error(String(applyResult?.error ||
+          TABLE_POLICY_OWNER_NOT_APPLIED)), {
+          outcome: applyResult?.outcome,
+          retryAfterMs: applyResult?.retryAfterMs,
+        });
+      }
+      positivePolicyMutationObserved = true;
       lastPolicyApplyError = null;
     } catch (error) {
       stableMatchCount = ZERO;
@@ -1060,10 +1055,6 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
         }
       } else {
         stableMatchCount = ZERO;
-        if (noOpApplyCount >= 3 && isEmptyObject(observedPolicy)) {
-          policyUpdateNoOpDetected = true;
-          break;
-        }
       }
     } catch (error) {
       stableMatchCount = ZERO;
@@ -1096,12 +1087,13 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       ),
     );
   }
-  if (!policyVisible && policyUpdateNoOpDetected) {
+  if (policyOwnerRefusal !== null) {
     return {
       ...ensured,
       tablePolicies,
       tablePoliciesApplied: false,
-      tablePoliciesApplyWarning: 'sql_system_table_update_noop_detected',
+      tablePoliciesApplyWarning:
+        TABLE_POLICY_OWNER_REFUSED_WARNING_PREFIX + policyOwnerRefusal,
       tablePoliciesApplyVisibilityState:
         policyApplyVisibilitySummary.visibilityState,
       tablePoliciesApplyVisibilityAuthoritativeConfirmed:
@@ -1270,9 +1262,6 @@ export const TABLE_DISTRIBUTION_TABLE_BOOTSTRAP_HELPERS = {
   SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX,
   SQL_CREATE_TABLE_PREFIX,
   SQL_CREATE_TABLE_SUFFIX,
-  SQL_UPDATE_TABLE_POLICIES_PREFIX,
-  SQL_UPDATE_TABLE_POLICIES_MID,
-  SQL_UPDATE_TABLE_POLICIES_SUFFIX,
   SQL_CONTROL_SNAPSHOT,
   SQL_CONTROL_SNAPSHOT_FORCE_REPAIR,
   SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX,

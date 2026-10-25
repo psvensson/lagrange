@@ -1,3 +1,7 @@
+import {
+  STATEMENT_INGRESS_FIELD,
+  resolveStatementIngress,
+} from './sql-statement-ingress.js';
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineTransactionRecoveryMethods} from './sql-query-engine-transaction-recovery-methods.js';
 import {
@@ -115,6 +119,8 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
       ),
       expectedPartitionVersion:
         this.resolveWriteFencePartitionVersion(tableInfo),
+      // The statement's origin travels to every partition it is routed to.
+      [STATEMENT_INGRESS_FIELD]: resolveStatementIngress(queryOptions),
     }, queryOptions);
   }
 

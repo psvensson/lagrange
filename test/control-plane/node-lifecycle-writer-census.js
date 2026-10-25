@@ -55,7 +55,6 @@ const NODES_TRANSITION_CLASS = Object.freeze({
   INCARNATION_ADVANCE: 'incarnation_advance',
   LEASE_EXPIRY: 'lease_expiry',
   TERMINAL: 'terminal',
-  PRIVILEGED_OPERATOR_REPAIR: 'privileged_operator_repair',
   NON_LIFECYCLE_COLUMNS: 'non_lifecycle_columns',
   DORMANT_DEBT: 'dormant_debt',
 });
@@ -97,15 +96,6 @@ const NODES_TRANSITION_OWNER_ENTRIES = Object.freeze([
   ['src/control-plane/lease-service.js', 'reapStrandedJoiningRows',
     C.TERMINAL, 'stranded JOINING -> STOPPED at the observed incarnation ' +
       'and lease state'],
-  // Privileged operator repair: raw SQL through the admin query channel,
-  // keyed by node_id only. It deliberately bypasses the incarnation, lease
-  // and lost-outcome classification of the lifecycle owners; the owners'
-  // own source policies then refuse to build on an operator-set status
-  // (e.g. READY is never published from a draining row).
-  ['src/cli/admin-cli-action-methods.js', 'updateNodeStatus',
-    C.PRIVILEGED_OPERATOR_REPAIR, 'operator drain / activate (status only)'],
-  ['src/cli/admin-cli-action-methods.js', 'removeNode',
-    C.PRIVILEGED_OPERATOR_REPAIR, 'operator node-row removal (DELETE)'],
   ['src/topology/latency-group-manager.js', 'persistNodeAssignment',
     C.NON_LIFECYCLE_COLUMNS, 'latency topology columns'],
   ['src/rebalancer/storage-capacity-migration.js', 'backfillNodeBudgets',
@@ -116,12 +106,6 @@ const NODES_TRANSITION_OWNER_ENTRIES = Object.freeze([
     C.DORMANT_DEBT, 'FAILED'],
   ['src/node/failure-detector.js', 'handleNodeRecovery',
     C.DORMANT_DEBT, 'recovery -> ACTIVE'],
-  ['src/node/node-lifecycle-service.js', 'registerNode',
-    C.DORMANT_DEBT, 'registration'],
-  ['src/node/node-lifecycle-service.js', 'updateHeartbeat',
-    C.DORMANT_DEBT, 'heartbeat'],
-  ['src/node/node-lifecycle-service.js', 'removeNode',
-    C.DORMANT_DEBT, 'removal'],
   ['src/node/node-reintegration-service.js', 'completeReintegration',
     C.DORMANT_DEBT, 'reintegration complete'],
   ['src/node/node-reintegration-service.js', 'failReintegration',

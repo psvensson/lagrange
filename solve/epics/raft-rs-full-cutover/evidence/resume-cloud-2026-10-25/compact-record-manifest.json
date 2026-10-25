@@ -1,0 +1,81 @@
+{
+  "date": "2026-10-25",
+  "note": "Compact source reviews/manifests only. Raw logs, TAP and archives remain external; existing solve-evidence upload is pending. These records preserve their own bounded verdicts.",
+  "files": [
+    {
+      "path": "recovered-evidence-verification.json",
+      "bytes": 6233,
+      "sha256": "b50c1318fc69fdd2b70e913534ee20dde9b5f8f9a5e3681b6f727f0397ed68a4"
+    },
+    {
+      "path": "ADMIN-INDEPENDENT-REVIEW.md",
+      "bytes": 27179,
+      "sha256": "7de63d52c96531428fd658258a93d8a72537fbcef84d4d0208ddc4ed3b1417c0"
+    },
+    {
+      "path": "NATIVE-FIXTURE-SOURCE-REVIEW.md",
+      "bytes": 6379,
+      "sha256": "7eb46c03089e404c193a5a4c90be3ae331825351f7a092c7dbd6cbed9d4f0b84"
+    },
+    {
+      "path": "native-fixture-reviewed-source.json",
+      "bytes": 1678,
+      "sha256": "c3a1682e0011ce9b9f6f8a0aa63c24c6f01f2676124691172d5dea192b087583"
+    },
+    {
+      "path": "recovered-admin-evidence-review.json",
+      "bytes": 10846,
+      "sha256": "f5997a9ceaebf4418a5ae7b665f37b022e8cb3522b542ed35787a2f2d22010f7"
+    },
+    {
+      "path": "coordinator-source-receipt-check.json",
+      "bytes": 963,
+      "sha256": "cac105e49a87121879248b809ef9c521542389451edbb7a24451b523b07d6a50"
+    },
+    {
+      "path": "MUTATION-OWNERSHIP-CAUSAL-MAP.md",
+      "bytes": 26027,
+      "sha256": "d64f68ea164bfde3a4804979a3c95d987c90a27e81edaf2fc2ab6edac498283f"
+    },
+    {
+      "path": "mutation-classifier-current-census.json",
+      "bytes": 7271,
+      "sha256": "15bd183ae747d34e8bbb7d7c173d554584f40d6aedea137eb3e6ca6954903ed6"
+    },
+    {
+      "path": "HOOK-REPAIR-PRESERVATION.json",
+      "bytes": 3274,
+      "sha256": "cde6fd6d9d13838046d433c8e65969dab3d0fb16be60b8bed32c894511fbee7e"
+    },
+    {
+      "path": "marker-committed-source-attestation.json",
+      "bytes": 8303,
+      "sha256": "6e831ed85b41a505aeb562d9e7f395868e3be09396fd0c5dedfc7d4bc6f0413d"
+    },
+    {
+      "path": "cohort-committed-source-attestation.json",
+      "bytes": 12560,
+      "sha256": "badc4aa803dc2c43de0b6a92a48c3df95fd9e4bc9aff111c003d40c8fa19fc38"
+    },
+    {
+      "path": "REVIEW-MARKER-FROZEN-SOURCE.md",
+      "bytes": 15817,
+      "sha256": "d1a863aa5000e75e71449e3d7470aa4fcb061373210099b9757341d7df3f8c5c"
+    },
+    {
+      "path": "TEXT-BOUNDARY-SOURCE-CENSUS.md",
+      "bytes": 9701,
+      "sha256": "274a62f8173cce02511683854fa6c97ad90f98703542d78ce68e9e116cdcb067"
+    },
+    {
+      "path": "text-boundary-source-bindings.json",
+      "bytes": 3842,
+      "sha256": "b7f57fe3ba34834426cc830fd2d22ea2afb4036386bf2d0965280afbe7fee40f"
+    },
+    {
+      "path": "admin-composition-source-freeze-r1.json",
+      "bytes": 26495,
+      "sha256": "a8e5e792b74a712e296db374f55e5deee338ad22bf8a11fe641755280b8573ab"
+    }
+  ]
+}

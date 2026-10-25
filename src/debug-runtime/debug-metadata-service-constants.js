@@ -23,7 +23,6 @@ const DEBUG_METADATA_ROLE = Object.freeze({
 });
 
 const DEBUG_METADATA_DEFAULT = Object.freeze({
-  SESSION_ID_PREFIX: 'debug-meta',
   COLUMN_NUMBER: 0,
   RESOLVED_FALSE: 0,
   RESOLVED_TRUE: 1,
@@ -31,7 +30,7 @@ const DEBUG_METADATA_DEFAULT = Object.freeze({
 });
 
 const DEBUG_METADATA_ERROR_CODE = Object.freeze({
-  ENGINE_REQUIRED: 'ENGINE_REQUIRED',
+  GATEWAY_REQUIRED: 'GATEWAY_REQUIRED',
   INVALID_REQUEST: 'INVALID_REQUEST',
   SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
   SNAPSHOT_NOT_FOUND: 'SNAPSHOT_NOT_FOUND',
@@ -41,7 +40,7 @@ const DEBUG_METADATA_ERROR_CODE = Object.freeze({
 });
 
 const DEBUG_METADATA_ERROR_MSG = Object.freeze({
-  ENGINE_REQUIRED: 'SQL query engine is required',
+  GATEWAY_REQUIRED: 'The control-plane system-table gateway is required',
   REQUEST_REQUIRED: 'Debug metadata request is required',
   SESSION_ID_REQUIRED: 'sessionId is required',
   SERVICE_NAME_REQUIRED: 'serviceName is required',
@@ -54,7 +53,6 @@ const DEBUG_METADATA_ERROR_MSG = Object.freeze({
 });
 
 const DEBUG_METADATA_SQL = Object.freeze({
-  INSERT_OR_REPLACE_INTO: 'INSERT OR REPLACE INTO',
   ORDER_BY_CREATED_ASC: ' ORDER BY created_at ASC',
   ORDER_BY_CAPTURED_DESC: ' ORDER BY captured_at DESC',
   LIMIT: ' LIMIT ',

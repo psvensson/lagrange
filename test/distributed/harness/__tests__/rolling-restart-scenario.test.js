@@ -24,7 +24,6 @@ const OVERRIDE_POST_RESTART_LOAD_READINESS_NO_PROGRESS_MAX_ATTEMPTS = 7;
 const OVERRIDE_POST_RESTART_ACTIVE_NO_PROGRESS_MAX_ATTEMPTS = 6;
 const OVERRIDE_POST_RESTART_QUIESCENCE_NO_PROGRESS_TIMEOUT_MS = 2222;
 const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
-const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const SQL_FROM_TABLES = 'FROM tables';
 const SQL_FROM_PARTITIONS = 'FROM partitions';
 const SQL_FROM_SERVICES = 'FROM services';
@@ -324,10 +323,6 @@ describe('rolling-restart scenario', () => {
           calls.push('createBenchmarkTable');
           return {rows: []};
         }
-        if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
-          calls.push('updateBenchmarkPolicies');
-          return {rows: []};
-        }
         if (sql.includes(SQL_FROM_TABLES)) {
           return {
             rows: [{
@@ -357,15 +352,21 @@ describe('rolling-restart scenario', () => {
         }
         return {rows: []};
       };
+      const updateTablePolicy = async () => {
+        calls.push('updateBenchmarkPolicies');
+        return {success: true, outcome: 'applied'};
+      };
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
         query,
+        updateTablePolicy,
       };
       const joinerNode = {
         id: 'joiner-1',
         role: 'joiner',
         query,
+        updateTablePolicy,
       };
 
       const cluster = {

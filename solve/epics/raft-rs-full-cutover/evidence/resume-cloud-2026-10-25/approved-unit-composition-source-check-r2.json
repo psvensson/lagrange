@@ -1,0 +1,216 @@
+{
+  "checks": [
+    {
+      "unit": "metric",
+      "path": "scripts/check-circular-dependencies.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c",
+      "incomingSha256": "2c74eb487bc1e2d66cfc33d788ddd1a2e525780eaa3d80b81b116913765ef28c",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/check-cognitive-complexity.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "44ee16aac1204a900cd9c4dc48a74cee6e0ee706bb6b366fa1961e72bbfe52bd",
+      "incomingSha256": "13746f79d1e99a3ab56f504a480bdedc8f24e346ebc02d5a65be37ca41ef001d",
+      "exactIncomingBytes": false,
+      "onlyRetainedBaselineHistoryComment": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/check-complexity.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b",
+      "incomingSha256": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/check-duplication.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1",
+      "incomingSha256": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/checks/write-complexity-ratchet-closure-oracle.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6",
+      "incomingSha256": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/generate-global-owner-debt-inventory.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e",
+      "incomingSha256": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/global-owner-debt-inventory/constants.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd",
+      "incomingSha256": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-check-helpers.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165",
+      "incomingSha256": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-cycle-analyzer.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70",
+      "incomingSha256": "905c91ad7e1dab688a02e5eac936d7e2565b9d3ebb75c1d08e19decd7182ff70",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-cycle-input-facts.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a",
+      "incomingSha256": "f9548a761a51f716951c481269334db5713b4661b8f45b5cd89704d4c17f0e1a",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-report-constants.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423",
+      "incomingSha256": "3a07fb8b231ab1bc1c7cd3cb47e60517cdce6440691bc52eccc69d6dad4fc423",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-report-inputs.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "incomingSha256": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "scripts/metric-report-provenance.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133",
+      "incomingSha256": "c893a4fbbf0a68c61c391a41ef8bfe0a1bc38e92240a2155a4d1b01a4fb1b133",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-cycle-custody.test.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e",
+      "incomingSha256": "aeb82adb54eec75b789b8fee13733222ba6bb998a3df59b2a02ba45999a3222e",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-cycle-resolution.test.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c",
+      "incomingSha256": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-duplication-inputs.test.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a",
+      "incomingSha256": "1ad4eaa9c13df350a68e8909f1df2e7c6a3e6e850d9930b41b5258086ad6cf1a",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-report-fixture.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731",
+      "incomingSha256": "6275d668c0028f87176e5da0fb1c270d9f60b2f91ad9e222c6ef17d44e65c731",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-report-inputs.test.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89",
+      "incomingSha256": "229a7fc99cc8769f00c492ae405c97fec7caeb60fbfdfc88396cd5f0a55eeb89",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "metric",
+      "path": "test/scripts/metric-report-provenance.test.js",
+      "sourceCommit": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+      "sha256": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3",
+      "incomingSha256": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/message-group/message-group-native-custody-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "incomingSha256": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/message-group/message-group-native-provisional-route-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "incomingSha256": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "incomingSha256": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "incomingSha256": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/wasm-service/wasm-creation-bound-native-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "incomingSha256": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/wasm-service/wasm-retained-bootstrap-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "incomingSha256": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "exactIncomingBytes": true
+    },
+    {
+      "unit": "native",
+      "path": "test/wasm-service/wasm-strong-write-native-fixture.js",
+      "sourceCommit": "a781064f8382eef7b6f016b52262513d8c87d978",
+      "sha256": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "incomingSha256": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "exactIncomingBytes": true
+    }
+  ],
+  "allExact": false,
+  "allExecutableBytesMatch": true,
+  "note": "One metric file retains exactly two existing integration history comment lines; its baseline150 and all executable bytes match the approved incoming file."
+}

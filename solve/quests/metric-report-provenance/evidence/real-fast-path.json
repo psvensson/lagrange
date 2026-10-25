@@ -1,0 +1,70 @@
+{
+  "exitCode": 0,
+  "elapsedSeconds": 3.132935228990391,
+  "before": {
+    "test-output/analysis/complexity-src-test.json": {
+      "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+      "inode": 224434265,
+      "bytes": 418731
+    },
+    "test-output/analysis/cognitive-complexity-src-scripts.json": {
+      "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+      "inode": 224434266,
+      "bytes": 36361
+    },
+    "test-output/analysis/madge-circular-src-scripts-test.json": {
+      "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+      "inode": 224434267,
+      "bytes": 1776
+    },
+    "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+      "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+      "inode": 224535717,
+      "bytes": 908548
+    },
+    "test-output/analysis/jscpd-test/jscpd-report.json": {
+      "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+      "inode": 224535719,
+      "bytes": 2499088
+    },
+    "solve/changes/global-owner-debt-inventory/inventory.json": {
+      "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+      "inode": 224408943,
+      "bytes": 132764
+    }
+  },
+  "after": {
+    "test-output/analysis/complexity-src-test.json": {
+      "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+      "inode": 224434265,
+      "bytes": 418731
+    },
+    "test-output/analysis/cognitive-complexity-src-scripts.json": {
+      "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+      "inode": 224434266,
+      "bytes": 36361
+    },
+    "test-output/analysis/madge-circular-src-scripts-test.json": {
+      "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+      "inode": 224434267,
+      "bytes": 1776
+    },
+    "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+      "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+      "inode": 224535717,
+      "bytes": 908548
+    },
+    "test-output/analysis/jscpd-test/jscpd-report.json": {
+      "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+      "inode": 224535719,
+      "bytes": 2499088
+    },
+    "solve/changes/global-owner-debt-inventory/inventory.json": {
+      "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+      "inode": 224408943,
+      "bytes": 132764
+    }
+  },
+  "reportsUnchanged": true,
+  "inventoryBytesUnchanged": true
+}

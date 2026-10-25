@@ -28,7 +28,6 @@ const {
   BENCHMARK_WORKLOAD_PROFILE,
   LOAD_BREAKER_OWNER_NODE_CLIENT,
   LOAD_PROGRESS_HEARTBEAT_INTERVAL_MS,
-  NODE_CLIENT_MUTATING_CONTEXT,
   NODE_CLIENT_TRANSIENT_CONTEXT,
   ONE,
   Pool,
@@ -37,17 +36,16 @@ const {
   LoadGenerator,
   ZERO,
   buildBenchmarkPartitionLookupByTableIdSql,
-  buildBenchmarkPartitionLookupSql,
-  buildBenchmarkPartitionRepairSql,
   buildBenchmarkTableCreateNodeClientContext,
   buildBenchmarkTableDdl,
   buildBenchmarkTableLookupSql,
-  buildBenchmarkTablePolicySql,
   collectBenchmarkMetadataSnapshot,
   extractRequiredSchemaVersionFromRows,
   firstStringField,
   resolveScenarioTiming,
 } = POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE;
+const BENCHMARK_TABLE_POLICY_OWNER_NOT_READY = 'admin_owner_not_ready';
+const BENCHMARK_PARTITION_TABLE_NAME_MISSING = 'partition_table_name_missing';
 
 function buildBenchmarkMetadataFlow(state, tableName) {
   return {
@@ -120,7 +118,8 @@ function isRetriableBenchmarkTableProgressError(error) {
     message.includes('no partitions available for table') ||
     (message.includes('table') && message.includes('not found')) ||
     message.includes('connect econnrefused') ||
-    message.includes('connection refused')
+    message.includes('connection refused') ||
+    message.includes(BENCHMARK_TABLE_POLICY_OWNER_NOT_READY)
   );
 }
 
@@ -329,24 +328,27 @@ function resolveCanonicalSystemTableWriteNode(nodes) {
   return candidates[ZERO];
 }
 
-async function queryControlOnCanonicalSystemTableWriteNode(
-  nodeClient,
-  nodes,
-  sql,
-  params = [],
-  context = NODE_CLIENT_TRANSIENT_CONTEXT,
-) {
+/**
+ * Write the benchmark table's policy through its owner
+ * (TablePolicyService behind the admin table-policy operation) on the
+ * canonical system-table write node. A typed refusal or a not-ready owner
+ * is thrown with its code; the caller's retry classification decides.
+ * @param {Array<Object>} nodes
+ * @param {string} tableId
+ * @param {Object} tablePolicies
+ * @return {Promise<{nodeId: string}>}
+ */
+async function applyBenchmarkTablePolicyOnCanonicalNode(nodes, tableId,
+  tablePolicies) {
   const canonicalNode = resolveCanonicalSystemTableWriteNode(nodes);
-  const result = await nodeClient.queryControl(
-    canonicalNode,
-    sql,
-    params,
-    context,
-  );
-  return {
-    result,
-    nodeId: canonicalNode.id,
-  };
+  const answer = await canonicalNode.updateTablePolicy(tableId,
+    tablePolicies);
+  if (answer?.success !== true) {
+    throw new Error('benchmark table policy owner answered ' +
+      String(answer?.outcome) + ': ' +
+      String(answer?.errorCode || answer?.error).toLowerCase());
+  }
+  return {nodeId: canonicalNode.id};
 }
 
 async function querySutTableMetadata(
@@ -637,25 +639,15 @@ async function ensureSutBenchmarkTable(
         await timing.sleep(createRetryPollIntervalMs);
         continue;
       }
-      const policyResult = await queryControlOnCanonicalSystemTableWriteNode(
-        nodeClient,
+      const policyResult = await applyBenchmarkTablePolicyOnCanonicalNode(
         systemTableReadNodes,
-        buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies),
-        [],
-        NODE_CLIENT_MUTATING_CONTEXT,
-      );
-      const repairResult = await queryControlOnCanonicalSystemTableWriteNode(
-        nodeClient,
-        systemTableReadNodes,
-        buildBenchmarkPartitionRepairSql(tableName, tableId),
-        [],
-        NODE_CLIENT_MUTATING_CONTEXT,
+        tableId,
+        benchmarkTablePolicies,
       );
       return {
         ...tableMetadata,
         writeNodeId: createResult.nodeId,
         policyNodeId: policyResult.nodeId,
-        repairNodeId: repairResult.nodeId,
         createAttempt,
       };
     } catch (error) {
@@ -700,6 +692,25 @@ function isRetriableTableReadyError(error) {
   );
 }
 
+/**
+ * The read-back that replaced the harness partition repair: the partition
+ * complete cohort found by table_id must carry its exact catalog identity.
+ * Any incomplete or conflicting row is a product finding, even when another
+ * row in the cohort is correct.
+ * @param {Array<Object>} rows
+ * @param {string} tableName
+ * @param {string} tableId
+ * @return {void}
+ */
+function assertBenchmarkPartitionRowsCarryTableName(rows, tableName, tableId) {
+  if (rows.every((row) => row?.table_id === tableId && row.table_name === tableName)) {
+    return;
+  }
+  throw new Error(BENCHMARK_PARTITION_TABLE_NAME_MISSING + ': partition ' +
+    'rows of table_id "' + tableId + '" do not carry table_name "' +
+    tableName + '"');
+}
+
 async function waitForSutBenchmarkTableReady(
   nodeClient,
   systemTableReadNodes,
@@ -718,17 +729,6 @@ async function waitForSutBenchmarkTableReady(
 
   while (timing.now() < deadline) {
     try {
-      const tableNameLookup = await queryControlWithNodeFallback(
-        nodeClient,
-        systemTableReadNodes,
-        buildBenchmarkPartitionLookupSql(tableName),
-      );
-      const tableNameResult = tableNameLookup.result;
-      const tableNameRows = rowsFromQueryResult(tableNameResult);
-      if (tableNameRows.length > ZERO) {
-        return;
-      }
-
       const tableId = await querySutTableId(
         nodeClient,
         systemTableReadNodes,
@@ -743,6 +743,9 @@ async function waitForSutBenchmarkTableReady(
         const tableIdResult = tableIdLookup.result;
         const tableIdRows = rowsFromQueryResult(tableIdResult);
         if (tableIdRows.length > ZERO) {
+          // Partition rows of this table exist: each must carry its table
+          // name (table creation writes it; nothing here repairs it).
+          assertBenchmarkPartitionRowsCarryTableName(tableIdRows, tableName, tableId);
           return;
         }
       }
@@ -1152,7 +1155,6 @@ export const POSTGRES_BASELINE_COMPARISON_BENCHMARK_TABLE_LOAD_BUNDLE = {
   resolveSystemTableReadPath,
   queryControlWithNodeFallback,
   resolveCanonicalSystemTableWriteNode,
-  queryControlOnCanonicalSystemTableWriteNode,
   querySutTableMetadata,
   querySutTableId,
   resolveScenarioOverrides,

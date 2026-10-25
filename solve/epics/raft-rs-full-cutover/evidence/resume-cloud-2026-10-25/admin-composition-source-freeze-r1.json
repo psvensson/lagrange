@@ -1,0 +1,668 @@
+{
+  "base": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "oldAdminBase": "9adb6f5de25ec4a630438fa2c195df5e536cba2e",
+  "units": [
+    "8fee98abecb29133815f9ffab9c096019692f24b",
+    "e701ca2b35b9f682dcd051997d521fe3134bfc89",
+    "6a228ced9439af07216b492bb8fdbba5540c3671",
+    "a97f79c35b7e1f6428032493918e16e623339688",
+    "c582aa545068cf182754da98028812912d628bf0",
+    "930abb048f2d04db5bdb47bea20fc2ce7c450a17",
+    "9a7aeca9e2dde7d009643d62c904bc789b70c97d"
+  ],
+  "compositionCorrections": [
+    "Retain current stricter duplication baseline654/24609; older675/25566 not applied",
+    "Remove old ADMIN answer ACK alias at partition ingress refusal",
+    "Use sole delivery envelope builder around QUERY and TRANSACTION answers in new admission witness; reject unexpected test message types; add no-ACK refusal assertion"
+  ],
+  "files": [
+    {
+      "path": "src/admin/admin-debug-handlers.js",
+      "sha256": "cc9073af837b418ede6f0b8033633c7149817109d77954aeaf94ff3e215831c3",
+      "deleted": false
+    },
+    {
+      "path": "src/admin/admin-owner-operations.js",
+      "sha256": "8bfd27e8ad13dd3a494e4912b260a21733f9b6de7ff57658989801a82a1e340e",
+      "deleted": false
+    },
+    {
+      "path": "src/admin/admin-websocket-api-base.js",
+      "sha256": "e790cd9868fd4af80872fe64dfd688a2d094301e38f5325503d3bca9b2f8ab78",
+      "deleted": false
+    },
+    {
+      "path": "src/admin/admin-websocket-lifecycle-methods.js",
+      "sha256": "edd7dc25073140ca2a0b69695bb0aa60b624b6f4d7f462dbdc61e86ee4a575af",
+      "deleted": false
+    },
+    {
+      "path": "src/bootstrap/bootstrap-service.js",
+      "sha256": "3e49ab25c596356416d950d67d9f0eaa4b57b77945defdd249e24fba152f932e",
+      "deleted": false
+    },
+    {
+      "path": "src/bootstrap/node-joining-delegate-bundles.js",
+      "sha256": "606292391f51b57859a4f002f39060b9465f594efbf747f4eabfbc866f533c47",
+      "deleted": false
+    },
+    {
+      "path": "src/bootstrap/system-table-schema-shared-constants.js",
+      "sha256": "e14b82c572edd5229a5dae23bb84f144c9804af841d2b86fc34d1daec90361ef",
+      "deleted": false
+    },
+    {
+      "path": "src/cdc/cdc-cache-deletion-visibility.js",
+      "sha256": "54a7203eee4aeb689dc60e8a5716f88a0ccd04c884e60c3e64bc272980fb1a2a",
+      "deleted": false
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+      "sha256": "8145f6cac81498dce4de3ffa63b502b2982ebe73ae1042fd6074b17102ac22f4",
+      "deleted": false
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-mutations.js",
+      "sha256": "82f6ce2b0fb8550ad09764d264d130aac65f8286220fb9b9979f880d9a0d154b",
+      "deleted": false
+    },
+    {
+      "path": "src/cli/admin-cli-action-methods.js",
+      "sha256": "a6b4315577843e48d106c4ba402f0029325dcecbe0f46c4bfd986f4883c193a4",
+      "deleted": false
+    },
+    {
+      "path": "src/cli/admin-cli-local-constants.js",
+      "sha256": "a388cf39092b9d86446983c22a31d33471f020db5ede41cb3466cae83a4d93f3",
+      "deleted": false
+    },
+    {
+      "path": "src/cli/admin-cli-navigation-methods.js",
+      "sha256": "0a5000192316062a7487c285234c80d3eb43ab24b7ed4ae617714dc4ec0259dd",
+      "deleted": false
+    },
+    {
+      "path": "src/cli/cli-constants.js",
+      "sha256": "d4c09c1868265c5b1a85a8de865f756db3aaf5f47cac1203656d9ee5d449c97e",
+      "deleted": false
+    },
+    {
+      "path": "src/cli/core/connection-manager.js",
+      "sha256": "0aa3a4de9f243acb06be80b549a634ca741e548eb438aefa7575a747a38fbd63",
+      "deleted": false
+    },
+    {
+      "path": "src/config/config-constants.js",
+      "sha256": "a78e75f3d34099a421768ddf3332591b323fbba5ddc76db9b8e24d0d36c44d3e",
+      "deleted": false
+    },
+    {
+      "path": "src/config/dynamic-config-service.js",
+      "sha256": "e8a0887a7510e960efab1ce8d88cd66ef50575d2a04b32b58fc1617807b6436a",
+      "deleted": false
+    },
+    {
+      "path": "src/control-plane/control-plane-single-row-confirmation.js",
+      "sha256": "05fd1fdedce2f10a89b14362a1bc07bde3bec67268c2595cf68a7b60ac409aa5",
+      "deleted": false
+    },
+    {
+      "path": "src/control-plane/owners/nodes-owner.js",
+      "sha256": "6011d690f4590181644a79f9a7b295af1c2649f868e2b04af260226af58ee535",
+      "deleted": false
+    },
+    {
+      "path": "src/control-plane/owners/postgres-wire-scale-contract.js",
+      "sha256": "ff2c21b0ae4bfa5576414f77d76ba078c9394d7141324d0960ae0d47b173599e",
+      "deleted": false
+    },
+    {
+      "path": "src/control-plane/owners/runtime-access-policy-owner.js",
+      "sha256": "c532e5b35bad8d6b13856c0e692a5c5284679ea574ab7fefa600b685174e9928",
+      "deleted": false
+    },
+    {
+      "path": "src/control-plane/owners/service-definitions-owner.js",
+      "sha256": "bed46bc98929c22e9aa5d3c7bc35f525f88131bbfd7ec6b202e19e9ccd4abcc9",
+      "deleted": false
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service-constants.js",
+      "sha256": "76c80e747f0f86b3a526f58f268ac561fb04eea03d1e18f58c9037d94ed444f4",
+      "deleted": false
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service-value-helpers.js",
+      "sha256": "a9bc6744e7c08143b71e8eb6bdee6ba5c711bc2fc36d696ce3464664fa2baefe",
+      "deleted": false
+    },
+    {
+      "path": "src/debug-runtime/debug-metadata-service.js",
+      "sha256": "a2e8be9b3799527e3d0903ca5654c3c5ec05f1df28f16bdbb90c10f672f58676",
+      "deleted": false
+    },
+    {
+      "path": "src/entrypoint-runtime-admin-composition.js",
+      "sha256": "db788865cf8ff8702b32dfad464aa5c53effab112600b653bbdc40defc8c11af",
+      "deleted": false
+    },
+    {
+      "path": "src/entrypoint-runtime-shutdown-lifecycle.js",
+      "sha256": "324b3720390f58976a5713a2a12c317645afebb9478ca457249bd701f00fe0c5",
+      "deleted": false
+    },
+    {
+      "path": "src/lagrange-runtime-startup.js",
+      "sha256": "dffbe8a7e681fc0dfc956763eb877c05c08b5f274a02d542d13864149858a998",
+      "deleted": false
+    },
+    {
+      "path": "src/node/index.js",
+      "sha256": "4737961388205b9636dbce66d9b4771d4da3faee85549c79e2a3cc478b909f43",
+      "deleted": false
+    },
+    {
+      "path": "src/node/local-node-drain.js",
+      "sha256": "632accd77448c74d028b0cedf254679b9fbcead9f290f4e1141481206ffc71da",
+      "deleted": false
+    },
+    {
+      "path": "src/node/node-constants.js",
+      "sha256": "93dfc96b9d07f5825dd31f6855557e0206ee35f6d29d8ba04249c35ea878675f",
+      "deleted": false
+    },
+    {
+      "path": "src/node/node-lifecycle-service.js",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-apply.js",
+      "sha256": "c86d65ffa4e64cca5cee5fa9870042010e101071d78abbe3d7f6526ea7d43800",
+      "deleted": false
+    },
+    {
+      "path": "src/partition/partition-service-remote-query-methods.js",
+      "sha256": "88626ebd7943beb78aef6922c4e9b0ece238eb84caeead0232a1e201956fb008",
+      "deleted": false
+    },
+    {
+      "path": "src/policy/policy-constants.js",
+      "sha256": "284e6df5ac8dd4221146ebf078d1a28cec2e4a5b08884ecc34f1a5241c1fb734",
+      "deleted": false
+    },
+    {
+      "path": "src/policy/table-policy-service.js",
+      "sha256": "bd255821273bbad6d73b5a8e0e89e5f760b5d077775b2378fb0f7b6f128eca87",
+      "deleted": false
+    },
+    {
+      "path": "src/query/application-database-statement-policy.js",
+      "sha256": "cd3456687860f400e2fc67149d59483a5035c34cac6ed0dee4f708fc0976fa6f",
+      "deleted": false
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-participant-admission.js",
+      "sha256": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "deleted": false
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "sha256": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "deleted": false
+    },
+    {
+      "path": "src/query/query-constants.js",
+      "sha256": "9dec00eb3ae2f30486f28be13d707924859bbc614e007bc1c03a9d3b84b9c6b7",
+      "deleted": false
+    },
+    {
+      "path": "src/query/query-executor-partition-request-builders.js",
+      "sha256": "75c5e5df57e733a65614ec35de2af1139cd38ab95069decb0c71953eb999fa8c",
+      "deleted": false
+    },
+    {
+      "path": "src/query/schema-provisioning-intent.js",
+      "sha256": "a5b5c9536fe930b6cd8c452c8ca560b7a3f57883fbbe4456af10aef98d32087d",
+      "deleted": false
+    },
+    {
+      "path": "src/query/sql-query-engine-request-dispatch.js",
+      "sha256": "f90ac32cfd0d822b11fe4b93a1e9390540d5e3a1460c4ac115008a3172fe4e94",
+      "deleted": false
+    },
+    {
+      "path": "src/query/sql-query-engine-statement-execution.js",
+      "sha256": "4dffc675d78972ebffa1a0f97de62309e5d55ada09ccae50452efb0001ca1f92",
+      "deleted": false
+    },
+    {
+      "path": "src/query/sql-query-engine-table-routing-methods.js",
+      "sha256": "2400461d88f287995068239dda665b13b09ef398b9f9aed32e8c4cdaa2e210a2",
+      "deleted": false
+    },
+    {
+      "path": "src/query/sql-query-engine-write-execution.js",
+      "sha256": "63ecd94f470be84dc43ef4fffb18d9c219bc0518b404fa7a3cb941aa7ed7ee6c",
+      "deleted": false
+    },
+    {
+      "path": "src/query/sql-statement-ingress.js",
+      "sha256": "ca984bcbee876cfd08deb2375963f9085e13d90af7c34d15c1dfe7e16ddf81cb",
+      "deleted": false
+    },
+    {
+      "path": "src/query/table-creation-service-create-table.js",
+      "sha256": "4b8f43f7310bcb94c652a28ca64252b06964b487298ac2b174a3248f44d7db9e",
+      "deleted": false
+    },
+    {
+      "path": "src/query/table-creation-service-durable-job.js",
+      "sha256": "4b8cb03ba48a862c50eed0de438900ae0b18c72f46cf0ba0d2ed7432c3adb4a2",
+      "deleted": false
+    },
+    {
+      "path": "src/query/user-table-create-intent.js",
+      "sha256": "9ef287a7d07b8b086093e610ce99076147f26ee482ad0b6a091f3dd3928f6357",
+      "deleted": false
+    },
+    {
+      "path": "src/runtime/pgwire-protocol-constants.js",
+      "sha256": "4fb2a9ead54375a960faaf5d5093c8f1fdb4d4dc795fa02f110096cb7b4b2008",
+      "deleted": false
+    },
+    {
+      "path": "src/runtime/pgwire-result-mapper.js",
+      "sha256": "0932472df96637049b624c830478359d5cebbe5812d6f4dad495b2de999a130e",
+      "deleted": false
+    },
+    {
+      "path": "test/admin/admin-owner-mutation-outcomes.test.js",
+      "sha256": "99ce82ede2982d700aac19bd963204c02bec186fbd2cb5d534157c6c2fcf06b1",
+      "deleted": false
+    },
+    {
+      "path": "test/admin/admin-owner-operations.test.js",
+      "sha256": "f283ebddf0418ac449e98397e5ecee21c7562b04dad5c5910e0404ba7b9a1340",
+      "deleted": false
+    },
+    {
+      "path": "test/cdc/cdc-delete-cache-absence-convergence.test.js",
+      "sha256": "a65af545085b24d2258a18b01983de28bebaaea98221978b3f4a8fba182687ed",
+      "deleted": false
+    },
+    {
+      "path": "test/cli/admin-cli-owner-operations.test.js",
+      "sha256": "ce1c22d86aaa8296ef60a176bd5207cea7361fbb1e5afffee4cef75f7087cb53",
+      "deleted": false
+    },
+    {
+      "path": "test/cli/core/command-parser.test.js",
+      "sha256": "54662ef14aedcc85180d8628a1a2a5951301d1031d2a291805129df8514beadb",
+      "deleted": false
+    },
+    {
+      "path": "test/cli/index.test.js",
+      "sha256": "d734cf181e6ff64dd95b09987634c4598c37950fd7611499ee452f0307826146",
+      "deleted": false
+    },
+    {
+      "path": "test/config/dynamic-config-service.test.js",
+      "sha256": "db3283e79ae861adf6482f5e132b3b29c25d1cdaada31d869dad0fcb59fb1896",
+      "deleted": false
+    },
+    {
+      "path": "test/control-plane/node-lifecycle-writer-census.js",
+      "sha256": "9b0f907423558925a4be9c23a636f8cdc2f314a80826283898b97ec7c5ceb7ec",
+      "deleted": false
+    },
+    {
+      "path": "test/control-plane/node-terminal-removal.test.js",
+      "sha256": "7469fddabd7b18510b9cbf8e0a7eaecc0c64f3c9ead27907dc850de6f049f05d",
+      "deleted": false
+    },
+    {
+      "path": "test/control-plane/postgres-wire-scale.test.js",
+      "sha256": "2a3b5ed55c41076a79bb68b5d95748c51454b7d89d312d85315543dd104c7d88",
+      "deleted": false
+    },
+    {
+      "path": "test/control-plane/runtime-access-policy-owner.test.js",
+      "sha256": "4dd9780091c64289abe8f46fe4db1831a71f55726e1d9914d6da0ce6a1739782",
+      "deleted": false
+    },
+    {
+      "path": "test/control-plane/system-metadata-owner-modules.test.js",
+      "sha256": "a0edefbc17d01ff100b7b65606e81dd5109a1650db98aaa8967625bcea6eb965",
+      "deleted": false
+    },
+    {
+      "path": "test/debug-runtime/debug-metadata-service.test.js",
+      "sha256": "12f14ac9f202f08d19859ebf43634746cd91e06b096476b20f407992980ac135",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+      "sha256": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
+      "sha256": "79cf080b630e603fdc4b5ebdd05bc1c2ccaffe1a57de1285ff33450030645623",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js",
+      "sha256": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js",
+      "sha256": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
+      "sha256": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js",
+      "sha256": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js",
+      "sha256": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
+      "sha256": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js",
+      "sha256": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js",
+      "sha256": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js",
+      "sha256": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js",
+      "sha256": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js",
+      "sha256": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js",
+      "sha256": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js",
+      "sha256": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js",
+      "sha256": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
+      "sha256": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
+      "sha256": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js",
+      "sha256": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js",
+      "sha256": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js",
+      "sha256": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js",
+      "sha256": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-partition-table-name-readback.test.js",
+      "sha256": "0ad2a52cadec56d235ea5f099c65a77ce5c437664d478c189d97defe61076ccf",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js",
+      "sha256": "6ab97686c5d862ed9414cbe7b18c65a521505d80217e340b2e7b3528bfcebf81",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/rolling-restart-scenario.test.js",
+      "sha256": "1ea0269b76b2463148897e2bf16e68ee3b3e0bc9e00e7f4a8f9f98a86c14a4a1",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-load-during-partitioning-scenario.test.js",
+      "sha256": "fb737f236db48bf868438cf61592f76a8a962fae74ed445d4425e6d7c156cedc",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-distribution-scenario.test.js",
+      "sha256": "28859170b514f3a4d28963bfed1da651179d4e818e5a83dfdb6f8d759d19d9f0",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-scenario.test.js",
+      "sha256": "3a00af5e19fa7ce17e6bbb1598575f75abada513edb239dc7f8a23c5ecc40cb8",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
+      "sha256": "7f474048a2e48849448a665325e808b67e9ce6a27b2c1f60b0791e38434fd63a",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/seven-node-table-partition-distribution-scenario.test.js",
+      "sha256": "0785f78583f3591fc6424cb4c4af23562477c64cacf7deecf128c77767cea99a",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/table-distribution-helpers-scenario-policy.test.js",
+      "sha256": "0910c1bde97bdd9bc63db60f8392c3e820423a271ef9fbbe6db088234658c001",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js",
+      "sha256": "1ae35f6c3092ef74d55e5ed9b63ed0c0c352ac9e8844281c3ec3c6ea900092d8",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/cluster-node-handle-layer.js",
+      "sha256": "30da9b169409bd39ba8e59571d7d1d61b30c92ca8c483f2992b34dff68ee03d6",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/harness/cluster-node-owner-operations.js",
+      "sha256": "8d9c1028a5d44aeb840455f9f6ab10a5b5058968a6acfda34f93a15ebd4d8f75",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
+      "sha256": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js",
+      "sha256": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability-client.js",
+      "sha256": "8d959c9f691d5ad267780fbb3cc769c5045d54d455b12fcceb762565cd4fcfd9",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability-constants.js",
+      "sha256": "f0294e3b9982efe57641f8bc32e3b8afb09defe48959bcf9e46cb2e33e553457",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/public-seam-durability.js",
+      "sha256": "2d310b5912fae49227f172770e9094501f2fb9d5a7c8e2c2b762333697c368ef",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-control-query.js",
+      "sha256": "7e0a647e7e91f62b85a3f7f01b55b568d376e596eb17fa347ab249ae636643e9",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
+      "sha256": "0bc0d74dbe730c4f2fd377b0e5c3f2767e912e231a305a39751b49745315f320",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-load-node-planning.js",
+      "sha256": "0cd15b0dd8b563c4ac370847ce579322ca4fe124f5a6c2913b2a0809bab0cb89",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/table-distribution-helpers-table-bootstrap.js",
+      "sha256": "a43bb15fcf28391539317e117ac9b40d68a2a75ecb809158e870ab13a8c6c009",
+      "deleted": false
+    },
+    {
+      "path": "test/distributed/scenarios/user-table-topology-helpers.js",
+      "sha256": "3972ee3183423c33e652283dfb7941448c4151eabd772aed791a7db45d9c1801",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/benchmark-system-table-read-path.integration.test.js",
+      "sha256": "04a861be369da52bcf26e11adc990a51666a2f9a5ab1ebc711e59e2105f87cf3",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/control-plane-node-terminal-removal.integration.test.js",
+      "sha256": "79cf1854d76cdf9d1f6865671a556b16db1d988220eb316889bde8c80782b7f9",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/control-plane-pgwire-scale-callers.integration.test.js",
+      "sha256": "dbc08f6bfe9dc14dd04af80662ea2c77341717eeda1b260c735ddb36ca959e26",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+      "sha256": "8750ee27b83672150ef2abe671c367ab5a27bd3d8b101f899dfdbe801be46545",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/helpers/public-binding-seam-harness.js",
+      "sha256": "6132d91eddfaabf198ed2a93187aac46d7ff652ca1983f58f28e27a53a23cfcd",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/pgwire-command-tag-real-engine.integration.test.js",
+      "sha256": "61f52ed4000827ffc53d2d59569bee29219c7c6ddbc6d578dd010b5a8ace4db1",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/public-binding-cell-invocation-seam.integration.test.js",
+      "sha256": "6456235b675438a30f1ded5fab5d679f189f29412346347d56ffb383c7f0f6dd",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/strict-benchmark-local-readiness.integration.test.js",
+      "sha256": "775a514b4ee8c45c8ceff545f2b3cab71bd8a08864c212cd773853378f168034",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/strict-load-lane-table-probe.integration.test.js",
+      "sha256": "07513c5fe6d49e45836f032aa3c87b27d41162d477b678664819658b5acb491b",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/strict-preload-pressure-reproducer.integration.test.js",
+      "sha256": "af8919c0e06781b1732dd11ab72f208279a45abb5f0120c1549a551131279097",
+      "deleted": false
+    },
+    {
+      "path": "test/integration/versioned-cdc-readiness-convergence.integration.test.js",
+      "sha256": "09f90185d916f34e5a18f75d1bb13fbac9d2736b9543e9470109fadbcaebeb44",
+      "deleted": false
+    },
+    {
+      "path": "test/node/failure-detection-delegation.property.test.js",
+      "sha256": "50b155bd7246725cd70351c662b355753016813267a8af49e51d58c417db4c13",
+      "deleted": false
+    },
+    {
+      "path": "test/node/node-lifecycle-service.test.js",
+      "sha256": null,
+      "deleted": true
+    },
+    {
+      "path": "test/node/state-machine-cdc-consistency.property.test.js",
+      "sha256": "0619243c4395467263ba33a433e92430d7daca2488e663ed37a27b9a250b3bfa",
+      "deleted": false
+    },
+    {
+      "path": "test/partition/coordinator-table-exact-identity.test.js",
+      "sha256": "72d40dc445a03fc5f606c406a9e268385cf60ca3b84067ff1ab3b78e5cd35a87",
+      "deleted": false
+    },
+    {
+      "path": "test/policy/table-policy-service.test.js",
+      "sha256": "b985340d2d5fda712a8f64d827f386d3bdcfaa4259d49e99d788da20762537f4",
+      "deleted": false
+    },
+    {
+      "path": "test/query/schema-provisioning-job-owner.test.js",
+      "sha256": "3cc37d4d6b4e20d50611ab7d7557f55ed31944be9030bc375f21374a678798e2",
+      "deleted": false
+    },
+    {
+      "path": "test/query/sql-query-engine-system-table-write-admission.test.js",
+      "sha256": "1a97e2f6e63d9178b6ee1abb8cb676c3e5cce123621a1b2e9696bdd3c4e4a131",
+      "deleted": false
+    },
+    {
+      "path": "test/query/transaction-schema-enforcement.test.js",
+      "sha256": "1cbd497a49e88bc0706395d13f909516470e547e1483f41ba2f5abb6bef2d42c",
+      "deleted": false
+    },
+    {
+      "path": "test/runtime/pgwire-runtime-module.test.js",
+      "sha256": "9dcd9b64a25a6d0f59244e67a6753e74b7b0834fe609e53b2aa9e4a8de432159",
+      "deleted": false
+    }
+  ],
+  "runtimeTestsRun": false,
+  "generatedMetadataRegeneration": "pending normal hook",
+  "markerIncluded": false
+}

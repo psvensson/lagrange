@@ -37,7 +37,8 @@
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
         "test/integration/seed-migration-interrupted-decision.integration.test.js",
-        "test/partition/partition-tx1-single-path-alpha.test.js"
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -1666,6 +1667,98 @@
         "test/entrypoint/startup-failed-cleanup-process-custody.test.js",
         "test/entrypoint/process-custody-review.integration.test.js"
       ]
+    },
+    "node-terminal-removal-visibility": {
+      "description": "NodesOwner removes only an explicit node ID, boot incarnation and terminal-status observation through one conditional gateway DELETE. Admin and CLI preserve that observation across retries. Conditional CDC deletion observes disappearance of the matched row, preserves successors, and does not request absence on zero or unknown affected-row counts. Primary-key-only deletion retains authoritative absence convergence.",
+      "owners": [
+        "src/control-plane/owners/nodes-owner.js",
+        "src/admin/admin-owner-operations.js",
+        "src/cli/admin-cli-action-methods.js",
+        "src/cli/admin-cli-navigation-methods.js",
+        "src/cli/core/connection-manager.js",
+        "src/cli/cli-constants.js",
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+        "src/cdc/cdc-cache-deletion-visibility.js"
+      ],
+      "tests": [
+        "test/control-plane/node-terminal-removal.test.js",
+        "test/integration/control-plane-node-terminal-removal.integration.test.js",
+        "test/cdc/cdc-delete-cache-absence-convergence.test.js",
+        "test/admin/admin-owner-operations.test.js",
+        "test/cli/admin-cli-owner-operations.test.js",
+        "test/cli/core/command-parser.test.js"
+      ]
+    },
+    "postgres-wire-owner-scale": {
+      "description": "Operator scale for the exact built-in PostgreSQL listener persists only validated desired count/config through ServiceDefinitionsOwner and the existing gateway. HTTP/harness adapters retain typed outcomes; placement, running configuration and endpoint readiness remain separate owner observations.",
+      "owners": [
+        "src/control-plane/owners/postgres-wire-scale-contract.js",
+        "src/control-plane/owners/service-definitions-owner.js",
+        "src/admin/admin-owner-operations.js",
+        "src/entrypoint-runtime-admin-composition.js"
+      ],
+      "tests": [
+        "test/control-plane/postgres-wire-scale.test.js",
+        "test/integration/control-plane-postgres-wire-scale.integration.test.js",
+        "test/integration/control-plane-pgwire-scale-callers.integration.test.js",
+        "test/bootstrap/runtime-service-rebalancer-owner.test.js",
+        "test/rebalancer/runtime-service-entity.test.js",
+        "test/runtime/pgwire-runtime-module.test.js"
+      ]
+    },
+    "exact-logical-table-identity": {
+      "description": "Parser-preserved logical table case is shared by reserved system names, DML routing/admission, runtime grants and durable user CREATE/resume identity; no cache presence or case-fold alias grants creation or writes.",
+      "owners": [
+        "src/bootstrap/system-table-schema-shared-constants.js",
+        "src/control-plane/owners/runtime-access-policy-owner.js",
+        "src/query/schema-provisioning-intent.js",
+        "src/query/user-table-create-intent.js",
+        "src/query/table-creation-service-durable-job.js",
+        "src/query/table-creation-service-create-table.js",
+        "src/query/sql-statement-ingress.js",
+        "src/query/sql-query-engine-table-routing-methods.js",
+        "src/runtime/pgwire-result-mapper.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/query/distributed/distributed-transaction-participant-admission.js",
+        "src/partition/partition-participant-transaction-apply.js"
+      ],
+      "tests": [
+        "test/query/sql-query-engine-system-table-write-admission.test.js",
+        "test/query/schema-provisioning-job-owner.test.js",
+        "test/control-plane/runtime-access-policy-owner.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js",
+        "test/query/transaction-schema-enforcement.test.js"
+      ]
+    },
+    "admin-owner-mutation-confirmation": {
+      "description": "Config and table-policy owners consume the canonical mutation effect before publishing success or completion side effects; zero, uncertain and refused effects retain typed outcomes through admin ingress.",
+      "owners": [
+        "src/config/dynamic-config-service.js",
+        "src/config/config-constants.js",
+        "src/policy/table-policy-service.js",
+        "src/policy/policy-constants.js",
+        "src/control-plane/control-plane-single-row-confirmation.js",
+        "src/admin/admin-owner-operations.js"
+      ],
+      "tests": [
+        "test/admin/admin-owner-mutation-outcomes.test.js",
+        "test/admin/admin-owner-operations.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/policy/table-policy-service.test.js",
+        "test/policy/policy-driven-adjustment.property.test.js"
+      ]
+    },
+    "benchmark-full-partition-cohort-readback": {
+      "description": "Benchmark readiness reads the complete catalog table ID partition cohort and rejects every incomplete/conflicting identity without repair writes.",
+      "owners": [
+        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
+        "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+        "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -1714,7 +1807,8 @@
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
         "test/integration/seed-migration-interrupted-decision.integration.test.js",
-        "test/partition/partition-tx1-single-path-alpha.test.js"
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -3530,6 +3624,33 @@
         "test/bootstrap/seed-startup-listener-failure.integration.test.js",
         "test/bootstrap/fresh-seed-activation.integration.test.js",
         "test/entrypoint/startup-failed-cleanup-process-custody.test.js"
+      ]
+    },
+    "admin-owner-mutation-confirmation": {
+      "description": "Real admin HTTP, semantic owners and canonical gateway agree on confirmed single-row application before success or owner completion side effects.",
+      "endpoints": [
+        {
+          "id": "semantic-owner",
+          "owners": [
+            "src/config/dynamic-config-service.js",
+            "src/config/config-constants.js",
+            "src/policy/table-policy-service.js",
+            "src/policy/policy-constants.js"
+          ]
+        },
+        {
+          "id": "gateway-effect-and-admin",
+          "owners": [
+            "src/control-plane/control-plane-single-row-confirmation.js",
+            "src/admin/admin-owner-operations.js",
+            "src/control-plane/control-plane-mutation-outcome-classifier.js",
+            "src/control-plane/control-plane-system-table-gateway.js"
+          ]
+        }
+      ],
+      "contract": "admin-owner-mutation-confirmation",
+      "witnessTests": [
+        "test/admin/admin-owner-mutation-outcomes.test.js"
       ]
     }
   }

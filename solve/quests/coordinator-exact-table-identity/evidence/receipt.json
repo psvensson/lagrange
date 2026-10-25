@@ -1,0 +1,40 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "receipts": [
+    {
+      "id": "source-commit-and-alter-exact-table-identity",
+      "passed": true
+    },
+    {
+      "id": "lowercase-ledger-enforcement-preserved",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": false
+    }
+  ],
+  "source": {
+    "base": "a97f79c35b7e1f6428032493918e16e623339688",
+    "state": "checkpoint-awaiting-independent-review",
+    "sha256": {
+      "src/partition/partition-participant-transaction-apply.js": "8900ac7971e0eae0403d08c040fa1581beea3e693cb63fb3721054e9dcc8c9f8",
+      "src/query/distributed/distributed-transaction-participant-admission.js": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "src/query/distributed/distributed-transaction-schema-enforcement.js": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26"
+    }
+  },
+  "focusedProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 3,
+    "assertions": 92,
+    "output": "/tmp/codex-coordinator-table-identity-20261025/green-final.log",
+    "outputSha256": "e57b5db6677ad99505058d0f74d8c88a1c1622789535f6163a9736ef34fc79ab"
+  },
+  "limitations": [
+    "Bounded real PartitionService with controllable consensus proposal/application fixture; no native formation or physical distributed scenario claim.",
+    "Predecessor a97 failed all four source/application/ALTER/BEGIN cases. Existing lowercase ledger schema, trigger repair and participant exclusion remain strict.",
+    "Scoped lint and diff check passed. Generated classification is stale pending normal inventory hook; independent review and integration remain outstanding. No Quest landing, main merge or publication."
+  ]
+}

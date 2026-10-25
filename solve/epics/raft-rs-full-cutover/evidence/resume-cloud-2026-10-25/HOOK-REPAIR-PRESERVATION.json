@@ -1,0 +1,68 @@
+{
+  "schema": "hook-repair-preservation/1",
+  "heavy_analysis_window_released": true,
+  "task_owned_running_job_count": 0,
+  "units": [
+    {
+      "unit": "marker",
+      "local_branch": "work/cloud-marker-hook-repair-20261025",
+      "local_commit": "93c86b07d0cbeff46ae963a2b23d046e1b6512b1",
+      "tree": "644aee510125b2bea2196b6fcad21febb9ff93b8",
+      "parent": "6a228ced9439af07216b492bb8fdbba5540c3671",
+      "worktree_clean": true,
+      "all_reviewed_js_and_doc_bytes_unchanged": true,
+      "source_attestation": "marker-committed-source-attestation.json",
+      "normal_hook_attempts": [
+        {
+          "started": "2026-10-25T12:28:55.448650+00:00",
+          "ended": "2026-10-25T12:32:58.080257+00:00",
+          "exit_code": 1,
+          "log": "/workspace/scratch/285a938494ce/admin-hook-repair-evidence/marker-normal-hook-r1.txt",
+          "node_options": "--max-old-space-size=4096",
+          "sha256": "52f6483b29e723d8c8ab528ff7151b9edb93959a73b8af4b211b8a2a057005e1",
+          "bytes": 9454
+        },
+        {
+          "started": "2026-10-25T12:34:13.128577+00:00",
+          "ended": "2026-10-25T12:34:46.736134+00:00",
+          "exit_code": 0,
+          "log": "/workspace/scratch/285a938494ce/admin-hook-repair-evidence/marker-normal-hook-r2.txt",
+          "node_options": "--max-old-space-size=4096",
+          "execution_environment": "approved require_escalated retry",
+          "sha256": "a3b770dfaa725ba049dc17525ad2f2955a8c7f6cbbc12da2efd520ccf3a9ea69",
+          "bytes": 4653
+        }
+      ],
+      "review_scope": "capture correction approved; full marker source review HOLD pending shared Unicode boundary investigation",
+      "runtime_tests_executed_by_repair_author": false,
+      "integration_performed": false,
+      "remote_preservation_owner": "/root through connected GitHub API; local/remote metadata SHA mapping required"
+    },
+    {
+      "unit": "cohort",
+      "local_branch": "work/cloud-cohort-hook-repair-20261025",
+      "local_commit": "9a7aeca9e2dde7d009643d62c904bc789b70c97d",
+      "tree": "f0a979259276f12cf5c6f8746a8f3441e568306b",
+      "parent": "a97f79c35b7e1f6428032493918e16e623339688",
+      "worktree_clean": true,
+      "all_reviewed_js_and_doc_bytes_unchanged": true,
+      "source_attestation": "cohort-committed-source-attestation.json",
+      "normal_hook_attempts": [
+        {
+          "started": "2026-10-25T12:35:43.054601+00:00",
+          "ended": "2026-10-25T12:40:09.992247+00:00",
+          "exit_code": 0,
+          "log": "/workspace/scratch/285a938494ce/admin-hook-repair-evidence/cohort-normal-hook-r1.txt",
+          "node_options": "--max-old-space-size=4096",
+          "execution_environment": "approved require_escalated; prior marker attempt established sandbox child-process failure",
+          "sha256": "553733cd14b147186d1d8082752c38deca7652f7f4b9852463e22d7f3a46ea0a",
+          "bytes": 4140
+        }
+      ],
+      "review_scope": "full bounded source approved by subagent:/root; corrected witness execution and composition pending",
+      "runtime_tests_executed_by_repair_author": false,
+      "integration_performed": false,
+      "remote_preservation_owner": "/root through connected GitHub API; local/remote metadata SHA mapping required"
+    }
+  ]
+}

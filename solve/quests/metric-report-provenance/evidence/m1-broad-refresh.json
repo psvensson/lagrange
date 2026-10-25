@@ -1,0 +1,7 @@
+{
+  "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+  "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+  "command": "node scripts/generate-global-owner-debt-inventory.js --refresh",
+  "exitCode": 0,
+  "elapsedSeconds": 165.32138469896745
+}

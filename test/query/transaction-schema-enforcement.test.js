@@ -94,7 +94,10 @@ test('coordinator schema: altered enforcement fails closed, and outer apply fail
       'ON sql_transactions BEGIN SELECT 1; END');
     assert.equal(readTransactionSchemaEnforcement(gateway.db).state, 'incompatible');
     assert.throws(() => installTransactionSchemaEnforcement(gateway.db), /enforcement_unavailable/u);
-    assert.equal(coordinatorTableSchemaRefusal('SQL_TRANSACTIONS').failureCode,
+    assert.equal(coordinatorTableSchemaRefusal('sql_transactions').failureCode,
+      'transaction_coordinator_schema_protected');
+    assert.equal(coordinatorTableSchemaRefusal('SQL_TRANSACTIONS'), null);
+    assert.equal(coordinatorTableSchemaRefusal('global.sql_transactions').failureCode,
       'transaction_coordinator_schema_protected');
     assert.equal(coordinatorTableSchemaRefusal('tables'), null);
     assert.equal(readTransactionSchemaEnforcement(null).state, 'unavailable');

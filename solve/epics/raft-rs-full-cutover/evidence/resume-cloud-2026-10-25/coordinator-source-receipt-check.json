@@ -1,0 +1,23 @@
+{
+  "candidate": "c582aa545068cf182754da98028812912d628bf0",
+  "checks": [
+    {
+      "path": "src/partition/partition-participant-transaction-apply.js",
+      "sha256": "8900ac7971e0eae0403d08c040fa1581beea3e693cb63fb3721054e9dcc8c9f8",
+      "expected_sha256": "8900ac7971e0eae0403d08c040fa1581beea3e693cb63fb3721054e9dcc8c9f8",
+      "matches": true
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-participant-admission.js",
+      "sha256": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "expected_sha256": "f2df4892ed0aa13be6729b3dea388e6accb5f94acd1780fe0e49da009a46fb45",
+      "matches": true
+    },
+    {
+      "path": "src/query/distributed/distributed-transaction-schema-enforcement.js",
+      "sha256": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "expected_sha256": "50cbe176c55785018a676dfe784f913c5b09e351deeaa1c30204e2b13bb38d26",
+      "matches": true
+    }
+  ]
+}

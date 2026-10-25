@@ -1,0 +1,230 @@
+{
+  "integration": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "scope": "src exact direct classifier call census, not computed dynamic graph",
+  "file_count": 19,
+  "call_count": 27,
+  "paths": [
+    {
+      "path": "src/bootstrap/owners/service-registration-handoff-owner.js",
+      "sha256": "3f5e4938e9327803e74ee22a4b4aa6bb09e12749163c284d32732afdb9b63bf3",
+      "calls": [
+        {
+          "line": 603,
+          "source": "if (!classifyControlPlaneMutationResult(mutationResult).applied) {"
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/shared/node-registration-owner-publication-methods.js",
+      "sha256": "b9a5ad12cde36d840235563a7ce6e5fe1e9e37f6fcbe5f95387f6c004cde0fcd",
+      "calls": [
+        {
+          "line": 135,
+          "source": "const mutation = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    },
+    {
+      "path": "src/config/dynamic-config-service.js",
+      "sha256": "0e038414bf75f5a6af06b385ebefeabaf38b2a9786fb57f2fb5101b1500fbc30",
+      "calls": [
+        {
+          "line": 210,
+          "source": "return classifyControlPlaneMutationResult(mutationResult).applied;"
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+      "sha256": "e07d2b4c81da638dccb4a44fdf670a8cb7ffbcefa9aa09c597e3ee296c833acc",
+      "calls": [
+        {
+          "line": 66,
+          "source": "classifyControlPlaneMutationResult(result),"
+        },
+        {
+          "line": 169,
+          "source": "const classification = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/lease-service.js",
+      "sha256": "c9146b0d2670f25628d69bc590c6ab491d4d08bbdf3a5694333b0e4bc072355d",
+      "calls": [
+        {
+          "line": 535,
+          "source": "if (classifyControlPlaneMutationResult(result).applied !== true) {"
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/node-terminal-transition-fence.js",
+      "sha256": "3615869738886139caef9b28a3fe825fc3df538a2bd9f88abd0c5aa57a252494",
+      "calls": [
+        {
+          "line": 145,
+          "source": "classifyControlPlaneMutationResult(result).applied === true) {"
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/endpoint-incarnation-authority.js",
+      "sha256": "bbe47c55276f5cd7b42a2bb3b9a85948927e1b29cba417673c93ad826987c65c",
+      "calls": [
+        {
+          "line": 137,
+          "source": "classifyControlPlaneMutationResult(attempt.result).applied === true;"
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/node-registration-incarnation-write.js",
+      "sha256": "e5f50c39ef82ba0b5a23fe8db2c1f9e605a3f37e2e05ee1afa93123f0697c465",
+      "calls": [
+        {
+          "line": 129,
+          "source": "if (classifyControlPlaneMutationResult(result).applied === true ||"
+        }
+      ]
+    },
+    {
+      "path": "src/message-group/message-group-service-row-owner.js",
+      "sha256": "8cadb2dc5d05eef1c83e5499a78ac1aaa13718bfcbd8017d9dc33024163c3256",
+      "calls": [
+        {
+          "line": 255,
+          "source": "const mutation = classifyControlPlaneMutationResult(result);"
+        },
+        {
+          "line": 469,
+          "source": "if (!classifyControlPlaneMutationResult(result).applied) {"
+        },
+        {
+          "line": 573,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-cleanup-tombstone-owner.js",
+      "sha256": "23af679088197a56c924d69d79c8f40cc99e2cd19708ab00ace5ffacd38618e1",
+      "calls": [
+        {
+          "line": 169,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        },
+        {
+          "line": 291,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        },
+        {
+          "line": 427,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-create-admission-owner.js",
+      "sha256": "f6ce9f6fe427fdf5978f04f36a660295d3677307e997dd68375dc49f5fd9c3ba",
+      "calls": [
+        {
+          "line": 521,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        },
+        {
+          "line": 616,
+          "source": "const effect = classifyControlPlaneMutationResult(mutation);"
+        },
+        {
+          "line": 657,
+          "source": "if (classifyControlPlaneMutationResult(result).applied === true) break;"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-create-lifecycle-close.js",
+      "sha256": "274e5a621b4a7371115f8060d7ad43dc7edf149a39d75a719c0e2582647dc03b",
+      "calls": [
+        {
+          "line": 64,
+          "source": "if (classifyControlPlaneMutationResult(result).applied) return true;"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-recovery-service-row-admission.js",
+      "sha256": "c1bbd4e6e269219d04935a9939b04ce3bd2af5d4b9f961256c725c3325a2e589",
+      "calls": [
+        {
+          "line": 64,
+          "source": "if (classifyControlPlaneMutationResult(result).applied) return row;"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-create-persistence.js",
+      "sha256": "29460b8a4a839f4e18d00247506d80f06db9782359fce6ef1a1558b7efaaddaa",
+      "calls": [
+        {
+          "line": 182,
+          "source": "classifyControlPlaneMutationResult(result).applied) {"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-durability.js",
+      "sha256": "159213fc305c7ce8b9046ad77be5fe0fa13d5b7706c26af396b8e8497ece88ad",
+      "calls": [
+        {
+          "line": 12,
+          "source": "return classifyControlPlaneMutationResult(result).applied;"
+        },
+        {
+          "line": 16,
+          "source": "const effect = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-registered-activation.js",
+      "sha256": "6b2a152228dc4e75f5e0e23f46b284e6e8f9987fa820bd3a19e05cb04359186b",
+      "calls": [
+        {
+          "line": 170,
+          "source": "if (classifyControlPlaneMutationResult(mutationResult).applied) {"
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-service-row-owner.js",
+      "sha256": "a563397a2731d86907965137fba0f334cb926a78e83a9f25d4a909a9ead3e2d9",
+      "calls": [
+        {
+          "line": 311,
+          "source": "if (!classifyControlPlaneMutationResult(insertResult).applied) {"
+        }
+      ]
+    },
+    {
+      "path": "src/query/runtime-replica-state-projection.js",
+      "sha256": "2d31fe85b2965263e81a10b47bd703c8affdef5ce648336ba6d479df8cc91078",
+      "calls": [
+        {
+          "line": 158,
+          "source": "if (classifyControlPlaneMutationResult(result).applied) return;"
+        }
+      ]
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-vocabulary.js",
+      "sha256": "089aa0817c880303ee235c804f4c950c4af693591918b6ee66cfe5007222fd5d",
+      "calls": [
+        {
+          "line": 108,
+          "source": "const classification = classifyControlPlaneMutationResult(result);"
+        }
+      ]
+    }
+  ]
+}

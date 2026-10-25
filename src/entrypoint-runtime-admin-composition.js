@@ -21,6 +21,7 @@ import {SPLIT_MERGE_EVENT} from './partition/partition-constants.js';
 import {STABILIZATION_RESET_TRIGGER} from
   './rebalancer/rebalancer-constants.js';
 import {assertCritical} from './utils/assert.js';
+import {submitLocalNodeDrainIntent} from './node/local-node-drain.js';
 import {ModuleMirror} from './wasm-service/module-mirror.js';
 import {WasmExecutor} from './wasm-service/wasm-executor.js';
 import {createBoundApplicationDatabaseRuntime} from
@@ -179,6 +180,7 @@ function createAdminAPIWithLiveQuery(options) {
       typeof options.partitionServicesProvider === 'function' ?
         options.partitionServicesProvider :
         null,
+    adminOwnerProviders: options.adminOwnerProviders,
     liveQueryManager,
   });
 
@@ -557,6 +559,29 @@ async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {
 }
 
 /**
+ * The authoritative owners the admin owner operations invoke, resolved at
+ * call time: several are created after the admin API starts.
+ * @param {Object} options - Admin runtime composition options.
+ * @return {Object} Owner providers.
+ */
+function buildAdminOwnerProviders(options) {
+  return {
+    getDynamicConfigService: () =>
+      options.dynamicConfigWiring?.dynamicConfigService || null,
+    getTablePolicyService: () => options.owner?.tablePolicyService || null,
+    getNodesOwner: () =>
+      options.owner?.systemMetadataOwners?.nodesOwner || null,
+    getServiceDefinitionsOwner: () =>
+      options.owner?.systemMetadataOwners?.serviceDefinitionsOwner || null,
+    submitLocalDrainIntent: (drainOptions) => submitLocalNodeDrainIntent({
+      membershipLifecycleController:
+        options.membershipLifecycleController || null,
+      bootstrapAPI: options.bootstrapAPI,
+    }, drainOptions),
+  };
+}
+
+/**
  * Start admin plus live query startup composition.
  * @param {Object} options
  * @return {Promise<{adminAPI: Object, liveQueryWiring: Object, adminPort: number}>}
@@ -580,6 +605,7 @@ async function startAdminRuntimeComposition(options) {
     bootstrapReadinessState:
       options.owner.bootstrapReadinessState || null,
     partitionServicesProvider: () => options.partitionServices,
+    adminOwnerProviders: buildAdminOwnerProviders(options),
   });
   const adminAPI = adminStartup.adminAPI;
   const liveQueryWiring = adminStartup.liveQueryWiring;

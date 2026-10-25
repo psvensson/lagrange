@@ -23,10 +23,10 @@ const SECURITY_READ = Object.freeze({
   roles: [ROLE.READ],
 });
 
-describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
-  it('persists session metadata through SqlRequest execution only', async () => {
-    const engine = createMemorySqlEngine();
-    const store = new DebugMetadataStore({sqlQueryEngine: engine, now: () => 100});
+describe('DebugMetadataStore gateway ownership and authz', () => {
+  it('persists session metadata through the gateway owner route only', async () => {
+    const engine = createMemoryGateway();
+    const store = createStore(engine, () => 100);
 
     const created = await store.createSession({
       securityContext: SECURITY_ADMIN,
@@ -47,13 +47,15 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
     assert.equal(created.tenantId, 'tenant-a');
     assert.equal(loaded.endpoint, 'ws://node-a/debug');
     assert.equal(engine.requests.length >= 2, true);
-    assert.equal(engine.requests[0].tenantId, 'tenant-a');
-    assert.equal(engine.requests[0].executionMode, 'sql_statement');
+    assert.deepEqual(engine.mutations.map((m) => [m.operation, m.tableName]),
+      [['upsert', 'debug_sessions']], 'one gateway UPSERT, no raw SQL write');
+    assert.equal(engine.mutations[0].row.tenant_id, 'tenant-a');
+    assert.equal(engine.reads[0].tableName, 'debug_sessions');
   });
 
   it('enforces session attach authorization before SQL read', async () => {
-    const engine = createMemorySqlEngine();
-    const store = new DebugMetadataStore({sqlQueryEngine: engine});
+    const engine = createMemoryGateway();
+    const store = createStore(engine);
 
     await store.createSession({
       securityContext: SECURITY_ADMIN,
@@ -80,8 +82,8 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
   });
 
   it('enforces tenant isolation for session and breakpoint reads', async () => {
-    const engine = createMemorySqlEngine();
-    const store = new DebugMetadataStore({sqlQueryEngine: engine, now: () => 200});
+    const engine = createMemoryGateway();
+    const store = createStore(engine, () => 200);
 
     await store.createSession({
       securityContext: SECURITY_ADMIN,
@@ -118,8 +120,8 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
   });
 
   it('updates and detaches sessions through SQL mutation path', async () => {
-    const engine = createMemorySqlEngine();
-    const store = new DebugMetadataStore({sqlQueryEngine: engine, now: () => 210});
+    const engine = createMemoryGateway();
+    const store = createStore(engine, () => 210);
 
     await store.createSession({
       securityContext: SECURITY_ADMIN,
@@ -159,8 +161,8 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
   });
 
   it('writes and reads snapshot metadata with envelope decoding', async () => {
-    const engine = createMemorySqlEngine();
-    const store = new DebugMetadataStore({sqlQueryEngine: engine, now: () => 300});
+    const engine = createMemoryGateway();
+    const store = createStore(engine, () => 300);
 
     await store.createSession({
       securityContext: SECURITY_ADMIN,
@@ -204,7 +206,7 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
     assert.equal(loaded.manifest.frameCount, 2);
   });
 
-  it('fails fast when SQL engine is missing', async () => {
+  it('fails fast when the gateway is missing', async () => {
     const store = new DebugMetadataStore();
 
     await assert.rejects(
@@ -214,81 +216,57 @@ describe('DebugMetadataStore SQL/CDC ownership and authz', () => {
         serviceName: 'svc-debug',
       }),
       (error) => {
-        assert.equal(error.code, CODE.ENGINE_REQUIRED);
+        assert.equal(error.code, CODE.GATEWAY_REQUIRED);
         return true;
       },
     );
   });
 });
 
-function createMemorySqlEngine() {
-  const sessions = new Map();
-  const breakpoints = new Map();
-  const snapshots = new Map();
+function createStore(gateway, now = undefined) {
+  return new DebugMetadataStore({
+    getControlPlaneSystemTableGateway: () => gateway,
+    ...(now ? {now} : {}),
+  });
+}
+
+const PRIMARY_KEY_BY_TABLE = Object.freeze({
+  debug_sessions: 'session_id',
+  debug_breakpoints: 'breakpoint_id',
+  debug_snapshots: 'snapshot_id',
+});
+
+function createMemoryGateway() {
+  const tables = {
+    debug_sessions: new Map(),
+    debug_breakpoints: new Map(),
+    debug_snapshots: new Map(),
+  };
+  const sessions = tables.debug_sessions;
+  const breakpoints = tables.debug_breakpoints;
+  const snapshots = tables.debug_snapshots;
   const requests = [];
+  const mutations = [];
+  const reads = [];
 
   return {
     requests,
-    async executeRequest(sqlRequest) {
-      requests.push(sqlRequest);
-      const sql = sqlRequest.statement.toLowerCase();
-      const params = sqlRequest.parameters || [];
-
-      if (sql.startsWith('insert or replace into debug_sessions')) {
-        const row = {
-          session_id: params[0],
-          tenant_id: params[1],
-          service_name: params[2],
-          lineage_id: params[3],
-          stage_id: params[4],
-          node_id: params[5],
-          endpoint: params[6],
-          status: params[7],
-          created_at: params[8],
-          updated_at: params[9],
-        };
-        sessions.set(row.session_id, row);
-        return {success: true, affectedRows: 1};
-      }
-
-      if (sql.startsWith('insert or replace into debug_breakpoints')) {
-        const row = {
-          breakpoint_id: params[0],
-          session_id: params[1],
-          tenant_id: params[2],
-          module_ref: params[3],
-          source_file_url: params[4],
-          line_number: params[5],
-          column_number: params[6],
-          condition: params[7],
-          resolved: params[8],
-          created_at: params[9],
-          updated_at: params[10],
-        };
-        breakpoints.set(row.breakpoint_id, row);
-        return {success: true, affectedRows: 1};
-      }
-
-      if (sql.startsWith('insert or replace into debug_snapshots')) {
-        const row = {
-          snapshot_id: params[0],
-          session_id: params[1],
-          tenant_id: params[2],
-          module_ref: params[3],
-          module_digest: params[4],
-          captured_at: params[5],
-          format_version: params[6],
-          snapshot_bytes_base64: params[7],
-          manifest_json: params[8],
-          total_bytes: params[9],
-          frame_count: params[10],
-          host_call_count: params[11],
-          created_at: params[12],
-          updated_at: params[13],
-        };
-        snapshots.set(row.snapshot_id, row);
-        return {success: true, affectedRows: 1};
-      }
+    mutations,
+    reads,
+    async executeRequest() {
+      throw new Error('the debug store never sends a SqlRequest');
+    },
+    async submitMutation(mutation) {
+      requests.push(mutation);
+      mutations.push(mutation);
+      const key = PRIMARY_KEY_BY_TABLE[mutation.tableName];
+      tables[mutation.tableName].set(mutation.row[key], {...mutation.row});
+      return {success: true, outcome: 'applied', affectedRows: 1};
+    },
+    async readAuthoritativeRows(tableName, statement, params = []) {
+      requests.push({tableName, statement});
+      reads.push({tableName, statement});
+      const sql = statement.toLowerCase();
 
       if (sql.includes('from debug_sessions')) {
         if (sql.includes('session_id = ?1') && sql.includes('tenant_id = ?2')) {

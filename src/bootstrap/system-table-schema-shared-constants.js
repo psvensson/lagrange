@@ -66,7 +66,38 @@ const SYSTEM_TABLE_NAME = {
   ARTIFACT_PAYLOAD_CHUNKS: TABLES.ARTIFACT_PAYLOAD_CHUNKS,
 };
 
+const SYSTEM_TABLE_NAMES = new Set(Object.values(SYSTEM_TABLE_NAME));
+const SYSTEM_TABLE_NAMESPACE_PREFIX = 'global.';
+const LOCAL_STR_STRING = 'string';
+
+/**
+ * Resolve an optional global namespace without changing logical catalog case.
+ * Partition-local SQLite identifier rules do not define catalog identity.
+ * @param {*} tableName
+ * @return {string|null}
+ */
+function resolveLogicalTableName(tableName) {
+  if (typeof tableName !== LOCAL_STR_STRING || tableName.length === 0) {
+    return null;
+  }
+  return tableName.startsWith(SYSTEM_TABLE_NAMESPACE_PREFIX) ?
+    tableName.slice(SYSTEM_TABLE_NAMESPACE_PREFIX.length) :
+    tableName;
+}
+
+/**
+ * The one system-table predicate uses exact logical catalog identity.
+ * @param {*} tableName
+ * @return {boolean}
+ */
+function isSystemTableName(tableName) {
+  const canonical = resolveLogicalTableName(tableName);
+  return canonical !== null && SYSTEM_TABLE_NAMES.has(canonical);
+}
+
 export {
   COLUMN_TYPE,
   SYSTEM_TABLE_NAME,
+  isSystemTableName,
+  resolveLogicalTableName,
 };

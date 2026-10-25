@@ -1,0 +1,42 @@
+{
+  "base": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "reviewed_delta_sha256": "b6f70ce8b33d745844014f4f8ac39a3b94ca8fe1702ad2f4b2d3ef0914944106",
+  "files": [
+    {
+      "path": "test/message-group/message-group-native-custody-fixture.js",
+      "sha256": "384eb3ef563b68b27496e3e4cd6852cf70f5bfd479802650cf869d5f302007be",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route-fixture.js",
+      "sha256": "10c854d0f61f67937abd49e7a96c51f874e144e20a8c3be8aca590ef5fbf081f",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+      "sha256": "c6a59ae31191bb5c8fb50364b2639cc82405e2c5d0386f823ad65beb2ab471bc",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/wasm-service/bound-creation-handler-embedding-fixture.js",
+      "sha256": "3feecff6667fcdd5d00bed9081b5a2c30403251cda24cd90d56a815aaa879ea5",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/wasm-service/wasm-creation-bound-native-fixture.js",
+      "sha256": "2de39b774df966c9e9591cf3f20a8b96fa7748d2de242b91898fb3fb6b86cc4c",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/wasm-service/wasm-retained-bootstrap-fixture.js",
+      "sha256": "446c6443e5907c04858080debe60c6131b4c836d416c2c5a0c832395d90dbc1b",
+      "worktree_equals_staged": true
+    },
+    {
+      "path": "test/wasm-service/wasm-strong-write-native-fixture.js",
+      "sha256": "921e4cab8956162c664f9966b31f6e2f770b18d619e7db0b748b9437db369be5",
+      "worktree_equals_staged": true
+    }
+  ],
+  "runtime_executed_by_reviewer": false
+}

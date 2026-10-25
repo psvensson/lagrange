@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -94,7 +95,7 @@ async function recipientFixture(t, key, {replicaCount = REPLICAS.length} = {}) {
     const item = {address, envelope: structuredClone(envelope), options};
     f.queue.push(item);
     emit(f, 'transport-native-custody', item);
-    return Promise.resolve({delivered: true});
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
   };
   const addresses = replicas.map((id) => `${NODE_ID}/message-group/${id}`);
   for (const replicaId of replicas) {

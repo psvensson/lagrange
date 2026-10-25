@@ -8,6 +8,7 @@ import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {MessageGroupServiceRowOwner} from '../../src/message-group/message-group-service-row-owner.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -343,7 +344,7 @@ async function provisionalRouteFixture(t) {
   f.router.deliver = function(address, envelope, ...options) {
     if (isRaftRsTransportEnvelope(envelope)) {
       f.native.push({address, envelope: structuredClone(envelope), options});
-      return Promise.resolve({delivered: true});
+      return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
     }
     const pending = deliverApplication(f, address, envelope, options);
     f.applicationSettlements.add(pending);

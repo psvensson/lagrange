@@ -26,15 +26,13 @@ import {
 } from '../harness/scenario-ground-truth.js';
 import {recordScenarioGate} from '../harness/scenario-step-log.js';
 
-// Policy-mutation SQL comes from the canonical owner
-// (table-distribution-helpers-control-query.js) — the scenario policy
-// SQL guard forbids raw table_policies updates outside that owner.
+// Table policies are written by their owner (TablePolicyService behind the
+// admin table-policy operation, ClusterNodeHandle.updateTablePolicy); no
+// scenario writes the tables system table with SQL.
 const {
   DEFAULT_TABLE_SPLIT_POLICIES,
-  SQL_UPDATE_TABLE_POLICIES_MID,
-  SQL_UPDATE_TABLE_POLICIES_PREFIX,
-  SQL_UPDATE_TABLE_POLICIES_SUFFIX,
 } = TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS;
+const TABLE_POLICY_OWNER_REFUSED = 'refused';
 
 const ZERO = 0;
 const ONE = 1;
@@ -105,9 +103,6 @@ function buildUserActivityTableSql(tableName) {
       `SELECT table_id FROM tables WHERE table_name = '${tableName}'`,
     SELECT_TABLE_POLICIES_PREFIX:
       'SELECT table_policies FROM tables WHERE table_id = \'',
-    UPDATE_TABLE_POLICIES_PREFIX: SQL_UPDATE_TABLE_POLICIES_PREFIX,
-    UPDATE_TABLE_POLICIES_MID: SQL_UPDATE_TABLE_POLICIES_MID,
-    UPDATE_TABLE_POLICIES_SUFFIX: SQL_UPDATE_TABLE_POLICIES_SUFFIX,
     QUOTE_SUFFIX: '\'',
   });
 }
@@ -217,18 +212,22 @@ function createTableTopologyHelpers({scenarioName, tableName, sql}) {
   // re-applied until the read-back is stable — the benchmark
   // partitioning precedent.
   async function applySplitPolicies(seedNode, tableId, deps) {
-    const updateSql = sql.UPDATE_TABLE_POLICIES_PREFIX +
-      escapeSql(JSON.stringify(DEFAULT_TABLE_SPLIT_POLICIES)) +
-      sql.UPDATE_TABLE_POLICIES_MID +
-      escapeSql(tableId) +
-      sql.UPDATE_TABLE_POLICIES_SUFFIX;
+    const applyThroughOwner = async () => {
+      const answer = await seedNode.updateTablePolicy(tableId,
+        DEFAULT_TABLE_SPLIT_POLICIES);
+      if (answer?.success === true) return answer;
+      const error = new Error(`${scenarioName}: table policy owner ` +
+        `answered ${answer?.outcome}: ${answer?.errorCode || answer?.error}`);
+      error.deferRetry = answer?.outcome !== TABLE_POLICY_OWNER_REFUSED;
+      throw error;
+    };
     const readBackSql = sql.SELECT_TABLE_POLICIES_PREFIX +
       escapeSql(tableId) + sql.QUOTE_SUFFIX;
     let stableCount = ZERO;
     for (let attempt = ZERO; attempt < POLICY_APPLY_MAX_ATTEMPTS;
       attempt += ONE) {
       await retryTransientAdminQuery(deps, 'apply-split-policies',
-        () => seedNode.query(updateSql));
+        applyThroughOwner);
       const rows = await retryTransientAdminQuery(deps, 'read-back-policies',
         () => queryRows(seedNode, readBackSql));
       stableCount = policyReadBackMatches(rows) ? stableCount + ONE : ZERO;

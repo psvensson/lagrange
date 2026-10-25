@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
-import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
 import {cruise} from 'dependency-cruiser';
+import {ensureMetricReports, metricReportPayload} from './metric-report-provenance.js';
 
 import {
   buildFileSizeEntries,
@@ -17,7 +17,6 @@ import {
 import {
   OWNER_DEBT,
   OWNER_DEBT_CHILD_LIMITS as CHILD_LIMITS,
-  OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
   OWNER_DEBT_REPORTS as REPORTS,
   OWNER_DEBT_DEPENDENCY_POLICY_PATH,
   OWNER_DEBT_PACKAGE_PATH_SEPARATOR,
@@ -505,29 +504,6 @@ function validateInventory(inventory) {
   return inventory;
 }
 
-// The metric checkers exit 1 when their RATCHET is exceeded while still
-// writing a complete, fresh report — and elevated debt is exactly what this
-// inventory exists to measure, so a red ratchet must not make the debt
-// unmeasurable (measured 2026-07-29: three landed clone groups made every
-// downstream refresh crash, cascading into the CI owner-debt gate). Only a
-// checker CRASH (any other nonzero exit) aborts the refresh; ratchet
-// breaches are surfaced and recorded, never fatal here — the pre-push hook
-// remains the ratchet's enforcement point.
-function refreshReports(root) {
-  for (const args of REFRESH_COMMANDS) {
-    const result = spawnSync(process.execPath, args, {cwd: root, stdio: 'inherit'});
-    if (result.status === 1) {
-      process.stderr.write(
-        `owner-debt refresh: ratchet exceeded in node ${args.join(OWNER_DEBT.space)}` +
-        OWNER_DEBT.ratchetExceededNoticeSuffix);
-      continue;
-    }
-    if (result.status !== 0) {
-      throw new Error(`report refresh failed: node ${args.join(OWNER_DEBT.space)}`);
-    }
-  }
-}
-
 async function loadLintExclusions(root, files) {
   const configUrl = `${pathToFileURL(path.join(root, OWNER_DEBT.lintAuthority)).href}` +
     `?ownerDebt=${Date.now()}`;
@@ -929,16 +905,16 @@ async function collectLiveInputs(root) {
     loadLintExclusions(root, files),
   ]);
   const importGraph = readImportGraphReport(root, files);
-  const duplicationSource = readJson(root, REPORTS.duplicationSource);
-  const duplicationTest = readJson(root, REPORTS.duplicationTest);
+  const metrics = ensureMetricReports(root);
+  const {duplicationSource, duplicationTest} = metrics;
   const duplicationSourceIdentity = duplicationReportIdentity(
     REPORTS.duplicationSource, duplicationSource);
   const duplicationTestIdentity = duplicationReportIdentity(
     REPORTS.duplicationTest, duplicationTest);
   return {
-    complexity: readJson(root, REPORTS.complexity),
-    cognitive: readJson(root, REPORTS.cognitive),
-    cycles: readJson(root, REPORTS.cycles),
+    complexity: metrics.complexity,
+    cognitive: metrics.cognitive,
+    cycles: metrics.cycles,
     fileSizes: [...sourceSizes, ...testSizes],
     duplication: [
       {name: OWNER_DEBT.sourceDuplicationTarget, identity: duplicationSourceIdentity,
@@ -951,9 +927,9 @@ async function collectLiveInputs(root) {
     lintExclusions,
     importGraph,
     identities: {
-      complexity: fileIdentity(root, REPORTS.complexity),
-      cognitive: fileIdentity(root, REPORTS.cognitive),
-      cycles: fileIdentity(root, REPORTS.cycles),
+      complexity: logicalJsonIdentity(REPORTS.complexity, metricReportPayload(metrics.complexity)),
+      cognitive: logicalJsonIdentity(REPORTS.cognitive, metricReportPayload(metrics.cognitive)),
+      cycles: logicalJsonIdentity(REPORTS.cycles, metricReportPayload(metrics.cycles)),
       importGraph: fileIdentity(root, REPORTS.importGraph),
       duplicationSource: duplicationSourceIdentity,
       duplicationTest: duplicationTestIdentity,
@@ -967,7 +943,6 @@ async function collectLiveInputs(root) {
 
 async function buildInventory(root = ROOT, options = {}) {
   if (options.refresh === true) {
-    refreshReports(root);
     await refreshImportGraphReport(root, listJavaScriptFiles(root));
   } else if (options.refreshImportGraph === true) {
     await refreshImportGraphReport(root, listJavaScriptFiles(root));

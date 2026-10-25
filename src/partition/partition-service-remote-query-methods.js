@@ -1,6 +1,8 @@
 // Remote QUERY routing preserves the partition's ordinary read/write gates and
 // delegates current transaction identity and staging to the participant owner.
 import {QUERY_ERROR_CODE} from '../query/query-constants.js';
+import {refuseRoutedClientSystemTableWrite} from
+  '../query/sql-statement-ingress.js';
 import {
   answerParticipantQueryIdentityRefusal,
   answerParticipantSessionQuery,
@@ -262,6 +264,11 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
     const isWriteOperation = this.isWriteQuery(sql);
     const routingRefusal = writeRoutingRefusal(this, payload, isWriteOperation);
     if (routingRefusal !== null) return routingRefusal;
+    const ingressRefusal = isWriteOperation ?
+      refuseRoutedClientSystemTableWrite(payload, this.tableName) : null;
+    if (ingressRefusal !== null) {
+      return {...ingressRefusal, partitionId: this.partitionId};
+    }
     const participantAnswer = answerParticipantSessionQuery(this, payload);
     if (participantAnswer !== null) return participantAnswer;
     const readAuthorityWitness =

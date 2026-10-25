@@ -1,0 +1,115 @@
+{
+  "schema": "cloud-hook-repair/1",
+  "claim": "Scoped ambient-intrinsic repair only; full implementation review and runtime acceptance remain open.",
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "restoration": {
+    "patch_sha256": "2b107cc280596bcb881c69a6c785fe72a620632baf192618ff9bfb71805bf6ef",
+    "restored_index_tree": "2cae3124f76c41e05f30c3f473aef797f5c52372",
+    "expected_tree": "2cae3124f76c41e05f30c3f473aef797f5c52372",
+    "verified_file_count": 32,
+    "all_source_hashes_match": true
+  },
+  "new_source_delta": {
+    "path": "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+    "sha256": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+    "ambient_calls_replaced": 14,
+    "method": "module-load Function.call.bind captures",
+    "production_source_changed_after_restore": false,
+    "assertions_and_scenario_semantics_changed": false
+  },
+  "ambient_before": {
+    "exit_code": 1,
+    "stdout_stderr": "Scanned 1 JavaScript files\nFound 14 ambient-intrinsic call violations\nTop files:\n- test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js: 14\nMatched 0 inherited ambient-intrinsic baseline violations\n"
+  },
+  "ambient_after": {
+    "exit_code": 0,
+    "stdout_stderr": "Scanned 1 JavaScript files\nFound 0 ambient-intrinsic call violations\nMatched 0 inherited ambient-intrinsic baseline violations\n"
+  },
+  "eslint_after": {
+    "exit_code": 0,
+    "stdout_stderr": ""
+  },
+  "scoped_checks": [
+    {
+      "check": "literals",
+      "command": [
+        "node",
+        "scripts/check-guideline-literals.js",
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "exit_code": 0,
+      "output": "cohort-literals.txt",
+      "stdout_stderr": "Scanned 0 JavaScript files\nFound 0 new literal-guideline violations\nMatched 0 inherited literal-guideline baseline violations\n"
+    },
+    {
+      "check": "decision-boundaries",
+      "command": [
+        "node",
+        "scripts/check-guideline-decision-boundaries.js",
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "exit_code": 0,
+      "output": "cohort-decision-boundaries.txt",
+      "stdout_stderr": "Scanned 0 JavaScript files\nFound 0 decision-boundary guideline violations\nMatched 0 inherited decision-boundary baseline violations\n"
+    },
+    {
+      "check": "silent-catch",
+      "command": [
+        "node",
+        "scripts/check-guideline-silent-catch.js",
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "exit_code": 0,
+      "output": "cohort-silent-catch.txt",
+      "stdout_stderr": "Scanned 0 JavaScript files\nFound 0 silent catch violations\nMatched 0 inherited silent-catch baseline violations\n"
+    },
+    {
+      "check": "cyclomatic-strict",
+      "command": [
+        "node",
+        "scripts/check-complexity.js",
+        "--scoped",
+        "--strict",
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "exit_code": 0,
+      "output": "cohort-cyclomatic-strict.txt",
+      "stdout_stderr": "No complexity violations (threshold: 12).\n"
+    },
+    {
+      "check": "cognitive-strict",
+      "command": [
+        "node",
+        "scripts/check-cognitive-complexity.js",
+        "--scoped",
+        "--strict",
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js"
+      ],
+      "exit_code": 0,
+      "output": "cohort-cognitive-strict.txt",
+      "stdout_stderr": "No cognitive complexity violations (threshold: 20).\n"
+    }
+  ],
+  "normal_commit_hook": "not yet run",
+  "runtime_tests_executed": false,
+  "independent_source_review": {
+    "reviewer": "subagent:/root",
+    "verdict": "approve bounded source delta; corrected witness execution and current integration composition pending",
+    "review_path": "solve/quests/admin-partition-cohort-readback/evidence/source-review-cloud-2026-10-25.md",
+    "review_sha256": "f01aac9a194b7ef687ebf10f43b0b431e6be34d2f08b9cb0597dedeeb480cc2b",
+    "scope": "Full restored cohort repair plus exact capture substitutions; no Quest closure or distributed acceptance"
+  },
+  "historical_receipts_modified": false,
+  "checker_locality": {
+    "scope": "The 13/14 new ambient intrinsic findings in the exact preserved patch are confined to the named new or expanded test; this is not a claim of whole-repository intrinsic closure.",
+    "original_full_patch_new_finding_count": 14,
+    "original_full_patch_inherited_baseline_count": 761,
+    "scoped_reproduction_new_finding_count": 14,
+    "scoped_after_new_finding_count": 0,
+    "baseline_or_allowlist_changed": false,
+    "all_original_arguments_predicates_and_assertions_preserved": true,
+    "new_production_compatibility_or_fallback_paths": 0,
+    "original_hook_log_recovered": true,
+    "original_hook_log_preexisting_hash_available": false
+  }
+}

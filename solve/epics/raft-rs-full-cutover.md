@@ -37,57 +37,80 @@ authorizes:
 
 ## Current coordination summary
 
-**Execution stopped at the user's request on 2026-10-25.** All agents are idle; no implementation, review or test task should resume automatically. See the [stop handover](raft-rs-full-cutover/HANDOVER-2026-10-25-codex-stop.md) and its exact preservation manifest. The rows below describe checkpoint states and possible work after explicit resume.
+**Execution resumed by the user on 2026-10-25. The candidate is not ready for main.**
+The preserved integration remains `709dc2bebd4abdbec9a5d4fb2232c2621d7897f7`
+(runtime checkpoint `9311c883d03fa7004f4ecfc43530c315a0f7b029`). The
+[stop handover](raft-rs-full-cutover/HANDOVER-2026-10-25-codex-stop.md) remains an
+unchanged historical record. The active continuation is the isolated
+`work/cloud-raft-rs-resume-20261025` branch. Its admin composition, metric
+correction and native fixture changes have independent source approval at the
+linked bindings; no resumed runtime acceptance has executed. No main merge,
+release publication or post-merge certification has occurred.
 
-This is the mutable index for this milestone. The agent holding the integration
-role maintains it using
-[`documentation-lifecycle.md`](../../docs/development/documentation-lifecycle.md).
-The contracts and immutable records it links remain the acceptance authorities.
+This is the mutable coordination index. The user requires treating each defect
+as systemic until evidence proves its local scope, examining project history
+and primary sources from comparable systems, and removing existing as well as
+new legacy/alternate fallback execution paths. One semantic owner must retain
+supported capabilities and uncertain work through the migration. No compatibility
+window, gate bypass, raised ratchet or substitute test environment is authorized.
 
-Codex takeover, refreshed 2026-10-25 after approved TX1 discovery isolation at `90e4f31c9`, Q6 integration at `9558c8a10`, local-audit integration at `57d222d92`, startup integration at `9e026a011`, and approved D1 composition from `714eee75a`. This summary replaces the
-imported main-only coordination snapshot; the dated evidence below remains
-unchanged. The user's existing implementation authority and
-[owner decisions](raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md)
-persist. Diagnose each failure across the complete owner interaction, search
-project history for previous occurrences, and use primary sources from comparable
-systems to challenge assumptions before concluding that a defect is local.
-The user reiterates one implementation per semantic concern: migrate every
-consumer and remove superseded logic, aliases and compatibility fallbacks.
-
-| Field | Current observation |
-| --- | --- |
-| Governing steering | Rule-set revision 4, ported in `ebe2c5d8e77c0669d490eaae738f4619fff40968`; [revision coverage](raft-rs-full-cutover/steering-revision-4-review.md) |
-| Accepted integration baseline | `work/mg-delivery-resume-r2-20261023` at `af8a0381be10bebbb3daf78bd331f7aa3fcacbbf`, clean at takeover and matching its remote; composed bounded approvals remain in the [handoff log](../quests/retained-seed-original-handoff/log.ndjson) |
-| Integration responsibility | Codex `/root` owns serialized composition and the current summary. Separate writers below own only their named interactions; original Claude worktrees remain preserved. |
-| First established service blocker | [Fresh-seed activation](../quests/fresh-seed-activation/quest.json) now has approved runtime source and corrected composition witnesses. Public startup, CREATE, INSERT and SELECT passed during composition; the canonical exact-candidate receipt is still pending. The old sealed [red receipt](../quests/fresh-seed-activation/evidence/receipt.json) remains preserved and is not rewritten into acceptance. |
-| Accepted prerequisites | Lifecycle Q1-Q5, CDC D2, D4 stage A, initial TX1 validation repair, Q6 stages 1-2, retired public-API removal and PG-wire tag-first correction are composed. Their bounded approvals do not close service or release acceptance. |
-| Release evidence | [Full-cutover oracle](../oracle/raft-rs-full-cutover.json) remains metric 8 with no terminal evidence. Retained-seed, FreshMG, transaction, snapshot and WASM receipts remain incomplete; W7/W9 and exact-candidate certification are still required. |
-| Lab observation | Original Q6 candidate8104 placement reconciled from immutable worker logs: all five worker counts match planned2147 files, plus reserved controller file red. Overall1985 passing/163 failing file verdicts; all locks free. Controller terminal exit unavailable, failure leaves not yet fully classified; no integration-head or release proof. |
-
-| Interaction / work | Exact input and current owner | Next action |
+| Work / current owner | Exact state and evidence | Next owned action |
 | --- | --- | --- |
-| Fresh-seed activation | `/root/fresh_seed`, Astra xhigh; fresh checkpoint `814c81628d1e2c15c9cd605654f28760fdb19305` and listener checkpoint `cce9fc2db611dcc829e23220b80df6a63633472c`, independently approved | All 17 incoming runtime files match their approved source during composition. Six focused files pass 216 assertions; seven of eight fresh cases pass, while one stale test-helper reference failed R2. The one-line correction is independently [approved](../quests/fresh-seed-activation/evidence/REVIEW-composition-correction-2026-10-25.md), with the actual R2 negative now passing. The initial failed run and superseded review remain preserved. Normal-hook composition is committed and remotely preserved at `9e026a011`. The external controller cleanup correction is independently approved. Run the unchanged sealed writer after the approved D1 composition checkpoint, under controller custody. No canonical or distributed-service acceptance is claimed yet. |
-| Local constructor audit | `edfcd02b6aee218d8ca7467fd37e22fbc8317e20` independently APPROVED by `/root/fresh_seed_review`, Astra xhigh | [Review](raft-rs-full-cutover/evidence/owner-review-2026-10-26/VERIFY-local-constructor-audit-codex-2026-10-25.md): 335 assertions; actual same-source census removes exactly three diagnostic false positives with active-read counterparts retained. One local forwarding policy replaces the explicitly rejected provider interpreter; no production changes, waiver or baseline increase. Composed audit paths exactly match the approved source and the focused suite passes 277 assertions; normal-hook composition is committed at `57d222d92347e4507e91011f7d5274350fd02da0`. |
-| Router envelope Q6 stage 3b | `ba3fb3bdf771132c6913de401d2bf90071ec28b9` independently APPROVED by `/root/q6_review`, Astra xhigh; author `/root/q6_resume`, Astra high | Source-owned forwarded START uncertainty, QUERY/MG pre-send provenance and obsolete answer ACK aliases corrected. [Revision review](raft-rs-full-cutover/evidence/owner-review-2026-10-26/VERIFY-q6-stage3b-revision-codex-2026-10-25.md). Composition preserves all 82 incoming production files byte-for-byte; 16 focused files/507 assertions pass. Two bootstrap assertions reproduce on exact predecessor `90e4f31c9`; no whole-file blanket classification. Full candidate proof remains open. |
-| CDC D1 reclamation | Original `e1d26e0eb` independently REVISE; F1 `fa85052324778a07cf0067fbfb7bd9cb1ef3028f` independently APPROVED ([report](raft-rs-full-cutover/evidence/cdc-lifecycle-2026-10-26/VERIFY-cdc-d1-f1-codex-2026-10-25.md)); F2 `bcb063a7acf7f79c88ce0bea2e32be83c979c8d4` independently APPROVED by `/root/cdc_d1_review`, Astra xhigh | F1 distinguishes compacted position from exact event identity; the lane reconciles only its known obligations. F2 correction is committed, with 14 focused files/299 assertions and a separately repeated native RF3 witness; its previous `01d214f84` checkpoint is preserved remotely. Owed capacity, full supported PREPARED batches/restart, cross-class drain capacity and same-entry retry are measured. Controlled receipt subscriber is not remote-recipient/W7/W9 proof. The original new cognitive violation was corrected by flattening the existing dispatcher; full cognitive count and tightened baseline are both 150. Independent delta review passed 79 assertions and bound all 18 manifest paths ([final review](raft-rs-full-cutover/evidence/cdc-lifecycle-2026-10-26/VERIFY-cdc-d1-f2-r2-codex-2026-10-25.md)). Composition is independently approved: fifteen of sixteen runtime files are exact incoming, with all fourteen methods in the shared dispatcher exact to one reviewed parent. Eighteen focused files and 481 assertions pass, including native RF3 capacity/drain/retry and Q6 handler identity. The [composition review](../quests/cdc-owed-work-admission/evidence/VERIFY-composition-2026-10-25.md) preserves whole-D1/service and W7/W9 boundaries. Normal-hook composition is preserved at `9311c883d03fa7004f4ecfc43530c315a0f7b029`; six inherited native message-group fixture return shapes are a separate declared correction before affected acceptance. |
-| TX1 recovery-owner registry | Independently APPROVED by `/root/cdc_d1_review`, Astra xhigh; [review](../quests/replicated-transaction-decision-and-apply/evidence/VERIFY-recovery-owner-key-codex-2026-10-25.md), tested composition `bc8a68193cae6d198f355124322b84ce9668d923` | Composed without runtime changes from `7722a365`. Six focused suites206 assertions; independent multiple-old-obligation/live-session and generic registry probes pass candidate/composition, fail base. Inherited poison fixtures and overall transaction/release receipts remain open. |
-| Seed-harness completion | `69d125051628ee5630f7ac7d7ddf7c961f057136` independently APPROVED by `/root/seed_harness_review`, Astra high; composed at `07d0c4908110ab2fc0043a2f86b3fb55f694756f` | F1/F2 closed. Composition four files176 assertions green; test duplication tightened to655/24678 on measured hint. [Review](../quests/retained-seed-original-handoff/evidence/VERIFY-seed-harness-r7-codex-2026-10-25.md). Fresh startup and broad corpus remain separate. |
-| TX1 discovery isolation | Root repair `5ad35a427b70822fbf6d056abbe57d0675d644df`, independently APPROVED by `/root/fresh_seed`, composed at `90e4f31c9333bf0a02541618d3c45cb6eb99e2fb` | One discovery fetch/validation refusal boundary preserves typed attribution and authoritative retry of retained IDs. Four focused suites/41 assertions plus independent mixed-batch/live-owner probes pass; matched predecessor fails. [Review](../quests/replicated-transaction-decision-and-apply/evidence/VERIFY-discovery-isolation-codex-2026-10-25.md). Healthy BEGIN corruption is not demonstrated; overall transaction acceptance remains open. |
-| SQL admission / admin operations | Original `8fee98abecb29133815f9ffab9c096019692f24b`; author `/root/admin_resume`, Astra xhigh; independent core verdict REVISE | Conditional node removal `e701ca2b35b9f682dcd051997d521fe3134bfc89` is independently approved with 508 assertions. [Final admission review](raft-rs-full-cutover/evidence/owner-review-2026-10-26/VERIFY-admin-admission-codex-2026-10-25.md) approves PG-wire scaling `6a228ced9439af07216b492bb8fdbba5540c3671` with 545 assertions and exact-name handling `a97f79c35b7e1f6428032493918e16e623339688` with 517. Core repair still must preserve config/policy mutation outcomes before reporting success and validate the complete table-ID partition cohort. Coordinator-name follow-up has 92 focused assertions; marker migration has 109, with its native partition witness still in correction. Supported caller migration and two user capability decisions remain open. No admission production composition yet. |
-| Cached metric provenance | `/root/q6_resume`, Astra high; frozen 14-file source digest `084f0f7f63fc82d945a4a9f8690867ee36544600ea24cd7ad20cdabbc97d5323`, base `ddc34a6a6` | Actual stale-report discriminator reproduced; 63 focused assertions plus four ratchet cases pass. One provenance owner seals measured source/config/tool inputs and selectively refreshes stale reports; semantic inventory remains host-independent. Normal-hook checkpoint `c95ec0abe2361c3c31a471f024442a330b6095e2` completed with all frozen source hashes unchanged. Actual full refresh passed its output-custody checks; second generation took 3.13 seconds with unchanged report bytes/inodes and inventory bytes. Independent [review](raft-rs-full-cutover/evidence/owner-review-2026-10-26/VERIFY-metric-provenance-r1-codex-2026-10-25.md) is REVISE: actual Madge imports under `.cache` and outside entry roots are missing from the digest. The correction captures actual analyzer reads and resolution facts in one producer process; 186 focused assertions now pass, including omitted imports, precedence, missing paths and unsupported-route refusal. Clean normal-hook checkpoint `5485381b70d7c963f30e1468c5e8ca17d156f569` completed actual project coverage and refreshed reports. Reusing all five unchanged reports took 2.09 seconds with stable bytes/inodes and inventory. Independent delta review stopped incomplete, without a verdict; no integration yet. Global complexity debt remains explicit. |
-| Owned retention follow-ups | Message-group acknowledged IDs and completed workflow records remain retained; representative service endurance measurement pending | Preserve stale-row resurrection protection. No arbitrary TTL or new release blocker without measured endurance evidence; these are separate retention-owner follow-ups. |
-| CDC D4 window deletion | `06e3cfcf7d2084799718a61dc7757510e0d35330`, held for W-D4b | Run the declared distributed handoff witness after fresh-seed activation, then independently review the deletion. Joining-group fan-out admission remains a recorded design question. |
+| Frozen startup acceptance — `/root/startup_lab` | Canonical controller and writer remain unchanged at preserved integration `709dc2b`. No canonical execution started. The generic worker and controller acquire the same machine lock, so nesting them is invalid. Two GitHub issue-creation calls stalled; exact-ID readback found no submitted job. | Use the handover's standalone ordinary terminal on the existing local controller account. The reviewed offline launch packet preserves its lock, thermal gate, zero retries, cleanup and original writer. Retain full receipt and terminal evidence. |
+| Admin source composition — `/root`, reviewed by `/root/metric_review` | Original core `9adb6f5` to `8fee98a`, conditional removal `e701ca2`, PG-wire scaling `6a228ce`, exact name `a97f79c`, coordinator `c582aa5`, truthful outcomes `930abb0` and corrected complete cohort are composed. [Recovered review](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/ADMIN-INDEPENDENT-REVIEW.md) approves the two former WIP units with their original 92/848 counts. [R2 source review](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/REVIEW-ADMIN-COMPOSITION-R2.md) approves 129 frozen JavaScript changes after repairing the D2 HTTP mapping; the first rejection remains preserved. | Complete normal preservation hooks and run the independently selected 68-file composition proof at the resulting exact source. Preserve D2 owed-work admission, CDC guards, original-seed custody and Q6 transport/answer ownership. Runtime approval remains absent. |
+| Restored cohort — normal-hook local `9a7aeca`, remote `606660b` | The complete original patch reconstructed exactly. Four module-load captures replace 14 ambient calls in the new witness without changing assertions. Full bounded source and capture correction approved; normal hooks pass. [Committed review](../quests/admin-partition-cohort-readback/evidence/source-review-cloud-2026-10-25.md). Historical 17 distinct files / 174 runner counts are preserved, including intermediate failures. | Execute the corrected witness and current composition through the existing lab owner. No physical readiness or release credit follows from source approval. |
+| Fixed marker — remote `701d7c6`, review `/root/metric_review` | Restored patch and six captures / 13 substitutions pass normal hooks. [Frozen review](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/REVIEW-MARKER-FROZEN-SOURCE.md) is HOLD for one unmeasured shared JS-to-SQL text-identity hypothesis. [Census](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/TEXT-BOUNDARY-SOURCE-CENSUS.md) found directly matching transaction design history and shared representation paths. Historical 109 assertions and native RF3 witness retain their original limits. | Run the hash-bound reviewer packet in the lab, resolve the shared owner if reproduced, then complete marker review, caller migration and physical split-brain evidence. Do not silently restrict or replace strings at this endpoint alone. |
+| Metric provenance — remote `0e6923b`, independent source review complete | The original `5485381` actual-input correction and effective-home repair have combined independent source approval. M2 reproduced stale zero cycles after effective home changed while a fresh producer measured one. The shared input owner now seals `os.homedir()`; 12 independent producer/reader checks passed. [Normal-hook preservation](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/metric-task-preservation.json) records the equal local/remote tree. The complete repair is composed, with only two existing integration-history comment lines retained. | Execute the seven applicable official regression files at the exact published source. Thresholds remain unchanged. Full static/corpus qualification is separate. |
+| Native fixture envelopes — remote `a781064`, independent source approval | Six inherited queued-send returns now use the sole envelope builder; adjacent no-handler doubles retain their original refusal facts. The real peer-delivery regression contrasts rejected raw results with canonical queue custody. [Review](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/NATIVE-FIXTURE-SOURCE-REVIEW.md). Normal-hook local tree and remote tree are identical. | Run the 18 affected construction-path files plus peer-owner witness on the exact remote candidate. No native, W7/W9 or whole-D1 acceptance is claimed yet. |
+| Shared mutation ownership — `/root/admin_review`, sole author | [Causal map](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/MUTATION-OWNERSHIP-CAUSAL-MAP.md) binds 27 direct classifier sites / 19 files at `709dc2b`, and 31/23 with old admin additions. Producer-boundary tracing identifies additional count and success-only consumers; the direct-call census is not the whole graph. Confirmed source paths include inferred application, missing-CDC SQL selection, bootstrap Raft-to-local fan-out and join alternate publication. Earlier durable-marker and F-BOOT records establish recurrence. | Preserve the separately proposed contract and engaged real-helper/real-gateway predecessor; measure it in the lab before sealing or production edits. Complete the canonical producer/consumer census, preserve named replay and provisional transaction truth, and migrate bootstrap/join capabilities through their single durable owners. No fallback removal is claimed complete. |
+| Supported caller migrations | Write-ack visibility, seven mixed-load user-table scenarios, separate system-marker evidence and isolated MovieLens sessions remain incomplete. Failed-shutdown custody must precede MovieLens reset; the invocation journal is retained. | Use complete supported owners and preserve operation distributions, acknowledgement identities and fault obligations. Resolve the two explicit capability decisions below. |
+| CDC handoff and remaining acceptance | D4 still requires the declared three-node joining-group witness, more than 256 updates plus delete, positioned hydration/live convergence and authoritative equality before window deletion. Retained-seed, FreshMG, transaction, snapshot, WASM and W7/W9 remain open. | Resolve joining-group admission at its owner. Preserve W7 ordering/eventual native acknowledgement and W9's actual 2 MiB input, 65 remote targets and over-64 vector semantics. |
+| Final candidate qualification | Latest preserved integration complexity remains 1765 against 1755; this is the old integration measurement, not a result for the resumed composition. No final frozen candidate has been qualified. Full static/corpus, representative service/recovery, multi-machine certification, independent closeout, publication and exact-main proof remain outstanding. | Freeze one candidate after bounded repairs and caller migrations compose, then use the existing final gates. A preservation commit or partial test count does not close this row. |
 
-New review assignments are bounded to the changed interaction and its reachable
-consequences. No interrupted agent is considered active merely because an old
-shell remains alive. The root agent collects actual test results and owns
-continuation; final acceptance retains the [closeout plan](raft-rs-full-cutover/closeout-plan-2026-10-17.md).
+**Evidence recovery:** all 32 omitted manifest-bound artifacts were supplied by
+the user and independently verified against their original hashes and byte
+counts. Both manifests are byte-identical to `709dc2b`. Two directly linked blocked-hook
+logs were also recovered, with current hashes; no pre-existing checksum is
+invented for those two. The original missing-log incident and failed runs remain
+part of history. [Recovery verification](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/recovered-evidence-verification.json)
+and [compact record manifest](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/compact-record-manifest.json)
+preserve the bindings. Raw logs/TAP/archives remain outside Git; their existing
+solve-evidence upload is pending.
 
-Independent in-flight interactions may continue; this summary does not cancel,
-restart or absorb them. Count waiting review, proof and integration work before
-opening another competing repair. Use one writer per changing interaction and
-one integration role, following
-[`quest-subagents.md`](../../docs/development/quest-subagents.md).
+[Task preservation](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/published-task-trees-r1.json)
+records local normal-hook commits, equal Git trees, remote API commits and
+independent remote-ref verification. CLI HTTPS lacks credentials, so the connected
+GitHub Git-object API preserved the exact checked trees; differing commit metadata
+does not change reviewed bytes. Preservation is not release publication.
+The [preservation addendum](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/REVIEW-COMPOSITION-PRESERVATION-ADDENDUM.md)
+binds every changed JavaScript file across admin, metric and native composition,
+including the comment-only CDC correction. No changed source is covered solely
+by an unverified assertion of sameness.
+
+Two product capability choices remain explicit: retain the affinity demo's exact
+two-replica / 20-candidate experiment or replace it with a public Binding experiment;
+and retire the historical callback uploader or provide a complete supported
+publication owner for its distinct live-distributed capability. Neither choice is
+silently made by caller migration. Acknowledged-ID and completed-transaction
+retention remain separate endurance follow-ups, without arbitrary TTL or automatic
+new merge blockers.
+
+**Execution access:** the nonexecuting ping request
+`1d88388acdfd4de1bd0bc21333ff99d9` was still absent in exact-ID readback at
+2026-10-25 12:51:52 UTC after the second stalled connector call. Its prepared
+request expires at 13:01:26 UTC. No canonical, native, metric, marker, cohort or
+admin job was submitted; no execution is awaiting completion. Do not repeat an
+uncertain create call. The [offline packet source review](raft-rs-full-cutover/evidence/resume-cloud-2026-10-25/REVIEW-OFFLINE-LAUNCH-PACKET.md)
+approves the unchanged canonical launcher and marker invocation only. Fresh
+mailbox request timestamps/identities are generated before actual submission
+through the existing authorized local account. No alternate file/ref trigger,
+raw SSH route or cloud runtime substitute was introduced.
+
+The integration owner serializes composition and maintains this index. The sole
+lab coordinator owns submissions and execution custody. Source review, normal-hook
+preservation, measured unit/composition proof and service/release acceptance retain
+their separate claims. Historical coordination sections below are retained for
+traceability and do not reactivate their former agents.
 
 ## Representative service objective
 

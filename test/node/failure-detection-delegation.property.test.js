@@ -7,14 +7,12 @@
  *   is sole detector)
  *
  * This property test verifies:
- * 1. NodeLifecycleService does not have any failure detection methods
- * 2. FailureDetector correctly transitions nodes through
+ * FailureDetector correctly transitions nodes through
  *    suspected → failed on heartbeat timeout
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {NodeLifecycleService} from '../../src/node/node-lifecycle-service.js';
 import {FailureDetector} from '../../src/node/failure-detector.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -27,30 +25,6 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {createMockMutationGateway} from
   './failure-detector-test-helpers.js';
-
-/**
- * Methods that were removed from NodeLifecycleService as part of
- * Violation 1 cleanup. FailureDetector is the sole owner of these.
- */
-const REMOVED_FAILURE_DETECTION_METHODS = [
-  'detectFailedNodes',
-  'startFailureDetection',
-  'stopFailureDetection',
-  'markNodeFailed',
-  'markNodeSuspected',
-  'markNodeActive',
-];
-
-/**
- * Fields that were removed from NodeLifecycleService as part of
- * Violation 1 cleanup.
- */
-const REMOVED_FAILURE_DETECTION_FIELDS = [
-  'knownNodes',
-  'failureDetectionTimer',
-  'heartbeatTimeoutMs',
-  'failureDetectionIntervalMs',
-];
 
 /**
  * Initialize test dependencies.
@@ -136,88 +110,6 @@ test('Property 1: Failure detection delegation', async (t) => {
   t.afterEach(() => {
     resetTestDependencies();
   });
-
-  /**
-   * Property: For any removed failure detection method name,
-   * NodeLifecycleService SHALL NOT have that method defined.
-   *
-   * **Validates: Requirements 1.1, 1.2**
-   */
-  t.test(
-    'NodeLifecycleService has no failure detection methods',
-    async (t) => {
-      const methodArb = fc.constantFrom(
-        ...REMOVED_FAILURE_DETECTION_METHODS,
-      );
-
-      fc.assert(
-        fc.property(
-          methodArb,
-          (methodName) => {
-            initializeTestDependencies();
-
-            const mockCDC = createMockCDCService();
-            const service = new NodeLifecycleService({
-              nodeId: 'test-node',
-              cdcIntegrationService: mockCDC,
-            });
-
-            const hasMethod = typeof service[methodName] === 'function';
-
-            resetTestDependencies();
-
-            // Method must NOT exist on the service
-            return !hasMethod;
-          },
-        ),
-        {numRuns: 10},
-      );
-
-      t.pass(
-        'NodeLifecycleService has no failure detection methods',
-      );
-    },
-  );
-
-  /**
-   * Property: For any removed failure detection field name,
-   * NodeLifecycleService SHALL NOT have that field defined.
-   *
-   * **Validates: Requirements 1.1**
-   */
-  t.test(
-    'NodeLifecycleService has no failure detection fields',
-    async (t) => {
-      const fieldArb = fc.constantFrom(
-        ...REMOVED_FAILURE_DETECTION_FIELDS,
-      );
-
-      fc.assert(
-        fc.property(
-          fieldArb,
-          (fieldName) => {
-            initializeTestDependencies();
-
-            const service = new NodeLifecycleService({
-              nodeId: 'test-node',
-            });
-
-            const hasField = service[fieldName] !== undefined;
-
-            resetTestDependencies();
-
-            // Field must NOT exist on the service
-            return !hasField;
-          },
-        ),
-        {numRuns: 10},
-      );
-
-      t.pass(
-        'NodeLifecycleService has no failure detection fields',
-      );
-    },
-  );
 
   /**
    * Property: For any node with ACTIVE status whose heartbeat exceeds

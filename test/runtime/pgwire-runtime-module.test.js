@@ -182,6 +182,25 @@ describe('pgwire-runtime-module', () => {
   });
 
   describe('start', () => {
+    it('desired config edits leave a running listener unchanged until a subsequent start', async () => {
+      const mod = new PostgresWireRuntimeModule();
+      modules.push(mod);
+      const configured = (maxSessions) => makeDefinition({runtimeConfig: JSON.stringify({
+        host: '127.0.0.1', authMode: 'trust', tlsMode: 'disable', maxSessions,
+      })});
+      await mod.prepare(configured(2));
+      const original = await mod.start(makeContext());
+      await mod.prepare(configured(3));
+      const repeated = await mod.start(makeContext());
+      assert.deepEqual(repeated.endpointIntent, original.endpointIntent);
+      assert.equal((await mod.health(makeContext())).maxSessions, 2);
+      await mod.stop(makeContext());
+      await mod.prepare(configured(3));
+      const restarted = await mod.start(makeContext());
+      assert.equal(restarted.status, START_STATUS.RUNNING);
+      assert.equal((await mod.health(makeContext())).maxSessions, 3);
+    });
+
     it('should bind TCP listener and return endpoint intent',
       async () => {
         const mod = new PostgresWireRuntimeModule();

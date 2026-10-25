@@ -1,0 +1,266 @@
+{
+  "local_commit": "9a7aeca9e2dde7d009643d62c904bc789b70c97d",
+  "tree": "f0a979259276f12cf5c6f8746a8f3441e568306b",
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "status": "",
+  "files": [
+    {
+      "path": "solve/changes/global-owner-debt-inventory/inventory.json",
+      "sha256": "743f0b9d8675d982167c2f106f6587929cbe8dee34d8c8dcd55096ef8d5955ae",
+      "review_sha256": "b8dc7b64ef2c5747cc03c40178790f05e795914c757a5091a1d549deb05245bd",
+      "matches_review": false,
+      "semantic_source": false,
+      "matches_preserved": false
+    },
+    {
+      "path": "solve/quests/admin-partition-cohort-readback/evidence/receipt.json",
+      "sha256": "78576e3fb8444976aa2d0d8c4cf89f2398383a879621b4a5425d1591951e703b",
+      "review_sha256": "78576e3fb8444976aa2d0d8c4cf89f2398383a879621b4a5425d1591951e703b",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    },
+    {
+      "path": "solve/quests/admin-partition-cohort-readback/log.ndjson",
+      "sha256": "87a5676b03bc646549a9602e95be0990da5963259fbefc33930cf39576d6f462",
+      "review_sha256": "3d7a57f1f407b28aef950f0be26fff4f5400d1e933da51c585c804cdecb4297e",
+      "matches_review": false,
+      "semantic_source": false,
+      "matches_preserved": false
+    },
+    {
+      "path": "solve/quests/admin-partition-cohort-readback/quest.json",
+      "sha256": "1b880b789e22b02a89b6bb3747e7c5416e4f4f26cc09c544dd9573f58c22724c",
+      "review_sha256": "1b880b789e22b02a89b6bb3747e7c5416e4f4f26cc09c544dd9573f58c22724c",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+      "sha256": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "review_sha256": "0d7dbbaec93c29025580b19a4088ca284776aa521960696525bdbdd879fb8aec",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": false
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js",
+      "sha256": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "review_sha256": "f942881bb3284c6d94c6c21bcf4c1dd87b41b5a28b7efb0174132312d2cc4b71",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js",
+      "sha256": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "review_sha256": "18fa3cdc4daca4a43d0336c40b06994f6eef2bc63767dafec270296a11f77f1e",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
+      "sha256": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "review_sha256": "e76ab8f6e5d7982c579b84c3eed09f5ce44a5ec126ecae4460c68c4e2255e9a8",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js",
+      "sha256": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "review_sha256": "fb73e14ac16d1b803d335224322903728aed5aa945cc66a4b855c3565379a2ca",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js",
+      "sha256": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "review_sha256": "7daa194ecd035d6c1fc7eb64041014568bb42d422125c05e4591a3a032ecc708",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
+      "sha256": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "review_sha256": "000efed1eb01740a309cf7235f8775a3f2ee6cd8297af7ee4998608e34f42515",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js",
+      "sha256": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "review_sha256": "622872efd8dc1eb4a7ae4abba5aec4bb47c7a6ab77334adec65c9227066429a8",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js",
+      "sha256": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "review_sha256": "503e956a7bfb7daab93a95997bfc416830c278c7070d57572374ea9b9a0a0b1d",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js",
+      "sha256": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "review_sha256": "45a1e7529ffa580508fe750885c822fcb408211ab5d5bf6721f960ac1ee3efeb",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js",
+      "sha256": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "review_sha256": "a6cfd21f111c83ae7a28c292b6add72c58875262d9a2f9e3eee193190f80e2e8",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js",
+      "sha256": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "review_sha256": "83a2d7c16d45995c0ad877fd69622b7f045963cdabaa81fd3e3a0f8a1fc3bdb7",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js",
+      "sha256": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "review_sha256": "978a14d562d688f2d8e15d552de95f71d06a513baae1d0200cc756eea57759fc",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js",
+      "sha256": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "review_sha256": "6cf91129515d1429adc5f1e0230a205005de7d6d5c2a96711ed7d3ce1f3fbb31",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js",
+      "sha256": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "review_sha256": "6fdcecdc5184f21add5fc33c9a0271909075e7de63457d3db7e05ba43052663d",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
+      "sha256": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "review_sha256": "b81f57a9d43c5859f9336d36385297b29d1fb9d75702c6004f5cb0854163b6f0",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
+      "sha256": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "review_sha256": "1591b9a41f35161a58a4c73d72b3baf857b57b29681994755903ec56672b0b01",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js",
+      "sha256": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "review_sha256": "e30eb50da527ac3595243087ca2a87de91976d91f76ddcd2cac20e6477b1368f",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js",
+      "sha256": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "review_sha256": "bb97092abe0954d5a77b97b5460edbcf51a6ec5202554d24acf452bd174c3ce7",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js",
+      "sha256": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "review_sha256": "0f7b3121f73afbfbe0b46051ad1e1ae483c2fccfe23decf6128a47cc7f720c4b",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js",
+      "sha256": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "review_sha256": "478b57384f0ebe9724ca4ea4669fbcd03c10e6a7ad93af56d7089d43fe318362",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
+      "sha256": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "review_sha256": "a3d2f5d9ba09e03c106b1c1ff413000b1e39b36a9469c60a2bc43e8e8c244dff",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js",
+      "sha256": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "review_sha256": "8b4d49fec00379183f0157e465b468e200c63001bd5e9bc6cac86841c83f2b07",
+      "matches_review": true,
+      "semantic_source": true,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/shards/impact-contracts.json",
+      "sha256": "ab4367582dbce07c934874558ec7ddfe053325047d45a5c8ecca82dc250cfe7a",
+      "review_sha256": "ab4367582dbce07c934874558ec7ddfe053325047d45a5c8ecca82dc250cfe7a",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/shards/impact-graph-seal.json",
+      "sha256": "290271a25e6f99aa21c000159618a3b664e683054d855d295a3571d1490ea0bb",
+      "review_sha256": "25a9d3cc1a39ebf74371a1880d7f546e91f149335231cfd67ddd584f7447bbbc",
+      "matches_review": false,
+      "semantic_source": false,
+      "matches_preserved": false
+    },
+    {
+      "path": "test/shards/primary-classes.json",
+      "sha256": "a9d513ce58bcae5046c6d171345c167e549581adc0b7634f5022ba47401deda2",
+      "review_sha256": "a9d513ce58bcae5046c6d171345c167e549581adc0b7634f5022ba47401deda2",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/shards/resource-classes.json",
+      "sha256": "7dbce879cf48f76c0e64a35c0c068b9ed062d30cf4e5b3b37ebd22d50174be7f",
+      "review_sha256": "7dbce879cf48f76c0e64a35c0c068b9ed062d30cf4e5b3b37ebd22d50174be7f",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    },
+    {
+      "path": "test/shards/subsystem-classes.json",
+      "sha256": "8db26be52a68bf273f6190aaf9111a289773aca21e30413169b3ae0d3f1aa007",
+      "review_sha256": "8db26be52a68bf273f6190aaf9111a289773aca21e30413169b3ae0d3f1aa007",
+      "matches_review": true,
+      "semantic_source": false,
+      "matches_preserved": true
+    }
+  ],
+  "all_reviewed_js_and_doc_bytes_unchanged": true,
+  "runtime_tests_executed_by_repair_author": false
+}

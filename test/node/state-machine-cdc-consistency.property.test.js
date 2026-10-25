@@ -83,7 +83,7 @@ test('Property 4: State machine to CDC consistency',
     /**
      * Property: For any valid state transition sequence,
      * getState() always returns a value from the unified
-     * NODE_STATE enum. Since the NodeLifecycleService writes
+     * NODE_STATE enum. Since the node lifecycle publication writes
      * getState() to CDC, this guarantees the CDC value matches
      * the state machine's current state.
      */
@@ -136,7 +136,7 @@ test('Property 4: State machine to CDC consistency',
 
     /**
      * Property: For any valid state transition, the stateChange
-     * event's `to` field (which the NodeLifecycleService uses
+     * event's `to` field (which the lifecycle publication uses
      * to write to CDC) is identical to getState() after the
      * transition. This ensures the event-driven CDC write path
      * and the state machine's current state are consistent.

@@ -46,6 +46,7 @@ const ROUTER_FACTS = Object.freeze({
   UNNAMED_CLAIM: {acknowledged: true, deliveryState: ''},
   NO_HANDLER: {acknowledged: false, noHandler: true,
     error: 'No handler registered for address'},
+  RETIRED_ADDRESS: {acknowledged: true, noHandler: true},
 });
 
 function groupWith(sendToPeer) {
@@ -62,6 +63,33 @@ async function settle(outcome) {
   await sendMessages(group, [{to: 2, from: 1, index: 1}, {to: 2, from: 1, index: 2}]);
   return {sent, observation: group.peerDelivery.get('2')};
 }
+
+test('rs-raft peer delivery accepts queued custody only through the delivery envelope owner',
+  async (t) => {
+    const queued = [];
+    // Deliberately invalid predecessor value: enqueuing alone cannot confer
+    // a transport outcome on an unbranded, retired representation.
+    let outcome = {delivered: true};
+    const group = groupWith((_address, envelope) => {
+      queued.push(envelope.message.index);
+      return Promise.resolve(outcome);
+    });
+    const messages = [{to: 2, from: 1, index: 1}, {to: 2, from: 1, index: 2}];
+    await sendMessages(group, messages);
+    t.same(queued, [1], 'invalid queue result suppresses the second message in the batch');
+    t.equal(group.peerDelivery.get('2').outcome, PEER_DELIVERY_OUTCOME.FAILED,
+      'the real peer-delivery owner records the invalid result as failed');
+    t.equal(group.peerDelivery.get('2').consecutiveFailures, 1,
+      'the failed queue result is recorded exactly once');
+
+    outcome = buildDeliveryEnvelope({acknowledged: true});
+    t.equal(outcome.answer, null, 'transport custody does not fabricate an application answer');
+    await sendMessages(group, messages);
+    t.same(queued, [1, 1, 2], 'canonical queue custody admits both messages on the next batch');
+    t.same(group.peerDelivery.get('2'), {
+      outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
+    }, 'successful custody clears the earlier transport failure');
+  });
 
 test('rs-raft peer delivery records DELIVERED only on the transport owner decision',
   async (t) => {
