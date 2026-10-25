@@ -4,12 +4,12 @@
   "sourceManifest": "source-manifest.json",
   "sourceManifestSha256": "19a0361b753b0c6ef8bf5c9847a9d6d344b44b831b5cb0fbbfd5653982aa4d16",
   "validation": {
-    "command": "npm run test:file -- <13 files listed in final-cone.log>",
+    "command": "npm run test:file -- <13 files listed in final-cone.txt>",
     "files": 13,
     "passed": 13,
     "failed": 0,
     "assertions": 295,
-    "log": "final-cone.log",
+    "log": "final-cone.txt",
     "independentApproval": false,
     "wholeCandidateAcceptance": false
   },

@@ -1,0 +1,65 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/partition/partition-cdc-owed-admission.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 50C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/partition/partition-cdc-owed-admission.test.js (2 assertions, 5453ms)
+# TAP assertions failed; test process exited 1
+TAP version 13
+# Subtest: refusing subscriber bounds actual write ingress and admits retry after committed acknowledgement
+not ok 1 - refusing subscriber bounds actual write ingress and admits retry after committed acknowledgement
+  ---
+  duration_ms: 2257.508487
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/codex-cdc-d1-admission-20261025/test/partition/partition-cdc-owed-admission.test.js:36:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    full durable debt refuses before proposal
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/codex-cdc-d1-admission-20261025/test/partition/partition-cdc-owed-admission.test.js:49:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: concurrent proposals obey one committed-prefix capacity and losing same-entry retry remains live
+not ok 2 - concurrent proposals obey one committed-prefix capacity and losing same-entry retry remains live
+  ---
+  duration_ms: 1534.025262
+  type: 'test'
+  location: '/mnt/data/peter/projects/.worktrees/codex-cdc-d1-admission-20261025/test/partition/partition-cdc-owed-admission.test.js:71:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    4097 !== 4096
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 4096
+  actual: 4097
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///mnt/data/peter/projects/.worktrees/codex-cdc-d1-admission-20261025/test/partition/partition-cdc-owed-admission.test.js:88:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3812.103474
+# time=5453ms
+# test-files total=1 pass=0 fail=1 assertions=2
