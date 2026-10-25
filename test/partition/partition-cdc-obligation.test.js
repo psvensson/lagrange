@@ -440,7 +440,7 @@ test('TX1 CDC O6: a single acknowledged event is proposed at the flush deadline 
 // --- O7: the committed CDC_DELIVERED ---
 test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims the delivered ' +
   'prefix into the compact progress (decision D1), replays idempotently, ' +
-  'refuses an unknown position or a wrong key digest at a retained position without a ' +
+  'refuses unknown or misfiled identities both before and after reclamation without a ' +
   'write, moves neither the generation nor an outcome row, and is admitted only from the ' +
   'CDC delivery owner in its pinned form', async () => {
   const follower = await startCdcReplica(REPLICAS[1]);
@@ -455,6 +455,12 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims th
         events: [ackEvent(txKey(txA, 0), 0), ackEvent(txKey(txA, 1), 1)]}], stamp);
     const before = {generation: readPartitionWriteGeneration(follower.db),
       outcomes: transactionOperationOutcomes(follower), applied: durableAppliedIndex(follower)};
+    const answers = [];
+    const resolve = follower.resolveCommittedWrite.bind(follower);
+    follower.resolveCommittedWrite = (entryId, answer) => {
+      answers.push({success: answer.success, failureCode: answer.failureCode});
+      return resolve(entryId, answer);
+    };
     const facts = {applies: [a.prepareApply, a.decisionApply, b.prepareApply, b.decisionApply]};
     facts.ackApply = applyCommitted(follower, ackA);
     const standingAt = (logIndex, ordinal) =>
@@ -475,13 +481,16 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims th
         events: [ackEvent(txKey(txB, 0), 0), ackEvent(txKey(txB, 7), 7)]}], stamp);
     facts.unknownApply = applyCommitted(follower, unknown);
     facts.afterUnknown = countCdcObligations(follower.db);
-    // A wrong key digest is judged at a retained row (b0, still owed); at or
-    // below the reclaimed prefix a position is delivered without a row to
-    // compare against (decision D1).
+    // Preserve both meanings: retained mismatches are proven wrong, while
+    // compacted identity evidence must not certify a newly supplied digest.
     const misfiled = buildCdcAcknowledgementCommand(PARTITION_ID,
       [{logIndex: b.decisionIndex, events: [ackEvent(txKey(txA, 0), 0)]}], stamp);
     facts.misfiledApply = applyCommitted(follower, misfiled);
     facts.afterMisfiled = {...countCdcObligations(follower.db), progress: progress()};
+    const compactedMisfiled = buildCdcAcknowledgementCommand(PARTITION_ID,
+      [{logIndex: a.decisionIndex, events: [ackEvent(txKey(txB, 0), 0)]}], stamp);
+    facts.compactedMisfiledApply = applyCommitted(follower, compactedMisfiled);
+    facts.answers = answers;
     facts.unchanged = {generation: readPartitionWriteGeneration(follower.db) - before.generation,
       outcomes: transactionOperationOutcomes(follower) - before.outcomes,
       appliedAdvance: durableAppliedIndex(follower) - before.applied};
@@ -509,7 +518,13 @@ test('TX1 CDC O7: CDC_DELIVERED marks only the owed events it names, reclaims th
       misfiledApply: null, afterMisfiled: {owed: 1, delivered: 2,
         progress: {through: [a.decisionIndex, 1], reclaimed: 2,
           advancedIndex: before.applied + 1}},
-      unchanged: {generation: 0, outcomes: 0, appliedAdvance: 4},
+      compactedMisfiledApply: null,
+      answers: [{success: true, failureCode: undefined},
+        {success: false, failureCode: CODE.IDENTITY_COMPACTED},
+        {success: false, failureCode: CODE.UNKNOWN_EVENT},
+        {success: false, failureCode: CODE.POSITION_MISMATCH},
+        {success: false, failureCode: CODE.IDENTITY_COMPACTED}],
+      unchanged: {generation: 0, outcomes: 0, appliedAdvance: 5},
       admission: {fromOwner: true, fromWritePath: CODE.ORIGIN_REFUSED,
         tamperedEntryId: CODE.BYTES_INVALID, unsortedGroups: CODE.BYTES_INVALID,
         oversized: CODE.BYTES_INVALID}},
@@ -772,6 +787,58 @@ test('TX1 CDC O14: an unknown acknowledgement retries the same command without n
       await shutdownAll(leader);
     }
   });
+
+for (const coveredEvents of [1, 2]) {
+  test(`CDC prefix reconciliation settles ${coveredEvents} known events without certifying ` +
+    'the compacted ACK identity and drains any remaining mixed-batch debt', async () => {
+    const timeSource = new VirtualTimeSource();
+    const {leader, proposed} = await startCdcLeader({timeSource});
+    try {
+      await leader.subscribeToCDCWithHandshake(recordingSubscriber(), {subscriberId: 'prefix'});
+      commitHandBuilt(leader, identityOf(`prefix-${coveredEvents}`),
+        [cdcOperationOf(ROW), cdcOperationOf(ROW_2)]);
+      await settleTicks();
+      timeSource.advance(BOUND.ACK_FLUSH_DEADLINE_MS);
+      await settleTicks();
+      const [original] = acksOf(proposed);
+      assert.equal(original.acknowledged[0].events.length, 2,
+        'both real delivered ledger identities entered the pending ACK');
+      const competing = buildCdcAcknowledgementCommand(PARTITION_ID, [{
+        logIndex: original.acknowledged[0].logIndex,
+        events: original.acknowledged[0].events.slice(0, coveredEvents),
+      }], {timestamp: '', proposedBy: REPLICAS[0], proposedAt: 0});
+      applyCommitted(leader, competing);
+      // The pending original command now names compacted identity evidence.
+      // It must refuse whole; its owner then reconciles the known prefix.
+      applyCommitted(leader, original);
+      await settleTicks();
+      const reconciled = leader.cdcDelivery.getCdcObligationDiagnostics();
+      assert.equal(competing.entryId === original.entryId, coveredEvents === 2);
+      assert.equal(reconciled.lastFlush.state,
+        coveredEvents === 1 ? FLUSH.RECONCILED : FLUSH.COMMITTED,
+        'the full identical batch really committed; a mixed batch requires reconciliation');
+      assert.equal(reconciled.held, null);
+      assert.equal(countCdcObligations(leader.db).owed, 2 - coveredEvents);
+      timeSource.advance(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS);
+      await settleTicks();
+      const replacements = acksOf(proposed).slice(1);
+      assert.equal(replacements.length, coveredEvents === 1 ? 1 : 0);
+      if (coveredEvents === 1) {
+        assert.deepEqual(replacements[0].acknowledged, [{
+          logIndex: original.acknowledged[0].logIndex,
+          events: original.acknowledged[0].events.slice(1),
+        }], 'only the still-owed original identity is acknowledged again');
+        applyCommitted(leader, replacements[0]);
+        await settleTicks();
+      }
+      assert.deepEqual(countCdcObligations(leader.db), {owed: 0, delivered: 2});
+      assert.equal(leader.cdcDelivery.getCdcObligationDiagnostics()
+        .outstandingAcknowledgementBatches, 0);
+    } finally {
+      await shutdownAll(leader);
+    }
+  });
+}
 
 test('TX1 CDC O15: resolved semantic subscriber refusal cannot acknowledge an event', async () => {
   const timeSource = new VirtualTimeSource();

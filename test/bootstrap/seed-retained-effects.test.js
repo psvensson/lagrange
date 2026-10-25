@@ -403,7 +403,8 @@ test('only the first applied pinned ACK can justify a delivered obligation', asy
     const f = fixture(t);
     const command = sqlCommand(f.member, foundationMutation(f.declaration, f.member.tableName));
     const ack = acknowledgement(f.member, command, 2);
-    retain(f, [origin(f), command, ack, ack]);
+    retain(f, [origin(f), command, ack, ack],
+      {applicationOutcomes: {'4': OUTCOME.RECORDED_ONLY}});
     const result = expect(f, STATE.ACCEPTED);
     assert.equal(result.origin.generation, '1');
     // Decision D1: the delivered obligation is reclaimed at its first applied
@@ -414,6 +415,30 @@ test('only the first applied pinned ACK can justify a delivered obligation', asy
     f.db.exec(`UPDATE ${PROGRESS} SET advanced_index = 4`);
     expect(f, STATE.CONTRARY, REASON.OBLIGATION);
   });
+  await t.test('a mixed compacted ACK refuses whole before the remaining source is acknowledged',
+    (t) => {
+      for (const drain of [false, true]) {
+        const f = fixture(t);
+        const mutation = foundationMutation(f.declaration, f.member.tableName);
+        const first = sqlCommand(f.member, mutation, 'first-foundation');
+        const second = sqlCommand(f.member, mutation, 'second-foundation');
+        const firstAck = acknowledgement(f.member, first, 2);
+        const secondAck = acknowledgement(f.member, second, 4);
+        const mixed = buildCdcAcknowledgementCommand(f.member.groupId,
+          [...firstAck.acknowledged, ...secondAck.acknowledged], originalStamp(f.member, 2));
+        const commands = [origin(f), first, firstAck, second, mixed];
+        if (drain) commands.push(secondAck);
+        retain(f, commands, {applicationOutcomes: {'5': OUTCOME.RECORDED_ONLY}});
+        const observed = expect(f, STATE.ACCEPTED);
+        assert.equal(observed.obligations.rows.length, drain ? 0 : 1);
+        assert.equal(observed.obligations.progress.advancedIndex, drain ? '6' : '3');
+        assert.equal(observed.obligations.progress.reclaimed, drain ? '2' : '1');
+        if (!drain) {
+          assert.equal(observed.obligations.rows[0].logIndex, '4');
+          assert.equal(observed.obligations.rows[0].delivered, '0');
+        }
+      }
+    });
   await t.test('pre-D1 storage (the delivered row retained, no compact progress) is contrary',
     (t) => {
       // Decision D3 (alpha clean initialization): a ledger written by a build

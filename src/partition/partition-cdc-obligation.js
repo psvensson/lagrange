@@ -14,12 +14,12 @@
 //   "Today").
 // - applyCdcAcknowledgementCommand: a committed CDC_DELIVERED marks the owed
 //   events it names delivered, idempotently, then reclaims the delivered
-//   prefix into the ledger's compact progress (decision D1); a position at or
-//   below that prefix is a replay of a delivered event (answered as such,
-//   never as unknown), while an event the ledger never recorded, or filed
-//   under another entry than the one that owes it, refuses the whole command
-//   without a write and raises an alarm (a bug path, since the delivery owner
-//   acknowledges only what it read from this ledger). The command moves
+//   prefix into the ledger's compact progress (decision D1). Below that
+//   prefix exact identity evidence is compacted, so a new exact-event ACK
+//   refuses typed; the delivery lane separately reconciles its already-known
+//   pending obligations against committed progress. An unknown retained
+//   position or mismatched digest also refuses the whole command without a
+//   write. The command moves
 //   neither g nor any outcome row.
 //
 // It also composes the acknowledgement proposer for the delivery lane (see
@@ -198,14 +198,20 @@ function answerProposer(service, committed, answer) {
   }));
 }
 
-// Consumed without a write, alike on every replica, and raised as an alarm.
+// Consumed without a write, alike on every replica. Compacted evidence is a
+// normal reconciliation boundary; an invalid retained identity is an alarm.
 function refuseAcknowledgement(service, committed, failureCode, fields = {}) {
-  service.logger.error(LOG_MSG.ACKNOWLEDGEMENT_ALARM, {
+  const diagnostic = {
     partitionId: service.partitionId,
     entryId: committed.command.entryId,
     failureCode,
     ...fields,
-  });
+  };
+  if (failureCode === CODE.IDENTITY_COMPACTED) {
+    service.logger.debug(LOG_MSG.ACKNOWLEDGEMENT_IDENTITY_COMPACTED, diagnostic);
+  } else {
+    service.logger.error(LOG_MSG.ACKNOWLEDGEMENT_ALARM, diagnostic);
+  }
   answerProposer(service, committed, {
     success: false,
     error: `${MESSAGE.COMMAND_REFUSED}${MESSAGE.CODE_SEPARATOR}${failureCode}`,
@@ -215,23 +221,22 @@ function refuseAcknowledgement(service, committed, failureCode, fields = {}) {
   return OUTCOME.RECORDED_ONLY;
 }
 
-// Every positional member is judged before any row moves, by the ledger's one
-// delivered predicate: a position at or below the reclaimed prefix is a
-// replay of a delivered event; otherwise exactly one retained row at that
-// position with the named fixed-size key digest, or the first refusal. The
-// UNIQUE position constraint makes resolution deterministic; no caller-sized
+// Every positional member is judged before any row moves. Exact identity
+// requires a retained row at that position with the named fixed-size digest.
+// Compacted progress proves delivery of actual obligations, never that this
+// supplied identity existed; it requires the delivery owner's reconciliation.
+// The UNIQUE position constraint makes resolution deterministic; no caller-sized
 // durable ID enters the ACK.
 function acknowledgementJudgementOf(service, groups) {
   const owed = [];
   const deliveredEarlier = [];
-  let reclaimedEarlier = 0;
   for (const group of groups) {
     for (const event of group.events) {
       const {standing, row} = readCdcObligationStanding(service.db,
         {logIndex: group.logIndex, ordinal: event.ordinal});
       if (standing === STANDING.RECLAIMED) {
-        reclaimedEarlier += 1;
-        continue;
+        return {refusal: {failureCode: CODE.IDENTITY_COMPACTED,
+          logIndex: group.logIndex, ordinal: event.ordinal}};
       }
       if (standing === STANDING.UNKNOWN) {
         return {refusal: {failureCode: CODE.UNKNOWN_EVENT, logIndex: group.logIndex,
@@ -244,17 +249,16 @@ function acknowledgementJudgementOf(service, groups) {
       (standing === STANDING.DELIVERED ? deliveredEarlier : owed).push(row.eventKey);
     }
   }
-  return {owed, alreadyDelivered: deliveredEarlier, reclaimedEarlier};
+  return {owed, alreadyDelivered: deliveredEarlier};
 }
 
 /**
  * Apply one committed CDC_DELIVERED inside its application transaction:
  * every owed event it names is marked delivered at this entry's position;
- * one already delivered, retained or reclaimed, is left as it is (a replay is
- * idempotent); then the delivered prefix is reclaimed into the compact
- * progress. A command naming another partition, an unknown position above the
- * reclaimed prefix or the wrong event digest at a position is refused whole,
- * typed, without a write.
+ * one already delivered and retained is left as it is (a replay is idempotent);
+ * then the delivered prefix is reclaimed into compact progress. Compacted
+ * identity evidence, another partition, an unknown retained position or a
+ * wrong digest refuses the whole command, typed, without a write.
  * @param {Object} service - The partition.
  * @param {Object} committed - {command, index, term, afterCommit,
  *   afterRollback}.
@@ -293,15 +297,13 @@ function applyCdcAcknowledgementCommand(service, committed) {
       logIndex: index,
       delivered: judged.owed.length,
       alreadyDelivered: judged.alreadyDelivered.length,
-      alreadyReclaimed: judged.reclaimedEarlier,
       reclaimed,
     });
   });
   answerProposer(service, committed, {
     success: true,
     delivered: judged.owed.length,
-    alreadyDelivered: judged.alreadyDelivered.length + judged.reclaimedEarlier,
-    alreadyReclaimed: judged.reclaimedEarlier,
+    alreadyDelivered: judged.alreadyDelivered.length,
     reclaimed,
     logIndex: index,
     ...(judged.owed.length === 0 ? {idempotent: true} : {}),

@@ -208,9 +208,9 @@ const PARTITION_CDC_OBLIGATION_SQL = Object.freeze({
     'advanced_index = excluded.advanced_index, advanced_term = excluded.advanced_term',
 });
 
-// Where one source-event position stands in the ledger (decision D1): the one
-// delivered predicate. OWED and DELIVERED name a retained row; RECLAIMED a
-// position at or below the reclaimed prefix (delivered, its row gone);
+// Where one position stands in the ledger (decision D1). OWED and DELIVERED
+// prove a retained row; RECLAIMED means only that the position is within the
+// compact prefix, not that any particular event identity existed there;
 // UNKNOWN a position above the prefix the ledger holds no row for.
 const PARTITION_CDC_OBLIGATION_STANDING = Object.freeze({
   OWED: 'owed',
@@ -243,6 +243,7 @@ const PARTITION_CDC_OBLIGATION_FAILURE_CODE = Object.freeze({
   ORIGIN_REFUSED: 'partition_write_cdc_command_not_admissible',
   BYTES_INVALID: 'partition_write_cdc_command_invalid',
   IDENTITY_MISMATCH: 'cdc_acknowledgement_identity_mismatch',
+  IDENTITY_COMPACTED: 'cdc_acknowledgement_identity_compacted',
   UNKNOWN_EVENT: 'cdc_acknowledgement_unknown_event',
   ENTRY_MISMATCH: 'cdc_acknowledgement_entry_mismatch',
   POSITION_MISMATCH: 'cdc_acknowledgement_position_mismatch',
@@ -286,6 +287,7 @@ const PARTITION_CDC_OBLIGATION_FLUSH_STATE = Object.freeze({
   IN_FLIGHT: 'in_flight',
   BACKPRESSURE: 'backpressure',
   COMMITTED: 'committed',
+  RECONCILED: 'reconciled',
   REFUSED: 'refused',
   OUTCOME_UNKNOWN: 'outcome_unknown',
   PROPOSER_UNAVAILABLE: 'proposer_unavailable',
@@ -318,6 +320,8 @@ const PARTITION_CDC_OBLIGATION_LOG_MSG = Object.freeze({
   PROPOSER_UNAVAILABLE:
     'CDC acknowledgement batch held: no acknowledgement proposer is composed',
   ACKNOWLEDGEMENT_APPLIED: 'CDC_DELIVERED applied',
+  ACKNOWLEDGEMENT_IDENTITY_COMPACTED:
+    'CDC_DELIVERED exact identity compacted; delivery-owner reconciliation required',
   ACKNOWLEDGEMENT_ALARM:
     'CDC_DELIVERED refused: it names an event this ledger does not owe ' +
     '(an atomicity alarm)',

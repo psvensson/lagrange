@@ -219,8 +219,8 @@ function readCdcObligationProgress(db) {
 }
 
 /**
- * Whether a source-event position lies in the reclaimed prefix the compact
- * progress names (delivered, its row gone).
+ * Whether a position lies in the reclaimed prefix. This does not prove an
+ * event identity existed at the supplied position.
  * @param {{logIndex: number, ordinal: number}} position - The position.
  * @param {Object|null} progress - readCdcObligationProgress's answer.
  * @return {boolean} Whether it is reclaimed.
@@ -232,9 +232,9 @@ function isCdcPositionReclaimed(position, progress) {
 }
 
 /**
- * Where one source-event position stands (decision D1): the one delivered
- * predicate. A position at or below the reclaimed prefix is RECLAIMED
- * (delivered, its row gone); otherwise the retained row decides (OWED or
+ * Where one position stands (decision D1). A position within the compact
+ * prefix is RECLAIMED, with no retained exact event identity evidence;
+ * otherwise the retained row decides (OWED or
  * DELIVERED, with the row), and a position without one is UNKNOWN.
  * @param {Object} db - The partition's connection.
  * @param {{logIndex: number, ordinal: number}} position - The position.

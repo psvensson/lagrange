@@ -12,7 +12,7 @@ import {committedStatementEntryKey, readCommittedStatementCensusIn} from
 import {PARTITION_CDC_COMMAND as CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND} from
   '../partition/partition-cdc-obligation-constants.js';
 import {PARTITION_CDC_DELIVERY_FLAG, readCdcObligationCensusIn, isPinnedCdcAcknowledgementCommand,
-  buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest} from
+  buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest, isCdcPositionReclaimed} from
   '../partition/partition-cdc-obligation-ledger.js';
 import {PartitionCDCGenerator, hydratePartitionCdcEvent, PARTITION_CDC_EVENT_BUILD_STATE} from
   '../partition/partition-cdc-generator.js';
@@ -138,11 +138,15 @@ function acknowledgmentCensus(entries, sources) {
   const pending = [];
   for (const {entry, kind} of entries) {
     if (kind !== KIND.ACK) continue;
+    if (entry.command.acknowledged.some((group) => !acknowledgmentNamesSource(
+      group, sources.get(String(group.logIndex)), entry))) {
+      return censusRefusal(REASON.ACK, entry);
+    }
+    // The real ACK owner refuses the entire command when any exact identity
+    // was compacted. Its remaining members therefore cannot justify delivery.
+    if (acknowledgmentIsCompacted(entry, sources, firstApplied)) continue;
     for (const group of entry.command.acknowledged) {
       const source = sources.get(String(group.logIndex));
-      if (!acknowledgmentNamesSource(group, source, entry)) {
-        return censusRefusal(REASON.ACK, entry);
-      }
       if (source.entry.phase !== PHASE.APPLIED) {
         if (entry.phase === PHASE.APPLIED) return censusRefusal(REASON.ACK, entry);
         pending.push({source: source.entry, acknowledgment: entry});
@@ -152,6 +156,17 @@ function acknowledgmentCensus(entries, sources) {
     }
   }
   return {state: STATE.ACCEPTED, firstApplied, pending};
+}
+
+function acknowledgmentIsCompacted(entry, sources, firstApplied) {
+  const emitting = [...sources.values()].filter(({entry: source}) =>
+    source.phase === PHASE.APPLIED);
+  const reclamation = expectedReclamation(emitting, {firstApplied});
+  if (reclamation === null || reclamation.progress === null) return false;
+  const progress = {throughLogIndex: Number(reclamation.progress.throughLogIndex),
+    throughOrdinal: Number(reclamation.progress.throughOrdinal)};
+  return entry.command.acknowledged.some((group) => group.events.some((event) =>
+    isCdcPositionReclaimed({logIndex: group.logIndex, ordinal: event.ordinal}, progress)));
 }
 
 function expectedEvent(classified, member) {

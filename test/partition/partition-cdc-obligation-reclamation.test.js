@@ -274,9 +274,9 @@ async function reproposed(leader, command) {
 }
 
 test('W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committed again ' +
-  'after its positions were reclaimed is answered as a replay of delivered events (never ' +
-  'UNKNOWN_EVENT, the lane is not held), while a position above the reclaimed prefix the ' +
-  'ledger never recorded still refuses typed', async () => {
+  'after reclamation refuses exact identity as compacted; fabricated old coordinates ' +
+  'and digests never become successful acknowledgement evidence, while a position ' +
+  'above the prefix remains unknown', async () => {
   const timeSource = new VirtualTimeSource();
   const {leader, proposed} = await startLeader({timeSource, ...CDC});
   try {
@@ -287,7 +287,6 @@ test('W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committ
     await settleTicks();
     await pump(timeSource, leader, proposed, new Set());
     const [first] = proposed.filter((entry) => entry.type === ACK);
-    const named = first.acknowledged.reduce((sum, group) => sum + group.events.length, 0);
     const reclaimed = ledgerFactsOf(leader);
     const pick = ({success, delivered, alreadyDelivered, alreadyReclaimed, failureCode}) =>
       ({success, delivered, alreadyDelivered, alreadyReclaimed, failureCode});
@@ -298,31 +297,40 @@ test('W-D1e: acknowledgement-replay distinguishability - a CDC_DELIVERED committ
       events: [{ordinal: 0, eventKeyDigest: cdcObligationEventKeyDigest('never-recorded')}]}],
     stamp);
     const unknown = pick(await reproposed(leader, above));
-    // A position below the prefix that never held an obligation (the
-    // generation origin's entry) is indistinguishable from a reclaimed one:
-    // both are delivered by the predicate, and acknowledging it moves nothing.
+    // The prefix cannot establish that a coordinate ever emitted an event.
     const below = buildCdcAcknowledgementCommand(PARTITION_ID, [{
       logIndex: GENERATION_ORIGIN_INDEX,
       events: [{ordinal: 0, eventKeyDigest: cdcObligationEventKeyDigest('never-recorded')}]}],
     stamp);
     const belowPrefix = pick(await reproposed(leader, below));
+    const wrongDigest = buildCdcAcknowledgementCommand(PARTITION_ID, [{
+      logIndex: first.acknowledged[0].logIndex,
+      events: [{ordinal: first.acknowledged[0].events[0].ordinal,
+        eventKeyDigest: cdcObligationEventKeyDigest('wrong-event')}]}], stamp);
+    const missingOrdinal = buildCdcAcknowledgementCommand(PARTITION_ID, [{
+      logIndex: first.acknowledged[0].logIndex,
+      events: [{ordinal: W_D1E_FAR_ABOVE,
+        eventKeyDigest: cdcObligationEventKeyDigest('nonexistent-ordinal')}]}], stamp);
+    const fabricated = [pick(await reproposed(leader, wrongDigest)),
+      pick(await reproposed(leader, missingOrdinal))];
+    const compacted = {success: false, delivered: undefined, alreadyDelivered: undefined,
+      alreadyReclaimed: undefined,
+      failureCode: PARTITION_CDC_OBLIGATION_FAILURE_CODE.IDENTITY_COMPACTED};
     await settleTicks();
     const after = ledgerFactsOf(leader);
     assert.deepEqual({
       reclaimed: {rows: reclaimed.rows, reclaimed: reclaimed.progress?.reclaimed ?? null},
-      replay, unknown, belowPrefix,
+      replay, unknown, belowPrefix, fabricated,
       held: leader.cdcDelivery.getCdcObligationDiagnostics().held,
       after: {rows: after.rows, owed: after.owed, delivered: after.delivered,
         progressUnchanged: after.image === reclaimed.image},
     }, {
       reclaimed: {rows: 0, reclaimed: String(W_D1E_WRITES)},
-      replay: {success: true, delivered: 0, alreadyDelivered: named,
-        alreadyReclaimed: named, failureCode: undefined},
+      replay: compacted,
       unknown: {success: false, delivered: undefined, alreadyDelivered: undefined,
         alreadyReclaimed: undefined,
         failureCode: PARTITION_CDC_OBLIGATION_FAILURE_CODE.UNKNOWN_EVENT},
-      belowPrefix: {success: true, delivered: 0, alreadyDelivered: 1, alreadyReclaimed: 1,
-        failureCode: undefined},
+      belowPrefix: compacted, fabricated: [compacted, compacted],
       held: null,
       after: {rows: 0, owed: 0, delivered: W_D1E_WRITES, progressUnchanged: true},
     });
