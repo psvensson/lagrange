@@ -36,7 +36,7 @@ function createMockCDCService() {
     updates,
     updateSystemTableRow: async (tableName, whereClause, updateData) => {
       updates.push({tableName, whereClause, data: updateData});
-      return {success: true};
+      return {success: true, affectedRows: 1};
     },
   };
 }

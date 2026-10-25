@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "status": "partial",
+  "receipts": [
+    {
+      "id": "owner-outcome-negative-and-positive-proof",
+      "passed": true,
+      "evidence": "/tmp/codex-admin-owner-outcomes-20261025/green-r2.log",
+      "sha256": "0c497497fb7f5eb1399efbb06d09662a5bff98c3f938e473374525aa3970826a"
+    },
+    {
+      "id": "existing-client-and-owner-paths",
+      "passed": true,
+      "evidence": "/tmp/codex-admin-owner-outcomes-20261025/green-r2.log",
+      "sha256": "0c497497fb7f5eb1399efbb06d09662a5bff98c3f938e473374525aa3970826a"
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": false
+    }
+  ]
+}

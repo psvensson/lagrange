@@ -89,10 +89,12 @@ const CONFIG_ERROR_MSG = Object.freeze({
   DEPRECATED_ENV_INFIX: ' — use ',
 });
 
-// The typed refusal of a configuration write: the value does not satisfy
-// the key's definition. Nothing is written.
+// Validation and mutation observation outcomes owned by configuration.
+// An unconfirmed outcome does not prove that no write occurred.
 const CONFIG_ERROR_CODE = Object.freeze({
   VALUE_INVALID: 'CONFIG_VALUE_INVALID',
+  OBSERVATION_CHANGED: 'CONFIG_MUTATION_OBSERVATION_CHANGED',
+  OUTCOME_UNCONFIRMED: 'CONFIG_MUTATION_OUTCOME_UNCONFIRMED',
 });
 
 const CONFIG_STATS_DEFAULT = Object.freeze({

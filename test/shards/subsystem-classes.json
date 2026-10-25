@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "test-subsystem-classification",
   "counts": {
-    "admin-diagnostics": 117,
+    "admin-diagnostics": 118,
     "architecture-governance": 21,
     "bootstrap-membership": 330,
     "cdc-metadata": 66,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2478,
-  "digest": "fnv1a32-732d5d90",
+  "censusSize": 2479,
+  "digest": "fnv1a32-5df3e303",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-18df9ce1",
+  "observationDigest": "fnv1a32-97bb12aa",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -65,6 +65,7 @@
     "test/admin/admin-meta-endpoint-builder.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.pbt.test.js": "admin-diagnostics",
     "test/admin/admin-mutation-guard.test.js": "admin-diagnostics",
+    "test/admin/admin-owner-mutation-outcomes.test.js": "admin-diagnostics",
     "test/admin/admin-owner-operations.test.js": "admin-diagnostics",
     "test/admin/admin-preflight-repair-wait-bound-spent.test.js": "admin-diagnostics",
     "test/admin/admin-preflight-snapshot.test.js": "admin-diagnostics",
@@ -2597,6 +2598,12 @@
       "files": [
         "src/admin/admin-deprecation.js",
         "src/admin/admin-meta-command-handlers.js"
+      ]
+    },
+    "test/admin/admin-owner-mutation-outcomes.test.js": {
+      "files": [
+        "src/admin/admin-owner-operations.js",
+        "src/control-plane/control-plane-system-table-gateway.js"
       ]
     },
     "test/admin/admin-owner-operations.test.js": {

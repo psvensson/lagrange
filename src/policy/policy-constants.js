@@ -28,10 +28,13 @@ const POLICY_LOG_MSG = Object.freeze({
   TABLE_POLICY_SHUTDOWN: 'TablePolicyService shutdown',
 });
 
-// The typed refusals of a table-policy write. Nothing is written.
+// Validation and mutation observation outcomes owned by table policy.
+// An unconfirmed outcome does not prove that no write occurred.
 const POLICY_ERROR_CODE = Object.freeze({
   TABLE_ID_REQUIRED: 'TABLE_ID_REQUIRED',
   POLICY_INVALID: 'TABLE_POLICY_INVALID',
+  OBSERVATION_CHANGED: 'TABLE_POLICY_MUTATION_OBSERVATION_CHANGED',
+  OUTCOME_UNCONFIRMED: 'TABLE_POLICY_MUTATION_OUTCOME_UNCONFIRMED',
 });
 
 const POLICY_ERROR_MSG = Object.freeze({

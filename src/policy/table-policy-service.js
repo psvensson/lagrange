@@ -13,6 +13,8 @@ import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {requireConfirmedSingleRowMutation} from
+  '../control-plane/control-plane-single-row-confirmation.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -43,6 +45,14 @@ const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_CRITICAL = 'critical';
+const POLICY_MUTATION_CONFIRMATION = Object.freeze({
+  ownerName: POLICY_SUBSYSTEM.TABLE_POLICY,
+  tableName: TABLES.TABLES,
+  changed: Object.freeze({code: POLICY_ERROR_CODE.OBSERVATION_CHANGED,
+    message: 'The table policy mutation affected no row'}),
+  unconfirmed: Object.freeze({code: POLICY_ERROR_CODE.OUTCOME_UNCONFIRMED,
+    message: 'The table policy mutation application is not confirmed'}),
+});
 
 /**
  * TablePolicyService manages table policies for partition behavior.
@@ -350,7 +360,7 @@ class TablePolicyService extends EventEmitter {
 
     try {
       // Update via CDC integration service
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      const mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.TABLES,
         whereClause: {table_id: tableId},
@@ -362,6 +372,8 @@ class TablePolicyService extends EventEmitter {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
         deliveryPriority: LOCAL_STR_CRITICAL,
       });
+
+      requireConfirmedSingleRowMutation(mutationResult, POLICY_MUTATION_CONFIRMATION);
 
       // Invalidate cache
       this.policyCache.delete(tableId);

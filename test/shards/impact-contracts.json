@@ -1516,6 +1516,24 @@
         "test/query/schema-provisioning-job-owner.test.js",
         "test/control-plane/runtime-access-policy-owner.test.js"
       ]
+    },
+    "admin-owner-mutation-confirmation": {
+      "description": "Config and table-policy owners consume the canonical mutation effect before publishing success or completion side effects; zero, uncertain and refused effects retain typed outcomes through admin ingress.",
+      "owners": [
+        "src/config/dynamic-config-service.js",
+        "src/config/config-constants.js",
+        "src/policy/table-policy-service.js",
+        "src/policy/policy-constants.js",
+        "src/control-plane/control-plane-single-row-confirmation.js",
+        "src/admin/admin-owner-operations.js"
+      ],
+      "tests": [
+        "test/admin/admin-owner-mutation-outcomes.test.js",
+        "test/admin/admin-owner-operations.test.js",
+        "test/config/dynamic-config-service.test.js",
+        "test/policy/table-policy-service.test.js",
+        "test/policy/policy-driven-adjustment.property.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -3075,6 +3093,33 @@
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js"
+      ]
+    },
+    "admin-owner-mutation-confirmation": {
+      "description": "Real admin HTTP, semantic owners and canonical gateway agree on confirmed single-row application before success or owner completion side effects.",
+      "endpoints": [
+        {
+          "id": "semantic-owner",
+          "owners": [
+            "src/config/dynamic-config-service.js",
+            "src/config/config-constants.js",
+            "src/policy/table-policy-service.js",
+            "src/policy/policy-constants.js"
+          ]
+        },
+        {
+          "id": "gateway-effect-and-admin",
+          "owners": [
+            "src/control-plane/control-plane-single-row-confirmation.js",
+            "src/admin/admin-owner-operations.js",
+            "src/control-plane/control-plane-mutation-outcome-classifier.js",
+            "src/control-plane/control-plane-system-table-gateway.js"
+          ]
+        }
+      ],
+      "contract": "admin-owner-mutation-confirmation",
+      "witnessTests": [
+        "test/admin/admin-owner-mutation-outcomes.test.js"
       ]
     }
   }

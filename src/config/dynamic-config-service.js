@@ -13,6 +13,8 @@ import {
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {classifyControlPlaneMutationResult} from
   '../control-plane/control-plane-mutation-outcome-classifier.js';
+import {requireConfirmedSingleRowMutation} from
+  '../control-plane/control-plane-single-row-confirmation.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -41,6 +43,14 @@ import {
 const CONFIG_SELECT_ALL_SQL = CONFIG_SQL.SELECT_ALL;
 const CONFIG_SELECT_BY_KEY_SQL = CONFIG_SQL.SELECT_BY_KEY;
 const CONFIG_MUTATION_DELIVERY_PRIORITY = 'critical';
+const CONFIG_MUTATION_CONFIRMATION = Object.freeze({
+  ownerName: CONFIG_SUBSYSTEM.DYNAMIC_CONFIG,
+  tableName: SYSTEM_TABLE_NAME.CONFIG,
+  changed: Object.freeze({code: CONFIG_ERROR_CODE.OBSERVATION_CHANGED,
+    message: 'The configuration mutation affected no row'}),
+  unconfirmed: Object.freeze({code: CONFIG_ERROR_CODE.OUTCOME_UNCONFIRMED,
+    message: 'The configuration mutation application is not confirmed'}),
+});
 
 const ConfigValueType = CONFIG_VALUE_TYPE;
 
@@ -268,9 +278,10 @@ class DynamicConfigService extends EventEmitter {
     // Check if key exists
     const existing = await this.getConfigFromTable(key);
 
+    let mutationResult;
     if (existing) {
       // Update existing
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: SYSTEM_TABLE_NAME.CONFIG,
         whereClause: {[CONFIG_TABLE_COLUMN.KEY]: key},
@@ -285,7 +296,7 @@ class DynamicConfigService extends EventEmitter {
       });
     } else {
       // Insert new
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
         tableName: SYSTEM_TABLE_NAME.CONFIG,
         row: {
@@ -309,6 +320,7 @@ class DynamicConfigService extends EventEmitter {
       });
     }
 
+    requireConfirmedSingleRowMutation(mutationResult, CONFIG_MUTATION_CONFIRMATION);
     this.stats.writes++;
 
     // Log the change for auditing

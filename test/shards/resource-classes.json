@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2461,
+    "ordinary": 2462,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2478,
-  "digest": "fnv1a32-75c7f916",
+  "censusSize": 2479,
+  "digest": "fnv1a32-1901fd9f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -45,6 +45,7 @@
     "test/admin/admin-meta-endpoint-builder.test.js": "ordinary",
     "test/admin/admin-mutation-guard.pbt.test.js": "ordinary",
     "test/admin/admin-mutation-guard.test.js": "ordinary",
+    "test/admin/admin-owner-mutation-outcomes.test.js": "ordinary",
     "test/admin/admin-owner-operations.test.js": "ordinary",
     "test/admin/admin-preflight-repair-wait-bound-spent.test.js": "ordinary",
     "test/admin/admin-preflight-snapshot.test.js": "ordinary",

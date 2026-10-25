@@ -56,6 +56,18 @@ lifecycle SQL statements (`INSTALL SERVICE`, `CREATE BINDING`,
 
 ## Operational Diagnostics Endpoints
 
+`PUT /api/admin/config/:configKey` and
+`PATCH /api/admin/tables/:tableId/policy` report applied success only after
+their semantic owner confirms one affected row through the mutation gateway.
+An observed zero-row effect returns HTTP 409 with
+`CONFIG_MUTATION_OBSERVATION_CHANGED` or
+`TABLE_POLICY_MUTATION_OBSERVATION_CHANGED`. An uncertain count or pending
+visibility returns HTTP 503 with the corresponding
+`*_MUTATION_OUTCOME_UNCONFIRMED` code; this does not establish that the write
+failed to commit. Gateway refusals retain their original error and mutation
+outcome. Unconfirmed writes do not publish successful-write statistics,
+invalidate the policy cache, or emit a policy-updated event.
+
 The operator-only built-in PostgreSQL wire scale operation is
 `POST /api/admin/services/sys-postgres-wire/scale`, with JSON
 `{"replicaCount": 1, "runtimeConfig": {"host": "127.0.0.1", "authMode": "password", "tlsMode": "disable"}}`.
