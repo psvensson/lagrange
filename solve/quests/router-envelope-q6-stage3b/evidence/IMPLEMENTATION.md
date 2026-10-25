@@ -138,3 +138,24 @@ The first normal hook attempt correctly rejected two import-formatting errors;
 those were fixed and the normal hook was retried. Original 9122-path snapshot
 recheck still has zero byte/mode differences. Broad lab proof and independent
 source review are still required. No source landing or green acceptance is claimed.
+
+
+## Pre-send producer trace before the lab freeze
+
+The first normal-hook preservation commit is
+`cf9e88ee75c91d1217b947e991a94652ce57343d`; it is not the final lab candidate.
+A final producer trace found the query witness's true before-send input could
+hide an omission: reconnect/deferred constructors dropped the real send owner's
+recoverableBeforeSend flag. The new router-envelope-pre-send-failure test uses
+an actual MessageRouter delivery with a controlled closed-socket connection;
+sendWithAck itself refuses before ws.send, then real recovery and envelope
+construction run. Its pre-send assertion failed on cf9e88ee while ACK/response
+custody assertions passed. Deferred constructors now carry the existing flag;
+reconnect-pending owners mark their unsent request explicitly. No inferred
+pre-send proof is added to ambiguous post-send failures. The full-field rewrite
+matrix now also attacks recoverableBeforeSend. The final source requires its own
+normal-hook followup commit and committed-source lab/review identity.
+
+Pre-send focused proof: four files / 80 assertions pass, including the real-router
+refusal, query loss/pre-send matrix, canonical query-transport failure shape and
+cold-reconnect grant. The new test is included in the router impact contract.

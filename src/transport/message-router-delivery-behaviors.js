@@ -218,6 +218,7 @@ export async function deliver(
     return buildDeliveryEnvelope(router.buildDeferredDeliveryFailure(
       messageId, correlationId, error.message, {
         errorCode: error.code,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs: router.resolveReconnectRetryAfterMs(
           router.nodeConnections.get(targetNodeId) || null,
         ),
@@ -543,6 +544,7 @@ export async function resolveRecoverableDeliveryError(
           {
             errorCode:
               reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+            recoverableBeforeSend: reconnectError?.recoverableBeforeSend === true,
             retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
               reconnectError.retryAfterMs :
               retryAfterMs,
@@ -561,6 +563,7 @@ export async function resolveRecoverableDeliveryError(
       error.message,
       {
         errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs,
       },
     );

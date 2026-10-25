@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2133,
+    "unit": 2134,
     "integration": 108,
     "bootstrap": 214,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2462,
-  "digest": "fnv1a32-905e8708",
+  "censusSize": 2463,
+  "digest": "fnv1a32-f3f1b85a",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -2360,6 +2360,7 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "unit",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "unit",
     "test/transport/owner-retry-budget.test.js": "unit",
+    "test/transport/router-envelope-pre-send-failure.test.js": "unit",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "unit",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "unit",
     "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "unit",

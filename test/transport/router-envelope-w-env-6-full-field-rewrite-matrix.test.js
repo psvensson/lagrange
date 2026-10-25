@@ -11,7 +11,7 @@
 // an answer travels: LOCAL dispatch, an identified SERVICE_RESPONSE, and a
 // two-hop forward whose first hop answers with the onward hop's answer.
 import {test} from '../../src/test-helpers/tap.js';
-import {TRANSPORT_DELIVERY_OUTCOME_STATE} from
+import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {
   answerOf,
@@ -29,7 +29,7 @@ const PATH = Object.freeze({LOCAL: 'LOCAL', SERVICE_RESPONSE: 'SERVICE_RESPONSE'
 // Every field of the router's transport outcome an answer could name.
 const TRANSPORT_FIELDS = Object.freeze(['acknowledged', 'deliveryState', 'reasonCode',
   'error', 'errorCode', 'deferRetry', 'retryAfterMs', 'noHandler', 'messageId',
-  'correlationId']);
+  'correlationId', 'recoverableBeforeSend']);
 const VALUES = Object.freeze([false, true, null, 0, 250, 'failed', 'delivered',
   'deferred', 'ROUTER_CONNECTION_CLOSED', 'ROUTER_NO_CONNECTION',
   'ROUTER_HANDLER_FAILED', 'no_handler', 'superseded', 'spoofed']);
@@ -86,7 +86,8 @@ test('W-ENV-6 no answer field rewrites any transport fact or the identity',
           const facts = transportFactsOf(delivery);
           const identity = transportIdentityOf(delivery);
           const label = `${path} answer.${field}=${JSON.stringify(value)}`;
-          if (JSON.stringify(facts) !== JSON.stringify(empty)) {
+          if (deliveryTransportOf(delivery).recoverableBeforeSend !== false ||
+              JSON.stringify(facts) !== JSON.stringify(empty)) {
             violations.push(`${label}: facts ${JSON.stringify(facts)}`);
           }
           if (identity.messageId !== messageId || identity.correlationId !== messageId ||

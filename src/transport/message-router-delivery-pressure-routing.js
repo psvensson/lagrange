@@ -144,6 +144,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
       outcome.error ?? ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
       {
         errorCode: outcome.errorCode,
+        recoverableBeforeSend: outcome.recoverableBeforeSend,
         retryAfterMs: Number.isFinite(outcome.retryAfterMs) ?
           outcome.retryAfterMs :
           this.reconnectIntervalMs,

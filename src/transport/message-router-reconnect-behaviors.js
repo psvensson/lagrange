@@ -103,6 +103,7 @@ export function buildReconnectInProgressFailure(
     ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
     {
       errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+      recoverableBeforeSend: true,
       retryAfterMs: router.resolveReconnectRetryAfterMs(connection),
     },
   );
@@ -336,6 +337,7 @@ export function buildColdReconnectBudgetFailure(
     ROUTER_ERROR_MSG.connectionClosed(targetNodeId),
     {
       errorCode: ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+      recoverableBeforeSend: true,
       retryAfterMs: router.reconnectIntervalMs,
     },
   );
@@ -727,6 +729,9 @@ export function buildDeferredDeliveryFailure(
     options.errorCode.length > TRANSPORT_NUM.ZERO
   ) {
     result.errorCode = options.errorCode;
+  }
+  if (options.recoverableBeforeSend === true) {
+    result.recoverableBeforeSend = true;
   }
   return result;
 }

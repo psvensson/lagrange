@@ -1546,6 +1546,7 @@
         "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js",
         "test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js",
         "test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js",
+        "test/transport/router-envelope-pre-send-failure.test.js",
         "test/query/router-envelope-lost-write-answer.test.js",
         "test/query/transaction-coordinator-participant-protocol.test.js",
         "test/message-group/message-group-forward-backpressure-code.test.js",

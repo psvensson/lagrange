@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2445,
+    "ordinary": 2446,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2462,
-  "digest": "fnv1a32-2372fe0a",
+  "censusSize": 2463,
+  "digest": "fnv1a32-751b0bf4",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2359,6 +2359,7 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "ordinary",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "ordinary",
     "test/transport/owner-retry-budget.test.js": "ordinary",
+    "test/transport/router-envelope-pre-send-failure.test.js": "ordinary",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "ordinary",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "ordinary",
     "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "ordinary",
