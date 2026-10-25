@@ -405,7 +405,7 @@
       ]
     },
     "CL-041": {
-      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft \u00a75.2 Election Safety).",
+      "description": "A follower grants its vote to at most one candidate per term, so at most one leader can be elected per term (Raft §5.2 Election Safety).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -416,7 +416,7 @@
       ]
     },
     "CL-040": {
-      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft \u00a75.3 Log Matching).",
+      "description": "A committed Raft log entry is identical cluster-wide at its index; a follower never stale-commits its own same-index/different-term entry on catch-up (Raft §5.3 Log Matching).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -427,7 +427,7 @@
       ]
     },
     "CL-042": {
-      "description": "An empty raft log's last-log-term is 0 (Raft \u00a75.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "description": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "owners": [
         "src/raft/raft-rs-operation-port.js",
         "src/raft/raft-rs-runtime-owner.js",
@@ -1348,7 +1348,8 @@
         "test/partition/partition-cdc-generator.test.js",
         "test/bootstrap/seed-registration-phase.test.js",
         "test/bootstrap/seed-original-attempt-lifetime.test.js",
-        "test/raft/raft-rs-original-allocation-cold-inspection.test.js"
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js"
       ]
     },
     "cdc-source-native-delivery": {
@@ -1456,7 +1457,8 @@
         "test/message-group/message-group-forward-backpressure-code.test.js",
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
-        "test/transport/message-router-query-transport-failure-shape.test.js"
+        "test/transport/message-router-query-transport-failure-shape.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js"
       ]
     }
   },
@@ -2907,7 +2909,8 @@
       "witnessTests": [
         "test/bootstrap/seed-retained-effects.test.js",
         "test/bootstrap/seed-retained-effects.integration.test.js",
-        "test/bootstrap/seed-retained-effects-preparation.test.js"
+        "test/bootstrap/seed-retained-effects-preparation.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js"
       ]
     },
     "cdc-source-native-delivery": {
@@ -3016,7 +3019,8 @@
         "test/message-group/message-group-forward-backpressure-code.test.js",
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
-        "test/transport/message-router-query-transport-failure-shape.test.js"
+        "test/transport/message-router-query-transport-failure-shape.test.js",
+        "test/partition/partition-cdc-obligation-reclamation.test.js"
       ]
     }
   }
