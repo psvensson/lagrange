@@ -435,10 +435,11 @@ const ADMIN_CLI_ACTION_METHODS = {
   /**
    * Remove a stopped or failed node from cluster metadata.
    * @param {string} nodeId
+   * @param {{bootIncarnation: number, status: string}} observation
    */
-  removeNode(nodeId) {
+  removeNode(nodeId, observation) {
     return this.executeNodeManagementOperation({
-      invoke: () => this.connectionManager.removeNode(nodeId),
+      invoke: () => this.connectionManager.removeNode(nodeId, observation),
       pendingMessage: `Removing node ${nodeId}...`,
       successMessage: `Node ${nodeId} removed`,
       failurePrefix: `Failed to remove node ${nodeId}`,

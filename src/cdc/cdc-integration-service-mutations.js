@@ -1,6 +1,8 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {buildSystemTableMutationSqlParts, buildSystemTableUpsert} from './cdc-system-table-mutation-sql-helpers.js';
 import {TABLES} from '../constants/index.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {
   CONTROL_PLANE_GATEWAY_ERROR_CODE,
   GATEWAY_ERROR_MSG,
@@ -23,6 +25,24 @@ const {
   logSystemTableWriteFailure,
 } = CDC_INTEGRATION_SERVICE_SHARED;
 
+async function observeDeletedRowVisibility(context, tableName, id, whereClause, options, result) {
+  const effect = classifyControlPlaneMutationResult(result);
+  const idField = context.getPrimaryKeyField(tableName);
+  const conditional = Object.keys(whereClause).some((field) => field !== idField);
+  // A failed comparison says nothing should disappear. Primary-key-only
+  // deletion still requests absence even on replay with zero affected rows.
+  // An applied comparison waits for this matched row to disappear, allowing
+  // a successor at the same key to remain visible.
+  const canObserveDeletion = !conditional ||
+    (effect.applied && effect.affectedRowsPresent && effect.affectedRows > 0);
+  if (!canObserveDeletion) return buildSystemTableVisibilityResult({visibilityState: null});
+  return normalizeSystemTableVisibilityResult(
+    await context.waitForCacheUpdate(tableName, id, false, {
+      expectedFields: whereClause,
+      allowPendingVisibility: options?.allowPendingVisibility === true,
+    }),
+  );
+}
 
 /**
  * Delete a row from a system table.
@@ -84,15 +104,8 @@ export async function deleteSystemTableRow(context, tableName, whereClause, opti
           CDC_ERROR_MSG.DELETE_FAILED,
         );
       }
-      // A zero-row DELETE is an idempotent durable success, not proof that this
-      // node's cache already observed the earlier deletion. Reassert the same
-      // absence postcondition for every successful DELETE so a lost CDC event
-      // cannot leave a stale row indefinitely.
-      const visibilityResult = normalizeSystemTableVisibilityResult(
-        await context.waitForCacheUpdate(tableName, id, false, {
-          allowPendingVisibility: options?.allowPendingVisibility === true,
-        }),
-      );
+      const visibilityResult = await observeDeletedRowVisibility(
+        context, tableName, id, whereClause, options, result);
       context.stats.deletes++;
       context.logger.debug(CDC_LOG_MSG.DELETED_ROW, {
         tableName,

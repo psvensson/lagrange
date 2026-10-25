@@ -65,8 +65,8 @@ test('drain and remove-node invoke the owner operations', async (t) => {
   const connection = createRecordingConnection({success: true});
   const cli = createCli(connection);
   await cli.drainNode('node-a');
-  await cli.removeNode('node-b');
-  t.same(connection.calls, [['drainNode', 'node-a'], ['removeNode', 'node-b']]);
+  await cli.removeNode('node-b', {bootIncarnation: 1, status: 'stopped'});
+  t.same(connection.calls, [['drainNode', 'node-a'], ['removeNode', 'node-b', {bootIncarnation: 1, status: 'stopped'}]]);
   t.equal(cli.refreshes, 2);
   t.same(connection.sentSql, [], 'no SQL is sent');
 });
@@ -88,7 +88,7 @@ test('read-only mode refuses node management locally', async (t) => {
   const connection = createRecordingConnection({success: true});
   const cli = createCli(connection);
   cli.readOnlyMode = true;
-  await cli.removeNode('node-b');
+  await cli.removeNode('node-b', {bootIncarnation: 1, status: 'stopped'});
   t.same(connection.calls, []);
   t.equal(cli.errors.length, 1);
 });
@@ -115,14 +115,14 @@ test('the connection manager calls the admin HTTP operations', async (t) => {
   t.same(await manager.setConfigValue('logging.level', 'warn'),
     {success: true, outcome: 'applied'});
   await manager.drainNode('node-a');
-  await manager.removeNode('node-b');
+  await manager.removeNode('node-b', {bootIncarnation: 1, status: 'stopped'});
   t.same(requests, [
     {method: 'PUT', url: ADMIN_OWNER_OPERATION_PATH.configByKey(
       'logging.level'), body: {value: 'warn'}},
     {method: 'POST', url: ADMIN_OWNER_OPERATION_PATH.nodeDrain('node-a'),
       body: {}},
     {method: 'DELETE', url: ADMIN_OWNER_OPERATION_PATH.nodeById('node-b'),
-      body: null},
+      body: {bootIncarnation: 1, status: 'stopped'}},
   ]);
 
   const disconnected = new ConnectionManager();

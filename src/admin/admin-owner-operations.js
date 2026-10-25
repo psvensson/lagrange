@@ -7,7 +7,7 @@
  * query channel:
  * - config set   -> DynamicConfigService.set (validated, gateway write)
  * - node drain   -> the node-local one-way drain owner (this node only)
- * - node remove  -> NodesOwner.removeNode (gateway delete; terminal rows only)
+ * - node remove  -> NodesOwner.removeTerminalNode (exact observed terminal row)
  * - table policy -> TablePolicyService.updateTablePolicy (gateway write)
  *
  * An absent owner answers OWNER_NOT_READY; nothing falls back to SQL.
@@ -15,7 +15,7 @@
  */
 
 import {HTTP_STATUS} from '../constants/index.js';
-import {NODE_STATE} from '../constants/node-state.js';
+import {NODE_REMOVAL_ERROR_CODE} from '../control-plane/owners/nodes-owner.js';
 import {CONFIG_ERROR_CODE} from '../config/config-constants.js';
 import {POLICY_ERROR_CODE} from '../policy/policy-constants.js';
 import {CONTROL_PLANE_MUTATION_OUTCOME} from
@@ -56,8 +56,6 @@ const ADMIN_OWNER_OPERATION_ERROR_CODE = Object.freeze({
   CONFIG_KEY_REQUIRED: 'CONFIG_KEY_REQUIRED',
   NODE_ID_REQUIRED: 'NODE_ID_REQUIRED',
   NODE_DRAIN_REMOTE_UNSUPPORTED: 'NODE_DRAIN_REMOTE_UNSUPPORTED',
-  NODE_NOT_FOUND: 'NODE_NOT_FOUND',
-  NODE_REMOVE_NODE_LIVE: 'NODE_REMOVE_NODE_LIVE',
 });
 
 const ADMIN_OWNER_OPERATION_ERROR_MSG = Object.freeze({
@@ -66,9 +64,6 @@ const ADMIN_OWNER_OPERATION_ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId is required',
   NODE_DRAIN_REMOTE_UNSUPPORTED:
     'A node drains only itself: connect to the node to drain it',
-  NODE_NOT_FOUND: 'Node not found',
-  NODE_REMOVE_NODE_LIVE:
-    'Only a stopped or failed node can be removed from cluster metadata',
 });
 
 // Owner refusal codes and the HTTP status each answers with.
@@ -78,18 +73,13 @@ const REFUSAL_STATUS_BY_CODE = new Map([
   [ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_ID_REQUIRED, HTTP_STATUS.BAD_REQUEST],
   [ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_DRAIN_REMOTE_UNSUPPORTED,
     HTTP_STATUS.CONFLICT],
-  [ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_NOT_FOUND, HTTP_STATUS.NOT_FOUND],
-  [ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_REMOVE_NODE_LIVE,
-    HTTP_STATUS.CONFLICT],
+  [NODE_REMOVAL_ERROR_CODE.NODE_ID_REQUIRED, HTTP_STATUS.BAD_REQUEST],
+  [NODE_REMOVAL_ERROR_CODE.INCARNATION_REQUIRED, HTTP_STATUS.BAD_REQUEST],
+  [NODE_REMOVAL_ERROR_CODE.TERMINAL_STATUS_REQUIRED, HTTP_STATUS.BAD_REQUEST],
+  [NODE_REMOVAL_ERROR_CODE.OBSERVATION_CHANGED, HTTP_STATUS.CONFLICT],
   [CONFIG_ERROR_CODE.VALUE_INVALID, HTTP_STATUS.BAD_REQUEST],
   [POLICY_ERROR_CODE.TABLE_ID_REQUIRED, HTTP_STATUS.BAD_REQUEST],
   [POLICY_ERROR_CODE.POLICY_INVALID, HTTP_STATUS.BAD_REQUEST],
-]);
-
-// Node statuses after which the node no longer publishes its own row.
-const REMOVABLE_NODE_STATUSES = new Set([
-  NODE_STATE.STOPPED,
-  NODE_STATE.FAILED,
 ]);
 
 const NOT_READY_MUTATION_OUTCOMES = new Set([
@@ -114,12 +104,13 @@ function refusal(code, message) {
   });
 }
 
-function ownerNotReady(retryAfterMs = null) {
+function ownerNotReady(retryAfterMs = null, error = null) {
   return answer(HTTP_STATUS.SERVICE_UNAVAILABLE, {
     success: false,
     outcome: ADMIN_OWNER_OPERATION_OUTCOME.OWNER_NOT_READY,
-    errorCode: ADMIN_OWNER_OPERATION_ERROR_CODE.OWNER_NOT_READY,
-    error: ADMIN_OWNER_OPERATION_ERROR_MSG.OWNER_NOT_READY,
+    errorCode: error?.code || ADMIN_OWNER_OPERATION_ERROR_CODE.OWNER_NOT_READY,
+    error: error?.message || ADMIN_OWNER_OPERATION_ERROR_MSG.OWNER_NOT_READY,
+    ...(isNonEmptyString(error?.outcome) ? {mutationOutcome: error.outcome} : {}),
     ...(Number.isFinite(retryAfterMs) ? {retryAfterMs} : {}),
   });
 }
@@ -162,7 +153,7 @@ function answerOwnerFailure(error) {
   }
   if (error?.deferRetry === true ||
       NOT_READY_MUTATION_OUTCOMES.has(error?.outcome)) {
-    return ownerNotReady(error?.retryAfterMs);
+    return ownerNotReady(error?.retryAfterMs, error);
   }
   return ownerFailed(error, code);
 }
@@ -254,30 +245,14 @@ class AdminOwnerOperations {
   /**
    * Remove a terminal node's row through the nodes owner.
    * @param {string} nodeId
+   * @param {{bootIncarnation: number, status: string}} observation
    * @return {Promise<{statusCode: number, body: Object}>}
    */
-  async removeNode(nodeId) {
-    if (!isNonEmptyString(nodeId)) {
-      return refusal(ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_ID_REQUIRED,
-        ADMIN_OWNER_OPERATION_ERROR_MSG.NODE_ID_REQUIRED);
-    }
+  async removeNode(nodeId, observation) {
     const owner = resolveOwner(this.getNodesOwner);
     if (!owner) return ownerNotReady();
     try {
-      const node = await owner.getNode(nodeId);
-      if (!node) {
-        return refusal(ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_NOT_FOUND,
-          ADMIN_OWNER_OPERATION_ERROR_MSG.NODE_NOT_FOUND);
-      }
-      if (!REMOVABLE_NODE_STATUSES.has(node.status)) {
-        return refusal(ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_REMOVE_NODE_LIVE,
-          ADMIN_OWNER_OPERATION_ERROR_MSG.NODE_REMOVE_NODE_LIVE);
-      }
-      const result = await owner.removeNode(nodeId);
-      return applied({
-        nodeId,
-        mutationOutcome: result?.outcome || null,
-      });
+      return applied(await owner.removeTerminalNode(nodeId, observation));
     } catch (error) {
       return answerOwnerFailure(error);
     }
@@ -319,7 +294,7 @@ function registerAdminOwnerOperationRoutes(fastify, operations) {
       await operations.drainNode(request.params.nodeId, request.body)));
   fastify.delete(ADMIN_OWNER_OPERATION_ROUTE.NODE_BY_ID,
     async (request, reply) => sendAnswer(reply,
-      await operations.removeNode(request.params.nodeId)));
+      await operations.removeNode(request.params.nodeId, request.body)));
   fastify.patch(ADMIN_OWNER_OPERATION_ROUTE.TABLE_POLICY,
     async (request, reply) => sendAnswer(reply,
       await operations.updateTablePolicy(request.params.tableId,

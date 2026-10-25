@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2456,
+    "ordinary": 2458,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2473,
-  "digest": "fnv1a32-bdc34646",
+  "censusSize": 2475,
+  "digest": "fnv1a32-23a3af8f",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -591,6 +591,7 @@
     "test/control-plane/node-incarnation-fence.test.js": "ordinary",
     "test/control-plane/node-lifecycle-publication.test.js": "ordinary",
     "test/control-plane/node-liveness-semantic-projection-owner.test.js": "ordinary",
+    "test/control-plane/node-terminal-removal.test.js": "ordinary",
     "test/control-plane/node-terminal-transition-fence.test.js": "ordinary",
     "test/control-plane/node-trust-serve-lane-observability.test.js": "ordinary",
     "test/control-plane/node-trust-state.test.js": "ordinary",
@@ -1014,6 +1015,7 @@
     "test/integration/cdc-propagation.integration.test.js": "ordinary",
     "test/integration/cdc-subscription-catchup.integration.test.js": "ordinary",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "ordinary",
+    "test/integration/control-plane-node-terminal-removal.integration.test.js": "ordinary",
     "test/integration/control-plane-rebalance.integration.test.js": "ordinary",
     "test/integration/convergence-control-snapshot.integration.test.js": "ordinary",
     "test/integration/create-table-partition-provisioning.integration.test.js": "ordinary",

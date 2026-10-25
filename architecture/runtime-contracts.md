@@ -123,6 +123,23 @@ Forbidden patterns:
 - one persisted field carrying unrelated claim, lease, workflow, and entity
   lifecycle semantics
 
+### Terminal Node Removal
+
+Terminal NODES metadata removal is owned by `NodesOwner.removeTerminalNode`.
+The caller supplies the observed node ID, issued boot incarnation and `stopped`
+or `failed` status. The owner deletes with all three equality predicates in one
+gateway mutation. Zero matched rows mean observation changed, never removed;
+an unavailable affected-row count remains unconfirmed. HTTP
+`DELETE /api/admin/nodes/:nodeId` requires `{bootIncarnation, status}`; CLI
+`remove-node <node_id> <boot_incarnation> <status>` carries the same observation.
+Retries retain it. A new removal intent requires a new observation.
+
+CDC conditional DELETE visibility observes disappearance of the matched row,
+including every predicate field. A successor at the same key is preserved.
+Zero matched rows or an unknown effect count establish no absence postcondition.
+Primary-key-only deletion requests key absence and retains its authoritative
+cache reconciliation on a zero-row repeat.
+
 ## Cache And Read Models
 
 `SystemTableCache` is the steady-state read model for CDC-propagated metadata.

@@ -1458,6 +1458,28 @@
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js"
       ]
+    },
+    "node-terminal-removal-visibility": {
+      "description": "NodesOwner removes only an explicit node ID, boot incarnation and terminal-status observation through one conditional gateway DELETE. Admin and CLI preserve that observation across retries. Conditional CDC deletion observes disappearance of the matched row, preserves successors, and does not request absence on zero or unknown affected-row counts. Primary-key-only deletion retains authoritative absence convergence.",
+      "owners": [
+        "src/control-plane/owners/nodes-owner.js",
+        "src/admin/admin-owner-operations.js",
+        "src/cli/admin-cli-action-methods.js",
+        "src/cli/admin-cli-navigation-methods.js",
+        "src/cli/core/connection-manager.js",
+        "src/cli/cli-constants.js",
+        "src/cdc/cdc-integration-service-mutations.js",
+        "src/cdc/cdc-integration-service-cache-visibility-wait.js",
+        "src/cdc/cdc-cache-deletion-visibility.js"
+      ],
+      "tests": [
+        "test/control-plane/node-terminal-removal.test.js",
+        "test/integration/control-plane-node-terminal-removal.integration.test.js",
+        "test/cdc/cdc-delete-cache-absence-convergence.test.js",
+        "test/admin/admin-owner-operations.test.js",
+        "test/cli/admin-cli-owner-operations.test.js",
+        "test/cli/core/command-parser.test.js"
+      ]
     }
   },
   "coupledPairs": {

@@ -17,7 +17,7 @@ import {DynamicConfigService} from
 import {CONFIG_ERROR_CODE} from '../../src/config/config-constants.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {POLICY_ERROR_CODE} from '../../src/policy/policy-constants.js';
-import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
+import {NODE_REMOVAL_ERROR_CODE, NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
 import {submitLocalNodeDrainIntent} from
   '../../src/node/local-node-drain.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
@@ -184,10 +184,11 @@ test('node remove deletes only a terminal row through NodesOwner',
       getNodesOwner: () => nodesOwner,
     }, SERVING_NODE_ID);
 
-    const live = await operations.removeNode(OTHER_NODE_ID);
-    t.equal(live.statusCode, 409);
+    const live = await operations.removeNode(OTHER_NODE_ID,
+      {bootIncarnation: 1, status: 'active'});
+    t.equal(live.statusCode, 400);
     t.equal(live.body.errorCode,
-      ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_REMOVE_NODE_LIVE);
+      NODE_REMOVAL_ERROR_CODE.TERMINAL_STATUS_REQUIRED);
     t.equal(gateway.deletedRows.length, 0, 'a live node row is kept');
 
     const stoppedGateway = createRecordingGateway({
@@ -198,24 +199,30 @@ test('node remove deletes only a terminal row through NodesOwner',
     });
     const stopped = await new AdminOwnerOperations({
       getNodesOwner: () => stoppedOwner,
-    }, SERVING_NODE_ID).removeNode(OTHER_NODE_ID);
+    }, SERVING_NODE_ID).removeNode(OTHER_NODE_ID,
+      {bootIncarnation: 1, status: 'stopped'});
     t.equal(stopped.statusCode, 200);
     t.equal(stoppedGateway.deletedRows.length, 1);
     t.same(stoppedGateway.deletedRows[0], {
       tableName: 'nodes',
-      whereClause: {node_id: OTHER_NODE_ID},
+      whereClause: {node_id: OTHER_NODE_ID, boot_incarnation: 1, status: 'stopped'},
     });
     t.equal(stoppedGateway.rawSql.length, 0, 'no raw SQL');
 
     const missingOwner = new NodesOwner({
-      controlPlaneSystemTableGateway: createRecordingGateway(),
+      controlPlaneSystemTableGateway: {
+        ...createRecordingGateway(),
+        deleteSystemTableRow: async () => ({success: true, outcome: 'observed_state_changed',
+          affectedRows: 0}),
+      },
     });
     const missing = await new AdminOwnerOperations({
       getNodesOwner: () => missingOwner,
-    }, SERVING_NODE_ID).removeNode(OTHER_NODE_ID);
-    t.equal(missing.statusCode, 404);
+    }, SERVING_NODE_ID).removeNode(OTHER_NODE_ID,
+      {bootIncarnation: 1, status: 'stopped'});
+    t.equal(missing.statusCode, 409);
     t.equal(missing.body.errorCode,
-      ADMIN_OWNER_OPERATION_ERROR_CODE.NODE_NOT_FOUND);
+      NODE_REMOVAL_ERROR_CODE.OBSERVATION_CHANGED);
   });
 
 test('table policy invokes TablePolicyService.updateTablePolicy',
@@ -285,7 +292,8 @@ test('the routes answer each operation over HTTP', async (t) => {
     url: ADMIN_OWNER_OPERATION_PATH.nodeDrain(OTHER_NODE_ID), payload: {}});
   t.equal(drain.statusCode, 409);
   const remove = await fastify.inject({method: 'DELETE',
-    url: ADMIN_OWNER_OPERATION_PATH.nodeById(OTHER_NODE_ID)});
+    url: ADMIN_OWNER_OPERATION_PATH.nodeById(OTHER_NODE_ID),
+    payload: {bootIncarnation: 1, status: 'stopped'}});
   t.equal(remove.statusCode, 404);
   const policy = await fastify.inject({method: 'PATCH',
     url: ADMIN_OWNER_OPERATION_PATH.tablePolicy(TABLE_ID),
@@ -294,9 +302,34 @@ test('the routes answer each operation over HTTP', async (t) => {
   t.same(calls, [
     ['setConfig', LOG_LEVEL_KEY, {value: 'warn'}],
     ['drainNode', OTHER_NODE_ID, {}],
-    ['removeNode', OTHER_NODE_ID],
+    ['removeNode', OTHER_NODE_ID, {bootIncarnation: 1, status: 'stopped'}],
     ['updateTablePolicy', TABLE_ID, {policy: {a: 1}}],
   ]);
+});
+
+test('HTTP node removal requires original observation and preserves the owner refusal', async (t) => {
+  const gateway = createRecordingGateway();
+  const owner = new NodesOwner({controlPlaneSystemTableGateway: gateway});
+  const fastify = Fastify();
+  registerAdminOwnerOperationRoutes(fastify,
+    new AdminOwnerOperations({getNodesOwner: () => owner}));
+  t.teardown(() => fastify.close());
+  const request = {method: 'DELETE', url: ADMIN_OWNER_OPERATION_PATH.nodeById(OTHER_NODE_ID)};
+  const missing = await fastify.inject(request);
+  t.equal(missing.statusCode, 400);
+  t.equal(missing.json().errorCode, NODE_REMOVAL_ERROR_CODE.INCARNATION_REQUIRED);
+  t.equal(gateway.deletedRows.length, 0);
+  const observation = {bootIncarnation: 1, status: 'stopped'};
+  const applied = await fastify.inject({...request, payload: observation});
+  t.equal(applied.statusCode, 200);
+  t.same(gateway.deletedRows[0].whereClause,
+    {node_id: OTHER_NODE_ID, boot_incarnation: 1, status: 'stopped'});
+  gateway.deleteSystemTableRow = async () => ({success: true,
+    outcome: 'observed_state_changed', partitionResult: {affectedRows: 0}});
+  const repeated = await fastify.inject({...request, payload: observation});
+  t.equal(repeated.statusCode, 409);
+  t.equal(repeated.json().errorCode, NODE_REMOVAL_ERROR_CODE.OBSERVATION_CHANGED);
+  t.equal(repeated.json().success, false);
 });
 
 test('the admin API serves the owner operations with its owner providers',

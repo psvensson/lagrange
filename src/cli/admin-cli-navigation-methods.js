@@ -291,7 +291,11 @@ const ADMIN_CLI_NAVIGATION_METHODS = {
       if (args[LOCAL_NUM_ZERO]) this.drainNode(args[LOCAL_NUM_ZERO]);
       break;
     case LOCAL_STR_REMOVE_NODE:
-      if (args[LOCAL_NUM_ZERO]) this.removeNode(args[LOCAL_NUM_ZERO]);
+      if (args[LOCAL_NUM_ZERO]) {
+        this.removeNode(args[LOCAL_NUM_ZERO], {
+          bootIncarnation: Number(args[1]), status: args[2],
+        });
+      }
       break;
     case LOCAL_STR_HISTORY:
       if (args[LOCAL_NUM_ZERO]) this.showReplicaHistory(args[LOCAL_NUM_ZERO]);

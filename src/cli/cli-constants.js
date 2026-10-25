@@ -111,8 +111,8 @@ const CLI_COMMAND_DEFINITIONS = Object.freeze([
   },
   {
     name: CLI_COMMAND.REMOVE_NODE,
-    params: ['node_id'],
-    description: 'Remove a stopped or failed node from cluster metadata',
+    params: ['node_id', 'boot_incarnation', 'status'],
+    description: 'Remove exactly the observed incarnation and stopped/failed status',
     aliases: ['rm-node'],
   },
   {

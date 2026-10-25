@@ -441,11 +441,12 @@ export class ConnectionManager {
   /**
    * Remove a stopped or failed node's metadata row.
    * @param {string} nodeId
+   * @param {{bootIncarnation: number, status: string}} observation
    * @returns {Promise<Object>}
    */
-  removeNode(nodeId) {
+  removeNode(nodeId, observation) {
     return this.requestAdminOperation(ADMIN_HTTP_METHOD.DELETE,
-      ADMIN_OWNER_OPERATION_PATH.nodeById(nodeId));
+      ADMIN_OWNER_OPERATION_PATH.nodeById(nodeId), observation);
   }
 
   /**

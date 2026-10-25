@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 66,
     "cli-tooling": 97,
-    "control-plane": 217,
+    "control-plane": 219,
     "convergence-topology": 78,
     "distributed-harness": 178,
     "examples-e2e": 7,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2473,
-  "digest": "fnv1a32-54031ef0",
+  "censusSize": 2475,
+  "digest": "fnv1a32-025fba69",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-94bd22d9",
+  "observationDigest": "fnv1a32-e6e9f695",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -611,6 +611,7 @@
     "test/control-plane/node-incarnation-fence.test.js": "control-plane",
     "test/control-plane/node-lifecycle-publication.test.js": "control-plane",
     "test/control-plane/node-liveness-semantic-projection-owner.test.js": "control-plane",
+    "test/control-plane/node-terminal-removal.test.js": "control-plane",
     "test/control-plane/node-terminal-transition-fence.test.js": "control-plane",
     "test/control-plane/node-trust-serve-lane-observability.test.js": "control-plane",
     "test/control-plane/node-trust-state.test.js": "control-plane",
@@ -1034,6 +1035,7 @@
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
+    "test/integration/control-plane-node-terminal-removal.integration.test.js": "control-plane",
     "test/integration/control-plane-rebalance.integration.test.js": "placement-rebalance",
     "test/integration/convergence-control-snapshot.integration.test.js": "control-plane",
     "test/integration/create-table-partition-provisioning.integration.test.js": "storage-partition",
@@ -4523,6 +4525,13 @@
         "src/rebalancer/unified-rebalancer-replica-state.js"
       ]
     },
+    "test/control-plane/node-terminal-removal.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway-constants.js",
+        "src/control-plane/owners/nodes-owner.js",
+        "src/partition/partition-committed-statement-outcome-constants.js"
+      ]
+    },
     "test/control-plane/node-terminal-transition-fence.test.js": {
       "files": [
         "src/bootstrap/shared/node-registration-owner.js",
@@ -7622,6 +7631,14 @@
         "src/bootstrap/phases/contact-seed-failure-signals.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js"
+      ]
+    },
+    "test/integration/control-plane-node-terminal-removal.integration.test.js": {
+      "files": [
+        "src/bootstrap/shared/node-registration-owner-row-builder.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/control-plane/owners/node-registration-incarnation-write.js",
+        "src/partition/partition-committed-statement-outcome-constants.js"
       ]
     },
     "test/integration/control-plane-rebalance.integration.test.js": {

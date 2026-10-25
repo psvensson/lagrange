@@ -264,8 +264,8 @@ test('CommandParser', async (t) => {
   await t.test('remove-node alias parses to canonical command', async (t) => {
     const parser = new CommandParser();
 
-    const result = parser.parse('rm-node node-2');
-    t.same(result, {command: 'remove-node', args: ['node-2']});
+    const result = parser.parse('rm-node node-2 1 stopped');
+    t.same(result, {command: 'remove-node', args: ['node-2', '1', 'stopped']});
   });
 
   await t.test('since command parses with a required argument', async (t) => {
