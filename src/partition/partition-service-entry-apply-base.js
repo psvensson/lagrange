@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {assertReplicaHandlerServing} from '../node/replica-transport-handler-identity.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
 import {
@@ -293,16 +294,18 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const payload = this.extractApplicationPayload(envelope);
     if (payload === null) {
       return {
-        acknowledged: false,
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
       };
     }
     if (isRaftRsTransportEnvelope(payload)) {
+      // A shut-down or no-longer-registered incarnation refuses the envelope
+      // it would drop, so the sender never records it as taken (F1).
+      assertReplicaHandlerServing(this);
       if (this.raft) {
         await Promise.resolve(this.raft.step(payload));
       }
-      return {acknowledged: true};
+      return null;
     }
     return this.handleCanonicalApplicationPayload(payload);
   }
@@ -327,7 +330,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
   async handleCanonicalApplicationPayload(payload) {
     if (!payload || !payload.type) {
       return {
-        acknowledged: false,
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE,
       };
@@ -335,7 +337,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const admission = this.resolveRemovalServingAdmission(payload);
     if (admission.allowed !== true) {
       return {
-        acknowledged: true,
+
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
         deferRetry: true,
@@ -408,7 +410,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         return this.applyWrite(payload.operation);
       }
       return {
-        acknowledged: false,
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.INVALID_FORWARD_WRITE,
       };
@@ -432,7 +433,6 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         partitionId: this.partitionId,
       });
       return {
-        acknowledged: false,
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
       };
@@ -450,19 +450,18 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       const result = await routeParticipantTransactionRequest(this, payload);
       if (!result) {
         return {
-          acknowledged: false,
           success: false,
           error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
         };
       }
       return {
-        acknowledged: true,
+
         success: result?.success === true,
         ...result,
       };
     } catch (error) {
       return {
-        acknowledged: true,
+
         success: false,
         error: error.message,
         deferRetry: error?.deferRetry === true,
@@ -530,13 +529,12 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         break;
       default:
         return {
-          acknowledged: false,
           success: false,
           error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
         };
       }
       return {
-        acknowledged: true,
+
         success: result.success,
         changes: result.changes || 0,
       };

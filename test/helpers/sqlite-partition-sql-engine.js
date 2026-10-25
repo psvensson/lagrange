@@ -9,6 +9,7 @@
  * really produces.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -63,18 +64,21 @@ function createPartitionRouter(databases, uncountedPartitions) {
       const database = databases.get(
         address.split('/')[ADDRESS_PARTITION_SEGMENT]);
       if (message.type !== QUERY_MESSAGE || !database) {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const prepared = database.prepare(message.sql);
       const params = message.params || [];
       if (SQL_READ_PATTERN.test(message.sql)) {
-        return {acknowledged: true, success: true, rows: prepared.all(...params)};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: prepared.all(...params),
+        });
       }
       const {changes} = prepared.run(...params);
       const partitionId = address.split('/')[ADDRESS_PARTITION_SEGMENT];
       return uncountedPartitions.has(partitionId) ?
-        {acknowledged: true, success: true, rows: []} :
-        {acknowledged: true, success: true, rows: [], changes};
+        buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []}) :
+        buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [], changes});
     },
   };
 }

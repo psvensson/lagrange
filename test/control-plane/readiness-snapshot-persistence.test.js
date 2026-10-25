@@ -3,6 +3,7 @@
  * Task 4.2 — Requirements 4, 7, 9.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {
@@ -414,7 +415,7 @@ test('coordinator createOperation persists readiness snapshot in initial step',
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -505,7 +506,7 @@ test('dispatch service emits readiness snapshot with dispatch event',
       nodeId: 'node-local',
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       cdcIntegrationService: {
@@ -601,7 +602,7 @@ test('dispatch service passes row metadata through direct dispatch',
       nodeId: 'node-local',
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       cdcIntegrationService: {
@@ -704,7 +705,7 @@ test('dispatch service emits failure event when target is not ready',
       nodeId: 'node-local',
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       cdcIntegrationService: {
@@ -800,7 +801,7 @@ test('coordinator updateStep persists readiness snapshot in step entry',
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {

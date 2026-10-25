@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -66,7 +67,11 @@ function createHarness(answer) {
       const captured = structuredClone(message);
       deliveries.push(captured);
       if (message.type !== QUERY_OPERATION.TRANSACTION) {
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       }
       const recordReplyBoundary = () => {
         replyBoundaryRows.push({
@@ -74,11 +79,11 @@ function createHarness(answer) {
           row: durableRowOf(gateway, message.transactionId),
         });
       };
-      return answer?.({
+      return buildDeliveryEnvelope({acknowledged: true}, answer?.({
         message: captured,
         partitionId,
         recordReplyBoundary,
-      }) ?? answerParticipantTransactionRequest(message, partitionId);
+      }) ?? answerParticipantTransactionRequest(message, partitionId));
     },
   };
   const engine = new SQLQueryEngine({
@@ -104,7 +109,6 @@ async function beginAndWrite(engine, sessionId) {
 
 function terminalOutcomeAnswer(message, partitionId) {
   return {
-    acknowledged: true,
     success: true,
     operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
     partitionId,
@@ -297,7 +301,6 @@ test('production evidence matrix: foreign terminal replies after durable ' +
         if (targetOperation === QUERY_OPERATION.TRANSACTION_OUTCOME &&
             message.operation === QUERY_OPERATION.COMMIT) {
           return {
-            acknowledged: true,
             success: false,
             error: 'participant no longer has an active volatile session',
             errorCode: 'NO_TRANSACTION',

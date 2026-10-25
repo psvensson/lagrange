@@ -1,6 +1,6 @@
 import {registerMessageRouterTailFinalTests} from './message-router-tail-final-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+import { deliveryTransportOf, isDeliveredTransportDeliveryOutcome,TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../../src/transport/transport-semantic-outcome.js';
 
 export async function registerMessageRouterTailMoreTests({
@@ -106,8 +106,8 @@ export async function registerMessageRouterTailMoreTests({
       const result = await deliveryPromise;
       await Promise.resolve();
 
-      t.equal(result.acknowledged, false, 'should report failed ACK on shutdown');
-      t.equal(result.error, 'Router shutdown', 'should surface shutdown as delivery error');
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'should report failed ACK on shutdown');
+      t.equal(result.transport.error, 'Router shutdown', 'should surface shutdown as delivery error');
       t.equal(router.pendingResponses.size, 0, 'should clear pending responses');
       t.same(
         unhandledRejections,
@@ -307,7 +307,7 @@ export async function registerMessageRouterTailMoreTests({
     const receivedMessages = [];
     router.register('self-delivery-test/service/test-service', (envelope) => {
       receivedMessages.push(envelope);
-      return {acknowledged: true, data: 'response-from-self'};
+      return {data: 'response-from-self'};
     });
 
     // Deliver message to self
@@ -316,8 +316,8 @@ export async function registerMessageRouterTailMoreTests({
       {type: 'TEST', data: 'hello-self'},
     );
 
-    t.equal(result.acknowledged, true, 'should be acknowledged');
-    t.equal(result.data, 'response-from-self', 'should have response data');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should be acknowledged');
+    t.equal(result.answer.data, 'response-from-self', 'should have response data');
     t.equal(receivedMessages.length, 1, 'should receive one message');
     t.equal(receivedMessages[0].payload.data, 'hello-self', 'should have correct payload');
 
@@ -338,12 +338,12 @@ export async function registerMessageRouterTailMoreTests({
       {type: 'TEST', data: 'missing'},
     );
 
-    t.equal(classifyTransportDeliveryOutcome(result).reasonCode,
+    t.equal(result.transport.reasonCode,
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
       'the frame-level no-handler fact is FAILED/no_handler');
-    t.equal(result.noHandler, true, 'should surface noHandler flag');
+    t.equal(result.transport.noHandler, true, 'should surface noHandler flag');
     t.match(
-      result.error,
+      result.transport.error,
       /No handler registered for address self-no-handler-test\/service\/missing-handler/,
       'should preserve no-handler error text',
     );
@@ -362,7 +362,6 @@ export async function registerMessageRouterTailMoreTests({
 
     router.register('self-error-detail-test/service/erroring-service', () => {
       return {
-        acknowledged: true,
         status: 'error',
         error: 'replica assignment rejected',
       };
@@ -373,12 +372,12 @@ export async function registerMessageRouterTailMoreTests({
       {type: 'TEST', data: 'bad'},
     );
 
-    t.equal(result.acknowledged, true, 'should acknowledge delivery');
-    t.equal(result.status, 'error', 'should preserve handler status');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should acknowledge delivery');
+    t.equal(result.answer.status, 'error', 'should preserve handler status');
     t.equal(
-      result.error,
+      result.answer.error,
       'replica assignment rejected',
-      'should preserve handler error text on acknowledged ACK',
+      'should preserve handler error text in the answer',
     );
 
     await router.shutdown();
@@ -499,7 +498,7 @@ export async function registerMessageRouterTailMoreTests({
         capturedArgs[0], 'test-node/service/unregistered',
         'should pass target address to deliverRemote',
       );
-      t.equal(result.acknowledged, false, 'should not be acknowledged');
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'should not be acknowledged');
 
       await router.shutdown();
     });
@@ -716,8 +715,8 @@ export async function registerMessageRouterTailMoreTests({
       }
       await firstPromise;
 
-      t.equal(secondResult.acknowledged, true, 'second delivery should be acknowledged');
-      t.equal(secondResult.id, 2, 'second delivery should preserve handler payload');
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(secondResult)), true, 'second delivery should be acknowledged');
+      t.equal(secondResult.answer.id, 2, 'second delivery should preserve handler payload');
       t.ok(
         secondDurationMs < 80,
         'second delivery should not be blocked by first ACK wait ' +
@@ -835,11 +834,11 @@ export async function registerMessageRouterTailMoreTests({
         {type: 'TEST'},
       );
 
-      t.equal(result.acknowledged, false, 'delivery should fail when ACK times out');
-      t.match(result.error, /Message timeout/i, 'should surface ACK timeout error');
-      t.equal(result.deferRetry, true,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'delivery should fail when ACK times out');
+      t.match(result.transport.error, /Message timeout/i, 'should surface ACK timeout error');
+      t.equal(result.transport.deferRetry, true,
         'ACK timeout should ask callers to defer immediate retries');
-      t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+      t.equal(result.transport.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
         'ACK timeout should surface a stable deferred-timeout error code');
 
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -894,11 +893,11 @@ export async function registerMessageRouterTailMoreTests({
         {type: 'TEST'},
       );
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'delivery should fail closed when the socket is already closed');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'delivery should ask callers to defer immediate retries');
-      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      t.equal(result.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
         'delivery should surface a stable closed-connection error code');
       t.equal(
         router.nodeConnections.get('node-b')?.state,
@@ -966,9 +965,9 @@ export async function registerMessageRouterTailMoreTests({
         {type: 'TEST'},
       );
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'delivery should still fail when the ACK times out');
-      t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+      t.equal(result.transport.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
         'timeout should still surface the deferred timeout error');
       t.equal(
         router.nodeConnections.get('node-b')?.state,

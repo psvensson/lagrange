@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {encodeDeliveryMessage} from '../../src/transport/message-router-delivery-encoding.js';
@@ -107,7 +108,7 @@ test('actual router debits final preparer work and preserves text-frame bytes',
     assert.equal(write.bytes.length, Buffer.byteLength(JSON.stringify(write.frame)));
     peer.ack('prepared-duration', {transportProbe: 'encoding'});
     write.release();
-    assert.equal((await result).acknowledged, true);
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await result)), true);
   });
 
 test('pre-send encoding exhaustion has zero ws effects without waiting for a timer callback',
@@ -122,8 +123,8 @@ test('pre-send encoding exhaustion has zero ws effects without waiting for a tim
         return prepareCdcDeliveryMessage(message, ms);
       }}));
     assert.equal(preparations, 2, 'the actual final-stamp preparation boundary was reached');
-    assert.equal(result.acknowledged, false);
-    assert.equal(result.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false);
+    assert.equal(result.transport.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
     await nextTurn();
     assert.equal(peer.writes.length, 0);
     assert.equal(f.router.pendingMessages.size, 0);
@@ -201,8 +202,8 @@ test('real ws receives the duration payload as unchanged Unicode JSON text with 
     const input = payload();
     const result = await f.router.deliver(CDC_ROUTER_TEST.ADDRESS, input, options());
     const wire = await received.promise;
-    assert.equal(result.acknowledged, true);
-    assert.equal(result.transportProbe, 'real-ws');
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true);
+    assert.equal(result.answer.transportProbe, 'real-ws');
     assert.equal(wire.isBinary, false);
     assert.deepEqual(wire.frame.payload.events, input.events);
     assert.equal(wire.frame.payload[CDC_DELIVERY_REMAINING_MS], CDC_ROUTER_TEST.BUDGET_MS);

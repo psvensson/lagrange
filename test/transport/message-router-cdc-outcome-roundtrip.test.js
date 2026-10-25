@@ -1,13 +1,15 @@
-// C2 witness: transport normalization composed with the canonical CDC answer.
+// C2 witness: the router delivery envelope composed with the canonical CDC
+// answer (restated for the Q6 envelope cutover, design section 4.2).
 //
-// Property. For a handler reply R carrying CDC receipt metadata, the outcome O
-// that the delivery caller receives from the real MessageRouter must not pass
-// the canonical CDC predicate when R itself fails it. Transport may ADD facts
-// (acknowledged, deliveryState, queueWaitMs) and reports a supplied deliveryState
-// that contradicts its computed state as FAILED; it must never erase or rewrite
-// any other explicitly supplied claim. Oracle: the canonical validators from
-// src/cdc/cdc-delivery-outcome.js applied to the raw reply (no transport) and to
-// the delivered outcome, plus own-property preservation of each supplied field.
+// Property. For a handler reply R carrying CDC receipt metadata, the envelope
+// {transport, answer} the delivery caller receives from the real MessageRouter
+// must not pass the canonical CDC delivery predicate when R itself fails the
+// canonical CDC answer predicate. The answer is R with every own property
+// preserved; the transport half is the router's own outcome of this delivery,
+// equal to the outcome of an empty answer, whatever R names. Oracle: the
+// canonical validators from src/cdc/cdc-delivery-outcome.js applied to the raw
+// reply (no transport) and to the delivered envelope, plus own-property
+// preservation of each supplied field in the answer.
 //
 // Receipts below are declared component fixtures built by the canonical owner's
 // builders; they are not native commit evidence and claim no Raft commit.
@@ -22,10 +24,9 @@ import {buildCommittedCdcOutcome, buildProvisionalCdcOutcome,
   isCommittedCdcDelivery, isCommittedCdcOutcome, isProvisionalCdcDelivery,
   isProvisionalCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE} from '../../src/message-group/constants.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, TRANSPORT_DELIVERY_OUTCOME_STATE,
+import {TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  TRANSPORT_DELIVERY_OUTCOME_STATE, buildDeliveryEnvelope,
   buildTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
-import {normalizeDeliveryOutcome} from
-  '../../src/transport/message-router-outbound-queue-admission.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {SERVICE_RESPONSE_DISPOSITION_KIND} from
   '../../src/transport/message-router-shared-vocabulary.js';
@@ -98,10 +99,9 @@ const COMMITTED_CONFLICTS = [
 ].map(([name, fields, expect = {}]) => ({name: `COMMITTED_${name}`, kind: KIND.COMMITTED,
   fields, expect, reply: () => committed(fields)}));
 
-// A supplied deliveryState that contradicts the computed transport state is
-// reported FAILED (a state conflict is never preserved as DELIVERED); every
-// other supplied claim is preserved verbatim. `expect` names the fields whose
-// delivered value lawfully differs from the supplied one.
+// In the answer every supplied claim is preserved verbatim. `expect` names the
+// fields a router producer's supplied value lawfully differs from in the
+// transport builder (a contradicting deliveryState claim is reported FAILED).
 const PROVISIONAL_CONFLICTS = [
   ['DEFER_RETRY_FALSE', {deferRetry: false}],
   ['DELIVERED_WITH_RETRY_HINT',
@@ -189,25 +189,34 @@ async function deliverThrough(path, entry) {
   return delivered;
 }
 
-// Every own property of the raw reply must reach the caller unchanged, except
-// the fields `expect` names (a contradicted deliveryState is reported FAILED).
-function preservation(raw, outcome, expect = {}) {
+// Every own property of the raw reply must reach the caller's answer
+// unchanged.
+function preservation(raw, answer) {
   if (!raw || typeof raw !== 'object') return {expected: {}, actual: {}};
   const expected = {};
   const actual = {};
   for (const field of Object.keys(raw)) {
-    expected[field] = {present: true,
-      value: Object.hasOwn(expect, field) ? expect[field] : raw[field]};
-    actual[field] = {present: Object.hasOwn(outcome, field), value: outcome[field]};
+    expected[field] = {present: true, value: raw[field]};
+    actual[field] = {present: Object.hasOwn(answer ?? {}, field), value: answer?.[field]};
   }
   return {expected, actual};
 }
 
-function suppliedText(entry, outcome) {
+// The router's own metadata of a delivered message: what an empty answer gets.
+const OWN_TRANSPORT = Object.freeze(Object.fromEntries(
+  TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS.map((field) =>
+    [field, buildTransportDeliveryOutcome({acknowledged: true})[field]])));
+
+function metadataOf(transport) {
+  return Object.fromEntries(TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS.map((field) =>
+    [field, transport[field]]));
+}
+
+function suppliedText(entry, answer) {
   const fields = entry.fields ?? {};
   return Object.keys(fields).map((field) =>
     `${field}: supplied ${JSON.stringify(fields[field])}, delivered ` +
-    `${Object.hasOwn(outcome, field) ? JSON.stringify(outcome[field]) : '<absent>'}`)
+    `${Object.hasOwn(answer ?? {}, field) ? JSON.stringify(answer[field]) : '<absent>'}`)
     .join('; ');
 }
 
@@ -219,41 +228,42 @@ for (const path of Object.values(PATH)) {
         const valid = entry.valid === true;
         assert.equal(RAW_PREDICATE[entry.kind](raw, EVENTS, GROUP), valid,
           `C2_${path}_${entry.name}_RAW_PREDICATE_IS_${valid}`);
-        const outcome = await deliverThrough(path, entry);
+        const delivery = await deliverThrough(path, entry);
         const cut = `C2_${path}_${entry.name}`;
-        const kept = preservation(raw, outcome, entry.expect ?? {});
+        const kept = preservation(raw, delivery.answer);
         assert.deepEqual(
-          {deliveredPredicate: DELIVERED_PREDICATE[entry.kind](outcome, EVENTS, GROUP),
-            preserved: kept.actual},
-          {deliveredPredicate: valid, preserved: kept.expected},
-          `${cut}_DELIVERED_MATCHES_RAW_VERDICT (${suppliedText(entry, outcome)}); ` +
-          `delivered=${JSON.stringify(outcome)}`);
+          {deliveredPredicate: DELIVERED_PREDICATE[entry.kind](delivery, EVENTS, GROUP),
+            preserved: kept.actual, transport: metadataOf(delivery.transport)},
+          {deliveredPredicate: valid, preserved: kept.expected, transport: OWN_TRANSPORT},
+          `${cut}_DELIVERED_MATCHES_RAW_VERDICT (${suppliedText(entry, delivery.answer)}); ` +
+          `delivered=${JSON.stringify(delivery)}`);
       });
     }
   });
 }
 
-function routerEnvelope(reply) {
-  return {messageId: 'c2-idempotence', correlationId: 'c2-idempotence',
-    acknowledged: true, ...reply};
-}
+const ROUTER_FACTS = Object.freeze({messageId: 'c2-idempotence',
+  correlationId: 'c2-idempotence', acknowledged: true});
+const TRANSPORT_KEYS = new Set(Object.keys(buildTransportDeliveryOutcome()));
 
-test('C2 normalizeDeliveryOutcome is idempotent on CDC replies', () => {
+test('C2 the delivery envelope is a fixed point over CDC replies', () => {
   for (const entry of CASES) {
-    const once = normalizeDeliveryOutcome(routerEnvelope(entry.reply())).result;
-    const twice = normalizeDeliveryOutcome(once).result;
+    const once = buildDeliveryEnvelope(ROUTER_FACTS, entry.reply());
+    const twice = buildDeliveryEnvelope(once.transport, once.answer);
     assert.deepEqual(twice, once, `C2_IDEMPOTENT_${entry.name}`);
   }
 });
 
+// A router producer's supplied transport value is emitted as supplied (a
+// contradicting deliveryState claim fails); nothing else is copied.
 test('C2 unit anchor: buildTransportDeliveryOutcome keeps explicit fields', async (t) => {
   for (const entry of CONFLICTS) {
     await t.test(entry.name, () => {
-      const outcome = buildTransportDeliveryOutcome(routerEnvelope(entry.reply()));
+      const outcome = buildTransportDeliveryOutcome({...ROUTER_FACTS, ...entry.fields});
       const want = (field) => Object.hasOwn(entry.expect, field) ?
         entry.expect[field] : entry.fields[field];
-      const replaced = Object.keys(entry.fields).filter((field) =>
-        !Object.hasOwn(outcome, field) || !Object.is(outcome[field], want(field)))
+      const replaced = Object.keys(entry.fields).filter((field) => TRANSPORT_KEYS.has(field) ?
+        !Object.is(outcome[field], want(field)) : Object.hasOwn(outcome, field))
         .map((field) => `${field}: supplied ${JSON.stringify(entry.fields[field])}, ` +
           `want ${JSON.stringify(want(field))} -> ${JSON.stringify(outcome[field])}`);
       assert.deepEqual(replaced, [], `C2_ANCHOR_${entry.name}_EXPLICIT_FIELD_REPLACED`);

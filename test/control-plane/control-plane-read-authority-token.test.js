@@ -12,6 +12,7 @@
  * they never enumerate.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildControlPlaneReadAuthority,
@@ -118,7 +119,7 @@ test('membership publication threads purpose through view, CDC, owner RPC, ' +
   const messageRouter = {
     getConnectionState: () => 'connected',
     async deliver() {
-      return {acknowledged: true, success: true, rows: [nodeRow]};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [nodeRow]});
     },
   };
   const productionExecutor = new QueryExecutor({
@@ -419,14 +420,12 @@ test('readiness-internal owner RPC routes without re-entering readiness',
       async deliver() {
         deliveryCount++;
         if (!handlerReady) {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
             success: false,
-            noHandler: true,
             error: 'No handler registered for partition service',
-          };
+          });
         }
-        return {acknowledged: true, success: true, rows: []};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
       },
     };
     const productionExecutor = new QueryExecutor({

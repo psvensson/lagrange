@@ -1,3 +1,4 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {TIME_MS} from '../constants/index.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -18,10 +19,9 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   ReplicaOperationField,
   ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
   ReplicaStatus,
   WORKFLOW_STEP,
-  classifyTransportDeliveryOutcome,
+  isCompletedReplicaOperationAnswer,
   isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -84,16 +84,16 @@ async function deliverFailedCreateCleanupRelease(owner, operation) {
       [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
         precondition,
     };
-    const outcome = classifyTransportDeliveryOutcome(
-      await owner.deliverReplicaOperationRequest(
-        operation,
-        target,
-        request,
-        operation.targetNodeId,
-      ),
+    const deliveryEnvelope = await owner.deliverReplicaOperationRequest(
+      operation,
+      target,
+      request,
+      operation.targetNodeId,
     );
-    return isDeliveredTransportDeliveryOutcome(outcome) &&
-      outcome.status === ReplicaOperationResponseStatus.COMPLETED;
+    const transport = deliveryTransportOf(deliveryEnvelope);
+    const answer = deliveryAnswerOf(deliveryEnvelope);
+    return isDeliveredTransportDeliveryOutcome(transport) &&
+      isCompletedReplicaOperationAnswer(answer);
   } catch (_error) {
     return false;
   }

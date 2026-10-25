@@ -8,6 +8,7 @@
  * Requirements: 1.5, 10.1, 10.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {InternalSqlAdapter} from '../../src/query/internal-sql-adapter.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -50,19 +51,19 @@ function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = partitionStore.get(replicaId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: 0,
-        };
+        });
       }
       // A participant answers the transaction protocol (TX1 design 2.2): a
       // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return answerParticipantTransactionRequest(message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 }

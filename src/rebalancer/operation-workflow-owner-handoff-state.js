@@ -1,3 +1,4 @@
+import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import * as COORDINATOR_HANDOFF_RETRY
   from './operation-workflow-coordinator-handoff-retry.js';
@@ -17,7 +18,6 @@ const {
   REBALANCE_COORDINATOR_LOG_MSG,
   WORKFLOW_STEP,
   classifySystemPartition,
-  classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
@@ -280,21 +280,21 @@ function withOwnerHandoffState(Base) {
       }
 
       try {
-        const response = classifyTransportDeliveryOutcome(
-          await this.messageRouter.deliver(
-            target,
-            {
-              type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
-              [ControlPlaneField.OPERATION_ID]: operation.operationId,
-              [ControlPlaneField.OPERATION_ROW]:
-                this.buildCoordinatorCreatedDispatchRow(operation),
-              [ControlPlaneField.HANDOFF_MODE]:
-                options.handoffMode ||
-                CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH,
-            },
-            deliveryOptions,
-          ),
+        // The wake decision reads the transport outcome only.
+        const deliveryEnvelope = await this.messageRouter.deliver(
+          target,
+          {
+            type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+            [ControlPlaneField.OPERATION_ID]: operation.operationId,
+            [ControlPlaneField.OPERATION_ROW]:
+              this.buildCoordinatorCreatedDispatchRow(operation),
+            [ControlPlaneField.HANDOFF_MODE]:
+              options.handoffMode ||
+              CONTROL_PLANE_OPERATION_HANDOFF_MODE.INITIAL_DISPATCH,
+          },
+          deliveryOptions,
         );
+        const response = deliveryTransportOf(deliveryEnvelope);
 
         // A wake the target ACKed without a registered handler is a dropped
         // wake, never a woken owner: the transport outcome fails closed on

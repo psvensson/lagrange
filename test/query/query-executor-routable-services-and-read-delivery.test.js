@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -288,11 +289,10 @@ async (t) => {
       async deliver(address) {
         deliveryCount += 1;
         deliveredAddress = address;
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{ok: true}],
-        };
+        });
       },
     },
     systemCache,
@@ -398,11 +398,10 @@ test('QueryExecutor - executeOnPartition can suppress routing-triggered ' +
     messageRouter: {
       async deliver() {
         deliveryCount += 1;
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{ok: true}],
-        };
+        });
       },
     },
     systemCache,
@@ -572,26 +571,20 @@ test('QueryExecutor - executeOnPartition retries reads across ' +
       deliveries.push(address);
       if (address === 'node1/partition/p1') {
         // First candidate: transient failure (timeout)
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'Message timeout',
-        };
+        });
       }
       if (address === 'node2/partition/p1') {
         // Second candidate: also transient failure
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'Query execution error',
-        };
+        });
       }
       // Third candidate: success
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [{id: 1}],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{id: 1}]});
     },
   };
 
@@ -687,20 +680,19 @@ test('QueryExecutor - reconnect delivery deferral falls through to another ' +
       deliveries.push(address);
       deliveryOptions.push(options);
       if (address === firstAddress) {
-        return {
-          acknowledged: false,
-          success: false,
-          error: reconnectClosedError,
-          errorCode: reconnectClosedErrorCode,
-          deferRetry: true,
-          retryAfterMs: reconnectRetryAfterMs,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: reconnectClosedError,
+            errorCode: reconnectClosedErrorCode,
+            deferRetry: true,
+            retryAfterMs: reconnectRetryAfterMs,
+          });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{node_id: secondNodeId}],
-      };
+      });
     },
   };
   const executor = new QueryExecutor({
@@ -802,17 +794,12 @@ test('QueryExecutor - read candidate delivery reserves timeout budget for ' +
     deliver: async (address, _message, options) => {
       deliveries.push({address, timeoutMs: options?.timeoutMs});
       if (address === staleAddress) {
-        return {
-          acknowledged: false,
-          success: false,
-          error: 'Message timeout',
-        };
+        return buildDeliveryEnvelope({acknowledged: false, error: 'Message timeout'});
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{node_id: liveNodeId}],
-      };
+      });
     },
   };
   const executor = new QueryExecutor({
@@ -896,14 +883,14 @@ test('QueryExecutor - read delivery defers cold reconnect for a disconnected ' +
     getConnectionState: () => 'disconnected',
     deliver: async (address, _message, options) => {
       deliveries.push({address, timeoutMs: options?.timeoutMs});
-      return {
-        acknowledged: false,
-        success: false,
-        error: `Connection to node ${disconnectedNodeId} closed`,
-        errorCode: 'ROUTER_CONNECTION_CLOSED',
-        retryAfterMs: 50,
-        deferRetry: true,
-      };
+      return buildDeliveryEnvelope(
+        {
+          acknowledged: false,
+          error: `Connection to node ${disconnectedNodeId} closed`,
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+          retryAfterMs: 50,
+          deferRetry: true,
+        });
     },
   };
   const executor = new QueryExecutor({
@@ -986,14 +973,14 @@ test('QueryExecutor - read delivery defers cold reconnect for an unobserved ' +
     getConnectionState: () => 'unobserved',
     deliver: async (address, _message, options) => {
       deliveries.push({address, timeoutMs: options?.timeoutMs});
-      return {
-        acknowledged: false,
-        success: false,
-        error: `Connection to node ${unobservedNodeId} closed`,
-        errorCode: 'ROUTER_CONNECTION_CLOSED',
-        retryAfterMs: 50,
-        deferRetry: true,
-      };
+      return buildDeliveryEnvelope(
+        {
+          acknowledged: false,
+          error: `Connection to node ${unobservedNodeId} closed`,
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+          retryAfterMs: 50,
+          deferRetry: true,
+        });
     },
   };
   const executor = new QueryExecutor({
@@ -1077,14 +1064,14 @@ test('QueryExecutor - recovery read bounds connected stale candidate ack ' +
     getConnectionState: () => 'connected',
     deliver: async (address, _message, options) => {
       deliveries.push({address, timeoutMs: options?.timeoutMs});
-      return {
-        acknowledged: false,
-        success: false,
-        error: 'Message timeout',
-        errorCode: 'ROUTER_MESSAGE_TIMEOUT',
-        retryAfterMs: reconnectIntervalMs,
-        deferRetry: true,
-      };
+      return buildDeliveryEnvelope(
+        {
+          acknowledged: false,
+          error: 'Message timeout',
+          errorCode: 'ROUTER_MESSAGE_TIMEOUT',
+          retryAfterMs: reconnectIntervalMs,
+          deferRetry: true,
+        });
     },
   };
   const executor = new QueryExecutor({

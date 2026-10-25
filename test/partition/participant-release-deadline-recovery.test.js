@@ -68,7 +68,7 @@ function interceptDependentReply(transport, action, transform) {
         state.selected !== null) return operation;
     state.selected = payload;
     return Promise.resolve(operation).then((response) => {
-      state.reply = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+      state.reply = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
       try {
         return transform(response, payload);
       } catch (error) {

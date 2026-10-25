@@ -62,7 +62,7 @@ function observeApplicationTransport(f) {
     const call = {address, payload: structuredClone(payload), answer: null};
     calls.push(call);
     return Reflect.apply(deliver, this, [address, payload, ...options]).then((answer) => {
-      call.answer = structuredClone(answer);
+      call.answer = structuredClone(answer.answer);
       return answer;
     });
   };

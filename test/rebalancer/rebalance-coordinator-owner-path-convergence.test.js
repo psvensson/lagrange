@@ -12,6 +12,7 @@
  * System Guidelines: §1.6 — Deterministic Control-Plane Progression
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -259,7 +260,7 @@ function createConvergenceCoordinator(options = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: sqlEngine,
@@ -872,7 +873,7 @@ test('Owner-path convergence: all progression entry points ' +
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {

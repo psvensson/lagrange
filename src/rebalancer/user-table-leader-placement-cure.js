@@ -1,3 +1,4 @@
+import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 /**
  * User-table leader-placement cure — the single owner of the
  * "spread ordinary user-table partition leaders across data hosts"
@@ -394,16 +395,17 @@ async function demoteLocalSourceLeader(rebalancer) {
   }
   const target = `${rebalancer.nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
   try {
-    const response = await rebalancer.messageRouter.deliver(
+    const deliveryEnvelope = await rebalancer.messageRouter.deliver(
       target,
       buildSourceDemotionRequest(rebalancer),
       {targetNodeId: rebalancer.nodeId},
     );
+    const response = deliveryAnswerOf(deliveryEnvelope);
     rebalancer.logger.info(
       CURE_LOG_MSG.DEMOTION_COMPLETED,
       buildHandoffResponseLogContext(rebalancer, response, {sourceReplicaId}),
     );
-    return response || null;
+    return response;
   } catch (error) {
     rebalancer.logger.warn(CURE_LOG_MSG.DEMOTION_FAILED, {
       entityId: rebalancer.entityId,
@@ -427,11 +429,12 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
   const target =
     `${decision.target.nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
   try {
-    const response = await rebalancer.messageRouter.deliver(
+    const deliveryEnvelope = await rebalancer.messageRouter.deliver(
       target,
       buildHandoffRequest(rebalancer, decision),
       {targetNodeId: decision.target.nodeId},
     );
+    const response = deliveryAnswerOf(deliveryEnvelope);
     rebalancer.logger.info(
       CURE_LOG_MSG.DISPATCHED,
       buildHandoffResponseLogContext(rebalancer, response, {
@@ -439,7 +442,7 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
         targetReplicaId: decision.target.replicaId,
       }),
     );
-    return response || null;
+    return response;
   } catch (error) {
     rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {
       entityId: rebalancer.entityId,

@@ -3,6 +3,7 @@
  * Provides mock factories for all required dependencies.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   answerFixtureCommittedMembership,
   withFixtureCommittedMembership,
@@ -448,7 +449,7 @@ function createMockMessageRouter(options = {}) {
     // the given cache, when there is one); every other delivery succeeds.
     deliver: async (target, payload) =>
       answerFixtureCommittedMembership(systemTableCache, payload) ??
-        {acknowledged: true, status: 'completed'},
+        buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'}),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };
@@ -583,15 +584,11 @@ function withFixtureReplaceWitness(router, cache) {
   const deliver = router.deliver.bind(router);
   router.deliver = async (target, payload, options) => {
     const answer = answerFixtureReplaceWitness(cache, payload);
-    return answer === undefined ? deliver(target, payload, options) : {
-      acknowledged: true,
-      noHandler: false,
-      deliveryState: 'delivered',
-      deferRetry: false,
-      errorCode: null,
-      retryAfterMs: null,
-      ...answer,
-    };
+    return answer === undefined ? deliver(target, payload, options) : buildDeliveryEnvelope(
+      {acknowledged: true},
+      {
+        ...answer,
+      });
   };
   return router;
 }

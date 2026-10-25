@@ -75,7 +75,7 @@ function createReplicaRuntime(router, stateMachine) {
     unifiedAddress: ADDRESS,
     resolveHandlerRetirementLane: () => stateMachine,
   };
-  service.transportHandler = () => ({acknowledged: true});
+  service.transportHandler = () => (null);
   router.register(ADDRESS, service.transportHandler);
   return service;
 }
@@ -169,7 +169,7 @@ test('D2 (3): another generation\'s handler at the same address is not ' +
   const world = await createDeferredReplica(
     REPLICA_STATE_MACHINE_STATE.ACTIVE);
   await world.retire();
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
 
   await world.stateMachine._reconcileLocalOnlyServiceRows();
 

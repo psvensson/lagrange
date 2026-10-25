@@ -102,7 +102,7 @@ class PartitionServiceMergeReplicationResumptionMethods {
     );
     const response = await startMergeReplicationHandleForService(
       this, this.mergeReplication);
-    return response.acknowledged === true;
+    return response.success === true;
   }
 }
 

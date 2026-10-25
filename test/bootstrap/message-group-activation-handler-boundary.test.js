@@ -87,7 +87,7 @@ function createWorld(initialRow = registeredRow(), options = {}) {
   const service = createService(router, stateMachine,
     options.register !== false);
   if (options.register === false) {
-    service.transportHandler = () => ({acknowledged: true});
+    service.transportHandler = () => (null);
   }
   const durable = createGatedServicesRow(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
@@ -322,7 +322,7 @@ test('MG N2 (4b): retirement does not wait for unrelated lifecycle work in ' +
 test('MG N2 (5): a different generation handler under the same replica id ' +
   'does not satisfy activation', async (t) => {
   const world = createWorld(registeredRow(), {register: false});
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
   await t.rejects(world.activate(), /replica handler registration/u,
     'presence at the address is not this generation\'s handler');
   t.equal(world.durable.casCalls.length, 0);
@@ -377,15 +377,13 @@ async (t) => {
     'src/partition']) {
     walk(join(root, directory));
   }
-  // Remaining raw removals are not replica handlers: node-level service
-  // handlers (fixed addresses) and the shared exact-identity retirement
-  // itself. Seed cleanup is not a handler-removal authority (Removal-7): the
-  // exact retirement in partition.shutdown() is the one path.
+  // The one remaining raw removal is the shared exact-identity retirement
+  // itself: node-level service handlers retire through it too (one handler
+  // identity policy, findings F2/F4). Seed cleanup is not a handler-removal
+  // authority (Removal-7): the exact retirement in partition.shutdown() is
+  // the one path.
   t.same(removalSites.sort(), [
-    'src/node/message-group-service-handler.js',
-    'src/node/replica-handler-runtime-methods.js',
     'src/node/replica-transport-handler-identity.js',
-    'src/node/runtime-service-handler.js',
   ]);
   t.notMatch(read('src/bootstrap/phases/seed-cleanup-handler.js'),
     /\bunregister(Exact)?(\?\.)?\(/u,
@@ -394,7 +392,7 @@ async (t) => {
   // address (registered-learner-read contract): a successor registration at
   // the same address survives an old handler's retirement.
   t.match(read('src/node/message-group-service-handler.js'),
-    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;[\s\S]{0,600}?const retired = isFunction\(messageRouter\.unregisterExact\) &&\s+messageRouter\.unregisterExact\(handlerAddress, registration\) === true;/u,
+    /MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS\.HANDLER_ID\}`;[\s\S]{0,800}?retireNodeTransportHandler\(this\.logger, \{transport: messageRouter,\s+address: handlerAddress, handler: registration\}\);/u,
     'the node-level service handler removes only its own fixed address, and only its own callback');
   const retirements = {
     'src/bootstrap/phases/create-message-group-replica-lifecycle.js':

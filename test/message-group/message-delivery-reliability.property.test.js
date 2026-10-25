@@ -190,9 +190,9 @@ test('Property 9: Message Delivery Reliability - acknowledgment tracking', async
             `Message ${messageId} should be detected as duplicate`,
           );
           t.equal(
-            result.acknowledged,
-            true,
-            `Message ${messageId} should be marked as acknowledged`,
+            Object.hasOwn(result, 'acknowledged'),
+            false,
+            `Message ${messageId} has only its application duplicate status`,
           );
         }
 

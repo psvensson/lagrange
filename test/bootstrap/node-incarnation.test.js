@@ -6,6 +6,7 @@
  * update message so receivers can fence stale-incarnation writers.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -161,7 +162,7 @@ test('the publication owner stamps the boot incarnation onto every node ' +
       getMessageRouter: () => ({
         async deliver(_target, msg) {
           captured = msg;
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       }),
       getControlPlaneKernelIngress: () => ({

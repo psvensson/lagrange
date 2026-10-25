@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -30,7 +31,7 @@ function createHarness(gateway, mintedIds) {
     messageRouter: {
       async deliver(_address, message) {
         deliveries.push(structuredClone(message));
-        return {acknowledged: false, success: false};
+        return buildDeliveryEnvelope({acknowledged: false});
       },
     },
   });

@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_COMPLETION} from '../../src/cdc/cdc-delivery-outcome.js';
@@ -33,8 +34,8 @@ test('router timeout retains the actual write callback, outbound slot and brande
     f.clock.elapse(CDC_ROUTER_TEST.SHORT_MS);
     f.clock.dispatchDue();
     const refused = await first;
-    assert.equal(refused.acknowledged, false);
-    assert.equal(refused.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(refused)), false);
+    assert.equal(refused.transport.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
     assert.equal(peer.accepted.readyState, 1, 'the live incoming peer remains connected');
     context.finish();
     const cleanup = watchSettlement(context.cleanup);
@@ -69,8 +70,8 @@ test('router timeout retains the actual write callback, outbound slot and brande
     peer.ack('same-message', {transportProbe: 'successor'});
     secondWrite.release();
     const answer = await successor;
-    assert.equal(answer.acknowledged, true);
-    assert.equal(answer.transportProbe, 'successor');
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(answer)), true);
+    assert.equal(answer.answer.transportProbe, 'successor');
     assert.equal(queue.inFlight, 0);
     assert.equal(f.router.pendingMessages.size, 0);
     assert.equal(f.router.pendingResponses.size, 0);
@@ -94,7 +95,7 @@ for (const firstBoundary of ['write', 'ack']) {
       assert.equal(f.router.getOutboundQueue(CDC_ROUTER_TEST.PEER).inFlight, 1);
       if (firstBoundary === 'write') peer.ack(firstBoundary, {transportProbe: firstBoundary});
       else write.release();
-      assert.equal((await result).acknowledged, true);
+      assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await result)), true);
       context.finish();
       await context.cleanup;
       assert.equal(f.delivery.activeCdcInvocation, null);
@@ -141,8 +142,8 @@ test('a ws throw after acquisition does not manufacture raw write cleanup',
     f.clock.elapse(CDC_ROUTER_TEST.SHORT_MS);
     f.clock.dispatchDue();
     const refused = await result;
-    assert.equal(refused.acknowledged, false);
-    assert.equal(refused.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(refused)), false);
+    assert.equal(refused.transport.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE);
     context.finish();
     const cleanup = watchSettlement(context.cleanup);
     await nextTurn();
@@ -206,8 +207,8 @@ test('actual router shutdown and initialize never revive the old local invocatio
     old.invocation.assertCurrent();
     await f.router.shutdown();
     const refused = await result;
-    assert.equal(refused.acknowledged, false);
-    assert.equal(refused.shutdown, true);
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(refused)), false);
+    assert.match(refused.transport.error, /shutdown/i, 'the refusal names the router shutdown');
     await f.router.initialize({startServer: false});
     assert.equal(f.router.isShuttingDown, false);
     assert.equal(old.delivery.isCurrent(), false);
@@ -225,8 +226,8 @@ test('actual router shutdown and initialize never revive the old local invocatio
       return {transportProbe: 'fresh'};
     });
     const fresh = await f.router.deliver(address, PROBE);
-    assert.equal(fresh.acknowledged, true);
-    assert.equal(fresh.transportProbe, 'fresh');
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(fresh)), true);
+    assert.equal(fresh.answer.transportProbe, 'fresh');
     assert.equal(effects, 1);
     release.resolve();
     await context.cleanup;

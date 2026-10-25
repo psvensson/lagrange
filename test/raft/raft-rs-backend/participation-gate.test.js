@@ -22,6 +22,7 @@
 // pending), and H1 + self (an identity removed and re-added: the target's
 // replay passes through a configuration in which it is the sole voter).
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -531,13 +532,12 @@ function replaceOwnerReadingThrough(cluster, sourceReplicaId) {
     getCachedCriticalReplicaRows: () => [...cluster.replicas.keys()].map(
       (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
-      deliver: async (_target, payload) => ({
-        acknowledged: true,
+      deliver: async (_target, payload) => (buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]: await readPartitionReplicaMembership(
           serviceOf(payload[ReplicaOperationField.REPLICA_ID]),
           sourceReplicaId),
-      }),
+      })),
     },
   };
 }

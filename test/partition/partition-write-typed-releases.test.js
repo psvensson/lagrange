@@ -20,6 +20,7 @@
 // the partition's defaults); the durable log is read on an independent
 // connection through the store owner's own statement and proposal codec.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -211,7 +212,7 @@ async () => {
   // proposal is in its log and is never acknowledged.
   network.deliver = (address, ...rest) => (dropOutgoing &&
     !String(address).includes(members[0][1]) ? Promise.resolve(
-      {acknowledged: true}) : deliver.call(network, address, ...rest));
+      buildDeliveryEnvelope({acknowledged: true})) : deliver.call(network, address, ...rest));
   try {
     await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
     assert.equal((await insert(leader, 'row-0', 'setup', 's-setup'))

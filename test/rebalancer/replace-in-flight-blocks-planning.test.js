@@ -40,6 +40,7 @@
  * orphan adoption excludes priority/system partitions; its exit is the drain
  * settlement, which needs a second coordinator over a shared store).
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {MESSAGE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -211,7 +212,7 @@ async function createWorld({seed}) {
         if (answered) {
           return deliveredReplaceWitnessResponse(answered);
         }
-        return {acknowledged: true, status: DELIVERY_INITIATED};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: DELIVERY_INITIATED});
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,

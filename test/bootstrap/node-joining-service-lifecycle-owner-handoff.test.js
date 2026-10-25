@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readFileSync} from 'node:fs';
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -72,7 +73,7 @@ function stubDurableRejoin(service, calls, options = {}) {
   };
   service.phaseConnectWebSocket = async () => {
     service.messageRouter = {
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       setExternalAdmissionEnabled() {},
       unregister() {},
     };

@@ -34,6 +34,7 @@
  *    test takes or withholds (AN6: lost at the leader).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'node:events';
 
 import {DELIVERED_TO_PEER, PartitionNodeCluster} from
@@ -773,7 +774,7 @@ function answerRemoveEffect(world, payload) {
   if (world.sourceStopsAtEffect) {
     world.group.kill(world.sourceReplicaId);
   }
-  return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
+  return {status: ReplicaOperationResponseStatus.INITIATED};
 }
 
 const UNREACHABLE_ANSWER = Object.freeze({
@@ -861,8 +862,12 @@ const MESSAGE_ANSWERS = Object.freeze({
 async function deliver(world, target, payload) {
   world.deliveries.push({target, payload});
   const answer = MESSAGE_ANSWERS[payload?.[ReplicaOperationField.TYPE]];
-  return answer ? {acknowledged: true, ...await answer(world, payload)} :
-    {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
+  return answer ? buildDeliveryEnvelope({acknowledged: true}, {
+    ...await answer(world, payload),
+  }) :
+    buildDeliveryEnvelope({acknowledged: true}, {
+      status: ReplicaOperationResponseStatus.INITIATED,
+    });
 }
 
 // Every terminal write is captured with the oracle read at that instant.

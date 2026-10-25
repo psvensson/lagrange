@@ -14,6 +14,7 @@
  *     UNCHANGED when the policy is off.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   SERVICE_READ_LOCALITY,
@@ -273,9 +274,13 @@ test('end-to-end: policy-on SELECT delivers to the local-node replica ' +
     deliver: async (address, message) => {
       if (message.type === 'QUERY') {
         deliveredAddresses.push(address);
-        return {acknowledged: true, success: true, rows: [], changes: 0};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 0,
+        });
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
   const engine = new SQLQueryEngine({

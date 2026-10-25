@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {
@@ -267,7 +268,7 @@ test('RebalanceCoordinator executeOperation skips operations owned by another no
       messageRouter: {
         async deliver() {
           deliverCalls += 1;
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -344,7 +345,7 @@ async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {
@@ -409,7 +410,7 @@ async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     enableTimeouts: false,
@@ -487,7 +488,7 @@ async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     enableTimeouts: false,
@@ -571,7 +572,7 @@ async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     enableTimeouts: false,
@@ -667,7 +668,7 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -749,7 +750,7 @@ test('RebalanceCoordinator createOperation defers background mutation when local
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -824,7 +825,7 @@ test('RebalanceCoordinator createOperation enforces concurrent add budget when r
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -887,7 +888,7 @@ test('RebalanceCoordinator createOperation rejects stale membership publication 
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -965,7 +966,7 @@ test('RebalanceCoordinator createOperation rejects stale membership plans using 
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -1045,7 +1046,7 @@ test('RebalanceCoordinator createOperation persists membership publication epoch
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {

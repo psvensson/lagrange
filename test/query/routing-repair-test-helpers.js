@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   ERRORS,
   SERVICE_STATUS,
@@ -151,28 +152,24 @@ export function createNoHandlerRepairMessageRouter(options) {
             'stale no-handler address retried after routing refresh',
           );
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
 
       if (address === refreshedAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: successRows,
           changes: successRows.length,
-        };
+        });
       }
 
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: `unexpected address: ${address}`,
-      };
+      });
     },
   };
 }

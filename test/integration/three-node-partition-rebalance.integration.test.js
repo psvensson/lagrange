@@ -5,6 +5,7 @@
  * Requirements: 8.1, 8.2, 8.3, 10.1, 10.2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from
@@ -56,7 +57,7 @@ function createMockMessageRouter() {
     getConnectionState: () => 'connected',
     isOutboundQueueAvailable: () => true,
     pingNode: async () => true,
-    deliver: async () => ({acknowledged: true, status: 'initiated'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'})),
   };
 }
 

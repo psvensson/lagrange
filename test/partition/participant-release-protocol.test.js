@@ -725,7 +725,7 @@ test('post-ENABLE control loss returns the canonical control refusal and stays p
         [address, payload, options]);
       if (payload.action === RELEASE_ACTION.RELEASE &&
           payload.partitionId === CONTROL_PARTITION &&
-          response[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome === OUTCOME.CUT_OVER) {
+          response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD]?.outcome === OUTCOME.CUT_OVER) {
         successfulControlReleases += 1;
       }
       return response;
@@ -877,8 +877,8 @@ test('registered dependent release retains delivered control refusal after curre
         request.action === RELEASE_ACTION.RELEASE);
       assert.equal(delivered.length, 1, 'exactly one real control RELEASE reached its route');
       const response = delivered[0].response;
-      assert.notEqual(response.noHandler, true);
-      const nested = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+      assert.notEqual(response.transport.noHandler, true);
+      const nested = response.answer[PARTICIPANT_RELEASE_RESULT_FIELD];
       assert.equal(nested.outcome, OUTCOME.UNAVAILABLE);
       assert.equal(nested.missingFact, MISSING_FACT.HOSTED_PARTITION);
       assert.equal(answer.outcome, OUTCOME.UNAVAILABLE);

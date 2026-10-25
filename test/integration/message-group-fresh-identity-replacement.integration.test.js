@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,13 +21,18 @@ class MemoryRouter {
   register(address, handler) {
     this.handlers.set(address, handler);
   }
-  unregister(address) {
+  getRegisteredHandler(address) {
+    return this.handlers.get(address) ?? null;
+  }
+  unregisterExact(address, handler) {
+    if (this.handlers.get(address) !== handler) return false;
     this.handlers.delete(address);
+    return true;
   }
   async deliver(address, envelope) {
     const handler = this.handlers.get(address);
-    if (!handler) return {acknowledged: false, noHandler: true};
-    return handler(envelope);
+    if (!handler) return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
+    return buildDeliveryEnvelope({acknowledged: true}, await handler(envelope));
   }
 }
 
@@ -103,7 +109,7 @@ test('mg-1 survives physical seed storage loss from two distinct off-seed voters
       'base has no off-seed C5 artifact');
 
     for (const replica of replicas) {
-      router.unregister(replica.unifiedAddress);
+      router.unregisterExact(replica.unifiedAddress, replica.transportHandler);
       await replica.shutdown();
     }
     replicas.length = 0;

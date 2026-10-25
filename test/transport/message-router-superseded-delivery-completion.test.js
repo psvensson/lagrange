@@ -2,7 +2,7 @@
 // MessageRouter.deliver at once, without waiting for a SERVICE_RESPONSE that
 // can never arrive (the superseded message is never sent). The queue resolves
 // it with the transport owner's named superseded outcome (decision D3:
-// DELIVERED, reasonCode superseded, coalesced, no answer); completeRemoteDelivery
+// DELIVERED, reasonCode superseded, no answer); completeRemoteDelivery
 // completes that outcome by name without arming a response wait. Remove that
 // completion and the superseded delivery is held until its full delivery
 // deadline.
@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {CDC_ROUTER_TEST, cdcRouterFixture, controlledCdcPeer, nextTurn, watchSettlement}
   from '../test-helpers/message-router-cdc-fixture.js';
-import {
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
   isSupersededTransportDeliveryOutcome,
@@ -52,23 +52,23 @@ for (const {name, message, options} of CASES) {
       assert.equal(superseded.settled, true,
         'the superseded delivery settled with no clock advance and no response');
       assert.equal(superseded.error, null);
-      assert.equal(isSupersededTransportDeliveryOutcome(superseded.value), true,
+      const transport = superseded.value?.transport;
+      assert.equal(isSupersededTransportDeliveryOutcome(transport), true,
         'the owner names the outcome superseded');
-      assert.equal(superseded.value?.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
-      assert.equal(superseded.value?.reasonCode,
-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED);
-      assert.equal(superseded.value?.coalesced, true);
-      assert.equal(superseded.value?.errorCode ?? null, null);
+      assert.equal(transport?.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
+      assert.equal(transport?.reasonCode, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED);
+      assert.equal(transport?.errorCode, null);
+      assert.equal(superseded.value?.answer, null, 'a superseded delivery has no answer');
       assert.equal(peer.writes.length, 1, 'the superseded message was never sent');
 
       peer.ack(held.frame.messageId, {ok: true});
       held.release();
-      assert.equal((await first).acknowledged, true);
+      assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await first)), true);
       const next = await peer.nextWrite(1);
       await next.handedOff;
       peer.ack(next.frame.messageId, {ok: true});
       next.release();
-      assert.equal((await successor).acknowledged, true);
+      assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(await successor)), true);
       assert.equal(f.router.pendingResponses.size, 0, 'no response wait is left behind');
     });
 }

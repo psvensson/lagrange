@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {RebalanceCoordinator} from
@@ -90,7 +91,7 @@ function createCoordinator(operation, deliveries) {
     messageRouter: {
       async deliver() {
         deliveries.push(TEST_OPERATION_ID);
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {executeQuery},

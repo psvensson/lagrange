@@ -437,7 +437,7 @@ test('accepted recovery refreshes writes committed while START waits and ' +
         'cannot enter the volatile queue');
       authorizationGate.resolve();
       const response = await start;
-      assert.equal(response.acknowledged, true,
+      assert.equal(response.success, true,
         `${scenario.family} ${scenario.phase}: durable START is accepted`);
       await (isSplit ? source.restarted.splitReplicationRun :
         source.restarted.mergeReplicationRun);

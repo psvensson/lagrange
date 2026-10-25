@@ -20,6 +20,7 @@
  * handler's reported exits.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 import {isLivePartitionServiceRow} from '../../src/constants/service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -269,12 +270,12 @@ function openGroupWorld(t, {partitionId, voters, reconcile = true}) {
         if (!world.membershipReadAvailable || world.retired.has(replicaId) ||
             message?.type !==
               ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
-          return null;
+          return buildDeliveryEnvelope({acknowledged: false});
         }
         // The router's delivered envelope around the handler's answer.
-        return {acknowledged: true, deliveryState: 'delivered',
-          ...await world.sources.get(replicaId).handler
-            .handleReadCommittedMembership(message)};
+        return buildDeliveryEnvelope({acknowledged: true},
+          await world.sources.get(replicaId).handler
+            .handleReadCommittedMembership(message));
       },
     },
   };

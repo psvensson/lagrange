@@ -642,10 +642,7 @@ class AdminWebSocketAPIBase {
             targetAddress: ADMIN_LOCAL_DISPATCH.TARGET_ADDRESS,
             targetNodeId: this.nodeId,
           },
-          delivery: {
-            acknowledged: true,
-            payload,
-          },
+          answer: {payload},
         };
       },
     };

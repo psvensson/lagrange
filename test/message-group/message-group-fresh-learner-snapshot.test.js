@@ -86,7 +86,7 @@ async function hostAt(root) {
   const close = async (replica) => {
     const service = live.get(replica);
     live.delete(replica);
-    router.unregister(`${NODE}/message-group/${replica}`);
+    router.unregisterExact(`${NODE}/message-group/${replica}`, service?.transportHandler);
     await service?.shutdown();
   };
   return {router, live, caches, dbPath, open, close, async dispose() {

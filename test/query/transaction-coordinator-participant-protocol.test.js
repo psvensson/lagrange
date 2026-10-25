@@ -12,6 +12,7 @@
  * the participant owner's increment-4 constants); a script answers with them
  * literally where this branch's participant constants predate them.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test} from 'node:test';
@@ -102,10 +103,15 @@ function harness(options = {}) {
       const copy = JSON.parse(JSON.stringify(message));
       log.push({kind: 'deliver', partitionId, message: copy});
       if (message.type !== QUERY_OPERATION.TRANSACTION) {
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       }
-      return options.answer?.(copy, partitionId, clock) ??
-        answerParticipantTransactionRequest(message, partitionId);
+      return buildDeliveryEnvelope({acknowledged: true},
+        options.answer?.(copy, partitionId, clock) ??
+          answerParticipantTransactionRequest(message, partitionId));
     },
   };
   if (options.seed) {
@@ -162,7 +168,7 @@ async function runTransaction(engine, sessionId, rows) {
 
 function refusalOf(message, failureCode, extra = {}) {
   const participantPrefix = `${message.transactionId}:`;
-  return {acknowledged: true, success: false,
+  return {success: false,
     error: `Participant transaction request refused: ${failureCode}`,
     failureCode, operation: message.operation,
     partitionId: typeof message.participantId === 'string' &&
@@ -484,12 +490,12 @@ test('C56-1: contradictory PREPARE and terminal tuples cannot authorize ' +
   await badRollback.engine.shutdown();
   badRollback.gateway.db.close();
 
-  assert.throws(() => transactionOutcomeAnswerOf({acknowledged: true,
-    success: true, operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
+  assert.throws(() => transactionOutcomeAnswerOf({success: true,
+    operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
     partitionId: 'p1', transactionId: 'a'.repeat(32),
     participantId: `${'a'.repeat(32)}:p1`, durable: true,
     state: 'ROLLED_BACK', outcome: 'COMMITTED'}));
-  assert.equal(transactionOutcomeAnswerOf({acknowledged: true, success: true,
+  assert.equal(transactionOutcomeAnswerOf({success: true,
     operation: QUERY_OPERATION.TRANSACTION_OUTCOME, partitionId: 'p1',
     transactionId: 'a'.repeat(32), participantId: `${'a'.repeat(32)}:p1`,
     durable: true, state: 'PREPARED', outcome: 'UNKNOWN'}).outcome, 'UNKNOWN');
@@ -771,8 +777,7 @@ async () => {
   const deferred = await prepareAnswered((message, answered) =>
     (answered === 1 ? refusalOf(message, ANSWER.REMOVAL_FENCED,
       {deferRetry: true}) : null));
-  const untyped = await prepareAnswered(() => ({acknowledged: true,
-    success: true}));
+  const untyped = await prepareAnswered(() => ({success: true}));
   const beginRefused = {};
   for (const code of [ANSWER.GENERATION_ORIGIN_PENDING,
     ANSWER.DETERMINISM_SELF_CHECK_FAILED]) {

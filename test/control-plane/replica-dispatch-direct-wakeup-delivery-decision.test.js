@@ -3,20 +3,24 @@
 // operationDispatchRetryAfterMs a delivered router outcome takes the
 // verification path, and a deferred one is deferred at that delay. The
 // transport owner attaches no default hint, so the dispatch owner's own
-// fallback supplies the delay for a null or non-positive hint.
+// fallback supplies the delay for a null or non-positive hint. A dispatch
+// owner's own refusal answer over a delivered transport defers through the
+// dispatch owner (design Q5), never as a woken owner.
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
-import {buildTransportDeliveryOutcome, classifyTransportDeliveryOutcome} from
+import {buildDeliveryEnvelope, buildTransportDeliveryOutcome} from
   '../../src/transport/transport-semantic-outcome.js';
 import {createService, initEnv} from './replica-dispatch-node-state-update-test-support.js';
 
 const RETRY_AFTER_MS = 23;
 const OUTCOMES = Object.freeze({
-  DELIVERED: buildTransportDeliveryOutcome({acknowledged: true}),
-  DEFERRED: buildTransportDeliveryOutcome({acknowledged: false, deferRetry: true}),
-  DEFERRED_ZERO_HINT: buildTransportDeliveryOutcome({acknowledged: false, deferRetry: true,
+  DELIVERED: buildDeliveryEnvelope({acknowledged: true}, {}),
+  DEFERRED: buildDeliveryEnvelope({acknowledged: false, deferRetry: true}),
+  DEFERRED_ZERO_HINT: buildDeliveryEnvelope({acknowledged: false, deferRetry: true,
     retryAfterMs: 0}),
+  REFUSED: buildDeliveryEnvelope({acknowledged: true},
+    {success: false, error: 'dispatch refused', retryAfterMs: 7}),
 });
 
 async function wake(outcome, operationId) {
@@ -71,7 +75,10 @@ test('direct remote wake-up verifies a delivered outcome and defers a deferred o
     t.same(await wake(OUTCOMES.DEFERRED_ZERO_HINT, 'op-direct-wake-deferred-zero'),
       {verified: 0, deferred: [0], delays: [RETRY_AFTER_MS]},
       'a deferral keeps its own zero hint and the dispatch owner falls back to its delay');
-    t.equal(classifyTransportDeliveryOutcome({acknowledged: false, deferRetry: true},
-      {defaultRetryAfterMs: RETRY_AFTER_MS}).retryAfterMs, null,
+    t.same(await wake(OUTCOMES.REFUSED, 'op-direct-wake-refused'),
+      {verified: 0, deferred: [7], delays: [7]},
+      'a delivered dispatch refusal defers through the dispatch owner with its own hint');
+    t.equal(buildTransportDeliveryOutcome({acknowledged: false, deferRetry: true})
+      .retryAfterMs, null,
     'the transport owner attaches no caller default hint; the delay is the caller\'s');
   });

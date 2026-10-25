@@ -333,7 +333,7 @@ test('Multi-node cluster integration tests', {timeout: TEST_TIMEOUT_MS}, async (
       let _receivedMessage = null;
       router.register(targetAddress, (envelope) => {
         _receivedMessage = envelope;
-        return {acknowledged: true, status: 'received'};
+        return {status: 'received'};
       });
 
       const result = await leader.sendMessage(targetAddress, {

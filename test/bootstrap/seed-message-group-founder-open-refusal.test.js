@@ -46,6 +46,7 @@ function attachRouter(service) {
   return service;
 }
 
+
 async function firstSeedStart(dataDir) {
   return attachRouter(await createPreparedVirginSeedBootstrapService({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, dataDir,

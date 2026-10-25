@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -115,7 +116,11 @@ function createEngineHarness(options = {}) {
     systemCache,
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       },
     },
     distributedQueryPlanner,

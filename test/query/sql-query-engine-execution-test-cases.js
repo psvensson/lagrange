@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
@@ -137,7 +138,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const engine = new SQLQueryEngine({
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
-        deliver: async () => ({acknowledged: true, success: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
       },
       nodeId: 'local-node',
     });
@@ -198,7 +199,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const engine = new SQLQueryEngine({
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
-        deliver: async () => ({acknowledged: true, success: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
       },
       nodeId: 'local-node',
     });

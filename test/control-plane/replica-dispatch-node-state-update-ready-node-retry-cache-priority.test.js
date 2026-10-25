@@ -2,6 +2,7 @@
  * Unit tests for ReplicaDispatchService NODE_STATE_UPDATE handling.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createService,
@@ -740,7 +741,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     cdcIntegrationService: {
@@ -1100,7 +1101,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     rebalanceCoordinator: {
@@ -1197,7 +1198,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     rebalanceCoordinator: {

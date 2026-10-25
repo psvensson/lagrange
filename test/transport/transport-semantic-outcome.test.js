@@ -6,14 +6,24 @@ import {
   ROUTER_NO_CONNECTION_ERROR_CODE,
   WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE,
 } from '../../src/transport/message-router-shared-vocabulary.js';
-import {
-  TRANSPORT_COMPLETED_STATUS,
+import {deliveryTransportOf,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
+  buildDeliveryEnvelope,
+  buildHandlerFailedError,
+  buildSupersededDeliveryOutcome,
   buildTransportDeliveryOutcome,
-  classifyTransportDeliveryOutcome,
+  classifyThrownDeliveryError,
+  deliveryAnswerOf,
+  deliveryReadingOf,
+  forwardedDeliveryAnswer,
+  isDeliveredTransportDeliveryOutcome,
+  isSupersededTransportDeliveryOutcome,
 } from '../../src/transport/transport-semantic-outcome.js';
+import {ROUTER_HANDLER_FAILED_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
+import {isCompletedReplicaOperationAnswer} from
+  '../../src/rebalancer/replica-operation-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('transport delivery outcome grammar classifies deferred and failed deliveries',
@@ -24,7 +34,7 @@ test('transport delivery outcome grammar classifies deferred and failed deliveri
       errorCode: 'ROUTER_CONNECTION_CLOSED',
       retryAfterMs: 250,
     });
-    const failed = classifyTransportDeliveryOutcome({
+    const failed = buildTransportDeliveryOutcome({
       acknowledged: false,
       error: 'handler missing',
       noHandler: true,
@@ -33,7 +43,9 @@ test('transport delivery outcome grammar classifies deferred and failed deliveri
     t.same(
       deferred,
       {
-        acknowledged: false,
+        messageId: null,
+        correlationId: null,
+        recoverableBeforeSend: false,
         error: 'connection closed',
         errorCode: 'ROUTER_CONNECTION_CLOSED',
         retryAfterMs: 250,
@@ -102,28 +114,21 @@ test('transport delivery outcome fails closed when ACK contradicts delivery meta
         value: {acknowledged: true, deliveryState: 'failed'},
         expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
       },
-      {
-        label: 'completed response carrying a raw error',
-        value: {
-          acknowledged: true,
-          status: 'completed',
-          error: 'connection failed',
-        },
-        expectedState: TRANSPORT_DELIVERY_OUTCOME_STATE.FAILED,
-      },
     ];
 
     for (const {label, value, expectedState} of cases) {
-      const outcome = classifyTransportDeliveryOutcome(value);
+      const outcome = buildTransportDeliveryOutcome(value);
       t.equal(outcome.deliveryState, expectedState,
         `${label}: ACK cannot erase contradictory transport state`);
     }
-    t.equal(classifyTransportDeliveryOutcome({
-      acknowledged: true,
-      status: 'error',
-      error: 'application refused the request',
-    }).deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
-    'confirmed delivery preserves an application refusal for its caller');
+    // A replica-operation status is an answer field: transport never reads it.
+    t.equal(buildTransportDeliveryOutcome({acknowledged: true, status: 'completed',
+      error: 'connection failed'}).deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
+    'a completed-with-error answer shape is not a transport input');
+    t.equal(isCompletedReplicaOperationAnswer({status: 'completed', error: 'boom'}), false,
+      'the replica-operation answer predicate refuses a completed status with an error');
+    t.equal(isCompletedReplicaOperationAnswer({status: 'completed'}), true,
+      'the replica-operation answer predicate accepts a clean completion');
   });
 
 test('message router normalizes local delivery results onto the shared delivery grammar',
@@ -144,13 +149,15 @@ test('message router normalizes local delivery results onto the shared delivery 
     );
 
     t.equal(
-      result.deliveryState,
+      result.transport.deliveryState,
       TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
       'delivered messages should expose the shared delivered state',
     );
-    t.equal(result.acknowledged, true, 'delivery should remain acknowledged');
-    t.equal(result.success, true, 'handler payload should still be preserved');
-    t.same(result.rows, [{id: 'r1'}], 'handler payload should remain intact');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'delivery should remain acknowledged');
+    t.same(result.answer, {success: true, rows: [{id: 'r1'}]},
+      'the handler answer travels beside the transport, intact');
+    t.same(Object.keys(result).sort(), ['answer', 'transport'],
+      'the delivery is the one {transport, answer} envelope');
 
     await router.shutdown();
   });
@@ -219,12 +226,16 @@ function deepEquals(actual, expected) {
   }
 }
 
-// Building again and classifying a built outcome are both the identity.
+// Building again is the identity, and the outcome has the closed key set.
+const CLOSED_TRANSPORT_KEYS = Object.freeze(['messageId', 'correlationId', 'recoverableBeforeSend',
+  'deliveryState', 'error', ...TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS.filter(
+    (field) => field !== 'deliveryState')].sort());
+
 function fixedPointViolations(once) {
   return [
     ...(deepEquals(buildTransportDeliveryOutcome(once), once) ? [] : ['not idempotent']),
-    ...(deepEquals(classifyTransportDeliveryOutcome(once), once) ? [] :
-      ['classify(build(x)) differs from build(x)']),
+    ...(deepEquals(Object.keys(once).sort(), CLOSED_TRANSPORT_KEYS) ? [] :
+      ['outcome keys are not the closed transport key set']),
   ];
 }
 
@@ -337,16 +348,16 @@ test('transport delivery outcome emits supplied values and computes absent ones'
     const aliased = buildTransportDeliveryOutcome({acknowledged: false,
       code: ROUTER_NO_CONNECTION_ERROR_CODE});
     t.same({deliveryState: aliased.deliveryState, errorCode: aliased.errorCode,
-      code: aliased.code, reasonCode: aliased.reasonCode},
-    {deliveryState: STATE.FAILED, errorCode: null, code: ROUTER_NO_CONNECTION_ERROR_CODE,
+      code: Object.hasOwn(aliased, 'code'), reasonCode: aliased.reasonCode},
+    {deliveryState: STATE.FAILED, errorCode: null, code: false,
       reasonCode: REASON.ACK_REJECTED},
-    'a code field is an application field and is never repaired into errorCode');
+    'a code field is not a transport field: never repaired into errorCode, never copied');
     const messageOnly = buildTransportDeliveryOutcome({acknowledged: true,
-      status: TRANSPORT_COMPLETED_STATUS, message: 'boom'});
+      status: 'completed', message: 'boom'});
     t.same({deliveryState: messageOnly.deliveryState, error: messageOnly.error,
-      message: messageOnly.message},
-    {deliveryState: STATE.DELIVERED, error: undefined, message: 'boom'},
-    'a message field is an application field and is never read as the error text');
+      message: Object.hasOwn(messageOnly, 'message')},
+    {deliveryState: STATE.DELIVERED, error: null, message: false},
+    'a message field is never read as the error text, and is not copied');
     const supplied = buildTransportDeliveryOutcome({acknowledged: true, deferRetry: 'true',
       noHandler: 1, reasonCode: REASON.ACK_REJECTED, retryAfterMs: -5});
     t.same({deferRetry: supplied.deferRetry, noHandler: supplied.noHandler,
@@ -357,17 +368,17 @@ test('transport delivery outcome emits supplied values and computes absent ones'
     'malformed supplied values reach the caller unchanged for their canonical owner');
   });
 
-test('classifyTransportDeliveryOutcome hands supplied values to the owner unchanged',
+test('the transport owner hands supplied values through unchanged',
   async (t) => {
-    const classified = classifyTransportDeliveryOutcome({acknowledged: true, noHandler: 1,
+    const classified = buildTransportDeliveryOutcome({acknowledged: true, noHandler: 1,
       errorCode: '', retryAfterMs: 0, deferRetry: false});
     t.same({noHandler: classified.noHandler, errorCode: classified.errorCode,
       retryAfterMs: classified.retryAfterMs, deferRetry: classified.deferRetry},
     {noHandler: 1, errorCode: '', retryAfterMs: 0, deferRetry: false},
-    'classification does not coerce supplied values before the owner sees them');
+    'the builder does not coerce supplied values');
     const error = new Error('Connection closed');
     error.code = CLOSED_CODE;
-    const thrown = classifyTransportDeliveryOutcome(error);
+    const thrown = classifyThrownDeliveryError(error);
     t.same({deliveryState: thrown.deliveryState, errorCode: thrown.errorCode,
       error: thrown.error},
     {deliveryState: STATE.DEFERRED, errorCode: CLOSED_CODE, error: 'Connection closed'},
@@ -389,15 +400,20 @@ test('classifyTransportDeliveryOutcome hands supplied values to the owner unchan
         0, 'a thrown deferral keeps its own zero hint'],
     ];
     for (const [value, deliveryState, retryAfterMs, label] of cases) {
-      const classified = classifyTransportDeliveryOutcome(value);
+      const classified = value instanceof Error ? classifyThrownDeliveryError(value) :
+        buildTransportDeliveryOutcome(value);
       t.same({deliveryState: classified.deliveryState,
         retryAfterMs: classified.retryAfterMs}, {deliveryState, retryAfterMs}, label);
-      t.same(classifyTransportDeliveryOutcome(classified), classified,
-        `${label}: classifying again is a fixed point`);
+      t.same(buildTransportDeliveryOutcome(classified), classified,
+        `${label}: building again is a fixed point`);
     }
-    const once = classifyTransportDeliveryOutcome(error);
-    t.same(classifyTransportDeliveryOutcome(once), once,
-      'classifying a classified outcome is a fixed point');
+    const once = classifyThrownDeliveryError(error);
+    t.same(buildTransportDeliveryOutcome(once), once,
+      'building a thrown outcome again is a fixed point');
+    t.same({deliveryState: classifyThrownDeliveryError({error: 'not an Error'}).deliveryState,
+      reasonCode: classifyThrownDeliveryError(null).reasonCode},
+    {deliveryState: STATE.FAILED, reasonCode: REASON.ACK_REJECTED},
+    'a thrown value that is not an Error carries no transport fact: failed');
   });
 
 // Absent value fields keep the values the owner computed before supplied
@@ -414,8 +430,6 @@ const ABSENT_FIELD_DEFAULTS = Object.freeze([
     WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, null, REASON.WEBSOCKET_CONNECT_TIMEOUT],
   [{acknowledged: false, errorCode: 'ROUTER_MESSAGE_TIMEOUT'}, STATE.FAILED, false,
     'ROUTER_MESSAGE_TIMEOUT', null, REASON.MESSAGE_TIMEOUT],
-  [{acknowledged: true, status: 'completed', error: 'boom'}, STATE.FAILED, false, null, null,
-    REASON.COMPLETED_WITH_ERROR],
   [{acknowledged: true, deliveryState: STATE.DEFERRED}, STATE.DEFERRED, true, null, null,
     REASON.TRANSPORT_DEFERRED],
 ]);
@@ -429,5 +443,116 @@ test('transport delivery outcome computes absent value fields as before', async 
       retryAfterMs: outcome.retryAfterMs, reasonCode: outcome.reasonCode},
     {deliveryState, deferRetry, errorCode, noHandler: false, retryAfterMs, reasonCode},
     `${JSON.stringify(input)}: absent fields keep their computed values`);
+  }
+});
+
+// F-V3: the owner names handler_failed and superseded and its builders.
+test('a handler failure is FAILED/handler_failed through the owner builders',
+  async (t) => {
+    const thrown = buildHandlerFailedError('handler refused');
+    t.same({message: thrown.message, code: thrown.code},
+      {message: 'handler refused', code: ROUTER_HANDLER_FAILED_ERROR_CODE},
+      'buildHandlerFailedError carries the router handler-failed code');
+    const outcome = classifyThrownDeliveryError(thrown);
+    t.same({deliveryState: outcome.deliveryState, reasonCode: outcome.reasonCode,
+      errorCode: outcome.errorCode, error: outcome.error, deferRetry: outcome.deferRetry},
+    {deliveryState: STATE.FAILED, reasonCode: REASON.HANDLER_FAILED,
+      errorCode: ROUTER_HANDLER_FAILED_ERROR_CODE, error: 'handler refused',
+      deferRetry: false},
+    'a handler failure is FAILED with reasonCode handler_failed, never deferred');
+    t.equal(buildTransportDeliveryOutcome({acknowledged: true,
+      errorCode: ROUTER_HANDLER_FAILED_ERROR_CODE}).deliveryState, STATE.FAILED,
+    'the handler-failed code conflicts with an acknowledgement: FAILED wins');
+  });
+
+test('a superseded delivery is the one named DELIVERED state superseded', async (t) => {
+  const superseded = buildSupersededDeliveryOutcome();
+  t.same({deliveryState: superseded.deliveryState, reasonCode: superseded.reasonCode},
+    {deliveryState: STATE.DELIVERED, reasonCode: REASON.SUPERSEDED},
+    'superseded is DELIVERED with reasonCode superseded');
+  t.equal(Object.hasOwn(superseded, 'coalesced'), false,
+    'the one named state is the reason code; no second coalesced field (F-V4)');
+  t.equal(Object.hasOwn(superseded, 'deliverySource'), false,
+    'the superseded outcome carries no unread deliverySource (F-V4)');
+  t.equal(isSupersededTransportDeliveryOutcome(superseded), true,
+    'the owner predicate names it');
+  t.equal(isSupersededTransportDeliveryOutcome(buildTransportDeliveryOutcome(
+    {acknowledged: true})), false, 'an ordinary delivered outcome is not superseded');
+  t.equal(isSupersededTransportDeliveryOutcome(buildTransportDeliveryOutcome(
+    {acknowledged: false, reasonCode: REASON.SUPERSEDED})), false,
+  'an undelivered outcome is never superseded');
+  t.same(buildTransportDeliveryOutcome(superseded), superseded, 'it is a fixed point');
+});
+
+test('the delivery envelope carries the transport and, only when delivered, the answer',
+  async (t) => {
+    const answer = {success: true, rows: [1]};
+    const delivered = buildDeliveryEnvelope({messageId: 'm1', correlationId: 'c1',
+      acknowledged: true}, answer);
+    t.ok(Object.isFrozen(delivered), 'the envelope is frozen');
+    t.ok(Object.isFrozen(delivered.transport), 'its transport is frozen');
+    t.same(Object.keys(delivered).sort(), ['answer', 'transport'], 'one shape');
+    t.equal(delivered.answer, answer, 'the answer is carried as given');
+    t.same({messageId: delivered.transport.messageId,
+      deliveryState: delivered.transport.deliveryState},
+    {messageId: 'm1', deliveryState: STATE.DELIVERED}, 'the transport is built by the owner');
+    const failed = buildDeliveryEnvelope({acknowledged: false, error: 'no'}, answer);
+    t.same({state: failed.transport.deliveryState, answer: failed.answer},
+      {state: STATE.FAILED, answer: null}, 'an undelivered envelope never carries an answer');
+    t.equal(buildDeliveryEnvelope({acknowledged: true}).answer, null,
+      'an ACK-only delivery has a null answer');
+    t.same(buildDeliveryEnvelope(delivered.transport, answer), delivered,
+      'building from a built transport is a fixed point');
+  });
+
+test('a consumer reads one namespace', async (t) => {
+  const delivered = buildDeliveryEnvelope({acknowledged: true}, {error: 'domain'});
+  t.same(deliveryReadingOf(delivered), {error: 'domain'},
+    'a delivered reading is the answer');
+  t.same(deliveryReadingOf(buildDeliveryEnvelope({acknowledged: true})), {},
+    'an answer-less delivered reading is an empty answer');
+  const deferred = buildDeliveryEnvelope({acknowledged: false, deferRetry: true,
+    error: 'later'});
+  t.equal(deliveryReadingOf(deferred), deferred.transport,
+    'an undelivered reading is the transport outcome itself');
+});
+
+test('a forwarder answers with the onward answer or its typed refusal', async (t) => {
+  const onward = {success: true, rows: []};
+  t.equal(forwardedDeliveryAnswer(buildDeliveryEnvelope({acknowledged: true}, onward)),
+    onward, 'a delivered onward hop forwards its answer');
+  const refusal = forwardedDeliveryAnswer(buildDeliveryEnvelope({acknowledged: false,
+    error: 'closed', errorCode: CLOSED_CODE, retryAfterMs: RETRY_HINT_MS}));
+  t.same(refusal, {success: false, error: 'closed', deferRetry: true,
+    retryAfterMs: RETRY_HINT_MS, forwardedReasonCode: REASON.CONNECTION_CLOSED},
+  'an undelivered onward hop is a typed refusal carrying its deferral at answer level');
+  t.equal(isDeliveredTransportDeliveryOutcome(refusal), false,
+    'the refusal is an answer, not a transport outcome');
+});
+
+// Approved D4: the public envelope has one delivery-state fact, no ACK alias.
+test('Q6 D4 public transport contains no acknowledged alias', async (t) => {
+  const envelope = buildDeliveryEnvelope({acknowledged: true}, {success: false});
+  t.equal(Object.hasOwn(envelope.transport, 'acknowledged'), false,
+    'the ACK is internal evidence; only deliveryState crosses the boundary');
+  t.equal(envelope.transport.deliveryState, STATE.DELIVERED,
+    'a domain refusal still arrived');
+});
+
+test('Q6 accessors accept only the router owner envelope', async (t) => {
+  const answer = {success: true};
+  const envelope = buildDeliveryEnvelope({acknowledged: true}, answer);
+  t.equal(deliveryAnswerOf(envelope), answer, 'the owner answer is preserved');
+  t.equal(deliveryTransportOf(envelope), envelope.transport, 'the outcome is not reclassified');
+  t.equal(buildDeliveryEnvelope(envelope), envelope, 'an envelope is a fixed point');
+  const forged = {...envelope};
+  const copied = JSON.parse(JSON.stringify(envelope));
+  const unreadable = new Proxy({}, {get() {
+    throw new Error('must not read');
+  }});
+  for (const value of [null, undefined, false, {}, forged, copied, unreadable]) {
+    t.equal(deliveryTransportOf(value).deliveryState, STATE.FAILED,
+      'unowned values cannot supply delivery authority');
+    t.equal(deliveryAnswerOf(value), null, 'unowned values supply no answer');
   }
 });

@@ -218,7 +218,8 @@ async function createGroupHost() {
   const close = async (replicaId) => {
     const service = live.get(replicaId);
     live.delete(replicaId);
-    router.unregister(`${NODE_ID}/message-group/${replicaId}`);
+    router.unregisterExact(`${NODE_ID}/message-group/${replicaId}`,
+      service?.transportHandler);
     await service?.shutdown();
   };
   const dispose = async () => {

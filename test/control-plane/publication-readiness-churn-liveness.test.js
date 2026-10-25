@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {MEMBERSHIP_PUBLICATION_READ_SOURCE} from
   '../../src/control-plane/membership-publication-row-contract.js';
@@ -582,11 +583,10 @@ test('full production-composition storm closes cache, owner-RPC, dependency, ' +
       Array.from({length: NODE_COUNT}, (_, index) => `node-${index}`),
     getConnectionState: () => transportState,
     async deliver() {
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: activeCache.getAll(TABLES.NODES),
-      };
+      });
     },
   };
   let cdcIntegrationService = null;

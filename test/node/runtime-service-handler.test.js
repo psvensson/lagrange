@@ -25,6 +25,11 @@ import {
   validateRuntimeDescriptor,
 } from '../../src/wasm-service/runtime-descriptor-validator.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_STATE} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {createIdentityTransport} from '../test-helpers/replica-handler-identity-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-1';
 const TEST_ALREADY_ACTIVE_ENTITY_ID = 'sys-postgres-wire';
@@ -1074,54 +1079,44 @@ describe('RuntimeServiceHandler router registration', () => {
     );
   });
 
-  it('unregisters handler from router', () => {
+  it('unregisters exactly its own handler from the router', () => {
     const {handler} = createHandler();
-    const unregistered = [];
-    const mockRouter = {
-      register() {},
-      unregister(address) {
-        unregistered.push(address);
-      },
-    };
-    handler.registerWithRouter(mockRouter);
-    handler.unregisterFromRouter(mockRouter);
-    assert.equal(unregistered.length, 1);
-    assert.equal(
-      unregistered[0],
-      'test-node/service/runtime-service-handler',
-    );
+    const transport = createIdentityTransport();
+    handler.registerWithRouter(transport);
+    const address = 'test-node/service/runtime-service-handler';
+    assert.equal(typeof transport.getRegisteredHandler(address), 'function');
+    handler.unregisterFromRouter(transport);
+    assert.equal(transport.getRegisteredHandler(address), null);
   });
 
-  it('registered handler returns acknowledged response',
+  it('a delivered request is router-acknowledged and answered by the handler',
     async () => {
       const {handler} = createHandler();
-      const registered = new Map();
-      const mockRouter = {
-        register(address, fn) {
-          registered.set(address, fn);
-        },
-      };
-      handler.registerWithRouter(mockRouter);
-
-      const routerHandler = registered.get(
-        'test-node/service/runtime-service-handler',
-      );
-      const response = await routerHandler({
-        correlationId: 'corr-1',
-        payload: {
+      const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+      try {
+        handler.registerWithRouter(router);
+        const delivery = await router.deliver('test-node/service/runtime-service-handler', {
           [ReplicaOperationField.TYPE]:
             ReplicaOperationMessageType.CREATE_REPLICA,
           [ReplicaOperationField.OPERATION_ID]: 'op-1',
           [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
           [ReplicaOperationField.REPLICA_ID]:
             'sys-postgres-wire-r1',
-        },
-      });
-      assert.equal(response.acknowledged, true);
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-      );
+        });
+        // The acknowledgement is the router's fact; the handler only answers.
+        assert.equal(delivery.transport.deliveryState,
+          TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
+        assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)), true);
+        assert.equal(Object.hasOwn(delivery.answer, 'acknowledged'), false);
+        assert.equal(
+          delivery.answer.status,
+          ReplicaOperationResponseStatus.INITIATED,
+        );
+      } finally {
+        await router.shutdown();
+      }
     });
 });
 

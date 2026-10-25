@@ -140,6 +140,9 @@ function buildPendingSourceSummary(
     }));
 }
 
+// The router-internal form of one delivery step: the transport facts (built
+// by the owner, closed key set), the handler's answer when there is one, and
+// the queue wait. A bare facts object is a step without an answer.
 function normalizeDeliveryOutcome(outcome) {
   if (
     outcome &&
@@ -155,6 +158,7 @@ function normalizeDeliveryOutcome(outcome) {
   ) {
     return {
       result: buildTransportDeliveryOutcome(outcome.result),
+      answer: outcome.answer ?? null,
       queueWaitMs: Number.isFinite(outcome.queueWaitMs) ?
         Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) :
         TRANSPORT_NUM.ZERO,
@@ -162,6 +166,7 @@ function normalizeDeliveryOutcome(outcome) {
   }
   return {
     result: buildTransportDeliveryOutcome(outcome),
+    answer: null,
     queueWaitMs: TRANSPORT_NUM.ZERO,
   };
 }
@@ -176,11 +181,9 @@ function normalizeRetryAfterMs(value, fallback) {
   return TRANSPORT_NUM.ZERO;
 }
 
-function buildSupersededPendingResult(replacedItem) {
+function buildSupersededPendingResult() {
   return {
-    result: buildSupersededDeliveryOutcome({
-      deliverySource: replacedItem?.deliverySource || null,
-    }),
+    result: buildSupersededDeliveryOutcome(),
     queueWaitMs: TRANSPORT_NUM.ZERO,
   };
 }

@@ -22,6 +22,7 @@
 // createJoinMessageGroupReplica -> MessageGroupService -> the rs-raft port on
 // the real WASM core).
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -50,7 +51,7 @@ const ROUTER = Object.freeze({
   unregister() {},
   getRegisteredHandler: () => null,
   unregisterExact: () => true,
-  deliver: async () => ({acknowledged: true}),
+  deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
 });
 
 function joinPhase(directory, services, delegates = {}) {

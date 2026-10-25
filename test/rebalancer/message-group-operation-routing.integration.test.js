@@ -3,6 +3,7 @@
  * Task 6.1: expected to fail until message-group operation routing is wired.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -278,7 +279,7 @@ test('Message-group operation routing integration', async (t) => {
         messageRouter: {
           deliver: async (target, payload) => {
             deliveries.push({target, payload});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         tablePolicyService: {
@@ -418,7 +419,9 @@ test('Message-group operation routing integration', async (t) => {
           updateSystemTableRow: async () => ({success: true}),
         },
         messageRouter: {
-          deliver: async () => ({acknowledged: true, status: 'initiated'}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'initiated',
+          })),
         },
         controlPlaneSystemTableGateway: {
           readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>
@@ -519,7 +522,9 @@ test('Message-group operation routing integration', async (t) => {
           updateSystemTableRow: async () => ({success: true}),
         },
         messageRouter: {
-          deliver: async () => ({acknowledged: true, status: 'initiated'}),
+          deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'initiated',
+          })),
         },
         tablePolicyService: {
           getPolicyForPartition: () => ({}),

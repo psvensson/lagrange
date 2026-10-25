@@ -10,9 +10,10 @@ import {answerParticipantTransactionRequest} from
 import {participantSetTextOf} from
   '../../src/query/distributed/distributed-transaction-participant-manifest.js';
 import {
-  isParticipantTransactionAnswer,
+  participantDeliveryAnswerOf,
   preparedEvidenceOf,
 } from '../../src/query/sql-query-engine-participant-wire.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 const logger = {debug() {}, warn() {}, error() {}};
 const evidence = {preparedDigest: 'b'.repeat(64), prepareIndex: 3, prepareTerm: 1};
 const deferred = () => {
@@ -194,13 +195,13 @@ test('C56-1: incomplete PREPARE coordinates cannot authorize COMMIT',
 
 test('C56-4: participant answers reject noHandler, inherited fields, and ' +
   'accessors without invoking them', () => {
-  assert.equal(isParticipantTransactionAnswer({acknowledged: true,
-    success: true, noHandler: true}), false);
-  assert.throws(() => preparedEvidenceOf(Object.create({acknowledged: true,
-    success: true, state: 'PREPARED', preparedDigest: 'a'.repeat(64),
+  assert.equal(participantDeliveryAnswerOf(buildDeliveryEnvelope({acknowledged: false,
+    noHandler: true}, {success: true})), null,
+  'a no-handler delivery is never a participant answer');
+  assert.throws(() => preparedEvidenceOf(Object.create({success: true, state: 'PREPARED', preparedDigest: 'a'.repeat(64),
     prepareIndex: 2, prepareTerm: 1})));
   let digestReads = 0;
-  assert.throws(() => preparedEvidenceOf({acknowledged: true, success: true,
+  assert.throws(() => preparedEvidenceOf({success: true,
     state: 'PREPARED', get preparedDigest() {
       digestReads += 1;
       return 'a'.repeat(64);
@@ -222,28 +223,29 @@ test('C56-4: live delivery binds the processed response to the exact request',
     });
     const transactionId = 'e'.repeat(32);
     const participantId = `${transactionId}:p1`;
-    let answer = null;
+    let delivery = null;
     engine.queryExecutor.executeOnPartition = async (...args) => {
       const options = args[6];
-      if (!options.isSuccessfulResponse(answer)) {
+      if (!options.isSuccessfulResponse(delivery)) {
         return {success: false, error: 'participant response rejected'};
       }
-      return options.buildSuccessResult(answer);
+      return options.buildSuccessResult(delivery.answer);
     };
-    const exact = {acknowledged: true, success: true, operation: 'BEGIN',
+    const delivered = (answer) => buildDeliveryEnvelope({acknowledged: true}, answer);
+    const exact = {success: true, operation: 'BEGIN',
       partitionId: 'p1', transactionId, participantId, state: 'ACTIVE'};
     for (const divergent of [
-      {...exact, noHandler: true},
-      {...exact, operation: 'ROLLBACK'},
-      {...exact, partitionId: 'p2'},
-      {...exact, transactionId: 'f'.repeat(32)},
-      {...exact, participantId: `${transactionId}:p2`},
+      buildDeliveryEnvelope({acknowledged: false, noHandler: true}),
+      delivered({...exact, operation: 'ROLLBACK'}),
+      delivered({...exact, partitionId: 'p2'}),
+      delivered({...exact, transactionId: 'f'.repeat(32)}),
+      delivered({...exact, participantId: `${transactionId}:p2`}),
     ]) {
-      answer = divergent;
+      delivery = divergent;
       await assert.rejects(engine.deliverTransactionOperation('session', 'p1',
         'BEGIN', {transactionId, participantId}));
     }
-    answer = exact;
+    delivery = delivered(exact);
     assert.equal((await engine.deliverTransactionOperation('session', 'p1',
       'BEGIN', {transactionId, participantId})).state, 'ACTIVE');
   });
@@ -348,8 +350,9 @@ test('C56-6: matching advanced readback is left to durable recovery without ' +
       commitEntered.resolve();
       await releaseCommit.promise;
     }
-    return {...answerParticipantTransactionRequest(message, partitionId),
-      decisionIndex: 12, decisionTerm: 9};
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      ...answerParticipantTransactionRequest(message, partitionId),
+      decisionIndex: 12, decisionTerm: 9});
   }};
   const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
     systemCache: cache, messageRouter: router});

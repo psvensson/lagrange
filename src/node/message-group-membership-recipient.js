@@ -12,6 +12,7 @@ import {COMMITTED_MEMBERSHIP_READ_PURPOSE as PURPOSE,
 import {normalizeCommittedLearnerRead} from '../raft/raft-rs-committed-membership-read.js';
 import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS as ADDRESS} from
   './message-group-service-handler-constants.js';
+import {isExactReplicaHandlerRegistered} from './replica-transport-handler-identity.js';
 
 const FUNCTION = 'function';
 const unavailable = () => Object.freeze({kind: KIND.REFUSED, reason: REASON.UNAVAILABLE});
@@ -30,7 +31,7 @@ function captureRecipient(handler, replicaId, delivery, invocation) {
   if (!service || !router) return null;
   const current = () => typeof registration === FUNCTION &&
     handler.registeredRouterHandler === registration && handler.messageRouter === router &&
-    router.getRegisteredHandler(address) === registration &&
+    isExactReplicaHandlerRegistered(router, address, registration) &&
     typeof isCurrent === FUNCTION && delivery.nodeId === handler.nodeId && isCurrent() === true &&
     handler.resolveActiveReplicaService(replicaId) === service && service.raft === port;
   if (!current() || typeof port?.[RAFT_OPERATION.READ_COMMITTED_MEMBERSHIP] !== FUNCTION) {

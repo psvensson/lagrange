@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {RebalanceCoordinator} from '../../../../src/rebalancer/rebalance-coordinator.js';
@@ -364,7 +365,7 @@ test('boundary-transition scenario defers critical partition create admission ' 
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     sqlQueryEngine: {

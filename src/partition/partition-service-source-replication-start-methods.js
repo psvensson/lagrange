@@ -2,6 +2,7 @@ import {ERRORS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {forwardSourceReplicationStart} from './managed-source-replication-start-delivery.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
@@ -64,7 +65,8 @@ function forwardSplitStartIfFollower(service, payload, transitionMetadata) {
   if (service.role === RaftRole.LEADER) return null;
   const leaderAddress = service.resolveLeaderAddress();
   if (leaderAddress && service.transport) {
-    return service.transport.deliver(leaderAddress, {
+    // A forwarding hop answers with the leader's answer (or its refusal).
+    return forwardSourceReplicationStart(service.transport, leaderAddress, {
       type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
       partitionId: payload.partitionId || service.partitionId,
       tableId: payload.tableId || service.tableId,
@@ -119,7 +121,7 @@ function consumeAuthorizedPredecessors(service, handle, family) {
 }
 
 function rejected(error) {
-  return {acknowledged: false, success: false, error};
+  return {success: false, error};
 }
 
 function snapshotExecutionMetadata(metadata) {
@@ -259,12 +261,12 @@ class PartitionServiceSourceReplicationStartMethods {
         START_METHOD.QUIESCE_HANDLE, handle) : undefined);
     handle.runPromise = run;
     this.splitReplicationRun = run;
-    return {acknowledged: true, success: true};
+    return {success: true};
   }
 
   async waitForSplitReplicationStart(handle) {
     const response = handle.startPromise ? await handle.startPromise : null;
-    return response?.acknowledged === true && handle.authorized === true &&
+    return response?.success === true && handle.authorized === true &&
       handle.runPromise && this.splitReplication === handle &&
       this.isShutdown !== true && this.role === RaftRole.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
@@ -354,12 +356,12 @@ class PartitionServiceSourceReplicationStartMethods {
         START_METHOD.QUIESCE_HANDLE, handle) : undefined);
     handle.runPromise = run;
     this.mergeReplicationRun = run;
-    return {acknowledged: true, success: true};
+    return {success: true};
   }
 
   async waitForMergeReplicationStart(handle) {
     const response = handle.startPromise ? await handle.startPromise : null;
-    return response?.acknowledged === true && handle.authorized === true &&
+    return response?.success === true && handle.authorized === true &&
       handle.runPromise && this.mergeReplication === handle &&
       this.isShutdown !== true && this.role === RAFT_ROLE.LEADER ? response :
       rejected(PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);

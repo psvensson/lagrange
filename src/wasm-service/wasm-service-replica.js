@@ -364,7 +364,7 @@ class WasmServiceReplica extends EventEmitter {
       if (this.raft) {
         await Promise.resolve(this.raft.step(payload));
       }
-      return {acknowledged: true};
+      return null;
     }
     const refusal = this.heldCreationRefusal();
     if (refusal !== null) return refusal;

@@ -106,7 +106,7 @@ test('Removal-8: an old generation shut down before registration never ' +
     replicaStateMachine: stateMachine});
   t.equal(g1.transportHandler ?? null, null, 'G1 registered no handler');
   // G2 later owns the address.
-  const g2Handler = () => ({acknowledged: true});
+  const g2Handler = () => (null);
   router.register(ADDRESS, g2Handler);
   // The delayed G1 shutdown runs its retirement.
   await g1.shutdown();
@@ -123,8 +123,8 @@ test('Removal-8: an old generation shut down before registration never ' +
 test('Removal-8: exact removal removes only the exact handler', async (t) => {
   const router = new MessageRouter({nodeId: NODE_ID,
     bootIncarnation: TEST_BOOT_INCARNATION});
-  const g1Handler = () => ({acknowledged: true});
-  const g2Handler = () => ({acknowledged: true});
+  const g1Handler = () => (null);
+  const g2Handler = () => (null);
   router.register(ADDRESS, g1Handler);
   t.equal(await retireReplicaTransportHandler({transport: router,
     address: ADDRESS, handler: g1Handler, replicaId: REPLICA_ID}),
@@ -142,7 +142,7 @@ test('Removal-8: exact removal removes only the exact handler', async (t) => {
 test('Removal-8: a transport without the identity API is refused and ' +
   'nothing is removed', async (t) => {
   const transport = createPresenceOnlyTransport();
-  const handler = () => ({acknowledged: true});
+  const handler = () => (null);
   transport.register(ADDRESS, handler);
   t.equal(isExactReplicaHandlerRegistered(transport, ADDRESS, handler), false,
     'the activation check cannot pass on presence');
@@ -181,7 +181,7 @@ function assertLeftRegisteredReported(t, logger, address, replicaId) {
 test('Removal-8: every retiring owner surfaces a refused retirement (the ' +
   'handler is left registered) instead of discarding it', async (t) => {
   initializeEnvironment();
-  const handler = () => ({acknowledged: true});
+  const handler = () => (null);
 
   t.test('partition replica shutdown', async (t) => {
     const transport = createPresenceOnlyTransport();

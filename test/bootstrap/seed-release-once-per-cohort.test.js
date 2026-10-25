@@ -1,6 +1,7 @@
 // Seed owns one ordered release INTENT per actual partition cohort. The
 // participant cutover owner, not this test, owns authentic replica census and
 // control validation. Fake delivery here proves only seed intent multiplicity.
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -60,10 +61,9 @@ test('seed issues one serialized real partition release intent, not one per repl
         messageRouter: {
           deliver(_address, payload, options) {
             routed.push(Object.freeze({payload, options}));
-            return Promise.resolve({
-              acknowledged: true, deliveryState: 'delivered',
+            return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, {
               [PARTICIPANT_RELEASE_RESULT_FIELD]: {outcome: OUTCOME.CUT_OVER},
-            });
+            }));
           },
         },
       },

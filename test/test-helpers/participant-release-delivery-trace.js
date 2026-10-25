@@ -157,8 +157,9 @@ function releaseAnswerTraceOf(answer) {
 
 function responseTraceOf(response) {
   if (response === null) return null;
-  return {...traceFields(response, ['acknowledged', 'deliveryState', 'noHandler', 'errorCode']),
-    answer: releaseAnswerTraceOf(response?.[PARTICIPANT_RELEASE_RESULT_FIELD])};
+  return {...traceFields(response.transport,
+    ['acknowledged', 'deliveryState', 'noHandler', 'errorCode']),
+  answer: releaseAnswerTraceOf(response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD])};
 }
 
 function createParticipantReleaseDeliveryTrace() {

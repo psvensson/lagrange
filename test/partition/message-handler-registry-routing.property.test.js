@@ -108,7 +108,7 @@ test('Property 1: Message Handler Registry Routing', async (t) => {
 
           registry.register(messageType, async (msg) => {
             receivedMessage = msg;
-            return {acknowledged: true};
+            return null;
           });
 
           const message = {
@@ -201,7 +201,7 @@ test('Property 1: Message Handler Registry Routing', async (t) => {
             invocationCounts.set(type, 0);
             registry.register(type, async () => {
               invocationCounts.set(type, invocationCounts.get(type) + 1);
-              return {acknowledged: true, type};
+              return {type};
             });
           }
 
@@ -310,7 +310,7 @@ test('Property 1: Message Handler Registry Routing', async (t) => {
 
           registry.register(messageType, async (msg) => {
             receivedPayloads.push(msg.payload.data);
-            return {acknowledged: true, index: receivedPayloads.length - 1};
+            return {index: receivedPayloads.length - 1};
           });
 
           // Send multiple messages

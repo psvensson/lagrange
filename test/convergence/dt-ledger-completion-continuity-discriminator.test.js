@@ -39,6 +39,7 @@
  *   Physical-leadership witness — only recorded exact-target election
  *                           evidence CONTINUEs a remove-safety handoff.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {createReplaceWitness} from '../rebalancer/replace-witness-fixture.js';
 import t from 'tap';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -564,7 +565,7 @@ t.test(
       });
       const baseDeliver = owner.messageRouter.deliver.bind(owner.messageRouter);
       owner.messageRouter.deliver = async (target, payload, options) =>
-        witness.answer(payload) ?? baseDeliver(target, payload, options);
+        witness.deliveryFor(payload) ?? baseDeliver(target, payload, options);
       const projectedTerminal = {
         ...durable,
         status: 'removed',
@@ -960,7 +961,7 @@ t.test(
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -1036,7 +1037,7 @@ t.test(
       messageRouter: {
         deliver: async () => {
           deliveries.push('deliver');
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,

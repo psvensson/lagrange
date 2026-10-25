@@ -55,10 +55,7 @@ import {resolveCanonicalLeaderIdentitySnapshot} from '../query/canonical-leader-
 import {wireMigrationWorkflowOwners} from '../migration/migration-composition.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
-import {
-  classifyTransportDeliveryOutcome,
-  isDeliveredTransportDeliveryOutcome,
-} from '../transport/transport-semantic-outcome.js';
+import {isDeliveredTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
 import {
   NodeStatePublicationOwner,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
@@ -413,7 +410,6 @@ const NODE_JOINING_SERVICE_JOIN_HELPER_SHARED = Object.freeze({
   buildOwnerContractOutcome,
   buildPartitionCdcPropagationSubscriber,
   canonicalizeSystemTableRow,
-  classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
 });
 const NODE_JOINING_SERVICE_ROUTING_HELPER_SHARED = Object.freeze({

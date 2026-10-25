@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -372,11 +373,10 @@ test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
       },
       async deliver(targetAddress, message) {
         deliveries.push({targetAddress, state: message.state});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           completionKind: 'durable_state_publication',
           completionCompleted: true,
-        };
+        });
       },
     };
 
@@ -497,17 +497,16 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
       return 'connected';
     },
     async deliver(targetAddress, message) {
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         targetAddress,
         state: message.state,
-      };
+      });
     },
   };
   const deliveries = [];
   service.messageRouter.deliver = async (targetAddress, message) => {
     deliveries.push({targetAddress, state: message.state});
-    return {acknowledged: true};
+    return buildDeliveryEnvelope({acknowledged: true});
   };
   service.messageGroupServices.set('mg-1-r2', {
     groupId: 'mg-1',
@@ -556,7 +555,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE prefers remote ' +
     },
     async deliver(targetAddress, message) {
       deliveries.push({targetAddress, state: message.state});
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
   service.messageGroupServices.set('mg-1-r2', {
@@ -612,7 +611,7 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
     },
     async deliver(targetAddress, message) {
       deliveries.push({targetAddress, state: message.state});
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
   service.messageGroupServices.set('mg-1-r2', {
@@ -669,12 +668,10 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE falls back to ' +
     async deliver(targetAddress, message) {
       deliveries.push({targetAddress, state: message.state});
       if (targetAddress === 'seed-node-1/message-group/mg-1-r1') {
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed-node-1',
-        };
+        return buildDeliveryEnvelope(
+          {acknowledged: false, error: 'No connection to node seed-node-1'});
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
   service.messageGroupServices.set('mg-1-r2', {
@@ -740,12 +737,10 @@ test('NodeJoiningService - READY heartbeat NODE_STATE_UPDATE keeps local ' +
       deliveries.push({targetAddress, state: message.state});
       if (targetAddress ===
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r1`) {
-        return {
-          acknowledged: false,
-          error: `No connection to node ${REMOTE_CANONICAL_LEADER_NODE_ID}`,
-        };
+        return buildDeliveryEnvelope(
+          {acknowledged: false, error: `No connection to node ${REMOTE_CANONICAL_LEADER_NODE_ID}`});
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
   service.messageGroupServices.set('mg-1-r2', {
@@ -841,7 +836,7 @@ test('NodeJoiningService - query transport selection uses initialized local ' +
 
   const relayService = {
     initialized: true,
-    sendMessage: async () => ({acknowledged: true}),
+    sendMessage: async () => null,
     isLeaderReplica: () => false,
     getMetadataIngressReadiness: () => ({
       ready: false,
@@ -885,7 +880,7 @@ test('NodeJoiningService - connect websocket phase wires the dedicated query ' +
 
   const relayService = {
     initialized: true,
-    sendMessage: async () => ({acknowledged: true}),
+    sendMessage: async () => null,
     isLeaderReplica: () => false,
     getMetadataIngressReadiness: () => ({
       ready: false,
@@ -941,10 +936,7 @@ test('NodeJoiningService - excludes disconnected control-plane ingress candidate
         return 'disconnected';
       },
       async deliver(targetAddress) {
-        return {
-          acknowledged: true,
-          targetAddress,
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {targetAddress});
       },
     };
 
@@ -994,12 +986,10 @@ test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane targ
       async deliver(targetAddress) {
         deliveries.push(targetAddress);
         if (targetAddress === 'stale-node/message-group/mg-1-r9') {
-          return {
-            acknowledged: false,
-            error: 'No connection to node stale-node',
-          };
+          return buildDeliveryEnvelope(
+            {acknowledged: false, error: 'No connection to node stale-node'});
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 
@@ -1042,11 +1032,14 @@ test('NodeJoiningService - re-resolves ingress after the only target moves',
     service.messageRouter = {
       async deliver(targetAddress) {
         deliveries.push(targetAddress);
-        return targetAddress === staleTarget ? {
-          acknowledged: false,
-          noHandler: true,
-          error: `No handler registered for address ${staleTarget}`,
-        } : {acknowledged: true};
+        return targetAddress === staleTarget ? buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            noHandler: true,
+            error: `No handler registered for address ${staleTarget}`,
+          }) : buildDeliveryEnvelope({
+          acknowledged: true,
+        });
       },
     };
 
@@ -1103,12 +1096,10 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
     service.messageRouter.deliver = async (targetAddress) => {
       deliveries.push(targetAddress);
       if (targetAddress === 'stale-node/message-group/mg-1-r9') {
-        return {
-          acknowledged: false,
-          error: 'No connection to node stale-node',
-        };
+        return buildDeliveryEnvelope(
+          {acknowledged: false, error: 'No connection to node stale-node'});
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     };
 
     await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
@@ -1161,15 +1152,16 @@ test('NodeJoiningService - retries CONNECTED NODE_STATE_UPDATE once on the same 
       async deliver(targetAddress) {
         deliveries.push(targetAddress);
         if (deliveries.length === 1) {
-          return {
-            acknowledged: false,
-            error: 'Connection to node seed-node-1 closed',
-            errorCode: 'ROUTER_CONNECTION_CLOSED',
-            deferRetry: true,
-            retryAfterMs: 25,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: 'Connection to node seed-node-1 closed',
+              errorCode: 'ROUTER_CONNECTION_CLOSED',
+              deferRetry: true,
+              retryAfterMs: 25,
+            });
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 
@@ -1217,14 +1209,15 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on alter
       async deliver(targetAddress, message, options) {
         deliveries.push({targetAddress, message, options});
         if (deliveries.length === 1) {
-          return {
-            acknowledged: false,
-            error: 'Distributed operation failed due to participant failures',
-            errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
-            retryAfterMs: 25,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: 'Distributed operation failed due to participant failures',
+              errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+              retryAfterMs: 25,
+            });
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 
@@ -1319,12 +1312,13 @@ test('NodeJoiningService - retries heartbeat-recovery NODE_STATE_UPDATE on stale
       async deliver(targetAddress, message, options) {
         deliveries.push({targetAddress, message, options});
         if (targetAddress === staleTargetAddress) {
-          return {
-            acknowledged: false,
-            error: `No handler registered for address ${staleTargetAddress}`,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: `No handler registered for address ${staleTargetAddress}`,
+            });
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 

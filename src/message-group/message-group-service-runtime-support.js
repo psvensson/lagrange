@@ -1,3 +1,4 @@
+import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {NUM} from '../constants/index.js';
 import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
 import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
@@ -207,24 +208,20 @@ function shouldSynthesizeMessageGroupDeliverySource(
   return !hasRouterVisibleDeliverySource(sourceContext?.payload);
 }
 
-function buildDeferredDeliveryError(deliveryResult) {
-  const error = new Error(deliveryResult?.error || 'Message delivery deferred');
-  if (
-    typeof deliveryResult?.errorCode === 'string' &&
-    deliveryResult.errorCode.length > 0
-  ) {
-    error.code = deliveryResult.errorCode;
-  }
-  if (deliveryResult?.deferRetry === true) {
-    error.deferRetry = true;
-  }
-  if (Number.isFinite(deliveryResult?.retryAfterMs)) {
-    error.retryAfterMs = Math.max(
-      0,
-      Math.floor(deliveryResult.retryAfterMs),
-    );
-  }
-  return error;
+// An exception is needed only at the direct-only API boundary. Read the
+// canonical envelope once, preserving every transport discriminator; never
+// reconstruct it from a second MG-specific flat delivery record.
+function buildDirectDeliveryError(delivery, fallbackMessage) {
+  const outcome = deliveryTransportOf(delivery);
+  return Object.assign(new Error(outcome.error || fallbackMessage), {
+    code: outcome.errorCode,
+    deliveryState: outcome.deliveryState,
+    reasonCode: outcome.reasonCode,
+    noHandler: outcome.noHandler,
+    deferRetry: outcome.deferRetry,
+    retryAfterMs: outcome.retryAfterMs,
+    recoverableBeforeSend: outcome.recoverableBeforeSend,
+  });
 }
 
 function buildDeferredCdcForwardError(message, retryAfterMs = 0) {
@@ -349,13 +346,6 @@ function normalizeMessageDeliveryMode(deliveryMode) {
   return MESSAGE_DELIVERY_MODE.AUTO;
 }
 
-function buildLatencyCdcPropagationResult(result) {
-  // A response wrapper records receipt of this application request. It must
-  // preserve the owner's full semantic answer, including contradictory fields
-  // which the canonical CDC validator must refuse at its consumer.
-  return {acknowledged: true, ...result};
-}
-
 export {
   CDC_FORWARD_MAX_RELAY_DEPTH,
   cdcRelaySendDepth,
@@ -370,8 +360,7 @@ export {
   ROLE_PERSIST_ERROR_MSG,
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
-  buildDeferredDeliveryError,
-  buildLatencyCdcPropagationResult,
+  buildDirectDeliveryError,
   isWebSocketBasedMessageRouterTransport,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,

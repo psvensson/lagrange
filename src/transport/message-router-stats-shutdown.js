@@ -175,7 +175,6 @@ class MessageRouterStatsShutdown {
         messageId: pending.messageId,
         acknowledged: false,
         error: ROUTER_ERROR_MSG.SHUTDOWN,
-        shutdown: true,
       });
     }
     this.pendingMessages.clear();

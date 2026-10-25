@@ -1,6 +1,6 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {QUERY_RESULT_REQUEST_FIELD} from './query-result-budget.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {statementParticipantFieldsOf} from
   './distributed/distributed-transaction-identity.js';
@@ -137,8 +137,8 @@ function resolvePartitionExecutionBuilders({
     typeof executionOptions.isSuccessfulResponse ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
       executionOptions.isSuccessfulResponse :
-      (response) => isDeliveredTransportDeliveryOutcome(
-        classifyTransportDeliveryOutcome(response)) && response?.success;
+      (delivery) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+        deliveryAnswerOf(delivery)?.success;
   const buildSuccessResult =
     typeof executionOptions.buildSuccessResult ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?

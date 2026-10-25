@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Cross-node replica placement integration tests.
  * Tests the full flow: seed node bootstrap, second node joining,
@@ -9,6 +10,7 @@
  * goes through message groups as required by 4.13.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -132,7 +134,7 @@ function createMockMessageRouter() {
       return true;
     },
     async deliver() {
-      return {acknowledged: true, status: 'initiated'};
+      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
     },
   };
 }
@@ -326,7 +328,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         resources.seedRouter.register(partitionAddress, (envelope) => {
           return resources.seedPartition.handleTransportMessage ?
             resources.seedPartition.handleTransportMessage(envelope) :
-            {acknowledged: true};
+            null;
         });
 
         await resources.seedPartition.initialize();
@@ -500,7 +502,6 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         receivedMessages.push(message);
 
         return {
-          acknowledged: true,
           type: 'CREATE_REPLICA_ACK',
           request_id: message.request_id,
           status: 'initiated',
@@ -525,8 +526,8 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         createReplicaMessage,
       );
 
-      t.ok(result.messageId, 'should have message ID');
-      t.ok(result.acknowledged, 'should be acknowledged');
+      t.ok(deliveryTransportOf(result).messageId, 'should have message ID');
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'should be delivered');
 
       t.ok(receivedMessages.length > 0, 'should receive message');
       t.equal(

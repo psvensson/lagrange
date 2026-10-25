@@ -9,6 +9,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
@@ -177,7 +178,7 @@ function createMockCoordinatorDeps(sqlEngine) {
       insertSystemTableRow: async () => ({success: true}),
     },
     messageRouter: withFixtureCommittedMembership({
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     }, null),
     controlPlaneSystemTableGateway: {
       readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>

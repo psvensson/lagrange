@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -86,8 +87,7 @@ function createMessageRouter() {
     async deliver(_address, payload) {
       const sql = String(payload?.sql || '').toLowerCase();
       if (sql.includes(`from ${TABLES.SCHEMA_MIGRATIONS}`)) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{
             migration_id: 'migration-1',
@@ -96,11 +96,10 @@ function createMessageRouter() {
             created_at: 1000,
             updated_at: 2000,
           }],
-        };
+        });
       }
       if (sql.includes(`from ${TABLES.SCHEMA_MIGRATION_PARTITIONS}`)) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{
             partition_id: 'table-1-p1',
@@ -109,13 +108,9 @@ function createMessageRouter() {
             retry_count: 2,
             error_message: null,
           }],
-        };
+        });
       }
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 }

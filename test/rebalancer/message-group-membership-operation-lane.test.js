@@ -8,6 +8,7 @@
  * claim or recover the lane.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -145,7 +146,7 @@ function createCoordinator(database, nodeId) {
     cdcIntegrationService: {waitForCacheUpdate: async () => {}},
     controlPlaneSystemTableGateway: gateway,
     sqlQueryEngine: gateway,
-    messageRouter: {deliver: async () => ({acknowledged: true})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
     tablePolicyService: {
       getPolicyForPartition: async () => ({minReplicaCount: 1}),
     },

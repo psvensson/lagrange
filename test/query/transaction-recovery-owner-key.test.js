@@ -25,6 +25,7 @@ import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {recoveryDecisionColumns, recoveryRowsOf} from
   '../test-helpers/transaction-recovery-rows-fixture.js';
 
@@ -52,7 +53,8 @@ function restartedEngine(t, sessionId = QUERY_SESSION.DEFAULT) {
   const router = {async deliver(address, message) {
     deliveries.push({operation: message.operation,
       transactionId: message.transactionId});
-    return answerParticipantTransactionRequest(message, address.split('/')[2]);
+    return buildDeliveryEnvelope({acknowledged: true},
+      answerParticipantTransactionRequest(message, address.split('/')[2]));
   }};
   const engine = new SQLQueryEngine({controlPlaneSystemTableGateway: gateway,
     systemCache: cache, messageRouter: router, logger,

@@ -2,10 +2,11 @@ import {assertDeliveryOpen, remainingDeliveryMs, withDeliveryLifetime}
   from './message-router-delivery-lifetime.js';
 export {sendMessage} from './message-router-ack-delivery.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {
+import {deliveryTransportOf,
+  buildDeliveryEnvelope,
   buildHandlerFailedError,
-  buildTransportDeliveryOutcome,
-  classifyTransportDeliveryOutcome,
+  classifyThrownDeliveryError,
+  isDeliveredTransportDeliveryOutcome,
   isSupersededTransportDeliveryOutcome,
 } from './transport-semantic-outcome.js';
 
@@ -32,15 +33,24 @@ const {
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
 
-// The handler answered. The acknowledgement is the router's own fact, written
-// after the answer, so an answer's `acknowledged` value cannot turn a delivered
-// message into a transport failure (decision D2).
-function answeredDelivery(router, messageId, correlationId, answer) {
+// The handler answered. The acknowledgement is the router's own fact and the
+// answer travels beside it, never merged into it, so no answer field can
+// change a transport fact (design D4). The local answer is verbatim: no
+// property evaluation, copy or encoding. Remote answers have already passed
+// through the wire owner's serialization; that boundary owns its failures.
+function answeredDelivery(messageId, correlationId, answer, queueWaitMs) {
   return {
-    messageId,
-    correlationId,
-    ...router.normalizeServiceResponseResult(answer),
-    acknowledged: true,
+    result: {messageId, correlationId, acknowledged: true},
+    answer: answer ?? null,
+    queueWaitMs,
+  };
+}
+
+function handlerFailedDelivery(messageId, correlationId, error, queueWaitMs) {
+  return {
+    result: {...classifyThrownDeliveryError(buildHandlerFailedError(error?.message)),
+      messageId, correlationId},
+    queueWaitMs,
   };
 }
 
@@ -87,20 +97,10 @@ export async function deliverLocal(
     } catch (error) {
       // Only the handler's own throw is a handler failure; the delivery
       // lifetime's refusals stay the router's (decision D1).
-      return {
-        result: {
-          messageId,
-          correlationId,
-          ...classifyTransportDeliveryOutcome(buildHandlerFailedError(error?.message)),
-        },
-        queueWaitMs: TRANSPORT_NUM.ZERO,
-      };
+      return handlerFailedDelivery(messageId, correlationId, error, TRANSPORT_NUM.ZERO);
     }
     assertDeliveryOpen(options);
-    return {
-      result: answeredDelivery(router, messageId, correlationId, result),
-      queueWaitMs: TRANSPORT_NUM.ZERO,
-    };
+    return answeredDelivery(messageId, correlationId, result, TRANSPORT_NUM.ZERO);
   });
 }
 
@@ -113,7 +113,7 @@ function recordDeliveryMetric(router, {
     const queueDepth = queue ? queue.pending.length : TRANSPORT_NUM.ZERO;
     const queueWaitSummary = buildQueueWaitSummary(queue);
     const durationMs = clock.now() - deliverStartMs;
-    const acknowledged = result?.acknowledged === true;
+    const acknowledged = isDeliveredTransportDeliveryOutcome(result);
     const trigger = router.getDeliverMetricTrigger(
       targetNodeId,
       durationMs,
@@ -197,22 +197,28 @@ export async function deliver(
     );
     assertDeliveryOpen(options);
     const normalizedOutcome = normalizeDeliveryOutcome(deliveryOutcome);
-    const result = normalizedOutcome.result;
-    const queueWaitMs = normalizedOutcome.queueWaitMs;
+    // The identity of THIS delivery is the router's own (finding F-D).
+    const delivered = buildDeliveryEnvelope(
+      normalizedOutcome.result,
+      normalizedOutcome.answer,
+      {messageId, correlationId},
+    );
     recordDeliveryMetric(router, {
-      targetNodeId, messageId, correlationId, requestId, operationId, result,
-      queueWaitMs, deliverStartMs, clock: options.deliveryLifetime.clock,
+      targetNodeId, messageId, correlationId, requestId, operationId,
+      result: deliveryTransportOf(delivered), queueWaitMs: normalizedOutcome.queueWaitMs,
+      deliverStartMs, clock: options.deliveryLifetime.clock,
     });
-    return result;
+    return delivered;
   }, (error, lifetime) => {
     if (lifetime.ownsShutdown(error)) {
-      return buildTransportDeliveryOutcome({
-        messageId, correlationId, acknowledged: false, error: error.message, shutdown: true,
+      return buildDeliveryEnvelope({
+        messageId, correlationId, acknowledged: false, error: error.message,
       });
     }
-    return buildTransportDeliveryOutcome(router.buildDeferredDeliveryFailure(
+    return buildDeliveryEnvelope(router.buildDeferredDeliveryFailure(
       messageId, correlationId, error.message, {
         errorCode: error.code,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs: router.resolveReconnectRetryAfterMs(
           router.nodeConnections.get(targetNodeId) || null,
         ),
@@ -260,11 +266,7 @@ export function tryDeliverRaftDirect(
     const encoded = JSON.stringify(message);
     assertDeliveryOpen(options);
     connection.ws.send(encoded);
-    return {
-      messageId,
-      acknowledged: true,
-      direct: true,
-    };
+    return {messageId, acknowledged: true};
   } catch (_sendError) {
     return null;
   }
@@ -448,7 +450,8 @@ async function completeRemoteDelivery(router, {
   ackResult, queueWaitMs, responsePromise, pending, cancelResponse,
   messageId, correlationId, options,
 }) {
-  if (!ackResult?.acknowledged) {
+  ackResult = normalizeDeliveryOutcome(ackResult).result;
+  if (!isDeliveredTransportDeliveryOutcome(ackResult)) {
     cancelResponse(RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED);
     return {
       result: ackResult,
@@ -467,23 +470,21 @@ async function completeRemoteDelivery(router, {
   router.armPendingResponseTimeout(
     messageId, options.deliveryLifetime.remainingMs(), pending,
   );
+  let serviceResult;
   try {
-    const serviceResult = await responsePromise;
+    serviceResult = await responsePromise;
     assertDeliveryOpen(options);
-    return {
-      result: answeredDelivery(router, messageId, correlationId, serviceResult),
-      queueWaitMs,
-    };
   } catch (error) {
     // No answer arrived after the ACK: the waiter's failure is the outcome,
     // through the owner's thrown-error conversion so its router code survives
     // (a connection closed after the ACK is the router's deferral, never
     // DELIVERED; a remote handler throw is handler_failed, finding F-A).
     return {
-      result: {messageId, correlationId, ...classifyTransportDeliveryOutcome(error)},
+      result: {...classifyThrownDeliveryError(error), messageId, correlationId},
       queueWaitMs,
     };
   }
+  return answeredDelivery(messageId, correlationId, serviceResult, queueWaitMs);
 }
 
 export async function resolveRecoverableDeliveryError(
@@ -543,6 +544,7 @@ export async function resolveRecoverableDeliveryError(
           {
             errorCode:
               reconnectError?.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+            recoverableBeforeSend: reconnectError?.recoverableBeforeSend === true,
             retryAfterMs: Number.isFinite(reconnectError?.retryAfterMs) ?
               reconnectError.retryAfterMs :
               retryAfterMs,
@@ -561,6 +563,7 @@ export async function resolveRecoverableDeliveryError(
       error.message,
       {
         errorCode: error.code || ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+        recoverableBeforeSend: error.recoverableBeforeSend === true,
         retryAfterMs,
       },
     );

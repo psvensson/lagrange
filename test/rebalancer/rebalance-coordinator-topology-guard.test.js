@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -184,7 +185,7 @@ function createCoordinator(options = {}) {
       upsertSystemTableRow: async () => ({success: true}),
     },
     messageRouter: options.messageRouter || {
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     },
     tablePolicyService: {
       getPolicyForPartition: () => TEST_TABLE_POLICY,
@@ -442,7 +443,9 @@ test(
         ],
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+          status: 'completed',
+        })),
         getConnectionState: (nodeId) =>
           nodeId === staleTransportTarget ? 'disconnected' : 'connected',
       },

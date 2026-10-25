@@ -14,13 +14,11 @@ import {
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_STRATEGY,
 } from '../topology/cdc-group-propagation-constants.js';
-import {
-  classifyTransportDeliveryOutcome,
+import {deliveryTransportOf, deliveryAnswerOf,
   isDeliveredTransportDeliveryOutcome,
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
-  TRANSPORT_COMPLETED_STATUS,
 } from '../transport/transport-semantic-outcome.js';
+import {ReplicaOperationResponseStatus} from '../rebalancer/replica-operation-constants.js';
 
 const objectHasOwn = Object.hasOwn;
 const isProxy = types.isProxy.bind(types);
@@ -69,7 +67,7 @@ const PROVISIONAL_REQUIRED_FIELDS = objectFreeze([
 ]);
 
 const SUCCESS_STATUSES = objectFreeze([
-  TRANSPORT_COMPLETED_STATUS,
+  ReplicaOperationResponseStatus.COMPLETED,
   TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
   MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
   MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
@@ -109,6 +107,8 @@ function nullable(check) {
 
 // Optional wrapper metadata is part of this semantic boundary. A wrapper
 // cannot turn a contradictory or unrecognized claim into committed success.
+// These are answer fields only: the transport outcome travels beside the
+// answer (the delivery envelope), so no transport field belongs here.
 const OUTCOME_METADATA_FIELDS = objectFreeze({
   messageId: nonEmptyText,
   correlationId: nonEmptyText,
@@ -126,7 +126,7 @@ const OUTCOME_METADATA_FIELDS = objectFreeze({
   fallbackReason: nullable(enumValue(Object.values(CDC_GROUP_PROPAGATION_REASON))),
   fallbackStrategy: nullable(enumValue(Object.values(CDC_GROUP_PROPAGATION_STRATEGY))),
   timestamp: (value) => numberIsFinite(value) && value >= 0,
-  responseType: enumValue(Object.values(MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE)),
+  type: enumValue(Object.values(MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE)),
   status: enumValue(SUCCESS_STATUSES),
 });
 
@@ -136,14 +136,9 @@ const COMMITTED_OUTCOME_FIELDS = objectFreeze({
   cdcCommitted: isDenseDataArray,
   cdcVectorDigest: isSha256Digest,
   error: nullValue,
-  errorCode: nullValue,
-  reasonCode: nullValue,
   deferRetry: falseValue,
-  noHandler: falseValue,
   retryAfterMs: nullValue,
   deliveryFailures: emptyArray,
-  deliveryState: (value) => value === TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
-  acknowledged: trueValue,
 });
 
 const PROVISIONAL_OUTCOME_FIELDS = objectFreeze({
@@ -152,15 +147,9 @@ const PROVISIONAL_OUTCOME_FIELDS = objectFreeze({
   error: (value) => value === CDC_COMPLETION.PROVISIONAL,
   cdcProvisional: isDenseDataArray,
   cdcVectorDigest: isSha256Digest,
-  errorCode: nullValue,
-  reasonCode: nullable((value) =>
-    value === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.TRANSPORT_DEFERRED),
   deferRetry: trueValue,
-  noHandler: falseValue,
   retryAfterMs: nullable((value) => numberIsFinite(value) && value > 0),
   deliveryFailures: emptyArray,
-  deliveryState: (value) => value === TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED,
-  acknowledged: trueValue,
 });
 
 function outcomeFieldsMatch(answer, fields, required) {
@@ -333,33 +322,38 @@ function unknownCdcAcceptance(error = CDC_COMPLETION.UNKNOWN) {
   return {success: false, error, deferRetry: true};
 }
 
-function isCommittedCdcDelivery(answer, events, groupId) {
-  return isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(answer)) &&
-    isCommittedCdcOutcome(answer, events, groupId);
+// Over a delivery envelope: the router delivered it AND its answer is the
+// canonical committed (or provisional) CDC outcome. The answer's own
+// deferral is CDC's provisional state, never a transport deferral.
+function isCommittedCdcDelivery(delivery, events, groupId) {
+  return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+    isCommittedCdcOutcome(deliveryAnswerOf(delivery), events, groupId);
 }
 
-function isProvisionalCdcDelivery(answer, events, groupId = null) {
-  const transport = classifyTransportDeliveryOutcome(answer);
-  return transport.acknowledged && !transport.noHandler && transport.errorCode === null &&
-    transport.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.TRANSPORT_DEFERRED &&
-    isProvisionalCdcOutcome(answer, events, groupId);
+function isProvisionalCdcDelivery(delivery, events, groupId = null) {
+  return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+    isProvisionalCdcOutcome(deliveryAnswerOf(delivery), events, groupId);
 }
 
 // These observations contain only validated coverage/receipt metadata. The
 // source lane binds them to its exact vector, consumer and recipient lifetime;
-// no response body or event payload is retained between invocations.
-function observeCdcCoverage(answer, events, groupId = null, {transport = false} = {}) {
-  const committed = transport ? isCommittedCdcDelivery : isCommittedCdcOutcome;
-  const provisional = transport ? isProvisionalCdcDelivery : isProvisionalCdcOutcome;
-  if (committed(answer, events, groupId)) {
+// no response body or event payload is retained between invocations. A local
+// answer is observed as is; a delivery is observed through its envelope.
+function observeCdcCoverage(answer, events, groupId = null) {
+  if (isCommittedCdcOutcome(answer, events, groupId)) {
     return objectFreeze({state: CDC_COVERAGE_STATE.COMMITTED,
       cdcVectorDigest: answer.cdcVectorDigest,
       receipts: objectFreeze(copyArrayByIndex(answer.cdcCommitted, (receipt) =>
         objectFreeze({...receipt})))});
   }
-  return provisional(answer, events, groupId) ?
+  return isProvisionalCdcOutcome(answer, events, groupId) ?
     objectFreeze({state: CDC_COVERAGE_STATE.PROVISIONAL,
       cdcVectorDigest: answer.cdcVectorDigest}) : UNCOVERED_CDC;
+}
+
+function observeCdcDeliveryCoverage(delivery, events, groupId = null) {
+  return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) ?
+    observeCdcCoverage(deliveryAnswerOf(delivery), events, groupId) : UNCOVERED_CDC;
 }
 
 function emptyCdcCoverage() {
@@ -416,5 +410,6 @@ export {
   isProvisionalCdcDelivery,
   isProvisionalCdcOutcome,
   observeCdcCoverage,
+  observeCdcDeliveryCoverage,
   unknownCdcAcceptance,
 };

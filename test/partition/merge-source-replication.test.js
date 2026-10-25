@@ -181,7 +181,7 @@ test('merge source - rejects invalid merge transition metadata',
     const response = await context.handleStartMergeReplication({
       transitionMetadata: {workflowId: FIXTURE_WORKFLOW_ID},
     });
-    t.equal(response.acknowledged, false);
+    t.equal(response.success, false);
     t.equal(
       response.error,
       PARTITION_SERVICE_ERROR_MSG.INVALID_MERGE_REPLICATION,
@@ -195,7 +195,7 @@ test('merge source - full run emits the ack ladder in order and fans ' +
   const response = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
-  t.equal(response.acknowledged, true);
+  t.equal(response.success, true);
   t.equal(response.success, true);
   await context.mergeReplicationRun;
 
@@ -246,7 +246,7 @@ test('merge source - idempotent restart acks; conflicting replication ' +
   const duplicateResponse = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
-  t.equal(duplicateResponse.acknowledged, true);
+  t.equal(duplicateResponse.success, true);
   t.equal(duplicateResponse.success, true);
 
   const conflictingMetadata = {
@@ -256,7 +256,7 @@ test('merge source - idempotent restart acks; conflicting replication ' +
   const conflictResponse = await context.handleStartMergeReplication({
     transitionMetadata: conflictingMetadata,
   });
-  t.equal(conflictResponse.acknowledged, false);
+  t.equal(conflictResponse.success, false);
   t.equal(
     conflictResponse.error,
     PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED,

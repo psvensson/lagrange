@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -28,9 +29,10 @@ function harness() {
     messageRouter: {async deliver(address, message) {
       messages.push({address, ...message});
       if (message.type === 'TRANSACTION') {
-        return answerParticipantTransactionRequest(message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
-      return {acknowledged: true, success: true, rows: [{id: 'one'}]};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{id: 'one'}]});
     }}});
   return {engine, messages, gateway};
 }
@@ -119,7 +121,7 @@ test('TX1 Q5: the real participant SELECT sees its staged write', async (t) => {
     controlPlaneSystemTableGateway: gateway,
     messageRouter: {async deliver(_address, message) {
       messages.push(message);
-      return {acknowledged: true, ...await send(leader, message)};
+      return buildDeliveryEnvelope({acknowledged: true}, {...await send(leader, message)});
     }}});
   const begun = await engine.executeQuery('BEGIN', [], {sessionId: 'real-read'});
   assert.equal(begun.success, true, begun.error);

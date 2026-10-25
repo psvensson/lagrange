@@ -20,6 +20,7 @@
  *   W7  step 0 + step 1: the waiting owner is woken by the node's consensus
  *       relay (a committed membership change), with no timer firing.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -101,7 +102,7 @@ async function createHarness({
           {...coordinator.repository.getReplicaOperationRowFromCache?.(
             operationId)} : null,
       });
-      return {acknowledged: true, status: 'initiated'};
+      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
     },
   };
   coordinator = createTestCoordinator({

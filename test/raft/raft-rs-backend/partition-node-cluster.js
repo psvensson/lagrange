@@ -34,7 +34,7 @@ import {setActualCoreEntryObserver} from
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
 import {createRaftRsOperationPort} from '../../../src/raft/raft-rs-operation-port.js';
-import {buildTransportDeliveryOutcome} from
+import {buildDeliveryEnvelope} from
   '../../../src/transport/transport-semantic-outcome.js';
 
 const TEMP_PREFIX = 'raft-rs-real-partition-';
@@ -43,7 +43,7 @@ const ADDRESS_PREFIX = 'raft-rs://replica-';
 const NO_LEADER = '0';
 // What a fixture's in-process hand-off to a peer answers: the transport
 // owner's delivered outcome, as the router answers a delivered message.
-const DELIVERED_TO_PEER = buildTransportDeliveryOutcome({acknowledged: true});
+const DELIVERED_TO_PEER = buildDeliveryEnvelope({acknowledged: true});
 
 // The timing a partition group hands its backend. Long enough that only the
 // peer the test ticks can time out.

@@ -1,3 +1,4 @@
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -11,9 +12,7 @@ function createMockRouter() {
       register(address, handlerFn) {
         registeredHandlers.set(address, handlerFn);
       },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
+      ...handlerIdentityApi(registeredHandlers),
     },
   };
 }
@@ -136,7 +135,7 @@ async function registerReplicaHandlerRouterAdmissionTests({
     });
 
     const response = await registeredHandler(envelope);
-    t.equal(response.acknowledged, true, 'response acknowledged');
+    t.equal(Object.hasOwn(response, 'acknowledged'), false, 'answer has no transport ACK alias');
     t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
       'create initiated');
     t.equal(response.correlationId, 'corr-1', 'correlationId preserved');

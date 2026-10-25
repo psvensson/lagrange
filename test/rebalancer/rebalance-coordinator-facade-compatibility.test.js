@@ -8,6 +8,7 @@
  * extracted concerns to repository/workflow/policy owners.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 
@@ -162,7 +163,7 @@ function createFacadeCoordinator(overrides = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
       getConnectionState() {
         return 'connected';

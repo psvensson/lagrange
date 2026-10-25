@@ -11,6 +11,7 @@
  * **Validates: Requirements 2.2**
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -105,7 +106,7 @@ function createMockCache() {
 function createMockRouter() {
   return {
     getConnectionState: () => 'connected',
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };

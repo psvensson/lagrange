@@ -19,7 +19,7 @@ import {copyCdcEventMetadata} from '../../src/cdc/cdc-event-envelope.js';
 import {CDC_EVENT_IDENTITY} from '../../src/constants/cdc-lifecycle-constants.js';
 import {CDC_OPERATION, TABLES} from '../../src/constants/index.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
-import {buildTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_STATE} from
+import {buildDeliveryEnvelope, TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {MESSAGE_GROUP_APPLICATION_STATUS, MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE} from
   '../../src/message-group/constants.js';
@@ -62,11 +62,12 @@ test('canonical local committed acceptance needs no transport ACK', () => {
   const {events, answer} = fixture();
   assert.equal(Object.hasOwn(answer, 'acknowledged'), false);
   assert.equal(isCommittedCdcOutcome(answer, events, GROUP_ID), true);
-  assert.equal(isCommittedCdcDelivery(answer, events, GROUP_ID), false);
-  const remote = buildTransportDeliveryOutcome({...answer, acknowledged: true});
+  assert.equal(isCommittedCdcDelivery(buildDeliveryEnvelope({acknowledged: false}, answer),
+    events, GROUP_ID), false, 'an undelivered answer is not a committed delivery');
+  const remote = buildDeliveryEnvelope({acknowledged: true}, answer);
   assert.equal(isCommittedCdcDelivery(remote, events, GROUP_ID), true);
-  assert.equal(remote.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
-  assert.deepEqual(remote.cdcCommitted, answer.cdcCommitted);
+  assert.equal(remote.transport.deliveryState, TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
+  assert.deepEqual(remote.answer.cdcCommitted, answer.cdcCommitted);
   const single = buildCommittedCdcOutcome([events[0]], GROUP_ID, POSITION);
   assert.equal(isCommittedCdcOutcome(zeroTarget(events[0], single),
     [events[0]], GROUP_ID), true);
@@ -145,7 +146,7 @@ const SUCCESS_METADATA = {
   strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
   mode: CDC_GROUP_PROPAGATION_STATUS.SAFE, targetGroupCount: 0,
   fallbackReason: null, fallbackStrategy: null, timestamp: 1000,
-  responseType: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
+  type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
 };
 
 for (const status of ['completed', 'delivered',
@@ -154,11 +155,10 @@ for (const status of ['completed', 'delivered',
   test(`canonical owner permits typed successful wrapper metadata: ${status}`, () => {
     const {events, answer} = fixture();
     const result = {...answer, ...SUCCESS_METADATA, status, error: null,
-      errorCode: null, reasonCode: null, deferRetry: false, noHandler: false,
-      retryAfterMs: null, deliveryFailures: [],
-      deliveryState: TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED};
+      deferRetry: false, retryAfterMs: null, deliveryFailures: []};
     assert.equal(isCommittedCdcOutcome(result, events, GROUP_ID), true);
-    assert.equal(isCommittedCdcDelivery({...result, acknowledged: true}, events, GROUP_ID), true);
+    assert.equal(isCommittedCdcDelivery(buildDeliveryEnvelope({acknowledged: true}, result),
+      events, GROUP_ID), true);
   });
 }
 
@@ -174,7 +174,8 @@ test('provisional ingress remains distinct from committed and transport-only ans
   const provisional = buildProvisionalCdcOutcome(events, 10);
   assert.equal(isProvisionalCdcOutcome(provisional, events), true);
   assert.equal(isCommittedCdcOutcome(provisional, events, GROUP_ID), false);
-  assert.equal(isProvisionalCdcDelivery({...provisional, acknowledged: true}, events), true);
+  assert.equal(isProvisionalCdcDelivery(buildDeliveryEnvelope({acknowledged: true},
+    provisional), events), true);
   assert.equal(isProvisionalCdcOutcome({...provisional,
     cdcCommitted: answer.cdcCommitted}, events), false,
   'a mixed answer cannot launder contradictory committed evidence into provisional coverage');
@@ -185,7 +186,8 @@ for (const answer of [undefined, {success: true}, {acknowledged: true},
   test(`ordinary or transport-only success is not acceptance: ${JSON.stringify(answer)}`, () => {
     const {events} = fixture();
     assert.equal(isCommittedCdcOutcome(answer, events, GROUP_ID), false);
-    assert.equal(isCommittedCdcDelivery(answer, events, GROUP_ID), false);
+    assert.equal(isCommittedCdcDelivery(buildDeliveryEnvelope({acknowledged: true}, answer),
+      events, GROUP_ID), false);
     assert.equal(isProvisionalCdcOutcome(answer, events), false);
   });
 }

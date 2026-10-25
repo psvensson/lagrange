@@ -19,6 +19,7 @@
 //     transiently omits a committed voter, and STILL_VOTER once its gate is
 //     open.
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -479,13 +480,12 @@ function replaceOwnerOver(model, target, source) {
     getCachedCriticalReplicaRows: () => [...model.replicas.keys()].map(
       (replicaId) => ({replica_id: replicaId, node_id: `${replicaId}-node`})),
     messageRouter: {
-      deliver: async (_target, payload) => ({
-        acknowledged: true,
+      deliver: async (_target, payload) => (buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.COMPLETED,
         [ReplicaOperationField.MEMBERSHIP]:
           await readPartitionReplicaMembership(serviceOf(model,
             payload[ReplicaOperationField.REPLICA_ID]), source),
-      }),
+      })),
     },
   };
 }

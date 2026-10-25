@@ -39,7 +39,7 @@ import {
 } from './managed-merge-workflow-execution-gate-methods.js';
 import {ManagedSourceReplicationStartConfirmationMethods} from
   './managed-source-replication-start-confirmation-methods.js';
-import {sourceReplicationStartAnswerMayBeLost} from
+import {startSourceReplicationWithConfirmation} from
   './managed-source-replication-start-delivery.js';
 import {
   ManagedMergeWorkflowDissolutionMethods,
@@ -702,22 +702,13 @@ class ManagedMergeWorkflow {
     const persistedTransitionMetadata =
       this.buildPersistedTransitionMetadata(backfilling);
     for (const sourcePartitionId of input.sourcePartitionIds) {
-      try {
-        await this.startMergeReplicationOnSourcePartition(
-          sourcePartitionId,
-          input.tableId,
-          input.tableName,
-          persistedTransitionMetadata,
-        );
-      } catch (error) {
-        const confirmed = sourceReplicationStartAnswerMayBeLost(error) &&
-          this.isRetryablePostAdmissionExecutionError(error) &&
-          await this.confirmMergeReplicationStart(sourcePartitionId,
-            persistedTransitionMetadata, input.tableId, input.tableName);
-        if (!confirmed) {
-          throw error;
-        }
-      }
+      await startSourceReplicationWithConfirmation({
+        start: () => this.startMergeReplicationOnSourcePartition(
+          sourcePartitionId, input.tableId, input.tableName, persistedTransitionMetadata),
+        isRetryable: (error) => this.isRetryablePostAdmissionExecutionError(error),
+        confirm: () => this.confirmMergeReplicationStart(sourcePartitionId,
+          persistedTransitionMetadata, input.tableId, input.tableName),
+      });
     }
 
     this.logger.info(MANAGED_MERGE_LOG_MSG.MERGE_PREPARED, {

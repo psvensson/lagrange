@@ -1,3 +1,4 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -54,7 +55,6 @@ const {
   WORKFLOW_STEP,
   buildHandoffDeferralTransportDiagnostics,
   classifySystemPartition,
-  classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
   resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -250,6 +250,8 @@ const CREATE_IN_PROGRESS_OBSERVED_RECONCILE_STATUSES = Object.freeze(
 const CREATE_IN_PROGRESS_OBSERVED_RETRY_STATUSES = Object.freeze(
   new Set([ReplicaStatus.SYNCING]),
 );
+// A replica-operation answer may carry a nested error object; its fields
+// read as the error (this is the answer's shape, never a transport one).
 function resolveDispatchDeliveryErrorLike(response) {
   if (!response || typeof response !== 'object') {
     return response;
@@ -738,17 +740,20 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       entityId,
       replaceRemovePhase: replaceRemoveDispatchPhase,
     });
+    // `transport` is the router's outcome; `response` is the target's answer
+    // (an answer-less delivery is an answer without a status).
     let response;
+    let transport = null;
     let retainedCreateDeliveryResolution = null;
     try {
-      response = classifyTransportDeliveryOutcome(
-        await this.deliverReplicaOperationRequest(
-          operation,
-          target,
-          request,
-          dispatchNodeId,
-        ),
+      const delivery = await this.deliverReplicaOperationRequest(
+        operation,
+        target,
+        request,
+        dispatchNodeId,
       );
+      transport = deliveryTransportOf(delivery);
+      response = deliveryAnswerOf(delivery) ?? {};
     } catch (error) {
       const errorMsg = this.normalizeErrorMessage(
         error,
@@ -792,8 +797,8 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       return response;
     }
     if (!retainedCreateDeliveryResolution &&
-        !isDeliveredTransportDeliveryOutcome(response)) {
-      const errorLike = resolveDispatchDeliveryErrorLike(response);
+        !isDeliveredTransportDeliveryOutcome(transport)) {
+      const errorLike = transport;
       const errorMsg = this.normalizeErrorMessage(
         errorLike,
         REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -31,6 +32,21 @@ const NON_SYSTEM_CDC_TABLE = 'runtime_forward_events';
 
 
 
+function routerCleanup(router, getMessageGroup) {
+  let shutdownCalled = false;
+  return async () => {
+    if (shutdownCalled) return;
+    shutdownCalled = true;
+    const mg = getMessageGroup();
+    try {
+      if (mg && mg.raft) await mg.shutdown();
+    } catch (_error) {
+      // Preserve best-effort group teardown; always close the router.
+    }
+    await router.shutdown();
+  };
+}
+
 export function registerCdcNonLeaderPropagationTailTests({
   test,
 }) {
@@ -44,21 +60,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -133,7 +136,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         const forwardedPayloads = [];
         router.deliver = async (address, payload, options) => {
           forwardedPayloads.push({address, payload, options});
-          return {acknowledged: true, success: true};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -173,21 +176,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -243,21 +233,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -321,21 +298,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -359,7 +323,7 @@ export function registerCdcNonLeaderPropagationTailTests({
         let deliverCount = 0;
         router.deliver = async (_address, _payload, _options) => {
           deliverCount += 1;
-          return {acknowledged: true, success: true};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await t.rejects(
@@ -389,21 +353,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -427,11 +378,9 @@ export function registerCdcNonLeaderPropagationTailTests({
         let deliverAttempts = 0;
         router.deliver = async () => {
           deliverAttempts += 1;
-          return {
-            acknowledged: true,
-            noHandler: true,
+          return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
             error: 'No handler for address: remote-node/message-group/mg-no-handler-r2',
-          };
+          });
         };
 
         await t.rejects(
@@ -461,21 +410,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -610,17 +546,13 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           attempts.push(address);
           if (address === staleAddress) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               error: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-            };
+            });
           }
           if (address === freshAddress) {
-            return {
-              acknowledged: true,
-              success: true,
-            };
+            return buildDeliveryEnvelope({acknowledged: true}, {success: true});
           }
           throw new Error(`unexpected forward target ${address}`);
         };
@@ -684,21 +616,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -730,16 +649,11 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           deliverAttempts += 1;
           if (deliverAttempts === 1) {
-            return {
-              acknowledged: true,
-              noHandler: true,
+            return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
               error: `No handler for address: ${address}`,
-            };
+            });
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -770,21 +684,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -819,15 +720,10 @@ export function registerCdcNonLeaderPropagationTailTests({
           attempts.push(address);
           if (address ===
             'remote-node-2/message-group/mg-no-connection-suppress-r2') {
-            return {
-              acknowledged: false,
-              error: 'No connection to node remote-node-2',
-            };
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: 'No connection to node remote-node-2'});
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -892,21 +788,8 @@ export function registerCdcNonLeaderPropagationTailTests({
         nodeId, wsPort: port});
       await router.initialize({startServer: true});
 
-      let shutdownCalled = false;
-      const cleanup = async () => {
-        if (shutdownCalled) return;
-        shutdownCalled = true;
-        try {
-          if (mg && mg.raft) {
-            await mg.shutdown();
-          }
-        } catch (_e) {
-          // best-effort
-        }
-        await router.shutdown();
-      };
-
       let mg;
+      const cleanup = routerCleanup(router, () => mg);
 
       const consensus = new ControllableConsensusPort();
       try {
@@ -940,16 +823,10 @@ export function registerCdcNonLeaderPropagationTailTests({
         router.deliver = async (address) => {
           attempts.push(address);
           if (address === 'remote-node-2/message-group/mg-timeout-suppress-r2') {
-            return {
-              acknowledged: false,
-              success: true,
-              error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-            };
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT});
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(

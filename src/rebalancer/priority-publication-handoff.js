@@ -1,3 +1,4 @@
+import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {PriorityPublicationLeaderSafety} from './priority-publication-leader-safety.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {
@@ -250,19 +251,20 @@ class PriorityPublicationHandoff extends PriorityPublicationLeaderSafety {
     const attemptSeq = beginReplaceHandoffAttempt(this, operation.operationId);
     let response = null;
     try {
-      response = await this.messageRouter.deliver(target, {
+      // The STEP_DOWN answer is the target's; an undelivered request has none.
+      response = deliveryAnswerOf(await this.messageRouter.deliver(target, {
         ...request,
         [ReplicaOperationField.ATTEMPT_SEQ]: attemptSeq,
       }, {
         targetNodeId: handoffRequest.dispatchNodeId,
         deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-      });
+      }));
     } catch (_error) {
       response = null;
     }
     recordReplaceHandoffAnswer(this, operation.operationId, response,
       attemptSeq);
-    return response || null;
+    return response;
   }
 
   async dispatchRemoveSafetyHandoffRequest(operation, handoffRequest) {

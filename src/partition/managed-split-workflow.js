@@ -34,7 +34,7 @@ import {
 } from './managed-split-workflow-execution-gate-methods.js';
 import {ManagedSourceReplicationStartConfirmationMethods} from
   './managed-source-replication-start-confirmation-methods.js';
-import {sourceReplicationStartAnswerMayBeLost} from
+import {startSourceReplicationWithConfirmation} from
   './managed-source-replication-start-delivery.js';
 import {
   ManagedSplitWorkflowDissolutionMethods,
@@ -601,22 +601,13 @@ class ManagedSplitWorkflow {
         workflowId, (current) => ({...current,
           status: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING}));
 
-      try {
-        await this.startSplitReplicationOnSourcePartition(
-          partitionId,
-          tableId,
-          tableName,
-          backfilling.metadata,
-        );
-      } catch (error) {
-        const confirmed = sourceReplicationStartAnswerMayBeLost(error) &&
-          this.isRetryablePostAdmissionExecutionError(error) &&
-          await this.confirmSplitReplicationStart(
-            backfilling.metadata, tableId, tableName);
-        if (!confirmed) {
-          throw error;
-        }
-      }
+      await startSourceReplicationWithConfirmation({
+        start: () => this.startSplitReplicationOnSourcePartition(
+          partitionId, tableId, tableName, backfilling.metadata),
+        isRetryable: (error) => this.isRetryablePostAdmissionExecutionError(error),
+        confirm: () => this.confirmSplitReplicationStart(
+          backfilling.metadata, tableId, tableName),
+      });
 
       this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_PREPARED, {
         partitionId,

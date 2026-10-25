@@ -9,6 +9,7 @@
  * Requirements: 2.1, 3.2, 4.4, 11.2
  */
 
+import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -666,6 +667,9 @@ class RuntimeServiceHandler extends EventEmitter {
       return;
     }
 
+    this.unregisterFromRouter(this.messageRouter);
+    this.messageRouter = messageRouter;
+
     const handlerAddress =
     `${this.nodeId}/` +
     `${RUNTIME_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
@@ -682,9 +686,10 @@ class RuntimeServiceHandler extends EventEmitter {
           response.correlationId, response,
         );
       }
-      return {acknowledged: true, ...response};
+      return response;
     };
 
+    this.registeredRouterHandler = routerHandler;
     messageRouter.register(handlerAddress, routerHandler);
 
     this.logger.info(
@@ -698,7 +703,7 @@ class RuntimeServiceHandler extends EventEmitter {
    * @param {Object} messageRouter - Message router instance.
    */
   unregisterFromRouter(messageRouter) {
-    if (!messageRouter) {
+    if (!messageRouter || messageRouter !== this.messageRouter) {
       return;
     }
 
@@ -707,9 +712,11 @@ class RuntimeServiceHandler extends EventEmitter {
     `${RUNTIME_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
     `${RUNTIME_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
 
-    if (typeof messageRouter.unregister === 'function') {
-      messageRouter.unregister(handlerAddress);
-    }
+    // Only our own exact registration is retired (finding F2).
+    retireNodeTransportHandler(this.logger, {transport: messageRouter,
+      address: handlerAddress, handler: this.registeredRouterHandler ?? null});
+    this.registeredRouterHandler = null;
+    this.messageRouter = null;
 
     this.logger.info(
       RUNTIME_SERVICE_HANDLER_LOG_MSG.UNREGISTERED_ROUTER,

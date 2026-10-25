@@ -323,10 +323,10 @@ class CellIngressAdapterBase {
         ),
         fields.activeRequest,
       );
-      if (result.delivery?.processed === true) {
-        return this._kit.mapProcessedDelivery(result.delivery, fields);
+      if (result.answer?.processed === true) {
+        return this._kit.mapProcessedDelivery(result.answer, fields);
       }
-      throw this._kit.failureFromDelivery(result.delivery);
+      throw this._kit.failureFromDelivery(result.answer);
     } finally {
       release();
     }

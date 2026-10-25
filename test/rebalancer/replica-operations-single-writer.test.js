@@ -29,6 +29,7 @@
  * Design: §2, §7, Phase 2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -192,7 +193,7 @@ function createTestCoordinator(options = {}) {
     },
     messageRouter: messageRouter || {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {
@@ -533,7 +534,7 @@ async (t) => {
         await new Promise((resolve) => {
           releaseDispatch = resolve;
         });
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
   });
@@ -582,7 +583,7 @@ test('dispatchOperation uses critical router priority for replica work',
       messageRouter: {
         async deliver(target, request, options) {
           deliverCalls.push({target, request, options});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
     });

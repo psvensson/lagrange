@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -104,11 +105,7 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {
@@ -215,11 +212,7 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {
@@ -431,7 +424,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
         ]});
 
         service.messageGroupServiceHandler = {};
-        const transportHandler = () => ({acknowledged: true});
+        const transportHandler = () => (null);
         service.messageRouter = createIdentityTransport();
         service.messageRouter.register(
           'join-activation-node/message-group/mg-cache-r1', transportHandler);
@@ -723,7 +716,7 @@ test('NodeJoiningService - emits events', async (t) => {
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
+      this.messageRouter.register(unifiedAddress, async () => (null));
     };
     service.phaseWaitForLeadership = async function() {};
     service.getLeaderMessageGroupService = function() {

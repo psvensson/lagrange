@@ -6,9 +6,8 @@ import {LoggingService} from '../logging/logging-service.js';
 import {
   SUBSYSTEM,
 } from '../constants/index.js';
-import {
+import {deliveryTransportOf, deliveryAnswerOf,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
 import {assertServiceMessageEnvelope} from './service-message-contract.js';
@@ -340,23 +339,21 @@ class ServiceDispatcher {
         throw new Error(SERVICE_DISPATCHER_ERROR.TARGET_ADDRESS_REQUIRED);
       }
 
-      const delivery = classifyTransportDeliveryOutcome(
-        await this._messageRouter.deliver(
-          target.targetAddress,
-          validatedEnvelope,
-          buildDeliveryOptions(target, traceId, authorizedContext),
-        ),
+      const deliveryEnvelope = await this._messageRouter.deliver(
+        target.targetAddress,
+        validatedEnvelope,
+        buildDeliveryOptions(target, traceId, authorizedContext),
       );
+      const transport = deliveryTransportOf(deliveryEnvelope);
+      const answer = deliveryAnswerOf(deliveryEnvelope);
 
-      if (!isDeliveredTransportDeliveryOutcome(delivery) ||
-          delivery.reasonCode ===
-            TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
-        throw createDeliveryFailure(delivery);
+      if (!isDeliveredTransportDeliveryOutcome(transport)) {
+        throw createDeliveryFailure(transport);
       }
       if (
         authorizedContext?.requireProcessedResponse === true &&
-        delivery.processed !== true &&
-        delivery.handlerProcessed !== true
+        answer?.processed !== true &&
+        answer?.handlerProcessed !== true
       ) {
         throw createRoutingFailure(
           REQUEST_CELL_ROUTE_ERROR_CODE.ACK_ONLY,
@@ -380,7 +377,7 @@ class ServiceDispatcher {
       return {
         envelope: validatedEnvelope,
         target,
-        delivery,
+        answer,
       };
     } catch (error) {
       const durationMs = Date.now() - startedAt;

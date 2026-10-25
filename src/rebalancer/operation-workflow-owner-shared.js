@@ -31,10 +31,7 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
-import {
-  classifyTransportDeliveryOutcome,
-  isDeliveredTransportDeliveryOutcome,
-} from '../transport/transport-semantic-outcome.js';
+import {isDeliveredTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
 import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {resolvePriorityRecoveryActiveNodeCohort} from '../control-plane/active-node-projection.js';
@@ -89,6 +86,7 @@ import {
   ReplicaOperationReason,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
+  isCompletedReplicaOperationAnswer,
 } from './replica-operation-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
@@ -631,13 +629,13 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   buildSelectRowsByTransactionIdsSql,
   buildTimeoutClassification,
   buildTopologyOperatorWitnessFromWorkflowProgress,
-  classifyTransportDeliveryOutcome,
   classifySystemPartition,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
   getControlPlaneRetryAfterMs,
   getWorkflowSteps,
   hasPriorityRecoverySpreadGap,
+  isCompletedReplicaOperationAnswer,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isRetryableControlPlaneError,

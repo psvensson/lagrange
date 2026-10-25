@@ -279,8 +279,7 @@ test('S6: source-row delete x T5\'/R-1f preconditions - decide-first waits ' +
   try {
     for (const world of [first, second]) {
       // The source node acknowledges the effect but its row lags.
-      world.removeEffectAnswer = {acknowledged: true,
-        status: ReplicaOperationResponseStatus.INITIATED};
+      world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
       await driveToIntent(world);
       world.eventsSuppressed = true;
       t.equal(world.retirements.length, 0, 'setup: no R-1f yet');
@@ -519,8 +518,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
   try {
     // The source node acknowledges but its row lags: the intent is durable
     // and the effect must be re-sent later (T5').
-    world.removeEffectAnswer = {acknowledged: true,
-      status: ReplicaOperationResponseStatus.INITIATED};
+    world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
     await driveToIntent(world);
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');

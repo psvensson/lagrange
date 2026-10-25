@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -530,12 +531,11 @@ test('QueryExecutor - executeOnPartition applies recovery candidate ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 1,
-      };
+      });
     },
   };
   const systemCache = {
@@ -691,21 +691,18 @@ async (t) => {
         deliveries.push(address);
         if (address === firstAddress) {
           if (expireBudgetAfterFirstResponse) now = 10006;
-          return {
-            acknowledged: true,
-            success: false,
-            error: pressureDeferredError,
-            errorCode: 'INTERNAL_ERROR',
-            retryAfterMs: 250,
-            deferRetry: true,
-          };
+          return buildDeliveryEnvelope(
+            {acknowledged: true, errorCode: 'INTERNAL_ERROR', retryAfterMs: 250, deferRetry: true},
+            {
+              success: false,
+              error: pressureDeferredError,
+            });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       },
     };
     const executor = new QueryExecutor({
@@ -863,7 +860,7 @@ test('QueryExecutor - executeOnPartition retries reads with ' +
 
   const messageRouter = {
     deliver: async () => {
-      return {acknowledged: true, success: true, rows: [{id: 1}]};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{id: 1}]});
     },
   };
 

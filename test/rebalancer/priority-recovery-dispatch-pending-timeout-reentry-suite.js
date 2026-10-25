@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {buildPriorityRecoveryDecisionSnapshot} from
@@ -593,7 +594,9 @@ function createTopologyOperatorWitnessCoordinator() {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          status: TEST_DELIVERY_STATUS_INITIATED,
+        });
       },
     },
     tablePolicyService: {
@@ -895,7 +898,9 @@ registerCase(TEST_BOUNDED_OWNER_REENTRY_CONTRACT_TEST_NAME, async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          status: TEST_DELIVERY_STATUS_INITIATED,
+        });
       },
     },
     tablePolicyService: {
@@ -1004,7 +1009,9 @@ registerCase(
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {
@@ -1090,7 +1097,9 @@ registerCase(
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {

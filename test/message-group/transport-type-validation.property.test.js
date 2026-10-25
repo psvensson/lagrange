@@ -6,6 +6,7 @@
  * Validates: Requirements 1.2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
@@ -36,7 +37,7 @@ function createValidMessageRouter() {
   return {
     async initialize() {},
     async deliver() {
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
     setServiceNodeResolver() {},
     async shutdown() {},
@@ -92,7 +93,7 @@ test('Property 1: Transport Type Validation - invalid transports rejected', asyn
         const invalidTransport = {
           async initialize() {},
           async deliver() {
-            return {acknowledged: true};
+            return buildDeliveryEnvelope({acknowledged: true});
           },
           async shutdown() {},
           // Missing setMessageRouter AND setServiceNodeResolver
@@ -200,7 +201,7 @@ test('Property 1: Transport Type Validation - missing initialize rejected', asyn
         // Create transport missing initialize method
         const invalidTransport = {
           async deliver() {
-            return {acknowledged: true};
+            return buildDeliveryEnvelope({acknowledged: true});
           },
           setMessageRouter() {},
           async shutdown() {},

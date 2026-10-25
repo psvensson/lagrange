@@ -28,7 +28,7 @@ import {
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
 import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryTransportOf, forwardedDeliveryAnswer, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {transactionSchemaWriteRefusal} from
   '../query/distributed/distributed-transaction-schema-enforcement.js';
@@ -462,7 +462,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
         if (!leaderAddress) {
           throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
         }
-        const result = await this.transport.deliver(leaderAddress, {
+        const delivery = await this.transport.deliver(leaderAddress, {
           type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,
           operationId: correlation.operationId,
@@ -475,7 +475,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
           forwardDeliverStartMs,
         );
         const durationMs = this.timeSource.now() - proposeStartMs;
-        const forwardOutcome = classifyTransportDeliveryOutcome(result);
+        const forwardOutcome = deliveryTransportOf(delivery);
+        // A forwarding hop answers with the leader's answer, or its typed
+        // refusal when the leader was not reached; never the leader's
+        // transport outcome.
+        const result = forwardedDeliveryAnswer(delivery);
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
             partitionId: this.partitionId,
@@ -485,11 +489,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
             operationId: correlation.operationId,
             requestId: correlation.requestId,
             correlationId: correlation.correlationId,
-            acknowledged: result?.acknowledged === true,
             deliveryState: forwardOutcome.deliveryState,
             error: isDeliveredTransportDeliveryOutcome(forwardOutcome) ?
               null :
-              result?.error || null,
+              forwardOutcome.error || null,
             writePhaseTimingMs: this.buildWritePhaseTimingPayload(
               phaseTimings,
               durationMs,

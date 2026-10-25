@@ -21,6 +21,7 @@
 // expectation is the owners' (the classifier, the kernel, the partition's
 // defaults) or read from the replicas' own databases.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -187,7 +188,7 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
           const answer = partition.handleRemoteQuery(message);
           await new Promise((resolve) => setImmediate(resolve));
           clock.advance(PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS);
-          return answer;
+          return buildDeliveryEnvelope({acknowledged: true}, await answer);
         },
       },
       cdcIntegrationService: {
@@ -264,7 +265,7 @@ async function withPartitionedLeader(body) {
   network.deliver = (address, envelope, ...rest) => {
     const packet = envelope?.payload ?? envelope;
     return blocked.has(`${packet?.from}>${packet?.to}`) ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       deliver.call(network, address, envelope, ...rest);
   };
   try {
@@ -338,8 +339,9 @@ test('F-aj: the query executor re-delivers an unknown outcome under the ' +
       messageRouter: {
         async deliver(address, message) {
           sent.push({address, entryId: message.entryId});
-          return services[members.findIndex((member) =>
-            addressOf(member) === address)].handleRemoteQuery(message);
+          return buildDeliveryEnvelope({acknowledged: true},
+            await services[members.findIndex((member) =>
+              addressOf(member) === address)].handleRemoteQuery(message));
         },
       },
     });

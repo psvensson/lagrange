@@ -1,3 +1,4 @@
+import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
 import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
   shutdownReplicaHandler} from './replica-runtime-cleanup-custody.js';
 import {
@@ -560,6 +561,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER);
         return;
       }
+      this.unregisterFromRouter(this.messageRouter);
       this.messageRouter = messageRouter;
       const handlerAddress =
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
@@ -576,11 +578,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         if (this.rpcClient && response.correlationId) {
           this.rpcClient.handleResponse(response.correlationId, response);
         }
-        return {
-          acknowledged: true,
-          ...response,
-        };
+        return response;
       };
+      this.registeredRouterHandler = routerHandler;
       messageRouter.register(handlerAddress, routerHandler);
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_ROUTER, {
         address: handlerAddress,
@@ -592,15 +592,19 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {Object} messageRouter - Message router instance.
      */
     unregisterFromRouter(messageRouter) {
-      if (!messageRouter) {
+      if (!messageRouter || messageRouter !== this.messageRouter) {
         return;
       }
       const handlerAddress =
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
         `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
-      messageRouter.unregister(handlerAddress);
+      // Only our own exact registration is retired; a successor's handler
+      // at the address is never removed (finding F2).
+      retireNodeTransportHandler(this.logger, {transport: messageRouter,
+        address: handlerAddress, handler: this.registeredRouterHandler});
       if (this.messageRouter === messageRouter) {
         this.messageRouter = null;
+        this.registeredRouterHandler = null;
       }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.UNREGISTERED_ROUTER, {
         address: handlerAddress,

@@ -6,7 +6,7 @@ import {captureCdcForwardOptions,
 import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
 import {cdcRelaySendDepth} from './message-group-service-runtime-support.js';
 import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from '../transport/transport-error-codes.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome,
+import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, deliveryReadingOf,
   isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
@@ -625,16 +625,19 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             payload,
             deliveryOptions,
           );
-          // Transport decides delivery; success and error are the leader's answer.
-          const deliveryOutcome = classifyTransportDeliveryOutcome(deliveryResult);
+          // Transport decides delivery; success and error are the leader's
+          // answer. A failure is read from exactly one of the two: the
+          // leader's answer when delivered, else the transport outcome.
+          const deliveryOutcome = deliveryTransportOf(deliveryResult);
           const deliveryAcked = isDeliveredTransportDeliveryOutcome(deliveryOutcome);
-          const deliverySucceeded = deliveryResult?.success !== false;
+          const failure = deliveryReadingOf(deliveryResult);
+          const deliverySucceeded = deliveryAcked && failure.success !== false;
           const deliveryErrorMessage =
-            typeof deliveryResult?.error === typeofToken.STRING &&
-            deliveryResult.error.length > num.ZERO ?
-              deliveryResult.error :
+            typeof failure.error === typeofToken.STRING &&
+            failure.error.length > num.ZERO ?
+              failure.error :
               null;
-          const deliveryRejectedByHandler = deliveryErrorMessage !== null;
+          const deliveryRejectedByHandler = deliveryAcked && deliveryErrorMessage !== null;
           if (
             !deliveryAcked ||
             !deliverySucceeded ||
@@ -643,7 +646,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             const shouldRepairTopology =
               service.shouldRepairForwardTopology(deliveryErrorMessage);
             if (service.shouldSuppressForwardTarget(
-              deliveryResult,
+              failure,
               deliveryErrorMessage,
             )) {
               service.suppressForwardTarget({
@@ -673,7 +676,6 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 causeId,
                 durationMs: service.now() - forwardStartMs,
                 deliveryRejectedByHandler,
-                acknowledged: deliveryOutcome.acknowledged,
                 success: deliverySucceeded,
                 deliveryState: deliveryOutcome.deliveryState,
                 noHandler: deliveryOutcome.reasonCode ===
@@ -694,7 +696,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               `${messageGroupCdcErrorMsg.FORWARD_DELIVERY_REJECTED}` +
               deliveryError;
             const forwardFailureState = this.resolveForwardFailureState(
-              deliveryResult,
+              failure,
               {
                 message: deliveryErrorMessage,
                 deferRetry: isDeferredTransportDeliveryOutcome(deliveryOutcome),
@@ -702,7 +704,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             );
             const resolvedRetryAfterMs = this.resolveForwardRetryAfterMs(
               strictForwardRetryAfterMs,
-              deliveryResult,
+              failure,
             );
             lastDeliveryError = strictForwarding ?
               this.buildStrictForwardError(
@@ -710,7 +712,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 resolvedRetryAfterMs,
                 {
                   failureState: forwardFailureState,
-                  code: deliveryResult?.errorCode || null,
+                  code: deliveryOutcome.errorCode || null,
                 },
               ) :
               new Error(forwardErrorMessage);

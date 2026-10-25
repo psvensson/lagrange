@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {classifyThrownDeliveryError, deliveryTransportOf, isDeliveredTransportDeliveryOutcome, buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createTestTransport,
@@ -838,11 +839,7 @@ test('MessageGroupService - QUERY direct-only delivery clears pending envelope '
 async (t) => {
   const transport = {
     async deliver() {
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [{value: 1}],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{value: 1}]});
     },
     async initialize() {},
     async shutdown() {},
@@ -878,10 +875,7 @@ test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'Message timeout',
-        };
+        return buildDeliveryEnvelope({acknowledged: false, error: 'Message timeout'});
       },
       async initialize() {},
       async shutdown() {},
@@ -931,13 +925,14 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata',
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed',
-          errorCode: 'ROUTER_NO_CONNECTION',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'No connection to node seed',
+            errorCode: 'ROUTER_NO_CONNECTION',
+            deferRetry: true,
+            retryAfterMs: 250,
+          });
       },
       async initialize() {},
       async shutdown() {},
@@ -1039,11 +1034,7 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
     const transport = {
       async deliver(_targetService, _message, options) {
         capturedOptions.push(options);
-        return {
-          acknowledged: true,
-          success: true,
-          rows: [],
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
       },
       async initialize() {},
       async shutdown() {},
@@ -1074,7 +1065,7 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
       },
     );
 
-    t.equal(result.acknowledged, true,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result.delivery)), true,
       'query delivery should still succeed');
     t.equal(capturedOptions.length, 1,
       'query delivery should perform one direct transport attempt');
@@ -1090,13 +1081,14 @@ test('MessageGroupService - idempotent control-plane payloads use direct-only de
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed',
-          errorCode: 'ROUTER_NO_CONNECTION',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'No connection to node seed',
+            errorCode: 'ROUTER_NO_CONNECTION',
+            deferRetry: true,
+            retryAfterMs: 250,
+          });
       },
       async initialize() {},
       async shutdown() {},
@@ -1140,4 +1132,34 @@ test('MessageGroupService - idempotent control-plane payloads use direct-only de
       t.equal(service.pendingMessages.size, 0,
         'direct-only control-plane failure should not retain pending envelopes');
     }
+  });
+
+
+test('MessageGroupService - direct-only errors preserve the owner state with retry hints',
+  async (t) => {
+    for (const fields of [
+      {acknowledged: true, deliveryState: 'failed', deferRetry: true, retryAfterMs: 3},
+      {acknowledged: false, noHandler: true},
+      {acknowledged: false, deferRetry: true, retryAfterMs: 3},
+    ]) {
+      const delivery = buildDeliveryEnvelope({...fields, error: 'controlled refusal'});
+      const transport = {async deliver() {
+        return delivery;
+      },
+      async initialize() {}, async shutdown() {}, setServiceNodeResolver() {}};
+      const service = new MessageGroupService(withTestDbPath({
+        groupId: 'mg-state', replicaId: 'mg-state-r1', nodeId: 'node-state', transport}));
+      service.initialized = true;
+      service.persistToRaftLog = async () => t.fail('direct-only QUERY must not persist');
+      const error = await service.sendMessage('node-x/partition/p1',
+        {type: 'QUERY', sql: 'SELECT 1', params: []}).then(
+        () => null, (failure) => failure);
+      t.ok(error instanceof Error, 'the established MG error boundary remains an Error');
+      t.same(classifyThrownDeliveryError(error), deliveryTransportOf(delivery),
+        'a failed state cannot become deferred merely because it carries a retry hint');
+      t.equal(service.pendingMessages.size, 0, 'direct-only failure retires custody');
+    }
+    const spoofed = Object.assign(new Error('claimed success'), {deliveryState: 'delivered'});
+    t.equal(classifyThrownDeliveryError(spoofed).deliveryState, 'failed',
+      'a thrown error can never provide the missing transport ACK');
   });

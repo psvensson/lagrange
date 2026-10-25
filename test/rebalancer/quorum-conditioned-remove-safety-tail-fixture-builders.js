@@ -6,6 +6,8 @@
  * so the tail cases stay focused on the behavior under test.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+
 const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
 
 /**
@@ -193,7 +195,7 @@ export async function runReplacementElectionNudgeScenario(context, t, {
     enableTimeouts: false,
     messageRouter: createRecordingReplicaMessageRouter({
       deliveries,
-      respond: () => ({acknowledged: true, status: 'initiated'}),
+      respond: () => buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'}),
     }),
     controlPlaneReadinessService: createPublishedPlanningReadinessService({
       publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,

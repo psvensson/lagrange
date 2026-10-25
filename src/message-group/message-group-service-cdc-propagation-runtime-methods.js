@@ -20,13 +20,20 @@ async function handleDurableLatencyCdcMessage(service, runtimeDeps, messageId, r
   budget.assertCurrent();
   // Optional wrapper metadata comes from the shallow wrapper copy and its
   // dense, already classified member count; it never overrides the answer.
-  return runtimeDeps.buildLatencyCdcPropagationResult({messageId, acknowledged: true,
+  // The answer is the owner's full semantic answer (including any
+  // contradictory field the canonical CDC validator must refuse); the router
+  // carries its receipt beside it, never in it.
+  return {messageId,
     status: batch ? runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED :
       runtimeDeps.MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
     ...(batch ? {eventCount: incoming.length} :
       {tableName: payload.tableName, operation: payload.operation}),
     ...answer,
-  });
+  };
+}
+
+function latencyCdcAnswer(messageId, status, metadata, answer) {
+  return {messageId, status, ...metadata, ...answer};
 }
 
 async function handleLatencyCdcPropagationMessage(
@@ -49,7 +56,6 @@ async function handleLatencyCdcPropagationMessage(
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   } = runtimeDeps;
   const tableName = payload.tableName;
@@ -89,10 +95,9 @@ async function handleLatencyCdcPropagationMessage(
       if (
         ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
       ) {
-        return buildLatencyCdcPropagationResult({
+        return {
           messageId,
           status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-          acknowledged: true,
           success: false,
           error:
             ingressDecision.reason ||
@@ -105,7 +110,7 @@ async function handleLatencyCdcPropagationMessage(
             service.resolveStrictCdcForwardRetryAfterMs(),
           tableName,
           operation,
-        });
+        };
       }
       if (
         ingressDecision.action ===
@@ -126,14 +131,8 @@ async function handleLatencyCdcPropagationMessage(
           applyOptions.replayOnly = true;
         }
         const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-          acknowledged: true,
-          tableName,
-          operation,
-          ...answer,
-        });
+        return latencyCdcAnswer(messageId,
+          MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
       }
     }
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
@@ -146,14 +145,8 @@ async function handleLatencyCdcPropagationMessage(
       causeId,
       replayOnly,
     });
-    return buildLatencyCdcPropagationResult({
-      messageId,
-      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-      acknowledged: true,
-      tableName,
-      operation,
-      ...answer,
-    });
+    return latencyCdcAnswer(messageId,
+      MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
   }
   const applyOptions = {...copyCdcEventMetadata(payload), skipSubscriptionCheck: true};
   if (eventTimestamp) {
@@ -163,14 +156,8 @@ async function handleLatencyCdcPropagationMessage(
     applyOptions.causeId = causeId;
   }
   const answer = await service.applyCDCEvent(tableName, operation, data, applyOptions);
-  return buildLatencyCdcPropagationResult({
-    messageId,
-    status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
-    acknowledged: true,
-    tableName,
-    operation,
-    ...answer,
-  });
+  return latencyCdcAnswer(messageId,
+    MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED, {tableName, operation}, answer);
 }
 
 async function handleLatencyCdcPropagationBatchMessage(
@@ -193,7 +180,6 @@ async function handleLatencyCdcPropagationBatchMessage(
     MESSAGE_GROUP_APPLICATION_STATUS,
     MESSAGE_GROUP_CDC_ERROR_MSG,
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
-    buildLatencyCdcPropagationResult,
   } = runtimeDeps;
   const events = Array.isArray(payload.events) ? payload.events : [];
   const replayOnly = payload?.replayOnly === true;
@@ -227,11 +213,10 @@ async function handleLatencyCdcPropagationBatchMessage(
       if (
         ingressDecision.action === MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER
       ) {
-        return buildLatencyCdcPropagationResult({
+        return {
           messageId,
           status:
             MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-          acknowledged: true,
           success: false,
           error:
             ingressDecision.reason ||
@@ -243,7 +228,7 @@ async function handleLatencyCdcPropagationBatchMessage(
             ingressDecision.strictForwardRetryAfterMs :
             service.resolveStrictCdcForwardRetryAfterMs(),
           eventCount: events.length,
-        });
+        };
       }
       if (
         ingressDecision.action ===
@@ -254,14 +239,8 @@ async function handleLatencyCdcPropagationBatchMessage(
           replayOnly,
           relayDepth,
         });
-        return buildLatencyCdcPropagationResult({
-          messageId,
-          status:
-            MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-          acknowledged: true,
-          eventCount: events.length,
-          ...answer,
-        });
+        return latencyCdcAnswer(messageId,
+          MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
       }
     }
     if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
@@ -271,22 +250,12 @@ async function handleLatencyCdcPropagationBatchMessage(
       relayDepth,
       replayOnly,
     });
-    return buildLatencyCdcPropagationResult({
-      messageId,
-      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-      acknowledged: true,
-      eventCount: events.length,
-      ...answer,
-    });
+    return latencyCdcAnswer(messageId,
+      MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
   }
   const answer = await service.applyCDCBatch(events, {skipSubscriptionCheck: true});
-  return buildLatencyCdcPropagationResult({
-    messageId,
-    status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
-    acknowledged: true,
-    eventCount: events.length,
-    ...answer,
-  });
+  return latencyCdcAnswer(messageId,
+    MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED, {eventCount: events.length}, answer);
 }
 
 async function applyCDCEvent(service, tableName, operation, data, options = {}) {

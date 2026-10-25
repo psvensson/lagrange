@@ -8,6 +8,7 @@
  * durable suite may supply a real engine (e.g. SQLite-backed) instead.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -209,7 +210,7 @@ function wireEpochDispatchProbe(coordinator) {
     const baseDeliver = owner.deliverReplicaOperationRequest.bind(owner);
     owner.deliverReplicaOperationRequest = async (_op, _target, request) => {
       requestCapture.captured = request;
-      return {acknowledged: true, status: DELIVERY_STATUS_COMPLETED};
+      return buildDeliveryEnvelope({acknowledged: true}, {status: DELIVERY_STATUS_COMPLETED});
     };
     const result = await baseExecuteOperationInternal(dispatchedOperation);
     owner.deliverReplicaOperationRequest = baseDeliver;

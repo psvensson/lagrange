@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -70,12 +71,11 @@ test('SQLQueryEngine - single-table system selects prefer local authoritative re
       messageRouter: {
         async deliver(address, message) {
           deliveries.push({address, message});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 0,
-          };
+          });
         },
       },
       cdcIntegrationService: {
@@ -131,12 +131,11 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
       messageRouter: {
         async deliver(address, message) {
           deliveries.push({address, message});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 0,
-          };
+          });
         },
       },
       authoritativeControlPlaneView: {
@@ -249,12 +248,11 @@ test('SQLQueryEngine - routed system-table queries default to critical delivery 
       messageRouter: {
         async deliver(address, message, options) {
           deliveries.push({address, message, options});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 0,
-          };
+          });
         },
       },
     });
@@ -282,12 +280,11 @@ test('SQLQueryEngine - system selects that do not project the primary key ' +
     messageRouter: {
       async deliver(address, message) {
         deliveries.push({address, message});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{service_type: 'partition'}],
           changes: 0,
-        };
+        });
       },
     },
     cdcIntegrationService: {

@@ -100,7 +100,16 @@ const ReplicaOperationResponseStatus = Object.freeze({
   ERROR: 'error',
 });
 
+// A replica-operation answer that completed: COMPLETED without an error text.
+// A completed status carrying an error is not a completion; this is the
+// answer's own rule, never a transport decision (design finding F-C).
+function isCompletedReplicaOperationAnswer(answer) {
+  return answer?.status === ReplicaOperationResponseStatus.COMPLETED &&
+    !(typeof answer.error === 'string' && answer.error.length > 0);
+}
+
 export {
+  isCompletedReplicaOperationAnswer,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
   ReplaceWitnessDeliveryOutcome,

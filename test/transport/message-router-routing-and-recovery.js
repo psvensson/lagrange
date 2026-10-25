@@ -11,6 +11,7 @@ import {MessageRouter, ConnectionState, RouterMessageType} from
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 import {
   RAFT_RS_MESSAGE_TYPE,
@@ -103,7 +104,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     router.register('test-node/service/service-1', handler);
     t.equal(router.handlers.size, 1, 'should have one handler');
@@ -112,7 +113,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     router.register('test-node/service/service-2', handler);
     t.equal(router.handlers.size, 2, 'should have two handlers');
 
-    router.unregister('test-node/service/service-1');
+    t.equal(router.unregisterExact('test-node/service/service-1', handler), true,
+      'the exact handler is removed');
     t.equal(router.handlers.size, 1, 'should have one handler after unregister');
     t.notOk(router.isRegistered('test-node/service/service-1'), 'should not be registered');
 
@@ -136,7 +138,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     t.throws(
       () => router.register('invalid-address', handler),
@@ -163,7 +165,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     t.throws(
       () => router.register('legacy-address', handler),
@@ -182,7 +184,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const receivedMessages = [];
     router.register('test-node/service/local-service', (envelope) => {
       receivedMessages.push(envelope);
-      return {acknowledged: true, data: 'response'};
+      return {data: 'response'};
     });
 
     const result = await router.deliver('test-node/service/local-service', {
@@ -190,9 +192,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       data: 'hello',
     });
 
-    t.ok(result.messageId, 'should have message ID');
-    t.equal(result.acknowledged, true, 'should be acknowledged');
-    t.equal(result.data, 'response', 'should include handler data');
+    t.ok(result.transport.messageId, 'should have message ID');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should be acknowledged');
+    t.equal(result.answer.data, 'response', 'should include handler data');
     t.equal(receivedMessages.length, 1, 'should invoke handler');
 
     await router.shutdown();
@@ -205,21 +207,21 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     let localHandlerCalls = 0;
     router.register('test-node/partition/p1', () => {
       localHandlerCalls++;
-      return {acknowledged: true, success: true, rows: [{id: 'local'}]};
+      return {success: true, rows: [{id: 'local'}]};
     });
 
     let queryTransportCalls = 0;
     router.setQueryMessageGroupServiceResolver(() => ({
       sendMessage: async (targetAddress, message) => {
         queryTransportCalls++;
-        return {
-          acknowledged: true,
+        // The message group's record carries the inner delivery envelope.
+        return {delivery: buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           routedVia: 'message-group',
           targetAddress,
           sql: message.sql,
           rows: [{id: 'mg'}],
-        };
+        })};
       },
     }));
 
@@ -231,8 +233,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
     t.equal(queryTransportCalls, 1, 'should use message-group transport once');
     t.equal(localHandlerCalls, 0, 'should not use direct local handler path');
-    t.equal(result.acknowledged, true, 'should acknowledge query delivery');
-    t.equal(result.routedVia, 'message-group', 'should report message-group routing');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should acknowledge query delivery');
+    t.equal(result.answer.routedVia, 'message-group', 'should report message-group routing');
 
     await router.shutdown();
   });
@@ -252,13 +254,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         params: [],
       });
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'should fail closed when query transport is unavailable');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'should return typed defer semantics instead of falling back');
-      t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+      t.equal(result.transport.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
         'should surface a stable transport-not-ready error code');
-      t.ok(result.retryAfterMs > 0,
+      t.ok(result.transport.retryAfterMs > 0,
         'should expose a retry hint for the canonical query transport path');
 
       await router.shutdown();
@@ -274,14 +276,14 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       params: [],
     });
 
-    t.equal(result.acknowledged, false,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
       'should fail closed when query transport resolver is missing');
-    t.equal(result.deferRetry, true,
+    t.equal(result.transport.deferRetry, true,
       'missing query transport should surface typed defer semantics');
-    t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+    t.equal(result.transport.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
       'missing resolver should expose a stable error code');
     t.match(
-      result.error,
+      result.transport.error,
       /message-group transport is not configured/i,
       'missing resolver should preserve the canonical reason',
     );
@@ -308,13 +310,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         params: [],
       });
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'should fail closed while query transport owner is unavailable');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'typed selection misses should preserve defer semantics');
-      t.equal(result.retryAfterMs, 321,
+      t.equal(result.transport.retryAfterMs, 321,
         'typed selection misses should preserve retryAfterMs');
-      t.equal(result.error, 'query ingress owner not ready',
+      t.equal(result.transport.error, 'query ingress owner not ready',
         'typed selection misses should preserve the owner reason');
 
       await router.shutdown();
@@ -375,13 +377,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         params: [],
       });
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'query transport connection closure should fail closed');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'query transport connection closure should defer while reconnect is armed');
-      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      t.equal(result.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
         'query transport closure should normalize to the canonical router error code');
-      t.ok(result.retryAfterMs > 0,
+      t.ok(result.transport.retryAfterMs > 0,
         'query transport closure should preserve a bounded retry hint');
 
       await router.shutdown();
@@ -410,15 +412,15 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         params: [],
       });
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'explicit query transport deferrals should fail closed');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'explicit query transport deferrals should preserve defer semantics');
-      t.equal(result.errorCode, 'QUERY_INGRESS_BACKPRESSURE',
+      t.equal(result.transport.errorCode, 'QUERY_INGRESS_BACKPRESSURE',
         'explicit query transport deferrals should preserve the error code');
-      t.equal(result.retryAfterMs, 222,
+      t.equal(result.transport.retryAfterMs, 222,
         'explicit query transport deferrals should preserve retryAfterMs');
-      t.equal(result.error, 'query ingress backpressure',
+      t.equal(result.transport.error, 'query ingress backpressure',
         'explicit query transport deferrals should preserve the error message');
 
       await router.shutdown();
@@ -460,11 +462,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
       router.setQueryMessageGroupServiceResolver(() => ({
         async sendMessage(_targetService, _message, options = {}) {
           capturedOptions = options;
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return {delivery: buildDeliveryEnvelope({acknowledged: true},
+            {success: true, rows: []})};
         },
       }));
 
@@ -478,7 +477,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         deliverySource: QUERY_TRANSPORT_DELIVERY_SOURCE,
       });
 
-      t.equal(result.acknowledged, true,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
         'query transport send should still succeed');
       t.equal(capturedOptions?.transportDeliveryOptions?.timeoutMs, 1234,
         'query transport sends should inherit timeoutMs from router delivery');
@@ -501,15 +500,15 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
     router.register('test-node/service/async-service', async (envelope) => {
       await Promise.resolve();
-      return {acknowledged: true, processed: envelope.payload.data};
+      return {processed: envelope.payload.data};
     });
 
     const result = await router.deliver(
       'test-node/service/async-service', {data: 'async-test'},
     );
 
-    t.equal(result.acknowledged, true, 'should be acknowledged');
-    t.equal(result.processed, 'async-test', 'should include handler result');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should be acknowledged');
+    t.equal(result.answer.processed, 'async-test', 'should include handler result');
 
     await router.shutdown();
   });
@@ -526,8 +525,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     // Without self-connection, delivery should fail (connection error, not handler error)
     const result = await router.deliver('test-node/service/error-service', {data: 'test'});
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
-    t.ok(result.error, 'should have error message');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'should not be acknowledged');
+    t.ok(result.transport.error, 'should have error message');
 
     await router.shutdown();
   });
@@ -538,8 +537,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
     const result = await router.deliver('test-node/service/unknown-service', {data: 'test'});
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
-    t.ok(result.error, 'should include error message');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'should not be acknowledged');
+    t.ok(result.transport.error, 'should include error message');
 
     await router.shutdown();
   });
@@ -604,8 +603,8 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         nodeId: 'remote-node',
         address: 'ws://remote-node:9999',
       }, 'should reconnect using the resolved node address');
-      t.equal(result.acknowledged, true, 'should deliver after recovering the node connection');
-      t.equal(result.recovered, true, 'should preserve the delivery result from the retry');
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'should deliver after recovering the node connection');
+      t.equal(result.answer.recovered, true, 'should preserve the delivery result from the retry');
 
       await router.shutdown();
     });
@@ -632,14 +631,14 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         {type: 'TEST_MESSAGE'},
       );
 
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'delivery should fail when reconnect recovery cannot restore the peer');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'failed recovery should ask upstream owners to defer immediate retries');
-      t.ok(result.retryAfterMs > 0 &&
-        result.retryAfterMs <= router.reconnectIntervalMs,
+      t.ok(result.transport.retryAfterMs > 0 &&
+        result.transport.retryAfterMs <= router.reconnectIntervalMs,
       'failed recovery should expose the active reconnect cooldown');
-      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      t.equal(result.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
         'failed recovery should surface the reconnect-in-progress error code');
       t.equal(
         router.nodeConnections.get('remote-node')?.state,
@@ -679,11 +678,11 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
       t.equal(connectCalls, 1,
         'subsequent deliveries should defer behind the armed reconnect owner');
-      t.equal(firstResult.deferRetry, true,
+      t.equal(firstResult.transport.deferRetry, true,
         'first failed cold dial should ask callers to defer');
-      t.equal(secondResult.deferRetry, true,
+      t.equal(secondResult.transport.deferRetry, true,
         'second delivery should also defer while reconnect remains scheduled');
-      t.equal(secondResult.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      t.equal(secondResult.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
         'second delivery should reuse the reconnect-in-progress failure');
     });
 
@@ -730,13 +729,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
       t.equal(connectCalls, 0,
         'delivery should not bypass an already armed reconnect timer');
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'delivery should fail closed while reconnect remains in progress');
-      t.equal(result.deferRetry, true,
+      t.equal(result.transport.deferRetry, true,
         'delivery should return a deferred retry hint');
-      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+      t.equal(result.transport.errorCode, 'ROUTER_CONNECTION_CLOSED',
         'delivery should surface a stable closed-connection error code');
-      t.ok(result.retryAfterMs > 0 && result.retryAfterMs <= 250,
+      t.ok(result.transport.retryAfterMs > 0 && result.transport.retryAfterMs <= 250,
         'delivery should expose the remaining reconnect delay');
     });
 
@@ -805,13 +804,13 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
       t.not(thirdOutcome, 'pending',
         'queue-saturated delivery should fail fast instead of joining backlog');
-      t.equal(thirdOutcome.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(thirdOutcome)), false,
         'saturated delivery should return a failed-delivery envelope');
-      t.match(thirdOutcome.error, /queue/i,
+      t.match(thirdOutcome.transport.error, /queue/i,
         'saturated delivery should expose queue backpressure');
-      t.equal(thirdOutcome.deferRetry, true,
+      t.equal(thirdOutcome.transport.deferRetry, true,
         'saturated delivery should ask upstream owners to defer retries');
-      t.equal(thirdOutcome.retryAfterMs, router.reconnectIntervalMs,
+      t.equal(thirdOutcome.transport.retryAfterMs, router.reconnectIntervalMs,
         'saturated delivery should surface a retry-after hint');
       t.equal(
         router.getOutboundQueue('remote-node').pending.length,
@@ -868,10 +867,10 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         },
       );
 
-      t.equal(result.acknowledged, true,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
         'Raft delivery should be acknowledged immediately');
-      t.equal(result.direct, true,
-        'Raft delivery should report the direct path');
+      t.equal(result.answer, null,
+        'a direct Raft delivery is ACK-only: delivered with no answer');
       t.equal(enqueueOutboundCalled, false,
         'direct Raft delivery should bypass the outbound queue');
       t.equal(pendingResponseRegistered, false,
@@ -940,9 +939,9 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
         'Raft delivery should fall back to the queue when no live socket exists');
       t.equal(pendingResponseRegistered, true,
         'queued fallback should preserve the normal response registration path');
-      t.equal(result.acknowledged, false,
+      t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
         'fallback result should come from the queued path');
-      t.equal(result.error, 'queued-fallback',
+      t.equal(result.transport.error, 'queued-fallback',
         'fallback result should preserve the queued delivery outcome');
 
       await router.shutdown();

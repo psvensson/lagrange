@@ -13,6 +13,7 @@
 // post-intent no-fail guard (shared with REPLACE) completes it instead -
 // even when the SYNCING step timer fires after the promotion.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -119,15 +120,13 @@ function terminalCleanupRepairOwner(
     operationWorkflowRunExclusive: async (_key, action) => action(),
     deliverReplicaOperationRequest: async (_operation, _target, request) => {
       deliveries.push(request);
-      return deliveries.length === 1 ? {
-        acknowledged: false,
-        deliveryState: 'deferred',
-        status: 'error',
-      } : {
+      return deliveries.length === 1 ? buildDeliveryEnvelope(
+        {
+          acknowledged: false,
+          deliveryState: 'deferred',
+        }) : buildDeliveryEnvelope({
         acknowledged: true,
-        deliveryState: 'delivered',
-        status: 'completed',
-      };
+      }, {status: 'completed'});
     },
     scheduled,
   };

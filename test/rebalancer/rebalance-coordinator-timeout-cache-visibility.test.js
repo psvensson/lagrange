@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {
@@ -109,7 +110,7 @@ test('checkTimeouts confirms STOPPING timeout failure without cache waits',
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -261,7 +262,7 @@ test('checkTimeouts reconciles stale operations when owner-rpc reads are unavail
       controlPlaneSystemTableGateway,
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -443,7 +444,7 @@ test('checkTimeouts preserves cache-preferred incomplete visibility when the ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     tablePolicyService: {
@@ -546,7 +547,7 @@ test('checkTimeouts applies bounded SYNCING timeout to priority control-plane pa
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -619,7 +620,7 @@ test('checkTimeouts does not fail a stale operation while a deferred transition 
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -757,7 +758,7 @@ test('checkTimeouts fails stale priority PENDING recovery operations once the di
       messageRouter: {
         async deliver() {
           dispatchDeliveries += 1;
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       controlPlaneReadinessService: {
@@ -1046,7 +1047,7 @@ test(STALE_PRIORITY_PENDING_CACHE_ACTIVE_TIMEOUT_RECONCILE_TEST_NAME,
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {

@@ -1102,7 +1102,7 @@ test('PartitionService - handleRemoteQuery returns redirect for writes on follow
     params: [],
   });
 
-  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, false, 'should not succeed (redirect instead)');
   t.equal(result.redirect, 'LEADER_REDIRECT', 'should return redirect type');
   t.equal(result.leaderAddress, 'leader-node/partition/test-partition',
@@ -1136,7 +1136,7 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
     params: [],
   });
 
-  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'should succeed for reads');
   t.equal(result.rows.length, 1, 'should return data');
   t.equal(result.rows[0].name, 'Alice', 'should return correct data');
@@ -1217,7 +1217,7 @@ test('PartitionService - removal drain waits for a query admitted before its ser
   partition.handleRemoteQuery = async () => {
     announceStarted();
     await queryGate;
-    return {acknowledged: true, success: true};
+    return {success: true};
   };
   const admittedQuery = partition.handleApplicationMessage({
     type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY,

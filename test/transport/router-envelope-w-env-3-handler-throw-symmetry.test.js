@@ -11,13 +11,13 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
-  classifyTransportDeliveryOutcome,
 } from '../../src/transport/transport-semantic-outcome.js';
 import * as TRANSPORT_ERROR_CODES from '../../src/transport/transport-error-codes.js';
 import {
   createRouterEnvelopeFixture,
   serviceAddress,
   transportFactsOf,
+  transportIdentityOf,
 } from './router-envelope-witness-fixture.js';
 
 const NODE = Object.freeze({sender: 'wenv3-sender', target: 'wenv3-target'});
@@ -56,7 +56,7 @@ test('W-ENV-3 a thrown handler is FAILED/handler_failed on both paths', async (t
     deliveryState: transportFactsOf(delivery).deliveryState,
     reasonCode: transportFactsOf(delivery).reasonCode,
     errorCode: transportFactsOf(delivery).errorCode,
-    error: classifyTransportDeliveryOutcome(delivery).error,
+    error: transportIdentityOf(delivery).error,
   });
   t.same(shapeOf(local), expected, 'LOCAL: a thrown handler is FAILED/handler_failed');
   t.same(shapeOf(remote), expected, 'remote: a thrown handler is FAILED/handler_failed');

@@ -8,6 +8,7 @@
  * never reach other nodes' caches — causing "no partitions available"
  * errors for newly created tables.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerCdcNonLeaderPropagationTailTests} from './cdc-non-leader-propagation-tail-test-cases.js';
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
@@ -131,7 +132,7 @@ test(
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
         // Simulate successful delivery
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       // Apply a CDC event simulating a new partition for benchmark_events
@@ -248,7 +249,7 @@ test(
         if (deliverAttempt === 1) {
           throw new Error('transient forward failure');
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       const cdcData = {
@@ -339,7 +340,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (targetService, payload, options) => {
         forwardedPayloads.push({targetService, payload, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       await mg.applyCDCEvent(
@@ -426,7 +427,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (targetService, payload, options) => {
         forwardedPayloads.push({targetService, payload, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       await mg.applyCDCEvent(
@@ -516,7 +517,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       await mg.applyCDCEvent(
@@ -606,7 +607,7 @@ test(
         if (deliverAttempt === 1) {
           throw new Error('transient forward failure');
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       };
 
       const causeId = 'cause-1';
@@ -696,7 +697,7 @@ test(
       let deliverCount = 0;
       router.deliver = async (_address, _payload, _options) => {
         deliverCount += 1;
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       setTimeout(() => {
@@ -783,7 +784,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await mg.applyCDCEvent(
@@ -886,7 +887,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await mg.applyCDCEvent(
@@ -981,7 +982,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await mg.applyCDCEvent(
@@ -1076,7 +1077,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await t.rejects(
@@ -1181,7 +1182,7 @@ test(
       };
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await mg.applyCDCEvent(
@@ -1256,7 +1257,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await t.rejects(
@@ -1369,7 +1370,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await mg.applyCDCEvent(

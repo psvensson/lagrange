@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "status": "FAIL",
+  "receipts": [
+    {
+      "id": "canonical-envelope-and-no-public-ack",
+      "passed": false
+    },
+    {
+      "id": "transport-answer-isolation-local-remote-forwarded",
+      "passed": false
+    },
+    {
+      "id": "lost-answer-and-domain-refusal-preservation",
+      "passed": false
+    },
+    {
+      "id": "atomic-consumer-migration-and-handler-identity",
+      "passed": false
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": false
+    }
+  ]
+}

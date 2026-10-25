@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -503,7 +504,9 @@ function createEventDrivenCoordinator(
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          status: TEST_DELIVERY_STATUS_INITIATED,
+        });
       },
     },
     tablePolicyService: {

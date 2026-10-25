@@ -1,6 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const {
@@ -474,9 +474,9 @@ class PartitionServiceMetadataDeliveryMethods {
     }
   }
   /**
-   * Extract ACK from transport response.
+   * Extract ACK from the delivered handler answer.
    * Requirements: 6.1, 6.2, 6.3, 6.4
-   * @param {Object} result - Transport result (now flat structure).
+   * @param {Object|null} result - The handler's answer.
    * @param {string} requestId - Expected request ID.
    * @return {Object|null} ACK or null if not found.
    * @private
@@ -530,7 +530,9 @@ class PartitionServiceMetadataDeliveryMethods {
       earlyRejection = err;
     });
     try {
-      const result = await transport.deliver(targetAddress, message);
+      const deliveryEnvelope = await transport.deliver(targetAddress, message);
+      const outcome = deliveryTransportOf(deliveryEnvelope);
+      const answer = deliveryAnswerOf(deliveryEnvelope);
       if (earlyRejection) {
         if (
           earlyRejection.message === PARTITION_SERVICE_LOG_MSG.TRACKER_SHUTDOWN
@@ -543,9 +545,9 @@ class PartitionServiceMetadataDeliveryMethods {
         }
         throw earlyRejection;
       }
-      if (!isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result))) {
+      if (!isDeliveredTransportDeliveryOutcome(outcome)) {
         const errorMsg =
-          result.error || PARTITION_SERVICE_ERROR_MSG.DELIVERY_NOT_ACK;
+          outcome.error || PARTITION_SERVICE_ERROR_MSG.DELIVERY_NOT_ACK;
         this.logger.warn(PARTITION_SERVICE_ERROR_MSG.MESSAGE_DELIVERY_FAILED, {
           requestId,
           targetAddress,
@@ -560,7 +562,7 @@ class PartitionServiceMetadataDeliveryMethods {
         }
         throw new Error(`Delivery failed: ${errorMsg}`);
       }
-      const ack = this.extractAckFromResponse(result, requestId);
+      const ack = this.extractAckFromResponse(answer, requestId);
       if (ack) {
         this.pendingRequestTracker.resolve(requestId, ack);
         this.logger.debug(PARTITION_SERVICE_LOG_MSG.RECEIVED_ACK, {

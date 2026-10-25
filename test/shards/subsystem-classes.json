@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 321,
+    "bootstrap-membership": 322,
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
@@ -13,22 +13,22 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 186,
+    "query-sql": 187,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 150,
     "solver-tooling": 7,
-    "storage-partition": 199,
+    "storage-partition": 200,
     "storage-raft": 146,
     "test-infrastructure": 148,
     "transactions": 16,
-    "transport-messaging": 106,
+    "transport-messaging": 110,
     "wasm-toolchain": 74
   },
-  "censusSize": 2457,
-  "digest": "fnv1a32-dfffb52b",
+  "censusSize": 2464,
+  "digest": "fnv1a32-9b614ccc",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-b3e67087",
+  "observationDigest": "fnv1a32-f54a0720",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1179,6 +1179,7 @@
     "test/node/group-retirement-liveness.test.js": "bootstrap-membership",
     "test/node/group-retirement-redrive.test.js": "bootstrap-membership",
     "test/node/group-retirement-reseed-held.test.js": "bootstrap-membership",
+    "test/node/handler-identity-w-hid-2-3-node-handler-exact-retirement.test.js": "bootstrap-membership",
     "test/node/lifecycle-readiness.test.js": "bootstrap-membership",
     "test/node/local-only-reconcile-activation-boundary.test.js": "bootstrap-membership",
     "test/node/message-group-executor-activation-handler-boundary.test.js": "bootstrap-membership",
@@ -1269,6 +1270,7 @@
     "test/partition/group-retirement-epoch-decode.test.js": "storage-partition",
     "test/partition/group-retirement-provisioning-mark.test.js": "storage-partition",
     "test/partition/group-retirement-resume-claim.test.js": "storage-partition",
+    "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": "storage-partition",
     "test/partition/key-range-manager.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-budget-walk.test.js": "storage-partition",
     "test/partition/learner-promotion-count-check-inputs.test.js": "storage-partition",
@@ -1520,6 +1522,7 @@
     "test/query/result-stream.test.js": "query-sql",
     "test/query/retry-continuation-flow.test.js": "query-sql",
     "test/query/retry-idempotency.test.js": "query-sql",
+    "test/query/router-envelope-lost-write-answer.test.js": "query-sql",
     "test/query/runtime-access-policy-enforcement.test.js": "query-sql",
     "test/query/runtime-api-exports.test.js": "query-sql",
     "test/query/runtime-integration.test.js": "query-sql",
@@ -2377,10 +2380,14 @@
     "test/transport/node-registration-creates-endpoint.property.test.js": "transport-messaging",
     "test/transport/outbound-saturation-warn-rate-limit.test.js": "transport-messaging",
     "test/transport/owner-retry-budget.test.js": "transport-messaging",
+    "test/transport/router-envelope-pre-send-failure.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-3-handler-throw-symmetry.test.js": "transport-messaging",
     "test/transport/router-envelope-w-env-4-no-handler-frame.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js": "transport-messaging",
+    "test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js": "transport-messaging",
     "test/transport/router-server-manager.test.js": "transport-messaging",
     "test/transport/routing-correctness.property.test.js": "transport-messaging",
     "test/transport/rpc-client.test.js": "transport-messaging",
@@ -3045,10 +3052,8 @@
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/message-group/message-group-service-row-owner.js",
         "src/node/message-group-service-handler.js",
-        "src/node/replica-handler-runtime-methods.js",
         "src/node/replica-state-machine-serialization.js",
-        "src/node/replica-transport-handler-identity.js",
-        "src/node/runtime-service-handler.js"
+        "src/node/replica-transport-handler-identity.js"
       ],
       "directories": [
         "src/bootstrap",
@@ -9195,7 +9200,8 @@
     },
     "test/node/runtime-service-handler.test.js": {
       "files": [
-        "src/node/runtime-service-handler.js"
+        "src/node/runtime-service-handler.js",
+        "src/transport/transport-semantic-outcome.js"
       ],
       "env": [
         "NODE_ENV"
@@ -9383,6 +9389,17 @@
         "src/partition/managed-merge-workflow.js",
         "src/partition/managed-split-workflow.js",
         "src/partition/partition-constants.js"
+      ]
+    },
+    "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js": {
+      "files": [
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ]
     },
     "test/partition/learner-promotion-count-check-inputs.test.js": {
@@ -11035,6 +11052,12 @@
         "src/query/distributed/exchange-manager.js",
         "src/query/execution-context.js",
         "src/query/lineage-tracker.js"
+      ]
+    },
+    "test/query/router-envelope-lost-write-answer.test.js": {
+      "files": [
+        "src/partition/partition-write-kernel.js",
+        "src/transport/transport-error-codes.js"
       ]
     },
     "test/query/runtime-access-policy-enforcement.test.js": {
@@ -12795,11 +12818,6 @@
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
         "src/storage/data-directory-process-owner.js"
-      ]
-    },
-    "test/raft/raft-rs-peer-delivery-transport-outcome.test.js": {
-      "files": [
-        "src/transport/message-router-outbound-queue-admission.js"
       ]
     },
     "test/raft/snapshot-compaction-catchup-integration.test.js": {
@@ -17540,7 +17558,6 @@
     "test/transport/message-router-cdc-outcome-roundtrip.test.js": {
       "files": [
         "src/cdc/cdc-delivery-outcome.js",
-        "src/transport/message-router-outbound-queue-admission.js",
         "src/transport/message-router-shared-vocabulary.js",
         "src/transport/transport-semantic-outcome.js"
       ]
@@ -17570,7 +17587,6 @@
     },
     "test/transport/message-router-query-transport-failure-shape.test.js": {
       "files": [
-        "src/transport/message-router-shared-vocabulary.js",
         "src/transport/transport-error-codes.js"
       ]
     },
@@ -17606,17 +17622,27 @@
         "test/test-helpers/endpoint-incarnation-fixture.js"
       ]
     },
+    "test/transport/router-envelope-pre-send-failure.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
+      ]
+    },
     "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js": {
       "files": [
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/control-plane/control-plane-constants.js",
-        "src/message-group/message-group-service-runtime-support.js",
         "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": {
       "files": [
+        "src/partition/partition-service-merge-replication-methods.js",
         "src/transport/transport-error-codes.js"
+      ]
+    },
+    "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js": {
+      "files": [
+        "src/transport/transport-semantic-outcome.js"
       ]
     },
     "test/transport/routing-correctness.property.test.js": {
@@ -17629,9 +17655,9 @@
         "src/logging/wait-bound-spent.js"
       ]
     },
-    "test/transport/transport-outcome-forwarding-hop.test.js": {
+    "test/transport/transport-semantic-outcome.test.js": {
       "files": [
-        "src/message-group/message-group-service-runtime-support.js"
+        "src/rebalancer/replica-operation-constants.js"
       ]
     },
     "test/utils/canonical-json-data.test.js": {

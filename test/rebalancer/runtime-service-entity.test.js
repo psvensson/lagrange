@@ -8,6 +8,7 @@
  * Requirements: 3.2, 4.1, 4.2, 4.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -107,7 +108,7 @@ function createRebalancer(options = {}) {
     },
     messageRouter: {
       getConnectionState: () => 'connected',
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

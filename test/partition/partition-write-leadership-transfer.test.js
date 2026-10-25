@@ -15,6 +15,7 @@
 // message type read from the binding's own num_to_msg_type match arm), to a
 // voter cut off from the group so that it can only abort.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -116,7 +117,7 @@ async function withTransferRunning(partitionId, body) {
       {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
     await owners.release(partitionId);
     network.deliver = (address, ...rest) => (address === transfereeAddress ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       deliver.call(network, address, ...rest));
     assert.equal((await insert(leader, 'row-0', 'setup')).success, true,
       'setup: the group serves a write');

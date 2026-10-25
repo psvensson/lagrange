@@ -140,7 +140,7 @@ function selectEnable(host, request, outer) {
 
 function expireAfterActualAnswer(host, response) {
   const selected = host.selected;
-  selected.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+  selected.answer = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
   selected.after = readPartitionWriteOrigin(selected.db);
   selected.settledAtMs = host.originalClock.now();
   selected.admissionAfterEnable = participantReleaseAdmissionOf(selected.service);
@@ -160,7 +160,7 @@ function deliverParticipant(host, router, original, args) {
   const operation = Reflect.apply(original, router, args);
   return Promise.resolve(operation).then((response) => {
     observe(host, () => {
-      record.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+      record.answer = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
       record.settled = true;
       if (outer !== null) expireAfterActualAnswer(host, response);
     });

@@ -4,6 +4,7 @@
  * Requirements: 2.1, 2.3, 2.4, 10.1, 10.3, 10.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -22,14 +23,13 @@ function createMockMessageRouter() {
       const partitionId = parts[2];
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: data.length || 1,
-        };
+        });
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 }

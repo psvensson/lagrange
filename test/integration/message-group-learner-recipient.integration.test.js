@@ -53,10 +53,10 @@ test('registered message-group recipient carries historical evidence to its work
       const fx = await receiverFixture(t); const request = payload(fx.f, fx.replicaId);
       const wrongGroup = {...request, entityId: 'other', membershipQuery:
       {...request.membershipQuery, groupId: 'other'}};
-      assert.equal((await fx.deliver(wrongGroup)).membership.reason, 'learner-action-invalid');
+      assert.equal((await fx.deliver(wrongGroup)).answer.membership.reason, 'learner-action-invalid');
       const wrongAction = {...request, membershipQuery: {...request.membershipQuery,
         action: {...request.membershipQuery.action, operationId: 'other-operation'}}};
-      assert.equal((await fx.deliver(wrongAction)).membership.reason, 'learner-action-mismatch');
+      assert.equal((await fx.deliver(wrongAction)).answer.membership.reason, 'learner-action-mismatch');
       assert.equal((await record(fx, fx.f.request, {nodeId: SUCCESSOR, replicaId: 'missing'})).outcome,
         'unavailable');
     });
@@ -109,9 +109,9 @@ test('registered message-group recipient carries historical evidence to its work
       const create = await fx.deliver({type: TYPE.CREATE_REPLICA, replicaId: TARGET,
         operationId: fx.f.request.operationId, entityId: GROUP,
         entityType: SERVICE_TYPE.MESSAGE_GROUP});
-      assert.equal(create.reason, 'message_group_membership_change_unsupported');
+      assert.equal(create.answer.reason, 'message_group_membership_change_unsupported');
       const read = payload(fx.f, fx.replicaId); read.membershipQuery.purpose = PURPOSE.BOOTSTRAP;
-      assert.equal((await fx.deliver(read)).membership.reason, 'learner-action-invalid');
+      assert.equal((await fx.deliver(read)).answer.membership.reason, 'learner-action-invalid');
       assert.equal(fx.physical(), 0);
     });
   });

@@ -1,15 +1,16 @@
-// The one fixture of the Q6 router-envelope witnesses (W-ENV-1..4): real
+// The one fixture of the Q6 router-envelope witnesses (W-ENV-1..8): real
 // MessageRouter instances, identified over real WebSocket connections, and the
-// owner classification of what a delivery caller receives. Nothing here fakes
-// a router or restates an owner answer; handlers are registered on the real
-// routers and their replies cross the real wire.
+// delivery envelope a caller receives ({transport, answer}). Nothing here
+// fakes a router or restates an owner answer; handlers are registered on the
+// real routers and their replies cross the real wire. A forwarding hop answers
+// through the transport owner's one forwarded-answer rule.
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ENTITY_TYPE} from '../../src/constants/addresses.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
-  classifyTransportDeliveryOutcome,
+  forwardedDeliveryAnswer,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {managedSleep} from '../../src/test-helpers/managed-timers.js';
@@ -19,17 +20,32 @@ const HOST = '127.0.0.1';
 const SETTLE_POLL_MS = 5;
 const SETTLE_POLLS = 2000;
 
-// The transport facts a caller decides on: the owner metadata plus the
-// acknowledgement the owner computes beside it.
+// The transport facts a caller decides on, with one delivery-state field.
 const TRANSPORT_FACT_FIELDS = Object.freeze([
-  'acknowledged',
   ...TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
 ]);
 
+// The transport facts of a delivery, without the per-delivery identity.
 function transportFactsOf(delivery) {
-  const outcome = classifyTransportDeliveryOutcome(delivery);
   return Object.fromEntries(TRANSPORT_FACT_FIELDS.map((field) =>
-    [field, outcome[field]]));
+    [field, delivery.transport[field]]));
+}
+
+// The router's identity of the delivery and the transport error text.
+function transportIdentityOf(delivery) {
+  const {messageId, correlationId, error} = delivery.transport;
+  return {messageId, correlationId, error};
+}
+
+function answerOf(delivery) {
+  return delivery.answer;
+}
+
+// A forwarding handler on `router`: it delivers the inner message to the
+// onward address and answers with the owner's forwarded answer.
+function forwardingHandler(router) {
+  return async (envelope) => forwardedDeliveryAnswer(await router.deliver(
+    envelope.payload.forwardTo, envelope.payload.inner));
 }
 
 function serviceAddress(nodeId, entity) {
@@ -79,8 +95,11 @@ async function settleUntil(t, condition, label) {
 }
 
 export {
+  answerOf,
   createRouterEnvelopeFixture,
+  forwardingHandler,
   serviceAddress,
   settleUntil,
   transportFactsOf,
+  transportIdentityOf,
 };

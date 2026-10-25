@@ -1,3 +1,4 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningPublicationActivation} from './node-joining-publication-activation.js';
 import {
@@ -36,7 +37,6 @@ const {
   TABLES,
   TIME_MS,
   canonicalizeSystemTableRow,
-  classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
   extractJoinSchemaVersionFromRecord,
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -220,13 +220,13 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const nextSeenAddresses = new Set(seenAddresses);
     nextSeenAddresses.add(address);
     try {
-      const response = classifyTransportDeliveryOutcome(
-        await messageRouter.deliver(
-          address,
-          {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
-          {deliveryPriority: options.deliveryPriority},
-        ),
+      const deliveryEnvelope = await messageRouter.deliver(
+        address,
+        {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
+        {deliveryPriority: options.deliveryPriority},
       );
+      const transport = deliveryTransportOf(deliveryEnvelope);
+      const response = deliveryAnswerOf(deliveryEnvelope);
       if (
         response?.redirect ===
           JOIN_BACKFILL_QUERY.RESPONSE_TYPE.LEADER_REDIRECT &&
@@ -240,7 +240,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
           nextSeenAddresses,
         );
       }
-      if (isDeliveredTransportDeliveryOutcome(response) && response?.success) {
+      if (isDeliveredTransportDeliveryOutcome(transport) && response?.success) {
         return {
           success: true,
           rows: Array.isArray(response.rows) ? response.rows : [],
@@ -249,7 +249,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       return {
         success: false,
         rows: [],
-        error: response?.error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
+        error: (response ?? transport).error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
       };
     } catch (error) {
       return {success: false, rows: [], error: error.message};
