@@ -351,7 +351,11 @@ test(
             writeOperations: [],
           });
 
-          const recovered = recoveredCoordinator.getTransaction(sessionId);
+          if (recoveredCoordinator.getTransaction(sessionId) !== null) {
+            return false;
+          }
+          const recovered = recoveredCoordinator.getRecoveryObligation(
+            persisted.transactionId);
           if (!recovered) {
             return false;
           }
@@ -573,6 +577,11 @@ test(
               return false;
             }
           }
+          for (const row of transactionRows) {
+            if (coordinator.getRecoveryObligation(row.transaction_id) !== null) {
+              return false;
+            }
+          }
 
           const replayBySessionId = new Map(
             recovery.results.map((entry) => [entry.sessionId, entry]),
@@ -746,7 +755,8 @@ test(
           if (sweep.skipped || sweep.swept !== 1 || sweep.failed !== 0) {
             return false;
           }
-          if (coordinator.getTransaction(sessionId) !== null) {
+          if (coordinator.getTransaction(sessionId) !== null ||
+              coordinator.getRecoveryObligation(transactionId) !== null) {
             return false;
           }
 

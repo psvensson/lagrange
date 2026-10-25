@@ -38,6 +38,20 @@ const WORKFLOW_CLAIM_RESULT = Object.freeze({
 });
 
 /**
+ * How a workflow restored from a recovery row is registered. OWNER_KEY binds
+ * it to its owner key (unless a newer live owner holds that key); a
+ * WORKFLOW_ID_ONLY restore is retained by its workflow ID alone and never
+ * occupies the owner-key namespace, for an owner whose recovered obligations
+ * belong to its recovery path rather than to the key's live owner.
+ *
+ * @enum {string}
+ */
+const RECOVERED_WORKFLOW_BINDING = Object.freeze({
+  OWNER_KEY: 'owner_key',
+  WORKFLOW_ID_ONLY: 'workflow_id_only',
+});
+
+/**
  * Fallback owner identity prefix when a managed workflow coordinator is
  * constructed without an explicit `nodeId` (tests and single-node harnesses).
  *
@@ -143,6 +157,7 @@ export {
   WORKFLOW_ERROR_MSG,
   PARTICIPANT_ACK_RESULT,
   WORKFLOW_CLAIM_RESULT,
+  RECOVERED_WORKFLOW_BINDING,
   WORKFLOW_DEFAULT_NODE_ID,
   PROTOTYPE_CONSTRUCTOR_METHOD,
   PARTICIPANT_ACK_FIELD,

@@ -2,16 +2,16 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {DistributedTransactionCoordinator} from
   '../../src/query/distributed/distributed-transaction-coordinator.js';
-import {buildTransactionDecisionRecord} from
-  '../../src/query/distributed/distributed-transaction-decision.js';
 import {decisionBindingRefusalOf} from
   '../../src/partition/partition-participant-transaction-bytes.js';
 import {participantFailureOf} from
   '../../src/query/sql-query-engine-participant-wire.js';
 import {QUERY_OPERATION} from '../../src/query/query-constants.js';
+import {RECOVERY_PREPARE_EVIDENCE as evidence, discoverWithAuthority,
+  recoveryDecisionColumns, recoveryRowsOf} from
+  '../test-helpers/transaction-recovery-rows-fixture.js';
 
 const logger = {warn() {}, error() {}, debug() {}};
-const evidence = {preparedDigest: 'b'.repeat(64), prepareIndex: 3, prepareTerm: 1};
 const deferred = () => {
   let resolve;
   const promise = new Promise((done) => {
@@ -23,35 +23,16 @@ const ticks = async () => {
   for (let i = 0; i < 40; i += 1) await Promise.resolve();
 };
 
+// A COMMITTING row with its recorded decision; the participant projection
+// is stale (PREPARING, no retained evidence).
 function recoveryRows(transactionId, sessionId, decision = 'COMMIT') {
-  const record = buildTransactionDecisionRecord({transactionId,
-    participants: new Map([['p1', {partitionId: 'p1', ...evidence}]])}, decision);
-  return {
-    transactions: [{transaction_id: transactionId, session_id: sessionId,
-      status: 'COMMITTING', transaction_epoch: 7, timeout_deadline: 1,
-      transaction_mode: 'EXPLICIT', participant_set_state: 'FROZEN',
-      participant_set_text: JSON.stringify([[`${transactionId}:p1`, 'p1']]),
-      commit_mode: 'TWO_PHASE_COMMIT', frozen_participant_count: 1,
-      created_at: 1, updated_at: 2, decision: record.decision,
-      decision_text: record.decisionText, decision_digest: record.decisionDigest}],
-    participants: [{transaction_id: transactionId,
-      participant_id: `${transactionId}:p1`, partition_id: 'p1',
-      status: 'PREPARING', prepared_digest: null, prepare_index: null,
-      prepare_term: null, created_at: 1, updated_at: 1}],
-  };
+  return recoveryRowsOf({transactionId, sessionId, participantStatus: 'PREPARING',
+    prepared: false, overrides: {status: 'COMMITTING',
+      ...recoveryDecisionColumns(transactionId, ['p1'], decision)}});
 }
 
 // The discovery projection and actual retained owner row are distinct inputs.
-function restoreRecorded(coordinator, rows, authority = rows) {
-  const durable = structuredClone(authority);
-  coordinator.readTransactionRecoveryState = async (id) => {
-    const transaction = durable.transactions.find((row) => row.transaction_id === id);
-    return transaction ? {state: 'available', transaction,
-      participants: durable.participants.filter((row) => row.transaction_id === id)} :
-      {state: 'missing'};
-  };
-  return coordinator.recoverFromSystemTables(rows);
-}
+const restoreRecorded = discoverWithAuthority;
 
 test('TX1 Q1: recovery consumes the immutable COMMIT binding when the ' +
   'participant projection is stale', async () => {
@@ -230,7 +211,8 @@ test('TX1 Q1: malformed authoritative decision remains held without replacing a 
     const replay = await coordinator.resumeRecoveredTransactions();
     assert.equal(replay.resumed, 0);
     assert.equal(replay.results[0].decisionReadState, 'invalid');
-    assert.equal(coordinator.recoveredTransactionIds.has(rows.transactions[0].transaction_id), true);
+    assert.equal(coordinator.recoveredTransactionIds.has(
+      rows.transactions[0].transaction_id), true);
     assert.equal(coordinator.getTransaction('occupied').transactionId,
       current.transactionId);
     assert.equal(coordinator.workflowCoordinator.workflowsById.size, 2);
@@ -246,7 +228,8 @@ test('TX1 Q1: inconsistent authoritative set count cannot complete a nonempty de
     const replay = await coordinator.resumeRecoveredTransactions();
     assert.equal(replay.resumed, 0);
     assert.equal(replay.results[0].decisionReadState, 'invalid');
-    assert.equal(coordinator.recoveredTransactionIds.has(rows.transactions[0].transaction_id), true);
+    assert.equal(coordinator.recoveredTransactionIds.has(
+      rows.transactions[0].transaction_id), true);
   });
 
 test('TX1 Q1: a later authoritative decision cannot complete an empty registry',
@@ -261,7 +244,8 @@ test('TX1 Q1: a later authoritative decision cannot complete an empty registry',
     coordinator.recoverFromSystemTables(rows);
     const replay = await coordinator.resumeRecoveredTransactions();
     assert.equal(replay.failed, 1);
-    assert.equal(coordinator.recoveredTransactionIds.has(rows.transactions[0].transaction_id), true);
+    assert.equal(coordinator.recoveredTransactionIds.has(
+      rows.transactions[0].transaction_id), true);
   });
 
 test('TX1 Q3: overlapping COMMIT waits for the durable PREPARED acknowledgement',
@@ -335,21 +319,26 @@ test('TX1 Q2/Q5: a held read delays recovery and a late old statement is refused
       'a fresh request can start after the old block ends');
   });
 
-test('TX1 Q5: an expired read cannot answer with a recovery COMMIT result',
-  async () => {
-    let commits = 0;
-    const coordinator = new DistributedTransactionCoordinator({logger,
-      now: () => 100, commitParticipant: async () => {
-        commits += 1;
-      }});
-    const rows = recoveryRows('b'.repeat(32), 'expired-read');
-    coordinator.recoverFromSystemTables(rows);
-    const result = await coordinator.executeReadStatement('expired-read',
-      rows.transactions[0].transaction_id, async () => ({success: true}));
-    assert.equal(result.success, false);
-    assert.equal(result.errorCode, 'TIMEOUT');
-    assert.equal(commits, 0, 'the retained decision belongs to recovery');
-  });
+test('TX1 Q5: a read naming a recovered obligation cannot answer with a ' +
+  'recovery COMMIT result', async () => {
+  let commits = 0;
+  let reads = 0;
+  const coordinator = new DistributedTransactionCoordinator({logger,
+    now: () => 100, commitParticipant: async () => {
+      commits += 1;
+    }});
+  const rows = recoveryRows('b'.repeat(32), 'expired-read');
+  coordinator.recoverFromSystemTables(rows);
+  const result = await coordinator.executeReadStatement('expired-read',
+    rows.transactions[0].transaction_id, async () => {
+      reads += 1; return {success: true};
+    });
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, 'NO_TRANSACTION',
+    'the session does not hold the recovered obligation');
+  assert.equal(reads, 0);
+  assert.equal(commits, 0, 'the retained decision belongs to recovery');
+});
 
 test('review Q2: resumed older debt waits behind the current owner read FIFO',
   async () => {
