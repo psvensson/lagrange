@@ -144,7 +144,9 @@ async function deliverApplication(f, address, envelope, options) {
   try {
     const result = await Reflect.apply(f.deliver, f.router, [address, envelope, ...options]);
     note(f, 'application-return', {sendOrdinal: started.ordinal, address,
-      envelope: structuredClone(envelope), result: structuredClone(result),
+      // The transport owner brands the live delivery result. Cloning it loses
+      // that identity and must not create an untrusted answer-shaped surrogate.
+      envelope: structuredClone(envelope), result,
       target: targetView(f), source: sourceView(f),
       sourceGroup: f.source?.db?.open ? {record: recordOf(f.source)} : null});
     return result;

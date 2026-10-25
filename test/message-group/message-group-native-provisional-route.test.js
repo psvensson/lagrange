@@ -15,7 +15,9 @@ import {readCommittedStatementOutcome} from '../../src/partition/partition-commi
 import {readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_STANDING} from
   '../../src/partition/partition-cdc-obligation-constants.js';
-import {isCommittedCdcOutcome, isProvisionalCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {isCommittedCdcDelivery, isProvisionalCdcDelivery, isProvisionalCdcOutcome} from
+  '../../src/cdc/cdc-delivery-outcome.js';
+import {deliveryAnswerOf} from '../../src/transport/transport-semantic-outcome.js';
 import {buildPartitionCdcPropagationSubscriber} from '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import {resolveOperationalMessageGroupSelection, resolveOperationalMessageGroupSelectionAsync,
   buildMessageGroupOwnerNotReadyError} from '../../src/bootstrap/shared/message-group-selection.js';
@@ -250,7 +252,7 @@ function requireReturn(f, replicaId, debt, predicate, label, afterOrdinal = -1) 
 }
 
 function assertNativeReceipt(event, debt) {
-  const [receipt] = event.result.cdcCommitted;
+  const [receipt] = deliveryAnswerOf(event.result).cdcCommitted;
   const peer = event.target.find((item) => item.replicaId === LEADER);
   const retained = peer.record.entries.find((entry) =>
     BigInt(entry.index) === BigInt(receipt.logIndex));
@@ -298,7 +300,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   const tenure = f.producerLeader.leadershipTenure;
   await tick(f);
 
-  const provisional = requireReturn(f, FOLLOWER, a, isProvisionalCdcOutcome, 'S2_PROVISIONAL_A');
+  const provisional = requireReturn(f, FOLLOWER, a, isProvisionalCdcDelivery, 'S2_PROVISIONAL_A');
   assert.equal(payloadOf(provisional.envelope).relayDepth, 1, 'F1 produced the genuine first relay');
   assertActualIngress(f, FIRST_HOP, a, 0);
   const localIngress = assertActualIngress(f, FOLLOWER, a, 1);
@@ -331,7 +333,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
 
   releaseB(f);
   await tick(f);
-  const hydrated = requireReturn(f, FOLLOWER, b, isProvisionalCdcOutcome, 'S2_PROVISIONAL_B');
+  const hydrated = requireReturn(f, FOLLOWER, b, isProvisionalCdcDelivery, 'S2_PROVISIONAL_B');
   assert.equal(payloadOf(hydrated.envelope).relayDepth, 1);
   assertActualIngress(f, FIRST_HOP, b, 0);
   assertActualIngress(f, FOLLOWER, b, 1);
@@ -360,10 +362,10 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   await tick(f);
   // An always-local-after-B mutation produces a concrete provisional result
   // here. It cannot pass by eventually timing out or merely touching the cache.
-  const forwarded = requireReturn(f, FOLLOWER, a, isCommittedCdcOutcome,
+  const forwarded = requireReturn(f, FOLLOWER, a, isCommittedCdcDelivery,
     'S2_F3_FOLLOWER_MUST_RELEASE_TO_NATIVE', hydrated.ordinal);
   assertNativeReceipt(forwarded, a);
-  const native = requireReturn(f, LEADER, a, isCommittedCdcOutcome, 'S2_NATIVE_AFTER_B');
+  const native = requireReturn(f, LEADER, a, isCommittedCdcDelivery, 'S2_NATIVE_AFTER_B');
   assert.equal(payloadOf(native.envelope).relayDepth, 2,
     'terminal native route consumes the remaining hop');
   assert.ok(native.ordinal > hydrated.ordinal);
@@ -380,7 +382,9 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   assert.equal(f.first.raft.readStatus().leaderId, null);
   assert.equal(f.follower.raft.readStatus().role, RAFT_ROLE.FOLLOWER);
   const ingress = f.events.filter((event) => event.kind === 'registered-handler' &&
-    event.replicaId === FOLLOWER);
+    event.replicaId === FOLLOWER && event.phase === 'measured' &&
+    event.status.lifecycleIncarnation === f.followerBefore.lifecycleIncarnation);
+  assert.ok(ingress.length > 0, 'measured follower incarnation handled the CDC route');
   for (const event of ingress) {
     assert.equal(event.status.role, RAFT_ROLE.FOLLOWER);
     assert.equal(event.status.leaderId, LEADER);
@@ -399,7 +403,7 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   'actual source CDC_DELIVERED application settles A and B only after native delivery');
   for (const debt of f.debts) {
     assertNativeReceipt(requireReturn(f, LEADER, debt,
-      isCommittedCdcOutcome, 'S2_NATIVE_RECEIPT_BEFORE_ACK'), debt);
+      isCommittedCdcDelivery, 'S2_NATIVE_RECEIPT_BEFORE_ACK'), debt);
   }
   for (const peer of sourceView(f)) {
     for (const obligation of peer.obligations) {

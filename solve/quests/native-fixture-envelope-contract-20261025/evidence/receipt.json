@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "canonical-native-transport-owner", "passed": false},
+    {"id": "delivery-answer-and-incarnation-owner", "passed": false},
+    {"id": "admitted-wasm-native-completion", "passed": false},
+    {"id": "exact-source-lab-affected-cone", "passed": false},
+    {"id": "independent-review-and-applicable-gates", "passed": false}
+  ]
+}

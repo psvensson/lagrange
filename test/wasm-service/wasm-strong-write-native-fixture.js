@@ -14,11 +14,7 @@ import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_RS_MESSAGE_TYPE} from '../../src/raft/raft-rs-ingress-constants.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {encodeProposal} from '../../src/raft/raft-rs-proposal-codec.js';
-import {WasmServiceReplica, ENTRY_TYPE} from
-  '../../src/wasm-service/wasm-service-replica.js';
-import {encodeCommittedCommand} from
-  '../../src/wasm-service/wasm-service-committed-command-codec.js';
+import {WasmServiceReplica} from '../../src/wasm-service/wasm-service-replica.js';
 import {WRITE_CONSISTENCY_MODE} from
   '../../src/wasm-service/wasm-service-constants.js';
 import {createLoopbackTransport} from
@@ -164,13 +160,6 @@ function startWrite(f) {
   });
 }
 
-function proposalEntries(f, view) {
-  const command = encodeCommittedCommand({type: ENTRY_TYPE.KV_SET,
-    sessionId: f.request.sessionId, key: f.request.key, value: f.request.value});
-  const data = Buffer.from(encodeProposal(command)).toString('base64');
-  return view.durable.entries.filter((entry) => entry.data === data);
-}
-
 function evidence(t, f, stage) {
   const result = {stage, groupId: f.groupId, request: f.request,
     response: structuredClone(f.response), before: f.before, views: views(f),
@@ -184,4 +173,4 @@ function evidence(t, f, stage) {
   return result;
 }
 
-export {deliverScheduled, evidence, fixture, proposalEntries, startWrite};
+export {deliverScheduled, evidence, fixture, startWrite};
