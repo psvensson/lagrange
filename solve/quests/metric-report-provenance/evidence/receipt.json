@@ -1,0 +1,255 @@
+{
+  "schema": "test-receipt/1",
+  "status": "FAIL",
+  "receipts": [
+    {
+      "id": "fresh-graph-stale-report-discriminator",
+      "passed": true
+    },
+    {
+      "id": "canonical-provenance-and-selective-refresh",
+      "passed": true
+    },
+    {
+      "id": "producer-seals-and-negative-matrix",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": false
+    }
+  ],
+  "authorEvidence": {
+    "base": "ddc34a6a6272a94415b989d33ad79968426aac71",
+    "discriminator": {
+      "producer": "actual check-complexity.js",
+      "consumer": "actual collectLiveInputs after canonical import-graph refresh",
+      "before": 0,
+      "staleAfterFreshGraph": 0,
+      "actuallyMeasured": 1,
+      "sourceMtimeRestored": true
+    },
+    "census": {
+      "producers": [
+        "check-complexity.js",
+        "check-cognitive-complexity.js",
+        "check-circular-dependencies.js",
+        "check-duplication.js"
+      ],
+      "reports": [
+        "complexity",
+        "cognitive",
+        "cycles",
+        "duplicationSource",
+        "duplicationTest"
+      ],
+      "consumers": [
+        "generate-global-owner-debt-inventory.js",
+        "checks/write-complexity-ratchet-closure-oracle.js"
+      ]
+    },
+    "history": [
+      {
+        "commit": "f9f9fb797d4662223641b360346822f60d3c1fe8",
+        "finding": "PG-wire verification: fresh import graph admitted prior jscpd-test report at 316d18ac3; cached statistics differed by one line and fourteen tokens."
+      },
+      {
+        "commit": "b8a51c1e8cbaff17c626895ef4165870b2fd643f",
+        "finding": "Shared node_modules jscpd cache broke worktree determinism; cache remains disabled."
+      },
+      {
+        "commit": "954caf5543025997daf5485fb0790ff2041856b4",
+        "finding": "A completed measurement with ratchet exit 1 must remain usable; current provenance distinguishes it from a crash without valid output."
+      }
+    ],
+    "primaryResearch": [
+      {
+        "url": "https://bazel.build/remote/caching",
+        "application": "Bind declared action inputs, tool implementation and output contents; do not use report timestamps."
+      },
+      {
+        "url": "https://docs.gradle.org/current/userguide/build_cache_concepts.html",
+        "application": "Include implementation and configuration identity; retain relocatable relative path identity and matching-input cache hits."
+      }
+    ],
+    "contract": {
+      "owner": "scripts/metric-report-provenance.js",
+      "inputs": "All bytes under measured target roots plus scripts and root configuration; only canonical generated graph/test-classification outputs excluded. Installed package closure content and dependency resolution, Node executable/version/options/environment, scope, report path and regeneration command are bound.",
+      "completion": "Capture before measurement and compare again before atomic report publication. Report content digest excludes only its own provenance and nondeterministic jscpd detectionDate.",
+      "reuse": "Unsealed, damaged, scoped, stale or incompatible reports cannot satisfy a full consumer. Inventory refreshes each stale report only and verifies the produced seal, including exit 1. Oracle validates the same owner result.",
+      "selection": "Metric selection and thresholds remain with existing tools; no duplicate analyzer, protocol gate, baseline increase, or compatibility branch.",
+      "inventory": "Committed inventory identities hash only validated semantic payloads; local cache provenance is deliberately excluded so installed-runtime differences cannot make deterministic inventories host-dependent. Source changes and metric configuration payload changes still change identity."
+    },
+    "limitations": [
+      "Independent review pending. Broad metric refresh and real-repository matching-input fast path passed; normal-hook checkpoint is being prepared.",
+      "Source/tool/configuration must remain quiescent during measurement; pre/post byte snapshots detect observed mutation, not an intervening mutate-and-restore cycle.",
+      "Conservative script/root-configuration hashing may refresh more reports than a minimal dependency graph would. Matching inputs avoid checker execution.",
+      "Author focused evidence is not Quest landing, full-corpus acceptance or publication."
+    ],
+    "logs": [
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/red-confirmed.log",
+        "sha256": "df9193e2baeb02565c1c6d766bb5e89524825b38a185c8deea364a5cfe9fbef7",
+        "bytes": 151
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/inputs.log",
+        "sha256": "2818cb5ad7b69a1e6419991af6dc7a492bffcfe1630bd3c426d92cb905dc7ff2",
+        "bytes": 1110
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/provenance.log",
+        "sha256": "182e6af4986a7f62760587f8e358bca3cbe9a509be021dc11ef75c2aaa68416c",
+        "bytes": 7537
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/inventory-existing.log",
+        "sha256": "97fcb5093e4e35eed643f5c6a58ce4b2e74c9c56077b8adcabbe5002a1a93c9d",
+        "bytes": 1505
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/ratchet-existing.log",
+        "sha256": "586acb7df8c81229f08386209caf0bfff9d21560448f022312df97edadedb6bd",
+        "bytes": 848
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/complexity-scoped.log",
+        "sha256": "b1aa9e2149998fd9ef2c1918abe2d0df9d5a973bc4fe2d987a0f38bb8cc48578",
+        "bytes": 146
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/cognitive-scoped.log",
+        "sha256": "d7bc7bbf6c487764877195187cba79a9e04818d770753b224777ad4016d5ea62",
+        "bytes": 176
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/eslint.log",
+        "sha256": "b1f9deb49eb39d2abb389b2bb16b1e81146e02eb2e5c73fa155e96a7d59e0279",
+        "bytes": 278
+      }
+    ],
+    "focusedProof": {
+      "provenanceAssertions": 30,
+      "inputIdentityAssertions": 14,
+      "existingInventoryAssertions": 19,
+      "existingRatchetCases": 4,
+      "newOwnerScopedCyclomatic": 0,
+      "newOwnerScopedCognitive": 0
+    },
+    "staticChecks": [
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-0.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-1.log",
+        "sha256": "279f2db212c0b5889b95ab2ce17c5391b8bb90a2e4fe134ecb781a1731d4ed76",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-2.log",
+        "sha256": "d7c7c383fd4edf21fc8e46e6631999262d6657bb55fdc038fe586eb9d0476387",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-3.log",
+        "sha256": "818e9f3f3dcb4e736117fd7a81a13c46ed77f804b51472820e5c61b89d6673c1",
+        "exitCode": 0
+      },
+      {
+        "path": "/tmp/codex-rs-raft-20261025/metric-provenance/final-static-4.log",
+        "sha256": "417d12dfe287803740c4204fdab3557ceffbcfeffe20d8ebcc2eae9131446bec",
+        "exitCode": 0
+      }
+    ],
+    "broadEvidence": {
+      "normalGeneratorExitCode": 0,
+      "complexityCount": 1765,
+      "complexityBaseline": 1755,
+      "cognitiveCount": 150,
+      "cognitiveBaseline": 150,
+      "cycleGroups": 0,
+      "duplicationSource": [
+        44,
+        1383
+      ],
+      "duplicationTest": [
+        654,
+        24609
+      ],
+      "fastPath": {
+        "exitCode": 0,
+        "elapsedSeconds": 3.132935228990391,
+        "before": {
+          "test-output/analysis/complexity-src-test.json": {
+            "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+            "inode": 224434265,
+            "bytes": 418731
+          },
+          "test-output/analysis/cognitive-complexity-src-scripts.json": {
+            "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+            "inode": 224434266,
+            "bytes": 36361
+          },
+          "test-output/analysis/madge-circular-src-scripts-test.json": {
+            "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+            "inode": 224434267,
+            "bytes": 1776
+          },
+          "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+            "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+            "inode": 224535717,
+            "bytes": 908548
+          },
+          "test-output/analysis/jscpd-test/jscpd-report.json": {
+            "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+            "inode": 224535719,
+            "bytes": 2499088
+          },
+          "solve/changes/global-owner-debt-inventory/inventory.json": {
+            "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+            "inode": 224408943,
+            "bytes": 132764
+          }
+        },
+        "after": {
+          "test-output/analysis/complexity-src-test.json": {
+            "sha256": "825a3eb41c6193391746a471820be75bde3edbb35c4efe95ca4111ff81d822c0",
+            "inode": 224434265,
+            "bytes": 418731
+          },
+          "test-output/analysis/cognitive-complexity-src-scripts.json": {
+            "sha256": "d9b1d84d24670c386890ee156f52a0237406891e5a2d3965d8027b7f17331f5e",
+            "inode": 224434266,
+            "bytes": 36361
+          },
+          "test-output/analysis/madge-circular-src-scripts-test.json": {
+            "sha256": "1d242c1293ada8ba52ab264cfc32b0dacb82f056ee781e219a66d8b92b9f0da8",
+            "inode": 224434267,
+            "bytes": 1776
+          },
+          "test-output/analysis/jscpd-src-scripts/jscpd-report.json": {
+            "sha256": "a2f23e5dc5d722543299e10cd343f98cd89ac73c6982e19623fa8d33f4527aac",
+            "inode": 224535717,
+            "bytes": 908548
+          },
+          "test-output/analysis/jscpd-test/jscpd-report.json": {
+            "sha256": "e5cc830fb4bd576958d80dcd36651743179c71a1ce17c74c23995f33876202c3",
+            "inode": 224535719,
+            "bytes": 2499088
+          },
+          "solve/changes/global-owner-debt-inventory/inventory.json": {
+            "sha256": "572c8276b5fa22ae38fc1de0a19a1ef2e4e099d2ed6727c426594d5ff5c88881",
+            "inode": 224408943,
+            "bytes": 132764
+          }
+        },
+        "reportsUnchanged": true,
+        "inventoryBytesUnchanged": true
+      },
+      "sourceDigest": "084f0f7f63fc82d945a4a9f8690867ee36544600ea24cd7ad20cdabbc97d5323",
+      "proofCeiling": "Inherited whole-repository complexity ratchet remains red. Full-corpus, independent approval, Quest landing and publication remain unexecuted."
+    }
+  }
+}

@@ -6,11 +6,13 @@
  * --strict mode: fails if any cycle group is present.
  */
 
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import madge from 'madge';
 
 import {
   printRatchetTighteningHint,
-  writeJsonReport,
 } from './metric-check-helpers.js';
 
 const LOCAL_STR_CIRCULAR_DEPENDENCY_VIOLATIONS = 'Circular dependency violations:\n';
@@ -21,18 +23,18 @@ const LOCAL_STR_SCRIPTS_CHECK_CIRCULAR_DEPENDENCIES_JS = 'scripts/check-circular
 const BASELINE_CYCLE_GROUP_COUNT = 0;
 const STRICT_FLAG = '--strict';
 const FILE_EXTENSIONS = ['js'];
-const SOURCE_DIRECTORIES = ['src', 'scripts', 'test'];
-const REPORT_RELATIVE_PATH =
-  'test-output/analysis/madge-circular-src-scripts-test.json';
+const SOURCE_DIRECTORIES = METRIC_REPORTS.cycles.targets;
+const REPORT_RELATIVE_PATH = METRIC_REPORTS.cycles.reportPath;
 const strict = process.argv.includes(STRICT_FLAG);
 
+const measurement = beginMetricMeasurement('cycles');
 const result = await madge(SOURCE_DIRECTORIES, {
   fileExtensions: FILE_EXTENSIONS,
 });
 const cycleGroups = result.circular();
 const cycleGroupCount = cycleGroups.length;
 
-writeJsonReport(REPORT_RELATIVE_PATH, {cycleGroups});
+finishMetricMeasurement(measurement, {cycleGroups});
 
 if (strict) {
   if (cycleGroupCount > 0) {
