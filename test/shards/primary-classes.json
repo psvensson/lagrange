@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 2140,
+    "unit": 2141,
     "integration": 108,
     "bootstrap": 215,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2470,
-  "digest": "fnv1a32-b1d7b72c",
+  "censusSize": 2471,
+  "digest": "fnv1a32-7b3b30fe",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
     "test/address/address-malformed-rejection.property.test.js": "unit",
@@ -1579,6 +1579,7 @@
     "test/query/write-tracking-recursion-guard.test.js": "unit",
     "test/raft/authoritative-row-mutation-helper.test.js": "unit",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "unit",
+    "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js": "unit",
     "test/raft/bulk-transfer-socket-adapter.test.js": "unit",
     "test/raft/leader-activation-gate.test.js": "unit",
     "test/raft/leader-activation-scheduler.test.js": "unit",

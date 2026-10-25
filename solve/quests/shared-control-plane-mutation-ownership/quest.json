@@ -1,0 +1,48 @@
+{
+  "schema": "solve-quest/2",
+  "id": "shared-control-plane-mutation-ownership",
+  "class": "fix",
+  "statement": "Control-plane mutations have one evidence-based outcome owner and one supported durable execution path per admitted capability: unconfirmed answers retain the original write and cannot publish row effect, visibility or progress; canonical producers and every affected consumer preserve exact row predicates, named replay with unknown count, original-seed custody and later confirmed completion without legacy result or SQL fallback branches.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/shared-control-plane-mutation-ownership/evidence/receipt.json",
+      "requiredReceipts": [
+        "gateway-retains-unconfirmed-intent-then-completes",
+        "canonical-producer-and-outcome-truth-table",
+        "named-write-settlement-retains-custody",
+        "provisional-transaction-count-is-not-committed-application",
+        "exact-row-consumers-and-unknown-count-replay",
+        "original-seed-canonical-mutation-custody",
+        "join-publication-retains-work-without-alternate-sql",
+        "supported-original-seed-startup-write-read"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-outcome-owner",
+      "statement": "Extend the existing CONTROL_PLANE_MUTATION_OUTCOME and classifier owner with explicit UNCONFIRMED. Missing, malformed or uncertain application evidence cannot become REJECTED, NO_OP, OWNER_NOT_READY or APPLIED by default. Preserve the original cause and write identity; no parallel classifier."
+    },
+    {
+      "id": "producer-and-consumer-migration",
+      "statement": "Normalize actual physical result facts at the producing boundary and migrate all current effect consumers together. Remove downstream changes/affectedRows selection, success-only interpretation and boolean-or-receipt ambiguity. Named settled replay remains applied with an unknown count; exact-row owners retain their exact predicates and authoritative readbacks."
+    },
+    {
+      "id": "canonical-capabilities",
+      "statement": "Remove missing-CDC raw SQL, bootstrap post-Raft local SQL and join publication alternate implementations only with their supported capability wired to its canonical owner or typed readiness refusal retaining the work. Preserve the original LIVE_ISSUER preparation, UNUSED to SUBMITTED to TRANSFERRED custody, original registration value and public admission gate."
+    },
+    {
+      "id": "proof",
+      "statement": "Measure the predecessor through the real gateway and real authoritative-row consumer, with the producer answer controlled and the subsequent true completion engaged. Runtime execution uses the authorized lab route. Full closure also requires producer/replay, exact-row, seed custody, join and supported startup receipts on one source candidate; the small discriminator alone cannot close this interaction."
+    },
+    {
+      "id": "preserved-owners",
+      "statement": "Preserve Q6 transport/application separation, D2 handler and cleanup custody, original entry identity, terminal fencing, pressure admission, retry bounds and visibility distinctions. No new fallback, compatibility window, arbitrary retention policy or weaker hook/test/baseline."
+    },
+    {
+      "id": "review",
+      "statement": "One source author owns this coupled interaction. Review the concrete contract before production edits; seal only from an actually measured red receipt. Independent source review newer than the last attempt and exact lab proof are required before composition. Historical sealed records and receipts remain unchanged."
+    }
+  ]
+}

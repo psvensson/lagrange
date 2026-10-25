@@ -19,16 +19,16 @@
     "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 205,
-    "storage-raft": 146,
+    "storage-raft": 147,
     "test-infrastructure": 148,
     "transactions": 16,
     "transport-messaging": 110,
     "wasm-toolchain": 74
   },
-  "censusSize": 2470,
-  "digest": "fnv1a32-977bb4e2",
+  "censusSize": 2471,
+  "digest": "fnv1a32-ce559ee1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-64cb43ab",
+  "observationDigest": "fnv1a32-4292260b",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1598,6 +1598,7 @@
     "test/query/write-tracking-recursion-guard.test.js": "query-sql",
     "test/raft/authoritative-row-mutation-helper.test.js": "storage-raft",
     "test/raft/authoritative-row-mutation-outcome-classifier.test.js": "storage-raft",
+    "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js": "storage-raft",
     "test/raft/bulk-transfer-socket-adapter.test.js": "storage-raft",
     "test/raft/leader-activation-gate.test.js": "storage-raft",
     "test/raft/leader-activation-scheduler.test.js": "storage-raft",
@@ -11615,6 +11616,12 @@
         "test/test-helpers/controllable-consensus-port.js",
         "test/test-helpers/participant-protocol-double.js",
         "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
+    "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js": {
+      "files": [
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/raft/authoritative-row-mutation-helper.js"
       ]
     },
     "test/raft/leadership-transfer-single-path.test.js": {

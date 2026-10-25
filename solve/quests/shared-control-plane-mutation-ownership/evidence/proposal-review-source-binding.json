@@ -1,0 +1,249 @@
+{
+  "schema": "independent-mutation-proposal-source-review/1",
+  "reviewer": "subagent:/root/metric_review",
+  "baseCommit": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "actualHead": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "authorBindingSha256": "e08fac0a815f14ad2e9fd9b2c255c8047fb3a62f6c55817be8238f8736d2c1e2",
+  "proposalFiles": [
+    {
+      "path": "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js",
+      "bytes": 4660,
+      "sha256": "b7dcaefab016e631aabb0c53eee48ef88cb5302565b40b539875bdfc58159eb9",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "scripts/quest-evidence/shared-control-plane-mutation-predecessor.js",
+      "bytes": 991,
+      "sha256": "cfacea485c4f3ea398c7f75468ea22ca59e8cf862e195edfc3489d325b094be9",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/quest.json",
+      "bytes": 3664,
+      "sha256": "0b13fda982199163d44b1f93de346b003dcdf84c805f43680ad40a2337d6d810",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/DESIGN.md",
+      "bytes": 27155,
+      "sha256": "6b005c904ff76c1febe975778efaa78b211aadb40c5ef8527db537e2a44ceb7c",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/PROOF-PACKET.md",
+      "bytes": 4257,
+      "sha256": "c7c20f2b5941a942be203f842509d4a277e0d63ade08ba08f67806bb28bbabc0",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/OWNER-CENSUS.md",
+      "bytes": 29699,
+      "sha256": "b3fcdedd4c215d15d8b13247b4a6b8c2f6617854f9b01a63c7bcd75bbdd34f4f",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/evidence/predecessor-source-manifest.json",
+      "bytes": 3750,
+      "sha256": "707d52cbe331abaece46a0d222743227d3de3f75a2eb3a6e5f63ba77f672f96d",
+      "matchesAuthorBinding": true
+    },
+    {
+      "path": "solve/quests/shared-control-plane-mutation-ownership/evidence/current-interface-census.json",
+      "bytes": 27105,
+      "sha256": "d01c3afd99fa2c5beb40d4c893208d4f1a925aa65cc1ea5ebfd6d942f5a06122",
+      "matchesAuthorBinding": true
+    }
+  ],
+  "predecessorFiles": [
+    {
+      "path": "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js",
+      "bytes": 4660,
+      "sha256": "b7dcaefab016e631aabb0c53eee48ef88cb5302565b40b539875bdfc58159eb9",
+      "matchesManifest": true,
+      "role": "new-proof-source"
+    },
+    {
+      "path": "scripts/quest-evidence/shared-control-plane-mutation-predecessor.js",
+      "bytes": 991,
+      "sha256": "cfacea485c4f3ea398c7f75468ea22ca59e8cf862e195edfc3489d325b094be9",
+      "matchesManifest": true,
+      "role": "new-proof-source"
+    },
+    {
+      "path": "scripts/quest-evidence/harness-runtime.js",
+      "bytes": 11526,
+      "sha256": "3db1f20d4975eea9f9c83251fa308460bdce468e19ccab76069dfcb0e1e22220",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-helper.js",
+      "bytes": 23790,
+      "sha256": "2471dcfd62da4147397352c5c928b07f3ef80f5aa56dd2de2f16d0a181a804dc",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-vocabulary.js",
+      "bytes": 6658,
+      "sha256": "089aa0817c880303ee235c804f4c950c4af693591918b6ee66cfe5007222fd5d",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway.js",
+      "bytes": 9379,
+      "sha256": "6343b65af66e4a188de807af4103ea844eecf969a2a92fbd839f3500100c322b",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+      "bytes": 14221,
+      "sha256": "e07d2b4c81da638dccb4a44fdf670a8cb7ffbcefa9aa09c597e3ee296c833acc",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+      "bytes": 13772,
+      "sha256": "4c7553da2e6b58f750c1f796c5ad0aff2b0c20a82309f98ca1ce8624f99c04de",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
+      "bytes": 17569,
+      "sha256": "7f7ce7949093d742450b344a4ac800b86cc42afca6dd49742433dbfdd57291fc",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-mutation-outcome-classifier.js",
+      "bytes": 11736,
+      "sha256": "079ceb4af4ba8d1c3498fff960d0112a2767b97bdf321a8f222ffa579f6eeac6",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-write-identity.js",
+      "bytes": 15849,
+      "sha256": "d8a79c43e47cc9d0c2e49398b6043c20414c67454b8b7ed1089e5b83459d36ee",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 580979,
+      "sha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
+      "matchesManifest": true,
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    }
+  ],
+  "additionalReadSource": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 3252,
+      "sha256": "640008279732be15c50b42bdfef1b5ec1893c6a31eaa851580c711de22ccc0bb",
+      "matchesBaseline": true
+    },
+    {
+      "path": "docs/steering/rules.md",
+      "bytes": 8726,
+      "sha256": "932d6db68293113c7798f97036293fd08a7d9f436e9bd60475f50058e9ba471c",
+      "matchesBaseline": true
+    },
+    {
+      "path": "docs/steering/router.md",
+      "bytes": 5633,
+      "sha256": "81737e24e7e62882e8feffe016d7b3c5f4cfa30cc9705e4b1164787c31c0ccfd",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome.js",
+      "bytes": 17364,
+      "sha256": "fe9e2fb424d61384a0eaefc08a437ad2dead4442a26bb121a2d19ae33f4c795d",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/partition/partition-write-kernel.js",
+      "bytes": 23994,
+      "sha256": "377a641a6f6caa15c38158eefa940ffe90c79e20f08b8bfa6b53a0f0ed297a44",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/partition/partition-participant-transaction-staging.js",
+      "bytes": 10616,
+      "sha256": "f3b06c97c1cabcc6f5c9cb4bbf3a2645ea123cde5b2a076cae5bdb15ca5f395e",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/query/application-database-result.js",
+      "bytes": 8908,
+      "sha256": "b3fefc89731907b4856eb0387cb75e041d7f387ead9e561b3322297e6983092a",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/runtime/pgwire-result-mapper.js",
+      "bytes": 7418,
+      "sha256": "2236c60a2d6f96ad57ced8e69aefbfb5edb0a11fd9b690f0772a881127865583",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/cdc/cdc-bootstrap-direct-sql.js",
+      "bytes": 6579,
+      "sha256": "8d12fa9592ef0ab479f4a386e0f38b92b987d385a84dc01a0dfe59ecb45c3e2a",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/cdc/cdc-routed-mutation-readiness.js",
+      "bytes": 27532,
+      "sha256": "237d9b99f9eca713d8684d3e674b2f94be461f6655a98056eb121baa673a056f",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/bootstrap/system-table-writer.js",
+      "bytes": 2643,
+      "sha256": "7219a56da49fe2b828a23a3f64906ff43a6bd469a6566ed596bb045c8d079642",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/bootstrap/seed-original-registration.js",
+      "bytes": 3081,
+      "sha256": "612e6eac26b45c79dc443c8d4962f69bc88c8c2384648356eabd9b9742e26600",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/owners/node-registration-incarnation-write.js",
+      "bytes": 12060,
+      "sha256": "e5f50c39ef82ba0b5a23fe8db2c1f9e605a3f37e2e05ee1afa93123f0697c465",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+      "bytes": 26593,
+      "sha256": "57169258450bf6dd3498a977981ba8d7160095076db828d35f3719464af2d4c6",
+      "matchesBaseline": true
+    },
+    {
+      "path": "scripts/run-test-files.js",
+      "bytes": 35018,
+      "sha256": "b00cb60ce9de2e1842715e22d4c809cfd30c1593e2094b6361030c3ef81fc374",
+      "matchesBaseline": true
+    }
+  ],
+  "runtimeExecution": "not-run",
+  "preservationVerdict": "approve",
+  "productionImplementationVerdict": "not-approved-by-this-review",
+  "gitStatusAtReview": "A  scripts/quest-evidence/shared-control-plane-mutation-predecessor.js\nA  solve/quests/shared-control-plane-mutation-ownership/DESIGN.md\nA  solve/quests/shared-control-plane-mutation-ownership/OWNER-CENSUS.md\nA  solve/quests/shared-control-plane-mutation-ownership/PROOF-PACKET.md\nA  solve/quests/shared-control-plane-mutation-ownership/evidence/current-interface-census.json\nA  solve/quests/shared-control-plane-mutation-ownership/evidence/predecessor-source-manifest.json\nA  solve/quests/shared-control-plane-mutation-ownership/log.ndjson\nA  solve/quests/shared-control-plane-mutation-ownership/quest.json\nA  test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js\n"
+}

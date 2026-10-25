@@ -1,0 +1,100 @@
+{
+  "schema": "mutation-predecessor-source/1",
+  "baseCommit": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "author": "subagent:/root/admin_review",
+  "runtimeExecution": "not-run",
+  "preservationCommit": null,
+  "files": [
+    {
+      "path": "test/raft/authoritative-row-mutation-unconfirmed-gateway.test.js",
+      "bytes": 4660,
+      "sha256": "b7dcaefab016e631aabb0c53eee48ef88cb5302565b40b539875bdfc58159eb9",
+      "role": "new-proof-source",
+      "matchesBaseline": false
+    },
+    {
+      "path": "scripts/quest-evidence/shared-control-plane-mutation-predecessor.js",
+      "bytes": 991,
+      "sha256": "cfacea485c4f3ea398c7f75468ea22ca59e8cf862e195edfc3489d325b094be9",
+      "role": "new-proof-source",
+      "matchesBaseline": false
+    },
+    {
+      "path": "scripts/quest-evidence/harness-runtime.js",
+      "bytes": 11526,
+      "sha256": "3db1f20d4975eea9f9c83251fa308460bdce468e19ccab76069dfcb0e1e22220",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-helper.js",
+      "bytes": 23790,
+      "sha256": "2471dcfd62da4147397352c5c928b07f3ef80f5aa56dd2de2f16d0a181a804dc",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-vocabulary.js",
+      "bytes": 6658,
+      "sha256": "089aa0817c880303ee235c804f4c950c4af693591918b6ee66cfe5007222fd5d",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway.js",
+      "bytes": 9379,
+      "sha256": "6343b65af66e4a188de807af4103ea844eecf969a2a92fbd839f3500100c322b",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-contracts.js",
+      "bytes": 14221,
+      "sha256": "e07d2b4c81da638dccb4a44fdf670a8cb7ffbcefa9aa09c597e3ee296c833acc",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+      "bytes": 13772,
+      "sha256": "4c7553da2e6b58f750c1f796c5ad0aff2b0c20a82309f98ca1ce8624f99c04de",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-request-coalescing.js",
+      "bytes": 17569,
+      "sha256": "7f7ce7949093d742450b344a4ac800b86cc42afca6dd49742433dbfdd57291fc",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-mutation-outcome-classifier.js",
+      "bytes": 11736,
+      "sha256": "079ceb4af4ba8d1c3498fff960d0112a2767b97bdf321a8f222ffa579f6eeac6",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "src/control-plane/control-plane-write-identity.js",
+      "bytes": 15849,
+      "sha256": "d8a79c43e47cc9d0c2e49398b6043c20414c67454b8b7ed1089e5b83459d36ee",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 580979,
+      "sha256": "8fb1a612db45cac0a61e281b41fd60da315f916b7aeb52046bcbe3e7b8d61ecd",
+      "role": "unchanged-predecessor-source",
+      "matchesBaseline": true
+    }
+  ],
+  "staticChecks": {
+    "eslint": "pass: both new executable files",
+    "literals": "pass: 1 governed file, 0 violations",
+    "deferredOutcomes": "pass: 1 governed file, 0 violations",
+    "ambientIntrinsics": "0 governed files; no coverage claimed",
+    "silentCatch": "0 governed files; no coverage claimed"
+  }
+}

@@ -1,0 +1,1078 @@
+{
+  "schema": "mutation-interface-text-census/1",
+  "baseCommit": "709dc2bebd4abdbec9a5d4fb2232c2621d7897f7",
+  "scope": "All src/**/*.js; literal method/property text matches, including forwarding wrappers; not an AST/dynamic call graph and not a completed semantic approval",
+  "counts": {
+    "gatewaySubmission": 59,
+    "systemTableMutation": 63,
+    "nestedMutationCount": 18,
+    "partitionCountRead": 18
+  },
+  "fileCount": 72,
+  "files": [
+    {
+      "path": "src/bootstrap/bootstrap-api-control-plane-methods.js",
+      "sha256": "920ac712bd25d6d323eeba231a48253bf35c9acb97f20291278a8dfe680bd38c",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 196
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/node-joining-cdc-subscription-and-backfill.js",
+      "sha256": "191805b39d20ebc9facf29a2d6105d8acfc745cb6509833d1fdebccfb30202b4",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 138
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/node-joining-delegate-bundles.js",
+      "sha256": "ff8526209196c98fa1d95c8aba9ed9000a173f1c77d84ac8005e245f19e7baa2",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 313
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/node-joining-owner-construction.js",
+      "sha256": "4e4ca518d9b82cf1808f95f4574a2b4470b1fbd377ce1414e816dbed138f2d9b",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 660
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/phases/create-message-group-phase.js",
+      "sha256": "d288d4572f0eea970e77b067bc8b3a44c1d5906429b08bc3e0a444f383ff91da",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 750
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/phases/query-system-state-phase.js",
+      "sha256": "f8f8d6a13c6193708d79a1a860e5a6ceb28c6581d8332d3babf9743c675fd800",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 667
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/phases/seed-registration-phase.js",
+      "sha256": "ece2807d5985810cfcc1057188fe7729ae55172c4474e348420b3d337c2925b3",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 179
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 333
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 341
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 408
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 423
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 466
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 594
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/seed-original-registration.js",
+      "sha256": "612e6eac26b45c79dc443c8d4962f69bc88c8c2384648356eabd9b9742e26600",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 54
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/shared/node-registration-owner-durable-rejoin-methods.js",
+      "sha256": "f2d526e7d25dad0a8341cd4c7f127df66083af8d34b8af3a2127a431d6eebe69",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 388
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/shared/node-registration-owner-publication-methods.js",
+      "sha256": "b9a5ad12cde36d840235563a7ce6e5fe1e9e37f6fcbe5f95387f6c004cde0fcd",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 465
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 513
+        }
+      ]
+    },
+    {
+      "path": "src/bootstrap/system-table-writer.js",
+      "sha256": "7219a56da49fe2b828a23a3f64906ff43a6bd469a6566ed596bb045c8d079642",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 2
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 5
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 29
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 36
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 42
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 70
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 76
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 82
+        }
+      ]
+    },
+    {
+      "path": "src/cdc/cdc-integration-service-authoritative-read-flow.js",
+      "sha256": "bf12ffafa7c16852fa324bdb119eae1056cbfaad79ec7bff0d27cad8f721f0be",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 392
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 399
+        }
+      ]
+    },
+    {
+      "path": "src/config/dynamic-config-service.js",
+      "sha256": "0e038414bf75f5a6af06b385ebefeabaf38b2a9786fb57f2fb5101b1500fbc30",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 182
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 269
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 284
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/control-plane-system-table-gateway-mutation-submission.js",
+      "sha256": "4c7553da2e6b58f750c1f796c5ad0aff2b0c20a82309f98ca1ce8624f99c04de",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 90
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 108
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 125
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 142
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 260
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 281
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 297
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 311
+        },
+        {
+          "kind": "nestedMutationCount",
+          "line": 395
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/heartbeat-service-lifecycle-methods.js",
+      "sha256": "e5c782d8b1e8f80bfff353630c29df24e19481c2a6a5c83fd011e6318467ebe0",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 487
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/heartbeat-service-publication-methods.js",
+      "sha256": "fd0b35796375c0788d6758bbd3d54d283b5f5e60c6c16afd370118cb9db64906",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 305
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 308
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 560
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/lease-service.js",
+      "sha256": "c9146b0d2670f25628d69bc590c6ab491d4d08bbdf3a5694333b0e4bc072355d",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 391
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 474
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 523
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/node-lifecycle-publication.js",
+      "sha256": "ec60c724966325867fb7610369439cc2a969ffe13a46af4cf64b294902fc6bcf",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 585
+        },
+        {
+          "kind": "nestedMutationCount",
+          "line": 594
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/membership-publication-runtime-owner.js",
+      "sha256": "8a59012be11e57f30faa8e18661001e43dd6dfeb1f62e489c20c9c1b45ed75a9",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 161
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 164
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 179
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/service-install-catalog-owner.js",
+      "sha256": "69b88bae685f92bbdd056a4f68fc15ea276e5d6dc4777cd6f399dc2d307a2fb9",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 73
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 98
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/service-instance-metadata.js",
+      "sha256": "30fb6b1c2ddf15c7af1843c7a2e39e5345c10b041d128c6f58ad9b5c49c71aa3",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 49
+        }
+      ]
+    },
+    {
+      "path": "src/control-plane/owners/system-metadata-owner-base.js",
+      "sha256": "151296c6f4dfc74282f88d41dc214f956233ab44e2fdce67598ee642e6f32d6f",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 461
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 474
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 487
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 501
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 515
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 528
+        }
+      ]
+    },
+    {
+      "path": "src/function/context-manager.js",
+      "sha256": "9916df0b20899fd00a89a4cb52723e51e65f363bdf0105199844e8fa67615b5c",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 189
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 211
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 277
+        }
+      ]
+    },
+    {
+      "path": "src/index-management/index-service.js",
+      "sha256": "b5ae0dfb2a29b48d56f5c8a53bc26bb3f7cf86218e653cd94b16526f8249c2d6",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 203
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 369
+        }
+      ]
+    },
+    {
+      "path": "src/message-group/message-group-service-row-owner.js",
+      "sha256": "8cadb2dc5d05eef1c83e5499a78ac1aaa13718bfcbd8017d9dc33024163c3256",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 246
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 452
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 460
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 561
+        }
+      ]
+    },
+    {
+      "path": "src/node/failure-detector-control-plane-guards.js",
+      "sha256": "38712dccd9ee8fea44f5dbfa3857ea036878ff74941edeb0cc9e15caec9bb770",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "path": "src/node/failure-detector-replica-failures.js",
+      "sha256": "6c67ac167d444038dd2c5e28b370904b7f7d96dbd05038fda200bc5379980d35",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 110
+        }
+      ]
+    },
+    {
+      "path": "src/node/failure-detector.js",
+      "sha256": "78baf8eb66fc8e5001a374f6ed85418789e59491cace31ae58a4ba031ecf69a0",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 309
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 361
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 419
+        }
+      ]
+    },
+    {
+      "path": "src/node/node-lifecycle-service.js",
+      "sha256": "033e880a027bbee9b6eccb17ac0f1cc3cf74964ec6d1bb820ff8b711adaa2db0",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 147
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 204
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 246
+        }
+      ]
+    },
+    {
+      "path": "src/node/node-reintegration-service.js",
+      "sha256": "4de2c434e6a25b51522e93ad75850cbc78df690d0677e409c2283601274871c5",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 69
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 483
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 568
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-cleanup-tombstone-owner.js",
+      "sha256": "23af679088197a56c924d69d79c8f40cc99e2cd19708ab00ace5ffacd38618e1",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 155
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 270
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 313
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 404
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-create-admission-owner.js",
+      "sha256": "f6ce9f6fe427fdf5978f04f36a660295d3677307e997dd68375dc49f5fd9c3ba",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 497
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 557
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 635
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-create-lifecycle-close.js",
+      "sha256": "274e5a621b4a7371115f8060d7ad43dc7edf149a39d75a719c0e2582647dc03b",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 48
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-recovery-service-row-admission.js",
+      "sha256": "c1bbd4e6e269219d04935a9939b04ce3bd2af5d4b9f961256c725c3325a2e589",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 51
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-create-persistence.js",
+      "sha256": "29460b8a4a839f4e18d00247506d80f06db9782359fce6ef1a1558b7efaaddaa",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 109
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-failed-create-claim.js",
+      "sha256": "c1b9e5d775b6aa155f1dd193faa1e37255cbc39ed9fa56fb2d12bda6a5dabcd5",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 83
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-leader-clear.js",
+      "sha256": "ebc58874a36af7e20d50c8d8ce88420a06c1835bf6ee9950f3faaf8cff77cc4f",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 132
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-registered-activation.js",
+      "sha256": "6b2a152228dc4e75f5e0e23f46b284e6e8f9987fa820bd3a19e05cb04359186b",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 161
+        }
+      ]
+    },
+    {
+      "path": "src/node/replica-state-machine-transition.js",
+      "sha256": "ae76b2189c6e648c056220705cc0678d375040f5e0df240c65435da02cd4b533",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 587
+        }
+      ]
+    },
+    {
+      "path": "src/partition/managed-merge-workflow-dissolution-methods.js",
+      "sha256": "2fa7675eef5e1c170dab561058c701fb3d8cf13855461968e2519a6651866c79",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 154
+        }
+      ]
+    },
+    {
+      "path": "src/partition/managed-merge-workflow-persistence-methods.js",
+      "sha256": "cd3f2a1349498119f8cb8a2fee2a8194007b9abc6f1513c487f25b424940b917",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 49
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 375
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 390
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 410
+        }
+      ]
+    },
+    {
+      "path": "src/partition/managed-split-workflow-dissolution-methods.js",
+      "sha256": "de54beb06a681356b9695fe90813762b1a75ab32556a682184ce11f9e6182391",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 278
+        }
+      ]
+    },
+    {
+      "path": "src/partition/managed-split-workflow-persistence-methods.js",
+      "sha256": "bbaf7b0e5f3a733ec38ea1406b8291979cef4a52db05d0c4c001e5822a6f5749",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 260
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 286
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 564
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 584
+        }
+      ]
+    },
+    {
+      "path": "src/partition/managed-workflow-record-store.js",
+      "sha256": "d1194faae6336b2a241196aa3f40d764c3bf50fe2d03b8009dd3a50fbff5c789",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 249
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 481
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-cdc-obligation.js",
+      "sha256": "2b45fd4e95a6b0db9bf5bcb0109e0fd2d156f35dce1c560e2925e89afb8cbd72",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 98
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 145
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-committed-statement-outcome.js",
+      "sha256": "fe9e2fb424d61384a0eaefc08a437ad2dead4442a26bb121a2d19ae33f4c795d",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 187
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-service-entry-apply-base.js",
+      "sha256": "388c24a014dba9a9cd2d24207a69103a74522ca7abc75911715f58c6b456a386",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 541
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-service-remote-query-methods.js",
+      "sha256": "575f66589f06f266bc7d0973ea39a7ecccddc23f459e4e3e6f1df89ede83c231",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 88
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-service-row-owner.js",
+      "sha256": "a563397a2731d86907965137fba0f334cb926a78e83a9f25d4a909a9ead3e2d9",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 261
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 290
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 299
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-service-split-accessor-base.js",
+      "sha256": "063bc81e4cdad31e8b5482d218f9e82620add48a3a411f32b44ad98f6e6f9f07",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 162
+        }
+      ]
+    },
+    {
+      "path": "src/partition/partition-write-kernel.js",
+      "sha256": "377a641a6f6caa15c38158eefa940ffe90c79e20f08b8bfa6b53a0f0ed297a44",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 545
+        }
+      ]
+    },
+    {
+      "path": "src/policy/table-policy-service.js",
+      "sha256": "9742508f601a42fd589a22c920510f0fd3a4d0da017c7df1b1f7f9c0d1751a88",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 340
+        }
+      ]
+    },
+    {
+      "path": "src/query/distributed/parallel-query-partition-outcomes.js",
+      "sha256": "3117346b8db5eefbc67b067ab92805c296cda7a3f6a395e597e51a407730b70f",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 108
+        }
+      ]
+    },
+    {
+      "path": "src/query/distributed/straggler-detector.js",
+      "sha256": "6a09de5cad21392e1541937d93ee7d7a545f2ee245034ead1898cf69de1f1e04",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 337
+        }
+      ]
+    },
+    {
+      "path": "src/query/query-executor-partition-request-builders.js",
+      "sha256": "4b0d69396783560d701e15af737ff38572e2ec65ebfb961aecf2bc1299393ddd",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 150
+        }
+      ]
+    },
+    {
+      "path": "src/query/query-executor-sql-command-rendering.js",
+      "sha256": "ae4aafee712588ef686106b9c8739d2e7aaa2a9bfde572b570af40bb7eb6b462",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 52
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 424
+        }
+      ]
+    },
+    {
+      "path": "src/query/runtime-replica-state-projection.js",
+      "sha256": "2d31fe85b2965263e81a10b47bd703c8affdef5ce648336ba6d479df8cc91078",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 76
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 89
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 175
+        },
+        {
+          "kind": "nestedMutationCount",
+          "line": 191
+        }
+      ]
+    },
+    {
+      "path": "src/query/schema-provisioning-job-repository.js",
+      "sha256": "cc172608b57fd490e08797e2823315c8571943b0e78793b819e9cb4d4b51dff2",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 131
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 133
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 203
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 233
+        }
+      ]
+    },
+    {
+      "path": "src/query/service-partition-access-publisher.js",
+      "sha256": "c8bb5289cf28240f4880658874653587bda89ee91d53a0af5df17171c3fa63a7",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 175
+        }
+      ]
+    },
+    {
+      "path": "src/query/sql-query-engine-transaction-persistence-methods.js",
+      "sha256": "f514a4445521b846457818f54e3fcd05268688d8469f612d4e5e1fcf57f4a031",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 145
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 186
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 266
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 335
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 383
+        }
+      ]
+    },
+    {
+      "path": "src/query/sql-query-engine-transaction-set-methods.js",
+      "sha256": "b20dba809484d24d5ee6f47805c0c97502fc38166293731a35b3b69661944e58",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 46
+        }
+      ]
+    },
+    {
+      "path": "src/query/table-creation-service-create-table.js",
+      "sha256": "aef8fe451d82d1d97751f6edf2e93e0b25241dcdf7107d77f9f47811efbb64e1",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 255
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 268
+        }
+      ]
+    },
+    {
+      "path": "src/query/table-creation-service-existing-table-reconciliation.js",
+      "sha256": "94fadd023b575295fa041650a23d88b7c3a876ed550f9778701ca7e08ee9608f",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 76
+        }
+      ]
+    },
+    {
+      "path": "src/raft/authoritative-row-mutation-helper.js",
+      "sha256": "2471dcfd62da4147397352c5c928b07f3ef80f5aa56dd2de2f16d0a181a804dc",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 290
+        }
+      ]
+    },
+    {
+      "path": "src/raft/raft-rs-replica-lifecycle-owner.js",
+      "sha256": "7c04ac2fa4287ba547d317fc909bea7f2ffbdd3a18ab852443c854c92fa8c755",
+      "sites": [
+        {
+          "kind": "partitionCountRead",
+          "line": 260
+        }
+      ]
+    },
+    {
+      "path": "src/rebalancer/node-storage-budget-service.js",
+      "sha256": "7962a0e4a9771335a3a26da7b472a46faaca334d166f6802a77fe8cd3e2267f0",
+      "sites": [
+        {
+          "kind": "systemTableMutation",
+          "line": 258
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 260
+        }
+      ]
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+      "sha256": "35dc525709eb9e05a7b9286671c0637e89342eb3db2cdcc6fca7e7b2e8270723",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 313
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 319
+        },
+        {
+          "kind": "systemTableMutation",
+          "line": 329
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 727
+        },
+        {
+          "kind": "nestedMutationCount",
+          "line": 730
+        }
+      ]
+    },
+    {
+      "path": "src/rebalancer/storage-capacity-migration.js",
+      "sha256": "008f3d2c7880d496e9060222bba7d6ff67b70ffc36ab9d89a40b2c4cb5925438",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 115
+        }
+      ]
+    },
+    {
+      "path": "src/runtime/request-cell-invocation-owner.js",
+      "sha256": "b74ce3ad2698f4a0249152fc21821ae891f5a31f536a26148e0a05d80b283ca3",
+      "sites": [
+        {
+          "kind": "nestedMutationCount",
+          "line": 169
+        },
+        {
+          "kind": "partitionCountRead",
+          "line": 171
+        }
+      ]
+    },
+    {
+      "path": "src/topology/latency-group-manager.js",
+      "sha256": "7e195b4c4f86c86e11a47380974721d40392ad6f97d0706396691ba3fef8a4fc",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 496
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 569
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 617
+        }
+      ]
+    },
+    {
+      "path": "src/topology/latency-measurement-service.js",
+      "sha256": "0d1e041ac5fba71b84a1f6ed437fdc4073e2e012d0459a0678c7746be4ebd1bd",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 364
+        }
+      ]
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica.js",
+      "sha256": "ee8728e4099808d83e75f7c394060f2ef7662c4c3f1577974e9a06ae461cfcb3",
+      "sites": [
+        {
+          "kind": "gatewaySubmission",
+          "line": 645
+        },
+        {
+          "kind": "gatewaySubmission",
+          "line": 691
+        }
+      ]
+    }
+  ]
+}
