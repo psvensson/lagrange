@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "local-forwarding-and-active-use",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/check-guideline-decision-boundaries.test.js",
+      "assertions": 277,
+      "sourceSha256": {
+        "scripts/check-guideline-decision-boundaries.js": "f93294b9b41f517dbd92277dbe6b3bfedc55d634909e3b1169ad82b44997bb56",
+        "scripts/checks/decision-boundary-construction.js": "dbc6b0a1e2eb8d5414849b16198b5dc66431ac317e9214385e5f8d2c3c7c0598",
+        "test/scripts/check-guideline-decision-boundaries.test.js": "79c01a570d3a0ef3e6275f74ddb01590bbccb7b72302940ecbad1f5fb2f8b544"
+      },
+      "logSha256": "0b50cc954cac2b4a471391c8c0940ef5073ba0e788fd51d08685db58b05632d0",
+      "evidence": "test-output/local-constructor-audit/label-alias-final-tests.log",
+      "ceiling": "Implementation evidence only. Local syntax/use classification; no transitive purity, startup or release claim. Independent source approval pending."
+    }
+  ]
+}
