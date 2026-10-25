@@ -50,7 +50,7 @@ test('SeedRegistrationPhase registers partition rows as stopped before activatio
         partitionId: 'p1',
         replicaId: 'p1-r1',
         initialized: true,
-        transportHandler: () => ({acknowledged: true}),
+        transportHandler: () => (null),
         getUnifiedAddress() {
           return 'node-a/partition/p1-r1';
         },
@@ -171,7 +171,7 @@ test('SeedRegistrationPhase retains deferred STOPPED birth and rejects ' +
     ['p1-r1', {
       partitionId: 'p1',
       initialized: true,
-      transportHandler: () => ({acknowledged: true}),
+      transportHandler: () => (null),
       getUnifiedAddress: () => 'node-a/partition/p1-r1',
       getRole: () => 'follower',
     }],

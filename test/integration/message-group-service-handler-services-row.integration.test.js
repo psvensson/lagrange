@@ -115,7 +115,7 @@ test('MessageGroupServiceHandler services-row integration', async (t) => {
             getRole() {
               return 'follower';
             },
-            receiveMessage: () => ({acknowledged: true}),
+            receiveMessage: () => (null),
           };
           registerMessageGroupTransportHandler(service, {
             messageRouter,

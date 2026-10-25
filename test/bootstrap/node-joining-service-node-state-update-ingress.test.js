@@ -836,7 +836,7 @@ test('NodeJoiningService - query transport selection uses initialized local ' +
 
   const relayService = {
     initialized: true,
-    sendMessage: async () => ({acknowledged: true}),
+    sendMessage: async () => null,
     isLeaderReplica: () => false,
     getMetadataIngressReadiness: () => ({
       ready: false,
@@ -880,7 +880,7 @@ test('NodeJoiningService - connect websocket phase wires the dedicated query ' +
 
   const relayService = {
     initialized: true,
-    sendMessage: async () => ({acknowledged: true}),
+    sendMessage: async () => null,
     isLeaderReplica: () => false,
     getMetadataIngressReadiness: () => ({
       ready: false,

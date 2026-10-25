@@ -65,7 +65,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           await router.initialize();
 
           // Register a handler for the address (simulating local service)
-          router.register(targetAddress, () => ({acknowledged: true, data: 'response'}));
+          router.register(targetAddress, () => ({data: 'response'}));
 
           // Attempt delivery - should fail because no WebSocket connection exists
           const result = await router.deliver(targetAddress, message);
@@ -221,7 +221,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           const selfAddress = `${localNodeId}/${entityType}/${entityId}`;
 
           // Register handler
-          router.register(selfAddress, () => ({acknowledged: true}));
+          router.register(selfAddress, () => (null));
 
           // Attempt delivery to self
           const result = await router.deliver(selfAddress, message);

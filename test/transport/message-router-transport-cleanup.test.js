@@ -249,7 +249,7 @@ describe('MessageRouter transport cleanup verification', () => {
               await testRouter.initialize({startServer: true});
 
               const address = `${nodeId}/${entityType}/${entityId}`;
-              const handlerResponse = {acknowledged: true, echo: 'ok'};
+              const handlerResponse = {echo: 'ok'};
               testRouter.register(address, () => handlerResponse);
 
               // Capture what deliverLocal returns directly

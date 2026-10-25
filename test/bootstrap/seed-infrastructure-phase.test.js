@@ -72,7 +72,7 @@ test(
     let createOptions = null;
     const leaderService = {
       initialized: false,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
     let currentSelection = {
       service: leaderService,
@@ -194,7 +194,7 @@ test(
     };
     const relayService = {
       initialized: true,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
 
     MessageRouterSetup.create = async () => {

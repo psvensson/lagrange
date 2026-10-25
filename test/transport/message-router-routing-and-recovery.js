@@ -104,7 +104,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     router.register('test-node/service/service-1', handler);
     t.equal(router.handlers.size, 1, 'should have one handler');
@@ -138,7 +138,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     t.throws(
       () => router.register('invalid-address', handler),
@@ -165,7 +165,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: 'test-node'});
     await router.initialize();
 
-    const handler = () => ({acknowledged: true});
+    const handler = () => (null);
 
     t.throws(
       () => router.register('legacy-address', handler),
@@ -184,7 +184,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     const receivedMessages = [];
     router.register('test-node/service/local-service', (envelope) => {
       receivedMessages.push(envelope);
-      return {acknowledged: true, data: 'response'};
+      return {data: 'response'};
     });
 
     const result = await router.deliver('test-node/service/local-service', {
@@ -500,7 +500,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
 
     router.register('test-node/service/async-service', async (envelope) => {
       await Promise.resolve();
-      return {acknowledged: true, processed: envelope.payload.data};
+      return {processed: envelope.payload.data};
     });
 
     const result = await router.deliver(

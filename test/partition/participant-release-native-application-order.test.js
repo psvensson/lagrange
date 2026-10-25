@@ -266,11 +266,22 @@ function createCommitCarrierGate(router, {leader, followers, settled}) {
   const restoreState = (replicaId, state) => {
     if (state === undefined || state.restored) return;
     if (router.getRegisteredHandler(state.address) === state.original) {
+      assert.equal(state.service.transportHandler, state.original);
       state.restored = true;
       return;
     }
-    assert.equal(router.unregisterExact(state.address, state.wrapper), true,
-      `${replicaId}: only its exact gate handler is retired`);
+    const registered = router.getRegisteredHandler(state.address);
+    if (registered === state.wrapper) {
+      assert.equal(router.unregisterExact(state.address, state.wrapper), true,
+        `${replicaId}: only its exact gate handler is retired`);
+    } else {
+      assert.equal(registered, null, 'a successor handler is never replaced');
+      assert.equal(state.retired, true, 'only the gate-owned vacancy is restored');
+    }
+    assert.ok(state.service.transportHandler === state.wrapper ||
+      state.service.transportHandler === state.original,
+    `${replicaId}: restoration owns the service identity`);
+    state.service.transportHandler = state.original;
     router.register(state.address, state.original);
     assert.equal(router.getRegisteredHandler(state.address), state.original,
       `${replicaId}: exact partition handler is restored`);
@@ -283,9 +294,11 @@ function createCommitCarrierGate(router, {leader, followers, settled}) {
       const original = router.getRegisteredHandler(address);
       assert.equal(typeof original, 'function',
         `setup: ${follower.service.replicaId} owns its router handler`);
-      const state = {address, original, wrapper: null, first: null,
+      assert.equal(follower.service.transportHandler, original,
+        'the service and router name the same current handler');
+      const state = {address, original, service: follower.service, wrapper: null, first: null,
         matched: 0, suppressed: 0, overflow: false, forwarded: false,
-        restored: false};
+        restored: false, retired: false};
       const followerPeerId = String(follower.status.peerId);
       state.wrapper = function(...args) {
         const carrier = armed ? commitAdvancingCarrierOf(args[0], {
@@ -293,10 +306,13 @@ function createCommitCarrierGate(router, {leader, followers, settled}) {
         }) : null;
         if (carrier === null) return Reflect.apply(original, this, args);
         retainCarrier(state, carrier, this, args, followerPeerId);
-        return {acknowledged: true};
+        return null;
       };
-      router.register(address, state.wrapper);
       states.set(follower.service.replicaId, state);
+      assert.equal(router.unregisterExact(address, original), true);
+      state.retired = true;
+      follower.service.transportHandler = state.wrapper;
+      router.register(address, state.wrapper);
     }
   } catch (error) {
     const restoreErrors = [];
@@ -877,14 +893,15 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled,
   };
 }
 
-function assertHeldEdge({gate, route, group, leader, settled}) {
+function assertHeldEdge({gate, route, group, leader, settled, edge}) {
   const routeFacts = route.facts();
   assert.deepEqual(routeFacts.errors, [], 'route observation has no error');
   assert.equal(routeFacts.dropped, 0,
     'held-edge route observations fit their physical cap');
   assert.equal(routeFacts.errorOverflow, false,
     'held-edge route errors fit their physical cap');
-  assert.ok(routeFacts.pauseAnchor, 'the exact natural PAUSE batch armed the gate');
+  assert.ok(routeFacts.pauseAnchor,
+    `the exact natural PAUSE batch armed the gate (${diagnosticText(edge)})`);
   const enabled = routeFacts.enableRecord?.answer;
   assert.equal(enabled?.outcome, RELEASE_OUTCOME.OBSERVED,
     `ENABLE returns canonical leader facts (${JSON.stringify(enabled)})`);
@@ -1345,7 +1362,7 @@ test('the real participant release owner waits for every native voter origin ' +
     exitDiagnostic.phase = 'release-edge';
     const edge = await Promise.race([releaseSettled, route.entered]);
     exitDiagnostic.edgeKind = edge.kind;
-    const held = assertHeldEdge({gate, route, group,
+    const held = assertHeldEdge({gate, route, group, edge,
       leader: current.leader, settled});
     membershipReads.expectCurrent(held.k);
 

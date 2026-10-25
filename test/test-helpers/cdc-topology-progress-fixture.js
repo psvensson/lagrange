@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 // Component fixture: real source apply/ledger/subscription and topology owners,
 // with controlled route projections and recipient answers. These answers are
 // deliberately not evidence of a native recipient commit or a system-row write.
@@ -28,12 +29,12 @@ const TARGET_NODE = 'node-b';
 const RETRY_AFTER_MS = 20;
 const RESPONSE = Object.freeze({NATIVE: 'native', WEAK: 'weak', UNKNOWN: 'unknown'});
 
-function controlledAnswer(events, groupId, mode, transport = false) {
+function controlledAnswer(events, groupId, mode) {
   const answer = mode === RESPONSE.NATIVE ?
     buildCommittedCdcOutcome(events, groupId, {index: 17, term: 2}) :
     mode === RESPONSE.WEAK ? buildProvisionalCdcOutcome(events, RETRY_AFTER_MS, groupId) :
       unknownCdcAcceptance();
-  return transport ? {...answer, acknowledged: true} : answer;
+  return answer;
 }
 
 function serviceRow(groupId, nodeId) {
@@ -71,7 +72,8 @@ function buildTopology(f) {
     f.targetCalls.push({address, groupId: payload.targetGroupId,
       nodeId: options.targetNodeId, eventKey: payload.eventKey});
     if (f.duringTarget) f.duringTarget();
-    return controlledAnswer([payload], payload.targetGroupId, f.targetMode, true);
+    return buildDeliveryEnvelope({acknowledged: true},
+      controlledAnswer([payload], payload.targetGroupId, f.targetMode));
   }};
   const topology = new CDCGroupPropagationService({nodeId: SOURCE_NODE,
     systemTableCache: f.projection.cache, messageRouter: router,

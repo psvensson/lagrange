@@ -161,7 +161,7 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
       const replicaId = 'mg-join-r1';
       const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
       // The replica's exact handler identity (activation checks identity).
-      const transportHandler = async () => ({acknowledged: true});
+      const transportHandler = async () => (null);
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
         unifiedAddress,

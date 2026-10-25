@@ -307,7 +307,7 @@ export async function registerMessageRouterTailMoreTests({
     const receivedMessages = [];
     router.register('self-delivery-test/service/test-service', (envelope) => {
       receivedMessages.push(envelope);
-      return {acknowledged: true, data: 'response-from-self'};
+      return {data: 'response-from-self'};
     });
 
     // Deliver message to self

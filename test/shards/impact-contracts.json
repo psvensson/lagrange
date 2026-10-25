@@ -1571,7 +1571,10 @@
         "test/query/transaction-release-settlement.test.js",
         "test/admin/admin-websocket-service-dispatcher.test.js",
         "test/wasm-service/wasm-service-replica.test.js",
-        "test/partition/raft-rs-transport-demux.test.js"
+        "test/partition/raft-rs-transport-demux.test.js",
+        "test/partition/participant-release-native-application-order.test.js",
+        "test/partition/partition-cdc-topology-progress-currentness.test.js",
+        "test/topology/cdc-group-propagation-foreground-boundary.test.js"
       ]
     },
     "transport-handler-identity": {
@@ -3229,7 +3232,9 @@
       "contract": "router-delivery-envelope",
       "witnessTests": [
         "test/transport/message-router-cdc-outcome-roundtrip.test.js",
-        "test/message-group/message-group-forward-backpressure-code.test.js"
+        "test/message-group/message-group-forward-backpressure-code.test.js",
+        "test/partition/partition-cdc-topology-progress-currentness.test.js",
+        "test/topology/cdc-group-propagation-foreground-boundary.test.js"
       ]
     },
     "router-envelope-partition": {
@@ -3270,7 +3275,8 @@
         "test/partition/learner-promotion-proof-delivery-outcome.test.js",
         "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js",
         "test/partition/partition-replication-restart-attempt-handoff.test.js",
-        "test/partition/partition-coordinator-settlement.test.js"
+        "test/partition/partition-coordinator-settlement.test.js",
+        "test/partition/participant-release-native-application-order.test.js"
       ]
     },
     "router-envelope-control-plane": {

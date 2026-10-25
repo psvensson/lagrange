@@ -328,7 +328,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         resources.seedRouter.register(partitionAddress, (envelope) => {
           return resources.seedPartition.handleTransportMessage ?
             resources.seedPartition.handleTransportMessage(envelope) :
-            {acknowledged: true};
+            null;
         });
 
         await resources.seedPartition.initialize();

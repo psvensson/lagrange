@@ -95,7 +95,7 @@ function bindRegisteredReplicaHandler(service, options = {}) {
   const transport = createIdentityTransport();
   const unifiedAddress = `${options.nodeId || 'node'}/partition/` +
     `${service.replicaId}`;
-  const transportHandler = () => ({acknowledged: true});
+  const transportHandler = () => (null);
   transport.register(unifiedAddress, transportHandler);
   return Object.assign(service, {
     transport,

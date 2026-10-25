@@ -87,7 +87,7 @@ function createWorld(initialRow = registeredRow(), options = {}) {
   const service = createService(router, stateMachine,
     options.register !== false);
   if (options.register === false) {
-    service.transportHandler = () => ({acknowledged: true});
+    service.transportHandler = () => (null);
   }
   const durable = createGatedServicesRow(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
@@ -322,7 +322,7 @@ test('MG N2 (4b): retirement does not wait for unrelated lifecycle work in ' +
 test('MG N2 (5): a different generation handler under the same replica id ' +
   'does not satisfy activation', async (t) => {
   const world = createWorld(registeredRow(), {register: false});
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
   await t.rejects(world.activate(), /replica handler registration/u,
     'presence at the address is not this generation\'s handler');
   t.equal(world.durable.casCalls.length, 0);

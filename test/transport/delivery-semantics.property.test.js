@@ -88,7 +88,6 @@ test('Property 5: Delivery Semantics', async (t) => {
 
             // Register handler that returns success
             router.register(targetAddress, () => ({
-              acknowledged: true,
               ...handlerResponse,
             }));
 
@@ -261,7 +260,7 @@ test('Property 5: Delivery Semantics', async (t) => {
             const targetAddress = `${nodeId}/${entityType}/${entityId}`;
 
             if (hasHandler) {
-              router.register(targetAddress, () => ({acknowledged: true}));
+              router.register(targetAddress, () => null);
             }
 
             // Deliver message
@@ -318,9 +317,9 @@ test('Property 5: Delivery Semantics', async (t) => {
             const targetAddress = `${nodeId}/${entityType}/${entityId}`;
 
             if (handlerBehavior === 'success') {
-              router.register(targetAddress, () => ({acknowledged: true}));
+              router.register(targetAddress, () => null);
             } else if (handlerBehavior === 'failure') {
-              router.register(targetAddress, () => ({acknowledged: false}));
+              router.register(targetAddress, () => ({success: false}));
             } else if (handlerBehavior === 'undefined_return') {
               router.register(targetAddress, () => undefined);
             }
@@ -330,7 +329,7 @@ test('Property 5: Delivery Semantics', async (t) => {
             const result = await router.deliver(targetAddress, message);
 
             // Result must never be undefined or null
-            // Result must have acknowledged property (boolean)
+            // Result carries one canonical transport state and no ACK alias
             return result !== undefined &&
                    result !== null &&
                    typeof result === 'object' &&
@@ -441,7 +440,6 @@ test('Property 5: Delivery Semantics', async (t) => {
               });
             } else {
               router.register(targetAddress, () => ({
-                acknowledged: true,
                 data: 'success',
               }));
             }
@@ -507,7 +505,6 @@ test('Property 5: Delivery Semantics', async (t) => {
             const targetAddress = `${nodeId}/${entityType}/${entityId}`;
 
             router.register(targetAddress, () => ({
-              acknowledged: true,
               ...responseFields,
             }));
 

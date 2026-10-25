@@ -424,7 +424,7 @@ test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
         ]});
 
         service.messageGroupServiceHandler = {};
-        const transportHandler = () => ({acknowledged: true});
+        const transportHandler = () => (null);
         service.messageRouter = createIdentityTransport();
         service.messageRouter.register(
           'join-activation-node/message-group/mg-cache-r1', transportHandler);
@@ -716,7 +716,7 @@ test('NodeJoiningService - emits events', async (t) => {
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
+      this.messageRouter.register(unifiedAddress, async () => (null));
     };
     service.phaseWaitForLeadership = async function() {};
     service.getLeaderMessageGroupService = function() {

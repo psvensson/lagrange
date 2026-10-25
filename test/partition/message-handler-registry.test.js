@@ -26,7 +26,7 @@ test('MessageHandlerRegistry', async (t) => {
     registry.register('FORWARD_WRITE', async (message) => {
       handlerCalled = true;
       receivedMessage = message;
-      return {acknowledged: true, result: 'write-success'};
+      return {result: 'write-success'};
     });
 
     const message = {
@@ -37,7 +37,7 @@ test('MessageHandlerRegistry', async (t) => {
 
     t.equal(handlerCalled, true, 'handler should be called');
     t.same(receivedMessage, message, 'handler should receive the message');
-    t.equal(result.acknowledged, true, 'result should be acknowledged');
+    t.notOk(Object.hasOwn(result, 'acknowledged'), 'answer contains only domain output');
     t.equal(result.result, 'write-success', 'result should contain handler output');
   });
 
@@ -133,7 +133,6 @@ test('MessageHandlerRegistry', async (t) => {
 
     registry.register('ASYNC_TYPE', async (message) => {
       return {
-        acknowledged: true,
         data: message.payload.data,
       };
     });
@@ -144,7 +143,7 @@ test('MessageHandlerRegistry', async (t) => {
 
     const result = await registry.handle(message);
 
-    t.equal(result.acknowledged, true, 'async handler should work');
+    t.notOk(Object.hasOwn(result, 'acknowledged'), 'async answer contains only domain output');
     t.equal(result.data, 'async-data', 'async handler should return data');
   });
 

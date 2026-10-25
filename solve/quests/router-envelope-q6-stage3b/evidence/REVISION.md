@@ -135,3 +135,48 @@ under `q6-preservation`. No run was retried or reduced to a greener selection.
 
 Normal-hook WIP commit and final static results are recorded in the external
 freeze handoff. No source acceptance, Quest land, publication or merge is claimed.
+
+## Final fixture-only census and native identity discriminator
+
+A second AST census included pure ACK objects, not only answer objects with
+success/status fields. Obsolete no-op handler answers in activation, registry,
+identity and routing fixtures now return null; meaningful domain fields remain.
+MG callback mocks whose result is ignored also no longer invent an ACK answer.
+Explicit adversarial/ACK-only refusal cases, arbitrary opaque answer generation,
+internal ACK-frame/queue inputs, builder input matrices and distinct telemetry/
+recorded-history facts remain. `all-ack-fixtures-final.txt` and the migration
+manifests record this classification. No production file changed after dc51106ff.
+
+The CDC topology fixture had an actual remaining flat branch:
+`transport ? {...answer, acknowledged:true} : answer`. That branch is deleted;
+its fake router produces a canonical envelope, and direct owner callers receive
+only their domain answer. Its currentness route-count failures reproduce at f006.
+The foreground test is refused by the canonical runner because its computed
+TEST_TIMEOUT_MS is not a file-local numeric constant; no timeout bypass was used.
+The seed-infrastructure fixture's missing assertOriginalSeedAttempt delegate also
+fails at f006. These three unrelated holds remain explicit.
+
+The native participant-release application-order witness gave a stronger paired
+discriminator: f006 passed, dc51106ff failed before PAUSE, and the repaired fixture
+passes. Its gate overwrote the registered follower callback without replacing the
+service's current handler identity. Delegation into the original callback then
+correctly failed Q6's exact-identity policy and disturbed native leadership. The
+gate now retires the exact original, couples its wrapper registration and service
+identity, and restores only its exact callback or the vacancy it owns; it refuses
+a successor. Custody is recorded before mutation so installation failure enters
+that same restoration path. The witness's native carrier/application-order
+assertions are unchanged. A better failure message retains the early release edge.
+This fidelity correction requires independent review; no production guard was
+weakened and no new transport success authority was introduced.
+
+`handler-wrapper-census.txt` and `registered-handler-census.txt` record the broader
+search. Other wrapping occurrences change applyCommittedEntry or the Raft
+membership observation port, not transport registration; plain cell application
+handler substitutions do not have the replica-service identity contract. The
+native gate was the corresponding guarded transport-service seam.
+
+Fixture follow-up: 27 files, final disposition 24 pass and three inherited holds
+above, using `noop-tests.log`, `noop-extra-tests.log`, `ingress-retest.log`,
+`native-final.log` and `noop-base.log`. Failed intermediate attempts remain on disk;
+the ingress mechanical replacement error was fixed before freeze and its 67
+assertions pass. This is bounded evidence, not the repaired full-lab gate.

@@ -81,7 +81,7 @@ test('Property 4: Routing Correctness', async (t) => {
                 address: envelope.targetAddress,
                 payload: envelope.payload,
               });
-              return {acknowledged: true, handlerId: targetAddress};
+              return {handlerId: targetAddress};
             });
 
             // Deliver message via self-connection
@@ -149,12 +149,12 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register two handlers
             router.register(address1, (envelope) => {
               handler1Calls.push(envelope.targetAddress);
-              return {acknowledged: true, handler: 'handler1'};
+              return {handler: 'handler1'};
             });
 
             router.register(address2, (envelope) => {
               handler2Calls.push(envelope.targetAddress);
-              return {acknowledged: true, handler: 'handler2'};
+              return {handler: 'handler2'};
             });
 
             // Deliver to address1
@@ -214,7 +214,6 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register handler that returns specific response
             router.register(targetAddress, () => {
               return {
-                acknowledged: true,
                 data: responseData.responseData,
                 code: responseData.responseCode,
               };
@@ -376,7 +375,7 @@ test('Property 4: Routing Correctness', async (t) => {
             // Register async handler
             router.register(targetAddress, async () => {
               await Promise.resolve();
-              return {acknowledged: true, asyncResult: asyncData};
+              return {asyncResult: asyncData};
             });
 
             // Deliver message

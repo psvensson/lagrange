@@ -140,7 +140,7 @@ test('Property 20: Location Transparent Communication', async (t) => {
             router.register(targetAddress, (envelope) => {
               handlerCalled = true;
               targetReceived = envelope.targetAddress;
-              return {acknowledged: true};
+              return null;
             });
 
             // Deliver to target
@@ -192,7 +192,7 @@ test('Property 20: Location Transparent Communication', async (t) => {
             // Register local handler
             router.register(targetAddress, () => {
               localHandlerCalled = true;
-              return {acknowledged: true};
+              return null;
             });
 
             // Deliver to local target
@@ -302,7 +302,7 @@ test('Property 20: Location Transparent Communication', async (t) => {
             for (const target of targets) {
               const address = `${nodeId}/${target.entityType}/${target.entityId}`;
               if (target.hasHandler) {
-                router.register(address, () => ({acknowledged: true}));
+                router.register(address, () => (null));
               }
             }
 
@@ -360,7 +360,7 @@ test('Property 20: Location Transparent Communication', async (t) => {
             const address = `${nodeId}/${entityType}/${entityId}`;
 
             // Should support register
-            const handler = () => ({acknowledged: true});
+            const handler = () => (null);
             router.register(address, handler);
 
             // Should support deliver

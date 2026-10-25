@@ -153,14 +153,14 @@ test('node-state reporter acknowledged within its bound logs no spent wait',
     const timers = createManualTimers();
     const clock = {nowMs: 5000};
     const {service, capture} = createService('node-hb-spent-d', timers, clock, {
-      nodeStateReporter: async () => ({acknowledged: true}),
+      nodeStateReporter: async () => null,
     });
     try {
       const result = await service.callNodeStateReporterWithTimeout(
         {state: 'ready'},
         30,
       );
-      t.same(result, {acknowledged: true});
+      t.equal(result, null);
       t.equal(timers.handles[0].cleared, true, 'watchdog cleared');
       t.equal(capture.spent().length, 0, 'no wait_bound_spent on completion');
     } finally {
