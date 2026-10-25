@@ -341,7 +341,9 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
       systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       epochManager: bootstrapResult.epochManager,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+      runtimeOwner: bootstrapService.runtimeDependencyOwner,
+      assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     });
     await seedApi.initialize(0, {listen: false});
     seedQueryEngine = new SQLQueryEngine({

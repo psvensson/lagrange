@@ -1310,8 +1310,41 @@
         "test/bootstrap/seed-original-attempt-lifetime.test.js"
       ]
     },
+    "fresh-seed-original-publication-and-admission": {
+      "description": "The exact live original issuer authorizes only admitted consumed native openings. Row owners construct declared SERVICES births; preparation consumes one durable publication right before submission and transfers it only after exact authoritative committed readback. Lost answers retain identity and SUBMITTED without resubmission. Every original right must transfer before public readiness or transport admission. A fresh child serves a public write/read; retained, partial, uncertain and cold states preserve their existing owner refusals and rights. Native activation and typed membership-hold oracle correspondence require independent source review; test registration alone is not acceptance.",
+      "owners": [
+        "src/bootstrap/seed-original-allocation-startup.js",
+        "src/bootstrap/seed-original-registration.js",
+        "src/raft/raft-rs-original-allocation-preparation.js",
+        "src/raft/raft-rs-status-observation.js",
+        "src/partition/partition-service-row-owner.js",
+        "src/message-group/message-group-service-row-owner.js",
+        "src/bootstrap/phases/seed-registration-phase.js",
+        "src/bootstrap/phases/seed-partitions-phase.js",
+        "src/bootstrap/phases/seed-message-groups-phase.js",
+        "src/bootstrap/bootstrap-service-seed-delegates.js",
+        "src/bootstrap/bootstrap-service-seed-workflow.js",
+        "src/bootstrap/bootstrap-service-runtime-methods.js",
+        "src/bootstrap/bootstrap-api.js",
+        "src/bootstrap/owners/bootstrap-readiness-owner.js",
+        "src/entrypoint-runtime-join-decision.js",
+        "src/lagrange-runtime-startup.js",
+        "scripts/checks/raft-rs-operation-boundary-audit.js",
+        "scripts/quest-evidence/fresh-seed-activation.js"
+      ],
+      "tests": [
+        "test/bootstrap/fresh-seed-activation.integration.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "test/bootstrap/seed-registration-phase.test.js",
+        "test/bootstrap/seed-registration-election-scheduling.test.js",
+        "test/entrypoint-runtime-helpers-join-decision.test.js",
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/raft/raft-rs-original-opening-authority.test.js",
+        "test/raft/raft-rs-backend/operation-port-boundary.test.js"
+      ]
+    },
     "original-retained-effects-correspondence": {
-      "description": "Read-only original foundation correspondence consumes actual registration/SQL producers and application owners in one native/application snapshot. Exact SQL/params/rows, first statement outcomes, generation and complete owed/delivered CDC census must agree; applied ACKs bind first delivery and pending source dependencies remain unavailable. Physical schema belongs to the actual partition opener; no native DDL producer is inferred. Strict MG content observation preserves both stamps without source-occurrence authority. Startup and continuation remain held; this observation grants no opening or publication right.",
+      "description": "Read-only original foundation correspondence consumes actual registration/SQL producers and application owners in one native/application snapshot. Exact SQL/params/rows, first statement outcomes, generation and complete owed/delivered CDC census must agree; applied ACKs bind first delivery and pending source dependencies remain unavailable. Physical schema belongs to the actual partition opener; no native DDL producer is inferred. Strict MG content observation preserves both stamps without source-occurrence authority. Retained startup and continuation remain held; this observation grants no opening or publication right.",
       "owners": [
         "src/bootstrap/seed-foundation-rows.js",
         "src/bootstrap/phases/seed-registration-phase.js",
@@ -1487,6 +1520,42 @@
     }
   },
   "coupledPairs": {
+    "fresh-seed-original-publication-and-admission": {
+      "description": "Original preparation, native opening, registration/readback and public admission form one protected fresh-start interaction. Membership keeps sole authority over a held retained restart.",
+      "endpoints": [
+        {
+          "id": "original-attempt-and-rights",
+          "owners": [
+            "src/raft/raft-rs-original-allocation-preparation.js",
+            "src/bootstrap/seed-original-allocation-startup.js"
+          ]
+        },
+        {
+          "id": "bootstrap-original-publication-and-admission",
+          "owners": [
+            "src/bootstrap/seed-original-registration.js",
+            "src/bootstrap/phases/seed-registration-phase.js",
+            "src/partition/partition-service-row-owner.js",
+            "src/message-group/message-group-service-row-owner.js",
+            "src/bootstrap/phases/seed-partitions-phase.js",
+            "src/bootstrap/phases/seed-message-groups-phase.js",
+            "src/bootstrap/bootstrap-service-runtime-methods.js",
+            "src/bootstrap/bootstrap-service-seed-workflow.js",
+            "src/bootstrap/owners/bootstrap-readiness-owner.js",
+            "src/bootstrap/bootstrap-api.js",
+            "src/entrypoint-runtime-join-decision.js"
+          ]
+        }
+      ],
+      "contract": "fresh-seed-original-publication-and-admission",
+      "witnessTests": [
+        "test/bootstrap/fresh-seed-activation.integration.test.js",
+        "test/bootstrap/seed-original-attempt-lifetime.test.js",
+        "test/bootstrap/seed-registration-phase.test.js",
+        "test/raft/raft-rs-original-allocation-cold-inspection.test.js",
+        "test/entrypoint-runtime-helpers-join-decision.test.js"
+      ]
+    },
     "distributed-transaction-coordinator-participant-protocol": {
       "description": "Coordinator decisions are bound to the PREPARE evidence participants answer, and participants apply only that bound decision and return exact durable outcomes.",
       "endpoints": [

@@ -25,10 +25,12 @@ const NODE_TYPE = Object.freeze({
   BINARY: 'BinaryExpression',
   RETURN: 'ReturnStatement',
   CALL: 'CallExpression',
+  CHAIN: 'ChainExpression',
 });
 
 const SYNTAX = Object.freeze({
   CONST: 'const',
+  INIT: 'init',
   ASSIGN: '=',
   GETTER: 'get',
   SETTER: 'set',
@@ -247,6 +249,86 @@ function markFieldUses(record, fields, passive) {
   }
 }
 
+// A reference forwarded as a constructor dependency is not locally consumed as
+// truth. This grammar does NOT prove accessor/constructor purity or value type.
+// Calls, computed reads and all decision expressions remain evidence.
+function forwardedReference(node) {
+  if (node.type === NODE_TYPE.IDENTIFIER) return [node];
+  if (node.type === NODE_TYPE.THIS) return [];
+  if (node.type === NODE_TYPE.CHAIN) return forwardedReference(node.expression);
+  if (node.type !== NODE_TYPE.MEMBER || node.computed) return null;
+  const receiver = forwardedReference(node.object);
+  return receiver ? [...receiver, node.property] : null;
+}
+
+function forwardedOption(record) {
+  const {node, parent, ancestors} = record;
+  if (!isCurrentFunction(record) || node.type !== NODE_TYPE.PROPERTY ||
+      node.kind !== SYNTAX.INIT || node.computed || parent?.type !== NODE_TYPE.OBJECT) {
+    return null;
+  }
+  const construction = ancestors.at(-2);
+  if (construction?.type !== NODE_TYPE.NEW ||
+      !arrayIncludes(construction.arguments, parent) ||
+      !staticConstructorLabels(construction.callee)) return null;
+  return forwardedReference(node.value);
+}
+
+function forwardingAliases(records) {
+  return arrayFilter(records, (record) => {
+    const {node, parent} = record;
+    return isCurrentFunction(record) && node.type === NODE_TYPE.DECLARATOR &&
+      parent.kind === SYNTAX.CONST && node.id.type === NODE_TYPE.IDENTIFIER &&
+      node.init && forwardedReference(node.init) && !hasBindingConflict(records, node);
+  });
+}
+
+function isReferenceOccurrence({node, parent}) {
+  if (parent?.type === NODE_TYPE.MEMBER && !parent.computed && parent.property === node) {
+    return false;
+  }
+  if (parent?.type === NODE_TYPE.PROPERTY && !parent.computed && parent.key === node) {
+    return parent.value === node;
+  }
+  return true;
+}
+
+function allAliasUsesForwarded(records, declaration, forwarded) {
+  const uses = arrayFilter(records, (record) => record.node.type === NODE_TYPE.IDENTIFIER &&
+    record.node.name === declaration.id.name && record.node !== declaration.id &&
+    isReferenceOccurrence(record));
+  return uses.length > 0 && !arraySome(uses, ({node}) => !forwarded.has(node));
+}
+
+function markDependencyForwarding(records, passive) {
+  const forwarded = new WeakSet();
+  for (const record of records) {
+    const references = forwardedOption(record);
+    if (!references) continue;
+    passive.add(record.node.key);
+    for (const reference of references) {
+      passive.add(reference);
+      forwarded.add(reference);
+    }
+  }
+  // Backwards closure over simple immutable aliases: at most one addition per
+  // declaration. Any unknown use keeps the initializer's source evidence alive.
+  let pending = forwardingAliases(records);
+  while (pending.length) {
+    const accepted = arrayFilter(pending, ({node}) =>
+      allAliasUsesForwarded(records, node, forwarded));
+    if (!accepted.length) break;
+    for (const {node} of accepted) {
+      passive.add(node.id);
+      for (const reference of forwardedReference(node.init)) {
+        passive.add(reference);
+        forwarded.add(reference);
+      }
+    }
+    pending = arrayFilter(pending, (record) => !arrayIncludes(accepted, record));
+  }
+}
+
 // These are individual syntactic occurrences, never exempt subtrees. Unknown
 // bindings and uses retain the existing conservative identifier evidence.
 // Plain-class checks rule out visible accessors/mutations; they do not prove
@@ -255,6 +337,7 @@ export function passiveConstructionOccurrences(fn, parent, ancestors) {
   const records = recordsWithin(fn.body || fn);
   const passive = new WeakSet();
   markSyntaxLabels(records, passive);
+  markDependencyForwarding(records, passive);
   const bindings = constructedBindings(fn, records);
   const fields = provedFields(enclosingPlainClass(parent, ancestors), records, bindings);
   markPublications(records, fields, passive);

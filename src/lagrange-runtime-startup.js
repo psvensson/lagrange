@@ -183,7 +183,7 @@ async function startJoinNode(options) {
     replicaHandler: nodeJoiningService.replicaHandler,
     [METADATA_KEY]: null,
     bootstrapStartupAdapter: nodeJoiningService,
-    bootstrapService: null,
+
     epochManager: nodeJoiningService.epochManager,
     messageRouter: nodeJoiningService.messageRouter,
     readinessState: joinReadinessState,
@@ -447,7 +447,7 @@ async function startSeedNode(options) {
     partitionServices: bootstrapService.partitionServices,
     replicaHandler: bootstrapService.replicaHandler,
     [METADATA_KEY]: bootstrapService[METADATA_KEY],
-    bootstrapService: bootstrapService,
+    assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     epochManager: bootstrapService.epochManager,
     messageRouter: bootstrapService.messageRouter,
     readinessState,

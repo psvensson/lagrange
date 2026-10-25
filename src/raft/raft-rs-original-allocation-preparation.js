@@ -18,7 +18,8 @@ import {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations,
 // formats, issues and reads them only through these named operations.
 import {prepareReplicaLifecycleForOriginalAllocation, prepareOriginalAllocationRow,
   markOriginalAllocationIssued, readOriginalAllocationRow,
-  readOriginalAllocationDeclaration} from './raft-rs-replica-lifecycle-owner.js';
+  readOriginalAllocationDeclaration, transitionOriginalRight} from
+  './raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from './raft-rs-durable-store.js';
 import {RAFT_RS_RETAINED_HISTORY_COVERAGE, RAFT_RS_RETAINED_ENTRY_KIND,
   RAFT_RS_ZERO_INDEX} from './raft-rs-durable-store-constants.js';
@@ -36,6 +37,7 @@ import {validateBootstrapMembershipStamp, validateDurableRecordBootstrap} from
 
 const ABSENT_FILE = 'ENOENT';
 const JOURNAL_SUFFIXES = Object.freeze(['', '-wal', '-journal']);
+const PUBLICATION_EXECUTION = Object.freeze({IDLE: 'idle', RUNNING: 'running'});
 
 function assertVirginMember(member) {
   for (const suffix of JOURNAL_SUFFIXES) {
@@ -138,6 +140,13 @@ function inspectColdMember(db, declaration, member) {
 // declaration read from disk nor a copied object can reopen original work.
 // Tokens own no handle: the existing service/port keeps physical custody.
 const originalOpenings = new WeakMap();
+let originalRightObserver = null;
+
+// Passive measurement of committed owner transitions. The observer supplies
+// no authority; a changed lifetime is checked again before the next effect.
+function setOriginalAllocationRightObserver(observer) {
+  originalRightObserver = observer;
+}
 
 function requireOriginalOpening(opening) {
   const record = originalOpenings.get(opening);
@@ -163,6 +172,7 @@ function consumeOriginalAllocationOpening(opening, request) {
   record.assertCurrent();
   // Even construction failure cannot turn this into another opening right.
   record.consumed = true;
+  record.db = request[PORT_REQUEST.DURABLE_STORAGE];
   return (incarnation) => {
     record.assertCurrent();
     if (incarnation !== record.member.incarnation) {
@@ -188,6 +198,8 @@ class RaftRsOriginalAllocationPreparation {
   #inspectApplicationHistory = null;
   #openings = new Map();
   #openingValidationActive = false;
+  #publications = new Map();
+  #handoffComplete = false;
 
   constructor({directoryOwner, dataDir, nodeId, buildDigest}) {
     this.#directoryOwner = directoryOwner;
@@ -343,6 +355,166 @@ class RaftRsOriginalAllocationPreparation {
     return this.#declaration.declaredAt;
   }
 
+  assertContinuation(replicaId = undefined) {
+    this.#assertCurrent();
+    if (this.#openingMode === null) throw originalAllocationError(REASON.AUTHORITY);
+    if (this.#openingMode !== STATE.LIVE_ISSUER) {
+      throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE, replicaId);
+    }
+    if (replicaId !== undefined) this.#continuedMember(replicaId);
+  }
+
+  #continuedMember(replicaId) {
+    const opening = this.#openings.get(replicaId);
+    const record = originalOpenings.get(opening);
+    if (!record?.admitted || !record.consumed) {
+      throw originalAllocationError(REASON.AUTHORITY, replicaId);
+    }
+    let row;
+    try {
+      row = readOriginalAllocationRow({db: record.db, member: record.member});
+    } catch (error) {
+      throw error?.code === STATE.HOLD ? error :
+        originalAllocationError(REASON.OBSERVATION, replicaId, error);
+    }
+    if (row[COLUMN.DECLARATION] !== JSON.stringify(this.#declaration) ||
+        row[COLUMN.ISSUE] !== (replicaId === this.#declaration.anchorReplicaId ?
+          STATE.ISSUED : STATE.PREPARING) ||
+        row.native_history_state !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
+      throw originalAllocationError(REASON.IDENTITY, replicaId);
+    }
+    return record;
+  }
+
+  serviceBirth(replicaId) {
+    this.assertContinuation(replicaId);
+    const {member} = this.#continuedMember(replicaId);
+    return Object.freeze({created_at: member.createdAt,
+      state_entered_at: member.createdAt, updated_at: member.createdAt,
+      create_attempt_token: member.createAttemptToken});
+  }
+
+  assertServiceIdentity(replicaId, row) {
+    this.assertContinuation(replicaId);
+    const {member} = this.#continuedMember(replicaId);
+    const partition = member.serviceType === SERVICE_TYPE.PARTITION;
+    const address = originalSeedPeerAddresses(this.#declaration.nodeId,
+      member.serviceType, [member.replicaId])[0];
+    const identity = {service_id: member.replicaId, replica_id: member.replicaId,
+      service_type: member.serviceType, node_id: this.#declaration.nodeId, address,
+      partition_id: partition ? member.groupId : null,
+      group_id: partition ? null : member.groupId, ...this.serviceBirth(replicaId)};
+    if (!Object.entries(identity).every(([field, value]) => row[field] === value)) {
+      throw originalAllocationError(REASON.IDENTITY, replicaId);
+    }
+  }
+
+  clusterIdentity() {
+    this.assertContinuation(this.#declaration?.anchorReplicaId);
+    return Object.freeze({replicaId: this.#declaration.anchorReplicaId,
+      clusterId: this.#declaration.clusterId, timestamp: this.#declaration.declaredAt});
+  }
+
+  // The same live issuer retains a submitted operation's exact value. A later
+  // invocation may only read it back. No failure, absent row or lost response
+  // restores submission authority. Durable rights remain lifecycle-owned.
+  async publishOriginalRight({replicaId, right, value, submit, observe}) {
+    this.assertContinuation(replicaId);
+    const record = this.#continuedMember(replicaId);
+    if (right !== COLUMN.SERVICE_RIGHT &&
+        !(right === COLUMN.IDENTITY_RIGHT && replicaId === this.#declaration.anchorReplicaId)) {
+      throw originalAllocationError(REASON.IDENTITY, replicaId);
+    }
+    if (right === COLUMN.SERVICE_RIGHT) this.assertServiceIdentity(replicaId, value);
+    const key = `${replicaId}:${right}`;
+    const expected = deepFreeze(structuredClone(value));
+    const retained = this.#publications.get(key);
+    if (retained) {
+      if (right === COLUMN.IDENTITY_RIGHT && !isDeepStrictEqual(retained.value, expected)) {
+        throw originalAllocationError(REASON.IDENTITY, replicaId);
+      }
+      // A leader change can alter a newly built SERVICES row's mutable role.
+      // Identity is checked above; the existing operation still observes and
+      // returns its first exact row, never the caller's rebuilt mutable value.
+      if (retained.execution.state === PUBLICATION_EXECUTION.RUNNING) {
+        return retained.execution.promise;
+      }
+    } else if (readOriginalAllocationRow({db: record.db, member: record.member})[right] !==
+        STATE.UNUSED) {
+      // A refused first call must not leave a retained invocation that could
+      // turn the next call's observed SUBMITTED/TRANSFERRED row into authority.
+      throw originalAllocationError(REASON.SPENT, replicaId);
+    }
+    const publication = retained || {value: expected,
+      execution: {state: PUBLICATION_EXECUTION.IDLE}};
+    this.#publications.set(key, publication);
+    // A promise is installed before any callback can re-enter this operation.
+    const promise = Promise.resolve().then(async () => {
+      this.assertContinuation(replicaId);
+      const {db, member} = record;
+      const row = readOriginalAllocationRow({db, member});
+      if (row[right] === STATE.TRANSFERRED) {
+        if (!retained) throw originalAllocationError(REASON.SPENT, replicaId);
+        return publication.value;
+      }
+      let submissionError;
+      if (row[right] === STATE.UNUSED) {
+        this.#transitionRight(record, right, STATE.UNUSED, STATE.SUBMITTED);
+        this.assertContinuation(replicaId);
+        try {
+          await submit(publication.value);
+        } catch (error) {
+          submissionError = error;
+        }
+      } else if (row[right] !== STATE.SUBMITTED || !retained) {
+        throw originalAllocationError(REASON.SPENT, replicaId);
+      }
+      this.assertContinuation(replicaId);
+      let observed;
+      try {
+        observed = await observe(publication.value);
+      } catch (error) {
+        throw originalAllocationError(REASON.OBSERVATION, replicaId, error);
+      }
+      this.assertContinuation(replicaId);
+      if (observed !== true) {
+        throw originalAllocationError(REASON.OBSERVATION, replicaId, submissionError);
+      }
+      this.#transitionRight(record, right, STATE.SUBMITTED, STATE.TRANSFERRED);
+      return publication.value;
+    });
+    publication.execution = {state: PUBLICATION_EXECUTION.RUNNING, promise};
+    try {
+      return await publication.execution.promise;
+    } finally {
+      publication.execution = {state: PUBLICATION_EXECUTION.IDLE};
+    }
+  }
+
+  #transitionRight({db, member}, right, from, to) {
+    transitionOriginalRight({db, member, right, from, to});
+    originalRightObserver?.(Object.freeze({replicaId: member.replicaId, right, from, to}));
+  }
+
+  assertPublicAdmission() {
+    this.assertContinuation();
+    // Transfer is irreversible. Once this exact live attempt has observed
+    // every durable right transferred, ordinary founder retirement must not
+    // turn its completed handoff back into startup debt. Current custody and
+    // LIVE_ISSUER are still required; cold/closed attempts cannot borrow it.
+    if (this.#handoffComplete) return;
+    for (const member of this.#declaration.members) {
+      const {db} = this.#continuedMember(member.replicaId);
+      const row = readOriginalAllocationRow({db, member});
+      if (row[COLUMN.SERVICE_RIGHT] !== STATE.TRANSFERRED ||
+          (member.replicaId === this.#declaration.anchorReplicaId &&
+           row[COLUMN.IDENTITY_RIGHT] !== STATE.TRANSFERRED)) {
+        throw originalAllocationError(REASON.INCOMPLETE, member.replicaId);
+      }
+    }
+    this.#handoffComplete = true;
+  }
+
   /**
    * Ask this exact live attempt for one declared member's original opening.
    * There is no issuance from a row, serialized mode, or partial preparation.
@@ -359,6 +531,8 @@ class RaftRsOriginalAllocationPreparation {
       originalOpenings.set(opening, {
         member,
         consumed: false,
+        admitted: false,
+        db: null,
         assertCurrent: () => this.#assertCurrent(),
         validate: (request, final) =>
           this.#validateOpeningRequest(member, request, final),
@@ -404,6 +578,7 @@ class RaftRsOriginalAllocationPreparation {
       identityExisted: this.#openingMode === STATE.COLD_RECOVERY,
       originalAllocationOpening: opening});
     this.#assertCurrent();
+    originalOpenings.get(opening).admitted = true;
     return admitted;
   }
 
@@ -524,4 +699,4 @@ class RaftRsOriginalAllocationPreparation {
 }
 
 export {RaftRsOriginalAllocationPreparation, verifyMemberBinding,
-  consumeOriginalAllocationOpening};
+  consumeOriginalAllocationOpening, setOriginalAllocationRightObserver};

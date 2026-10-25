@@ -11,7 +11,8 @@ import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
   '../seed-foundation-rows.js';
 import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../raft/raft-rs-original-allocation-constants.js';
-import {randomUUID} from 'node:crypto';
+import {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity} from
+  '../seed-original-registration.js';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
   CONFIG_SEED_SOURCE,
@@ -63,7 +64,6 @@ const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_DIRECT_BOOTSTRAP_SEED = 'direct_bootstrap_seed';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
-const CLUSTER_ID_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const CLUSTER_ID_CONFIG_DESCRIPTION =
   'Authoritative durable cluster identity (minted once at first seed bootstrap)';
 import {resolveHostedNodeClock} from
@@ -245,6 +245,8 @@ class SeedRegistrationPhase {
             service,
             timestamp: now,
             status: SERVICE_STATUS.STOPPED,
+            originalRegistration: originalSeedServiceRegistration(
+              d.getOriginalSeedPreparation(), replicaId, systemTableWriter),
           });
         this.messageGroupRegistrationEvidenceByReplicaId.set(
           replicaId,
@@ -271,6 +273,8 @@ class SeedRegistrationPhase {
             service,
             timestamp: now,
             status: SERVICE_STATUS.STOPPED,
+            originalRegistration: originalSeedServiceRegistration(
+              d.getOriginalSeedPreparation(), replicaId, systemTableWriter),
           });
         partitionRegistrationEvidenceByReplicaId.set(
           replicaId,
@@ -603,45 +607,27 @@ class SeedRegistrationPhase {
   }
 
   /**
-   * Mint the durable cluster identity exactly once: the first seed bootstrap
-   * persists a randomUUID as the replicated CONFIG-row singleton. A later
-   * boot that finds the row already present leaves it untouched (the
-   * identity never changes for the life of the cluster).
+   * Transfer the already reserved cluster identity. Missing answers retain
+   * the submitted right; no later call may mint or insert another identity.
    * @return {Promise<void>}
    */
   async persistClusterIdIfMissing() {
     const d = this.delegates;
-    const configPartition =
-      this.runtimeOwner.findLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
-    if (configPartition?.isLeader) {
-      const result = await configPartition.executeQuery(
-        CLUSTER_ID_EXISTS_SQL,
-        [CLUSTER_ID_CONFIG_KEY],
-      );
-      const hasClusterId = result?.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0;
-      if (hasClusterId) {
-        return;
-      }
-    }
-
-    const clusterId = randomUUID();
-    const now = resolveHostedNodeClock(this.delegates)();
+    const preparation = d.getOriginalSeedPreparation();
+    const {clusterId, timestamp: now} = preparation.clusterIdentity();
     const systemTableWriter = this.ensureSystemTableWriter();
 
-    await systemTableWriter.upsertSystemTableRow(
-      SYSTEM_TABLE_NAME.CONFIG, {
-        [COLUMN.CONFIG_KEY]: CLUSTER_ID_CONFIG_KEY,
-        [COLUMN.CONFIG_VALUE]: clusterId,
-        [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.STRING,
-        [COLUMN.REQUIRES_RESTART]: 0,
-        [COLUMN.DESCRIPTION]: CLUSTER_ID_CONFIG_DESCRIPTION,
-        [COLUMN.DEFAULT_VALUE]: clusterId,
-        [COLUMN.UPDATED_BY]: d.getNodeId(),
-        [COLUMN.UPDATED_AT]: now,
-        [COLUMN.CREATED_AT]: now,
-      });
+    await publishOriginalSeedClusterIdentity(preparation, systemTableWriter, {
+      [COLUMN.CONFIG_KEY]: CLUSTER_ID_CONFIG_KEY,
+      [COLUMN.CONFIG_VALUE]: clusterId,
+      [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.STRING,
+      [COLUMN.REQUIRES_RESTART]: 0,
+      [COLUMN.DESCRIPTION]: CLUSTER_ID_CONFIG_DESCRIPTION,
+      [COLUMN.DEFAULT_VALUE]: clusterId,
+      [COLUMN.UPDATED_BY]: d.getNodeId(),
+      [COLUMN.UPDATED_AT]: now,
+      [COLUMN.CREATED_AT]: now,
+    });
   }
 
   /**

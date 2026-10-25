@@ -228,7 +228,7 @@ class SeedMessageGroupsPhase {
     );
 
     if (!options.deferElection) {
-      d.assertOriginalSeedContinuation();
+      d.assertOriginalSeedContinuation(options.replicaId);
       messageGroup.startElection();
     }
 

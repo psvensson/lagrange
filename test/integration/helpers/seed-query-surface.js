@@ -39,7 +39,9 @@ export function createSeedQuerySurface(bootstrapService, bootstrapResult,
     systemTableCache,
     messageRouter: bootstrapResult.messageRouter,
     epochManager: bootstrapResult.epochManager,
-    bootstrapService,
+    bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+    runtimeOwner: bootstrapService.runtimeDependencyOwner,
+    assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
   });
   return {
     systemTableCache,

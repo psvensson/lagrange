@@ -35,11 +35,13 @@ const ORIGINAL_LIFECYCLE_PREPARE =
   'prepareReplicaLifecycleForOriginalAllocation';
 // The preparation's declared calls into the lifecycle owner, the sole writer
 // of the allocation fields (owner decision 2026-10-26, Q3): format a born
-// founder's allocation row, issue the anchor, and the two named reads.
+// founder's allocation row, issue the anchor, the two named reads, and consume
+// an original right through the lifecycle owner's monotonic transition.
 const ORIGINAL_ALLOCATION_ROW_PREPARE = 'prepareOriginalAllocationRow';
 const ORIGINAL_ALLOCATION_ISSUE = 'markOriginalAllocationIssued';
 const ORIGINAL_ALLOCATION_ROW_READ = 'readOriginalAllocationRow';
 const ORIGINAL_ALLOCATION_DECLARATION_READ = 'readOriginalAllocationDeclaration';
+const ORIGINAL_ALLOCATION_RIGHT_TRANSITION = 'transitionOriginalRight';
 // Each declared caller and one named lifecycle operation it may import, one
 // row per (caller, operation): a symbol missing here is refused there.
 const LIFECYCLE_OPERATION_CALLERS = Object.freeze([
@@ -50,6 +52,7 @@ const LIFECYCLE_OPERATION_CALLERS = Object.freeze([
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_ISSUE]),
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_ROW_READ]),
   Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_DECLARATION_READ]),
+  Object.freeze([ORIGINAL_ALLOCATION_PREPARATION, ORIGINAL_ALLOCATION_RIGHT_TRANSITION]),
 ]);
 const LIFECYCLE_ADMIN =
   'src/raft/raft-rs-lifecycle-administration.js';

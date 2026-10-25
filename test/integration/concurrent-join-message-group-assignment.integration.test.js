@@ -78,7 +78,9 @@ async function withSeedApi(t, apiOptions, run) {
       systemTableCache: NodeService.getInstance().getSystemTableCache(),
       messageRouter: bootstrapResult.messageRouter,
       epochManager: bootstrapResult.epochManager,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+      runtimeOwner: bootstrapService.runtimeDependencyOwner,
+      assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
       ...apiOptions,
     });
     await seedApi.initialize(0, {listen: false});

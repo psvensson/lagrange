@@ -689,27 +689,6 @@ test('Branch-specific - seed shutdown calls bootstrapService.shutdown(), ' +
     'join shutdown calls nodeJoiningService.cleanup()');
 });
 
-test('Branch-specific - seed creates BootstrapAPI with bootstrapService ' +
-  'reference, join creates it without', async (t) => {
-  // Seed path: new BootstrapAPI({...bootstrapService: bootstrapService...})
-  // Join path: new BootstrapAPI({...bootstrapService: null...})
-  // This affects isStartupComplete() and other bootstrapService-dependent
-  // readiness checks in BootstrapAPI.
-
-  const seedBootstrapAPIOptions = {
-    bootstrapService: {phase: 'COMPLETE'},
-  };
-
-  const joinBootstrapAPIOptions = {
-    bootstrapService: null,
-  };
-
-  t.ok(seedBootstrapAPIOptions.bootstrapService !== null,
-    'seed BootstrapAPI receives bootstrapService reference');
-  t.equal(joinBootstrapAPIOptions.bootstrapService, null,
-    'join BootstrapAPI receives null bootstrapService');
-});
-
 test('Branch-specific - both paths wire controlPlaneWriteHealthProvider ' +
   'from their respective owner', async (t) => {
   // Seed: createControlPlaneWriteHealthProvider(bootstrapService)

@@ -335,7 +335,7 @@ class SeedPartitionsPhase {
     );
 
     if (!options.deferElection) {
-      d.assertOriginalSeedContinuation();
+      d.assertOriginalSeedContinuation(options.replicaId);
       partition.startElection();
     }
 
@@ -397,6 +397,7 @@ class SeedPartitionsPhase {
       });
 
       for (const messageGroup of messageGroupReplicas) {
+        d.assertOriginalSeedContinuation(messageGroup.replicaId);
         messageGroup.startElection();
       }
 
@@ -439,6 +440,7 @@ class SeedPartitionsPhase {
     }
 
     for (const partition of registrationRequiredReplicas) {
+      d.assertOriginalSeedContinuation(partition.replicaId);
       partition.startElection();
     }
 
@@ -452,6 +454,7 @@ class SeedPartitionsPhase {
       // replica and this scheduler must not restart them.
       if (!d.isShuttingDown()) {
         for (const partition of remainingReplicas) {
+          d.assertOriginalSeedContinuation(partition.replicaId);
           partition.startElection();
         }
       }

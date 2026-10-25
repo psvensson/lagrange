@@ -400,7 +400,8 @@ function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, 
   let hasSqlAccess = false;
   let cacheLine = null;
   let sqlLine = null;
-  const passive = passiveConstructionOccurrences(node, context.parent, context.ancestors);
+  const passive = passiveConstructionOccurrences(
+    node, context.parent, context.ancestors);
 
   walkAst(node.body || node, (child) => {
     if (child.type === 'Identifier' && !passive.has(child)) {

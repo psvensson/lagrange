@@ -28,7 +28,7 @@
   "censusSize": 2456,
   "digest": "fnv1a32-172eadc5",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c29fd940",
+  "observationDigest": "fnv1a32-4237e4b8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2818,6 +2818,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
@@ -2853,7 +2854,8 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/bootstrap/shared/control-plane-setup.js"
+        "src/bootstrap/shared/control-plane-setup.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/bootstrap-topology-snapshot-owner.test.js": {
@@ -2866,7 +2868,8 @@
     "test/bootstrap/bootstrap-websocket-server-reentry.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/call-cell-invocation-setup.test.js": {
@@ -2928,20 +2931,24 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/raft/raft-rs-runtime-owner.js"
+        "src/raft/raft-rs-runtime-owner.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/fresh-join-via-non-seed-node.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/fresh-seed-activation.integration.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-original-allocation-declaration.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
@@ -2966,6 +2973,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
@@ -3065,6 +3073,7 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/runtime-build-provenance.js",
         "src/node/participant-release-authorization-owner.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
@@ -3217,6 +3226,7 @@
         "src/bootstrap/pipeline/join-startup-plan.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
@@ -3224,6 +3234,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
@@ -3268,7 +3279,8 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/bootstrap/register-node-in-cluster.test.js": {
@@ -3391,7 +3403,13 @@
     "test/bootstrap/seed-registration-phase.test.js": {
       "files": [
         "src/bootstrap/bootstrap-service-seed-delegates.js",
-        "src/raft/raft-rs-original-allocation-constants.js"
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
     "test/bootstrap/seed-release-failure-custody.test.js": {
@@ -3405,6 +3423,7 @@
         "src/message-group/message-group-service-row-owner.js",
         "src/partition/partition-participant-transaction-pause.js",
         "src/partition/partition-participant-transaction-store.js",
+        "src/storage/data-directory-process-owner.js",
         "test/test-helpers/seed-release-failure-custody-fixture.js"
       ]
     },
@@ -3721,7 +3740,8 @@
     "test/cdc/current-epoch-propagation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/cli/core/base-view-model.test.js": {
@@ -4115,7 +4135,8 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/control-plane/current-membership-epoch-null-unreadable.test.js": {
@@ -4530,6 +4551,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ]
     },
@@ -7435,7 +7457,8 @@
     "test/integration/admin-cdc-propagation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/artifact-payload-durability.integration.test.js": {
@@ -7504,7 +7527,8 @@
     "test/integration/cdc-propagation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/cdc-subscription-catchup.integration.test.js": {
@@ -7535,14 +7559,16 @@
         "src/bootstrap/bootstrap-constants.js",
         "src/bootstrap/phases/contact-seed-failure-signals.js",
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/control-plane-rebalance.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/rebalancer/replica-operation-constants.js"
+        "src/rebalancer/replica-operation-constants.js",
+        "src/storage/data-directory-process-owner.js"
       ],
       "env": [
         "TAP"
@@ -7554,6 +7580,7 @@
         "src/admin/static/playback-viewer.html",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js"
       ]
@@ -7561,13 +7588,15 @@
     "test/integration/create-table-partition-provisioning.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/critical-partition-learner-safety.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/critical-replica-placement-causal-trace.integration.test.js": {
@@ -7578,7 +7607,8 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/node/replica-handler-create-methods.js",
         "src/partition/partition-service-learner-promotion-methods.js",
-        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js"
+        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/cross-node-replica-placement.integration.test.js": {
@@ -7605,7 +7635,8 @@
     "test/integration/debug-join-flow.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ],
       "env": [
         "TAP"
@@ -7616,6 +7647,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/storage/data-directory-process-owner.js",
         "test/test-helpers/lifecycle-state-store.js"
       ],
       "env": [
@@ -7645,7 +7677,8 @@
     "test/integration/insert-or-ignore-raft-replay.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/lagrange-server-npm-package.integration.test.js": {
@@ -7679,7 +7712,8 @@
     "test/integration/leader-metadata-validation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ],
       "env": [
         "TAP"
@@ -7698,7 +7732,8 @@
         "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/partition/partition-service-raft-peer-cache-reconciliation.js"
+        "src/partition/partition-service-raft-peer-cache-reconciliation.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/managed-split-writes-after-cutover.integration.test.js": {
@@ -7724,7 +7759,8 @@
         "src/control-plane/node-liveness-semantic-projection.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/control-plane/replica-dispatch-service.js",
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/message-group-learner-discovery.integration.test.js": {
@@ -7790,6 +7826,7 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-constants.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/test-helpers/participant-release-delivery-trace.js"
       ]
@@ -7797,7 +7834,8 @@
     "test/integration/message-group-multi-join-formation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/message-group-service-handler-services-row.integration.test.js": {
@@ -7871,25 +7909,29 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
-        "src/control-plane/control-plane-readiness-constants.js"
+        "src/control-plane/control-plane-readiness-constants.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/multi-node-raft-replication.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/node-join-convergence-slo.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/node-join-replica-activation.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/node-joining-rebalance.integration.test.js": {
@@ -7897,7 +7939,8 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/control-plane/replica-dispatch-service.js"
+        "src/control-plane/replica-dispatch-service.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/pgwire-bootstrap.integration.test.js": {
@@ -7930,7 +7973,8 @@
     "test/integration/preflight-critical-path-hops.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ],
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
@@ -7941,6 +7985,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/query/application-database.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
@@ -7948,6 +7993,7 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
@@ -7970,13 +8016,15 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/embedded-node-worker.js"
       ]
     },
     "test/integration/raft-leader-election.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ],
       "env": [
         "LAGRANGE_TEST_MACHINE_FACTOR"
@@ -7988,6 +8036,7 @@
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/rebalancer/replica-operation-constants.js",
+        "src/storage/data-directory-process-owner.js",
         "test/node/replica-handler-bootstrap-stamps.js",
         "test/test-helpers/lifecycle-state-store.js"
       ]
@@ -7995,7 +8044,8 @@
     "test/integration/replica-operations-owner-read-transport-readiness.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/seed-migration-cutover-persisted.integration.test.js": {
@@ -8003,6 +8053,7 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/tx1-migration-disk-reader.js"
       ],
       "env": [
@@ -8030,13 +8081,15 @@
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
     "test/integration/seed-owner-read-diagnosis.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/service-install-lifecycle-cli-pgwire.integration.test.js": {
@@ -8050,20 +8103,23 @@
     "test/integration/services-p1-self-referential-write.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/single-node-default-replica-count-writes.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/seed-query-surface.js"
       ]
     },
     "test/integration/sql-engine-system-writes-contract.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/sql-workflow.integration.test.js": {
@@ -8115,13 +8171,15 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
-        "src/rebalancer/unified-rebalancer.js"
+        "src/rebalancer/unified-rebalancer.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/three-node-seed-rebalance.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/transaction-coordinator-restart.integration.test.js": {
@@ -8160,7 +8218,8 @@
     "test/integration/user-table-metadata-fanout.integration.test.js": {
       "files": [
         "src/bootstrap/rejoin-hints.js",
-        "src/bootstrap/seed-startup-storage-admission.js"
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/integration/versioned-cdc-readiness-convergence.integration.test.js": {
@@ -12415,6 +12474,7 @@
         "src/partition/partition-service.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/raft/raft-rs-durable-store-constants.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/seed-query-surface.js",
         "test/test-helpers/participant-release-delivery-trace.js"
       ],
@@ -12676,6 +12736,7 @@
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
         "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },
@@ -13710,7 +13771,8 @@
         "src/control-plane/control-plane-publications-leadership.js",
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
-        "src/diagnostics/formation-turn-attribution.js"
+        "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js"
       ]
     },
     "test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js": {
@@ -14929,9 +14991,12 @@
         "scripts/participant-release-completion-audit.js",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
         "src/bootstrap/owners/seed-runtime-bridge-owner.js",
+        "src/bootstrap/phases/seed-partitions-phase.js",
         "src/bootstrap/shared/message-group-transport-handler.js",
         "src/constants/index.js",
         "src/diagnostics/runtime-build-provenance.js",
+        "src/live-query/live-query-manager.js",
+        "src/migration/migration-composition.js",
         "src/node/participant-release-client.js",
         "src/node/participant-release-diagnostic-observation.js",
         "src/node/replica-handler-constants.js",
@@ -16953,13 +17018,13 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/message-group/message-group-service.js",
         "src/partition/partition-service-core-base.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js",
@@ -16978,6 +17043,7 @@
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
         "src/rebalancer/priority-publication-safety-rows.js",
+        "src/storage/data-directory-process-owner.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-infrastructure-composition.js"
       ]
@@ -16986,11 +17052,11 @@
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
         "src/bootstrap/pipeline/startup-pipeline-runner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-diagnostics-contract.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js",
@@ -17000,10 +17066,10 @@
     "test/simulation/formation-sim-charged-seed-host.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17022,10 +17088,10 @@
     "test/simulation/formation-sim-production-bootstrap-phase-one.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17034,10 +17100,10 @@
     "test/simulation/formation-sim-production-five-node-composition.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17046,10 +17112,10 @@
     "test/simulation/formation-sim-production-handoff.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17058,10 +17124,10 @@
     "test/simulation/formation-sim-production-message-groups.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17070,10 +17136,10 @@
     "test/simulation/formation-sim-production-partitions.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17082,10 +17148,10 @@
     "test/simulation/formation-sim-production-transcript-determinism.test.js": {
       "files": [
         "src/bootstrap/boot-incarnation-owner.js",
-        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/integration/helpers/cluster-test-helpers.js",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/formation-sim-boot-incarnation.js"
@@ -17104,6 +17170,7 @@
         "src/control-plane/membership-publication-coordinator.js",
         "src/control-plane/owners/membership-publication-runtime-owner.js",
         "src/diagnostics/formation-turn-attribution.js",
+        "src/storage/data-directory-process-owner.js",
         "test/simulation/calibration/formation-seed-2026-09-13.json",
         "test/simulation/calibration/formation-seed-2026-09-17.json",
         "test/simulation/calibration/seed-owner-costs.report.json",

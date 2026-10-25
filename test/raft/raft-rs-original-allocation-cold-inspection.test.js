@@ -11,7 +11,7 @@ import {createSeedOriginalAllocation} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
   '../../src/raft/raft-rs-original-allocation-preparation.js';
-import {RaftRsReplicaLifecycleOwner} from
+import {RaftRsReplicaLifecycleOwner, transitionOriginalRight, readOriginalAllocationRow} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {RaftRsDurableStore, commitDurably} from
   '../../src/raft/raft-rs-durable-store.js';
@@ -79,6 +79,35 @@ function setIdentityRight(member, value) {
   }
 }
 
+for (const state of [STATE.SUBMITTED, STATE.TRANSFERRED]) {
+  test(`cold inspection cannot reopen an original service right in ${state}`, (t) => {
+    const f = completeStorageFixture(t);
+    const member = f.declaration.members[0];
+    const db = new Database(member.dbPath, {fileMustExist: true});
+    try {
+      transitionOriginalRight({db, member, right: COLUMN.SERVICE_RIGHT,
+        from: STATE.UNUSED, to: STATE.SUBMITTED});
+      if (state === STATE.TRANSFERRED) {
+        transitionOriginalRight({db, member, right: COLUMN.SERVICE_RIGHT,
+          from: STATE.SUBMITTED, to: STATE.TRANSFERRED});
+      }
+      const before = readOriginalAllocationRow({db, member});
+      const owner = f.createPreparation();
+      let applicationCalls = 0;
+      assert.throws(() => owner.inspect(f.declaration, () => {
+        applicationCalls++;
+        return STATE.HISTORY_ACCEPTED;
+      }), hold(REASON.SPENT));
+      assert.equal(applicationCalls, 0);
+      assert.throws(() => owner.assertContinuation(), hold(REASON.CLOSED));
+      assert.deepEqual(readOriginalAllocationRow({db, member}), before);
+      assert.deepEqual(owner.observeResources(), []);
+    } finally {
+      db.close();
+    }
+  });
+}
+
 test('complete original cold inspection: current custody and exact rights', async (t) => {
   const f = completeStorageFixture(t);
   const first = f.declaration.members[0];
@@ -99,6 +128,10 @@ test('complete original cold inspection: current custody and exact rights', asyn
     assert.deepEqual(visited, f.declaration.members.map((member) => member.replicaId));
     assert.ok(databases.every((db) => db.open === false));
     assert.deepEqual(owner.observeResources(), []);
+    assert.throws(() => owner.assertContinuation(), hold(REASON.CONTINUATION_UNAVAILABLE));
+    assert.throws(() => owner.assertContinuation(first.replicaId),
+      hold(REASON.CONTINUATION_UNAVAILABLE));
+    assert.throws(() => owner.assertPublicAdmission(), hold(REASON.CONTINUATION_UNAVAILABLE));
   });
 
   await t.test('revocation inside the application owner stops before the next member', () => {

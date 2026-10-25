@@ -74,7 +74,7 @@ async function composedNodeZero() {
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
-  const host = createProductionSeedSimHost(environment,
+  const host = await createProductionSeedSimHost(environment,
     {bootIncarnation: await reserveSimulatedBootIncarnation()});
   const before_ = {
     messageRouter: host.bootstrap.messageRouter,
@@ -95,6 +95,22 @@ function incomingPeerIdentity(router) {
     if (connection.isIncoming) return connection.nodeId;
   }
   return undefined;
+}
+
+// The admission fence, observed: during bootstrap the seed's router is built
+// with no listening port and external admission disabled, and no endpoint is
+// bound on the node's port. Public transport opens only through
+// BootstrapService.startWebSocketServer / openExternalTransportAdmission,
+// which consume the original seed continuation.
+function assertExternalAdmissionFenced(host, routerOptions) {
+  assert.equal(routerOptions.wsPort, undefined,
+    'the phase requests no listening port during bootstrap');
+  assert.equal(routerOptions.externalAdmissionEnabled, false,
+    'and builds its router with external admission disabled');
+  assert.equal(host.bootstrap.messageRouter.isExternalAdmissionEnabled(), false,
+    'the router admits no remote node yet');
+  assert.equal(host.endpoints.hasEndpoint(WS_PORT), false,
+    'and nothing is bound on the node\'s port');
 }
 
 function eventsOf(transcript) {
@@ -128,7 +144,9 @@ test('A2b-1. the real phase composes node-0\'s phase-one infrastructure',
     const [routerOptions] = world.environment.routerOptionsSeen;
     assert.equal(routerOptions.nodeId, NODE_ID);
     assert.equal(routerOptions.nodeAddress, NODE_ADDRESS);
-    assert.equal(routerOptions.wsPort, WS_PORT);
+    // Retired since 7fa4d79ae: the phase no longer binds its wsPort; public
+    // admission opens only through the seed's admission fence.
+    assertExternalAdmissionFenced(world.host, routerOptions);
     assert.equal(bootstrap.messageRouter.nodeId, NODE_ID);
 
     assert.ok(bootstrap.serviceLifecycleManager,
@@ -161,56 +179,33 @@ test('A2b-2. phase one begins no message-group, partition or later semantics',
     await world.host.stop();
   });
 
-test('A2b-3. the phase returns before its IDENTIFY lands, and the host settles it',
+test('A2b-3. the fenced phase opens no transport, and settling adds none',
   async () => {
     const world = await composedNodeZero();
     const {scenario, host} = world;
     const router = host.bootstrap.messageRouter;
     const transcript = host.transcript();
 
-    // The endpoint the dial resolved is the router the PHASE created, in the
-    // scenario's own registry. The witness registered nothing and dialled
-    // nothing: the router did, from initialize().
-    assert.equal(host.endpoints.lookupEndpoint(WS_PORT).router, router,
-      'the phase\'s own router is what answers a dial on its port');
-
-    // The asynchronous tail, stated as a fact rather than repaired.
+    // Retired since 7fa4d79ae: the self-dial and its in-flight IDENTIFY. With
+    // external admission fenced the phase binds no port, so nothing is dialled.
+    assertExternalAdmissionFenced(host, world.environment.routerOptionsSeen[0]);
     const atReturn = eventsOf(transcript);
     assert.ok(atReturn.includes('phase_infrastructure_completed'),
       'the phase returned');
-    assert.ok(atReturn.includes('physical_socket_open'),
-      'with the self socket physically open');
-    assert.ok(atReturn.includes('frame_enqueued'),
-      'and its IDENTIFY enqueued on the link');
-    assert.ok(!atReturn.includes('frame_delivered'),
-      'but not delivered');
-    assert.ok(!atReturn.includes('self_identity_bound'),
-      'so no self identity is bound yet');
-    assert.equal(incomingPeerIdentity(router), null,
-      'which the router\'s own inbound record agrees with');
-    assert.equal(scenario.network.now(), 0, 'and no virtual time has passed');
+    for (const event of ['physical_socket_open', 'frame_enqueued',
+      'frame_delivered', 'identify_received', 'self_identity_bound']) {
+      assert.ok(!atReturn.includes(event), `the fenced phase emits no ${event}`);
+    }
 
-    // The host, not production, knows how to wait.
+    // The host's settle finds nothing of the phase's still in flight.
     await host.settleCausalConsequences();
-
-    const settled = eventsOf(transcript);
-    const order = (event) => settled.indexOf(event);
-    assert.ok(order('phase_infrastructure_completed') < order('frame_delivered'),
-      'the phase completed before its frame was delivered');
-    assert.ok(order('frame_delivered') < order('identify_received'),
-      'delivery came before the router decided the frame was an IDENTIFY');
-    assert.ok(order('identify_received') < order('self_identity_bound'),
-      'and identification before the self identity was bound');
-    assert.equal(incomingPeerIdentity(router), NODE_ID,
-      'real inbound IDENTIFY handling established the self connection');
-    assert.ok(router.hasSelfConnection());
-    assert.ok(scenario.network.now() >= LINK_DELAY_MS,
-      `identification consumed link time (now=${scenario.network.now()})`);
-
-    // No same-node shortcut: node-0 dialling itself still crossed the link.
-    const selfFrames = scenario.network.getRecords().filter((entry) =>
-      entry.from === NODE_ID && entry.to === NODE_ID);
-    assert.ok(selfFrames.length > 0);
+    assert.deepEqual(eventsOf(transcript), atReturn,
+      'settling adds no transport boundary');
+    assert.equal(incomingPeerIdentity(router), undefined,
+      'the router holds no inbound peer');
+    assert.equal(scenario.network.getRecords().length, 0,
+      'no frame crossed the link');
+    assert.equal(scenario.network.now(), 0, 'and no virtual time passed');
 
     await host.stop();
   });
@@ -298,7 +293,7 @@ test('A2b-7. red: a second infrastructure composer for node-0 is refused',
     const compositionRegistry = createInfrastructureCompositionRegistry();
     compositionRegistry.claim(NODE_ID, LEGACY_SIMULATED_NODE_HOST_COMPOSER);
 
-    assert.throws(
+    await assert.rejects(
       () => createProductionSeedSimHost(environment, {compositionRegistry}),
       (error) => error.code ===
         HARNESS_COMPOSITION_REFUSAL.DUPLICATE_INFRASTRUCTURE_COMPOSER,
@@ -306,7 +301,7 @@ test('A2b-7. red: a second infrastructure composer for node-0 is refused',
 
     // And the reverse order refuses too: whoever is second loses.
     const second = createInfrastructureCompositionRegistry();
-    const host = createProductionSeedSimHost(environment, {
+    const host = await createProductionSeedSimHost(environment, {
       compositionRegistry: second,
       bootIncarnation: await reserveSimulatedBootIncarnation(),
     });
@@ -318,14 +313,14 @@ test('A2b-7. red: a second infrastructure composer for node-0 is refused',
       'the refused scenario composed nothing');
   });
 
-test('A2b-8. red: precomposed infrastructure is refused as an argument', () => {
+test('A2b-8. red: precomposed infrastructure is refused as an argument', async () => {
   const scenario = createProductionSimScenario();
   const environment = createProductionSimNodeEnvironment({
     nodeId: NODE_ID, nodeAddress: NODE_ADDRESS, wsPort: WS_PORT, scenario,
   });
   for (const key of ['legacyHost', 'messageRouter', 'systemTableCache',
     'cdcIntegrationService', 'rebalanceCoordinator']) {
-    assert.throws(
+    await assert.rejects(
       () => createProductionSeedSimHost(environment, {[key]: {}}),
       (error) => error.code ===
         HARNESS_COMPOSITION_REFUSAL.PRECOMPOSED_INFRASTRUCTURE_ARGUMENT,

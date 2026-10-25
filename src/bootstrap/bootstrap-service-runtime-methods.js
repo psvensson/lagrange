@@ -28,7 +28,8 @@ import {
 import {isEndpointCurrentForNode} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
 import {prepareOriginalSeedAttempt, assertOriginalSeedAttempt, admitOriginalSeedReplica,
-  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation} from
+  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation,
+  assertOriginalSeedPublicAdmission} from
   './seed-original-allocation-startup.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
@@ -59,8 +60,11 @@ function createBootstrapServiceRuntimeMethods() {
     closeOriginalSeedAttempt() {
       return closeOriginalSeedAttempt(this);
     },
-    assertOriginalSeedContinuation() {
-      return assertOriginalSeedContinuation(this);
+    assertOriginalSeedContinuation(replicaId = undefined) {
+      return assertOriginalSeedContinuation(this, replicaId);
+    },
+    assertOriginalSeedPublicAdmission() {
+      return assertOriginalSeedPublicAdmission(this);
     },
     hasPublishedLocalServiceEndpoints() {
       const systemTableCache = this.getSystemTableCache();
@@ -292,11 +296,10 @@ function createBootstrapServiceRuntimeMethods() {
     /**
      * Start WebSocket server for cross-node communication.
      * Call this after bootstrap is complete to enable remote node connections.
-     * Note: If wsPort was provided during bootstrap, the server is already started.
      * @return {Promise<void>}
      */
     async startWebSocketServer() {
-      this.assertOriginalSeedContinuation();
+      this.assertOriginalSeedPublicAdmission();
       if (!this.messageRouter) {
         throw new Error(bootstrapError.ROUTER_NOT_READY);
       }
@@ -336,7 +339,7 @@ function createBootstrapServiceRuntimeMethods() {
      * @return {void}
      */
     openExternalTransportAdmission() {
-      this.assertOriginalSeedContinuation();
+      this.assertOriginalSeedPublicAdmission();
       if (typeof this.messageRouter?.setExternalAdmissionEnabled ===
         TYPEOF_FUNCTION) {
         this.messageRouter.setExternalAdmissionEnabled(true);

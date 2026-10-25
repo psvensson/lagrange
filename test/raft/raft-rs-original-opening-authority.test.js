@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import {createSeedOriginalAllocation} from
+import {createSeedOriginalAllocation, originalSeedPeerAddresses} from
   '../../src/bootstrap/seed-original-allocation-declaration.js';
 import {RaftRsOriginalAllocationPreparation} from
   '../../src/raft/raft-rs-original-allocation-preparation.js';
@@ -14,7 +14,9 @@ import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {createRaftRsOperationPort} from '../../src/raft/raft-rs-operation-port.js';
 import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.js';
-import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {readOriginalAllocationRow, transitionOriginalRight} from
+  '../../src/raft/raft-rs-replica-lifecycle-owner.js';
+import {raftRsLifecycleAdministration} from '../../src/raft/raft-rs-lifecycle-administration.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
@@ -284,6 +286,55 @@ test('all-member actual native opening then readonly original recovery', async (
       assert.deepEqual(attempt.owner.observeResources(), []);
     });
   }
+});
+
+test('observed completed handoff survives founder retirement only in its live custody', async (t) => {
+  const f = fixture(t);
+  f.prepare();
+  const opened = [];
+  for (const member of f.declaration.members) {
+    const admitted = f.preparation.admitReplica({serviceType: member.serviceType,
+      replicaId: member.replicaId, replicaIds: member.replicaIds,
+      ...(member.tableName ? {partitionId: member.groupId, tableName: member.tableName} :
+        {groupId: member.groupId}),
+      peerAddresses: originalSeedPeerAddresses(f.declaration.nodeId,
+        member.serviceType, member.replicaIds), deferElection: true});
+    const native = f.native(member, admitted.originalAllocationOpening);
+    opened.push({member, db: native.db, port: native.open()});
+  }
+  assert.throws(() => f.preparation.assertPublicAdmission(), hold(REASON.INCOMPLETE),
+    'real admitted openings alone cannot complete the handoff');
+  // Storage-owner fixture for the monotonic rights facts. The public child
+  // separately proves actual SERVICES/CONFIG submission and authoritative
+  // committed application readback; this test isolates handoff lifetime.
+  for (const {member, db} of opened) {
+    const rights = [COLUMN.SERVICE_RIGHT,
+      ...(member.replicaId === f.declaration.anchorReplicaId ? [COLUMN.IDENTITY_RIGHT] : [])];
+    for (const right of rights) {
+      transitionOriginalRight({db, member, right, from: STATE.UNUSED, to: STATE.SUBMITTED});
+      assert.throws(() => f.preparation.assertPublicAdmission(), hold(REASON.INCOMPLETE));
+      transitionOriginalRight({db, member, right, from: STATE.SUBMITTED, to: STATE.TRANSFERRED});
+    }
+  }
+  assert.doesNotThrow(() => f.preparation.assertPublicAdmission(),
+    'the owner observes every exact durable transferred right before retaining completion');
+  const first = opened[0];
+  const retired = await raftRsLifecycleAdministration.retireReplica(first.member.replicaId,
+    'completed-original-handoff-test', {groupId: first.member.groupId, runtime: first.port});
+  assert.equal(retired.outcome, 'CORE_OK');
+  assert.throws(() => readOriginalAllocationRow({db: first.db, member: first.member}),
+    (error) => error.code === STATE.HOLD, 'the original active row is no longer available');
+  first.port.close();
+  first.db.close();
+  assert.doesNotThrow(() => f.preparation.assertPublicAdmission(),
+    'ordinary retirement does not resurrect the completed original handoff obligation');
+  const cold = f.newOwner();
+  assert.throws(() => cold.assertPublicAdmission(), hold(REASON.AUTHORITY),
+    'a new preparation cannot borrow the old live completion');
+  f.directoryOwner.release();
+  assert.throws(() => f.preparation.assertPublicAdmission(), hold(REASON.DIRECTORY));
+  f.preparation.close();
+  assert.throws(() => f.preparation.assertPublicAdmission(), hold(REASON.CLOSED));
 });
 
 test('revocation while resolving the last dispatcher callback cannot cross native entry', (t) => {

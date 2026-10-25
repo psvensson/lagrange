@@ -9,14 +9,25 @@ import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {createSeedPhaseContinuationFixture} from './seed-phase-continuation-fixture.js';
 import {INITIAL_REPLICA_IDS} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {createOwnedVirginSeedBootstrapService, cleanupTestEnvironment,
+  initializeTestEnvironment, getUniquePort} from '../integration/helpers/cluster-test-helpers.js';
+import {readIssuedDeclaration} from '../test-helpers/original-allocation-durable-reader.js';
+import {openOriginalSeedReplica} from '../test-helpers/open-original-seed-replica.js';
 
 function createWriterRecorder() {
   const calls = [];
+  const rows = new Map();
   return {
     calls,
     async insertSystemTableRow(tableName, row) {
       calls.push({type: 'insert', tableName, row});
+      rows.set(`${tableName}:${row.service_id}`, {...row});
       return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async readAuthoritativeRows(tableName, _sql, [key]) {
+      calls.push({type: 'read', tableName, key});
+      const row = rows.get(`${tableName}:${key}`);
+      return {success: true, rows: row ? [{...row}] : []};
     },
     async upsertSystemTableRow(tableName, row) {
       calls.push({type: 'upsert', tableName, row});
@@ -29,223 +40,147 @@ function createWriterRecorder() {
   };
 }
 
+// Canonical owned seed setup is shared with the other seed component tests.
+// Only SQL effect/readback and the activation collaborator are substituted;
+// preparation, exact original opening and original publication are real owners.
+async function registrationFixture(t, {withMessageGroup = false} = {}) {
+  initializeTestEnvironment({nodeId: 'node-a'});
+  const service = await createOwnedVirginSeedBootstrapService(t, {nodeId: 'node-a',
+    nodeAddress: 'http://127.0.0.1:18080', wsPort: getUniquePort()});
+  t.after(() => cleanupTestEnvironment());
+  await service.prepareOriginalSeedAttempt();
+  await service.seedInfrastructurePhase.phaseInfrastructure();
+  service.systemTableCache = service.nodeService.getSystemTableCache();
+  const declaration = readIssuedDeclaration(service.dataDirectoryManager.getDataDir());
+  const partition = await openOriginalSeedReplica(service, declaration,
+    declaration.anchorReplicaId);
+  let messageGroup;
+  if (withMessageGroup) {
+    const member = declaration.members.find((entry) => entry.serviceType === 'message_group');
+    messageGroup = await openOriginalSeedReplica(service, declaration, member.replicaId);
+  }
+  let checks = 0;
+  return {service, partition, messageGroup,
+    delegates: {...service.seedRegistrationPhase.delegates,
+      assertOriginalSeedContinuation(replicaId) {
+        checks += 1;
+        service.assertOriginalSeedContinuation(replicaId);
+      }},
+    get checks() {
+      return checks;
+    }};
+}
+
 test('SeedRegistrationPhase registers partition rows as stopped before activation',
   async (t) => {
+    const fixture = await registrationFixture(t, {withMessageGroup: true});
     const writer = createWriterRecorder();
-    const continuation = createSeedPhaseContinuationFixture();
     const lifecycleActivations = [];
-    const messageGroupServices = new Map([
-      ['mg-1-r1', {
-        groupId: 'mg-1',
-        getUnifiedAddress() {
-          return 'node-a/message-group/mg-1-r1';
-        },
-        isLeaderReplica() {
-          return true;
-        },
-      }],
-    ]);
-    const partitionServices = new Map([
-      ['p1-r1', {
-        partitionId: 'p1',
-        replicaId: 'p1-r1',
-        initialized: true,
-        transportHandler: () => ({acknowledged: true}),
-        getUnifiedAddress() {
-          return 'node-a/partition/p1-r1';
-        },
-        getRole() {
-          return 'leader';
-        },
-      }],
-    ]);
     const phase = new SeedRegistrationPhase({
       delegates: {
-        ...continuation.delegates,
-        getLogger: () => ({
-          debug() {},
-          error() {},
-        }),
+        ...fixture.delegates,
         getSystemTableWriter: () => writer,
         getReplicaStateMachine: () => ({
           async activateRegisteredReplica(options) {
-            const row = {
-              service_id: options.replicaId,
-              service_type: 'partition',
-              partition_id: options.partitionId,
-              node_id: options.nodeId,
-              raft_role: 'leader',
-              status: SERVICE_STATUS.ACTIVE,
-              updated_at: options.timestamp,
-            };
+            const row = {service_id: options.replicaId, service_type: 'partition',
+              partition_id: options.partitionId, node_id: options.nodeId,
+              raft_role: 'leader', status: SERVICE_STATUS.ACTIVE, updated_at: options.timestamp};
             lifecycleActivations.push({options, row});
             return row;
           },
         }),
-        getNodeId: () => 'node-a',
-        getBootIncarnation: () => 1,
-        getMessageRouter: () => ({
-          isRegistered(address) {
-            return address === 'node-a/partition/p1-r1';
-          },
-          getRegisteredHandler(address) {
-            return address === 'node-a/partition/p1-r1' ?
-              partitionServices.get('p1-r1').transportHandler : null;
-          },
-        }),
-        getMessageGroupServices: () => messageGroupServices,
-        getPartitionServices: () => partitionServices,
       },
     });
 
     await phase.registerServices(1234);
-    t.equal(continuation.checks, 1, 'service registration consults continuation authority');
+    t.equal(fixture.checks, 1, 'service registration consults the real continuation authority');
+    const partitionInsert = writer.calls.find((call) => call.type === 'insert' &&
+      call.tableName === TABLES.SERVICES &&
+      call.row?.service_id === fixture.partition.member.replicaId);
+    t.equal(partitionInsert?.row?.status, SERVICE_STATUS.STOPPED,
+      'initial partition row registers as stopped');
+    t.equal(lifecycleActivations[0]?.row?.status, SERVICE_STATUS.ACTIVE,
+      'partition row activates only through the lifecycle owner');
+    t.equal(writer.calls.filter((call) => call.type === 'upsert' &&
+      call.tableName === TABLES.SERVICES).length, 0,
+    'partition registration never uses the old services upsert path');
+    t.match(phase.messageGroupRegistrationEvidenceByReplicaId.get(
+      fixture.messageGroup.member.replicaId), {
+      service_id: fixture.messageGroup.member.replicaId,
+      status: SERVICE_STATUS.STOPPED,
+      created_at: fixture.messageGroup.member.createdAt,
+      updated_at: fixture.messageGroup.member.createdAt,
+      create_attempt_token: fixture.messageGroup.member.createAttemptToken,
+    }, 'seed registration retains the declared STOPPED birth for later activation');
+    const originalEvidence = phase.messageGroupRegistrationEvidenceByReplicaId.get(
+      fixture.messageGroup.member.replicaId);
+    const isLeaderReplica = fixture.messageGroup.replica.isLeaderReplica;
+    fixture.messageGroup.replica.isLeaderReplica = () => true;
+    try {
+      await phase.registerServices(5678);
+    } finally {
+      fixture.messageGroup.replica.isLeaderReplica = isLeaderReplica;
+    }
+    t.same(phase.messageGroupRegistrationEvidenceByReplicaId.get(
+      fixture.messageGroup.member.replicaId), originalEvidence,
+    'message-group role change retains its original publication evidence');
+    t.equal(writer.calls.filter((call) => call.type === 'insert').length, 2,
+      'neither original replica registers a second birth');
+  });
 
-    const partitionInsert = writer.calls.find(
-      (call) => call.type === 'insert' &&
-        call.tableName === TABLES.SERVICES &&
-        call.row?.service_id === 'p1-r1',
-    );
-    const serviceUpserts = writer.calls.filter(
-      (call) => call.type === 'upsert' &&
-        call.tableName === TABLES.SERVICES,
-    );
-
-    t.equal(
-      partitionInsert?.row?.status,
-      SERVICE_STATUS.STOPPED,
-      'initial partition row should register as stopped',
-    );
-    t.equal(
-      lifecycleActivations[0]?.row?.status,
-      SERVICE_STATUS.ACTIVE,
-      'partition row should activate only through the lifecycle owner',
-    );
-    t.equal(
-      serviceUpserts.length,
-      0,
-      'partition registration should never use the old services upsert path',
-    );
-    t.match(
-      phase.messageGroupRegistrationEvidenceByReplicaId.get('mg-1-r1'),
-      {
-        service_id: 'mg-1-r1',
-        status: SERVICE_STATUS.STOPPED,
-        created_at: 1234,
-        updated_at: 1234,
+test('SeedRegistrationPhase retains deferred STOPPED birth across same-live phase re-entry',
+  async (t) => {
+    const fixture = await registrationFixture(t);
+    const writer = createWriterRecorder();
+    let activationAttempt = 0;
+    const logEvents = [];
+    const phase = new SeedRegistrationPhase({
+      delegates: {
+        ...fixture.delegates,
+        getLogger: () => ({
+          debug(message) {
+            logEvents.push(message);
+          },
+          error() {},
+          warn(message) {
+            logEvents.push(message);
+          },
+        }),
+        getSystemTableWriter: () => writer,
+        getReplicaStateMachine: () => ({
+          async activateRegisteredReplica() {
+            activationAttempt += 1;
+            throw Object.assign(new Error('activation owner deferred'), {
+              code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED', deferRetry: true,
+            });
+          },
+        }),
       },
-      'seed registration retains exact STOPPED authority for later activation',
-    );
+    });
+    const deferred = {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED', deferRetry: true};
+    await t.rejects(phase.registerServices(1234), deferred,
+      'the phase stays incomplete while exact activation is debt');
+    const insertedRows = writer.calls.filter((call) => call.type === 'insert');
+    t.equal(insertedRows.length, 1, 'the original STOPPED birth is inserted once');
+    const originalRow = {...insertedRows[0].row};
+    t.equal(originalRow.status, SERVICE_STATUS.STOPPED);
+    t.equal(originalRow.created_at, fixture.partition.member.createdAt);
+    t.equal(originalRow.create_attempt_token, fixture.partition.member.createAttemptToken);
+    t.equal(logEvents.includes('Services registered'), false,
+      'deferred activation does not report completion');
+
+    // Original publication retains its declared value, unlike ordinary row
+    // birth. Re-entry may revisit the activation owner but never remints or
+    // resubmits the already transferred original registration.
+    await t.rejects(phase.registerServices(5678), deferred);
+    t.equal(fixture.checks, 2, 'each phase invocation rechecks continuation authority');
+    t.same(writer.calls.filter((call) => call.type === 'insert').map(({row}) => row),
+      [originalRow], 're-entry leaves the exact original row and single INSERT intact');
+    t.equal(writer.calls.filter((call) => call.type === 'read').length, 1,
+      'the original transfer used one authoritative readback');
+    t.equal(activationAttempt, 2, 'activation debt remains with its existing owner');
+    t.equal(logEvents.includes('Services registered'), false);
   });
-
-test('SeedRegistrationPhase retains deferred STOPPED birth and rejects ' +
-  'whole-phase registration of a distinct birth', async (t) => {
-  const continuation = createSeedPhaseContinuationFixture();
-  let durableServiceRow = null;
-  let activationAttempt = 0;
-  let readCount = 0;
-  const insertedRows = [];
-  const logEvents = [];
-  const writer = {
-    async insertSystemTableRow(_tableName, row) {
-      insertedRows.push({...row});
-      if (durableServiceRow) {
-        return {
-          success: true,
-          outcome: 'observed_state_changed',
-          partitionResult: {affectedRows: 0},
-        };
-      }
-      durableServiceRow = {...row};
-      return {success: true, partitionResult: {affectedRows: 1}};
-    },
-    async readAuthoritativeRows() {
-      readCount += 1;
-      return {success: true, rows: [{...durableServiceRow}]};
-    },
-    async updateSystemTableRow() {
-      return {success: true, partitionResult: {affectedRows: 0}};
-    },
-  };
-  const partitionServices = new Map([
-    ['p1-r1', {
-      partitionId: 'p1',
-      initialized: true,
-      transportHandler: () => ({acknowledged: true}),
-      getUnifiedAddress: () => 'node-a/partition/p1-r1',
-      getRole: () => 'follower',
-    }],
-  ]);
-  const phase = new SeedRegistrationPhase({
-    delegates: {
-      ...continuation.delegates,
-      getLogger: () => ({
-        debug(message) {
-          logEvents.push(message);
-        },
-        error() {},
-        warn(message) {
-          logEvents.push(message);
-        },
-      }),
-      getSystemTableWriter: () => writer,
-      getReplicaStateMachine: () => ({
-        async activateRegisteredReplica() {
-          activationAttempt += 1;
-          const error = new Error('activation owner deferred');
-          error.code = 'REPLICA_ACTIVATION_DURABILITY_DEFERRED';
-          error.deferRetry = true;
-          throw error;
-        },
-      }),
-      getNodeId: () => 'node-a',
-      getBootIncarnation: () => 1,
-      getMessageRouter: () => ({isRegistered: () => true,
-        getRegisteredHandler: (address) =>
-          partitionServices.get(address.split('/').pop())?.transportHandler}),
-      getMessageGroupServices: () => new Map(),
-      getPartitionServices: () => partitionServices,
-    },
-  });
-
-  await t.rejects(
-    phase.registerServices(1234),
-    {code: 'REPLICA_ACTIVATION_DURABILITY_DEFERRED', deferRetry: true},
-    'seed registration must leave the phase incomplete while exact activation is debt',
-  );
-  t.equal(durableServiceRow.status, SERVICE_STATUS.STOPPED,
-    'deferred activation must retain its durable STOPPED source generation');
-  t.equal(logEvents.includes('Services registered'), false,
-    'the seed phase must not report registration completion on defer');
-  const originalRow = {...durableServiceRow};
-  t.same(insertedRows, [originalRow],
-    'the first phase invocation inserts exactly its original STOPPED birth');
-
-  // Whole-phase re-entry creates another registration attempt. The separately
-  // tested lifecycle-owner retry retains the first branded evidence; this
-  // phase test does not establish evidence retention or startup recovery.
-  await t.rejects(phase.registerServices(5678), {
-    code: 'REPLICA_IDENTITY_CONFLICT',
-    errorCode: 'REPLICA_IDENTITY_CONFLICT',
-    deferRetry: false,
-  }, 'the exact-birth creation owner must refuse a fresh birth over the original');
-  t.equal(continuation.checks, 2, 'each registration attempt rechecks continuation authority');
-  t.equal(insertedRows.length, 2, 'whole-phase re-entry attempts registration again');
-  t.equal(insertedRows[1].created_at > originalRow.created_at, true,
-    'the second registration carries a distinct monotonically minted birth');
-  t.same({...insertedRows[1],
-    created_at: originalRow.created_at,
-    state_entered_at: originalRow.state_entered_at,
-    updated_at: originalRow.updated_at}, originalRow,
-  'the rejected attempt differs in birth generation, not replica identity or status');
-  t.equal(readCount, 1, 'the refused INSERT observes the original authoritative row');
-  t.same(durableServiceRow, originalRow,
-    'the original durable STOPPED row remains unchanged after refusal');
-  t.equal(activationAttempt, 1,
-    'the conflicting registration must not reach a second activation');
-  t.equal(logEvents.includes('Services registered'), false,
-    'whole-phase refusal must not report registration completion');
-});
 
 test('SeedRegistrationPhase projects local meta service endpoints into cache during bootstrap registration',
   async (t) => {

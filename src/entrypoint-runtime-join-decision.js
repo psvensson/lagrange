@@ -441,7 +441,15 @@ async function resolveStartupJoinDecision(options) {
     });
   }
   if (autoRejoinDecision.mode === STARTUP_JOIN_DECISION_MODE.FAIL) {
-    throw new Error(autoRejoinDecision.error);
+    // Preserve the membership owner's refusal through the public startup
+    // boundary. This is still the same FAIL decision, never recovery authority
+    // or an original-allocation classification supplied by this adapter.
+    const membershipOwnerOutcome = Object.freeze({...autoRejoinDecision.membershipOwnerOutcome});
+    throw Object.assign(new Error(autoRejoinDecision.error), {
+      code: membershipOwnerOutcome.outcomeType,
+      reason: membershipOwnerOutcome.reasonCode,
+      membershipOwnerOutcome,
+    });
   }
   if (autoRejoinDecision.mode !== STARTUP_JOIN_DECISION_MODE.JOIN) {
     return {

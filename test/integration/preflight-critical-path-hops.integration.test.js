@@ -209,7 +209,9 @@ test('preflight critical-path hop integration', {timeout: TEST_TIMEOUT_MS}, asyn
       systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       epochManager: bootstrapResult.epochManager,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+      runtimeOwner: bootstrapService.runtimeDependencyOwner,
+      assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     });
     await seedApi.initialize(0, {listen: false});
 

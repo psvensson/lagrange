@@ -87,8 +87,43 @@ schema enforcement, resets the generation, changes bytes, proposes or applies.
 
 These are bounded observation primitives. Complete SQL/MG effect correspondence,
 checkpoint/application binding and protected activation remain further owner
-obligations. The original startup composition still holds at
+obligations. The retained original startup composition still holds at
 `CLASSIFICATION_UNAVAILABLE`; no observation here grants public admission.
+
+## Fresh Original Publication And Admission
+
+The same live original-allocation preparation authorizes election scheduling
+only for an exact opening it admitted and the native owner consumed. A cold
+inspection, serialized declaration or another attempt grants no continuation.
+The existing service keeps physical SQLite/native custody; preparation borrows
+its exact consumed opening's handle and revokes continuation with its attempt.
+
+SERVICES row owners keep canonical row construction. Original registration
+uses the declaration's reserved birth timestamp and create token. Preparation
+retains one exact publication value per original right and the lifecycle owner
+durably commits `UNUSED -> SUBMITTED` before the one submission. The existing
+authoritative local-leader read gateway must return that exact committed value
+before the lifecycle owner commits `SUBMITTED -> TRANSFERRED`. A lost answer,
+absent row or unavailable observation keeps `SUBMITTED`. A repeated call in
+the same live attempt may observe the retained operation; it cannot resubmit
+or mint another birth. It returns the original exact row even when the native
+role changed meanwhile; a new role observation cannot replace that publication
+value. A changed declared identity or birth still refuses. This does not make an unknown submission final or
+authorize cold recovery.
+
+The anchor's cluster identity follows the same operation using its declared
+identity. Preparation owns the all-rights-transferred decision consumed by
+public transport, bootstrap success and readiness. Its first successful
+decision reads every exact durable right. The same live attempt retains this
+monotonic completion so ordinary founder retirement does not recreate original
+startup debt. Every later use still requires its live issuer mode and directory
+custody; shutdown and another preparation cannot borrow it. Membership still owns the
+earlier restart decision; the entrypoint preserves its typed outcome. Fresh
+activation does not weaken retained, partial, uncertain or cold startup holds.
+BootstrapAPI receives the named startup adapter, steady-state runtime owner
+and seed admission operation explicitly; it has no legacy whole-service
+fallback. The supported seed composition binds admission to its actual owner,
+and joining composition has no original allocation operation.
 
 ## System-Table Row Lifecycle
 

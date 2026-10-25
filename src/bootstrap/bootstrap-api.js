@@ -104,7 +104,7 @@ class BootstrapAPI {
    * @param {Object} options.replicaHandler - Replica handler.
   * @param {Object} [options.bootstrapStartupAdapter] - Narrow startup adapter.
   * @param {Object} [options.runtimeOwner] - Dedicated steady-state runtime owner.
-  * @param {BootstrapService} [options.bootstrapService] - Legacy startup adapter.
+  * @param {Function|null} [options.assertOriginalSeedPublicAdmission] - Seed owner's admission.
    * @param {Object} [options.epochManager] - Assignment epoch manager.
    */
   constructor(options = {}) {
@@ -118,12 +118,8 @@ class BootstrapAPI {
         options.controlPlaneWriteHealthProvider :
         null;
     this.bootstrapStartupAdapter =
-      options.bootstrapStartupAdapter || options.bootstrapService || null;
-    this.runtimeOwner =
-      options.runtimeOwner ||
-      this.bootstrapStartupAdapter?.runtimeDependencyOwner ||
-      options.bootstrapService?.runtimeDependencyOwner ||
-      null;
+      options.bootstrapStartupAdapter || null;
+    this.runtimeOwner = options.runtimeOwner || null;
     this.startupRecoveryCoordinator =
       options.startupRecoveryCoordinator ||
       this.runtimeOwner?.rebalanceCoordinator?.startupRecoveryCoordinator ||
@@ -194,7 +190,7 @@ class BootstrapAPI {
     this.ownsMoveReplicaAssignmentLifecycle =
       typeof options.ownsMoveReplicaAssignmentLifecycle === 'boolean' ?
         options.ownsMoveReplicaAssignmentLifecycle :
-        Boolean(options.bootstrapStartupAdapter || options.bootstrapService);
+        Boolean(options.bootstrapStartupAdapter);
     this.moveReplicaAssignmentReservations = new Map();
     this.moveReplicaAssignmentSweepTimer = null;
     this.readinessState = options.readinessState ||
@@ -430,6 +426,7 @@ class BootstrapAPI {
         delegates: {
           getSeedNodeId: () => this.seedNodeId,
           getReadinessState: () => this.readinessState,
+          assertOriginalSeedPublicAdmission: options.assertOriginalSeedPublicAdmission ?? null,
           getBootstrapService: () => this.bootstrapStartupAdapter,
           getMessageRouter: () =>
             this.messageRouter ||
