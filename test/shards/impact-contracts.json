@@ -37,7 +37,8 @@
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
         "test/integration/seed-migration-interrupted-decision.integration.test.js",
-        "test/partition/partition-tx1-single-path-alpha.test.js"
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {
@@ -1509,12 +1510,17 @@
         "src/query/table-creation-service-create-table.js",
         "src/query/sql-statement-ingress.js",
         "src/query/sql-query-engine-table-routing-methods.js",
-        "src/runtime/pgwire-result-mapper.js"
+        "src/runtime/pgwire-result-mapper.js",
+        "src/query/distributed/distributed-transaction-schema-enforcement.js",
+        "src/query/distributed/distributed-transaction-participant-admission.js",
+        "src/partition/partition-participant-transaction-apply.js"
       ],
       "tests": [
         "test/query/sql-query-engine-system-table-write-admission.test.js",
         "test/query/schema-provisioning-job-owner.test.js",
-        "test/control-plane/runtime-access-policy-owner.test.js"
+        "test/control-plane/runtime-access-policy-owner.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js",
+        "test/query/transaction-schema-enforcement.test.js"
       ]
     }
   },
@@ -1564,7 +1570,8 @@
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
         "test/integration/seed-migration-process-loss.integration.test.js",
         "test/integration/seed-migration-interrupted-decision.integration.test.js",
-        "test/partition/partition-tx1-single-path-alpha.test.js"
+        "test/partition/partition-tx1-single-path-alpha.test.js",
+        "test/partition/coordinator-table-exact-identity.test.js"
       ]
     },
     "transaction-workflow-recovery-ownership": {

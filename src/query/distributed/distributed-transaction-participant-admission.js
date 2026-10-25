@@ -2,7 +2,7 @@
  * decision write must remain possible after every admitted PREPARE. The query
  * precheck and actual partition BEGIN owner consume this same predicate.
  * Settlement of an already accepted participant is never refused by it. */
-import {TABLES} from '../../constants/tables.js';
+import {isCoordinatorTable} from './distributed-transaction-schema-enforcement.js';
 
 const COORDINATOR_PARTICIPANT_REFUSAL_CODE = 'transaction_coordinator_participant_unsupported';
 const COORDINATOR_PARTICIPANT_REFUSAL = Object.freeze({success: false,
@@ -11,7 +11,7 @@ const COORDINATOR_PARTICIPANT_REFUSAL = Object.freeze({success: false,
   error: 'The transaction coordinator ledger cannot enlist as a transaction participant'});
 
 function coordinatorTableParticipantRefusal(tableName) {
-  return typeof tableName === 'string' && tableName.toLowerCase() === TABLES.SQL_TRANSACTIONS ?
+  return isCoordinatorTable(tableName) ?
     COORDINATOR_PARTICIPANT_REFUSAL : null;
 }
 
