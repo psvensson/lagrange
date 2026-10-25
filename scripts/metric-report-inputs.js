@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {homedir} from 'node:os';
 import {createHash} from 'node:crypto';
 import {createRequire} from 'node:module';
 import {METRIC_GENERATED_OUTPUTS} from './metric-report-constants.js';
@@ -115,6 +116,7 @@ export function captureMetricInputs(root, descriptor, targets, reportPath,
     runtime: {executable: metricDigest(fs.readFileSync(process.execPath)),
       arguments: runtimeArguments, versions: process.versions, platform: process.platform,
       arch: process.arch, nodeOptions: process.env.NODE_OPTIONS || '',
+      homeDirectory: homedir(),
       nodePath: process.env.NODE_PATH || '', locale: process.env.LC_ALL || '',
       language: process.env.LANG || '', timezone: process.env.TZ || ''},
     command: descriptor.command, targets, reportPath,

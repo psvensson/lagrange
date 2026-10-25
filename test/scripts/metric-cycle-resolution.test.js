@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import {spawnSync} from 'node:child_process';
 import {test} from '../../src/test-helpers/tap.js';
 import {METRIC_REPORTS} from '../../scripts/metric-report-constants.js';
 import {readCurrentMetricReport} from '../../scripts/metric-report-provenance.js';
@@ -128,5 +130,75 @@ test('a truncated analyzer input manifest cannot certify a cached cycle report',
   fs.writeFileSync(path.join(root, METRIC_REPORTS.cycles.reportPath), JSON.stringify(report));
   t.notOk(readCurrentMetricReport(root, 'cycles'),
     'the report digest binds the complete observed input manifest');
+  t.end();
+});
+
+const HOME_CONTEXT_READER = `
+import {readCurrentMetricReport} from './scripts/metric-report-provenance.js';
+const report = readCurrentMetricReport(process.cwd(), 'cycles');
+console.log(JSON.stringify(report && {
+  cycleCount: report.cycleGroups.length,
+  homeDirectory: report.provenance.inputs.runtime.homeDirectory,
+}));
+`;
+
+function runWithHomeContext(root, directory, arguments_) {
+  const result = spawnSync(process.execPath, arguments_, {
+    cwd: root, encoding: 'utf8',
+    env: {...process.env, HOME: directory, USERPROFILE: directory},
+  });
+  if (![0, 1].includes(result.status)) {
+    throw new Error(result.stderr || result.error?.message || 'home-context child failed');
+  }
+  return result;
+}
+
+function readInHomeContext(root, directory) {
+  const result = runWithHomeContext(root, directory,
+    ['--input-type=module', '--eval', HOME_CONTEXT_READER]);
+  if (result.status !== 0) throw new Error(result.stderr || 'home-context reader failed');
+  return JSON.parse(result.stdout);
+}
+
+test('real cycle resolution invalidates when the effective home search root changes', (t) => {
+  const root = createMetricFixture();
+  const contextRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'metric-home-resolution-'));
+  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+  t.teardown(() => fs.rmSync(contextRoot, {recursive: true, force: true}));
+  const firstDirectory = path.join(contextRoot, 'first');
+  const secondDirectory = path.join(contextRoot, 'second');
+  const dependency = 'metric-home-context-dependency';
+  const subject = path.join(root, SUBJECT);
+  const firstTarget = path.join(firstDirectory, '.node_libraries', `${dependency}.js`);
+  const secondTarget = path.join(secondDirectory, '.node_libraries', `${dependency}.js`);
+  write(root, SUBJECT, `module.exports = require(${JSON.stringify(dependency)});\n`);
+  write(firstDirectory, path.relative(firstDirectory, firstTarget), 'module.exports = 1;\n');
+  write(secondDirectory, path.relative(secondDirectory, secondTarget),
+    `module.exports = require(${JSON.stringify(subject)});\n`);
+  const files = [subject, firstTarget, secondTarget];
+  const originalBytes = files.map((filename) => fs.readFileSync(filename));
+
+  const first = runWithHomeContext(root, firstDirectory, [`scripts/${PRODUCER}`]);
+  t.equal(first.status, 0, first.stderr || 'first home resolves an acyclic dependency');
+  const reportFile = path.join(root, METRIC_REPORTS.cycles.reportPath);
+  const initialReport = fs.readFileSync(reportFile);
+  const initialInode = fs.statSync(reportFile).ino;
+  t.same(readInHomeContext(root, firstDirectory), {
+    cycleCount: 0, homeDirectory: firstDirectory,
+  }, 'unchanged effective home reuses the sealed zero-cycle report');
+  t.equal(readInHomeContext(root, secondDirectory), null,
+    'a different home cannot reuse the old resolver context');
+  t.same(fs.readFileSync(reportFile), initialReport, 'readback leaves report bytes unchanged');
+  t.equal(fs.statSync(reportFile).ino, initialInode, 'readback leaves the report inode unchanged');
+
+  const second = runWithHomeContext(root, secondDirectory, [`scripts/${PRODUCER}`]);
+  t.equal(second.status, 1, 'fresh analysis under the second home finds the actual cycle');
+  t.same(readInHomeContext(root, secondDirectory), {
+    cycleCount: 1, homeDirectory: secondDirectory,
+  }, 'new context reuses its own complete one-cycle report');
+  t.equal(readInHomeContext(root, firstDirectory), null,
+    'returning to the original home also invalidates the changed report');
+  t.same(files.map((filename) => fs.readFileSync(filename)), originalBytes,
+    'entry and dependency bytes stay identical across both resolution contexts');
   t.end();
 });
