@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 321,
+    "bootstrap-membership": 322,
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
@@ -25,10 +25,10 @@
     "transport-messaging": 106,
     "wasm-toolchain": 74
   },
-  "censusSize": 2456,
-  "digest": "fnv1a32-172eadc5",
+  "censusSize": 2457,
+  "digest": "fnv1a32-0b34c4b6",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-4237e4b8",
+  "observationDigest": "fnv1a32-ee188267",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -288,6 +288,7 @@
     "test/bootstrap/seed-retained-effects-preparation.test.js": "bootstrap-membership",
     "test/bootstrap/seed-retained-effects.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-retained-effects.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-startup-listener-failure.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
     "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
@@ -3503,6 +3504,12 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "test/bootstrap/seed-retained-effects-fixture.js",
         "test/test-helpers/original-allocation-declaration-fixture.js"
+      ]
+    },
+    "test/bootstrap/seed-startup-listener-failure.integration.test.js": {
+      "files": [
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {

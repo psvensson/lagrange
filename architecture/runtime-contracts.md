@@ -125,6 +125,13 @@ and seed admission operation explicitly; it has no legacy whole-service
 fallback. The supported seed composition binds admission to its actual owner,
 and joining composition has no original allocation operation.
 
+The supported seed entrypoint acquires the actual transport listener before
+binding its public HTTP listener. A bind rejection remains the original typed
+startup error and is unwound by the existing acquisition ledger; it cannot
+become a returned runtime or a ready HTTP response. The ledger retains process
+custody if owned cleanup fails. The joining startup retry policy remains owned
+by its existing join operation.
+
 ## System-Table Row Lifecycle
 
 For every system-table-backed entity, exactly one component owns row creation,

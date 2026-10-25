@@ -475,8 +475,6 @@ async function startSeedNode(options) {
     throw bootstrapResult.cause ||
       new Error(bootstrapResult.error || ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED);
   }
-  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
-
   let seedLogsPersistence = null;
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
@@ -499,18 +497,14 @@ async function startSeedNode(options) {
       null,
   });
 
-  try {
-    await awaitStartupAcquisition(
-      bootstrapService.startWebSocketServer(),
-      options.signal,
-    );
-    mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
-  } catch (wsError) {
-    throwIfStartupAborted(options.signal);
-    mainLogger.warn(ENTRYPOINT_LOG_MSG.WS_START_FAILED, {
-      error: wsError.message,
-    });
-  }
+  await awaitStartupAcquisition(
+    bootstrapService.startWebSocketServer(),
+    options.signal,
+  );
+  mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
+  // Public HTTP admission follows the actual transport listen acquisition.
+  // A rejected listener preserves its original error through startup cleanup.
+  await awaitStartupAcquisition(bootstrapAPI.initialize(), options.signal);
 
   const seedSqlRuntime = await acquireStartupOwner({
     acquire: () => createSqlRuntimeComposition({
