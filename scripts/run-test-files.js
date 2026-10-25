@@ -312,6 +312,11 @@ function prepareTestRun(file, options) {
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
   };
+  // A node:test parent sets NODE_TEST_CONTEXT=child-v8. A separately spawned
+  // file inheriting it emits binary test events even with the TAP reporter
+  // selected. Each file belongs to this runner's TAP capture, not its caller's
+  // internal test stream; establish that boundary for both launch methods.
+  delete env.NODE_TEST_CONTEXT;
   // Honor per-test {timeout: N} options written in the file: this tap
   // version silently CAPS every test at the 30s default - neither the
   // test option nor t.setTimeout() can extend past it (verified

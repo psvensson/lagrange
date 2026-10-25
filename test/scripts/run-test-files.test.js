@@ -14,6 +14,7 @@ import {
   filterTestFiles,
   parseOptions,
   retryFailedOnce,
+  runTestFileSync,
   runTestFiles,
 } from '../../scripts/run-test-files.js';
 
@@ -131,6 +132,23 @@ describe('run-test-files', () => {
     assert.equal(summary.failed, 0);
     assert.ok(summary.assertions >= 2);
     assert.ok(summary.results.every((result) => result.output.length > 0));
+  });
+
+  it('separately launched tests retain TAP output under a Node test parent', async () => {
+    const resultsDirectory = await mkdtemp(path.join(tmpdir(), 'run-test-files-context-'));
+    temporaryDirectories.push(resultsDirectory);
+    const options = {
+      env: {NODE_TEST_CONTEXT: 'child-v8'},
+      print: false,
+      resultsDirectory,
+    };
+    const summary = await runTestFiles([TAP_PASS_FIXTURE, NODE_TEST_PASS_FIXTURE],
+      {...options, jobs: 1});
+    assert.equal(summary.ok, true, JSON.stringify(summary.results?.map((r) => r.reasons)));
+    assert.deepEqual(summary.results.map((result) => result.assertions), [3, 1]);
+    const sync = runTestFileSync(NODE_TEST_PASS_FIXTURE, options);
+    assert.equal(sync.ok, true, JSON.stringify(sync.reasons));
+    assert.equal(sync.assertions, 1);
   });
 
   it('fails closed when a test file emits no assertions', async () => {

@@ -1,0 +1,407 @@
+{
+  "reviewer": "subagent:/root/metric_review",
+  "verdict": "APPROVE_BOUNDED_SOURCE_CORRECTION",
+  "parentCommit": "affadba3af02932b36c06242daa87d333a9cfe5d",
+  "candidateCommit": null,
+  "sourceSha256": {
+    "scripts/run-test-files.js": "e5985de5eb28d89cd460efd8a0a537cb2b661ea8563875b34ec6012303431032",
+    "test/scripts/run-test-files.test.js": "4a2ee81bbc813bd93092a385ec1a9181bbaf43fb90d4944cff72d302d73f41f4"
+  },
+  "sourceStatus": "uncommitted frozen author delta; both exact hashes reverified after review",
+  "closedFindings": [
+    "F-RUNNER-CTX-1"
+  ],
+  "unresolvedBlockingFindings": [],
+  "review": "APPROVE-RUNNER-CONTEXT-SECOND-ATTEMPT.md",
+  "artifactRoot": "/workspace/scratch/285a938494ce/runner-context-review-evidence",
+  "files": [
+    {
+      "path": "APPROVE-RUNNER-CONTEXT-SECOND-ATTEMPT.md",
+      "bytes": 10067,
+      "sha256": "e46fe0a6d0d9607eba754cc79a7480ecdda1235337c4b856db2b308d45c6bfa0"
+    },
+    {
+      "path": "fixtures/empty.fixture.mjs",
+      "bytes": 11,
+      "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+    },
+    {
+      "path": "fixtures/node-test-failure.fixture.mjs",
+      "bytes": 249,
+      "sha256": "192e5c6220b6f4fee9af9a876782090b8161cbb003284e2b300ae69932b71294"
+    },
+    {
+      "path": "fixtures/node-test-pass.fixture.mjs",
+      "bytes": 170,
+      "sha256": "1aa9c51c1f32bfc56ec19c538cc14effedfc39d125cb90ec57fa8a71306c99b7"
+    },
+    {
+      "path": "fixtures/node-test-skip.fixture.mjs",
+      "bytes": 181,
+      "sha256": "9fde8f46b7a7b1b97b6a8262635b0e191aa910b805ee49447fe0594cff6934f5"
+    },
+    {
+      "path": "fixtures/node-todo.fixture.mjs",
+      "bytes": 95,
+      "sha256": "34a8c1252bab417ba493cc047c8432fb7ff22ea9455f25be723f628568d360b1"
+    },
+    {
+      "path": "fixtures/owned-environment.fixture.mjs",
+      "bytes": 626,
+      "sha256": "cdd7f42e76d0f38c6825145e6c19994f7f944dfa6d4dde9ad43f34fc12c0afe8"
+    },
+    {
+      "path": "fixtures/spec-only.fixture.mjs",
+      "bytes": 100,
+      "sha256": "b34ac654468af182ab144dfc301125f4569df209c9d5537e7410c9b01f090af3"
+    },
+    {
+      "path": "fixtures/tap-pass.fixture.mjs",
+      "bytes": 568,
+      "sha256": "20a2e0f666323f463555ba0275f364592136cbb3e475f42ca6adf375965bb652"
+    },
+    {
+      "path": "fixtures/tap-skip.fixture.mjs",
+      "bytes": 172,
+      "sha256": "a7b696fe105f4b8936cf033ecaf8c3407f83bcee1276d3b0ef4c2d5e87413788"
+    },
+    {
+      "path": "fixtures/tap-valid-exit7.fixture.mjs",
+      "bytes": 95,
+      "sha256": "65788c70a825fba4ca63e5111370b4b6067a539f4e221aab2989cdbb67c15c0e"
+    },
+    {
+      "path": "real-parent-successor-driver.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor-driver.tap",
+      "bytes": 330,
+      "sha256": "c527a186449876c1217ee984c65a85ba4654791b8bba75ee244f177edc194aba"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/empty/fixtures/empty.fixture.mjs.tap",
+      "bytes": 13,
+      "sha256": "9d1c1b5edcac3b47eb59d71a6ef83702d4a8772705a30b24e69a8dd11fcb254d"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/empty/fixtures/empty.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-failure/fixtures/node-test-failure.fixture.mjs.tap",
+      "bytes": 917,
+      "sha256": "27792b9fc60e8760b6838eb9c1bbe7256fcc7526c0ae4e7a0f133345a1847447"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-failure/fixtures/node-test-failure.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap",
+      "bytes": 253,
+      "sha256": "723915c08fea023f7043ac20b87253fa74d9d4431e691aa5cf09275ebf6a0c3f"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-skip/fixtures/node-test-skip.fixture.mjs.tap",
+      "bytes": 287,
+      "sha256": "a14ead8210f1b49ae8885ab89d897f4d5ea0926a81c456a89cee0af6ccea0614"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-test-skip/fixtures/node-test-skip.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-todo/fixtures/node-todo.fixture.mjs.tap",
+      "bytes": 260,
+      "sha256": "3e3277a61fd661bd69f8b9109f0cfdb5a004c182684b736538f91a0ffb094bda"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/node-todo/fixtures/node-todo.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/owned-environment/fixtures/owned-environment.fixture.mjs.tap",
+      "bytes": 325,
+      "sha256": "908d0ac32e4dc9a8100e6751a82cb02ea29559a34d14897c472e9b0232318b42"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/owned-environment/fixtures/owned-environment.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/spec-only/fixtures/spec-only.fixture.mjs.tap",
+      "bytes": 83,
+      "sha256": "5961ff93e903e7c78d54341b2f7e4686cac5446021ad314935708394c3efd59e"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/spec-only/fixtures/spec-only.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-pass/fixtures/tap-pass.fixture.mjs.tap",
+      "bytes": 248,
+      "sha256": "e9dee9b292cd659fb8cba2d472c25728ecbad95a3ecf176e46b1d3c1b56e8b79"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-pass/fixtures/tap-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-skip/fixtures/tap-skip.fixture.mjs.tap",
+      "bytes": 453,
+      "sha256": "bc1a502e0c18252f0a8b456b6eebcb7c01bb92b75abb7bb254d4e4663da27d61"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-skip/fixtures/tap-skip.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-valid-exit7/fixtures/tap-valid-exit7.fixture.mjs.tap",
+      "bytes": 59,
+      "sha256": "e3a3a271a05a59c36799261e1608bb1b5ebaa9f544b795a5b943efffa3b2f714"
+    },
+    {
+      "path": "real-parent-successor/candidate/async/tap-valid-exit7/fixtures/tap-valid-exit7.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/.tap/test-results/node-test-pass.fixture.mjs.tap",
+      "bytes": 253,
+      "sha256": "7b5276c5055c1a1acc3f01d1b007ae41b4c577288df55c15186d2cefe52038f0"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/.tap/test-results/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/canonical-cli.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/canonical-cli.stdout",
+      "bytes": 100,
+      "sha256": "0bbe5928f92389a77e6879aa66ab7f253e5e6fd31b8a2dcdcc5e2cb9806869a0"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/node-test-pass.fixture.mjs",
+      "bytes": 170,
+      "sha256": "1aa9c51c1f32bfc56ec19c538cc14effedfc39d125cb90ec57fa8a71306c99b7"
+    },
+    {
+      "path": "real-parent-successor/candidate/cli/test-output/reports/test-results.ndjson",
+      "bytes": 136,
+      "sha256": "8f1e431c48c4f3f4a9786e76acf73cb3233b6319d834c85f7a6e293b2815580a"
+    },
+    {
+      "path": "real-parent-successor/candidate/mixed/fixtures/node-test-pass.fixture.mjs.tap",
+      "bytes": 253,
+      "sha256": "9399b76db1718e2fcc912704155cff090df5cf8bae83ef4f64f677282d19e192"
+    },
+    {
+      "path": "real-parent-successor/candidate/mixed/fixtures/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/mixed/fixtures/tap-pass.fixture.mjs.tap",
+      "bytes": 248,
+      "sha256": "185bb5ebd9312260ffdf93812461dd8db36a0bae090a10b9e059d70bc219b233"
+    },
+    {
+      "path": "real-parent-successor/candidate/mixed/fixtures/tap-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/empty/fixtures/empty.fixture.mjs.tap",
+      "bytes": 13,
+      "sha256": "3385fb4e2d303d9f7a7ef9447be293f56c554720940027d42023f02fe77b890b"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/empty/fixtures/empty.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-failure/fixtures/node-test-failure.fixture.mjs.tap",
+      "bytes": 915,
+      "sha256": "2a4e7d09a0d8aa468e4f61938d169f7fdb3dba87b7ed283e44b887acc4aa74fe"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-failure/fixtures/node-test-failure.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap",
+      "bytes": 253,
+      "sha256": "1e6b879cbc4c29a1f9fc64fe362136c28ce6eb5c4f25e6655e747da6465f3c6e"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-skip/fixtures/node-test-skip.fixture.mjs.tap",
+      "bytes": 287,
+      "sha256": "3238ae6f338ddb4e450cd7946ebf1bc21558445d33611a916ea3051a24dc045d"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-test-skip/fixtures/node-test-skip.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-todo/fixtures/node-todo.fixture.mjs.tap",
+      "bytes": 260,
+      "sha256": "677c486ab1548f4ea8413a8bb55b09a5f2ce5d05e5735166584d5309841d8b3f"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/node-todo/fixtures/node-todo.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/owned-environment/fixtures/owned-environment.fixture.mjs.tap",
+      "bytes": 325,
+      "sha256": "bb33d24d5d205996a19c766226505880d17542757228df934bc39b328562994b"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/owned-environment/fixtures/owned-environment.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/spec-only/fixtures/spec-only.fixture.mjs.tap",
+      "bytes": 83,
+      "sha256": "a9731932388221862f24171db1872bbc61f1ed1016ff1fb92e1361f2d5c576ae"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/spec-only/fixtures/spec-only.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-pass/fixtures/tap-pass.fixture.mjs.tap",
+      "bytes": 248,
+      "sha256": "209eca59beabe89bd8b789ec1c856aef4fd4f998af5e577702097cb3d9fa9e49"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-pass/fixtures/tap-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-skip/fixtures/tap-skip.fixture.mjs.tap",
+      "bytes": 453,
+      "sha256": "71b62893fd1b719ce0490bd999762c2f72a50184fba979012ca93bcbec2f97b3"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-skip/fixtures/tap-skip.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-valid-exit7/fixtures/tap-valid-exit7.fixture.mjs.tap",
+      "bytes": 59,
+      "sha256": "d72d7dc824de7b00702b68171f238d24388f8a1b06c69d51c5af7f16e8332d80"
+    },
+    {
+      "path": "real-parent-successor/candidate/sync/tap-valid-exit7/fixtures/tap-valid-exit7.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/predecessor/async/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap",
+      "bytes": 3514,
+      "sha256": "d49ac7961fbdb4fe0701ae19899f85695f726f0f4ae52f477326cdd3c021b6b1"
+    },
+    {
+      "path": "real-parent-successor/predecessor/async/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/predecessor/sync/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap",
+      "bytes": 3514,
+      "sha256": "684efd2dd1c02aed0cb2a80d976b6c445e178bd647187210cd198a4e905d9698"
+    },
+    {
+      "path": "real-parent-successor/predecessor/sync/node-test-pass/fixtures/node-test-pass.fixture.mjs.tap.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "real-parent-successor/results.json",
+      "bytes": 46172,
+      "sha256": "838f7d98b740b268784e89de4ffa224040d35813873429d97b42167b5a1dc1bc"
+    },
+    {
+      "path": "review-real-parent-successor.test.mjs",
+      "bytes": 6442,
+      "sha256": "80906bfefc3afa5c6d0a15297dc3653f36c9dbfbeed4358e35aff0c417465f50"
+    },
+    {
+      "path": "review-source-binding.json",
+      "bytes": 1934,
+      "sha256": "35293f6dacc2c2f02dc24aa7dcdf669d4210792112d2ffadbc2e9b4c129e4e29"
+    },
+    {
+      "path": "reviewed-source.patch",
+      "bytes": 2320,
+      "sha256": "0a6439fb0aef055a2714ca0a71d53055f4feec6956c6e6da64efcb20e14d5218"
+    },
+    {
+      "path": "root-produced-evidence-binding.json",
+      "bytes": 1246,
+      "sha256": "1dd1aca8e56176628826e2829da4538037d7c5a88e8106383e43810890664749"
+    },
+    {
+      "path": "root-produced-evidence/rs-raft-package2-context-predecessor-20261025.tap",
+      "bytes": 1560,
+      "sha256": "7a560a2eaa7fe8b60c9f0b704f9f5fe09b0f810a66f2426407627fb7af99d4bb"
+    },
+    {
+      "path": "root-produced-evidence/rs-raft-package2-context-repaired-20261025.tap",
+      "bytes": 463,
+      "sha256": "d6109cf6a73ba5fd13650f5f4c5b08c7521fe326dec235fa8317b2e4ad539faa"
+    },
+    {
+      "path": "root-produced-evidence/rs-raft-package2-runner-context-focused-20261025.log",
+      "bytes": 793,
+      "sha256": "8950018c96e42437708385974857174203f7f7c29ba8be5d2338ab83718cc56e"
+    },
+    {
+      "path": "source-snapshot/scripts/run-test-files.js",
+      "bytes": 35604,
+      "sha256": "e5985de5eb28d89cd460efd8a0a537cb2b661ea8563875b34ec6012303431032"
+    },
+    {
+      "path": "source-snapshot/test/scripts/run-test-files.test.js",
+      "bytes": 29268,
+      "sha256": "4a2ee81bbc813bd93092a385ec1a9181bbaf43fb90d4944cff72d302d73f41f4"
+    }
+  ],
+  "fileCount": 77,
+  "bytes": 152448,
+  "excludes": "this binding and node_modules symlink; prior rejection/evidence separately referenced and verified unchanged"
+}
