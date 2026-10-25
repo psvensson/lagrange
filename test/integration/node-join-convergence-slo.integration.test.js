@@ -501,7 +501,10 @@ test('Node join convergence SLO', {timeout: INTEGRATION_TEST_TIMEOUT_MS}, async 
         systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
       await seedApi.initialize(0, {listen: false});
       seedApi.setSqlQueryEngine(seedQueryEngine);
@@ -721,7 +724,10 @@ test('Node join convergence SLO real-network readiness path',
         systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
         readinessState,
       });
 
@@ -863,7 +869,10 @@ test('Readiness endpoint remains reachable during background log buffer flush',
         systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
         readinessState,
       });
 
@@ -1047,7 +1056,10 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
         systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
         readinessState,
       });
 

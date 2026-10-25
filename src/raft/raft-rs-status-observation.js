@@ -20,6 +20,13 @@ import {
 const NO_DELIVERY_OBSERVED = Object.freeze({
   outcome: PEER_DELIVERY_OUTCOME.NONE_OBSERVED,
 });
+let nativeStatusObserver = null;
+
+// Passive observation of the existing runtime's native status publication.
+// This introduces no core read, scheduler wake, authority or cached decision.
+function setNativeStatusObserver(observer) {
+  nativeStatusObserver = typeof observer === 'function' ? observer : null;
+}
 
 // One configured peer's identity and address, each a named state. A peer
 // whose identity this replica never reserved is reported, not thrown: its
@@ -110,7 +117,7 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     // reservation state.
     return leaderIdentityUnresolved(error);
   }
-  return deepFreeze({
+  const result = deepFreeze({
     outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
     groupId: group.groupId,
     replicaIdentity: group.replicaIdentity,
@@ -146,6 +153,8 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     groupHealth: group.health,
     runtimeGeneration: observation.runtimeGeneration,
   });
+  nativeStatusObserver?.(result);
+  return result;
 }
 
-export {shapeGroupObservation};
+export {shapeGroupObservation, setNativeStatusObserver};

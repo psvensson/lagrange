@@ -229,7 +229,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -380,7 +383,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -733,7 +739,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         systemTableCache: systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService: bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});

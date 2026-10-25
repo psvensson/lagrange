@@ -1,0 +1,29 @@
+{
+  "integrationParent": "57d222d92347e4507e91011f7d5274350fd02da0",
+  "incoming": "cce9fc2db611dcc829e23220b80df6a63633472c",
+  "runtimeFiles": {
+    "src/bootstrap/bootstrap-api.js": "c4342a4946550d5cc0d6451b92be90720756e2859b52b05ee61c48bd25499ff9",
+    "src/bootstrap/bootstrap-service-runtime-methods.js": "aa3e8ae8885f60c55d7182d2559fd5bf6b89f3e2100aea4acc2417df4a089156",
+    "src/bootstrap/bootstrap-service-seed-delegates.js": "687326f25dc28618156fa7cd9b55910f6f1250681afcdf41d28c73565b5e858d",
+    "src/bootstrap/bootstrap-service-seed-workflow.js": "2cefa2fb6cacdc5f404e808f2fc999d74013f147b9acec36e53756362e7143f5",
+    "src/bootstrap/owners/bootstrap-readiness-owner.js": "83210d49a8516a55a8696091bc3d41abc684a827414d48b12d21ee252e80e330",
+    "src/bootstrap/phases/seed-message-groups-phase.js": "65c6d056c6a21a16c750ad11434c4c8d4f385fed323b97dee323923cbff43f12",
+    "src/bootstrap/phases/seed-partitions-phase.js": "94a1c9a8f8f09d342b24fb0c719307d11b7412ff35143cbb24a09aa2de6ffa24",
+    "src/bootstrap/phases/seed-registration-phase.js": "ece2807d5985810cfcc1057188fe7729ae55172c4474e348420b3d337c2925b3",
+    "src/bootstrap/seed-original-allocation-startup.js": "56a91e1c6782fe7b784e783fbc972fb6a2f2b292956a2a6197bcad477d14eb79",
+    "src/bootstrap/seed-original-registration.js": "612e6eac26b45c79dc443c8d4962f69bc88c8c2384648356eabd9b9742e26600",
+    "src/constants/entrypoint.js": "59381e412df187a2c2e64341280cf7a4e78bf8b16898163aaea435cd7092b687",
+    "src/entrypoint-runtime-join-decision.js": "91ef0c2eb506781dc598164422d456ec421badc93c06bdf550087d9ba99e0aff",
+    "src/lagrange-runtime-startup.js": "9ecb481b59eee5dd98de9efe206c1862ef6228c2731742dc486d30b9693b1797",
+    "src/message-group/message-group-service-row-owner.js": "8cadb2dc5d05eef1c83e5499a78ac1aaa13718bfcbd8017d9dc33024163c3256",
+    "src/partition/partition-service-row-owner.js": "a563397a2731d86907965137fba0f334cb926a78e83a9f25d4a909a9ead3e2d9",
+    "src/raft/raft-rs-original-allocation-preparation.js": "9bb55e875bd66d4d651d12654d0858c0a8ed2cc6b7b4a604559da1e0241b6f17",
+    "src/raft/raft-rs-status-observation.js": "2de3d7db5073030350f245730e7749fe7133a26cf4f2cf2e92313e8854e23da5"
+  },
+  "resolutions": {
+    "scripts/check-duplication.js": "Retain stricter integrated654/24609; no raised baseline.",
+    "test/bootstrap/seed-registration-phase.test.js": "Exact incoming approved real-owner fixture replaces obsolete fake replica tests; only root-side delta sinceaf8 was two fake transportHandler ACK aliases, whose fake objects are now deleted.",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "Preserve approved R5 membership-owned hold and all negative cases, invoke the already-approved sole isOriginalAllocationHold predicate instead of resurrecting removed local hold copy.",
+    "test/shards/impact-contracts.json": "Three-way structural merge: no doubly changed values, preserves all76 contracts and53 coupled pairs."
+  }
+}

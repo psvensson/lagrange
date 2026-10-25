@@ -58,18 +58,20 @@ const receipts = Object.freeze([
     testFile: WITNESS,
     testNamePattern: '^R1 .*$',
     expectedTests: 2,
-    detail: 'Startup opens and campaigns exactly the declared original groups, ' +
-      'each after its admitted opening; without a live attempt every ' +
+    detail: 'Startup natively opens, activates election scheduling and observes ' +
+      'leadership for exactly the declared groups after their admitted openings; ' +
+      'without a live attempt every ' +
       'continuation entry holds AUTHORITY.',
   }),
   Object.freeze({
     id: 'original-rights-durable-monotonic-transfer',
     testFile: WITNESS,
     testNamePattern: '^R2 .*$',
-    expectedTests: 1,
+    expectedTests: 2,
     detail: 'Every declared SERVICES right and the anchor identity right reads ' +
       'UNUSED, SUBMITTED, TRANSFERRED; the owner read at settle equals the ' +
-      'durable read after custody is released.',
+      'durable read after custody is released. Unknown publication retains ' +
+      'SUBMITTED until exact live readback without another INSERT.',
   }),
   Object.freeze({
     id: 'public-admission-closed-until-handoff',

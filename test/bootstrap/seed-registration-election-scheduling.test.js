@@ -115,8 +115,8 @@ test('seed elections start the registration dependency cohort before the remaind
     const scheduling = fixture.phase.startDeferredBootstrapReplicaElections();
 
     await Promise.resolve();
-    t.equal(fixture.continuation.checks, 1,
-      'the phase consults the actual continuation delegate before scheduling');
+    t.equal(fixture.continuation.checks, 1 + REQUIRED_PARTITION_IDS.length * REQUIRED_REPLICA_COUNT,
+      'the phase checks live mode then each exact replica before starting it');
     t.same(fixture.events, [
       ...requiredReplicaStartEvents(),
       'wait:registration-required',

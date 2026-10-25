@@ -4,7 +4,7 @@
   "counts": {
     "admin-diagnostics": 116,
     "architecture-governance": 21,
-    "bootstrap-membership": 322,
+    "bootstrap-membership": 323,
     "cdc-metadata": 66,
     "cli-tooling": 96,
     "control-plane": 217,
@@ -25,10 +25,10 @@
     "transport-messaging": 110,
     "wasm-toolchain": 74
   },
-  "censusSize": 2464,
-  "digest": "fnv1a32-9b614ccc",
+  "censusSize": 2465,
+  "digest": "fnv1a32-fc139243",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-88d1711d",
+  "observationDigest": "fnv1a32-8341d1f8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -288,6 +288,7 @@
     "test/bootstrap/seed-retained-effects-preparation.test.js": "bootstrap-membership",
     "test/bootstrap/seed-retained-effects.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-retained-effects.test.js": "bootstrap-membership",
+    "test/bootstrap/seed-startup-listener-failure.integration.test.js": "bootstrap-membership",
     "test/bootstrap/seed-startup-session-store.test.js": "bootstrap-membership",
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": "bootstrap-membership",
     "test/bootstrap/service-instance-table-schema.test.js": "bootstrap-membership",
@@ -2952,9 +2953,11 @@
     },
     "test/bootstrap/fresh-seed-activation.integration.test.js": {
       "files": [
+        "src/bootstrap/rejoin-hints-constants.js",
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-original-allocation-declaration.js",
         "src/bootstrap/seed-startup-storage-admission.js",
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
         "src/raft/raft-rs-opening-history-constants.js",
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-replica-lifecycle-owner.js",
@@ -3441,7 +3444,13 @@
     "test/bootstrap/seed-registration-phase.test.js": {
       "files": [
         "src/bootstrap/bootstrap-service-seed-delegates.js",
-        "src/raft/raft-rs-original-allocation-constants.js"
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-original-allocation-declaration.js",
+        "src/bootstrap/seed-startup-storage-admission.js",
+        "src/raft/raft-rs-original-allocation-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
+        "src/storage/data-directory-process-owner.js",
+        "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
     "test/bootstrap/seed-release-failure-custody.test.js": {
@@ -3535,6 +3544,12 @@
         "src/raft/raft-rs-replica-lifecycle-owner.js",
         "test/bootstrap/seed-retained-effects-fixture.js",
         "test/test-helpers/original-allocation-declaration-fixture.js"
+      ]
+    },
+    "test/bootstrap/seed-startup-listener-failure.integration.test.js": {
+      "files": [
+        "src/storage/data-directory-process-owner.js",
+        "test/test-helpers/fresh-seed-activation-public-child.js"
       ]
     },
     "test/bootstrap/seed-teardown-pending-cdc-delivery.test.js": {
@@ -12798,6 +12813,7 @@
         "src/raft/raft-rs-original-allocation-constants.js",
         "src/raft/raft-rs-original-allocation-preparation.js",
         "src/raft/raft-rs-replica-lifecycle-constants.js",
+        "src/raft/raft-rs-replica-lifecycle-owner.js",
         "src/storage/data-directory-process-owner.js"
       ]
     },

@@ -1,0 +1,35 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-startup-listener-failure",
+  "class": "fix",
+  "statement": "Supported seed startup preserves an actual transport-listener bind failure through startup cleanup, returns no runtime and publishes no ready HTTP response for that failed start.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-startup-listener-failure/evidence/receipt.json",
+      "requiredReceipts": [
+        "occupied-listener-refusal-and-custody",
+        "unoccupied-supported-start"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "startup-owner",
+      "statement": "Remove the demonstrated swallowed rejection at the existing startup acquisition owner. Preserve the actual listener error and cleanup owner's cause/aggregation/custody behavior. No alternate readiness state or fallback."
+    },
+    {
+      "id": "scope",
+      "statement": "This bounded repair is routed from the preserved fresh-seed R3 observer/listener failure. It does not change original allocation rights, recovery policy, join retry policy, or distributed release acceptance."
+    },
+    {
+      "id": "proof",
+      "statement": "Reserve a real listen port, enter actual public child-process startup, observe no returned runtime or ready HTTP publication, preserve EADDRINUSE and demonstrate cleanup through a competing process's real directory acquisition while the first child remains alive. The unoccupied actual public startup/write/read witness remains green. No deadline, retry or ratchet relaxation."
+    },
+    {
+      "id": "review",
+      "statement": "Independent review applies to this startup delta separately from fresh activation and the constructor audit repair."
+    }
+  ],
+  "sealedAt": "af8a0381be10bebbb3daf78bd331f7aa3fcacbbf"
+}

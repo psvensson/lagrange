@@ -1,3 +1,5 @@
+// Component readiness/health observations use the narrow startup adapter.
+// Real original-seed authority is exercised by fresh-seed-activation.integration.
 /**
  * Tests for Bootstrap API.
  * Requirements: 1.2, 7.2, 7.3, 7.4
@@ -73,7 +75,7 @@ test('BootstrapAPI - waitForServiceLeaders returns promptly when leaders are mis
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         config: {
           leadershipWaitTimeoutMs: 1000,
           leadershipWaitInitialDelayMs: 100,

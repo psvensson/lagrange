@@ -390,13 +390,15 @@ class MessageGroupServiceRowOwner {
    * never the raw clock: a replica removed and reborn under the same id in the
    * same millisecond (or under a regressed clock) gets a distinct created_at,
    * so a delayed removal of the old generation cannot match it (S-F1 rebirth).
+   * An original registration consumes its already reserved declaration birth.
    * @param {Object} options - buildServiceRow options.
    * @return {Object} The registration row.
    */
   static buildRegistrationRow(options = {}) {
     return MessageGroupServiceRowOwner.buildServiceRow({
       ...options,
-      timestamp: mintServiceRowCreatedAt(options.timestamp ?? Date.now()),
+      timestamp: options.originalRegistration?.birth.created_at ??
+        mintServiceRowCreatedAt(options.timestamp ?? Date.now()),
     });
   }
 
@@ -442,7 +444,15 @@ class MessageGroupServiceRowOwner {
     const row = MessageGroupServiceRowOwner.buildRegistrationRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
+      extraFields: {...options.extraFields, ...options.originalRegistration?.birth},
     });
+
+    if (options.originalRegistration) {
+      const registered = await options.originalRegistration.publish(row, (value) =>
+        this.systemTableWriter.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, value,
+          {...this.buildDeferredUpdateOptions(row.service_id), allowCoalescing: false}));
+      return registered;
+    }
 
     let result = null;
     let cause = null;

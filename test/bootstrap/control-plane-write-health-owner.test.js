@@ -1,3 +1,5 @@
+// Component readiness/health observations use the narrow startup adapter.
+// Real original-seed authority is exercised by fresh-seed-activation.integration.
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -313,7 +315,7 @@ test('BootstrapAPI keeps readiness available while surfacing contained observabi
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: {},
-    bootstrapService: {
+    bootstrapStartupAdapter: {
       phase: BOOTSTRAP_PHASE.COMPLETE,
       messageRouter: owner.messageRouter,
     },

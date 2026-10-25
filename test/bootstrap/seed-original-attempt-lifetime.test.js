@@ -402,7 +402,7 @@ async (t) => {
   assert.deepEqual(f.entries, []);
 });
 
-test('BootstrapService continuation entry points hold elections, registration and public admission ' +
+test('BootstrapService public admission entry points hold ' +
   'while preserving original rights',
 async (t) => {
   const f = await fixture(t, {wsPort: 18082}, {withRouter: false});
@@ -412,16 +412,12 @@ async (t) => {
   const before = readRow(anchor);
   const phase = f.service.phase;
   const checks = [
-    ['startDeferredBootstrapReplicaElections', () =>
-      f.service.seedPartitionsPhase.startDeferredBootstrapReplicaElections()],
-    ['phaseRegistration', () => f.service.seedRegistrationPhase.phaseRegistration()],
-    ['ensureSystemTableWriter', () => f.service.seedRegistrationPhase.ensureSystemTableWriter()],
     ['startWebSocketServer', () => f.service.startWebSocketServer()],
     ['openExternalTransportAdmission', () => f.service.openExternalTransportAdmission()],
     ['completeSuccessfulBootstrap', () => f.service.completeSuccessfulBootstrap()],
   ];
   for (const [name, invoke] of checks) {
-    await assert.rejects(async () => invoke(), hold(REASON.CONTINUATION_UNAVAILABLE), name);
+    await assert.rejects(async () => invoke(), (error) => error.code === STATE.HOLD, name);
     assert.deepEqual(readRow(anchor), before, `${name} preserves the durable original rights`);
     assert.equal(f.service.systemTableWriter, null);
     assert.equal(f.service.phase, phase);
@@ -435,6 +431,72 @@ async (t) => {
   }
   assert.deepEqual(f.entries, []);
 });
+
+test('live issuer continuation admits only this attempt\'s admitted and consumed openings',
+  async (t) => {
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.PARTITION);
+    const member = memberOf(f, options);
+    assert.doesNotThrow(() => f.service.assertOriginalSeedContinuation());
+    assert.throws(() => f.service.assertOriginalSeedContinuation('undeclared'),
+      hold(REASON.AUTHORITY));
+    assert.throws(() => f.service.assertOriginalSeedContinuation(member.replicaId),
+      hold(REASON.AUTHORITY), 'declared but never admitted');
+    const queued = queueReplica(f, options);
+    assert.throws(() => f.service.assertOriginalSeedContinuation(member.replicaId),
+      hold(REASON.AUTHORITY), 'admitted but not consumed');
+    await f.service.seedPartitionsPhase.createBootstrapPartitionReplica(queued);
+    assert.doesNotThrow(() => f.service.assertOriginalSeedContinuation(member.replicaId));
+    const other = await f.createService();
+    assert.throws(() => other.assertOriginalSeedContinuation(member.replicaId),
+      hold(REASON.AUTHORITY), 'another attempt cannot borrow the live opening');
+    assert.equal(readRow(member)[COLUMN.SERVICE_RIGHT], STATE.UNUSED);
+  });
+
+for (const boundary of ['submit', 'observe']) {
+  test(`revocation during original publication ${boundary} retains SUBMITTED`, async (t) => {
+    const f = await fixture(t);
+    await f.service.prepareOriginalSeedAttempt();
+    const options = replicaOptions(f, SERVICE_TYPE.PARTITION);
+    const member = memberOf(f, options);
+    assert.equal(member.replicaId, declarationOf(f).anchorReplicaId);
+    await f.service.seedPartitionsPhase.createBootstrapPartitionReplica(queueReplica(f, options));
+    const entered = Promise.withResolvers();
+    const released = Promise.withResolvers();
+    let submits = 0;
+    let reads = 0;
+    const publication = f.service.originalAllocationPreparation.publishOriginalRight({
+      replicaId: member.replicaId, right: COLUMN.IDENTITY_RIGHT,
+      value: f.service.originalAllocationPreparation.clusterIdentity(),
+      async submit() {
+        submits++;
+        if (boundary === 'submit') {
+          entered.resolve();
+          await released.promise;
+        }
+      },
+      async observe() {
+        reads++;
+        if (boundary === 'observe') {
+          entered.resolve();
+          await released.promise;
+        }
+        return true;
+      },
+    });
+    await pausedWorkEntered(entered, publication);
+    assert.equal(readRow(member)[COLUMN.IDENTITY_RIGHT], STATE.SUBMITTED);
+    f.controller.abort();
+    released.resolve();
+    await assert.rejects(publication, hold(REASON.CLOSED));
+    assert.equal(submits, 1);
+    assert.equal(reads, boundary === 'observe' ? 1 : 0);
+    assert.equal(readRow(member)[COLUMN.IDENTITY_RIGHT], STATE.SUBMITTED,
+      'a late successful answer cannot transfer the revoked attempt\'s right');
+    assert.throws(() => f.service.assertOriginalSeedPublicAdmission(), hold(REASON.CLOSED));
+  });
+}
 
 // Additional acquisition and late-completion witnesses. The original first
 // 14 cases remain preserved in commits 3fa20cef and 7fa4d79. Four self-connection

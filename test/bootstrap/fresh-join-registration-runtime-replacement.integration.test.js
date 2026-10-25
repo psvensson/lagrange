@@ -123,7 +123,9 @@ test('W7: a fresh join whose registration INSERT is cut by a runtime ' +
       systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       epochManager: bootstrapResult.epochManager,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+      runtimeOwner: bootstrapService.runtimeDependencyOwner,
+      assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     });
     await seedApi.initialize(0, {listen: false});
     seedApi.setSqlQueryEngine(new SQLQueryEngine({

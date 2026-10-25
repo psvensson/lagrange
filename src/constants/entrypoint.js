@@ -119,7 +119,6 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   READINESS_BLOCKED_DURATION: 'Bootstrap readiness blocker duration observed',
   READINESS_DRAINING: 'Bootstrap readiness marked draining',
   WS_STARTED: 'WebSocket server started for cross-node communication',
-  WS_START_FAILED: 'Failed to start WebSocket server',
   ADMIN_RUNTIME_STARTED: 'Admin runtime started',
   ADMIN_RUNTIME_SQL_ENGINE_ATTACHED: 'Admin runtime SQL engine attached',
   PROCESS_BEFORE_EXIT: 'Process beforeExit observed',

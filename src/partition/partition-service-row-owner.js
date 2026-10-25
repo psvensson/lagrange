@@ -192,7 +192,8 @@ class PartitionServiceRowOwner {
       replicaId,
     );
 
-    const createdAt = mintServiceRowCreatedAt(timestamp);
+    const createdAt = options.originalRegistration?.birth.created_at ??
+      mintServiceRowCreatedAt(timestamp);
     return {
       service_id: replicaId,
       service_type: SERVICE_TYPE.PARTITION,
@@ -281,7 +282,16 @@ class PartitionServiceRowOwner {
     const row = Object.freeze(PartitionServiceRowOwner.buildServiceRow({
       ...options,
       timestamp: options.timestamp ?? this.now(),
+      extraFields: {...options.extraFields, ...options.originalRegistration?.birth},
     }));
+
+    if (options.originalRegistration) {
+      const registered = await options.originalRegistration.publish(row, (value) =>
+        this.systemTableWriter.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, value,
+          {...this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
+            allowCoalescing: false}));
+      return sealPartitionRegistrationEvidence(registered);
+    }
 
     let insertResult;
     let insertError = null;

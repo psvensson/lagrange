@@ -214,7 +214,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
         setTimeout(startTopologyAsync, 0);
     },
     completeSuccessfulBootstrap() {
-      this.assertOriginalSeedContinuation();
+      this.assertOriginalSeedPublicAdmission();
       const duration = Date.now() - this.startTime;
       const alreadyComplete = this.phase === BootstrapPhase.COMPLETE;
 

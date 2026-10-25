@@ -338,3 +338,29 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
       fs.rmSync(fixture, {recursive: true, force: true});
     }
   });
+
+test('only original preparation may import the named original-right transition', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'original-right-audit-'));
+  const raft = path.join(fixture, 'src', 'raft');
+  fs.mkdirSync(raft, {recursive: true});
+  const named = 'import {transitionOriginalRight} from ' +
+    '\'./raft-rs-replica-lifecycle-owner.js\';\n';
+  const preparation = path.join(raft, 'raft-rs-original-allocation-preparation.js');
+  try {
+    fs.writeFileSync(path.join(raft, 'raft-rs-replica-lifecycle-owner.js'),
+      'export function transitionOriginalRight() {}\n');
+    fs.writeFileSync(preparation, named);
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}), []);
+    fs.writeFileSync(path.join(raft, 'unrelated-caller.js'), named);
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}).map(({file, code}) =>
+      ({file, code})), [{file: 'src/raft/unrelated-caller.js',
+      code: 'lifecycle-owner-import-bypass'}]);
+    fs.rmSync(path.join(raft, 'unrelated-caller.js'));
+    fs.writeFileSync(preparation,
+      'import * as lifecycle from \'./raft-rs-replica-lifecycle-owner.js\';\n');
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}).map(({code}) => code),
+      ['lifecycle-owner-import-bypass'], 'the named permission grants no owner namespace');
+  } finally {
+    fs.rmSync(fixture, {recursive: true, force: true});
+  }
+});

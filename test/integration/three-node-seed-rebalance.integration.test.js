@@ -278,7 +278,10 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
           systemTableCache,
           messageRouter: bootstrapResult.messageRouter,
           epochManager: bootstrapResult.epochManager,
-          bootstrapService,
+          bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+          runtimeOwner: bootstrapService.runtimeDependencyOwner,
+          assertOriginalSeedPublicAdmission: () =>
+            bootstrapService.assertOriginalSeedPublicAdmission(),
         });
         await withTimeout(
           () => seedApi.initialize(0, {listen: false}),

@@ -1,3 +1,5 @@
+// Component readiness/health observations use the narrow startup adapter.
+// Real original-seed authority is exercised by fresh-seed-activation.integration.
 /**
  * Tests for Bootstrap API.
  * Requirements: 1.2, 7.2, 7.3, 7.4
@@ -167,7 +169,7 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: readinessCache,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService,
       readinessState,
       controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
     });
@@ -298,7 +300,7 @@ test('BootstrapAPI - readyz demotes immediately when priority recovery regresses
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: readinessCache,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
       },
       readinessState,
@@ -410,7 +412,7 @@ test('BootstrapAPI - readyz blocks on local query transport readiness before pro
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: readinessCache,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
       },
       readinessState,
@@ -529,7 +531,7 @@ test('BootstrapAPI - readyz treats unknown local query transport state as not re
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: readinessCache,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
       },
       readinessState,
@@ -637,7 +639,7 @@ test('BootstrapAPI - transitions probes to draining non-ready state during shutd
       seedNodeId: 'seed-node-drain',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
       },
       readinessState,
@@ -731,7 +733,7 @@ test('BootstrapAPI - liveness remains true while readiness degrades on repeated 
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -879,7 +881,7 @@ test('BootstrapAPI - returns bootstrap not ready before touching cache', async (
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: null,
-    bootstrapService: {
+    bootstrapStartupAdapter: {
       phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
     },
     readinessState,

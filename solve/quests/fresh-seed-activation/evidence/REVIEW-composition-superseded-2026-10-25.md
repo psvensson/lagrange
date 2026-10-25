@@ -1,0 +1,13 @@
+# Startup composition source binding
+
+**APPROVE** the frozen TEST/registry composition delta over incoming `cce9fc2db611dcc829e23220b80df6a63633472c` and integration parent `57d222d92347e4507e91011f7d5274350fd02da0`. This is a source-binding verdict, not a fresh runtime or canonical receipt verdict. Final clean integration SHA remains to bind.
+
+Independent snapshot `/tmp/session-worktree-zAH5UP/tree` starts at clean incoming cce9 and applies the supplied exact witness patch; it copies the already-integrated original-allocation predicate owner only for correspondence. Both composed test files match the live frozen integration bytes exactly. All 17 incoming runtime files in `fresh-composition-manifest.json` independently match cce9 and the integration tree by SHA256. No runtime conflict is hidden in this verdict.
+
+The fresh witness removes its local hold predicate and imports the existing sole `isOriginalAllocationHold` owner. R5 retains its separately typed membership-owned hold branch; all reason-specific negatives still require the exact reason. The R3 callback wrapper preserves the single-argument assertion predicate. The owner definition is exactly the same HOLD-code equality plus optional reason equality. `equivalence.json` records 32 pure correspondence checks across absent/wrong/right errors and named reasons. The exact diff preserves all eight tests and 76 assertion-call occurrences; inspection shows no assertion body or observation dropped outside those equivalent predicate substitutions.
+
+`seed-registration-phase.test.js` is byte-identical to approved incoming cce9. The root-parent delta since af8 was only two fake transportHandler answers changed from acknowledged:true to null; incoming replaces/deletes those fake replica objects in favor of the already-approved real owned fixture. No live owner witness is removed by selecting incoming here.
+
+The registry is independently reproduced by a structural three-way merge at base af8: zero doubly changed values, exact equality to integration JSON, 76 contracts and 53 coupled pairs. Duplication bounds remain the stricter integrated 654 groups / 24609 lines. No exemption, duplicate hold decision or raised limit introduced.
+
+`BOUND.json` binds runtime, test, predicate-owner, registry and duplication-source hashes; SHA256 `8a3983d82a9119058b571da897773fef3eb68257a92037d716b6433476415dd5`. Frozen input patch and manifest are retained beside it. No product edits, author edits, native execution, commits, receipts or seals were made by this review. Root owns the composition cone, final clean SHA and canonical startup proof.

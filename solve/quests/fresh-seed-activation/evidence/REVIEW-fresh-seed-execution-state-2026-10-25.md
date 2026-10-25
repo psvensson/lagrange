@@ -1,0 +1,20 @@
+# Fresh-seed final publication-state delta: APPROVE
+
+Independent reviewer: subagent:/root/fresh_seed_review.
+Verification timestamp: 2026-10-25 08:05:05 UTC, after the author's 08:03:27Z attempt.
+
+APPROVE the bounded fresh-seed source reviewed in r2 plus the exact pending-state representation delta. No required source correction remains in this review. Clean committed-SHA binding, canonical receipt and applicable final gates remain separate and pending.
+
+The preceding complete r2 review is /tmp/session-worktree-2zCjJL/tree/test-output/independent-fresh-review-r2/REVIEW-r2.md, SHA256 3430c80b42ea46d12a9dc22181cf97b5b9b967444536a26b0c1936c980550c04. Its seven-template judgments, explicit R1/R5 correspondence, shared-fixture identity, no-legacy census, public213-assertion evidence, transport-red custody and scope ceilings remain applicable.
+
+To preserve r2's original source evidence, this delta was applied only in a new scripts/session-worktree.js snapshot: /tmp/session-worktree-I86wnG/tree. The exact author patch is retained as pending-state-delta.patch. The changed src/raft/raft-rs-original-allocation-preparation.js SHA256 is 9bb55e875bd66d4d651d12654d0858c0a8ed2cc6b7b4a604559da1e0241b6f17. The complete reviewed manifest, with only that source hash updated from r2, is complete-reviewed-final.json, SHA256 e7e20c98e3d9948c63b8e55a386922bc1fe0e9aa391eabf073bda4957afda8bc. The base remains af8a0381be10bebbb3daf78bd331f7aa3fcacbbf and all seven prerequisite files remain exact 69d125051628ee5630f7ac7d7ddf7c961f057136 bytes.
+
+The representation now names PUBLICATION_EXECUTION.IDLE and RUNNING. An active entry carries its single promise; an idle entry carries no promise. The RUNNING record is installed synchronously before the Promise.resolve().then callback can execute. Concurrent reentry returns that exact promise. The finally block resets only execution state; the retained first publication value and durable original right are untouched. There is no new timer, retry, wait, right transition, identity check, submit operation or exception path.
+
+Independent focused execution on these final source bytes passed two files/three node:test cases: pending-state-probes.tap. The original F1 diagnostic remeasured concurrent and repeated calls, lost answer, unavailable/absent/contrary readback, changed role observation, exact first-row return, one INSERT, and contrary caller birth-token refusal. The two publication abort cases use the unchanged production fixture/helper and unchanged test bodies extracted from the already-passing lifetime suite: submit-await abort and observe-await abort both retain SUBMITTED and reject CLOSED without a late transfer. This extraction does not skip a product test; the whole 24-case lifetime file and all other affected tests already passed on r2, and the diagnostic specifically remeasures the only changed execution-state seam.
+
+The pending-state patch changes no other source or test. R2's actual child public8, readiness119, registration61, lifetime24, impact-contract73/45 and AST203-caller evidence are reused by the inspected delta, not by unchanged filenames alone. The first independent F1 diagnostic from r1 remains retained as red evidence. No deadline, assertion, baseline, receipt or gate was relaxed.
+
+The author's remaining preservation-hook complaint about unchanged constructor dependency wiring is under the separate audit owner. This source approval is not a bypass or a claim that the hook passed. The known swallowed WebSocket-listen error and obsolete bootstrapOrExit removal remain separate bounded units authorized by the integration owner; neither future change is covered here.
+
+Before attributing this approval to a clean SHA, compare every reviewed source/test/dependency byte against that commit and inspect any new generated metadata or append-only record differences. The canonical receipt writer must then run under the existing machine-lock owner at the exact committed candidate, preserving full streams and cleanup custody. No receipt writer was run by this reviewer.

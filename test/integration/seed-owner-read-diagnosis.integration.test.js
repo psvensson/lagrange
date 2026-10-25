@@ -101,7 +101,9 @@ async function createSeedFixture() {
     systemTableCache,
     messageRouter: bootstrapResult.messageRouter,
     epochManager: bootstrapResult.epochManager,
-    bootstrapService,
+    bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+    runtimeOwner: bootstrapService.runtimeDependencyOwner,
+    assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     readinessState,
   });
   await seedApi.initialize(0, {listen: false});

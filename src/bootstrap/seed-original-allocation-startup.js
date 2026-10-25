@@ -103,13 +103,16 @@ function closeOriginalSeedAttempt(service) {
   service.originalAllocationPreparation?.close();
 }
 
-function assertOriginalSeedContinuation(service) {
+function assertOriginalSeedContinuation(service, replicaId = undefined) {
   assertOriginalSeedAttempt(service);
-  // Until the classified replay and monotonic publication interaction is
-  // implemented, no original attempt may enter ordinary registration/election.
-  // This is an explicit unfinished WIP boundary, never a completion receipt.
-  throw originalAllocationError(REASON.CONTINUATION_UNAVAILABLE);
+  return service.originalAllocationPreparation.assertContinuation(replicaId);
+}
+
+function assertOriginalSeedPublicAdmission(service) {
+  assertOriginalSeedAttempt(service);
+  return service.originalAllocationPreparation.assertPublicAdmission();
 }
 
 export {prepareOriginalSeedAttempt, assertOriginalSeedAttempt, admitOriginalSeedReplica,
-  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation};
+  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation,
+  assertOriginalSeedPublicAdmission};
