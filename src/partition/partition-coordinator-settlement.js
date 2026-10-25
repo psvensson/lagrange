@@ -23,12 +23,12 @@ import {advancePartitionWriteGeneration, isPartitionReserved} from
 import {settleReservedCommittedStatement} from './partition-participant-transaction-apply.js';
 
 function refusal(service, failureCode) {
-  return {acknowledged: true, success: false, admitted: false,
+  return {success: false, admitted: false,
     partitionId: service.partitionId, failureCode};
 }
 
 function settlementAnswer(service, result, fields = {}) {
-  return {acknowledged: true, success: ![SETTLEMENT.REFUSED, SETTLEMENT.UNAVAILABLE]
+  return {success: ![SETTLEMENT.REFUSED, SETTLEMENT.UNAVAILABLE]
     .includes(result.outcome), partitionId: service.partitionId, [RESULT]: result, ...fields};
 }
 
@@ -51,12 +51,11 @@ function requestCoordinatorSettlement(service, payload) {
   const command = buildCoordinatorSettlementCommand(service, payload.settlement);
   if (command === null) return refusal(service, ERROR.BYTES);
   const leadership = partitionWriteLeadershipRefusalOf(service);
-  if (leadership !== null) return {acknowledged: true, ...leadership};
+  if (leadership !== null) return leadership;
   const admission = admitCommittedCommand(command,
     {origin: PARTITION_COMMITTED_COMMAND_ORIGIN.COORDINATOR_OWNER});
   if (!admission.admitted) {
-    return {acknowledged: true,
-      ...committedCommandRefusalResult(admission, service.partitionId)};
+    return committedCommandRefusalResult(admission, service.partitionId);
   }
   const recorded = readCommittedStatementOutcome(service, service.getCommittedEntryKey(command));
   if (recorded.state === RECORD.SETTLED) return recordedAnswer(service, recorded);

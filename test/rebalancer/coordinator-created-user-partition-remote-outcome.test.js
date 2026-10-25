@@ -421,14 +421,14 @@ test(
       deliveryResult() {
         deliveryAttempt += 1;
         if (deliveryAttempt === 1) {
-          return {
+          return buildDeliveryEnvelope({
             acknowledged: false,
             error: RETRYABLE_DELIVERY_ERROR,
             deferRetry: true,
             retryAfterMs: RETRY_AFTER_MS,
-          };
+          });
         }
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     });
     try {
@@ -589,12 +589,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     try {
@@ -639,12 +639,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     try {
@@ -705,12 +705,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     const syncingTimeoutMs = harness.coordinator.getTimeoutForStep(

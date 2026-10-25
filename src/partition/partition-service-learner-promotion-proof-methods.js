@@ -63,7 +63,7 @@ class PartitionServiceLearnerPromotionProofMethods {
    * not yet in this cache) with cause learner_address_unresolvable.
    * @param {Object} payload request
    *   ({partitionId, replicaId, membershipEpoch})
-   * @return {Object} {acknowledged, partitionId, learnerReplicaId, proof}
+   * @return {Object} {partitionId, learnerReplicaId, proof}
    * @private
    */
   handleLearnerPromotionProofRequest(payload) {
@@ -71,7 +71,7 @@ class PartitionServiceLearnerPromotionProofMethods {
       payload?.replicaId || STRING.EMPTY,
     ).trim();
     const requestShape = {
-      acknowledged: true,
+
       partitionId: this.partitionId,
       learnerReplicaId,
     };

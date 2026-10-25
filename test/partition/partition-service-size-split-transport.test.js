@@ -608,7 +608,7 @@ test('PartitionService - starts split replication workflow and marks cutover act
 
     await partition.splitReplicationRun;
 
-    t.same(response, {acknowledged: true, success: true});
+    t.same(response, {success: true});
     t.equal(
       partition.splitReplication.phase,
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
@@ -1044,7 +1044,7 @@ test('PartitionService - handleTransportMessage unwraps message-group query enve
 
   const result = await partition.handleTransportMessage(wrappedQueryMessage);
 
-  t.equal(result.acknowledged, true, 'wrapped query should be acknowledged');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'wrapped query should execute successfully');
   t.equal(result.rows?.[0]?.value, 42, 'wrapped query should return expected row');
 

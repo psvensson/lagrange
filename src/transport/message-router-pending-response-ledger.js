@@ -2,6 +2,7 @@ import {createTimeoutBudget, getRemainingBudgetMs} from '../control-plane/timeou
 import {assertDeliveryOpen, deliveryAbortReason} from './message-router-delivery-lifetime.js';
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from './transport-error-codes.js';
 import {buildHandlerFailedError} from './transport-semantic-outcome.js';
 
 const {
@@ -70,7 +71,10 @@ function remainingResponseMs(pending) {
   }
   if (!pending.budget) return null;
   const remaining = getRemainingBudgetMs(pending.budget, {now: () => pending.clock.now()});
-  if (remaining <= 0) throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+  if (remaining <= 0) {
+    throw Object.assign(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT),
+      {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE});
+  }
   return remaining;
 }
 

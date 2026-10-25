@@ -109,7 +109,6 @@ async function beginAndWrite(engine, sessionId) {
 
 function terminalOutcomeAnswer(message, partitionId) {
   return {
-    acknowledged: true,
     success: true,
     operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
     partitionId,
@@ -302,7 +301,6 @@ test('production evidence matrix: foreign terminal replies after durable ' +
         if (targetOperation === QUERY_OPERATION.TRANSACTION_OUTCOME &&
             message.operation === QUERY_OPERATION.COMMIT) {
           return {
-            acknowledged: true,
             success: false,
             error: 'participant no longer has an active volatile session',
             errorCode: 'NO_TRANSACTION',

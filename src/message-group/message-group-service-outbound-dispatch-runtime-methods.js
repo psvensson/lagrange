@@ -1,7 +1,8 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
-import {deliveryTransportOf, isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {buildDeliveryEnvelope, classifyThrownDeliveryError, deliveryTransportOf,
+  isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
@@ -53,7 +54,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
     QUERY_MESSAGE_TYPE,
-    buildDeferredDeliveryError,
+    buildDirectDeliveryError,
     normalizeMessageDeliveryMode,
     resolveTransportDeliveryOptions,
     uuidv4,
@@ -117,7 +118,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           deliveryPromise,
           persistPromise,
         ]);
-        if (deliveryResult.delivered) {
+        if (isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliveryResult))) {
           // Direct delivery succeeded
           messageEnvelope.status = MessageStatus.DELIVERED;
           this.logger.debug(
@@ -133,7 +134,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             messageId,
             status: MessageStatus.DELIVERED,
             deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-            delivery: deliveryResult.delivery,
+            delivery: deliveryResult,
           };
         }
         this.logger.debug(
@@ -189,6 +190,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
         );
       }
       let lastError = null;
+      let lastDelivery = null;
       const maxAttempts =
         Number.isInteger(options?.maxAttempts) && options.maxAttempts > 0 ?
           options.maxAttempts :
@@ -231,26 +233,15 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           // The transport outcome decides; MG does not interpret the answer.
           const outcome = deliveryTransportOf(delivery);
           if (isDeliveredTransportDeliveryOutcome(outcome)) {
-            return {delivered: true, attempt: attempt + 1, delivery};
+            return delivery;
           }
-          if (isDeferredTransportDeliveryOutcome(outcome)) {
-            return {
-              delivered: false,
-              attempt: attempt + 1,
-              error:
-                outcome.error ||
-                MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
-              deferRetry: true,
-              retryAfterMs: outcome.retryAfterMs,
-              errorCode: outcome.errorCode || null,
-            };
-          }
-          lastError = new Error(
-            outcome.error ||
-              MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED,
-          );
+          if (isDeferredTransportDeliveryOutcome(outcome)) return delivery;
+          lastDelivery = delivery;
+          lastError = buildDirectDeliveryError(delivery,
+            MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED);
         } catch (error) {
           lastError = error;
+          lastDelivery = buildDeliveryEnvelope(classifyThrownDeliveryError(error));
           this.logger.debug(
             MESSAGE_GROUP_SERVICE_LITERAL.DELIVERY_ATTEMPT_FAILED,
             {
@@ -264,26 +255,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
       }
       reportDirectDeliveryExhausted(
         this, messageEnvelope, maxAttempts, lastError);
-      if (lastError?.deferRetry === true) {
-        return {
-          delivered: false,
-          error:
-            lastError.message ||
-            MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
-          deferRetry: true,
-          retryAfterMs: Number.isFinite(lastError.retryAfterMs) ?
-            Math.max(0, Math.floor(lastError.retryAfterMs)) :
-            0,
-          errorCode:
-            typeof lastError.code === 'string' ? lastError.code : null,
-        };
-      }
-      return {
-        delivered: false,
-        error:
-          lastError?.message ||
-          MESSAGE_GROUP_SERVICE_LITERAL.MAX_RETRIES_EXCEEDED,
-      };
+      return lastDelivery;
     }
     /**
      * Determine whether payload should use fast non-durable query delivery.
@@ -353,11 +325,10 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             transportDeliveryOptions: options?.transportDeliveryOptions || null,
           },
         );
-        if (!deliveryResult.delivered) {
-          // MG's own record names its deferral explicitly.
-          throw deliveryResult.deferRetry === true ?
-            buildDeferredDeliveryError(deliveryResult) :
-            new Error(deliveryResult.error || failureDescription);
+        if (!isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliveryResult))) {
+          // Only this direct-only invocation has exactly one transport attempt
+          // and no parallel durable admission. Its outcome remains intact.
+          throw buildDirectDeliveryError(deliveryResult, failureDescription);
         }
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.pendingMessages.delete(messageId);
@@ -365,7 +336,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           messageId,
           status: MessageStatus.DELIVERED,
           deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-          delivery: deliveryResult.delivery,
+          delivery: deliveryResult,
         };
       } catch (error) {
         const logLevel = error?.deferRetry === true ? 'debug' : 'error';

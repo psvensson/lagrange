@@ -3,8 +3,8 @@ import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../sr
  * Integration test for CREATE_REPLICA ACK delivery via WebSocket.
  *
  * This test uses REAL WebSocket connections through MessageRouter to verify
- * that async handler results reach the caller as the flat SERVICE_RESPONSE
- * outcome, and that a slow handler times out after the transport ACK.
+ * that async handler results reach the caller as the verbatim SERVICE_RESPONSE
+ * answer, and that a slow handler times out after the transport ACK.
  *
  * CRITICAL: This test does NOT use InMemoryTransport - it uses actual WebSocket
  * connections to catch bugs like async handlers returning Promise objects.
@@ -103,9 +103,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         // Simulate async processing
         await new Promise((resolve) => setTimeout(resolve, 5));
 
-        // Return flat structure - ACK fields spread directly
+        // Return the domain answer verbatim
         return {
-          acknowledged: true,
           type: 'CREATE_REPLICA_ACK',
           request_id: message.request_id,
           status: 'initiated',
@@ -132,11 +131,10 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
       t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'should be acknowledged');
 
-      // With flat structure, ACK fields are directly on result
-      // Handler's type is preserved as responseType
+      // The handler type is preserved verbatim inside the answer.
       t.equal(result.answer.request_id, requestId, 'ACK should have correct request_id');
       t.equal(result.answer.status, 'initiated', 'ACK should have status');
-      t.equal(result.answer.responseType, 'CREATE_REPLICA_ACK', 'ACK should have correct responseType');
+      t.equal(result.answer.type, 'CREATE_REPLICA_ACK', 'answer retains its domain type');
     } finally {
       await seedRouter.shutdown();
       await joiningRouter.shutdown();
@@ -176,7 +174,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
       joiningRouter.register(`${joiningNodeId}/lifecycle/manager`, async (_envelope) => {
         // Simulate slow processing that exceeds timeout
         await new Promise((resolve) => setTimeout(resolve, 500));
-        return {acknowledged: true};
+        return null;
       });
 
       await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
@@ -190,8 +188,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
-        'transport ACK should remain true even when response times out');
+      t.notOk(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
+        'an ACK cannot settle a delivery whose handler answer is lost');
       t.ok(result.transport.error, 'should have error');
       t.match(result.transport.error, /timeout/i, 'error should mention timeout');
     } finally {

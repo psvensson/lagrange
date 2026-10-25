@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
@@ -48,7 +49,7 @@ async (t) => {
   const envelopes = [];
   router.register(handlerAddress, async (envelope) => {
     envelopes.push(envelope);
-    return {acknowledged: true, removed: true};
+    return {removed: true};
   });
 
   try {
@@ -74,13 +75,13 @@ async (t) => {
       1,
       'the registered self replica-handler is invoked in-process',
     );
-    const result = response?.result ?? response;
+    const result = deliveryTransportOf(response);
     t.notOk(
       result?.noHandler,
       'delivery must NOT fall through to a no-handler loopback self-send',
     );
     t.equal(
-      result?.acknowledged,
+      isDeliveredTransportDeliveryOutcome(result),
       true,
       'the in-process delivery is acknowledged by the handler',
     );

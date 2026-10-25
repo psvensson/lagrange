@@ -198,11 +198,10 @@ test('C56-4: participant answers reject noHandler, inherited fields, and ' +
   assert.equal(participantDeliveryAnswerOf(buildDeliveryEnvelope({acknowledged: false,
     noHandler: true}, {success: true})), null,
   'a no-handler delivery is never a participant answer');
-  assert.throws(() => preparedEvidenceOf(Object.create({acknowledged: true,
-    success: true, state: 'PREPARED', preparedDigest: 'a'.repeat(64),
+  assert.throws(() => preparedEvidenceOf(Object.create({success: true, state: 'PREPARED', preparedDigest: 'a'.repeat(64),
     prepareIndex: 2, prepareTerm: 1})));
   let digestReads = 0;
-  assert.throws(() => preparedEvidenceOf({acknowledged: true, success: true,
+  assert.throws(() => preparedEvidenceOf({success: true,
     state: 'PREPARED', get preparedDigest() {
       digestReads += 1;
       return 'a'.repeat(64);
@@ -233,7 +232,7 @@ test('C56-4: live delivery binds the processed response to the exact request',
       return options.buildSuccessResult(delivery.answer);
     };
     const delivered = (answer) => buildDeliveryEnvelope({acknowledged: true}, answer);
-    const exact = {acknowledged: true, success: true, operation: 'BEGIN',
+    const exact = {success: true, operation: 'BEGIN',
       partitionId: 'p1', transactionId, participantId, state: 'ACTIVE'};
     for (const divergent of [
       buildDeliveryEnvelope({acknowledged: false, noHandler: true}),

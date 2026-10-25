@@ -1,3 +1,4 @@
+import {isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Unit tests for MessageRouter.
  * Tests local and remote message routing.
@@ -665,7 +666,7 @@ t.test('MessageRouter unit tests chunk 3', async (t) => {
 
       const supersededResult = await secondDelivery;
       t.equal(
-        supersededResult?.result?.acknowledged,
+        isDeliveredTransportDeliveryOutcome(supersededResult.result),
         true,
         'superseded heartbeat should still resolve successfully',
       );

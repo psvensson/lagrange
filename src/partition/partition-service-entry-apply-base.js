@@ -337,7 +337,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     const admission = this.resolveRemovalServingAdmission(payload);
     if (admission.allowed !== true) {
       return {
-        acknowledged: true,
+
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.SERVING_ADMISSION_FENCED_FOR_REMOVAL,
         deferRetry: true,
@@ -455,13 +455,13 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         };
       }
       return {
-        acknowledged: true,
+
         success: result?.success === true,
         ...result,
       };
     } catch (error) {
       return {
-        acknowledged: true,
+
         success: false,
         error: error.message,
         deferRetry: error?.deferRetry === true,
@@ -534,7 +534,7 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         };
       }
       return {
-        acknowledged: true,
+
         success: result.success,
         changes: result.changes || 0,
       };

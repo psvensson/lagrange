@@ -631,13 +631,13 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
           const deliveryOutcome = deliveryTransportOf(deliveryResult);
           const deliveryAcked = isDeliveredTransportDeliveryOutcome(deliveryOutcome);
           const failure = deliveryReadingOf(deliveryResult);
-          const deliverySucceeded = failure.success !== false;
+          const deliverySucceeded = deliveryAcked && failure.success !== false;
           const deliveryErrorMessage =
             typeof failure.error === typeofToken.STRING &&
             failure.error.length > num.ZERO ?
               failure.error :
               null;
-          const deliveryRejectedByHandler = deliveryErrorMessage !== null;
+          const deliveryRejectedByHandler = deliveryAcked && deliveryErrorMessage !== null;
           if (
             !deliveryAcked ||
             !deliverySucceeded ||

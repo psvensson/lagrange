@@ -46,7 +46,6 @@ import {
 const IDENTITY_REQUIRED = CODE.IDENTITY_REQUIRED;
 const answerCode = (answer) => answer?.failureCode ?? null;
 const ingressRefusal = (answer) => ({
-  acknowledged: answer?.acknowledged === true,
   error: answer?.error ?? null,
 });
 const transactionRequest = (operation, sessionId = 'single-path-routing') => ({
@@ -220,7 +219,7 @@ test('TX1 alpha red: own partial identity, inherited identity and accessors cann
       await registeredHandler(payloadAccessor));
 
     const ordinary = await registeredHandler(ordinaryQuery('unrelated-routing'));
-    const invalid = {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE};
+    const invalid = {error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE};
     assert.deepEqual({partialCodes, inheritedRefusal, accessorRefusal, accessorReads,
       symbolRefusal, proxyRefusal, proxyReads, typeAccessorRefusal, typeAccessorReads,
       payloadAccessorRefusal, payloadAccessorReads,
@@ -273,14 +272,14 @@ test('TX1 alpha: registered transport preserves direct and wrapped application a
       sourceReplica: 'strict-raft-replica',
     }}));
     assert.deepEqual({application: applicationAnswers.map((answer) => ({
-      acknowledged: answer?.acknowledged, success: answer?.success,
+      success: answer?.success,
       rows: answer?.rows,
     })), raft: raftAnswers,
     stepped: leader.controllablePort.steps.length}, {
       application: Array.from({length: 3}, () => ({
-        acknowledged: true, success: true, rows: [],
+        success: true, rows: [],
       })),
-      raft: Array.from({length: 3}, () => ({acknowledged: true})),
+      raft: Array.from({length: 3}, () => null),
       stepped: 3,
     });
   }, {transport: harness.transport});

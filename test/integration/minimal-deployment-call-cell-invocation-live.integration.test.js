@@ -589,14 +589,13 @@ function executePartitionQuery(partitionStores, address, message) {
   const partitionId = address.split('/')[2];
   const database = partitionStores.databases.get(partitionId);
   if (!database) {
-    return {acknowledged: true, success: false,
+    return {success: false,
       error: `unknown partition: ${partitionId}`};
   }
   const sql = message.sql || message.payload?.sql;
   const params = message.params || message.payload?.params || [];
   const rows = database.prepare(sql).all(...params);
   return {
-    acknowledged: true,
     success: true,
     rows,
     count: rows.length,

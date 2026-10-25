@@ -28,7 +28,7 @@
   "censusSize": 2463,
   "digest": "fnv1a32-384afb42",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-2c4dea80",
+  "observationDigest": "fnv1a32-46a53a3d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -17507,6 +17507,7 @@
     },
     "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js": {
       "files": [
+        "src/partition/partition-service-merge-replication-methods.js",
         "src/transport/transport-error-codes.js"
       ]
     },

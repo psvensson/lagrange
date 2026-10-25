@@ -168,7 +168,7 @@ async function runTransaction(engine, sessionId, rows) {
 
 function refusalOf(message, failureCode, extra = {}) {
   const participantPrefix = `${message.transactionId}:`;
-  return {acknowledged: true, success: false,
+  return {success: false,
     error: `Participant transaction request refused: ${failureCode}`,
     failureCode, operation: message.operation,
     partitionId: typeof message.participantId === 'string' &&
@@ -490,12 +490,12 @@ test('C56-1: contradictory PREPARE and terminal tuples cannot authorize ' +
   await badRollback.engine.shutdown();
   badRollback.gateway.db.close();
 
-  assert.throws(() => transactionOutcomeAnswerOf({acknowledged: true,
-    success: true, operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
+  assert.throws(() => transactionOutcomeAnswerOf({success: true,
+    operation: QUERY_OPERATION.TRANSACTION_OUTCOME,
     partitionId: 'p1', transactionId: 'a'.repeat(32),
     participantId: `${'a'.repeat(32)}:p1`, durable: true,
     state: 'ROLLED_BACK', outcome: 'COMMITTED'}));
-  assert.equal(transactionOutcomeAnswerOf({acknowledged: true, success: true,
+  assert.equal(transactionOutcomeAnswerOf({success: true,
     operation: QUERY_OPERATION.TRANSACTION_OUTCOME, partitionId: 'p1',
     transactionId: 'a'.repeat(32), participantId: `${'a'.repeat(32)}:p1`,
     durable: true, state: 'PREPARED', outcome: 'UNKNOWN'}).outcome, 'UNKNOWN');
@@ -777,8 +777,7 @@ async () => {
   const deferred = await prepareAnswered((message, answered) =>
     (answered === 1 ? refusalOf(message, ANSWER.REMOVAL_FENCED,
       {deferRetry: true}) : null));
-  const untyped = await prepareAnswered(() => ({acknowledged: true,
-    success: true}));
+  const untyped = await prepareAnswered(() => ({success: true}));
   const beginRefused = {};
   for (const code of [ANSWER.GENERATION_ORIGIN_PENDING,
     ANSWER.DETERMINISM_SELF_CHECK_FAILED]) {

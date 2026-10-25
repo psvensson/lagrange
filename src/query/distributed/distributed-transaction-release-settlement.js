@@ -95,7 +95,7 @@ async function applySettlement(service, settlement) {
   });
   const result = canonicalTransactionSettlementResult(
     answer?.[COORDINATOR_SETTLEMENT_RESULT]);
-  if (answer?.acknowledged !== true || answer?.committed !== true || result === null ||
+  if (answer?.committed !== true || result === null ||
       ![SETTLEMENT_OUTCOME.APPLIED, SETTLEMENT_OUTCOME.REPLAYED,
         SETTLEMENT_OUTCOME.ALREADY_RECORDED].includes(result.outcome)) return null;
   return result;

@@ -1,3 +1,4 @@
+import {isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import {registerMessageRouterTailMoreTests} from './message-router-tail-more-test-cases.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {isSupersededTransportDeliveryOutcome} from
@@ -81,7 +82,7 @@ export async function registerMessageRouterTailTests({
 
       const supersededResult = await secondDelivery;
       t.equal(
-        supersededResult?.result?.acknowledged,
+        isDeliveredTransportDeliveryOutcome(supersededResult.result),
         true,
         'superseded heartbeat node-state update should resolve without surfacing an error',
       );
@@ -187,7 +188,7 @@ export async function registerMessageRouterTailTests({
 
       const supersededResult = await secondDelivery;
       t.equal(
-        supersededResult?.result?.acknowledged,
+        isDeliveredTransportDeliveryOutcome(supersededResult.result),
         true,
         'superseded heartbeat should resolve without surfacing an error',
       );

@@ -50,11 +50,11 @@ function writeRoutingRefusal(service, payload, isWriteOperation) {
       replicaId: service.replicaId,
       leaderAddress,
     });
-    return {acknowledged: true, success: false,
+    return {success: false,
       redirect: PARTITION_SERVICE_RESPONSE.LEADER_REDIRECT, leaderAddress,
       partitionId: service.partitionId};
   }
-  return {acknowledged: true, success: false,
+  return {success: false,
     error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
     failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
     partitionId: service.partitionId};
@@ -85,7 +85,7 @@ async function executeRemoteQuery(service, payload) {
 function remoteQueryAnswer(service, result, readAuthorityWitness) {
   const success = result?.success !== false;
   const answer = {
-    acknowledged: true, success, rows: result.rows, changes: result.changes,
+    success, rows: result.rows, changes: result.changes,
     count: result.count, partitionId: service.partitionId,
     durableCommitWitness: result.durableCommitWitness,
     originHlc: result.originHlc, acceptingNodeId: result.acceptingNodeId,
@@ -106,7 +106,7 @@ function remoteQueryFailure(service, sql, error) {
     error: error.message,
     partitionId: service.partitionId,
   });
-  return {acknowledged: true, success: false, error: error.message,
+  return {success: false, error: error.message,
     errorCode: error.code || null, partitionId: service.partitionId};
 }
 
@@ -179,7 +179,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
         },
       );
       return {
-        acknowledged: true,
+
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
         errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
@@ -227,7 +227,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
         {partitionId: this.partitionId, expectedVersion, evidenceGap: true},
       );
       return {
-        acknowledged: true,
+
         success: false,
         error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
         errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
@@ -239,7 +239,7 @@ const PARTITION_SERVICE_REMOTE_QUERY_METHODS = Object.freeze({
       {partitionId: this.partitionId, expectedVersion},
     );
     return {
-      acknowledged: true,
+
       success: false,
       error: PARTITION_SERVICE_ERROR_MSG.PARTITION_EPOCH_EVIDENCE_MISSING,
       errorCode: QUERY_ERROR_CODE.PARTITION_EPOCH_EVIDENCE_DEFERRED,

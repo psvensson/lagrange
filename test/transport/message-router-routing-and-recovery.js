@@ -207,7 +207,7 @@ t.test('MessageRouter unit tests chunk 1', async (t) => {
     let localHandlerCalls = 0;
     router.register('test-node/partition/p1', () => {
       localHandlerCalls++;
-      return {acknowledged: true, success: true, rows: [{id: 'local'}]};
+      return {success: true, rows: [{id: 'local'}]};
     });
 
     let queryTransportCalls = 0;

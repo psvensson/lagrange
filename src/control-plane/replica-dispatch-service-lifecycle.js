@@ -305,7 +305,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
             };
           }
           await this.handleReplicaOperationDispatch(payload);
-          return {acknowledged: true};
+          return null;
         };
         this.messageRouter.register(
           this.directDispatchServiceAddress,

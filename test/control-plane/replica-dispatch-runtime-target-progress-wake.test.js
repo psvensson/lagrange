@@ -240,9 +240,9 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       t.equal(
-        ingressResult?.acknowledged,
-        true,
-        'registered transport ingress should acknowledge the marked wake',
+        ingressResult,
+        null,
+        'registered transport ingress completes without an application answer',
       );
       t.equal(
         dispatchCallCount,

@@ -362,7 +362,6 @@ export async function registerMessageRouterTailMoreTests({
 
     router.register('self-error-detail-test/service/erroring-service', () => {
       return {
-        acknowledged: true,
         status: 'error',
         error: 'replica assignment rejected',
       };

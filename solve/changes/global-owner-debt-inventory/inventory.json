@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417270,
-        "sha256": "476edaea14e2ecbfad4adc8ab90814fea70a15ec0bc251e9bc465a9a06ec9535"
+        "bytes": 417015,
+        "sha256": "0ad7bf34fda798afcb546736c5d46adee955fe36c63cabaff755270bcf6ea036"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 34620,
-        "sha256": "4755203f4ecbb1806cb534863b2780080791f515f19031123bccf4edfc182065"
+        "sha256": "406d624c08a213addaeca4633cb4527c8e8a053c4b1705b60dfc9b2789344e2f"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3085802,
-        "sha256": "52406270e3ac976769ee0de12a51502453610afc4e1adfa36335868bcf930f53"
+        "bytes": 3086760,
+        "sha256": "ae3b0cefa7b16b7147fe622d3f760eb016912e2dcbfe152cee5ca86df64e5aa8"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "e7972eac4e064af81aa3ec34584e3a800f28906667059c5ba0056d6941cf7992"
+        "sha256": "d421bf3eebc0a047a8c6e8cc9a1a2b7f49a7329034eeee7a9ce5f142bc932538"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "508576f1e7396e43546eb59228711d0ab5436c06383d0cbe6289800bba97cc19"
+        "sha256": "e76c0677400f5fd92ee327958d37d5f6b1bc6984f6c4e053513593c8fd233668"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,24 +62,24 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "975788cf9c732eb3a55ba378bbed4ef7ad2554fba686b4e8d779730f87dbd420"
+    "inputDigest": "2a45b3a85a2cf075f5c7a7aa16ec07f8cd56f6cca0ef46c121c59cef620a2c33"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 417270,
-        "sha256": "476edaea14e2ecbfad4adc8ab90814fea70a15ec0bc251e9bc465a9a06ec9535"
+        "bytes": 417015,
+        "sha256": "0ad7bf34fda798afcb546736c5d46adee955fe36c63cabaff755270bcf6ea036"
       },
-      "declaredCount": 1766,
-      "observedCount": 1766,
-      "assignedCount": 1766
+      "declaredCount": 1765,
+      "observedCount": 1765,
+      "assignedCount": 1765
     },
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
         "bytes": 34620,
-        "sha256": "4755203f4ecbb1806cb534863b2780080791f515f19031123bccf4edfc182065"
+        "sha256": "406d624c08a213addaeca4633cb4527c8e8a053c4b1705b60dfc9b2789344e2f"
       },
       "declaredCount": 150,
       "observedCount": 150,
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "e7972eac4e064af81aa3ec34584e3a800f28906667059c5ba0056d6941cf7992"
+          "sha256": "d421bf3eebc0a047a8c6e8cc9a1a2b7f49a7329034eeee7a9ce5f142bc932538"
         },
         "cloneGroups": 44,
         "duplicatedLines": 1383,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "508576f1e7396e43546eb59228711d0ab5436c06383d0cbe6289800bba97cc19"
+          "sha256": "e76c0677400f5fd92ee327958d37d5f6b1bc6984f6c4e053513593c8fd233668"
         },
         "cloneGroups": 655,
         "duplicatedLines": 24631,
@@ -167,29 +167,29 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 3085802,
-        "sha256": "52406270e3ac976769ee0de12a51502453610afc4e1adfa36335868bcf930f53"
+        "bytes": 3086760,
+        "sha256": "ae3b0cefa7b16b7147fe622d3f760eb016912e2dcbfe152cee5ca86df64e5aa8"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 2680,
         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
       },
-      "sourceDigest": "6525772426f242285c388ec5ee589952181bd148b33a2accda78869e6071c205",
+      "sourceDigest": "ed92475062fddca64c10924acc13b77d8cc3f2fb58dbfc535c9eb675bdbcc4ec",
       "moduleCount": 5601,
-      "edgeCount": 29941,
+      "edgeCount": 29956,
       "unresolvedCount": 36
     }
   },
   "assignment": {
-    "sourceSignalCount": 2477,
-    "assignedSignalCount": 2477,
-    "uniqueAssignmentCount": 2477,
-    "digest": "d29afe63653bff4e33a3f15532ab661b4029dd9792fbf5d097a1dcfc760fa985"
+    "sourceSignalCount": 2476,
+    "assignedSignalCount": 2476,
+    "uniqueAssignmentCount": 2476,
+    "digest": "b11de17ecc367d66712b8a8b27902a71e928e6dbcb752c9601423d120b93c290"
   },
   "signalCounts": {
     "cognitive": 150,
-    "complexity": 1766,
+    "complexity": 1765,
     "duplication": 475,
     "fileSize": 47,
     "lintExclusion": 39
@@ -807,8 +807,8 @@
       "cloneTouches": 1,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 122,
-      "importOut": 62,
+      "importIn": 123,
+      "importOut": 63,
       "score": 122,
       "topPaths": [
         "src/transport/message-router-outbound-queue-admission.js",
@@ -1107,8 +1107,8 @@
         "src/message-group"
       ],
       "fileCount": 8,
-      "signalCount": 16,
-      "complexity": 11,
+      "signalCount": 15,
+      "complexity": 10,
       "cognitive": 2,
       "oversizedFiles": 0,
       "duplicatedLines": 109,
@@ -1116,14 +1116,14 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 18,
-      "importOut": 64,
-      "score": 70.9,
+      "importOut": 65,
+      "score": 66.9,
       "topPaths": [
         "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
         "src/message-group/message-group-service-state.js",
         "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
-        "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
-        "src/message-group/message-group-service-runtime-support.js"
+        "src/message-group/message-group-service-runtime-support.js",
+        "src/message-group/message-group-service-raft-timing.js"
       ]
     },
     {

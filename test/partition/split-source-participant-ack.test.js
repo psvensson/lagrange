@@ -415,7 +415,7 @@ async (t) => {
     transitionMetadata: metadata,
   });
 
-  t.ok(result.acknowledged, 'must acknowledge the request');
+  t.ok(result.success, 'must acknowledge the request');
 
   // Wait for the async workflow to settle
   await context.splitReplicationRun;

@@ -225,18 +225,18 @@ function createPartitionStores() {
 function executePartitionSql(partitionStores, partitionId, message) {
   const database = partitionStores.databases.get(partitionId);
   if (!database) {
-    return {acknowledged: true, success: false,
+    return {success: false,
       error: `unknown partition: ${partitionId}`};
   }
   const sql = message.sql || message.payload?.sql;
   const params = message.params || message.payload?.params || [];
   if (/^\s*SELECT/iu.test(sql)) {
     const rows = database.prepare(sql).all(...params);
-    return {acknowledged: true, success: true, rows,
+    return {success: true, rows,
       count: rows.length, partitionId};
   }
   const outcome = database.prepare(sql).run(...params);
-  return {acknowledged: true, success: true, rows: [],
+  return {success: true, rows: [],
     affectedRows: outcome.changes, changes: outcome.changes, partitionId};
 }
 

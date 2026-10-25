@@ -256,7 +256,7 @@ test(
       const envelope = consensusEnvelope('mg-join-append');
       const result = await service.receiveMessage({payload: envelope});
 
-      t.same(result, {acknowledged: true}, 'the consensus envelope is acknowledged');
+      t.equal(result, null, 'consensus processing has no application answer');
       t.same(port.steps, [envelope], 'the envelope is stepped into the port unchanged');
       t.notOk(
         port.schedulingCalls.includes(SCHEDULING_STARTED),

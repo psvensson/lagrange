@@ -121,7 +121,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
         if (this.raft) {
           await Promise.resolve(this.raft.step(payload));
         }
-        return {acknowledged: true};
+        return null;
       }
       // Handle application messages
       // Requirements: 2.3, 5.3
@@ -153,7 +153,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
         return {
           messageId,
           status: MESSAGE_GROUP_APPLICATION_STATUS.DUPLICATE,
-          acknowledged: true,
+
         };
       }
       // Update HLC from remote timestamp if present and is a valid HLC string

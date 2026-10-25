@@ -188,7 +188,7 @@ class PartitionServiceSplitMirrorQueueMethods {
     }
     const response = await startSplitReplicationHandleForService(
       this, reconstructed);
-    return response.acknowledged === true;
+    return response.success === true;
   }
 
   /**

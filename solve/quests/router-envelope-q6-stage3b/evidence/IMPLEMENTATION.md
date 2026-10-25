@@ -106,8 +106,9 @@ The intersection with `8fee98abe` is
 `src/query/query-executor-partition-request-builders.js`. Q6 replaces the old flat
 success predicate/import with delivered transport plus answer.success. SQL
 admission adds statement policy/request fields elsewhere in that file. Compose
-both: preserve SQL admission fields and Q6 envelope predicate. The admin edits are
-in different files. No SQL branch was taken into this candidate. Parent integration
+both: preserve SQL admission fields and Q6 envelope predicate. The REVISE repair additionally intersects `admin-websocket-api-base.js`:
+preserve SQL admission and the canonical local ServiceDispatcher answer record.
+No SQL branch was taken into this candidate. Parent integration
 owns composed-source proof and delta review; this isolated SHA cannot certify it.
 
 ## Evidence and remaining gates

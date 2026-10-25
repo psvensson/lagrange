@@ -1460,7 +1460,7 @@
       ]
     },
     "router-delivery-envelope": {
-      "description": "The router alone computes a delivery's transport outcome, from its own facts, and deliver() resolves to the one envelope {transport, answer}: transport is the router's closed-key-set outcome of THIS hop (identity from the ledger, never the answer: F-D) and answer is the handler's answer, captured once, beside it. No answer field can change any transport fact (D2/D4, W-ENV-1/W-ENV-6), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on LOCAL and remote alike (D1); answers remain verbatim locally and use the existing JSON wire encoding remotely, whose serialization failure is handler_failed (F-V1), a no-handler reply is a frame-level router fact with no answer slot, a queued delivery replaced before it was sent is the named superseded outcome (D3, F-V4), and a forwarder's transport describes its own hop while the onward hop's outcome rides in its answer (design section 5, W-ENV-7). Only branded owner accessors read the envelope; deliveryState is the public outcome with no acknowledged alias. Router-proven pre-send refusal remains explicit; resolved post-submission connection loss and timeout retain the query owner unknown-write debt under its original entry.",
+      "description": "The router alone computes a delivery's transport outcome, from its own facts, and deliver() resolves to the one envelope {transport, answer}: transport is the router's closed-key-set outcome of THIS hop (identity from the ledger, never the answer: F-D) and answer is the handler's answer, captured once, beside it. No answer field can change any transport fact (D2/D4, W-ENV-1/W-ENV-6), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on LOCAL and remote alike (D1); answers remain verbatim locally and use the existing JSON wire encoding remotely, whose serialization failure is handler_failed (F-V1), a no-handler reply is a frame-level router fact with no answer slot, a queued delivery replaced before it was sent is the named superseded outcome (D3, F-V4), and a forwarder's transport describes its own hop while the onward hop's outcome rides in its answer (design section 5, W-ENV-7). Only branded owner accessors read the envelope; deliveryState is the public outcome with no acknowledged alias. Router-proven pre-send refusal remains explicit; resolved post-submission connection loss and timeout retain the query owner unknown-write debt under its original entry. START forwards retain the START owner confirmation obligation without adopting onward transport; both workflow families share one confirmation continuation. Direct-only QUERY/MG preserves its single attempt canonical envelope and never clears prior write debt. Handler answers and domain authorization/settlement readers have no redundant transport ACK alias.",
       "owners": [
         "src/transport/transport-semantic-outcome.js",
         "src/transport/transport-error-codes.js",
@@ -1532,7 +1532,16 @@
         "src/node/runtime-service-handler.js",
         "src/service/cell-ingress-transport.js",
         "src/service/service-dispatcher.js",
-        "src/raft/raft-rs-peer-delivery.js"
+        "src/raft/raft-rs-peer-delivery.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/partition-coordinator-settlement.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-service-merge-replication-resumption-methods.js",
+        "src/partition/partition-service-split-mirror-queue-methods.js",
+        "src/query/distributed/distributed-transaction-release-settlement.js",
+        "src/admin/admin-websocket-api-base.js",
+        "src/wasm-service/wasm-service-replica.js"
       ],
       "tests": [
         "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js",
@@ -1556,7 +1565,13 @@
         "test/control-plane/membership-swim-prober.test.js",
         "test/rebalancer/replace-witness-boundary.test.js",
         "test/service/service-dispatcher.test.js",
-        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+        "test/partition/partition-replication-restart-attempt-handoff.test.js",
+        "test/partition/partition-coordinator-settlement.test.js",
+        "test/query/transaction-release-settlement.test.js",
+        "test/admin/admin-websocket-service-dispatcher.test.js",
+        "test/wasm-service/wasm-service-replica.test.js",
+        "test/partition/raft-rs-transport-demux.test.js"
       ]
     },
     "transport-handler-identity": {
@@ -3168,14 +3183,19 @@
             "src/query/query-executor-partition-request-builders.js",
             "src/query/query-executor-unknown-outcome.js",
             "src/query/sql-query-engine-participant-wire.js",
-            "src/query/sql-query-engine.js"
+            "src/query/sql-query-engine.js",
+            "src/query/distributed/distributed-transaction-release-settlement.js",
+            "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
+            "src/message-group/message-group-service-runtime-support.js"
           ]
         }
       ],
       "contract": "router-delivery-envelope",
       "witnessTests": [
         "test/query/router-envelope-lost-write-answer.test.js",
-        "test/query/transaction-coordinator-participant-protocol.test.js"
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/transport/router-envelope-pre-send-failure.test.js",
+        "test/query/transaction-release-settlement.test.js"
       ]
     },
     "router-envelope-cdc-forwarding": {
@@ -3235,14 +3255,22 @@
             "src/partition/partition-service-metadata-delivery-methods.js",
             "src/partition/partition-service-remote-query-methods.js",
             "src/partition/partition-service-source-replication-start-methods.js",
-            "src/partition/partition-service-write-metrics-base.js"
+            "src/partition/partition-service-write-metrics-base.js",
+            "src/partition/managed-split-workflow.js",
+            "src/partition/managed-merge-workflow.js",
+            "src/partition/partition-coordinator-settlement.js",
+            "src/partition/partition-participant-transaction-request.js",
+            "src/partition/partition-service-merge-replication-resumption-methods.js",
+            "src/partition/partition-service-split-mirror-queue-methods.js"
           ]
         }
       ],
       "contract": "router-delivery-envelope",
       "witnessTests": [
         "test/partition/learner-promotion-proof-delivery-outcome.test.js",
-        "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js"
+        "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js",
+        "test/partition/partition-replication-restart-attempt-handoff.test.js",
+        "test/partition/partition-coordinator-settlement.test.js"
       ]
     },
     "router-envelope-control-plane": {
@@ -3332,14 +3360,16 @@
             "src/node/replica-transport-handler-identity.js",
             "src/node/runtime-service-handler.js",
             "src/service/cell-ingress-transport.js",
-            "src/service/service-dispatcher.js"
+            "src/service/service-dispatcher.js",
+            "src/admin/admin-websocket-api-base.js"
           ]
         }
       ],
       "contract": "router-delivery-envelope",
       "witnessTests": [
         "test/service/service-dispatcher.test.js",
-        "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js"
+        "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js",
+        "test/admin/admin-websocket-service-dispatcher.test.js"
       ]
     },
     "router-envelope-raft": {
@@ -3355,13 +3385,16 @@
         {
           "id": "raft-consumer",
           "owners": [
-            "src/raft/raft-rs-peer-delivery.js"
+            "src/raft/raft-rs-peer-delivery.js",
+            "src/wasm-service/wasm-service-replica.js"
           ]
         }
       ],
       "contract": "router-delivery-envelope",
       "witnessTests": [
-        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js",
+        "test/wasm-service/wasm-service-replica.test.js",
+        "test/partition/raft-rs-transport-demux.test.js"
       ]
     }
   }

@@ -214,7 +214,7 @@ test(
           await Promise.resolve();
           staleLeader.controllablePort.setRole(RAFT_ROLE.FOLLOWER);
         }
-        return response;
+        return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
     const executor = new QueryExecutor({messageRouter, systemCache});
@@ -452,7 +452,7 @@ test(
           return buildDeliveryEnvelope(
             {acknowledged: false, error: 'Message timeout after committed response loss'});
         }
-        return response;
+        return buildDeliveryEnvelope({acknowledged: true}, await response);
       },
     };
     const executor = new QueryExecutor({messageRouter, systemCache});

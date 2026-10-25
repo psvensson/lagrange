@@ -63,7 +63,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
         migrationOperation: PARTITION_SERVICE_MIGRATION_OPERATION.ALTER_TABLE,
         migrationId: 'migration-42',
       });
-      t.equal(alterResult.acknowledged, true);
+      t.equal(Object.hasOwn(alterResult, 'acknowledged'), false, 'answer has no transport ACK alias');
       t.equal(alterResult.success, true);
 
       const latestAppliedCommand = readLastAppliedCommandIndependently(dbPath);

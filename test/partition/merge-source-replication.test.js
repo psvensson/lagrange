@@ -195,7 +195,7 @@ test('merge source - full run emits the ack ladder in order and fans ' +
   const response = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
-  t.equal(response.acknowledged, true);
+  t.equal(response.success, true);
   t.equal(response.success, true);
   await context.mergeReplicationRun;
 
@@ -246,7 +246,7 @@ test('merge source - idempotent restart acks; conflicting replication ' +
   const duplicateResponse = await context.handleStartMergeReplication({
     transitionMetadata: buildMetadata(),
   });
-  t.equal(duplicateResponse.acknowledged, true);
+  t.equal(duplicateResponse.success, true);
   t.equal(duplicateResponse.success, true);
 
   const conflictingMetadata = {

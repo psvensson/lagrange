@@ -188,7 +188,7 @@ test('B7 / F-am: the SQL engine never records a partition write released ' +
           const answer = partition.handleRemoteQuery(message);
           await new Promise((resolve) => setImmediate(resolve));
           clock.advance(PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS);
-          return answer;
+          return buildDeliveryEnvelope({acknowledged: true}, await answer);
         },
       },
       cdcIntegrationService: {
@@ -339,8 +339,9 @@ test('F-aj: the query executor re-delivers an unknown outcome under the ' +
       messageRouter: {
         async deliver(address, message) {
           sent.push({address, entryId: message.entryId});
-          return services[members.findIndex((member) =>
-            addressOf(member) === address)].handleRemoteQuery(message);
+          return buildDeliveryEnvelope({acknowledged: true},
+            await services[members.findIndex((member) =>
+              addressOf(member) === address)].handleRemoteQuery(message));
         },
       },
     });

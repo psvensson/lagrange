@@ -43,7 +43,7 @@ function buildSwimPingAddress(nodeId) {
  * gossip + records the prober alive, and replies alive with its own incarnation and a
  * fresh batch of gossip. This is the regular bidirectional dissemination channel.
  * @param {Object} deps - {detector}
- * @return {Function} async (envelope) => {acknowledged, alive, incarnation, updates}
+ * @return {Function} async (envelope) => {alive, incarnation, updates}
  */
 function buildSwimPingHandler({detector} = {}) {
   return async (envelope) => {
@@ -56,7 +56,7 @@ function buildSwimPingHandler({detector} = {}) {
       }
     }
     return {
-      acknowledged: true,
+
       alive: true,
       incarnation: detector ? detector.selfIncarnation() : 0,
       updates: detector ? detector.drainGossip() : [],
@@ -68,16 +68,16 @@ function buildSwimPingHandler({detector} = {}) {
  * Handler for an indirect ping-req: a helper pings the requested target on behalf of
  * the requester and reports reachability. Register at buildSwimRelayAddress(localNodeId).
  * @param {Object} deps - {messageRouter, pingTimeoutMs}
- * @return {Function} async (envelope) => {acknowledged, reachable}
+ * @return {Function} async (envelope) => {reachable}
  */
 function buildSwimRelayHandler({messageRouter, pingTimeoutMs = null} = {}) {
   return async (envelope) => {
     const targetNodeId = normalizeNodeId(envelope?.payload?.targetNodeId);
     if (!targetNodeId || !messageRouter) {
-      return {acknowledged: true, reachable: false};
+      return {reachable: false};
     }
     const reachable = await messageRouter.pingNode(targetNodeId, pingTimeoutMs);
-    return {acknowledged: true, reachable: reachable === true};
+    return {reachable: reachable === true};
   };
 }
 
@@ -87,7 +87,7 @@ function buildSwimRelayHandler({messageRouter, pingTimeoutMs = null} = {}) {
  * the target's swim-ping handler, returning the target's {alive, incarnation, updates}
  * response (or null if unreachable). indirectProbe → deliver to the helper's swim-relay
  * handler (reachability only). `deliver` RESOLVES (does not throw) on transport faults,
- * so the mapping is explicit: acked+alive => the response; anything else (no_handler,
+ * so the mapping is explicit: delivered+alive => the response; anything else (no_handler,
  * timeout, connection-closed, throw) => null (target produced no verdict).
  * @param {Object} deps - {messageRouter, pingTimeoutMs}
  * @return {{directProbe: Function, indirectProbe: Function}}

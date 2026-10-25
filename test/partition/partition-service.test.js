@@ -614,7 +614,6 @@ test(
         params: [1],
       }),
       {
-        acknowledged: true,
         success: false,
         redirect: 'LEADER_REDIRECT',
         leaderAddress: liveLeaderAddress,

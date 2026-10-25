@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 // The simulator's in-process link is a real MessageRouter link whose physics
 // the VirtualNetwork owns.
 //
@@ -209,9 +210,9 @@ test('3. a service message is delivered and acknowledged over the link',
     const outcome = await deliveryPromise;
 
     assert.deepEqual(seen, [7], 'the remote handler ran on the remote router');
-    assert.equal(outcome.acknowledged, true,
+    assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(outcome)), true,
       'the ACK came back across the link, not from a local shortcut');
-    assert.equal(outcome.deliveryState, 'delivered');
+    assert.equal(deliveryTransportOf(outcome).deliveryState, 'delivered');
     assert.ok(harness.frameCount() > framesBefore + 1,
       'request and acknowledgement were separate link frames');
     assert.ok(network.now() > timeBefore,

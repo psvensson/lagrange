@@ -44,7 +44,7 @@ function fixture(t, row, answerOf) {
     },
     async deliverTransactionOperation(sessionId, partitionId, operation, options) {
       deliveries.push({sessionId, partitionId, operation, options});
-      return {acknowledged: true, operation, partitionId,
+      return {operation, partitionId,
         transactionId: options.transactionId,
         participantId: options.participantId,
         ...answerOf(operation)};
@@ -53,7 +53,7 @@ function fixture(t, row, answerOf) {
   const service = {async handleApplicationMessage(request) {
     const result = gateway.db.transaction(() =>
       applyTransactionSettlement(gateway.db, request.settlement))();
-    return {acknowledged: true, committed: true, settlementResult: result};
+    return {committed: true, settlementResult: result};
   }};
   return {gateway, engine, service, deliveries};
 }

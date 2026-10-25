@@ -940,14 +940,12 @@ test(
   },
 );
 
-test('MessageGroupService - forward rejection logs bounded leader diagnostics',
+test('MessageGroupService - missing handler logs bounded transport diagnostics',
   async (t) => {
     const transport = {
       async deliver() {
-        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
-          success: false,
-          error: 'No handler for address: remote-node/message-group/mg-forward-diag-r2',
-        });
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true,
+          error: 'No handler for address: remote-node/message-group/mg-forward-diag-r2'});
       },
       async initialize() {},
       async shutdown() {},
@@ -996,13 +994,13 @@ test('MessageGroupService - forward rejection logs bounded leader diagnostics',
       'warning should identify the rejected leader service');
     t.equal(
       warningLogs[0]?.fields?.deliveryRejectedByHandler,
-      true,
-      'warning should classify handler rejection explicitly',
+      false,
+      'a missing handler cannot have authored a refusal',
     );
     t.equal(warningLogs[0]?.fields?.noHandler, true,
       'warning should preserve the no-handler signal');
-    t.equal(warningLogs[0]?.fields?.acknowledged, true,
-      'warning should preserve delivery acknowledgement state');
+    t.equal(warningLogs[0]?.fields?.deliveryState, 'failed',
+      'warning should preserve the canonical transport state');
     t.equal(warningLogs[0]?.fields?.success, false,
       'warning should preserve delivery success state');
     t.equal(warningLogs[0]?.fields?.strictForwarding, true,

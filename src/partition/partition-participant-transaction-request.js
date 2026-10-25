@@ -621,13 +621,13 @@ function sessionStatementAnswer(service, payload) {
  * queries keep their ordinary epoch and leadership gates before staging.
  * @param {Object} service - The partition.
  * @param {Object} payload - The QUERY request.
- * @return {Object|null} Acknowledged refusal, or null.
+ * @return {Object|null} Participant refusal, or null.
  */
 function answerParticipantQueryIdentityRefusal(service, payload) {
   const classified = participantQueryClassification(service, payload);
   return classified.kind === PARTICIPANT_QUERY_KIND.REFUSED ?
-    {acknowledged: true, ...refusalOf(service, classified.request,
-      classified.failureCode)} : null;
+    refusalOf(service, classified.request,
+      classified.failureCode) : null;
 }
 
 /**
@@ -654,21 +654,20 @@ function admitsParticipantSessionQueryDuringRemoval(service, payload) {
  * QUERY traffic.
  * @param {Object} service - The partition.
  * @param {Object} payload - The QUERY request.
- * @return {Object|null} The acknowledged answer, or null.
+ * @return {Object|null} The participant answer, or null.
  */
 function answerParticipantSessionQuery(service, payload) {
   try {
     const classified = participantQueryClassification(service, payload);
     if (classified.kind === PARTICIPANT_QUERY_KIND.ORDINARY) return null;
     if (classified.kind === PARTICIPANT_QUERY_KIND.REFUSED) {
-      return {acknowledged: true, ...refusalOf(service, classified.request,
-        classified.failureCode)};
+      return refusalOf(service, classified.request,
+        classified.failureCode);
     }
-    return {acknowledged: true,
-      ...sessionStatementAnswer(service, classified.request)};
+    return sessionStatementAnswer(service, classified.request);
   } catch (statementError) {
     // An unexpected failure answers this request; nothing staged changed.
-    return {acknowledged: true, success: false, error: statementError?.message,
+    return {success: false, error: statementError?.message,
       errorCode: statementError?.code ?? null, partitionId: service.partitionId};
   }
 }

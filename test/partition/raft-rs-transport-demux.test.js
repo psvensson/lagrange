@@ -82,8 +82,8 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
         payload: semanticEnvelope,
       });
 
-      t.equal(result.acknowledged, true,
-        'the transport envelope is consumed as consensus traffic');
+      t.equal(result, null,
+        'consensus traffic has no application answer');
       t.equal(consensusPort.steps.length, 1,
         'exactly one semantic step crosses the existing operation port');
       t.same(consensusPort.steps[0], semanticEnvelope,
@@ -168,7 +168,7 @@ test('MessageRouter direct Raft delivery accepts the semantic raft-rs envelope',
       'node-r2',
     );
 
-    t.equal(result?.direct, true,
+    t.equal(result.acknowledged, true,
       'semantic raft-rs traffic uses the existing consensus fast path');
     t.same(transmitted?.payload, payload,
       'MessageRouter preserves the semantic envelope unchanged');

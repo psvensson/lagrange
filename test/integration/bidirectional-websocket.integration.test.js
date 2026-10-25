@@ -108,7 +108,6 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         const message = envelope.payload || envelope;
         receivedMessages.push(message);
         return {
-          acknowledged: true,
           request_id: message.request_id,
           status: 'initiated',
           replica_id: message.replica_id,
@@ -207,7 +206,6 @@ test('Bidirectional WebSocket communication', {timeout: 5000}, async (t) => {
         const message = envelope.payload || envelope;
         receivedMessages.push(message);
         return {
-          acknowledged: true,
           request_id: message.request_id,
           status: 'initiated',
           replica_id: message.replica_id,

@@ -27,7 +27,6 @@ test('default partition delivery preserves the durable commit witness',
     });
 
     const result = builders.buildSuccessResult({
-      acknowledged: true,
       success: true,
       rows: [],
       changes: 1,

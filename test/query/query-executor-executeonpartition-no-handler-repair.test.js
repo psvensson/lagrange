@@ -1046,13 +1046,11 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   const deliveries = [];
   const leaderFailures = [
     {
-      acknowledged: true,
       success: false,
       error: ERRORS.QUERY_FAILED,
       failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
     },
     {
-      acknowledged: true,
       success: false,
       error: ERRORS.WRITE_CUTOVER_PAUSED,
       failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
@@ -1115,7 +1113,7 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === leaderAddress) {
-        return leaderFailures.shift();
+        return buildDeliveryEnvelope({acknowledged: true}, leaderFailures.shift());
       }
       if (address === fallbackAddress) {
         return buildDeliveryEnvelope({acknowledged: true}, {

@@ -774,7 +774,7 @@ function answerRemoveEffect(world, payload) {
   if (world.sourceStopsAtEffect) {
     world.group.kill(world.sourceReplicaId);
   }
-  return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
+  return {status: ReplicaOperationResponseStatus.INITIATED};
 }
 
 const UNREACHABLE_ANSWER = Object.freeze({

@@ -321,7 +321,7 @@ describe('MessageRouter transport cleanup verification', () => {
                 const directOutcome = await testRouter.deliverRemote(
                   address, 'direct-id', payload, remoteId, 'direct-corr',
                 );
-                directFailed = directOutcome?.result?.acknowledged === false;
+                directFailed = !isDeliveredTransportDeliveryOutcome(directOutcome.result);
               } catch (_error) {
                 directFailed = true;
               }

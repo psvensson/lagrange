@@ -14,6 +14,7 @@ import {SQLQueryEnginePartitionRoutingReadiness} from
   '../../src/query/sql-query-engine-partition-routing-readiness.js';
 import {createContractMessageRouterStub} from
   '../contract/message-router-contract-support.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../../src/transport/transport-error-codes.js';
 import {ROUTER_ERROR_MSG} from '../../src/constants/transport.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
@@ -430,7 +431,8 @@ test('an accepted split START whose answer is lost stays on its durable ' +
     starts += 1;
     acceptedMetadata = message.transitionMetadata;
     await source.handleStartSplitReplication(message);
-    throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
+    throw Object.assign(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT),
+      {code: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE});
   }};
   const sender = Object.create(SQLQueryEnginePartitionRoutingReadiness.prototype);
   sender.queryExecutor = {findPartitionService: () => ({address: 'source'})};
@@ -558,7 +560,7 @@ test('the durable split record rejects altered payload at the same attempt ' +
   const accepted = recordSnapshot(store);
   t.equal(alteredResponse?.success, false,
     'same attempt and fence cannot authorize a different split key');
-  t.equal(exactResponse?.acknowledged, true,
+  t.equal(exactResponse?.success, true,
     'the exact durable execution payload remains admissible');
   t.equal(result.success, true, 'the exact START completes owner admission');
   t.equal(accepted.sourceStatus, 'snapshot_started',
@@ -657,8 +659,8 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
     const responses = await Promise.all([first, second]);
     await source[runField];
     t.same(responses, [
-      {acknowledged: true, success: true},
-      {acknowledged: true, success: true},
+      {success: true},
+      {success: true},
     ], `${kind}: both exact requests observe the one accepted START`);
     t.equal(events.filter((event) => event === `${kind}-snapshot`).length, 1,
       `${kind}: one physical snapshot worker runs`);
@@ -689,7 +691,7 @@ test('accepted START recovery and concurrent redelivery retain one physical ' +
       {managedMergeWorkflow: duplicateOwner};
     const recovered = await start(restarted, {transitionMetadata: metadata});
     await restarted[runField];
-    t.equal(recovered.acknowledged, true,
+    t.equal(recovered.success, true,
       `${kind}: accepted START recovers the same attempt after source crash`);
     t.equal(restartedEvents.filter(
       (event) => event === `${kind}-snapshot`).length, 1,
@@ -759,7 +761,7 @@ test('same-attempt owner takeover waits for predecessor quiescence and old ' +
     tableId: 'tbl-users', tableName: 'users',
     transitionMetadata: continuationMetadata,
   });
-  t.equal(continuation.acknowledged, true,
+  t.equal(continuation.success, true,
     'the same attempt continues under the new fence after quiescence');
   t.equal(events.filter((event) => event === 'split-snapshot').length, 2,
     'the continuation owns one replacement worker');
@@ -811,7 +813,7 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
     transitionMetadata: split.metadata,
   });
   await source.splitReplicationRun;
-  t.equal(splitResponse.acknowledged, true,
+  t.equal(splitResponse.success, true,
     'a different durable workflow is admitted despite reset attempt numbers');
   t.equal(source.splitReplication.terminal, true,
     'the replacement split reaches a terminal execution boundary');
@@ -830,7 +832,7 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
     transitionMetadata: merge.metadata,
   });
   await source.mergeReplicationRun;
-  t.equal(mergeResponse.acknowledged, true,
+  t.equal(mergeResponse.success, true,
     'a real merge record authorizes work after the split handle quiesces');
   t.equal(source.splitReplication, null,
     'accepted cross-family START consumes the terminal split predecessor');
@@ -847,7 +849,7 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
     transitionMetadata: reverseSplit.metadata,
   });
   await source.splitReplicationRun;
-  t.equal(reverseResponse.acknowledged, true,
+  t.equal(reverseResponse.success, true,
     'a real split record authorizes work after the merge handle quiesces');
   t.equal(source.mergeReplication, null,
     'accepted reverse-family START consumes the terminal merge predecessor');

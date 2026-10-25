@@ -28,7 +28,7 @@ function preparedDigestOf(participantId) {
  * Answer one TRANSACTION request as the participant does on its success
  * path.
  * @param {Object} message - The request.
- * @return {Object} The acknowledged answer.
+ * @return {Object} The participant answer.
  */
 function answerParticipantTransactionRequest(message, partitionId = undefined) {
   const participantPrefix = `${message.transactionId}:`;
@@ -37,7 +37,7 @@ function answerParticipantTransactionRequest(message, partitionId = undefined) {
       message.participantId.startsWith(participantPrefix) ?
       message.participantId.slice(participantPrefix.length) : null);
   const base = {
-    acknowledged: true,
+
     success: true,
     operation: message.operation,
     partitionId: answeredPartitionId,
