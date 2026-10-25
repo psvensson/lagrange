@@ -36,7 +36,6 @@ const {
   LoadGenerator,
   ZERO,
   buildBenchmarkPartitionLookupByTableIdSql,
-  buildBenchmarkPartitionLookupSql,
   buildBenchmarkTableCreateNodeClientContext,
   buildBenchmarkTableDdl,
   buildBenchmarkTableLookupSql,
@@ -695,19 +694,16 @@ function isRetriableTableReadyError(error) {
 
 /**
  * The read-back that replaced the harness partition repair: the partition
- * rows found by table_id must also be found by table_name. A row that lacks
- * its table name is a product finding and fails the scenario.
- * @param {Object} nodeClient
- * @param {Array<Object>} systemTableReadNodes
+ * complete cohort found by table_id must carry its exact catalog identity.
+ * Any incomplete or conflicting row is a product finding, even when another
+ * row in the cohort is correct.
+ * @param {Array<Object>} rows
  * @param {string} tableName
  * @param {string} tableId
- * @return {Promise<void>}
+ * @return {void}
  */
-async function assertBenchmarkPartitionRowsCarryTableName(nodeClient,
-  systemTableReadNodes, tableName, tableId) {
-  const byName = await queryControlWithNodeFallback(nodeClient,
-    systemTableReadNodes, buildBenchmarkPartitionLookupSql(tableName));
-  if (rowsFromQueryResult(byName.result).length > ZERO) {
+function assertBenchmarkPartitionRowsCarryTableName(rows, tableName, tableId) {
+  if (rows.every((row) => row?.table_id === tableId && row.table_name === tableName)) {
     return;
   }
   throw new Error(BENCHMARK_PARTITION_TABLE_NAME_MISSING + ': partition ' +
@@ -733,17 +729,6 @@ async function waitForSutBenchmarkTableReady(
 
   while (timing.now() < deadline) {
     try {
-      const tableNameLookup = await queryControlWithNodeFallback(
-        nodeClient,
-        systemTableReadNodes,
-        buildBenchmarkPartitionLookupSql(tableName),
-      );
-      const tableNameResult = tableNameLookup.result;
-      const tableNameRows = rowsFromQueryResult(tableNameResult);
-      if (tableNameRows.length > ZERO) {
-        return;
-      }
-
       const tableId = await querySutTableId(
         nodeClient,
         systemTableReadNodes,
@@ -760,8 +745,7 @@ async function waitForSutBenchmarkTableReady(
         if (tableIdRows.length > ZERO) {
           // Partition rows of this table exist: each must carry its table
           // name (table creation writes it; nothing here repairs it).
-          await assertBenchmarkPartitionRowsCarryTableName(nodeClient,
-            systemTableReadNodes, tableName, tableId);
+          assertBenchmarkPartitionRowsCarryTableName(tableIdRows, tableName, tableId);
           return;
         }
       }

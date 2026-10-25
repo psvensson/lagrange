@@ -9,7 +9,7 @@
     "cli-tooling": 97,
     "control-plane": 222,
     "convergence-topology": 78,
-    "distributed-harness": 178,
+    "distributed-harness": 179,
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
@@ -25,10 +25,10 @@
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2478,
-  "digest": "fnv1a32-732d5d90",
+  "censusSize": 2479,
+  "digest": "fnv1a32-723c670b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-18df9ce1",
+  "observationDigest": "fnv1a32-d0dfbf54",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -818,6 +818,7 @@
     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "admin-diagnostics",
     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "distributed-harness",
+    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/assert-consistency.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/assertion-policy.test.js": "distributed-harness",
     "test/distributed/harness/__tests__/assertions.test.js": "distributed-harness",
@@ -5468,6 +5469,15 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/container-memory-working-set.js"
+      ]
+    },
+    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/static/playback-viewer.html",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js"
       ]
     },
     "test/distributed/harness/__tests__/assertion-policy.test.js": {

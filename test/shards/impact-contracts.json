@@ -1516,6 +1516,17 @@
         "test/query/schema-provisioning-job-owner.test.js",
         "test/control-plane/runtime-access-policy-owner.test.js"
       ]
+    },
+    "benchmark-full-partition-cohort-readback": {
+      "description": "Benchmark readiness reads the complete catalog table ID partition cohort and rejects every incomplete/conflicting identity without repair writes.",
+      "owners": [
+        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
+        "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js"
+      ],
+      "tests": [
+        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
+        "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js"
+      ]
     }
   },
   "coupledPairs": {

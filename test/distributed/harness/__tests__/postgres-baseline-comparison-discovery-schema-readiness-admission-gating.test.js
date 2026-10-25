@@ -54,7 +54,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -308,7 +308,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -558,7 +558,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           if (statement.includes('FROM replica_operations') &&
             statement.includes('status NOT IN')) {
@@ -873,7 +873,7 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           if (statement.includes('FROM replica_operations') &&
             statement.includes('status NOT IN')) {
