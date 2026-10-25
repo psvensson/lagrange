@@ -41,13 +41,14 @@
       ]
     },
     "transaction-workflow-recovery-ownership": {
-      "description": "The workflow registry retains restart obligations by immutable workflow ID and preserves an existing live owner binding. Query request and recovery work share one session FIFO and complete only their exact transaction identity.",
+      "description": "The workflow registry retains restart obligations by immutable workflow ID and preserves an existing live owner binding. A discovered SQL transaction belongs to recovery and never binds a session that did not begin it. Query request and recovery work share one session FIFO and complete only their exact transaction identity.",
       "owners": [
         "src/workflow/durable-workflow-coordinator.js",
         "src/query/distributed/distributed-transaction-"
       ],
       "tests": [
         "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-recovery-owner-key.test.js",
         "test/workflow/durable-workflow-coordinator.test.js",
         "test/workflow/durable-workflow-recovery-identity.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",
@@ -1554,6 +1555,7 @@
       "contract": "transaction-workflow-recovery-ownership",
       "witnessTests": [
         "test/query/transaction-recovery-ownership.test.js",
+        "test/query/transaction-recovery-owner-key.test.js",
         "test/workflow/durable-workflow-coordinator.test.js",
         "test/workflow/durable-workflow-recovery-identity.test.js",
         "test/integration/seed-migration-cutover-persisted.integration.test.js",

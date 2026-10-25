@@ -13,7 +13,7 @@
     "examples-e2e": 7,
     "pgwire-compat": 21,
     "placement-rebalance": 268,
-    "query-sql": 185,
+    "query-sql": 186,
     "release-packaging": 15,
     "runtime-primitives": 22,
     "services-runtime": 150,
@@ -25,10 +25,10 @@
     "transport-messaging": 106,
     "wasm-toolchain": 74
   },
-  "censusSize": 2456,
-  "digest": "fnv1a32-172eadc5",
+  "censusSize": 2457,
+  "digest": "fnv1a32-dfffb52b",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-c29fd940",
+  "observationDigest": "fnv1a32-e8489ae8",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -1570,6 +1570,7 @@
     "test/query/transaction-owned-commit-mode-guard.test.js": "query-sql",
     "test/query/transaction-participant-set-authority.test.js": "query-sql",
     "test/query/transaction-recovery-decision-validation.test.js": "query-sql",
+    "test/query/transaction-recovery-owner-key.test.js": "query-sql",
     "test/query/transaction-recovery-ownership.test.js": "query-sql",
     "test/query/transaction-recovery-poison-row-attribution.test.js": "query-sql",
     "test/query/transaction-release-census.test.js": "query-sql",
@@ -11172,7 +11173,21 @@
         "src/query/distributed/distributed-transaction-coordinator.js",
         "src/query/distributed/distributed-transaction-decision.js",
         "src/query/distributed/distributed-transaction-identity.js",
-        "src/query/distributed/distributed-transaction-participant-manifest.js"
+        "src/query/distributed/distributed-transaction-participant-manifest.js",
+        "test/test-helpers/transaction-recovery-rows-fixture.js"
+      ]
+    },
+    "test/query/transaction-recovery-owner-key.test.js": {
+      "files": [
+        "src/cdc/cdc-system-table-mutation-sql-helpers.js",
+        "src/partition/partition-participant-transaction-constants.js",
+        "src/query/distributed/distributed-transaction-coordinator.js",
+        "src/query/distributed/distributed-transaction-decision.js",
+        "src/query/distributed/distributed-transaction-identity.js",
+        "src/query/distributed/distributed-transaction-participant-manifest.js",
+        "test/test-helpers/participant-protocol-double.js",
+        "test/test-helpers/transaction-persistence-gateway.js",
+        "test/test-helpers/transaction-recovery-rows-fixture.js"
       ]
     },
     "test/query/transaction-recovery-ownership.test.js": {
@@ -11180,7 +11195,10 @@
         "src/partition/partition-participant-transaction-bytes.js",
         "src/query/distributed/distributed-transaction-coordinator.js",
         "src/query/distributed/distributed-transaction-decision.js",
-        "src/query/sql-query-engine-participant-wire.js"
+        "src/query/distributed/distributed-transaction-identity.js",
+        "src/query/distributed/distributed-transaction-participant-manifest.js",
+        "src/query/sql-query-engine-participant-wire.js",
+        "test/test-helpers/transaction-recovery-rows-fixture.js"
       ]
     },
     "test/query/transaction-recovery-poison-row-attribution.test.js": {

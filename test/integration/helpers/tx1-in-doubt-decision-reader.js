@@ -42,7 +42,7 @@ assert.equal(coordinator.recoveredTransactionIds.has(transactionId), true);
 assert.equal(fanoutCalls, 0);
 process.stdout.write(JSON.stringify({transactionId,
   status: restored.status, durableDecisionOnDisk: transactions[0].decision,
-  adoptedDecisionWithoutAuthority: restored.decision !== null,
+  adoptedDecisionWithoutAuthority: Object.hasOwn(restored, 'decision'),
   participants: restored.participants.size, frozen: restored.frozenParticipantCount,
   recoveryDiscovered: restored.recoveryDiscovered, fanoutCalls,
   replayAttempted: false, coordinatorRestarted: false}));

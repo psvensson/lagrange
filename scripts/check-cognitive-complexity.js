@@ -40,7 +40,7 @@ const TARGET_THRESHOLD = 20;
 // origin/main ec63fbb00 merge and the native-append inference deletion.
 // 2026-10-04: tightened 153 -> 152 on the checker's hint (the scenario
 // result summary's status label split out of the table printer).
-const BASELINE_COUNT = 152;
+const BASELINE_COUNT = 150;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

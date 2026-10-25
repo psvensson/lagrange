@@ -460,7 +460,9 @@ class DistributedTransactionCoordinator {
    * Commit a distributed transaction across all enlisted participants.
    * @param {string} sessionId - Session ID.
    * @param {Object} [options] - {expectedTransactionId}: the COMMIT's own
-   *   transaction, when the caller knows it.
+   *   transaction, when the caller knows it. Without it the COMMIT is for the
+   *   transaction the session began, if any; a recovered obligation's exact
+   *   ID is answered by the recovery owner (in doubt), never adopted.
    * @return {Promise<Object>} Commit result.
    */
   async commit(sessionId, options = {}) {
@@ -475,7 +477,8 @@ class DistributedTransactionCoordinator {
   async commitOwned(sessionId, expectedTransactionId = null) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx || tx.transactionId !== expectedTransactionId) {
-      return {
+      return this.recoveryObligationAnswer(expectedTransactionId,
+        QUERY_OPERATION.COMMIT) ?? {
         success: false,
         error: QUERY_ERROR_MSG.NO_TRANSACTION_COMMIT,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
@@ -512,7 +515,8 @@ class DistributedTransactionCoordinator {
   async rollbackOwned(sessionId, expectedTransactionId) {
     const tx = this.transactionsBySession.get(sessionId);
     if (!tx || tx.transactionId !== expectedTransactionId) {
-      return {
+      return this.recoveryObligationAnswer(expectedTransactionId,
+        QUERY_OPERATION.ROLLBACK) ?? {
         success: false,
         error: QUERY_ERROR_MSG.NO_TRANSACTION_ROLLBACK,
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
@@ -529,9 +533,16 @@ class DistributedTransactionCoordinator {
    */
   getTransaction(sessionId) {
     const tx = this.transactionsBySession.get(sessionId);
-    if (!tx) {
-      return null;
-    }
+    return tx ? this.transactionMetadataOf(tx) : null;
+  }
+
+  /**
+   * The metadata projection of one transaction's state.
+   * @param {Object} tx - Transaction state.
+   * @return {Object} Transaction metadata.
+   * @private
+   */
+  transactionMetadataOf(tx) {
     return {
       sessionId: tx.sessionId,
       transactionId: tx.transactionId,
@@ -553,7 +564,8 @@ class DistributedTransactionCoordinator {
   }
 
   /**
-   * Check if a session has an active transaction.
+   * Check if a session has an active transaction: one the session began.
+   * An obligation recovery discovered is never one (its owner is recovery).
    * @param {string} sessionId - Session ID.
    * @return {boolean} Active transaction state.
    */
