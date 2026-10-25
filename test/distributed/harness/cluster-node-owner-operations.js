@@ -54,4 +54,19 @@ async function requestPostgresWireScale(node, desiredState, options = {}) {
   return {...body, status: response?.status};
 }
 
-export {requestPostgresWireScale, requestTablePolicyUpdate};
+/** Record one fixed marker; a missing HTTP answer means an unknown effect. */
+async function requestDiagnosticMarker(node, marker, options = {}) {
+  const response = await httpRequest({
+    url: 'http://' + node.ip + ':' + node.adminApiPort +
+      ADMIN_OWNER_OPERATION_PATH.logMarker,
+    timeoutMs: resolvePositiveTimeoutMs(options.timeoutMs, FETCH_TIMEOUT_MS),
+    method: HTTP_METHOD_POST,
+    body: marker,
+    includeBody: true,
+  });
+  const body = response?.body && typeof response.body === 'object' ?
+    response.body : {success: false, error: NO_ANSWER};
+  return {...body, status: response?.status};
+}
+
+export {requestDiagnosticMarker, requestPostgresWireScale, requestTablePolicyUpdate};

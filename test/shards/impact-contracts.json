@@ -1497,6 +1497,26 @@
         "test/rebalancer/runtime-service-entity.test.js",
         "test/runtime/pgwire-runtime-module.test.js"
       ]
+    },
+    "log-owner-diagnostic-marker": {
+      "description": "LogsOwner inserts one fixed diagnostic marker with original server identity and row retained across gateway retries. Mutation uniqueness fences identity; authoritative successful read can reconcile exact semantic intent, while unknown/read-failed never proves noncommit. HTTP and fault callers preserve cut-phase outcomes and distinguish post-heal completion from cut-time application; native source witness observes held quorum traffic and durable application. Physical distributed acceptance remains separate.",
+      "owners": [
+        "src/control-plane/owners/logs-owner.js",
+        "src/control-plane/owners/log-diagnostic-marker-contract.js",
+        "src/admin/admin-owner-operations.js",
+        "src/entrypoint-runtime-admin-composition.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/cluster-node-handle-layer.js",
+        "test/distributed/scenarios/admin-query-smoke.js",
+        "test/distributed/scenarios/network-partition-marker.js",
+        "test/distributed/scenarios/network-partition-split-brain.js"
+      ],
+      "tests": [
+        "test/control-plane/log-diagnostic-marker.test.js",
+        "test/integration/control-plane-log-marker.integration.test.js",
+        "test/raft/raft-rs-backend/log-marker-partition.test.js",
+        "test/distributed/harness/__tests__/network-partition-split-brain-scenario.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -3056,6 +3076,41 @@
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js"
+      ]
+    },
+    "log-owner-diagnostic-marker": {
+      "description": "Admin marker intent retains the logs owner mutation and retry meaning through HTTP/harness transport and native application; unknown effects cannot be converted to refusal.",
+      "endpoints": [
+        {
+          "id": "marker-intent-and-ingress",
+          "owners": [
+            "src/control-plane/owners/logs-owner.js",
+            "src/control-plane/owners/log-diagnostic-marker-contract.js",
+            "src/admin/admin-owner-operations.js",
+            "src/entrypoint-runtime-admin-composition.js",
+            "test/distributed/harness/cluster-node-owner-operations.js",
+            "test/distributed/harness/cluster-node-handle-layer.js",
+            "test/distributed/scenarios/admin-query-smoke.js",
+            "test/distributed/scenarios/network-partition-marker.js",
+            "test/distributed/scenarios/network-partition-split-brain.js"
+          ]
+        },
+        {
+          "id": "gateway-and-native-application",
+          "owners": [
+            "src/control-plane/owners/system-metadata-owner-base.js",
+            "src/control-plane/control-plane-system-table-gateway.js",
+            "src/cdc/cdc-integration-service-mutation-operations.js",
+            "src/partition/partition-write-kernel.js"
+          ]
+        }
+      ],
+      "contract": "log-owner-diagnostic-marker",
+      "witnessTests": [
+        "test/control-plane/log-diagnostic-marker.test.js",
+        "test/integration/control-plane-log-marker.integration.test.js",
+        "test/raft/raft-rs-backend/log-marker-partition.test.js",
+        "test/distributed/harness/__tests__/network-partition-split-brain-scenario.test.js"
       ]
     }
   }

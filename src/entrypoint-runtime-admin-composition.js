@@ -573,6 +573,7 @@ function buildAdminOwnerProviders(options) {
       options.owner?.systemMetadataOwners?.nodesOwner || null,
     getServiceDefinitionsOwner: () =>
       options.owner?.systemMetadataOwners?.serviceDefinitionsOwner || null,
+    getLogsOwner: () => options.owner?.systemMetadataOwners?.logsOwner || null,
     submitLocalDrainIntent: (drainOptions) => submitLocalNodeDrainIntent({
       membershipLifecycleController:
         options.membershipLifecycleController || null,

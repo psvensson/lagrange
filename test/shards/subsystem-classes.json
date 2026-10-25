@@ -7,7 +7,7 @@
     "bootstrap-membership": 330,
     "cdc-metadata": 66,
     "cli-tooling": 97,
-    "control-plane": 222,
+    "control-plane": 224,
     "convergence-topology": 78,
     "distributed-harness": 178,
     "examples-e2e": 7,
@@ -19,16 +19,16 @@
     "services-runtime": 150,
     "solver-tooling": 7,
     "storage-partition": 198,
-    "storage-raft": 145,
+    "storage-raft": 146,
     "test-infrastructure": 148,
     "transactions": 16,
     "transport-messaging": 112,
     "wasm-toolchain": 74
   },
-  "censusSize": 2478,
-  "digest": "fnv1a32-732d5d90",
+  "censusSize": 2481,
+  "digest": "fnv1a32-00ca31c1",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-9b17fae2",
+  "observationDigest": "fnv1a32-c8adbf14",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -582,6 +582,7 @@
     "test/control-plane/lease-sweep-transport-guard.test.js": "control-plane",
     "test/control-plane/live-transport-evidence-parity.characterization.test.js": "control-plane",
     "test/control-plane/live-transport-evidence.test.js": "control-plane",
+    "test/control-plane/log-diagnostic-marker.test.js": "control-plane",
     "test/control-plane/membership-count-neutral-steady-trim.test.js": "control-plane",
     "test/control-plane/membership-epoch-contract.test.js": "control-plane",
     "test/control-plane/membership-layer-boundary.guard.test.js": "control-plane",
@@ -1036,6 +1037,7 @@
     "test/integration/cdc-propagation.integration.test.js": "cdc-metadata",
     "test/integration/cdc-subscription-catchup.integration.test.js": "cdc-metadata",
     "test/integration/concurrent-join-message-group-assignment.integration.test.js": "transport-messaging",
+    "test/integration/control-plane-log-marker.integration.test.js": "control-plane",
     "test/integration/control-plane-node-terminal-removal.integration.test.js": "control-plane",
     "test/integration/control-plane-pgwire-scale-callers.integration.test.js": "control-plane",
     "test/integration/control-plane-postgres-wire-scale.integration.test.js": "control-plane",
@@ -1655,6 +1657,7 @@
     "test/raft/raft-rs-backend/local-log-guard-correct-followers.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-refusals.test.js": "storage-raft",
     "test/raft/raft-rs-backend/local-log-guard-sender-admissibility.test.js": "storage-raft",
+    "test/raft/raft-rs-backend/log-marker-partition.test.js": "storage-raft",
     "test/raft/raft-rs-backend/membership-changed-event.test.js": "storage-raft",
     "test/raft/raft-rs-backend/membership-generation-persistence.test.js": "storage-raft",
     "test/raft/raft-rs-backend/message-group-membership-semantic-port.test.js": "storage-raft",
@@ -5551,6 +5554,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -5590,6 +5594,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5614,6 +5619,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5638,6 +5644,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5662,6 +5669,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5686,6 +5694,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5717,6 +5726,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ]
     },
@@ -5729,6 +5739,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ]
     },
@@ -5744,6 +5755,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5770,6 +5782,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5794,6 +5807,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5818,6 +5832,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5842,6 +5857,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5863,6 +5879,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ]
     },
@@ -5878,6 +5895,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5902,6 +5920,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5926,6 +5945,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5950,6 +5970,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5974,6 +5995,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -5998,6 +6020,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6022,6 +6045,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6046,6 +6070,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6070,6 +6095,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6094,6 +6120,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6118,6 +6145,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6143,6 +6171,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6167,6 +6196,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6191,6 +6221,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6368,6 +6399,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-diagnostics-contract-reexport.js",
         "test/distributed/harness/failure-bundle-foundation.js",
@@ -6462,6 +6494,7 @@
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
         "test/distributed/harness/cluster-active-wait-progress-layer.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6494,6 +6527,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -6516,8 +6550,11 @@
     "test/distributed/harness/__tests__/network-partition-split-brain-scenario.test.js": {
       "files": [
         "Dockerfile",
+        "src/admin/admin-owner-operations.js",
         "src/admin/static/playback-viewer.html",
-        "test/distributed/config/local.json"
+        "src/control-plane/owners/log-diagnostic-marker-contract.js",
+        "test/distributed/config/local.json",
+        "test/distributed/scenarios/network-partition-marker.js"
       ]
     },
     "test/distributed/harness/__tests__/node-client.test.js": {
@@ -6539,6 +6576,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -6762,6 +6800,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/scenarios/table-bootstrap-core-helpers.js",
         "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
@@ -6811,6 +6850,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
@@ -6829,6 +6869,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/report-writer-optimization-summary.js"
@@ -6850,6 +6891,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -6872,6 +6914,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
@@ -6925,6 +6968,7 @@
         "test/distributed/harness/__fixtures__/failing-scenario.js",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -6960,6 +7004,7 @@
         "test/distributed/harness/__fixtures__/certification-scenario.js",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -7009,6 +7054,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -7031,6 +7077,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/scenarios/table-bootstrap-core-helpers.js",
         "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
@@ -7065,6 +7112,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/publication-evidence-contract.js",
@@ -7277,6 +7325,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js"
@@ -7298,6 +7347,7 @@
         "src/utils/canonical-json-data.js",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/scenarios/table-bootstrap-core-helpers.js",
         "test/distributed/scenarios/table-distribution-helpers-distribution-query.js",
@@ -7646,6 +7696,18 @@
         "src/bootstrap/seed-startup-storage-admission.js"
       ]
     },
+    "test/integration/control-plane-log-marker.integration.test.js": {
+      "files": [
+        "Dockerfile",
+        "src/admin/admin-owner-operations.js",
+        "src/admin/static/playback-viewer.html",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "test/distributed/config/local.json",
+        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
+        "test/distributed/harness/container-memory-working-set.js"
+      ]
+    },
     "test/integration/control-plane-node-terminal-removal.integration.test.js": {
       "files": [
         "src/bootstrap/shared/node-registration-owner-row-builder.js",
@@ -7671,6 +7733,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/publication-evidence-contract.js",
         "test/distributed/harness/startup-readiness-evidence.js",
@@ -12020,6 +12083,23 @@
         "src/transport/transport-semantic-outcome.js"
       ]
     },
+    "test/raft/raft-rs-backend/log-marker-partition.test.js": {
+      "files": [
+        "src/bootstrap/system-table-schemas-constants.js",
+        "src/bootstrap/system-table-workflow-schema-definitions.js",
+        "src/control-plane/control-plane-system-table-gateway.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-service-shared.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
+        "test/raft/raft-rs-backend/runtime-completion-consumers-fixture.js",
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
+      ]
+    },
     "test/raft/raft-rs-backend/membership-changed-event.test.js": {
       "files": [
         "src/raft/raft-committed-membership-stamp.js",
@@ -14283,6 +14363,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -15271,6 +15352,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -15406,6 +15488,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -15466,6 +15549,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/shards/impact-contracts.json",
         "test/shards/impact-graph-seal.json",
@@ -15625,6 +15709,7 @@
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/run.js"
       ],
@@ -15813,6 +15898,7 @@
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/run.js",
         "test/shards/primary-classes.json"
@@ -16453,6 +16539,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -16536,6 +16623,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -16584,6 +16672,7 @@
         "test/distributed/config/local-three-node.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
         "test/distributed/harness/report-writer-optimization-summary.js",
@@ -16624,6 +16713,7 @@
         "test/distributed/config/local.json",
         "test/distributed/harness/active-gate-closure-classification.js",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/distributed/harness/failure-bundle-priority-recovery-decision-snapshots.js",
         "test/distributed/harness/priority-recovery-summary-normalization.js",
@@ -16742,6 +16832,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [
@@ -17293,6 +17384,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js",
         "test/shards/impact-contracts.json",
         "test/shards/impact-graph-seal.json",
@@ -17386,6 +17478,7 @@
         "test/distributed/config/convergence-sealed-bars.json",
         "test/distributed/config/local.json",
         "test/distributed/harness/active-probe-snapshot-lane-constants.js",
+        "test/distributed/harness/cluster-node-owner-operations.js",
         "test/distributed/harness/container-memory-working-set.js"
       ],
       "directories": [

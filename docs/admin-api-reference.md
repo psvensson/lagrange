@@ -66,6 +66,19 @@ a replica next starts; this operation does not restart existing listeners.
 See [PostgreSQL wire scale operations](../architecture/postgres-wire.md#postgresql-wire-scale-operations)
 for outcomes and the existing ingress trust requirements.
 
+`POST /api/admin/logs/markers` records a fixed diagnostic marker through
+`LogsOwner`. Its body is exactly `{"markerId":"operator-probe-1","message":"probe"}`.
+The server supplies its node identity, timestamps, level and metadata. A confirmed
+answer includes `markerState: "recorded"`, `logId`, `nodeId` and the original
+`timestamp`. Repeating the same marker on the same ingress preserves the first
+row. Different content or ingress node returns `LOG_MARKER_IDENTITY_CONFLICT`
+(409); malformed intent returns `LOG_MARKER_REQUEST_INVALID` (400). An uncertain
+write or unavailable authoritative observation returns
+`LOG_MARKER_OUTCOME_UNCONFIRMED` (503), which does not prove that no write occurred.
+A disconnected or timed-out client also has an unknown outcome. The operation
+inherits the admin ingress bind/trust configuration; it adds no authentication
+layer and accepts no arbitrary log fields or SQL.
+
 Admin ingress exposes unified operational diagnostics:
 
 - `GET /api/admin/diagnostics/services`

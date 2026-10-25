@@ -1,6 +1,7 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
-import {requestPostgresWireScale, requestTablePolicyUpdate} from './cluster-node-owner-operations.js';
+import {requestDiagnosticMarker, requestPostgresWireScale, requestTablePolicyUpdate} from
+  './cluster-node-owner-operations.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -1030,6 +1031,12 @@ class NodeHandle {
   scalePostgresWireListener(desiredState, options = {}) {
     return requestPostgresWireScale({ip: this.ip,
       adminApiPort: this._adminApiPort}, desiredState, options);
+  }
+
+  /** Record a diagnostic marker through LogsOwner (no SQL). */
+  appendDiagnosticMarker(marker, options = {}) {
+    return requestDiagnosticMarker({ip: this.ip,
+      adminApiPort: this._adminApiPort}, marker, options);
   }
 
   /** Read the node-owned process resource sample from its diagnostics route. */
