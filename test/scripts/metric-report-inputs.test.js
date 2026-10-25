@@ -1,3 +1,7 @@
+import {collectLiveInputs, refreshImportGraphReport} from '../../scripts/generate-global-owner-debt-inventory.js';
+import {listJavaScriptFiles} from '../../scripts/global-owner-debt-inventory/helpers.js';
+import {readCurrentMetricReport} from '../../scripts/metric-report-provenance.js';
+import {createMetricFixture, PRODUCERS, runMetricProducer} from './metric-report-fixture.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,3 +63,40 @@ test('cache identity covers actual bytes, configuration, producer and tool closu
   initial, 'relocated worktree with shared installed tools has identical inputs');
   t.end();
 });
+
+for (const omitted of [
+  {label: 'imported hidden cache directory', file: 'src/.cache/dependency.js',
+    fromSubject: './.cache/dependency.js', backToSubject: '../subject.js'},
+  {label: 'imported directory outside declared entry roots', file: 'metric-shared/dependency.js',
+    fromSubject: '../metric-shared/dependency.js', backToSubject: '../src/subject.js'},
+]) {
+  test(`independent provenance review: ${omitted.label} is an actual analyzer input`, async (t) => {
+    const root = createMetricFixture();
+    t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
+    const dependency = path.join(root, omitted.file);
+    fs.mkdirSync(path.dirname(dependency), {recursive: true});
+    fs.writeFileSync(path.join(root, 'src/subject.js'),
+      `import ${JSON.stringify(omitted.fromSubject)};\nexport const value = 1;\n`);
+    fs.writeFileSync(dependency, 'export const dependency = 1;\n');
+    for (const producer of PRODUCERS) runMetricProducer(root, producer);
+    await refreshImportGraphReport(root, listJavaScriptFiles(root));
+    const before = await collectLiveInputs(root);
+    t.equal(before.cycles.cycleGroups.length, 0, 'the actual initial cycle measurement is clear');
+    const stat = fs.statSync(dependency);
+    fs.writeFileSync(dependency, `import ${JSON.stringify(omitted.backToSubject)};\n`);
+    fs.utimesSync(dependency, stat.atime, stat.mtime);
+    t.equal(readCurrentMetricReport(root, 'cycles'), null,
+      'changing an imported measurement dependency invalidates the prior seal');
+    await refreshImportGraphReport(root, listJavaScriptFiles(root));
+    const after = await collectLiveInputs(root);
+    t.equal(after.cycles.cycleGroups.length, 1,
+      'the actual inventory consumer refreshes cycles even after the graph is refreshed');
+    const measured = runMetricProducer(root, 'check-circular-dependencies.js');
+    const actual = readCurrentMetricReport(root, 'cycles');
+    t.equal(measured.status, 1, 'actual changed input triggers the existing cycle ratchet');
+    t.equal(actual.cycleGroups.length, 1, 'fresh actual producer confirms the missing cycle');
+    t.comment(JSON.stringify({input: omitted.file, before: before.cycles.cycleGroups.length,
+      consumerAfterFreshGraph: after.cycles.cycleGroups.length,
+      actualRemeasurement: actual.cycleGroups.length, producerExit: measured.status}));
+  });
+}

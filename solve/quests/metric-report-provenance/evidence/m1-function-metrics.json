@@ -1,0 +1,642 @@
+{
+  "base": "c95ec0abe2361c3c31a471f024442a330b6095e2",
+  "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+  "changedFunctions": [
+    {
+      "file": "scripts/metric-report-provenance.js",
+      "function": "/reportDigest#1",
+      "before": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "276e86f1f1324a56499bc4fff26750c4fbd7f75d025d9ec140313b919a2144c1"
+      },
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "3cc166bbd91fc835fca3cd80ea5a885f2a34af9578317f7c5ac498fcafe9daec"
+      }
+    },
+    {
+      "file": "scripts/metric-report-provenance.js",
+      "function": "/finishMetricMeasurement#1",
+      "before": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "54e69a9f468edaa934e00e66145c76e8cbbe9cd30b31a7d153b201124d08d576"
+      },
+      "after": {
+        "complexity": 4,
+        "cognitive": 3,
+        "sha256": "e439ae849973c0a5da1b7becf361f3f5e43ed471f682b2494e3babe6031e0df0"
+      }
+    },
+    {
+      "file": "scripts/metric-report-provenance.js",
+      "function": "/readCurrentMetricReport#1",
+      "before": {
+        "complexity": 10,
+        "cognitive": 5,
+        "sha256": "71228d7e74fe0e3395972913081b57b41b1d7e9dff0328f1f48fa5c1f55424e5"
+      },
+      "after": {
+        "complexity": 12,
+        "cognitive": 7,
+        "sha256": "8ecdf6e0c65c99e7f3e1f9cdbeb515ecd171541083e144921ed65f55eeac4c86"
+      }
+    },
+    {
+      "file": "test/scripts/metric-report-fixture.js",
+      "function": "/runMetricProducer#1",
+      "before": {
+        "complexity": 5,
+        "cognitive": 1,
+        "sha256": "3c24c0ffa56850f4256b1b899b6414e8f6ae8f62255bdd765d8b699293097201"
+      },
+      "after": {
+        "complexity": 6,
+        "cognitive": 1,
+        "sha256": "4cbf3aeccb5945e5be43dd322915ae3c9333d0670aa910349bf56d13e8f81fe7"
+      }
+    },
+    {
+      "file": "test/scripts/metric-report-inputs.test.js",
+      "function": "/callback#2",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "c5e397742fcad3dcdae694f5ea06929e0d78486bdfd7d0dda0e282337f4f1b8b"
+      }
+    },
+    {
+      "file": "test/scripts/metric-report-inputs.test.js",
+      "function": "/callback#2/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/assertGraphCoverage#1",
+      "before": null,
+      "after": {
+        "complexity": 7,
+        "cognitive": 11,
+        "sha256": "76cae49c0cc20bc55bd7f2f547470bd67ff933ac5782d90764463fcae452163a"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/assertGraphCoverage#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "904b76383c29dba8fb36d2f3c144bdb52bd534b9ce1874348da4678ed9ba1ea7"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/assertGraphCoverage#1/callback#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "74f05be07550df10237ce568929aebc6ac356e1da7556727fa77ca0c8ec7364d"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/resolutionRoute#1",
+      "before": null,
+      "after": {
+        "complexity": 7,
+        "cognitive": 5,
+        "sha256": "4de5009086be6b9c9882bb8962d9f5b455f652643ac549c389fe5b04f95f903c"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/resolutionRoute#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "8817dff86d89fdb82fb8772d7e70ddf08545cad3c17c04af06c7397fef2773bb"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "f3cc3cce93d8a01f5abef8c200b9ad83e938f125a91b026cc9b136aa6d3a6d24"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1/resolver.sync#1",
+      "before": null,
+      "after": {
+        "complexity": 4,
+        "cognitive": 3,
+        "sha256": "26f8b16f67498558909af05d879de7b090edd59de6aa2049fcaba028373b5c6e"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1/resolver.sync#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "cedaa1f0a4507d24aa86afb9610d0df99c915d03f3dcaea989870b40b905392a"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1/observedCabinet#1",
+      "before": null,
+      "after": {
+        "complexity": 5,
+        "cognitive": 4,
+        "sha256": "1e111475ce70fa4e71ee339f0a5405ea4ec9c0076cab180101217052002b220e"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1/observedCabinet._getJSType#1",
+      "before": null,
+      "after": {
+        "complexity": 3,
+        "cognitive": 2,
+        "sha256": "57fb9a0dd2c773f6aa3099e0017ea6c8636d5f2061fe44ba69ad5fe8e2204568"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/installResolutionObserver#1/restore#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "8ede84f588262614949816841288ed74d21f864faef3a075b30aa412fc032f0a"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-analyzer.js",
+      "function": "/analyzeMetricCycles#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "d011ab12a58baafa60e1ef5b5d258abd2c8a44c30602373ba97a6cdb5211086f"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/filesystemKind#1",
+      "before": null,
+      "after": {
+        "complexity": 3,
+        "cognitive": 2,
+        "sha256": "11167c615b3c05a30a73c0780d61c59f01664b68d7c5c7d183c05bcc736461a8"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/pathState#1",
+      "before": null,
+      "after": {
+        "complexity": 4,
+        "cognitive": 4,
+        "sha256": "636a932e375aadb8b7066726c8dad7d47c8fc5e9133ff8af05c68bdb1dc5aee0"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/contentDigest#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "d91fb79f84dc52eeee2867f17ae42b473cfe0fec8d62b4e9e7a9e874839f4b13"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/currentFact#1",
+      "before": null,
+      "after": {
+        "complexity": 5,
+        "cognitive": 3,
+        "sha256": "e2a71371bc11a7cdc7c561e6130c23217c0f53375cf7d3b3482ac0b06f8d5cd3"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "1d315b4dd455b6b9df6a414d9590a01a0528d70c9bcb01a0ec499d0e2247c94a"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/record#1",
+      "before": null,
+      "after": {
+        "complexity": 4,
+        "cognitive": 2,
+        "sha256": "7783d4e3a160e6cefb8b2a6b2e09f0d75594d7761100eef872d35d8d18d7e70f"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/guarded#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "6472ea0bb7558fb6576ebe17b4414679753ae1eff9e7b110665dd4314d3e8ea5"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/kind#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "07f76a01471cc764c969ecd8af6c196b19c072284eb071805812136a9cc7d8eb"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/kind#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "b4cda1097a6e186f9970cdcb0c96e93372ea8368113098693a3d00c8ac1c611b"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/readFileSync#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 0,
+        "sha256": "ac7f96f299963cd6e7291b0ab2ee3deb4d82192509c7199ae95fa1e9e41eba96"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/readFileSync#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "73edfc21ed9c48ecb9d6e6096c2c00b3f3794df27c31c25548125bcd4c4a126f"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/isFile#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "fef3b151adcc82433d44afcdc30d19b1ba3e60b03973b0b0759f8b0f5f921c5c"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/isDirectory#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "c3e0571aaac897bb86d1ef5236a42bb91b82b6f1924e9b9ba22de34bb757c622"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/realpathSync#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "6f649a62e288e96af6d76e12a530eeb8a112bafea80d8fae380e2086015ca65a"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/fail#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "5c2bd265df9d6ac8064980b8dcd76c54dd9e9517c2dc46ed422d822135944f84"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/createCycleInputFacts#1/finish#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "d2471f442ddfb97cd18541ec42265cb3f848349ad3ddefd0a6d68c6dbe4548d3"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/cycleInputsAreCurrent#1",
+      "before": null,
+      "after": {
+        "complexity": 5,
+        "cognitive": 1,
+        "sha256": "0056136f67ec4c04358a474a8307d95356bcda46bdbd209e7abe544eed5885f3"
+      }
+    },
+    {
+      "file": "scripts/metric-cycle-input-facts.js",
+      "function": "/cycleInputsAreCurrent#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 3,
+        "cognitive": 3,
+        "sha256": "7d767eb140da022cf8d0b54d8b9d76c643540c1d61ad5d8d77b4f886695cf592"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-custody.test.js",
+      "function": "/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 5,
+        "cognitive": 5,
+        "sha256": "ca28099d002191ee50fb54f517a3f4411da79e166b1ae830bcfc47d0c830583c"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-custody.test.js",
+      "function": "/callback#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-custody.test.js",
+      "function": "/callback#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "03301245d315404a447b21d05d17770aaedff6012ad70000aedc11e1d7c84017"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-custody.test.js",
+      "function": "/callback#2/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-custody.test.js",
+      "function": "/callback#2/callback#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "67608f327d9657b6d786054402ea50a038cb63cbf2a943526f36dab968a66f45"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/write#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "395f65ba58958f454663cb95052e12d9a27a404144526edb8c85d6659f59cb99"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/measure#1",
+      "before": null,
+      "after": {
+        "complexity": 4,
+        "cognitive": 1,
+        "sha256": "be6ba7976bc7767797ae11c1da47050f4a2b08dc347979d2798a67836705095a"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/prepare#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "238d8c198aed38d650992f1bf9ddcdbc01177f2a9242fbbe0e6265ca3d16716e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/change#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "604146efbb20257926ba165aa5be0ee9a1fb07d87058c9172474b15f3622a2b5"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/prepare#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "acb8a87722ba65ed3d279e81ce7a8a58c26ba09443d3fa22afe2959cedefcf62"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/change#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "99f550955152835127d72b363f1b103efbb5c5ba26de3808ffcf8ae377543078"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/prepare#3",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "000628f3e1f08f45a76ca67baad5704ac0a524c15cab871dd3a5793ad10748b7"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/change#3",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "3438290d429aecfbc1451a10f7ae804046963bf931eb0a0f51cdfabb489cd280"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/prepare#4",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "8ea3e767a396ceda20baafc3c9ee96a485e67d25dba04d01503637cf55904c4a"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/change#4",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "c00b2e251981a85e0f6bf35fcd3cc1f3230facd2cfb6fda939c6f65472a0a36b"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/prepare#5",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "c04b40ccff230667ab119f740c8a99312ffba0ca11d75f4e65d2c96c0579fdb3"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/change#5",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "72ff72d1d4ed0ca246d1d4ded68f428029773da8951df2e7f42f0f30b717543b"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 2,
+        "cognitive": 1,
+        "sha256": "24370ac15dc973aa33af0eec6da19ace5d99b090d56195e05050694231648e56"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#2",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "a8883a417f85018d92d50fb1b057a917a97ba1b123c87efe1fabcbebc30601fb"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#2/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#3",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "67b1fe63aa32c99bf9adb8947458c0bb5f81e44af95b8eb9282d615ab29c3309"
+      }
+    },
+    {
+      "file": "test/scripts/metric-cycle-resolution.test.js",
+      "function": "/callback#3/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-duplication-inputs.test.js",
+      "function": "/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "497be038ba6f74a034c87710b5dbcc09f4f86cb8d97f14af2cfb2843f12b8bb7"
+      }
+    },
+    {
+      "file": "test/scripts/metric-duplication-inputs.test.js",
+      "function": "/callback#1/callback#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "ce9c5a54d79db3289c9bcedeb67cda6ceaedc5c7c991bb5c123858accbbbcc3e"
+      }
+    },
+    {
+      "file": "test/scripts/metric-duplication-inputs.test.js",
+      "function": "/callback#1/run#1",
+      "before": null,
+      "after": {
+        "complexity": 1,
+        "cognitive": 0,
+        "sha256": "d9ff760c6f11659b6df2fc8f436b3fb4cd2eb4e6e56680e7e5a4cbc3d069a8ca"
+      }
+    }
+  ]
+}

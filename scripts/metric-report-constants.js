@@ -11,6 +11,7 @@ export const METRIC_GENERATED_OUTPUTS = new Set([
 ]);
 
 // One catalogue for producer scope, report locations and inventory refresh.
+export const METRIC_CYCLE_DISCOVERY = 'madge-resolution';
 const ANALYSIS = 'test-output/analysis';
 export const METRIC_REPORTS = Object.freeze({
   complexity: {
@@ -24,6 +25,7 @@ export const METRIC_REPORTS = Object.freeze({
     reportPath: `${ANALYSIS}/cognitive-complexity-src-scripts.json`,
   },
   cycles: {
+    inputDiscovery: METRIC_CYCLE_DISCOVERY,
     targets: ['src', 'scripts', 'test'], tools: ['madge'],
     command: ['scripts/check-circular-dependencies.js'],
     reportPath: `${ANALYSIS}/madge-circular-src-scripts-test.json`,

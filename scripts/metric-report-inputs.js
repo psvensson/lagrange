@@ -11,7 +11,7 @@ const SORT_LOCALE = 'en';
 const PACKAGE_MANIFEST = 'package.json';
 const MODULES_DIRECTORY = 'node_modules';
 const PRODUCER_DIRECTORY = 'scripts';
-const EXCLUDED_DIRECTORIES = new Set([MODULES_DIRECTORY, '.git', '.cache']);
+const EXCLUDED_DIRECTORIES = new Set([MODULES_DIRECTORY, '.git']);
 
 export function metricDigest(value) {
   return createHash(DIGEST_ALGORITHM).update(value).digest(DIGEST_ENCODING);

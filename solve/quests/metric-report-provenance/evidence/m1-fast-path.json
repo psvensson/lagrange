@@ -1,0 +1,73 @@
+{
+  "exitCode": 0,
+  "elapsedSeconds": 2.0857613389380276,
+  "sourceDigest": "c00b3f5b79857a84d2d01fb269001280eebd26f3603910e9d41922a3170c718a",
+  "before": {
+    "complexity": {
+      "path": "test-output/analysis/complexity-src-test.json",
+      "bytes": 418731,
+      "ino": 224434280,
+      "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+    },
+    "cognitive": {
+      "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+      "bytes": 36361,
+      "ino": 224434265,
+      "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+    },
+    "cycles": {
+      "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+      "bytes": 4280553,
+      "ino": 224434266,
+      "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+    },
+    "duplicationSource": {
+      "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+      "bytes": 909277,
+      "ino": 224565573,
+      "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+    },
+    "duplicationTest": {
+      "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+      "bytes": 2500210,
+      "ino": 224535717,
+      "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+    }
+  },
+  "after": {
+    "complexity": {
+      "path": "test-output/analysis/complexity-src-test.json",
+      "bytes": 418731,
+      "ino": 224434280,
+      "sha256": "7c9709f9272d3121bfaeb28749a35fcf7c01c0673cea4379c294dd24ecce86bd"
+    },
+    "cognitive": {
+      "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+      "bytes": 36361,
+      "ino": 224434265,
+      "sha256": "a6b5d35f355dc2169ddc06fb44f830bda8a496584a30fac927f041e25b49623b"
+    },
+    "cycles": {
+      "path": "test-output/analysis/madge-circular-src-scripts-test.json",
+      "bytes": 4280553,
+      "ino": 224434266,
+      "sha256": "f196627601b8e87d64ec68e7c13e170f99de0bb943107b732de8bb408ba62a3b"
+    },
+    "duplicationSource": {
+      "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+      "bytes": 909277,
+      "ino": 224565573,
+      "sha256": "be1eb61c8252c1944740a47b9b645d4bbb35c9a0e55543f95bf69afe659ab490"
+    },
+    "duplicationTest": {
+      "path": "test-output/analysis/jscpd-test/jscpd-report.json",
+      "bytes": 2500210,
+      "ino": 224535717,
+      "sha256": "89d5cddeb4bf8f8be3c844ce7b5c9d6d06c275e97142f04416b53dd5455aff05"
+    }
+  },
+  "allFiveReportBytesAndInodesUnchanged": true,
+  "inventoryBefore": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+  "inventoryAfter": "a53d6b560500f4b04fa47f284644b9bb69a36ecf699c5c569dba3e13fd02e47a",
+  "inventoryBytesUnchanged": true
+}

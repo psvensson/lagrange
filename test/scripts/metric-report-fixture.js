@@ -39,8 +39,8 @@ export function createMetricFixture() {
   return root;
 }
 
-export function runMetricProducer(root, producer) {
-  const result = spawnSync(process.execPath, [`scripts/${producer}`], {
+export function runMetricProducer(root, producer, args = []) {
+  const result = spawnSync(process.execPath, [`scripts/${producer}`, ...args], {
     cwd: root, encoding: 'utf8',
   });
   if (![0, 1].includes(result.status)) {

@@ -9,7 +9,7 @@
 import {METRIC_REPORTS} from './metric-report-constants.js';
 import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
 
-import madge from 'madge';
+import {analyzeMetricCycles} from './metric-cycle-analyzer.js';
 
 import {
   printRatchetTighteningHint,
@@ -22,19 +22,16 @@ const LOCAL_STR_SCRIPTS_CHECK_CIRCULAR_DEPENDENCIES_JS = 'scripts/check-circular
 // Circular imports are an owner-boundary violation, so the ratchet is strict.
 const BASELINE_CYCLE_GROUP_COUNT = 0;
 const STRICT_FLAG = '--strict';
-const FILE_EXTENSIONS = ['js'];
 const SOURCE_DIRECTORIES = METRIC_REPORTS.cycles.targets;
 const REPORT_RELATIVE_PATH = METRIC_REPORTS.cycles.reportPath;
 const strict = process.argv.includes(STRICT_FLAG);
 
 const measurement = beginMetricMeasurement('cycles');
-const result = await madge(SOURCE_DIRECTORIES, {
-  fileExtensions: FILE_EXTENSIONS,
-});
-const cycleGroups = result.circular();
+const {analysis, inputs} = await analyzeMetricCycles(measurement.root, SOURCE_DIRECTORIES);
+const cycleGroups = analysis.circular();
 const cycleGroupCount = cycleGroups.length;
 
-finishMetricMeasurement(measurement, {cycleGroups});
+finishMetricMeasurement(measurement, {cycleGroups}, inputs);
 
 if (strict) {
   if (cycleGroupCount > 0) {

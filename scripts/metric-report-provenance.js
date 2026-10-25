@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {METRIC_REPORTS} from './metric-report-constants.js';
+import {cycleInputsAreCurrent} from './metric-cycle-input-facts.js';
+import {METRIC_CYCLE_DISCOVERY, METRIC_REPORTS} from './metric-report-constants.js';
 import {captureMetricInputs, metricDigest} from './metric-report-inputs.js';
 
 const JSON_ENCODING = 'utf8';
 const MISSING_FILE = 'ENOENT';
-const SCHEMA = 'metric-report-provenance-v1';
+const SCHEMA = 'metric-report-provenance-v2';
 
 export function metricReportPayload(payload) {
   const copy = {...payload};
@@ -18,8 +19,8 @@ export function metricReportPayload(payload) {
   return copy;
 }
 
-function reportDigest(payload) {
-  return metricDigest(JSON.stringify(metricReportPayload(payload)));
+function reportDigest(payload, analyzerInputs) {
+  return metricDigest(JSON.stringify({payload: metricReportPayload(payload), analyzerInputs}));
 }
 
 export function beginMetricMeasurement(id, options = {}) {
@@ -31,14 +32,18 @@ export function beginMetricMeasurement(id, options = {}) {
     inputs: captureMetricInputs(root, descriptor, targets, reportPath)};
 }
 
-export function finishMetricMeasurement(measurement, payload) {
+export function finishMetricMeasurement(measurement, payload, analyzerInputs) {
   const {id, root, targets, reportPath, inputs} = measurement;
   const current = captureMetricInputs(root, METRIC_REPORTS[id], targets, reportPath);
   if (JSON.stringify(inputs) !== JSON.stringify(current)) {
     throw new Error(`metric inputs changed during measurement: ${id}`);
   }
+  if (METRIC_REPORTS[id].inputDiscovery === METRIC_CYCLE_DISCOVERY &&
+      !cycleInputsAreCurrent(root, analyzerInputs)) {
+    throw new Error(`cycle analyzer inputs changed or are unbound: ${id}`);
+  }
   const report = {...payload, provenance: {
-    schema: SCHEMA, id, inputs, reportDigest: reportDigest(payload),
+    schema: SCHEMA, id, inputs, analyzerInputs, reportDigest: reportDigest(payload, analyzerInputs),
   }};
   const destination = path.join(root, reportPath);
   fs.mkdirSync(path.dirname(destination), {recursive: true});
@@ -59,7 +64,9 @@ export function readCurrentMetricReport(root, id) {
   }
   const seal = report?.provenance;
   if (seal?.schema !== SCHEMA || seal.id !== id ||
-      seal.reportDigest !== reportDigest(report)) return null;
+      seal.reportDigest !== reportDigest(report, seal.analyzerInputs)) return null;
+  if (descriptor.inputDiscovery === METRIC_CYCLE_DISCOVERY &&
+      !cycleInputsAreCurrent(root, seal.analyzerInputs)) return null;
   const inputs = captureMetricInputs(root, descriptor,
     descriptor.targets, descriptor.reportPath, []);
   return JSON.stringify(seal.inputs) === JSON.stringify(inputs) ? report : null;
