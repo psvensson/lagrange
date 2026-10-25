@@ -1,0 +1,21 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "exact-constructor-injection-and-adversarial-reads",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/decision-boundary-seed-injection.test.js test/scripts/check-guideline-decision-boundaries.test.js",
+      "assertions": 269,
+      "sourceSha256": {
+        "scripts/check-guideline-decision-boundaries.js": "8ff3289cabcaa1b6c42f1a36c41dad90417a16f6434fe2d6484ce0aeddc2a32b",
+        "scripts/checks/decision-boundary-construction.js": "83ff890cba63ff24d1e6dbb2e6ea90666381040467fe9e279feb3d5281bf694e",
+        "scripts/checks/decision-boundary-seed-injection.js": "8b6d7effefe779193bfe173534d64d60b9e4d03557d0fa14d2cde683d5a719fb",
+        "test/scripts/decision-boundary-seed-injection.test.js": "d1baaeee2fd0e06a06dd0a5f90fc54909c8312a49f1fb1e900450ebba6b1ab50"
+      },
+      "logSha256": "9499316886edad8c9a4b4ed7e3b86e8e460e82cd918155d63e8eeddfbcba0f74",
+      "evidence": "test-output/seed-constructor-audit/final-hardened-tests.log",
+      "ceiling": "Audit repair implementation evidence only; independent review pending; no activation acceptance."
+    }
+  ]
+}

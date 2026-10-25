@@ -2,6 +2,8 @@ import {KEYS} from 'eslint-visitor-keys';
 import fs from 'node:fs/promises';
 import {collectCaughtExceptionCollections} from './checks/decision-boundary-exception-collection.js';
 import {passiveConstructionOccurrences} from './checks/decision-boundary-construction.js';
+import {loadSeedConstructorInjectionProof, verifiedSeedConstructorInputs} from
+  './checks/decision-boundary-seed-injection.js';
 import {loadParticipantReleaseCompletionAudit, isOwnedParticipantReleaseCompletionLoop} from
   './participant-release-completion-audit.js';
 import {
@@ -400,7 +402,8 @@ function checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, 
   let hasSqlAccess = false;
   let cacheLine = null;
   let sqlLine = null;
-  const passive = passiveConstructionOccurrences(node, context.parent, context.ancestors);
+  const passive = passiveConstructionOccurrences(
+    node, context.parent, context.ancestors, context.constructorInputs);
 
   walkAst(node.body || node, (child) => {
     if (child.type === 'Identifier' && !passive.has(child)) {
@@ -844,6 +847,8 @@ function collectDecisionBoundaryViolationsFromSource(
 
   const ast = parseSourceFile(source);
   const violations = [];
+  const constructorInputs = verifiedSeedConstructorInputs(
+    ast, source, filePath, options.constructionContext);
   checkNamedWaitConstants(source, filePath, violations, options.deadWaitClaims);
 
   walkAst(ast, (node, parent, ancestors) => {
@@ -859,7 +864,7 @@ function collectDecisionBoundaryViolationsFromSource(
 
     const functionName = getFunctionName(node, parent);
     checkMixedCacheAndSqlDecision(node, functionName, filePath, fileClass, violations,
-      {parent, ancestors});
+      {parent, ancestors, constructorInputs});
     checkLocalRetryLoop(node, functionName, filePath, violations, source,
       options.completionContext);
 
@@ -1053,10 +1058,11 @@ async function collectRefutedDeadClaims(
 
 async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
   const deadWaitClaims = [];
+  const constructionContext = await loadSeedConstructorInjectionProof(options.constructionRoot);
   const completion = await loadParticipantReleaseCompletionAudit(options.completionRoot);
   const report = await buildGuidelineViolationReport(
     pathsToScan,
-    {...options, deadWaitClaims, completionContext: completion.context},
+    {...options, deadWaitClaims, constructionContext, completionContext: completion.context},
     collectDecisionBoundaryViolationsFromSource,
   );
   return withAddedViolations(report, [...completion.violations, ...await collectRefutedDeadClaims(

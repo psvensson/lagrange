@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2439,
+    "ordinary": 2440,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 3
   },
-  "censusSize": 2456,
-  "digest": "fnv1a32-f43b7e45",
+  "censusSize": 2457,
+  "digest": "fnv1a32-f6c3e52d",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
@@ -2139,6 +2139,7 @@
     "test/scripts/closed-quest-shape.test.js": "ordinary",
     "test/scripts/closure-ledger-state.test.js": "ordinary",
     "test/scripts/complexity-ratchet-closure.test.js": "ordinary",
+    "test/scripts/decision-boundary-seed-injection.test.js": "ordinary",
     "test/scripts/dependency-policy-authority.test.js": "ordinary",
     "test/scripts/dependency-policy-classification.test.js": "ordinary",
     "test/scripts/dependency-policy-producer-binding.test.js": "ordinary",

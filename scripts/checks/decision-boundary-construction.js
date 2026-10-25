@@ -251,10 +251,16 @@ function markFieldUses(record, fields, passive) {
 // bindings and uses retain the existing conservative identifier evidence.
 // Plain-class checks rule out visible accessors/mutations; they do not prove
 // arbitrary effects of inherited objects, proxies or dynamically installed code.
-export function passiveConstructionOccurrences(fn, parent, ancestors) {
+export function passiveConstructionOccurrences(fn, parent, ancestors, verifiedInputs = []) {
   const records = recordsWithin(fn.body || fn);
   const passive = new WeakSet();
   markSyntaxLabels(records, passive);
+  for (const input of verifiedInputs) {
+    if (!containsNode(fn, input)) continue;
+    walkAst(input, (node) => {
+      if (node.type === NODE_TYPE.IDENTIFIER) passive.add(node);
+    });
+  }
   const bindings = constructedBindings(fn, records);
   const fields = provedFields(enclosingPlainClass(parent, ancestors), records, bindings);
   markPublications(records, fields, passive);
