@@ -19,9 +19,9 @@ import {readCommittedStatementOutcome} from
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {tuningOf} from '../../src/raft/raft-rs-runtime-tuning.js';
 import {cdcCommitWaitIdentity, isCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
-import {readOwedCdcObligations, readCdcObligation} from
-  '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_CDC_COMMAND} from
+import {readOwedCdcObligations, readCdcObligation, readCdcObligationProgress,
+  readCdcObligationStanding} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_STANDING} from
   '../../src/partition/partition-cdc-obligation-constants.js';
 import {buildPartitionCdcPropagationSubscriber} from
   '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
@@ -193,16 +193,19 @@ function assertNativeReceipt(propagation, debt) {
 
 async function assertSourceAck(t, f, producer, debt) {
   const flush = await producer.leader.cdcDelivery.flushCdcAcknowledgements('rf1-native-receipt');
+  // Decision D1: the delivered debt is reclaimed into the ledger's compact
+  // progress by the ACK that delivered it, on every replica alike.
   assert.equal(await producer.group.waitFor(() => producer.group.services.every((service) =>
-    readCdcObligation(service.db, debt.eventKey)?.delivered === true)), true,
+    readCdcObligationStanding(service.db, debt).standing ===
+      PARTITION_CDC_OBLIGATION_STANDING.RECLAIMED)), true,
   'the canonical source ACK applies to every actual source replica');
   const result = report(t, f, producer, 'source-ack-after-native-receipt', {flush});
   for (const peer of result.producer) {
-    assert.equal(peer.obligation.eventJson, debt.eventJson);
+    assert.equal(peer.obligation, null, 'the delivered row is reclaimed');
     const entry = peer.record.entries.find((item) =>
-      BigInt(item.index) === BigInt(peer.obligation.deliveredIndex));
-    assert.ok(entry, 'source delivered flag names a retained native ACK');
-    assert.equal(BigInt(entry.term), BigInt(peer.obligation.deliveredTerm));
+      BigInt(item.index) === BigInt(peer.progress.advancedIndex));
+    assert.ok(entry, 'the reclaimed progress names a retained native ACK');
+    assert.equal(BigInt(entry.term), BigInt(peer.progress.advancedTerm));
     assert.equal(JSON.parse(Buffer.from(entry.data, 'base64').toString()).type,
       PARTITION_CDC_COMMAND.DELIVERED);
     assert.ok(BigInt(peer.record.appliedIndex) >= BigInt(entry.index));
@@ -218,6 +221,7 @@ function report(t, f, producer, stage, extra = {}) {
       replicaId: service.replicaId, owed: readOwedCdcObligations(service.db),
       record: RaftRsDurableStore.readDurableRecordIn(service.db, PARTITION_ID),
       obligation: f.event ? readCdcObligation(service.db, f.event.eventKey) : null,
+      progress: readCdcObligationProgress(service.db),
       sourceRow: service.db.prepare('SELECT * FROM config WHERE config_key = ?').get(KEY),
     })), ...extra};
   t.diagnostic(json(result));

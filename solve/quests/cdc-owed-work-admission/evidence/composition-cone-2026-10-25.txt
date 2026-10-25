@@ -1,0 +1,29 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/partition/partition-cdc-owed-admission.test.js test/partition/partition-cdc-prepared-capacity.test.js test/partition/partition-cdc-drain-admission.test.js test/partition/partition-cdc-owed-admission-native.test.js test/partition/partition-cdc-obligation.test.js test/partition/partition-cdc-obligation-reclamation.test.js test/partition/proposal-queue.test.js test/partition/proposal-queue-capacity.property.test.js test/partition/proposal-queue-size-invariant.property.test.js test/partition/partition-write-kernel.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-coordinator-settlement.test.js test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects.integration.test.js test/partition/cdc-hydration-live-handoff.test.js
+
+# test-files planned=18
+classified lane ordinary: 16 file(s), jobs=1
+thermal: ok cpu 45C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js (7 assertions, 1101ms)
+ok test/partition/partition-cdc-drain-admission.test.js (2 assertions, 2412ms)
+ok test/partition/partition-cdc-obligation-reclamation.test.js (6 assertions, 5353ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 22242ms)
+ok test/partition/partition-cdc-owed-admission.test.js (4 assertions, 10049ms)
+ok test/partition/partition-cdc-prepared-capacity.test.js (3 assertions, 6615ms)
+ok test/partition/partition-coordinator-settlement.test.js (4 assertions, 1113ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 2448ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 2983ms)
+ok test/partition/committed-statement-outcome.test.js (20 assertions, 3447ms)
+ok test/partition/cdc-hydration-live-handoff.test.js (2 assertions, 3071ms)
+ok test/partition/partition-cdc-obligation.test.js (24 assertions, 2821ms)
+ok test/partition/proposal-queue.test.js (71 assertions, 219ms)
+ok test/partition/proposal-queue-size-invariant.property.test.js (7 assertions, 1319ms)
+ok test/partition/partition-write-kernel.test.js (104 assertions, 648ms)
+ok test/partition/proposal-queue-capacity.property.test.js (7 assertions, 301ms)
+# test-files total=16 pass=16 fail=0 assertions=308
+classified lane bootstrap: 2 file(s), jobs=1
+thermal: ok cpu 51C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/bootstrap/seed-retained-effects.integration.test.js (3 assertions, 1314ms)
+ok test/bootstrap/seed-retained-effects.test.js (170 assertions, 3562ms)
+# test-files total=2 pass=2 fail=0 assertions=173

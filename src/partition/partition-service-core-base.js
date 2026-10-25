@@ -1,3 +1,4 @@
+import {PARTITION_DRAIN_CAPACITIES} from './partition-cdc-owed-admission.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
 import {
@@ -163,7 +164,8 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.writeTraffic = new PartitionWriteTraffic();
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     this.pendingCDCEventDeliveries = /* @__PURE__ */ new Set();
-    this.proposalQueue = new ProposalQueue({timeSource: this.timeSource});
+    this.proposalQueue = new ProposalQueue({timeSource: this.timeSource,
+      reservedCapacities: PARTITION_DRAIN_CAPACITIES});
     this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
     this.cdcDelivery = new PartitionCDCDelivery(this);
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();

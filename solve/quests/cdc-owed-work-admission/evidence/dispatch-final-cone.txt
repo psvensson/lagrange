@@ -1,0 +1,22 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/partition/partition-cdc-owed-admission.test.js test/partition/partition-cdc-prepared-capacity.test.js test/partition/partition-cdc-drain-admission.test.js test/partition/partition-cdc-owed-admission-native.test.js test/partition/partition-cdc-obligation.test.js test/partition/partition-cdc-obligation-reclamation.test.js test/partition/proposal-queue.test.js test/partition/proposal-queue-capacity.property.test.js test/partition/proposal-queue-size-invariant.property.test.js test/partition/partition-write-kernel.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/committed-statement-outcome.test.js test/partition/partition-coordinator-settlement.test.js
+
+# test-files planned=14
+classified lane ordinary: 14 file(s), jobs=4
+thermal: ok cpu 54C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/partition/partition-coordinator-settlement.test.js (4 assertions, 899ms)
+ok test/partition/partition-cdc-obligation-reclamation.test.js (6 assertions, 5291ms)
+ok test/partition/partition-cdc-prepared-capacity.test.js (3 assertions, 7191ms)
+ok test/partition/committed-statement-outcome.test.js (20 assertions, 3501ms)
+ok test/partition/partition-cdc-obligation.test.js (24 assertions, 2636ms)
+ok test/partition/partition-cdc-owed-admission.test.js (4 assertions, 10794ms)
+ok test/partition/partition-cdc-drain-admission.test.js (2 assertions, 2121ms)
+ok test/partition/proposal-queue.test.js (71 assertions, 235ms)
+ok test/partition/partition-write-kernel.test.js (104 assertions, 292ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 3084ms)
+ok test/partition/proposal-queue-capacity.property.test.js (7 assertions, 347ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 2245ms)
+ok test/partition/proposal-queue-size-invariant.property.test.js (7 assertions, 328ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 23323ms)
+# test-files total=14 pass=14 fail=0 assertions=299

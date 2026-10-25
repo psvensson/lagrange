@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-owed-work-admission",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The durable CDC ledger supplies a finite owed-event capacity and the existing partition write admission enforces it for ordinary writes and complete participant batches, including concurrent proposals and restart. New work under pressure is deferred without application, acknowledged obligations are never deleted or forgotten, PREPARED work retains its right to complete, and acknowledgement/draining remains admissible. This bounds pending work rather than limiting individual supported payloads or fan-out vectors.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-owed-work-admission/evidence/receipt.json",
+      "requiredReceipts": [
+        "real-write-ingress-debt-pressure",
+        "concurrent-committed-prefix-and-retry",
+        "prepared-capacity-and-restart",
+        "acknowledgement-drain-and-supported-large-input"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-ledger-and-admission-owner",
+      "statement": "Use the durable CDC ledger as debt authority and the existing write/participant application and proposal owners. No second durable progress ledger, retry framework or alternate write path."
+    },
+    {
+      "id": "no-lost-owed-work",
+      "statement": "Never delete owed events or refuse an already-decided COMMIT to meet capacity. Pressure cannot block its own acknowledgement or transaction-decision drain. Preserve source-owned ordering, replay identity and actual native acknowledgement."
+    },
+    {
+      "id": "no-input-cap-substitution",
+      "statement": "The pending-work capacity is not a new individual payload, event or target-vector cap. Preserve W9 actual 2 MiB and 65-target/over-64-vector obligations and existing supported transaction batches."
+    },
+    {
+      "id": "count-and-byte-claim-honesty",
+      "statement": "The initial contract bounds outstanding event count; report measured payload bytes separately and do not claim a fixed byte-size bound from event count. Any byte admission policy is a separate explicit owner decision, never a silent shrink of supported input."
+    },
+    {
+      "id": "independent-source-and-composed-proof",
+      "statement": "Retain red-before-green, exact source provenance and independent source approval. Focused controlled-port witnesses are not native or whole-candidate release acceptance."
+    }
+  ],
+  "sealedAt": "fa85052324778a07cf0067fbfb7bd9cb1ef3028f"
+}

@@ -23,7 +23,8 @@ import {REPLICA_HANDLER_RETIREMENT_OUTCOME} from
 import {CDC_OPERATION, TABLES, SERVICE_STATUS} from '../../src/constants/index.js';
 import {SERVICES_SCHEMA} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {cdcSqlBuilder} from '../../src/cdc/cdc-sql-builder.js';
-import {readCdcObligation} from '../../src/partition/partition-cdc-obligation-ledger.js';
+import {readCdcObligation, readCdcObligationProgress, readCdcObligationStanding} from
+  '../../src/partition/partition-cdc-obligation-ledger.js';
 import {PARTICIPANT_CUTOVER_OUTCOME} from
   '../../src/partition/partition-participant-transaction-cutover-constants.js';
 import {formAdmittedGroup} from '../partition/partition-admitted-group-fixture.js';
@@ -62,6 +63,10 @@ function sourceView(f) {
   return f.producer.services.map((service) => ({
     replicaId: service.replicaId,
     obligations: f.debts.map((debt) => readCdcObligation(service.db, debt.eventKey)),
+    // Decision D1: a delivered debt is reclaimed into the compact progress
+    // once nothing owed lies below it; its standing is the one predicate.
+    standings: f.debts.map((debt) => readCdcObligationStanding(service.db, debt).standing),
+    progress: readCdcObligationProgress(service.db),
     record: recordOf(service, service.partitionId),
     lane: service.cdcDelivery.getCdcObligationDiagnostics(),
   }));

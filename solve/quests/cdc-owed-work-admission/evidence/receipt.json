@@ -1,0 +1,42 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "sourceManifest": "source-manifest.json",
+  "sourceManifestSha256": "52e0f40c8b3d372c7878900a52da4549fac7edc363febdc7703909b9f8fb75ea",
+  "validation": {
+    "command": "npm run test:file -- <14 files listed in dispatch-final-cone.txt>",
+    "files": 14,
+    "passed": 14,
+    "failed": 0,
+    "assertions": 299,
+    "log": "dispatch-final-cone.txt",
+    "independentApproval": false,
+    "wholeCandidateAcceptance": false,
+    "currentDisposition": "Author dispatch simplification passes focused/native rerun and scoped cognitive0. Exact revised checkpoint and independent delta approval pending. Original01d214 REVISE preserved in VERIFY-F2-r1.md.",
+    "fullCognitiveCount": 150,
+    "cognitiveBaseline": 150,
+    "baselineDisposition": "Measured full150/152 printed tightening hint; baseline reduced to150, matching already-tightened integration policy. No increase."
+  },
+  "receipts": [
+    {
+      "id": "real-write-ingress-debt-pressure",
+      "passed": true,
+      "reason": "Actual PartitionService.executeQuery refuses additional event-producing work at4096 owed with no proposal, SQL effect or write-generation advance; native RF3 reaches the same boundary over10 live rows, keeps it after actual leadership transfer and production release-owner resumption, and drains through committed CDC_DELIVERED."
+    },
+    {
+      "id": "concurrent-committed-prefix-and-retry",
+      "passed": true,
+      "reason": "Two preflight-admitted proposals at4095 are decided by committed order: both replicas retain exactly4096, the losing identity remains retryable, and its same-entry retry applies once after drain. Existing automatic retry resumes without new external traffic. Prior uncertain-attempt evidence remains outstanding."
+    },
+    {
+      "id": "prepared-capacity-and-restart",
+      "passed": true,
+      "reason": "Existing256-operation staging batch is refused before PREPARED when insufficient capacity remains, then prepares after drain. Durable PREPARED reserves its whole batch across actual SQLite restart; COMMIT completes at the limit and replay adds no debt. Impossible4097-operation producer demand is typed non-retryably refused, without changing the supported256-operation contract."
+    },
+    {
+      "id": "acknowledgement-drain-and-supported-large-input",
+      "passed": true,
+      "reason": "At1000 total queue capacity, ordinary parked work uses at most997; two ACK slots and one exact-PREPARED decision slot remain protected in both arrival orders. Unprepared tombstones cannot claim the decision reserve; duplicates join existing custody. Actual2MiB event payload remains intact. Native RF3 ACK application drains all replicas and permits the same-entry retry; remote65-target W9 is not claimed."
+    }
+  ]
+}

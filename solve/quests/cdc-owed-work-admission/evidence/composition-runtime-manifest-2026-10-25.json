@@ -1,0 +1,90 @@
+{
+  "parent": "9e026a011a2368853926f602abc300acb75aed67",
+  "incoming": "714eee75a648520a79f0468fc63d55b0ed0a8048",
+  "runtime": {
+    "src/bootstrap/seed-retained-partition-effects.js": {
+      "composed": "64568e19c838a5aa13ca10f1458868fae8a7f20c9010c83d9f1e0a42f12c0e83",
+      "approvedIncoming": "64568e19c838a5aa13ca10f1458868fae8a7f20c9010c83d9f1e0a42f12c0e83"
+    },
+    "src/constants/errors.js": {
+      "composed": "bd67ed8fc8d01b62634f3233cc1cfed1b504c301db3ec1c4db7ddb4b5edd0443",
+      "approvedIncoming": "bd67ed8fc8d01b62634f3233cc1cfed1b504c301db3ec1c4db7ddb4b5edd0443"
+    },
+    "src/partition/partition-cdc-delivery.js": {
+      "composed": "f4d66cd63fe46657cbf7600d1ef7e360dd0af0c4236d08a8de7a938b99962459",
+      "approvedIncoming": "f4d66cd63fe46657cbf7600d1ef7e360dd0af0c4236d08a8de7a938b99962459"
+    },
+    "src/partition/partition-cdc-obligation-constants.js": {
+      "composed": "d008aec7da62b183d665f7a73b552025d5ae426573150a3411a4d2bc99df4988",
+      "approvedIncoming": "d008aec7da62b183d665f7a73b552025d5ae426573150a3411a4d2bc99df4988"
+    },
+    "src/partition/partition-cdc-obligation-delivery.js": {
+      "composed": "d1eeeb1bd026e866fd6296ae29e08772fa59e1413126ba79cad6fa7f64abdea0",
+      "approvedIncoming": "d1eeeb1bd026e866fd6296ae29e08772fa59e1413126ba79cad6fa7f64abdea0"
+    },
+    "src/partition/partition-cdc-obligation-ledger.js": {
+      "composed": "1620d93878f62f043a24726c4555a982440021b474624803d4b10fee74d99a9e",
+      "approvedIncoming": "1620d93878f62f043a24726c4555a982440021b474624803d4b10fee74d99a9e"
+    },
+    "src/partition/partition-cdc-obligation.js": {
+      "composed": "2b45fd4e95a6b0db9bf5bcb0109e0fd2d156f35dce1c560e2925e89afb8cbd72",
+      "approvedIncoming": "2b45fd4e95a6b0db9bf5bcb0109e0fd2d156f35dce1c560e2925e89afb8cbd72"
+    },
+    "src/partition/partition-cdc-owed-admission.js": {
+      "composed": "28535c36deeaacc30ed459815a56be06d90b1485aa7c926ceaaf132dde0125e2",
+      "approvedIncoming": "28535c36deeaacc30ed459815a56be06d90b1485aa7c926ceaaf132dde0125e2"
+    },
+    "src/partition/partition-participant-transaction-apply.js": {
+      "composed": "21b39043bcfad7cd416c0097b2d9c817ab0e5c8d4e8accab5d02407cbbeebf87",
+      "approvedIncoming": "21b39043bcfad7cd416c0097b2d9c817ab0e5c8d4e8accab5d02407cbbeebf87"
+    },
+    "src/partition/partition-service-cdc-stream-base.js": {
+      "composed": "e0de025758c34a3ed518c56ca07f7f518718f828b2590760c2409dfca3bee20a",
+      "approvedIncoming": "e0de025758c34a3ed518c56ca07f7f518718f828b2590760c2409dfca3bee20a"
+    },
+    "src/partition/partition-service-core-base.js": {
+      "composed": "6d7c1d16f66932f5899b6a1906900fceb43835d45cd8813a5ae25283a3f4297b",
+      "approvedIncoming": "6d7c1d16f66932f5899b6a1906900fceb43835d45cd8813a5ae25283a3f4297b"
+    },
+    "src/partition/partition-service-entry-apply-base.js": {
+      "composed": "388c24a014dba9a9cd2d24207a69103a74522ca7abc75911715f58c6b456a386",
+      "approvedIncoming": "3e098dfc56753d998d948e235cba1f2f8aa3eaca39c5884ecfef6977ae22e840"
+    },
+    "src/partition/partition-service-raft-write-commit.js": {
+      "composed": "2cc5726da0d7b1f9c0a1d84d76c4ed4ebb477385eb7f6547b55d354d343ab832",
+      "approvedIncoming": "2cc5726da0d7b1f9c0a1d84d76c4ed4ebb477385eb7f6547b55d354d343ab832"
+    },
+    "src/partition/partition-write-kernel.js": {
+      "composed": "377a641a6f6caa15c38158eefa940ffe90c79e20f08b8bfa6b53a0f0ed297a44",
+      "approvedIncoming": "377a641a6f6caa15c38158eefa940ffe90c79e20f08b8bfa6b53a0f0ed297a44"
+    },
+    "src/partition/proposal-queue-constants.js": {
+      "composed": "dc407d385b96e0d3fbd310c8ff4d459372ec3801044ab26262aa3af2b488894f",
+      "approvedIncoming": "dc407d385b96e0d3fbd310c8ff4d459372ec3801044ab26262aa3af2b488894f"
+    },
+    "src/partition/proposal-queue.js": {
+      "composed": "82d70b572a81a2e87ac5d9ede66b3bd283992a20d8b5b2b1e24012198c949775",
+      "approvedIncoming": "82d70b572a81a2e87ac5d9ede66b3bd283992a20d8b5b2b1e24012198c949775"
+    }
+  },
+  "exact": [
+    "src/bootstrap/seed-retained-partition-effects.js",
+    "src/constants/errors.js",
+    "src/partition/partition-cdc-delivery.js",
+    "src/partition/partition-cdc-obligation-constants.js",
+    "src/partition/partition-cdc-obligation-delivery.js",
+    "src/partition/partition-cdc-obligation-ledger.js",
+    "src/partition/partition-cdc-obligation.js",
+    "src/partition/partition-cdc-owed-admission.js",
+    "src/partition/partition-participant-transaction-apply.js",
+    "src/partition/partition-service-cdc-stream-base.js",
+    "src/partition/partition-service-core-base.js",
+    "src/partition/partition-service-raft-write-commit.js",
+    "src/partition/partition-write-kernel.js",
+    "src/partition/proposal-queue-constants.js",
+    "src/partition/proposal-queue.js"
+  ],
+  "composed": [
+    "src/partition/partition-service-entry-apply-base.js"
+  ]
+}

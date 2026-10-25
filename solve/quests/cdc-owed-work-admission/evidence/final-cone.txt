@@ -1,0 +1,21 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/partition/partition-cdc-owed-admission.test.js test/partition/partition-cdc-prepared-capacity.test.js test/partition/partition-cdc-drain-admission.test.js test/partition/partition-cdc-owed-admission-native.test.js test/partition/partition-cdc-obligation.test.js test/partition/partition-cdc-obligation-reclamation.test.js test/partition/proposal-queue.test.js test/partition/proposal-queue-capacity.property.test.js test/partition/proposal-queue-size-invariant.property.test.js test/partition/partition-write-kernel.test.js test/partition/partition-participant-transaction-apply.test.js test/partition/partition-participant-transaction-staging.test.js test/partition/committed-statement-outcome.test.js
+
+# test-files planned=13
+classified lane ordinary: 13 file(s), jobs=4
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+ok test/partition/partition-cdc-obligation-reclamation.test.js (6 assertions, 5676ms)
+ok test/partition/partition-cdc-prepared-capacity.test.js (3 assertions, 7930ms)
+ok test/partition/partition-cdc-obligation.test.js (24 assertions, 3114ms)
+ok test/partition/partition-cdc-owed-admission.test.js (4 assertions, 11169ms)
+ok test/partition/committed-statement-outcome.test.js (20 assertions, 3689ms)
+ok test/partition/partition-participant-transaction-staging.test.js (19 assertions, 2878ms)
+ok test/partition/proposal-queue.test.js (71 assertions, 248ms)
+ok test/partition/proposal-queue-size-invariant.property.test.js (7 assertions, 392ms)
+ok test/partition/partition-write-kernel.test.js (104 assertions, 296ms)
+ok test/partition/proposal-queue-capacity.property.test.js (7 assertions, 388ms)
+ok test/partition/partition-cdc-drain-admission.test.js (2 assertions, 2480ms)
+ok test/partition/partition-participant-transaction-apply.test.js (27 assertions, 2195ms)
+ok test/partition/partition-cdc-owed-admission-native.test.js (1 assertions, 34452ms)
+# test-files total=13 pass=13 fail=0 assertions=295

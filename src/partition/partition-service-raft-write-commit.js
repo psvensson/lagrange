@@ -21,6 +21,8 @@ import {PARTITION_LEADERSHIP_TRANSFER_MESSAGE} from
 import {isPartitionReserved} from './partition-participant-transaction-store.js';
 import {PARTICIPANT_TRANSACTION_LOG_MSG} from
   './partition-participant-transaction-constants.js';
+import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, cdcDrainAdmissionClass} from
+  './partition-cdc-owed-admission.js';
 import {pausedWriteAnswerOf} from './partition-participant-transaction-pause.js';
 
 const {
@@ -331,7 +333,9 @@ async function executeHandedOffWriteCommit(service, options, handoff) {
     // pending write with the committed entry's index and witness. A proposal
     // queue at capacity refuses it (backpressure) before anything is
     // proposed.
-    commitPromise = service.waitForCommittedWrite(entry.entryId);
+    commitPromise = service.waitForCommittedWrite(entry.entryId, {
+      admissionClass: cdcDrainAdmissionClass(service, entry),
+    });
   } catch (error) {
     service.recordWritePhaseDuration(
       phaseTimings,
@@ -458,6 +462,10 @@ function startAdmittedPartitionWrite(service, options) {
 }
 
 function startPartitionRaftWriteCommit(service, options) {
+  const cdcAdmission = admitCdcOwedWork(service, options.entry);
+  if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
+    return Promise.resolve(cdcAdmission.answer);
+  }
   const {
     promise: outcomePromise,
     resolve: resolveOutcome,

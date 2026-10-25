@@ -1,0 +1,24 @@
+{
+  "base": "fa85052324778a07cf0067fbfb7bd9cb1ef3028f",
+  "files": {
+    "src/constants/errors.js": "bd67ed8fc8d01b62634f3233cc1cfed1b504c301db3ec1c4db7ddb4b5edd0443",
+    "src/partition/partition-cdc-obligation-constants.js": "d008aec7da62b183d665f7a73b552025d5ae426573150a3411a4d2bc99df4988",
+    "src/partition/partition-cdc-owed-admission.js": "28535c36deeaacc30ed459815a56be06d90b1485aa7c926ceaaf132dde0125e2",
+    "src/partition/partition-participant-transaction-apply.js": "21b39043bcfad7cd416c0097b2d9c817ab0e5c8d4e8accab5d02407cbbeebf87",
+    "src/partition/partition-service-cdc-stream-base.js": "e0de025758c34a3ed518c56ca07f7f518718f828b2590760c2409dfca3bee20a",
+    "src/partition/partition-service-core-base.js": "6d7c1d16f66932f5899b6a1906900fceb43835d45cd8813a5ae25283a3f4297b",
+    "src/partition/partition-service-entry-apply-base.js": "3e098dfc56753d998d948e235cba1f2f8aa3eaca39c5884ecfef6977ae22e840",
+    "src/partition/partition-service-raft-write-commit.js": "2cc5726da0d7b1f9c0a1d84d76c4ed4ebb477385eb7f6547b55d354d343ab832",
+    "src/partition/partition-write-kernel.js": "377a641a6f6caa15c38158eefa940ffe90c79e20f08b8bfa6b53a0f0ed297a44",
+    "src/partition/proposal-queue-constants.js": "dc407d385b96e0d3fbd310c8ff4d459372ec3801044ab26262aa3af2b488894f",
+    "src/partition/proposal-queue.js": "82d70b572a81a2e87ac5d9ede66b3bd283992a20d8b5b2b1e24012198c949775",
+    "test/partition/partition-cdc-drain-admission.test.js": "390465d0319a678bb340fbcdf12b3a1f1c508a951cc39a6d59d9a093e555cd97",
+    "test/partition/partition-cdc-owed-admission-native.test.js": "cd1b851832e79419992b95448662b64b6ec76f28267befa84e593f78ce95ee83",
+    "test/partition/partition-cdc-owed-admission.test.js": "c9db8cd45cb1214c8c93d5c84ffc655c1fd311e9a958e6d5f3a154c787327966",
+    "test/partition/partition-cdc-prepared-capacity.test.js": "41f6bc52968764fcb3277034fc06102529cd583686bf5e761022501c82056ba3",
+    "test/shards/impact-contracts.json": "dd9cf570ea09ef352e8ec698e259cf6627dfd9a36d820bd85e029aab9196d09c",
+    "test/test-helpers/cdc-owed-admission-fixture.js": "4f9a1a470d08072b7d8e98c6985f774c5445cae9475da3278aa93fa11551257d",
+    "scripts/check-cognitive-complexity.js": "4b52e1cafad5c240fb4bfb0d6a4f27e3f5859c13e765d7382585924ed2af28e4"
+  },
+  "correctionParent": "01d214f84b315adb5dd387f19d0e23092c425a50"
+}

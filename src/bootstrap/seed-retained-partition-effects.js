@@ -9,9 +9,10 @@ import {readPartitionWriteOriginIn, readParticipantTransactionCensusIn} from
   '../partition/partition-participant-transaction-store.js';
 import {committedStatementEntryKey, readCommittedStatementCensusIn} from
   '../partition/partition-committed-statement-outcome.js';
-import {PARTITION_CDC_COMMAND as CDC_COMMAND} from '../partition/partition-cdc-obligation-constants.js';
+import {PARTITION_CDC_COMMAND as CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND} from
+  '../partition/partition-cdc-obligation-constants.js';
 import {PARTITION_CDC_DELIVERY_FLAG, readCdcObligationCensusIn, isPinnedCdcAcknowledgementCommand,
-  buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest} from
+  buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest, isCdcPositionReclaimed} from
   '../partition/partition-cdc-obligation-ledger.js';
 import {PartitionCDCGenerator, hydratePartitionCdcEvent, PARTITION_CDC_EVENT_BUILD_STATE} from
   '../partition/partition-cdc-generator.js';
@@ -137,11 +138,15 @@ function acknowledgmentCensus(entries, sources) {
   const pending = [];
   for (const {entry, kind} of entries) {
     if (kind !== KIND.ACK) continue;
+    if (entry.command.acknowledged.some((group) => !acknowledgmentNamesSource(
+      group, sources.get(String(group.logIndex)), entry))) {
+      return censusRefusal(REASON.ACK, entry);
+    }
+    // The real ACK owner refuses the entire command when any exact identity
+    // was compacted. Its remaining members therefore cannot justify delivery.
+    if (acknowledgmentIsCompacted(entry, sources, firstApplied)) continue;
     for (const group of entry.command.acknowledged) {
       const source = sources.get(String(group.logIndex));
-      if (!acknowledgmentNamesSource(group, source, entry)) {
-        return censusRefusal(REASON.ACK, entry);
-      }
       if (source.entry.phase !== PHASE.APPLIED) {
         if (entry.phase === PHASE.APPLIED) return censusRefusal(REASON.ACK, entry);
         pending.push({source: source.entry, acknowledgment: entry});
@@ -151,6 +156,17 @@ function acknowledgmentCensus(entries, sources) {
     }
   }
   return {state: STATE.ACCEPTED, firstApplied, pending};
+}
+
+function acknowledgmentIsCompacted(entry, sources, firstApplied) {
+  const emitting = [...sources.values()].filter(({entry: source}) =>
+    source.phase === PHASE.APPLIED);
+  const reclamation = expectedReclamation(emitting, {firstApplied});
+  if (reclamation === null || reclamation.progress === null) return false;
+  const progress = {throughLogIndex: Number(reclamation.progress.throughLogIndex),
+    throughOrdinal: Number(reclamation.progress.throughOrdinal)};
+  return entry.command.acknowledged.some((group) => group.events.some((event) =>
+    isCdcPositionReclaimed({logIndex: group.logIndex, ordinal: event.ordinal}, progress)));
 }
 
 function expectedEvent(classified, member) {
@@ -224,9 +240,43 @@ function foundationRowsMatch(rows, expectedRows) {
       .some((expected) => storedFoundationRowMatches(row, expected)));
 }
 
+const byEntryIndex = (left, right) => {
+  const [a, b] = [BigInt(left.entry.index), BigInt(right.entry.index)];
+  return a < b ? -1 : a > b ? 1 : 0;
+};
+
+// Decision D1: the ledger owner reclaims, at the acknowledgement that
+// completes it, every delivered obligation below the lowest owed one into its
+// compact progress row. So the applied sources whose acknowledgements all
+// applied, in log order up to the first one still owed, have no row; the
+// progress names the last of them, their count, and the acknowledgement that
+// completed the prefix (the latest of theirs). The per-apply bound is never
+// reached by a foundation partition; a prefix beyond it is outside this
+// reduction and refused.
+function expectedReclamation(emitting, acknowledgments) {
+  const reclaimed = [];
+  for (const source of [...emitting].sort(byEntryIndex)) {
+    const acknowledgment = acknowledgments.firstApplied.get(source.entryKey);
+    if (!acknowledgment) break;
+    reclaimed.push({source, acknowledgment});
+  }
+  if (reclaimed.length > PARTITION_CDC_OBLIGATION_BOUND.RECLAIM_ROWS_PER_APPLY) return null;
+  const keys = new Set(reclaimed.map(({source}) => source.entryKey));
+  if (reclaimed.length === 0) return {keys, progress: null};
+  const completing = reclaimed.map(({acknowledgment}) => acknowledgment)
+    .sort((left, right) => byEntryIndex({entry: left}, {entry: right})).at(-1);
+  return {keys, progress: {throughLogIndex: reclaimed.at(-1).source.entry.index,
+    throughOrdinal: FOUNDATION_EVENT_ORDINAL, reclaimed: String(reclaimed.length),
+    advancedIndex: completing.index, advancedTerm: completing.term}};
+}
+
 function obligationCensusMatches(obligations, emitting, acknowledgments, member) {
-  return emitting.length === obligations.rows.length &&
-    emitting.every((source) => {
+  const reclamation = expectedReclamation(emitting, acknowledgments);
+  if (reclamation === null ||
+      !isDeepStrictEqual(obligations.progress, reclamation.progress)) return false;
+  const retained = emitting.filter((source) => !reclamation.keys.has(source.entryKey));
+  return retained.length === obligations.rows.length &&
+    retained.every((source) => {
       const row = obligations.rows.find(({eventKey}) => eventKey === source.entryKey);
       return row && obligationMatches(row, source,
         acknowledgments.firstApplied.get(source.entryKey), member);

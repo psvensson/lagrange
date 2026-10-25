@@ -13,7 +13,8 @@ import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {readCommittedStatementOutcome} from '../../src/partition/partition-committed-statement-outcome.js';
 import {readOwedCdcObligations} from '../../src/partition/partition-cdc-obligation-ledger.js';
-import {PARTITION_CDC_COMMAND} from '../../src/partition/partition-cdc-obligation-constants.js';
+import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_STANDING} from
+  '../../src/partition/partition-cdc-obligation-constants.js';
 import {isCommittedCdcOutcome, isProvisionalCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {buildPartitionCdcPropagationSubscriber} from '../../src/bootstrap/shared/partition-cdc-propagation-subscriber.js';
 import {resolveOperationalMessageGroupSelection, resolveOperationalMessageGroupSelectionAsync,
@@ -391,8 +392,10 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   const driven = await drive;
   assert.equal(driven.error, undefined, json(driven.error));
   await f.producerLeader.cdcDelivery.flushCdcAcknowledgements('native-provisional-route-receipts');
+  const delivered = [PARTITION_CDC_OBLIGATION_STANDING.DELIVERED,
+    PARTITION_CDC_OBLIGATION_STANDING.RECLAIMED];
   assert.equal(await f.producer.waitFor(() => sourceView(f).every((peer) =>
-    peer.obligations.every((obligation) => obligation.delivered === true))), true,
+    peer.standings.every((standing) => delivered.includes(standing)))), true,
   'actual source CDC_DELIVERED application settles A and B only after native delivery');
   for (const debt of f.debts) {
     assertNativeReceipt(requireReturn(f, LEADER, debt,
@@ -400,10 +403,15 @@ test('SERVICES scan releases provisional relay to the real native leader', async
   }
   for (const peer of sourceView(f)) {
     for (const obligation of peer.obligations) {
+      // A retained delivered row names its ACK; a reclaimed one, the ACK that
+      // completed the reclaimed prefix.
+      const marker = obligation === null ?
+        {index: peer.progress.advancedIndex, term: peer.progress.advancedTerm} :
+        {index: obligation.deliveredIndex, term: obligation.deliveredTerm};
       const entry = peer.record.entries.find((item) =>
-        BigInt(item.index) === BigInt(obligation.deliveredIndex));
+        BigInt(item.index) === BigInt(marker.index));
       assert.equal(commandOf(entry).type, PARTITION_CDC_COMMAND.DELIVERED);
-      assert.equal(BigInt(entry.term), BigInt(obligation.deliveredTerm));
+      assert.equal(BigInt(entry.term), BigInt(marker.term));
       assert.ok(BigInt(peer.record.appliedIndex) >= BigInt(entry.index));
     }
   }

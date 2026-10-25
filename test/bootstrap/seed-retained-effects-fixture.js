@@ -111,7 +111,7 @@ function fixture(t, tableName = SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
   return {db, store, declaration, member, confState, service, afterCommitBatches: []};
 }
 
-function applyRetainedEntry(f, entry) {
+function applyRetainedEntry(f, entry, expectedOutcome) {
   const result = applyCommittedEntryTransaction({store: f.store, groupId: f.member.groupId,
     entry, confState: f.confState,
     applyCommittedEntry: f.service ? (bytes, {index, term, effects}) => {
@@ -119,9 +119,11 @@ function applyRetainedEntry(f, entry) {
       const applied = f.service.applyCommittedEntry({command: decodeCommittedProposal(bytes),
         index: Number(index), term: Number(term),
         effects: {afterCommit, afterRollback: effects.afterRollback}});
-      assert.ok([PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
-        PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED].includes(applied),
-      `fixture must engage successful real application: ${applied}`);
+      const expected = expectedOutcome === undefined ?
+        [PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+          PARTITION_COMMITTED_COMMAND_OUTCOME.REPLAYED] : [expectedOutcome];
+      assert.ok(expected.includes(applied),
+        `fixture must engage its declared real application outcome: ${applied}`);
       // This storage fixture holds delivery/notification work for inspection.
       // The real transaction owner admits that work only after durable apply;
       // rollback must never publish a deferred batch. Native tests run the full host.
@@ -132,7 +134,8 @@ function applyRetainedEntry(f, entry) {
   assert.equal(result.escapedEffectFailures, 0, 'fixture effect capture must settle after commit');
 }
 
-function retain(f, commands, {applied = commands.length, commit = commands.length} = {}) {
+function retain(f, commands, {applied = commands.length, commit = commands.length,
+  applicationOutcomes = {}} = {}) {
   const {store, member} = f;
   const entries = commands.map((command, ordinal) => ({
     index: String(ordinal + 1), term: TERM, entryType: RAFT_RS_ENTRY_TYPE.NORMAL,
@@ -142,7 +145,9 @@ function retain(f, commands, {applied = commands.length, commit = commands.lengt
   store.appendEntries(member.groupId, entries);
   store.putHardState(member.groupId,
     {term: TERM, vote: member.peerId, commit: String(commit)});
-  for (let ordinal = 0; ordinal < applied; ordinal++) applyRetainedEntry(f, entries[ordinal]);
+  for (let ordinal = 0; ordinal < applied; ordinal++) {
+    applyRetainedEntry(f, entries[ordinal], applicationOutcomes[entries[ordinal].index]);
+  }
   return f;
 }
 

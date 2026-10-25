@@ -1,0 +1,18 @@
+TAP version 13
+# Subtest: native RF3 bounds owed admission and commits drain markers on every replica
+ok 1 - native RF3 bounds owed admission and commits drain markers on every replica
+  ---
+  duration_ms: 22570.630319
+  type: 'test'
+  ...
+# {"held":[{"replicaId":"cdc-admission-native-r1","owed":4096,"appliedIndex":4100},{"replicaId":"cdc-admission-native-r2","owed":4096,"appliedIndex":4100},{"replicaId":"cdc-admission-native-r3","owed":4096,"appliedIndex":4100}],"refused":"partition_write_cdc_capacity","drained":[{"replicaId":"cdc-admission-native-r1","progress":{"throughLogIndex":4100,"throughOrdinal":0,"reclaimed":4096,"advancedIndex":4117,"advancedTerm":2},"appliedIndex":4117},{"replicaId":"cdc-admission-native-r2","progress":{"throughLogIndex":4100,"throughOrdinal":0,"reclaimed":4096,"advancedIndex":4117,"advancedTerm":2},"appliedIndex":4117},{"replicaId":"cdc-admission-native-r3","progress":{"throughLogIndex":4100,"throughOrdinal":0,"reclaimed":4096,"advancedIndex":4117,"advancedTerm":2},"appliedIndex":4117}],"successor":"cdc-admission-native-r2","termBefore":1,"termAfter":2,"evidence":"native source apply and ACK markers; receipt subscriber substitutes remote recipient"}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22574.442788
+# time=23323ms

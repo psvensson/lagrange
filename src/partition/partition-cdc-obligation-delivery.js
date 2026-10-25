@@ -51,7 +51,11 @@ import {
   acknowledgedEventBytesOf,
   buildCdcAcknowledgementCommand,
   cdcObligationEventKeyDigest,
+  countRetainedDeliveredCdcObligations,
   emptyAcknowledgedBytes,
+  isCdcPositionReclaimed,
+  readCdcObligationProgress,
+  readOwedCdcHead,
   readOwedCdcObligations,
   readOwedCdcTail,
 } from './partition-cdc-obligation-ledger.js';
@@ -158,17 +162,24 @@ function resetCdcObligationLane(delivery) {
 
 /**
  * The ledger committed these events delivered (the CDC_DELIVERED applied):
- * they are no longer pending here.
+ * they are no longer pending here, nor is any position the ledger's compact
+ * progress reclaimed. Only identities already read from this ledger into
+ * lane.pending may be reconciled this way; the prefix proves no new identity.
  * @param {Object} delivery - The CDC delivery owner.
  * @param {Array<string>} eventKeys - The acknowledged keys.
+ * @param {Object|null} [progress] - The ledger's compact progress
+ *   ({throughLogIndex, throughOrdinal}) after the application, or null.
  */
-function settleAcknowledgedObligations(delivery, eventKeys) {
+function settleAcknowledgedObligations(delivery, eventKeys, progress = null) {
   const lane = laneOf(delivery);
   for (const eventKey of eventKeys) {
     lane.pending.delete(eventKey);
   }
+  for (const [eventKey, position] of lane.pending) {
+    if (isCdcPositionReclaimed(position, progress)) lane.pending.delete(eventKey);
+  }
   for (const [entryId, pending] of lane.commands) {
-    if (pending.eventKeys.every((key) => !lane.pending.has(key))) {
+    if (pending.members.every(({eventKey}) => !lane.pending.has(eventKey))) {
       lane.commands.delete(entryId);
     }
   }
@@ -209,6 +220,11 @@ function takeBatch(lane) {
     .flatMap(([logIndex, grouped]) => grouped
       .sort((left, right) => left.ordinal - right.ordinal)
       .map((member) => ({...member, logIndex})));
+  lane.batch = emptyBatch();
+  return {groups: groupsOfMembers(members), members};
+}
+
+function groupsOfMembers(members) {
   const groups = [];
   for (const member of members) {
     let group = groups.at(-1);
@@ -219,8 +235,7 @@ function takeBatch(lane) {
     group.events.push({ordinal: member.ordinal,
       eventKeyDigest: cdcObligationEventKeyDigest(member.eventKey)});
   }
-  lane.batch = emptyBatch();
-  return {groups, members};
+  return groups;
 }
 
 function keysOf(groups) {
@@ -356,7 +371,7 @@ async function flushCdcAcknowledgements(delivery, reason) {
     return flushOutcome(lane, FLUSH.REFUSED,
       {reason, events: eventKeys.length, failureCode: admission.code, proposed: false});
   }
-  const pending = {command: Object.freeze(command), eventKeys, groups,
+  const pending = {command: Object.freeze(command), members, groups,
     inFlight: false};
   lane.commands.set(command.entryId, pending);
   return proposePendingAcknowledgement(delivery, lane, pending, reason);
@@ -364,9 +379,14 @@ async function flushCdcAcknowledgements(delivery, reason) {
 
 async function proposePendingAcknowledgement(delivery, lane, pending, reason) {
   const {owner} = delivery;
-  const {command, eventKeys, groups} = pending;
+  const {command, members, groups} = pending;
+  const eventKeys = members.map(({eventKey}) => eventKey);
   if (pending.inFlight || !laneIsCurrent(delivery, lane)) {
     return Object.freeze({state: FLUSH.IN_FLIGHT, reason});
+  }
+  if (reconcilePendingAcknowledgement(delivery, lane, pending)) {
+    return flushOutcome(lane, FLUSH.RECONCILED,
+      {reason, events: eventKeys.length, entryId: command.entryId});
   }
   pending.inFlight = true;
   owner.logger.debug(LOG_MSG.ACKNOWLEDGEMENTS_PROPOSED, {
@@ -404,9 +424,15 @@ function acknowledgementFailureIsTerminal(failureCode) {
 
 function handleAcknowledgementRefusal(delivery, lane, pending, answer, reason) {
   const {owner} = delivery;
-  const {command, eventKeys, groups} = pending;
+  const {command, members, groups} = pending;
+  const eventKeys = members.map(({eventKey}) => eventKey);
   const uncertain = isWriteOutcomeUnknown(answer);
   const failureCode = answer?.failureCode ?? null;
+  if (failureCode === CODE.IDENTITY_COMPACTED &&
+      reconcilePendingAcknowledgement(delivery, lane, pending)) {
+    return flushOutcome(lane, FLUSH.RECONCILED,
+      {reason, events: eventKeys.length, entryId: command.entryId, failureCode});
+  }
   if (acknowledgementFailureIsTerminal(failureCode)) {
     lane.held = failureCode;
   } else {
@@ -416,6 +442,26 @@ function handleAcknowledgementRefusal(delivery, lane, pending, answer, reason) {
   return flushOutcome(lane, uncertain ? FLUSH.OUTCOME_UNKNOWN : FLUSH.REFUSED,
     {reason, events: eventKeys.length, entryId: command.entryId, failureCode,
       proposed: true});
+}
+
+// Prefix reconciliation belongs to this lane's known pending identities,
+// never to a new exact-event acknowledgement. Keep any uncovered members in
+// their own bounded replacement batch, without combining outstanding batches.
+function reconcilePendingAcknowledgement(delivery, lane, pending) {
+  const progress = readCdcObligationProgress(delivery.owner.db);
+  const members = pending.members.filter((member) =>
+    !isCdcPositionReclaimed(member, progress));
+  if (members.length === pending.members.length) return false;
+  lane.commands.delete(pending.command.entryId);
+  if (members.length > 0) {
+    const groups = groupsOfMembers(members);
+    const command = Object.freeze(buildCdcAcknowledgementCommand(
+      delivery.owner.partitionId, groups, stampOf(delivery.owner)));
+    lane.commands.set(command.entryId, {command, members, groups, inFlight: false});
+    scheduleDeliveryRetry(delivery, null);
+  }
+  settleAcknowledgedObligations(delivery, [], progress);
+  return true;
 }
 
 async function retryAcknowledgements(delivery, lane) {
@@ -513,9 +559,28 @@ function drivePage(owner, lane) {
       limit: 1});
 }
 
-function acknowledgementBackpressured(lane) {
-  return lane.held !== null ||
-    lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES;
+// Delivering past the lowest owed row keeps every delivered row above it in
+// the ledger (decision D1 reclaims only below it), so the lane does that only
+// while those retained rows and its own pending acknowledgements stay under
+// RETAINED_DELIVERED_MAX; the lowest owed row itself is always deliverable,
+// and a scan stopped here restarts from it (lane.scan cleared).
+function retainedDeliveredBackpressured(owner, lane, obligation) {
+  const head = readOwedCdcHead(owner.db);
+  if (head === null || (head.logIndex === obligation.logIndex &&
+      head.ordinal === obligation.ordinal)) {
+    return false;
+  }
+  return lane.pending.size + countRetainedDeliveredCdcObligations(owner.db,
+    BOUND.RETAINED_DELIVERED_MAX) >= BOUND.RETAINED_DELIVERED_MAX;
+}
+
+function acknowledgementBackpressured(owner, lane, obligation) {
+  if (lane.held !== null || lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
+    return true;
+  }
+  if (!retainedDeliveredBackpressured(owner, lane, obligation)) return false;
+  lane.scan = null;
+  return true;
 }
 
 function obligationCursor(obligation) {
@@ -539,7 +604,8 @@ function handleDeliveryFailure(delivery, lane, obligation, reason, delivered, er
 
 async function driveOneObligation(delivery, lane, obligation, subscribers,
   reason, delivered, context) {
-  const step = acknowledgementBackpressured(lane) ? DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE :
+  const step = acknowledgementBackpressured(delivery.owner, lane, obligation) ?
+    DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE :
     lane.pending.has(obligation.eventKey) ? OBLIGATION_DRIVE_STEP.PENDING :
       OBLIGATION_DRIVE_STEP.READY;
   if (step === DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE) {

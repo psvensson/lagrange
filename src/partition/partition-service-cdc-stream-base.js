@@ -339,7 +339,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     try {
       this.proposalQueue.enqueue(entryId, buildPendingProposal({
         options, resolve: resolvePending, reject: rejectPending, timeoutId,
-      }));
+      }), options.admissionClass);
     } catch (error) {
       this.timeSource.clearTimeout(timeoutId);
       throw error;

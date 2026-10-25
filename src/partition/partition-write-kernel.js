@@ -58,6 +58,8 @@ const PARTITION_WRITE_LEADERSHIP_REFUSAL = Object.freeze({
   COMMIT_DEADLINE_EXCEEDED: 'partition_write_commit_deadline_exceeded',
   RESERVED: 'partition_write_reserved',
   CUTOVER_PAUSED: 'partition_write_cutover_paused',
+  CDC_CAPACITY: 'partition_write_cdc_capacity',
+  CDC_DEMAND_EXCEEDS_CAPACITY: 'partition_write_cdc_demand_exceeds_capacity',
 });
 const REFUSAL = PARTITION_WRITE_LEADERSHIP_REFUSAL;
 
@@ -85,6 +87,7 @@ const RETRYABLE_WRITE_FAILURE_CODES = Object.freeze([
   REFUSAL.COMMIT_DEADLINE_EXCEEDED,
   REFUSAL.RESERVED,
   REFUSAL.CUTOVER_PAUSED,
+  REFUSAL.CDC_CAPACITY,
 ]);
 
 // Why pending writes are released without an answer from consensus: their

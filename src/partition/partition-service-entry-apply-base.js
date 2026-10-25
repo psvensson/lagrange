@@ -44,6 +44,8 @@ import {
   isCdcCommandType,
   recordCommittedStatementCdc,
 } from './partition-cdc-obligation.js';
+import {PARTITION_CDC_ADMISSION_STATE, admitCdcOwedWork, settleCdcOwedRefusal} from
+  './partition-cdc-owed-admission.js';
 import {recordCommittedWriteTraffic} from './partition-write-traffic.js';
 const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
   COMMIT: 'afterCommit',
@@ -648,70 +650,74 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
     }
-    if (isCommittedSqlCommandType(commandType)) {
-      if (command.sql) {
-        assertTransactionSchemaWriteEnforced(this.db, this.tableName,
-          readPartitionWriteOrigin(this.db) !== null);
-        const entryKey = this.getCommittedEntryKey(command);
-        const identity = this.buildCommittedWriteIdentity(command, index, term);
-        const afterCommit = (effect) =>
-          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect);
-        // The recorded outcome of this entry key decides whether the
-        // statement runs: a settled key is never executed again, on any
-        // replica, before or after a restart.
-        const recorded = readCommittedStatementOutcome(this, entryKey);
-        if (recorded.state ===
-            PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
-          return settleRecordedCommittedStatement(this, {
-            recorded, command, afterCommit});
-        }
-        // A PREPARED participant transaction holds every other statement.
-        if (isPartitionReserved(this.db)) {
-          return settleReservedCommittedStatement(this, {command, afterCommit});
-        }
-        let info;
-        try {
-          info = runCommittedPartitionStatement(this, command);
-        } catch (error) {
-          return settleFailedCommittedStatement(this, {
-            error, command, entryKey, index, term, identity, afterCommit,
-            afterRollback: (effect) =>
-              scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
-          });
-        }
-        recordCommittedStatementOutcome(this, {
-          entryKey,
-          outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
-          index,
-          term,
-          result: info,
-        });
-        recordCommittedStatementCdc(this, {command, index, term, afterCommit},
-          {entryKey, result: info});
-        advancePartitionWriteGeneration(this.db);
-        recordCommittedWriteTraffic(this, afterCommit, 1);
-        if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
-          afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
-        }
-        afterCommit(() => {
-          this.resolveCommittedWrite(command.entryId, {
-            success: true,
-            changes: info.changes,
-            lastInsertRowid: info.lastInsertRowid,
-            ...identity,
-          });
-        });
-      }
-    } else if (isCdcCommandType(commandType)) {
+    if (isCdcCommandType(commandType)) {
       // The CDC delivery owner's committed acknowledgement: its owner.
       return applyCdcAcknowledgementCommand(this, {command, index, term,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
-    } else {
-      // A participant transaction command: its owner.
+    }
+    if (!isCommittedSqlCommandType(commandType)) {
+      // The gate has admitted a participant transaction command: its owner.
       return applyCommittedTransactionCommand(this, {command, index, term,
         afterCommit: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect),
         afterRollback: (effect) => scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect)});
+    }
+    if (command.sql) {
+      assertTransactionSchemaWriteEnforced(this.db, this.tableName,
+        readPartitionWriteOrigin(this.db) !== null);
+      const entryKey = this.getCommittedEntryKey(command);
+      const identity = this.buildCommittedWriteIdentity(command, index, term);
+      const afterCommit = (effect) =>
+        scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, effect);
+      // The recorded outcome of this entry key decides whether the
+      // statement runs: a settled key is never executed again, on any
+      // replica, before or after a restart.
+      const recorded = readCommittedStatementOutcome(this, entryKey);
+      if (recorded.state ===
+          PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED) {
+        return settleRecordedCommittedStatement(this, {
+          recorded, command, afterCommit});
+      }
+      // A PREPARED participant transaction holds every other statement.
+      if (isPartitionReserved(this.db)) {
+        return settleReservedCommittedStatement(this, {command, afterCommit});
+      }
+      const cdcAdmission = admitCdcOwedWork(this, command);
+      if (cdcAdmission.state === PARTITION_CDC_ADMISSION_STATE.REFUSED) {
+        return settleCdcOwedRefusal(this, {command, afterCommit}, cdcAdmission.answer);
+      }
+      let info;
+      try {
+        info = runCommittedPartitionStatement(this, command);
+      } catch (error) {
+        return settleFailedCommittedStatement(this, {
+          error, command, entryKey, index, term, identity, afterCommit,
+          afterRollback: (effect) =>
+            scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, effect),
+        });
+      }
+      recordCommittedStatementOutcome(this, {
+        entryKey,
+        outcome: PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED,
+        index,
+        term,
+        result: info,
+      });
+      recordCommittedStatementCdc(this, {command, index, term, afterCommit},
+        {entryKey, result: info});
+      advancePartitionWriteGeneration(this.db);
+      recordCommittedWriteTraffic(this, afterCommit, 1);
+      if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+        afterCommit(() => this.registerMigrationDefaultFromAlterSql(command.sql));
+      }
+      afterCommit(() => {
+        this.resolveCommittedWrite(command.entryId, {
+          success: true,
+          changes: info.changes,
+          lastInsertRowid: info.lastInsertRowid,
+          ...identity,
+        });
+      });
     }
     scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
       this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
