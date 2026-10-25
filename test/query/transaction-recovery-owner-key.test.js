@@ -189,3 +189,51 @@ test('W-R4: a new client reusing an old row\'s session id sees no ' +
   assert.equal(coordinator.getRecoveryObligation(RECOVERED_ID)?.sessionId,
     'client-7', 'recovery still holds the obligation under its row identity');
 });
+
+for (const malformed of [
+  {name: 'null epoch', fields: {transaction_epoch: null}, dimension: 'transaction_epoch'},
+  {name: 'missing transaction ID', fields: {transaction_id: null}, dimension: undefined},
+]) {
+  test(`discovery ${malformed.name} cannot starve an independently retained COMMIT`, async (t) => {
+    const {engine, deliveries, makeAuthoritative} = restartedEngine(t);
+    const coordinator = engine.transactionCoordinator;
+    const badId = 'b'.repeat(32);
+    const badRows = recoveryRowsOf({transactionId: badId, sessionId: 'malformed-discovery',
+      overrides: malformed.fields});
+    assert.throws(() => coordinator.recoverFromSystemTables(badRows),
+      {errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE},
+      'direct discovery still refuses malformed identity without installing it');
+    coordinator.loadRecoveryStateForSweep = async () => badRows;
+    const warnings = [];
+    coordinator.logger = {...logger, warn(_message, fields) {
+      warnings.push(fields);
+    }};
+    const read = coordinator.readTransactionRecoveryState.bind(coordinator);
+    const reads = [];
+    coordinator.readTransactionRecoveryState = async (id) => {
+      reads.push(id);
+      return read(id);
+    };
+
+    const held = await coordinator.runRecoverySweep();
+    assert.equal(held.resolved, 0, 'missing authority remains held, never guessed');
+    assert.deepEqual(reads, [RECOVERED_ID]);
+    assert.deepEqual(deliveries, []);
+    makeAuthoritative();
+    const completed = await coordinator.runRecoverySweep();
+    assert.equal(completed.resolved, 1);
+    assert.deepEqual(reads, [RECOVERED_ID, RECOVERED_ID]);
+    assert.deepEqual(deliveries, [{operation: 'COMMIT', transactionId: RECOVERED_ID}]);
+    assert.equal(coordinator.getRecoveryObligation(RECOVERED_ID), null);
+    assert.equal(coordinator.getRecoveryObligation(badId), null);
+    assert.equal(engine.hasActiveTransaction(), false);
+    assert.equal(warnings.length, 2, 'each refused discovery remains visible');
+    for (const refusal of warnings) {
+      assert.equal(refusal.errorCode, QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE);
+      assert.equal(refusal.sessionId, 'malformed-discovery');
+      assert.equal(refusal.transactionId, malformed.fields.transaction_id === null ?
+        undefined : badId);
+      assert.equal(refusal.decisionDimension, malformed.dimension);
+    }
+  });
+}

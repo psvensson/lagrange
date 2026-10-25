@@ -291,19 +291,23 @@ const distributedTransactionRecoveryMethods = {
     this.recoverySweepInFlight = true;
     try {
       if (typeof this.loadRecoveryStateForSweep === LOCAL_STR_FUNCTION) {
-        let payload;
         try {
-          payload = await this.loadRecoveryStateForSweep();
+          const payload = await this.loadRecoveryStateForSweep();
+          if (payload && typeof payload === LOCAL_STR_OBJECT) {
+            this.recoverFromSystemTables(payload);
+          }
         } catch (error) {
-          // Discovery is a hint source. A failed cache census cannot suppress
-          // the authoritative retries of IDs already retained by this owner.
+          // Fetch and validation share one discovery boundary. Its refusal
+          // stays attributable, while independently retained IDs still reach
+          // their authoritative reader. No malformed row is repaired here.
           this.logger?.warn?.(RECOVERY_SWEEP_LOG_MSG, {
             error: error?.message || String(error),
+            errorCode: error?.errorCode,
+            transactionId: error?.transactionId,
+            sessionId: error?.sessionId,
+            decisionDimension: error?.decisionDimension,
             retainedTransactions: this.recoveredTransactionIds.size,
           });
-        }
-        if (payload && typeof payload === LOCAL_STR_OBJECT) {
-          this.recoverFromSystemTables(payload);
         }
       }
 
