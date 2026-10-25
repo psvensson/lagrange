@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {acquireDataDirectoryProcessOwner} from '../../src/storage/data-directory-process-owner.js';
 import {DataDirectoryManager} from '../../src/storage/data-directory-manager.js';
 import {ModuleMirror} from '../../src/wasm-service/module-mirror.js';
@@ -51,7 +52,7 @@ async function mirror(handler) {
 // The production answer of the inbound dispatcher for an address whose handler
 // retired (message-router-inbound-dispatch): acknowledged, no handler. The
 // shared loopback throws instead, which no production consensus path does.
-const RETIRED_ADDRESS_ANSWER = Object.freeze({acknowledged: true, noHandler: true});
+const RETIRED_ADDRESS_OUTCOME = buildDeliveryEnvelope({acknowledged: true, noHandler: true});
 const SUCCESSOR_OPERATION_PREFIX = 'successor-operation-';
 
 // A wake consumer standing in for the operation owner of the original CREATE
@@ -107,12 +108,14 @@ async function fixture(t, {automaticReconciliation = false, creationWake = null,
   f.transport = createLoopbackTransport();
   const loopbackDeliver = f.transport.deliver;
   f.deliver = tolerateRetiredAddress ? function(address, envelope, ...options) {
-    if (this.getRegisteredHandler(address) === null) return Promise.resolve(RETIRED_ADDRESS_ANSWER);
+    if (this.getRegisteredHandler(address) === null) {
+      return Promise.resolve(RETIRED_ADDRESS_OUTCOME);
+    }
     return Reflect.apply(loopbackDeliver, this, [address, envelope, ...options]);
   } : loopbackDeliver;
   f.transport.deliver = (address, envelope, ...options) => {
     f.queue.push({address, envelope: structuredClone(envelope), options});
-    return Promise.resolve({delivered: true});
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
   };
   // One original intent per (binding, slot): the retained creation of I, or a
   // successor J's with its own operation identity on the same founding peer.
