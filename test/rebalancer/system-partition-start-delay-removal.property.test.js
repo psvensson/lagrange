@@ -12,6 +12,7 @@
  * redistribution is urgently needed.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -130,7 +131,7 @@ function createSystemPartitionRebalancer(entityId) {
     },
     messageRouter: {
       getConnectionState: () => 'connected',
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

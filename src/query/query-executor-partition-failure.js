@@ -1,12 +1,19 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
-import {classifyTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
+import {classifyThrownDeliveryError} from '../transport/transport-semantic-outcome.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
   normalizeParticipantRetryAfterMs,
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
+
+// A candidate failure is a thrown router Error or one delivery reading (the
+// partition's answer, or the transport outcome when undelivered); its text
+// and code come from the thrown error's transport outcome or the reading.
+function failureFactsOf(failure) {
+  return failure instanceof Error ? classifyThrownDeliveryError(failure) : failure ?? {};
+}
 
 function resolveRetryableLeaderFailureRetryAfterMs({
   executor,
@@ -29,7 +36,7 @@ function resolveRetryableLeaderFailureRetryAfterMs({
   ) {
     return null;
   }
-  const outcome = classifyTransportDeliveryOutcome(failure);
+  const outcome = failureFactsOf(failure);
   const errorMessage =
     typeof outcome.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
       outcome.error :
@@ -73,9 +80,7 @@ function buildQueryPartitionCandidateFailureDetails({
     // The failed answer's typed fields (its code, its entryId) travel with
     // it to the delivery's failure result.
     ...pickTypedWriteAnswer(failure),
-    // A router answer or a thrown router error: the transport owner's one
-    // conversion names its code.
-    errorCode: classifyTransportDeliveryOutcome(failure).errorCode,
+    errorCode: failureFactsOf(failure).errorCode ?? null,
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,
       failure,

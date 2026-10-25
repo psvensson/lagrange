@@ -11,16 +11,12 @@
 // whose ordinary answer is "received, application acknowledgement pending":
 // it must reach the caller DELIVERED with that answer intact.
 //
-// Scope note: this stage makes `acknowledged` router-owned. The other owner
-// metadata fields an answer can still supply in the flat shape (deferRetry,
-// errorCode, noHandler, deliveryState, reasonCode, retryAfterMs) are pinned as
-// preserved by the approved C2 witnesses until the envelope cutover restates
-// them (design section 4.2); they join this property at that stage.
+// Scope note: since the envelope cutover (stage 3b) every other transport
+// field is pinned by W-ENV-6's full-field matrix; this witness keeps the
+// acknowledgement matrix and the F-B instance.
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {MESSAGE_GROUP_APPLICATION_STATUS} from '../../src/message-group/constants.js';
-import {buildLatencyCdcPropagationResult} from
-  '../../src/message-group/message-group-service-runtime-support.js';
 import {registerMessageGroupTransportHandler} from
   '../../src/bootstrap/shared/message-group-transport-handler.js';
 import {CONTROL_PLANE_MESSAGE_COMPLETION_KIND, ControlPlaneMessageType} from
@@ -29,7 +25,9 @@ import {TRANSPORT_DELIVERY_OUTCOME_STATE} from
   '../../src/transport/transport-semantic-outcome.js';
 import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 import {
+  answerOf,
   createRouterEnvelopeFixture,
+  forwardingHandler,
   serviceAddress,
   transportFactsOf,
 } from './router-envelope-witness-fixture.js';
@@ -60,11 +58,8 @@ async function setup(t) {
   const hop = await fixture.start(NODE.hop);
   const target = await fixture.start(NODE.target);
   target.router.register(ADDRESS.reply, () => state.reply);
-  // The first hop forwards to the second through the message-group CDC
-  // wrapper, the wrapper the MG forwarder's answer travels in.
-  hop.router.register(ADDRESS.forwarder, async (envelope) =>
-    buildLatencyCdcPropagationResult(await hop.router.deliver(
-      envelope.payload.forwardTo, envelope.payload.inner)));
+  // The first hop answers with the onward hop's answer (the owner rule).
+  hop.router.register(ADDRESS.forwarder, forwardingHandler(hop.router));
   await fixture.connect(hop, target);
   await fixture.connect(sender, hop);
   const mg = new MessageGroupService(withTestDbPath({groupId: 'wenv1-mg',
@@ -125,18 +120,19 @@ test('W-ENV-1 F-B: the message-group application answer is delivered intact',
       t.equal(transportFactsOf(ordinary).deliveryState,
         TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
         `${path}: an ordinary MG application message is transport-delivered`);
-      t.equal(ordinary.status, MESSAGE_GROUP_APPLICATION_STATUS.RECEIVED,
+      t.equal(answerOf(ordinary).status, MESSAGE_GROUP_APPLICATION_STATUS.RECEIVED,
         `${path}: the MG answer status reaches the caller`);
-      t.equal(ordinary.applicationAcknowledged, false,
-        `${path}: the MG application acknowledgement stays MG's own pending fact`);
+      t.equal(Object.hasOwn(answerOf(ordinary), 'applicationAcknowledged'), false,
+        `${path}: the MG answer carries no dead application-acknowledgement field`);
       const completed = await deliverOn(path, ADDRESS.mg,
         {type: ControlPlaneMessageType.NODE_STATE_UPDATE});
       t.equal(transportFactsOf(completed).deliveryState,
         TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED,
         `${path}: a completed control-plane message is transport-delivered`);
-      t.same({kind: completed.completionKind, completed: completed.completionCompleted},
-        {kind: CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
-          completed: true},
-        `${path}: the application completion reaches the caller intact`);
+      t.same({kind: answerOf(completed).completionKind,
+        completed: answerOf(completed).completionCompleted},
+      {kind: CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION,
+        completed: true},
+      `${path}: the application completion reaches the caller intact`);
     }
   });

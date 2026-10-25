@@ -2,9 +2,9 @@ import {
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
 } from '../transport/transport-error-codes.js';
-import {
+import {deliveryTransportOf, deliveryAnswerOf,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
+  classifyThrownDeliveryError,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
 import {ROUTER_ERROR_MSG} from '../constants/transport.js';
@@ -15,7 +15,7 @@ const SOURCE_START_ANSWER_MAY_BE_LOST = Symbol(
 
 function deliveryAnswerMayBeLost(error) {
   const outcome = error?.deliveryOutcome ||
-    classifyTransportDeliveryOutcome(error);
+    classifyThrownDeliveryError(error);
   return error?.message === ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT ||
     outcome.reasonCode ===
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ||
@@ -37,21 +37,24 @@ function markDeliveryAnswerLossCandidate(error) {
  * handler. A router ACK is transport evidence only: noHandler means the
  * target dropped the message before durable START authorization.
  *
- * @param {Object|null} response - MessageRouter delivery response.
+ * @param {Object} delivery - MessageRouter delivery envelope.
  * @param {string} fallbackMessage - Operation-specific error text.
- * @return {Object} The classified delivered response.
+ * @return {Object|null} The delivered START answer.
  * @throws {Error} When no handler processed START or it refused execution.
  */
-function requireProcessedSourceReplicationStart(response, fallbackMessage) {
-  const outcome = classifyTransportDeliveryOutcome(response);
-  if (isDeliveredTransportDeliveryOutcome(outcome) &&
-      outcome.success !== false) {
-    return outcome;
+function requireProcessedSourceReplicationStart(delivery, fallbackMessage) {
+  const transport = deliveryTransportOf(delivery);
+  const answer = deliveryAnswerOf(delivery);
+  const delivered = isDeliveredTransportDeliveryOutcome(transport);
+  if (delivered && answer?.success !== false) {
+    return answer;
   }
-  const error = new Error(outcome.error || fallbackMessage);
-  error.retryable = outcome.noHandler === true ||
-    outcome.deferRetry === true || outcome.retryable === true;
-  error.deliveryOutcome = outcome;
+  // A refusal is the handler's answer when delivered, else the transport's.
+  const refusal = delivered ? answer : transport;
+  const error = new Error(refusal.error || fallbackMessage);
+  error.retryable = transport.noHandler === true ||
+    refusal.deferRetry === true || refusal.retryable === true;
+  error.deliveryOutcome = transport;
   throw error;
 }
 

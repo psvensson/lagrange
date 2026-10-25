@@ -12,6 +12,7 @@
  * the participant owner's increment-4 constants); a script answers with them
  * literally where this branch's participant constants predate them.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {test} from 'node:test';
@@ -102,10 +103,15 @@ function harness(options = {}) {
       const copy = JSON.parse(JSON.stringify(message));
       log.push({kind: 'deliver', partitionId, message: copy});
       if (message.type !== QUERY_OPERATION.TRANSACTION) {
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       }
-      return options.answer?.(copy, partitionId, clock) ??
-        answerParticipantTransactionRequest(message, partitionId);
+      return buildDeliveryEnvelope({acknowledged: true},
+        options.answer?.(copy, partitionId, clock) ??
+          answerParticipantTransactionRequest(message, partitionId));
     },
   };
   if (options.seed) {

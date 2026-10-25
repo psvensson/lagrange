@@ -1,6 +1,7 @@
 // Component witness of the existing entry, actual authorization token owner
 // and release client. MATERIALIZED admission and routed replies are explicit
 // fixture seams; this does not prove placement, consensus or native release.
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {createParticipantReleaseRecovery} from
@@ -66,7 +67,9 @@ function createHost({clock = createClock(), reply, admitted = true} = {}) {
     messageRouter: {async deliver(address, request, options) {
       const answer = reply(request, delivered.length);
       delivered.push({address, request, options, answer});
-      return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: answer};
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        [PARTICIPANT_RELEASE_RESULT_FIELD]: answer,
+      });
     }},
   };
   handler.participantReleaseAuthorizationOwner =

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -74,10 +75,9 @@ test('REPLACE binds a fresh target in the durable dispatch step before ' +
   ) => {
     events.push('deliver');
     delivered.push({operation: {...operation}, target, request: {...request}});
-    return {
-      acknowledged: true,
+    return buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.INITIATED,
-    };
+    });
   };
   owner.retainDeliveredCreateProgress = () => {};
   owner._handleDispatchResponse = async (operation) => ({
@@ -213,10 +213,9 @@ test('CREATE redispatch adopts the durable admission tuple instead of mutable ' 
   owner.clearDeferredSafetyBlockState = () => {};
   owner.deliverReplicaOperationRequest = async (operation, target, request) => {
     delivered.push({operation, target, request});
-    return {
-      acknowledged: true,
+    return buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.IN_PROGRESS,
-    };
+    });
   };
   owner.retainDeliveredCreateProgress = () => {};
   owner._handleDispatchResponse = async (operation) => ({
@@ -316,10 +315,11 @@ test('lost CREATE response adopts durable admission and cannot terminalize ' +
   owner.isPriorityRecoverySupersededTargetFailureApplicable = () => false;
   owner.evaluateRemoveSafety = async () => null;
   owner.clearDeferredSafetyBlockState = () => {};
-  owner.deliverReplicaOperationRequest = async () => ({
-    acknowledged: true,
-    error: 'Pending response timeout',
-  });
+  owner.deliverReplicaOperationRequest = async () => (buildDeliveryEnvelope(
+    {acknowledged: true},
+    {
+      error: 'Pending response timeout',
+    }));
   owner.retainDeliveredCreateProgress = (candidate, response) => {
     if (response?.status !== ReplicaOperationResponseStatus.IN_PROGRESS) {
       return false;

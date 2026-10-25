@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -53,7 +54,9 @@ async function createSeedReleaseHost({timeSource, reply, budgetMs = TEST_BUDGET_
     async deliver(_address, request) {
       const answer = await reply(request, delivered.length);
       delivered.push({request, answer});
-      return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: answer};
+      return buildDeliveryEnvelope({acknowledged: true}, {
+        [PARTICIPANT_RELEASE_RESULT_FIELD]: answer,
+      });
     },
   };
   const delays = [];

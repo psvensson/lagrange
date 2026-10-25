@@ -492,7 +492,7 @@ test('an accepted split START whose answer is lost stays on its durable ' +
     tableId: 'tbl-users', tableName: 'users',
     transitionMetadata: acceptedMetadata,
   });
-  t.equal(resurrected.acknowledged, false,
+  t.equal(resurrected.success, false,
     'a terminal record cannot authorize a replacement physical worker');
   t.same(terminalEvents, [],
     'terminal refusal performs no replacement snapshot work');
@@ -556,7 +556,7 @@ test('the durable split record rejects altered payload at the same attempt ' +
   const result = await workflow.execute(SOURCE);
   await turns(20);
   const accepted = recordSnapshot(store);
-  t.equal(alteredResponse?.acknowledged, false,
+  t.equal(alteredResponse?.success, false,
     'same attempt and fence cannot authorize a different split key');
   t.equal(exactResponse?.acknowledged, true,
     'the exact durable execution payload remains admissible');
@@ -599,9 +599,9 @@ test('stale and different-payload START requests perform no snapshot work',
       const mismatched = await start(source, {transitionMetadata: changed});
       await turns(20);
 
-      t.equal(stale.acknowledged, false,
+      t.equal(stale.success, false,
         `${kind}: stale durable authorization is refused`);
-      t.equal(mismatched.acknowledged, false,
+      t.equal(mismatched.success, false,
         `${kind}: different payload cannot borrow authorization`);
       t.same(events, [], `${kind}: rejected START reaches no snapshot work`);
     }
@@ -738,7 +738,7 @@ test('same-attempt owner takeover waits for predecessor quiescence and old ' +
   t.equal(source.splitReplication.metadata.workflowFenceToken,
     predecessorIdentity.workflowFenceToken,
     'the live predecessor retains its captured fence after owner takeover');
-  t.equal(premature.acknowledged, false,
+  t.equal(premature.success, false,
     'a higher owner fence cannot relabel a live predecessor');
   t.equal(events.filter((event) => event === 'split-snapshot').length, 1,
     'the rejected takeover installs no second worker');
@@ -800,7 +800,7 @@ test('terminal quiesced predecessors admit reset workflow numbering and a ' +
     tableId: 'tbl-users', tableName: 'users',
     transitionMetadata: {...split.metadata, splitKey: 'z'},
   });
-  t.equal(refusedSplit.acknowledged, false,
+  t.equal(refusedSplit.success, false,
     'a refused successor authorization installs no replacement worker');
   t.equal(source.splitReplication, retainedPredecessor,
     'refusal restores the terminal predecessor idempotency witness');
@@ -892,9 +892,9 @@ test('shutdown while START authorization is pending installs no worker',
       authorizationGate.resolve();
       const [response, duplicateResponse] = await Promise.all(
         [pending, duplicate]);
-      t.equal(response.acknowledged, false,
+      t.equal(response.success, false,
         `${kind}: shutdown refuses the accepted-but-unstarted handler`);
-      t.equal(duplicateResponse.acknowledged, false,
+      t.equal(duplicateResponse.success, false,
         `${kind}: the joined duplicate observes the same lifecycle refusal`);
       t.same(events, [], `${kind}: shutdown reaches no physical work`);
       t.equal(source[kind === 'split' ? 'splitReplication' :

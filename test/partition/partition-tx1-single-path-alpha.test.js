@@ -4,6 +4,7 @@
  * its natural current release/origin state; no historical session or release
  * bypass is manufactured.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {afterEach, beforeEach, test} from 'node:test';
 import {
@@ -94,7 +95,7 @@ function registeredTransportHarness() {
         return true;
       },
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
   };

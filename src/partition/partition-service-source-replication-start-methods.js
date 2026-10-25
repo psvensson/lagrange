@@ -2,6 +2,7 @@ import {ERRORS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_RESULT} from '../workflow/workflow-constants.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {forwardedDeliveryAnswer} from '../transport/transport-semantic-outcome.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
@@ -64,13 +65,14 @@ function forwardSplitStartIfFollower(service, payload, transitionMetadata) {
   if (service.role === RaftRole.LEADER) return null;
   const leaderAddress = service.resolveLeaderAddress();
   if (leaderAddress && service.transport) {
+    // A forwarding hop answers with the leader's answer (or its refusal).
     return service.transport.deliver(leaderAddress, {
       type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
       partitionId: payload.partitionId || service.partitionId,
       tableId: payload.tableId || service.tableId,
       tableName: payload.tableName || service.tableName,
       transitionMetadata,
-    });
+    }).then(forwardedDeliveryAnswer);
   }
   return rejected(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
 }
@@ -119,7 +121,7 @@ function consumeAuthorizedPredecessors(service, handle, family) {
 }
 
 function rejected(error) {
-  return {acknowledged: false, success: false, error};
+  return {success: false, error};
 }
 
 function snapshotExecutionMetadata(metadata) {

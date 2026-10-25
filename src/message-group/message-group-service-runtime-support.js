@@ -349,13 +349,6 @@ function normalizeMessageDeliveryMode(deliveryMode) {
   return MESSAGE_DELIVERY_MODE.AUTO;
 }
 
-function buildLatencyCdcPropagationResult(result) {
-  // A response wrapper records receipt of this application request. It must
-  // preserve the owner's full semantic answer, including contradictory fields
-  // which the canonical CDC validator must refuse at its consumer.
-  return {acknowledged: true, ...result};
-}
-
 export {
   CDC_FORWARD_MAX_RELAY_DEPTH,
   cdcRelaySendDepth,
@@ -371,7 +364,6 @@ export {
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
   buildDeferredDeliveryError,
-  buildLatencyCdcPropagationResult,
   isWebSocketBasedMessageRouterTransport,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,

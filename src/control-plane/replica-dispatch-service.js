@@ -1,3 +1,4 @@
+import {retireNodeTransportHandler} from '../node/replica-transport-handler-identity.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchReadinessCapture} from './replica-dispatch-readiness-capture.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
@@ -45,20 +46,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
    * No response from this read grants new CREATE authority.
    */
   async authorizeLegacyRuntimeRemoval({operationId, entityId, replicaId, nodeId} = {}) {
-    const repository = this.rebalanceCoordinator?.repository;
-    if (typeof repository?.queryAuthoritativeOperationVisibilityObservation !== 'function') {
-      return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
-    }
-    let observation;
-    try {
-      observation = await repository.queryAuthoritativeOperationVisibilityObservation(
-        operationId, {
-          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          requireAbsenceConfirmation: true,
-        });
-    } catch {
-      return {outcome: LEGACY_AUTHORITY.UNAVAILABLE};
-    }
+    const observation = await this.readLegacyRemovalObservation(operationId);
     const operation = observation?.operation;
     if (!operation) {
       return {outcome: observation?.deferredOutcome ?
@@ -76,6 +64,22 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       LEGACY_AUTHORITY.CONTENT_CONFLICT};
   }
 
+  async readLegacyRemovalObservation(operationId) {
+    const repository = this.rebalanceCoordinator?.repository;
+    if (typeof repository?.queryAuthoritativeOperationVisibilityObservation !== 'function') {
+      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+    }
+    try {
+      return await repository.queryAuthoritativeOperationVisibilityObservation(
+        operationId, {
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          requireAbsenceConfirmation: true,
+        });
+    } catch {
+      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+    }
+  }
+
   isControlMessage(payload) {
     return getControlPlaneMessageCompletionKind(payload?.type) !== null;
   }
@@ -84,11 +88,10 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
    * Stop the dispatch service.
    */
   stop() {
-    if (this.directDispatchServiceAddress &&
-        this.messageRouter &&
-        typeof this.messageRouter.unregister === 'function') {
-      this.messageRouter.unregister(this.directDispatchServiceAddress);
-    }
+    // Only this service's exact registration is retired (finding F2).
+    retireNodeTransportHandler(this.logger, {transport: this.messageRouter,
+      address: this.directDispatchServiceAddress,
+      handler: this.directDispatchServiceHandler});
     this.directDispatchServiceHandler = null;
     this.directDispatchServiceAddress = null;
 

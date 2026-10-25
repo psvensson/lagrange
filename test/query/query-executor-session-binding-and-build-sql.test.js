@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -88,12 +89,11 @@ test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         changes: 1,
         rows: [],
-      };
+      });
     },
   };
 
@@ -184,12 +184,11 @@ test('QueryExecutor - executeOnPartition clears session-bound replica ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         changes: 1,
         rows: [],
-      };
+      });
     },
   };
 
@@ -314,18 +313,16 @@ test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +
         throw new Error(`${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`);
       }
       if (address === fallbackAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           changes: 1,
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -677,25 +674,23 @@ test('QueryExecutor - follows leader redirect response', async (t) => {
       if (message.type === 'QUERY') {
         // First call to follower returns redirect
         if (address === 'follower-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             redirect: 'LEADER_REDIRECT',
             leaderAddress: 'leader-node/partition/p1',
             partitionId: 'p1',
-          };
+          });
         }
         // Second call to leader succeeds
         if (address === 'leader-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: mockPartitionData.get('p1') || [],
             changes: 1,
-          };
+          });
         }
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 
@@ -741,23 +736,21 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
     deliver: async function(address, message) {
       if (message.type === 'QUERY') {
         if (address === 'follower-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             redirect: 'LEADER_REDIRECT',
             leaderAddress: 'leader-node/partition/p1',
             partitionId: 'p1',
-          };
+          });
         }
         // Leader also fails
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'Leader unavailable',
           partitionId: 'p1',
-        };
+        });
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 

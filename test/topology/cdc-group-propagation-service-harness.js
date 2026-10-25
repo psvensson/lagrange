@@ -9,7 +9,7 @@ import {
 } from '../../src/constants/index.js';
 import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
 import {beginCdcDeliveryInvocation} from '../../src/cdc/cdc-delivery-invocation.js';
-import {buildTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 
@@ -139,10 +139,8 @@ export function createDurablePropagationRequest(source, event = createDurableCdc
 // A target's answer through the owners: the transport delivered it and the
 // target group answered the CDC outcome owner's committed receipt.
 export function committedTargetAnswer(payload, receipt = {index: 1, term: DURABLE_SOURCE_TERM}) {
-  return buildTransportDeliveryOutcome({
-    ...buildCommittedCdcOutcome([payload], payload.targetGroupId, receipt),
-    acknowledged: true,
-  });
+  return buildDeliveryEnvelope({acknowledged: true},
+    buildCommittedCdcOutcome([payload], payload.targetGroupId, receipt));
 }
 
 export function createMessageRouter(results = []) {

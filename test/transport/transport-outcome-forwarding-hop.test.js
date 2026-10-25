@@ -1,20 +1,20 @@
-// Repeated normalization across a forwarding hop is stable. The second hop's
-// router outcome is re-emitted by the first hop's handler through the MG
-// response wrapper (buildLatencyCdcPropagationResult, the wrapper the MG
-// forwarder's answer travels in) and normalized again by the first router.
-// Property, over an enumerated per-field matrix: the outcome the caller
-// receives carries the second hop's delivery decision and metadata unchanged,
-// keeps every value the reply supplied, and is a fixed point of the owner.
+// A forwarding hop's transport describes its own hop (design section 5). The
+// first hop's handler delivers to the second hop and answers through the
+// transport owner's forwarded-answer rule. Property, over an enumerated
+// per-field matrix of second-hop replies carrying transport field names: the
+// caller's transport is the first hop's own DELIVERED outcome, no reply field
+// reaches it, the caller's answer is the second hop's answer with every value
+// it supplied, and the envelope is a fixed point of the owner builder.
 import assert from 'node:assert/strict';
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {buildLatencyCdcPropagationResult} from
-  '../../src/message-group/message-group-service-runtime-support.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
+  buildDeliveryEnvelope,
   buildTransportDeliveryOutcome,
+  forwardedDeliveryAnswer,
 } from '../../src/transport/transport-semantic-outcome.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
@@ -60,7 +60,7 @@ test('forwarding-hop matrix enumerates every owner metadata field', async (t) =>
     [...TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS].sort());
 });
 
-test('a forwarded outcome keeps the second hop decision and is a fixed point',
+test('a forwarded delivery keeps hop1 transport its own and is a fixed point',
   async (t) => {
     const hop1 = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: HOP1});
     const hop2 = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION, nodeId: HOP2});
@@ -73,7 +73,8 @@ test('a forwarded outcome keeps the second hop decision and is a fixed point',
     let reply;
     hop2.register(HOP2_ADDRESS, () => reply);
     hop1.register(HOP1_ADDRESS, async () =>
-      buildLatencyCdcPropagationResult(await hop2.deliver(HOP2_ADDRESS, {type: 'HOP'})));
+      forwardedDeliveryAnswer(await hop2.deliver(HOP2_ADDRESS, {type: 'HOP'})));
+    const ownHop = metadataOf(buildTransportDeliveryOutcome({acknowledged: true}));
 
     let size = 0;
     const violations = [];
@@ -84,22 +85,25 @@ test('a forwarded outcome keeps the second hop decision and is a fixed point',
       const forwarded = await hop1.deliver(HOP1_ADDRESS, {type: 'HOP'});
       const problems = [];
       try {
-        assert.deepStrictEqual(metadataOf(forwarded), metadataOf(second));
+        assert.deepStrictEqual(metadataOf(forwarded.transport), ownHop);
+        assert.deepStrictEqual(metadataOf(second.transport), ownHop);
       } catch {
-        problems.push('second hop decision changed');
-      }
-      for (const field of Object.keys(entry.reply)) {
-        if (field !== 'deliveryState' && !Object.is(forwarded[field], entry.reply[field])) {
-          problems.push(`${field} rewritten`);
-        }
+        problems.push('a reply field reached a transport outcome');
       }
       try {
-        assert.deepStrictEqual(buildTransportDeliveryOutcome(forwarded), forwarded);
+        assert.deepStrictEqual(forwarded.answer, forwardedDeliveryAnswer(second));
+        assert.deepStrictEqual(forwarded.answer, entry.reply);
+      } catch {
+        problems.push('the forwarded answer is not the second hop answer');
+      }
+      try {
+        assert.deepStrictEqual(buildDeliveryEnvelope(forwarded.transport, forwarded.answer),
+          forwarded);
       } catch {
         problems.push('not a fixed point');
       }
       if (problems.length > 0) violations.push(`${entry.name}: ${problems.join(', ')}`);
     }
     t.equal(size, 3 * (1 + 6 + 3 + 5 + 3 + 2 + 5), 'the whole matrix was forwarded');
-    t.same(violations, [], 'every forwarded outcome is stable across the hop');
+    t.same(violations, [], 'every forwarded delivery keeps each hop in its own namespace');
   });

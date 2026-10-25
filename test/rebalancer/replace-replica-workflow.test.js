@@ -2,6 +2,7 @@
  * Tests for first-class REPLACE replica workflow.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -216,10 +217,7 @@ test('REPLACE replica workflow', async (t) => {
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
-            status: 'initiated',
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       };
 
@@ -604,10 +602,9 @@ test('REPLACE replica workflow', async (t) => {
     const messageRouter = {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.COMPLETED,
-        };
+        });
       },
       getConnectionState: () => TEST_COMPLETED_REMOVE_CONNECTION_CONNECTED,
       pingNode: async () => true,
@@ -720,18 +717,13 @@ test('REPLACE replica workflow', async (t) => {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (deliveries.length === 1) {
-            return {
-              acknowledged: false,
-              error: {
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: {
                 message: 'control_plane_pressure_degraded',
                 retryAfterMs: 10,
-              },
-            };
+              }});
           }
-          return {
-            acknowledged: true,
-            status: 'initiated',
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       };
 
@@ -854,10 +846,9 @@ test('REPLACE replica workflow', async (t) => {
           hangFirstDispatch = false;
           return new Promise(() => {});
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     };
 

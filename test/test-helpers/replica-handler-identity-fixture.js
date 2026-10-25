@@ -5,6 +5,8 @@
  * that runs the activation, and handler removal is exact-identity only.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+
 /**
  * The exact-identity handler API over a handler map, for in-process transport
  * fixtures: identity lookup and exact removal, never removal by address.
@@ -53,9 +55,6 @@ function createIdentityTransport() {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
     isRegistered(address) {
       return handlers.has(address);
     },
@@ -65,8 +64,9 @@ function createIdentityTransport() {
 
 /**
  * An in-process routing transport for multi-replica property tests: delivers
- * to the registered handler (or answers not-acknowledged) and exposes the
- * identity API.
+ * to the registered handler and resolves the transport owner's delivery
+ * envelope (the handler's answer when delivered, a no-handler failure
+ * otherwise), and exposes the identity API.
  * @return {Object}
  */
 function createInProcessMockTransport() {
@@ -74,9 +74,11 @@ function createInProcessMockTransport() {
   transport.deliver = async (address, message) => {
     const handler = transport.handlers.get(address);
     if (handler) {
-      return handler({payload: message});
+      return buildDeliveryEnvelope({acknowledged: true},
+        await handler({payload: message}));
     }
-    return {acknowledged: false, error: 'No handler'};
+    return buildDeliveryEnvelope({acknowledged: false, noHandler: true,
+      error: 'No handler'});
   };
   return transport;
 }

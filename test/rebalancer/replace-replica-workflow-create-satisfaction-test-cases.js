@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   installActualReplicaObservationResolver,
 } from './test-helpers.js';
@@ -24,15 +25,13 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
       };
 
@@ -185,15 +184,13 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
       };
 
@@ -281,15 +278,13 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -483,15 +478,13 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,

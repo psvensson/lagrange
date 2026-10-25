@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Cold-reconnect delivery grant witness (C6).
  *
@@ -120,7 +121,7 @@ async (t) => {
   const result = await router.deliver(TARGET_ADDRESS, MESSAGE);
 
   t.equal(dials.length, 1, 'the cold target is dialled, not deferred');
-  t.equal(result.acknowledged, true, 'the delivery completes on the new socket');
+  t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true, 'the delivery completes on the new socket');
   t.ok(dials[0]?.connectBudgetMs > 0 &&
     dials[0]?.connectBudgetMs <=
       router.messageTimeoutMs - ELAPSED_BEFORE_DIAL_MS,
@@ -138,9 +139,9 @@ t.test('a grant below the minimum operation budget defers typed without ' +
   const result = await router.deliver(TARGET_ADDRESS, MESSAGE);
 
   t.equal(dials.length, 0, 'no dial is started on a spent grant');
-  t.equal(result.acknowledged, false, 'the delivery fails closed');
-  t.equal(result.deferRetry, true, 'the refusal carries deferRetry evidence');
-  t.equal(result.errorCode, ROUTER_CONNECTION_CLOSED_ERROR_CODE,
+  t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'the delivery fails closed');
+  t.equal(result.transport.deferRetry, true, 'the refusal carries deferRetry evidence');
+  t.equal(result.transport.errorCode, ROUTER_CONNECTION_CLOSED_ERROR_CODE,
     'the refusal is typed by the reconnect owner');
   t.equal(router.nodeConnections.get(REMOTE_NODE_ID)?.state,
     ConnectionState.RECONNECTING,
@@ -157,9 +158,9 @@ t.test('an exhausted grant is refused by the delivery lifetime without ' +
   const result = await router.deliver(TARGET_ADDRESS, MESSAGE);
 
   t.equal(dials.length, 0, 'no dial is started on an exhausted grant');
-  t.equal(result.acknowledged, false, 'the delivery fails closed');
-  t.equal(result.deferRetry, true, 'the refusal carries deferRetry evidence');
-  t.equal(result.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+  t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'the delivery fails closed');
+  t.equal(result.transport.deferRetry, true, 'the refusal carries deferRetry evidence');
+  t.equal(result.transport.errorCode, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
     'the refusal is typed by the delivery lifetime owner');
 });
 
@@ -208,10 +209,10 @@ t.test('a real cold dial started with a short grant is bounded by the grant, ' +
   }
 
   t.equal(dialsWhenReturned, 1, 'the cold target is dialled once');
-  t.equal(result.acknowledged, false, 'the unanswered dial fails closed');
-  t.equal(result.deferRetry, true, 'the outcome carries deferRetry evidence');
+  t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false, 'the unanswered dial fails closed');
+  t.equal(result.transport.deferRetry, true, 'the outcome carries deferRetry evidence');
   t.ok([ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE]
-    .includes(result.errorCode), `typed outcome (${result.errorCode})`);
+    .includes(result.transport.errorCode), `typed outcome (${result.transport.errorCode})`);
   t.ok(returnedAfterMs < SHORT_GRANT_MS + SHORT_GRANT_SLACK_MS,
     `the delivery returns within its grant (${returnedAfterMs}ms)`);
   const closedAfterMs = Number.isFinite(accepted[0]?.closedAtMs) ?

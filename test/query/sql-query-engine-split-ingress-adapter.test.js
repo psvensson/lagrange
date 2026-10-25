@@ -9,6 +9,7 @@
  * Design: §3, Phase 3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {TABLES} from '../../src/constants/index.js';
@@ -189,7 +190,7 @@ test('split helper methods are injected into ManagedSplitWorkflow as ' +
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
-    messageRouter: {deliver: async () => ({acknowledged: true})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
     partitionSplitMergeManager: {
       async splitPartition() {
         return {
@@ -269,7 +270,7 @@ test('split source routability helper uses control-plane recovery eligibility ' 
   const engine = new SQLQueryEngine({
     nodeId: 'node-a',
     systemCache: cache,
-    messageRouter: {deliver: async () => ({acknowledged: true})},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope({acknowledged: true}))},
   });
   const observedCalls = [];
   engine.queryExecutor = {

@@ -2,6 +2,7 @@
  * Task 6: Message-group rebalancer runtime wiring tests.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -60,7 +61,7 @@ function createMockCoordinator() {
 
 function createMockTransport() {
   return {
-    deliver: async () => ({acknowledged: true}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     initialize: async () => {},
     shutdown: async () => {},
     setServiceNodeResolver: () => {},
@@ -134,7 +135,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -195,7 +196,7 @@ test('Task 6 - message-group rebalancer wiring', async (t) => {
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },

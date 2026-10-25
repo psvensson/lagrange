@@ -3,6 +3,7 @@
 // SQLQueryEngine, QueryExecutor, distributed write coordinator and the
 // control-plane gateway; a runtime replacement is the runtime owner's
 // setCoreFaultInjector trap on a group's light-Ready advance.
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -459,7 +460,7 @@ async function withGroupSurface({partitionId, table, tempPrefix}, body) {
     const packet = envelope?.payload ?? envelope;
     return blocked.has(`${packet?.from}>${packet?.to}`) ||
       [...dropIf].some((drop) => drop(packet)) ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       deliver.call(network, address, envelope, ...rest);
   };
   try {

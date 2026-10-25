@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createControllableMessageGroupService,
@@ -126,7 +127,7 @@ test(
     const transport = {
       async deliver(address) {
         transport.deliveredAddress = address;
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -360,11 +361,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'the strict CDC execution path should acknowledge local recovery ingress',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(
           TABLES.NODES,
@@ -478,11 +476,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'the strict CDC execution path should acknowledge deferred leader-unknown ingress',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         result.success,
         false,
@@ -547,7 +542,7 @@ test(
       service.transport.deliver = async (address, _payload, options) => {
         deliveredAddress = address;
         deliveredOptions = options;
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await service.forwardCDCPayloadToLeader(
@@ -591,7 +586,7 @@ test(
     const transport = {
       async deliver(_address, _payload, options) {
         deliveredOptions = options;
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -720,11 +715,10 @@ test(
           TEST_ADDRESSED_STRICT_CONVERGENCE_REMOTE_ADDRESS,
           'the direct strict forward should first attempt the canonical remote leader target',
         );
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-        };
+        });
       };
 
       t.equal(
@@ -858,11 +852,10 @@ test(
           1,
           'leader-routed strict CDC should mark the first forward attempt as a relayed hop',
         );
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
-        };
+        });
       };
 
       await service.proposeCDCCommand({
@@ -951,12 +944,10 @@ test('MessageGroupService - forward rejection logs bounded leader diagnostics',
   async (t) => {
     const transport = {
       async deliver() {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: 'No handler for address: remote-node/message-group/mg-forward-diag-r2',
-        };
+        });
       },
       async initialize() {},
       async shutdown() {},

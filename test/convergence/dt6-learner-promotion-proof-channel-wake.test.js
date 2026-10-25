@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -224,8 +225,8 @@ async function failProofDeliveryAtBound(request, clock, boundMs) {
 }
 
 function completeProofRequest(request, clock, response, listeners) {
-  request.outcome = response?.proof?.reason ?? null;
-  request.proof = response?.proof ?? null;
+  request.outcome = response?.answer?.proof?.reason ?? null;
+  request.proof = response?.answer?.proof ?? null;
   request.completedAtMs = clock.now();
   if (typeof listeners.onResponse === 'function') {
     listeners.onResponse(request);
@@ -670,8 +671,7 @@ test(
 
       const realTransport = learner.transport;
       learner.transport = {
-        deliver: async () => ({
-          acknowledged: true,
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
           partitionId: PARTITION_ID,
           learnerReplicaId: FOREIGN_LEARNER_REPLICA,
           proof: evaluateLearnerPromotionProof({
@@ -682,7 +682,7 @@ test(
             leaderMembershipEpoch: BOOTSTRAP_EPOCH,
             learnerMembershipEpoch: BOOTSTRAP_EPOCH,
           }),
-        }),
+        })),
       };
       let bindingProof = null;
       try {

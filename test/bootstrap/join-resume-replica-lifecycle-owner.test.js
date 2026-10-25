@@ -21,6 +21,8 @@
  * and terminal cleanup leaves no orphaned timer.
  */
 
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'events';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -114,10 +116,8 @@ function buildRouter() {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
-    deliver: async () => ({acknowledged: true}),
+    ...handlerIdentityApi(handlers),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     setExternalAdmissionEnabled() {},
     async stop() {},
     async shutdown() {},

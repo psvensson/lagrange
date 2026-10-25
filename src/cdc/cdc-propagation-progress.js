@@ -2,7 +2,7 @@
 // lane stores this between invocations; a direct caller's topology wave may
 // store it only until that wave closes. There is no payload or timer here.
 import {CDC_COMPLETION, CDC_COVERAGE_STATE, cdcCoverageState, completeCdcPropagation,
-  emptyCdcCoverage, observeCdcCoverage} from './cdc-delivery-outcome.js';
+  emptyCdcCoverage, observeCdcCoverage, observeCdcDeliveryCoverage} from './cdc-delivery-outcome.js';
 import {captureDurablePropagationPlan} from '../topology/cdc-group-propagation-durable-plan.js';
 
 const OBSERVED_ROUTE_LIFETIME_FIELDS = Object.freeze([
@@ -121,13 +121,16 @@ function bindCdcPropagationProgress(context, progress, events) {
       assertCurrent();
       refreshCdcPropagationRoutes(progress, targets, options);
     },
-    observe: (dispatch, answer) => {
+    // The source leaf observes its local answer; a target leaf observes its
+    // delivery envelope, or null when it was not sent (uncovered).
+    observe: (dispatch, observed) => {
       assertCurrent();
       const leaf = dispatch.target;
       if (leaf === progress) {
-        progress.sourceCoverage = observeCdcCoverage(answer, events, progress.sourceGroupId);
+        progress.sourceCoverage = observeCdcCoverage(observed, events, progress.sourceGroupId);
       } else if (progress.targets.includes(leaf)) {
-        const coverage = observeCdcCoverage(answer, events, leaf.groupId, {transport: true});
+        const coverage = observed === null ? emptyCdcCoverage() :
+          observeCdcDeliveryCoverage(observed, events, leaf.groupId);
         // A native receipt remains a fact of the captured group. Weak ingress
         // from a replaced route cannot cover the newly selected route.
         if (coverage.state === CDC_COVERAGE_STATE.COMMITTED || leaf.route === dispatch.route) {

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -148,7 +149,7 @@ function createTargetOutcomeHarness(operation, options = {}) {
         if (typeof options.deliveryResult === 'function') {
           return options.deliveryResult(target, payload, deliveryOptions);
         }
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
       getConnectionHandoffDiagnostics(nodeId) {
         connectionDiagnosticNodeIds.push(nodeId);

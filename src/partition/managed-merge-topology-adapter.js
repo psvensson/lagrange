@@ -225,7 +225,8 @@ class ManagedMergeTopologyAdapter {
       return Promise.resolve(null);
     }
     const target = nodeId + LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX;
-    return this.messageRouter.deliver(target, request.message);
+    return this.messageRouter.deliver(target, request.message)
+      .then(({answer}) => answer);
   }
 
   get logger() {

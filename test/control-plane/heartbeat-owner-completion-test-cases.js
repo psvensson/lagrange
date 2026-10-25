@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -188,10 +189,11 @@ test('local and routed ingress adapters produce identical lifecycle publish ' +
         resolveNodeStateUpdateTargetCandidates: () => ['seed-1/message-group/mg-1'],
       }),
       getMessageRouter: () => ({
-        deliver: async (_targetAddress, message) => ({
-          acknowledged: true,
-          ...(await receivingReplica.publishNodeLifecycleMessage(message)),
-        }),
+        deliver: async (_targetAddress, message) => (buildDeliveryEnvelope(
+          {acknowledged: true},
+          {
+            ...(await receivingReplica.publishNodeLifecycleMessage(message)),
+          })),
       }),
     },
   });

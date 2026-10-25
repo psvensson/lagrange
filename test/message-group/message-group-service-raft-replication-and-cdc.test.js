@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createControllableMessageGroupService,
@@ -119,7 +120,7 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
   'metadata for upstream owners', async (t) => {
   const transport = {
     async deliver() {
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
     async initialize() {},
     async shutdown() {},
@@ -191,14 +192,14 @@ test(
   async (t) => {
     const transport = {
       async deliver() {
-        return {
-          acknowledged: false,
-          success: true,
-          error: TEST_RETRYABLE_FORWARD_ERROR_MSG,
-          errorCode: TEST_RETRYABLE_FORWARD_ERROR_CODE,
-          deferRetry: true,
-          retryAfterMs: TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: TEST_RETRYABLE_FORWARD_ERROR_MSG,
+            errorCode: TEST_RETRYABLE_FORWARD_ERROR_CODE,
+            deferRetry: true,
+            retryAfterMs: TEST_RETRYABLE_FORWARD_RETRY_AFTER_MS,
+          });
       },
       async initialize() {},
       async shutdown() {},
@@ -271,7 +272,7 @@ test(
   async (t) => {
     const transport = {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -329,13 +330,14 @@ test('MessageGroupService - non-query sendMessage honors deferred retry hints',
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed',
-          errorCode: 'ROUTER_NO_CONNECTION',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'No connection to node seed',
+            errorCode: 'ROUTER_NO_CONNECTION',
+            deferRetry: true,
+            retryAfterMs: 250,
+          });
       },
       async initialize() {},
       async shutdown() {},
@@ -382,9 +384,7 @@ test('MessageGroupService - control-plane targets default to critical router pri
     const transport = {
       async deliver(targetService, payload, options) {
         deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: true,
-        };
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -428,9 +428,7 @@ test('MessageGroupService - typeless control-plane target messages use a sender-
     const transport = {
       async deliver(targetService, payload, options) {
         deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: true,
-        };
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -490,9 +488,7 @@ test('MessageGroupService - non-critical initial partitions do not claim the cri
     const transport = {
       async deliver(targetService, payload, options) {
         deliveries.push({targetService, payload, options});
-        return {
-          acknowledged: true,
-        };
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -531,7 +527,7 @@ test('MessageGroupService - consensus envelopes to message-group peers use the r
     const transport = {
       async deliver(targetService, payload, options) {
         deliveries.push({targetService, payload, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},
@@ -713,7 +709,8 @@ test('MessageGroupService - receiveMessage detects duplicates', async (t) => {
     });
 
     t.equal(result.status, 'duplicate', 'Should detect duplicate');
-    t.equal(result.acknowledged, true, 'Should indicate already acknowledged');
+    t.notOk(Object.hasOwn(result, 'acknowledged'),
+      'the receipt is the router\'s fact, not a field of the CDC answer');
 
     await service.shutdown();
   } finally {
@@ -933,7 +930,7 @@ test(
       const forwardedPayloads = [];
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       };
 
       await service.applyCDCEvent(

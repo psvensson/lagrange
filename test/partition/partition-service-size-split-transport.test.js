@@ -4,6 +4,7 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -845,7 +846,7 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       ...createIdentityTransport(),
       deliver: async (_address, _payload, options) => {
         deliveries.push(options);
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 
@@ -901,7 +902,7 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     ...createIdentityTransport(),
     deliver: async (_address, _payload, options) => {
       deliveries.push(options);
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
 
@@ -1071,7 +1072,7 @@ test('PartitionService - handleTransportMessage rejects unknown message types', 
 
   const result = await partition.handleTransportMessage(unknownMsg);
 
-  t.equal(result.acknowledged, false, 'Unknown message should not be acknowledged');
+  t.equal(result.success, false, 'Unknown message is a domain refusal');
   t.ok(result.error, 'Error message should be present');
   t.match(result.error, /Unknown message type/, 'Error should mention unknown type');
 

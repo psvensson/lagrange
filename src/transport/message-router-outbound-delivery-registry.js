@@ -387,9 +387,7 @@ class OutboundDeliveryRegistryOwner {
         );
         if (existingPendingIndex >= TRANSPORT_NUM.ZERO) {
           const existingPendingItem = queue.pending[existingPendingIndex];
-          existingPendingItem.resolve(
-            buildSupersededPendingResult(existingPendingItem),
-          );
+          existingPendingItem.resolve(buildSupersededPendingResult());
           const replacement = createPendingItem(this, nodeId, queue, {
             deliverFn,
             resolve,
@@ -639,11 +637,7 @@ class OutboundDeliveryRegistryOwner {
     while (queue.pending.length > TRANSPORT_NUM.ZERO) {
       const item = queue.pending.shift();
       if (item) {
-        item.resolve({
-          acknowledged: false,
-          error: errorMessage,
-          shutdown: true,
-        });
+        item.resolve({acknowledged: false, error: errorMessage});
       }
     }
   }

@@ -241,8 +241,9 @@ const RATCHET_TARGETS = [
     // family and ReplicaLifecycleManager tests deleted).
     // Q6 stages 1-2: tightened 658/24752 -> 656/24700 (no-handler property
     // tests read the transport owner).
-    baselineCloneGroupCount: 656,
-    baselineDuplicatedLineCount: 24700,
+    // Q6 stage 3b: consolidate migrated router/cleanup fixtures (one-way ratchet).
+    baselineCloneGroupCount: 655,
+    baselineDuplicatedLineCount: 24631,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

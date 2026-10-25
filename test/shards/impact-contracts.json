@@ -1460,7 +1460,7 @@
       ]
     },
     "router-delivery-envelope": {
-      "description": "The router alone computes a delivery's transport outcome, from its own facts: an answer cannot change the acknowledgement (decision D2), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on the LOCAL and the remote path alike (D1), a no-handler reply is a frame-level router fact with no answer slot, and a queued delivery replaced before it was sent is the named superseded outcome (D3), so an ACK never carries a handler answer. Q6 stages 1-2 keep the flat shape; the {transport, answer} envelope cutover restates the approved C2 roundtrip and forwarding-hop witnesses and widens W-ENV-1 to every transport field.",
+      "description": "The router alone computes a delivery's transport outcome, from its own facts, and deliver() resolves to the one envelope {transport, answer}: transport is the router's closed-key-set outcome of THIS hop (identity from the ledger, never the answer: F-D) and answer is the handler's answer, captured once, beside it. No answer field can change any transport fact (D2/D4, W-ENV-1/W-ENV-6), a lost answer after the ACK is the router's deferral and never DELIVERED (F-A), a handler throw is FAILED/handler_failed on LOCAL and remote alike (D1); answers remain verbatim locally and use the existing JSON wire encoding remotely, whose serialization failure is handler_failed (F-V1), a no-handler reply is a frame-level router fact with no answer slot, a queued delivery replaced before it was sent is the named superseded outcome (D3, F-V4), and a forwarder's transport describes its own hop while the onward hop's outcome rides in its answer (design section 5, W-ENV-7). Only branded owner accessors read the envelope; deliveryState is the public outcome with no acknowledged alias. Router-proven pre-send refusal remains explicit; resolved post-submission connection loss and timeout retain the query owner unknown-write debt under its original entry.",
       "owners": [
         "src/transport/transport-semantic-outcome.js",
         "src/transport/transport-error-codes.js",
@@ -1472,7 +1472,67 @@
         "src/transport/message-router-connection-close-reconnect.js",
         "src/transport/message-router-delivery-pressure-routing.js",
         "src/transport/message-router-outbound-delivery-registry.js",
-        "src/message-group/message-group-service-inbound-ingress-runtime-methods.js"
+        "src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+        "src/query/query-executor-partition-delivery.js",
+        "src/query/query-executor-partition-failure.js",
+        "src/query/query-executor-partition-request-builders.js",
+        "src/query/query-executor-unknown-outcome.js",
+        "src/query/sql-query-engine-participant-wire.js",
+        "src/query/sql-query-engine.js",
+        "src/cdc/cdc-delivery-outcome.js",
+        "src/cdc/cdc-propagation-progress.js",
+        "src/message-group/message-group-forwarding-owner-delivery-methods.js",
+        "src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+        "src/message-group/message-group-forwarding-owner.js",
+        "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+        "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+        "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
+        "src/message-group/message-group-service-runtime-support.js",
+        "src/message-group/message-group-service.js",
+        "src/topology/cdc-group-propagation-durable-delivery.js",
+        "src/partition/managed-merge-topology-adapter.js",
+        "src/partition/managed-source-replication-start-delivery.js",
+        "src/partition/managed-split-topology-adapter.js",
+        "src/partition/message-handler-registry.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/partition/partition-service-learner-promotion-proof-methods.js",
+        "src/partition/partition-service-merge-replication-methods.js",
+        "src/partition/partition-service-metadata-delivery-methods.js",
+        "src/partition/partition-service-remote-query-methods.js",
+        "src/partition/partition-service-source-replication-start-methods.js",
+        "src/partition/partition-service-write-metrics-base.js",
+        "src/control-plane/membership-swim-prober.js",
+        "src/control-plane/replica-dispatch-direct-wakeup.js",
+        "src/control-plane/replica-dispatch-service-lifecycle.js",
+        "src/control-plane/replica-dispatch-service-shared.js",
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/committed-membership-bootstrap-read.js",
+        "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+        "src/rebalancer/operation-workflow-message-group-native-read.js",
+        "src/rebalancer/operation-workflow-owner-handoff-state.js",
+        "src/rebalancer/operation-workflow-owner-shared.js",
+        "src/rebalancer/operation-workflow-replace-witness.js",
+        "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+        "src/rebalancer/priority-publication-handoff.js",
+        "src/rebalancer/replica-operation-constants.js",
+        "src/rebalancer/user-table-leader-placement-cure.js",
+        "src/admin/admin-websocket-message-dispatch-methods.js",
+        "src/bootstrap/node-joining-backfill-merge-and-status.js",
+        "src/bootstrap/node-joining-service-shared.js",
+        "src/bootstrap/shared/node-state-publication-outcome.js",
+        "src/bootstrap/shared/node-state-publication-owner.js",
+        "src/node/message-group-membership-recipient.js",
+        "src/node/message-group-service-handler-constants.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/participant-release-client.js",
+        "src/node/replica-handler-class.js",
+        "src/node/replica-handler-lifecycle-methods.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/node/replica-transport-handler-identity.js",
+        "src/node/runtime-service-handler.js",
+        "src/service/cell-ingress-transport.js",
+        "src/service/service-dispatcher.js",
+        "src/raft/raft-rs-peer-delivery.js"
       ],
       "tests": [
         "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js",
@@ -1482,7 +1542,51 @@
         "test/transport/message-router-superseded-delivery-completion.test.js",
         "test/transport/transport-semantic-outcome.test.js",
         "test/transport/message-router-cdc-outcome-roundtrip.test.js",
-        "test/transport/transport-outcome-forwarding-hop.test.js"
+        "test/transport/transport-outcome-forwarding-hop.test.js",
+        "test/transport/router-envelope-w-env-6-full-field-rewrite-matrix.test.js",
+        "test/transport/router-envelope-w-env-7-two-hop-transport-is-per-hop.test.js",
+        "test/transport/router-envelope-w-env-8-verbatim-answer-and-wire-failure.test.js",
+        "test/query/router-envelope-lost-write-answer.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js",
+        "test/message-group/message-group-forward-backpressure-code.test.js",
+        "test/partition/learner-promotion-proof-delivery-outcome.test.js",
+        "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+        "test/control-plane/membership-swim-prober.test.js",
+        "test/rebalancer/replace-witness-boundary.test.js",
+        "test/service/service-dispatcher.test.js",
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
+      ]
+    },
+    "transport-handler-identity": {
+      "description": "One policy identifies and matches a transport handler (owner decision N2): a handler is matched by its exact registered identity at registration, dispatch and retirement, never by address. A replica handler takes a delivery only while its runtime is open and it is the exact registered handler (F1: a retiring partition refuses the Raft envelope it would drop); every retirement, replica or node-singleton, removes only its own exact registration and fails closed on a transport that cannot prove identity (F2, F4); the router's only removal is exact.",
+      "owners": [
+        "src/node/replica-transport-handler-identity.js",
+        "src/transport/message-router-handler-registry.js",
+        "src/partition/partition-service-entry-apply-base.js",
+        "src/node/message-group-service-handler.js",
+        "src/node/message-group-membership-recipient.js",
+        "src/node/runtime-service-handler.js",
+        "src/node/replica-handler-runtime-methods.js",
+        "src/control-plane/replica-dispatch-service.js"
+      ],
+      "tests": [
+        "test/partition/handler-identity-w-hid-1-retiring-partition-refuses-raft.test.js",
+        "test/node/handler-identity-w-hid-2-3-node-handler-exact-retirement.test.js",
+        "test/node/replica-transport-handler-identity.test.js",
+        "test/transport/exact-handler-identity-api.test.js"
+      ]
+    },
+    "replica-dispatch-direct-wakeup-delivery": {
+      "description": "The router decides whether this wake arrived; only its delivered answer can be the dispatch owner refusal. Both transport refusal and domain refusal retain dispatch retry debt.",
+      "owners": [
+        "src/transport/transport-semantic-outcome.js",
+        "src/control-plane/replica-dispatch-direct-wakeup.js",
+        "src/control-plane/replica-dispatch-service-lifecycle.js"
+      ],
+      "tests": [
+        "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js"
       ]
     }
   },
@@ -3043,6 +3147,220 @@
         "test/transport/transport-outcome-forwarding-hop.test.js",
         "test/topology/cdc-group-propagation-transport-outcome-failed-set.test.js",
         "test/transport/message-router-query-transport-failure-shape.test.js"
+      ]
+    },
+    "router-envelope-query": {
+      "description": "The router and query owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "query-consumer",
+          "owners": [
+            "src/query/query-executor-partition-delivery.js",
+            "src/query/query-executor-partition-failure.js",
+            "src/query/query-executor-partition-request-builders.js",
+            "src/query/query-executor-unknown-outcome.js",
+            "src/query/sql-query-engine-participant-wire.js",
+            "src/query/sql-query-engine.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/query/router-envelope-lost-write-answer.test.js",
+        "test/query/transaction-coordinator-participant-protocol.test.js"
+      ]
+    },
+    "router-envelope-cdc-forwarding": {
+      "description": "The router and cdc-forwarding owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "cdc-forwarding-consumer",
+          "owners": [
+            "src/cdc/cdc-delivery-outcome.js",
+            "src/cdc/cdc-propagation-progress.js",
+            "src/message-group/message-group-forwarding-owner-delivery-methods.js",
+            "src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+            "src/message-group/message-group-forwarding-owner.js",
+            "src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+            "src/message-group/message-group-service-cdc-replication-runtime-methods.js",
+            "src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
+            "src/message-group/message-group-service-outbound-dispatch-runtime-methods.js",
+            "src/message-group/message-group-service-runtime-support.js",
+            "src/message-group/message-group-service.js",
+            "src/topology/cdc-group-propagation-durable-delivery.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/transport/message-router-cdc-outcome-roundtrip.test.js",
+        "test/message-group/message-group-forward-backpressure-code.test.js"
+      ]
+    },
+    "router-envelope-partition": {
+      "description": "The router and partition owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "partition-consumer",
+          "owners": [
+            "src/partition/managed-merge-topology-adapter.js",
+            "src/partition/managed-source-replication-start-delivery.js",
+            "src/partition/managed-split-topology-adapter.js",
+            "src/partition/message-handler-registry.js",
+            "src/partition/partition-service-entry-apply-base.js",
+            "src/partition/partition-service-learner-promotion-proof-methods.js",
+            "src/partition/partition-service-merge-replication-methods.js",
+            "src/partition/partition-service-metadata-delivery-methods.js",
+            "src/partition/partition-service-remote-query-methods.js",
+            "src/partition/partition-service-source-replication-start-methods.js",
+            "src/partition/partition-service-write-metrics-base.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/partition/learner-promotion-proof-delivery-outcome.test.js",
+        "test/transport/router-envelope-w-env-2-lost-answer-after-ack.test.js"
+      ]
+    },
+    "router-envelope-control-plane": {
+      "description": "The router and control-plane owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "control-plane-consumer",
+          "owners": [
+            "src/control-plane/membership-swim-prober.js",
+            "src/control-plane/replica-dispatch-direct-wakeup.js",
+            "src/control-plane/replica-dispatch-service-lifecycle.js",
+            "src/control-plane/replica-dispatch-service-shared.js",
+            "src/control-plane/replica-dispatch-service.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/control-plane/replica-dispatch-direct-wakeup-delivery-decision.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-remote-direct-wakeup.test.js",
+        "test/control-plane/membership-swim-prober.test.js"
+      ]
+    },
+    "router-envelope-rebalancer": {
+      "description": "The router and rebalancer owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "rebalancer-consumer",
+          "owners": [
+            "src/rebalancer/committed-membership-bootstrap-read.js",
+            "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
+            "src/rebalancer/operation-workflow-message-group-native-read.js",
+            "src/rebalancer/operation-workflow-owner-handoff-state.js",
+            "src/rebalancer/operation-workflow-owner-shared.js",
+            "src/rebalancer/operation-workflow-replace-witness.js",
+            "src/rebalancer/operation-workflow-terminal-transition-repair.js",
+            "src/rebalancer/priority-publication-handoff.js",
+            "src/rebalancer/replica-operation-constants.js",
+            "src/rebalancer/user-table-leader-placement-cure.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/rebalancer/replace-witness-boundary.test.js"
+      ]
+    },
+    "router-envelope-service-bootstrap": {
+      "description": "The router and service-bootstrap owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "service-bootstrap-consumer",
+          "owners": [
+            "src/admin/admin-websocket-message-dispatch-methods.js",
+            "src/bootstrap/node-joining-backfill-merge-and-status.js",
+            "src/bootstrap/node-joining-service-shared.js",
+            "src/bootstrap/shared/node-state-publication-outcome.js",
+            "src/bootstrap/shared/node-state-publication-owner.js",
+            "src/node/message-group-membership-recipient.js",
+            "src/node/message-group-service-handler-constants.js",
+            "src/node/message-group-service-handler.js",
+            "src/node/participant-release-client.js",
+            "src/node/replica-handler-class.js",
+            "src/node/replica-handler-lifecycle-methods.js",
+            "src/node/replica-handler-runtime-methods.js",
+            "src/node/replica-transport-handler-identity.js",
+            "src/node/runtime-service-handler.js",
+            "src/service/cell-ingress-transport.js",
+            "src/service/service-dispatcher.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/service/service-dispatcher.test.js",
+        "test/transport/router-envelope-w-env-1-answer-cannot-rewrite-acknowledgement.test.js"
+      ]
+    },
+    "router-envelope-raft": {
+      "description": "The router and raft owners preserve hop-local transport facts separately from application answers, identities and retained obligations.",
+      "endpoints": [
+        {
+          "id": "router-outcome",
+          "owners": [
+            "src/transport/transport-semantic-outcome.js",
+            "src/transport/message-router-delivery-behaviors.js"
+          ]
+        },
+        {
+          "id": "raft-consumer",
+          "owners": [
+            "src/raft/raft-rs-peer-delivery.js"
+          ]
+        }
+      ],
+      "contract": "router-delivery-envelope",
+      "witnessTests": [
+        "test/raft/raft-rs-peer-delivery-transport-outcome.test.js"
       ]
     }
   }

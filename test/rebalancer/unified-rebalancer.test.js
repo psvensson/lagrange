@@ -4,6 +4,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
@@ -275,7 +276,7 @@ function createMockMessageRouter(
   return {
     getConnectionState: () => connectionState,
     getConnectedNodes: () => [...connectedNodes],
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };

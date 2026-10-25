@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -42,7 +43,7 @@ test('PartitionService routes semantic raft-rs transport envelopes to the operat
         return true;
       },
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
     const partition = createControllablePartitionService({
@@ -102,7 +103,7 @@ test('raft-rs runtime emits a semantic envelope instead of a native packet',
       replicaIds,
       sendFor: (fromReplicaId, peerAddress, packet) => {
         sent.push({fromReplicaId, peerAddress, packet});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     });
     try {

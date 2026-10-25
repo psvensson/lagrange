@@ -5,6 +5,7 @@
  * Requirements: 21.1, 21.2, 21.3, 21.4, 21.5, 21.6, 21.7
  */
 
+import {createMockMessageRouter, createMockSystemCache} from './transaction-routing-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 // Engines persist transaction state (TX1 seam S4b: an explicit BEGIN or a
@@ -12,8 +13,6 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 // their partitions answer the participant transaction protocol.
 import {createTransactionPersistenceGateway} from
   '../test-helpers/transaction-persistence-gateway.js';
-import {answerParticipantTransactionRequest} from
-  '../test-helpers/participant-protocol-double.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -24,76 +23,6 @@ config.initialize();
 const mockPartitionData = new Map();
 
 // Mock message router that routes queries to mock partition data
-function createMockMessageRouter() {
-  return {
-    deliver: async function(address, message) {
-      // Extract partition ID from address (format: nodeId/partition/partitionId)
-      const parts = address.split('/');
-      const partitionId = parts[2];
-
-      if (message.type === 'QUERY') {
-        const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
-          success: true,
-          rows: data,
-          changes: 1,
-        };
-      }
-      // A participant answers the transaction protocol (TX1 design 2.2): a
-      // PREPARE names its state and digest, a COMMIT its outcome.
-      if (message.type === 'TRANSACTION') {
-        return answerParticipantTransactionRequest(message);
-      }
-      return {acknowledged: true, success: true, changes: 1};
-    },
-  };
-}
-
-// Mock system cache with services for routing
-function createMockSystemCache(tables, partitions) {
-  const normalizedPartitions = partitions.map((partition) => ({
-    ...partition,
-    leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
-  }));
-  const services = normalizedPartitions.map((p) => ({
-    service_id: p.partition_id,
-    service_type: 'partition',
-    partition_id: p.partition_id,
-    node_id: 'test-node',
-    address: `test-node/partition/${p.partition_id}`,
-    status: 'active',
-    raft_role: 'leader',
-  }));
-
-  return {
-    tables,
-    partitions: normalizedPartitions,
-    services,
-    get: function(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll: function(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
-  };
-}
-
 /**
  * Normalize participant IDs from transaction state.
  * @param {Object} txState - Transaction state.
@@ -115,7 +44,7 @@ function getParticipantIds(txState) {
 
 test('Transaction - BEGIN TRANSACTION starts a transaction', async (t) => {
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
   });
@@ -131,7 +60,7 @@ test('Transaction - BEGIN TRANSACTION starts a transaction', async (t) => {
 
 test('Transaction - COMMIT without active transaction returns error', async (t) => {
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
   });
@@ -146,7 +75,7 @@ test('Transaction - COMMIT without active transaction returns error', async (t) 
 
 test('Transaction - ROLLBACK without active transaction returns error', async (t) => {
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
   });
@@ -161,7 +90,7 @@ test('Transaction - ROLLBACK without active transaction returns error', async (t
 
 test('Transaction - double BEGIN returns error', async (t) => {
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
   });
@@ -188,7 +117,7 @@ test('Transaction - cross-partition INSERT enlists all touched participants', as
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });
@@ -225,7 +154,7 @@ test('Transaction - cross-partition UPDATE enlists all touched participants', as
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });
@@ -265,7 +194,7 @@ test('Transaction - single-partition operations succeed', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });
@@ -305,7 +234,7 @@ test('Transaction - ROLLBACK reverts changes', async (t) => {
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });
@@ -333,7 +262,7 @@ test('Transaction - ROLLBACK reverts changes', async (t) => {
 
 test('Transaction - different sessions have independent transactions', async (t) => {
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: createMockSystemCache([], []),
   });
@@ -367,7 +296,7 @@ test('Transaction - concurrent transactions on same partition use SQLite locking
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });
@@ -413,7 +342,7 @@ test('Transaction - getTransactionPartition returns bound partition', async (t) 
   );
 
   const engine = new SQLQueryEngine({
-    messageRouter: createMockMessageRouter(),
+    messageRouter: createMockMessageRouter(mockPartitionData),
     controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     systemCache: cache,
   });

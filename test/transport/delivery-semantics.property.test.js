@@ -18,7 +18,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../../src/transport/transport-semantic-outcome.js';
 
 // Initialize configuration and logging for tests (module level)
@@ -97,10 +97,10 @@ test('Property 5: Delivery Semantics', async (t) => {
 
             // Result must have acknowledged: true
             // Result must include handler response data
-            return result.acknowledged === true &&
-                   result.responseData === handlerResponse.responseData &&
-                   result.status === handlerResponse.status &&
-                   typeof result.messageId === 'string';
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.responseData === handlerResponse.responseData &&
+                   result.answer.status === handlerResponse.status &&
+                   typeof result.transport.messageId === 'string';
           } finally {
             await router.shutdown();
           }
@@ -152,10 +152,10 @@ test('Property 5: Delivery Semantics', async (t) => {
             const result = await router.deliver(targetAddress, message);
 
             // The target router's frame-level no-handler fact: FAILED/no_handler.
-            return result.noHandler === true &&
-                   classifyTransportDeliveryOutcome(result).reasonCode ===
+            return result.transport.noHandler === true &&
+                   result.transport.reasonCode ===
                      TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER &&
-                   typeof result.messageId === 'string';
+                   typeof result.transport.messageId === 'string';
           } finally {
             await router.shutdown();
           }
@@ -211,9 +211,9 @@ test('Property 5: Delivery Semantics', async (t) => {
 
             // Deliver message - should return explicit failure result
             const result = await router.deliver(targetAddress, message);
-            return result.acknowledged === false &&
-                   typeof result.error === 'string' &&
-                   result.error.includes(errorMessage);
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                   typeof result.transport.error === 'string' &&
+                   result.transport.error.includes(errorMessage);
           } finally {
             await router.shutdown();
           }
@@ -268,8 +268,8 @@ test('Property 5: Delivery Semantics', async (t) => {
             const result = await router.deliver(targetAddress, message);
 
             // Result must always have messageId
-            return typeof result.messageId === 'string' &&
-                   result.messageId.length > 0;
+            return typeof result.transport.messageId === 'string' &&
+                   result.transport.messageId.length > 0;
           } finally {
             await router.shutdown();
           }
@@ -334,7 +334,7 @@ test('Property 5: Delivery Semantics', async (t) => {
             return result !== undefined &&
                    result !== null &&
                    typeof result === 'object' &&
-                   typeof result.acknowledged === 'boolean';
+                   Object.hasOwn(result.transport, 'deliveryState') && !Object.hasOwn(result.transport, 'acknowledged');
           } finally {
             await router.shutdown();
           }
@@ -386,8 +386,8 @@ test('Property 5: Delivery Semantics', async (t) => {
             // Deliver message
             const result = await router.deliver(targetAddress, message);
 
-            // Result.acknowledged must be strictly boolean
-            return (result.acknowledged === true || result.acknowledged === false);
+            // The handler answer cannot change the router delivery state.
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result));
           } finally {
             await router.shutdown();
           }
@@ -449,13 +449,13 @@ test('Property 5: Delivery Semantics', async (t) => {
             // Deliver message and verify explicit success/failure shape
             const result = await router.deliver(targetAddress, message);
             if (shouldThrow) {
-              return result.acknowledged === false &&
-                     typeof result.error === 'string' &&
-                     result.error.includes('Test error');
+              return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                     typeof result.transport.error === 'string' &&
+                     result.transport.error.includes('Test error');
             }
 
-            return result.acknowledged === true &&
-                   (result.error === undefined || result.error === null);
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   (result.transport.error === undefined || result.transport.error === null);
           } finally {
             await router.shutdown();
           }
@@ -515,10 +515,10 @@ test('Property 5: Delivery Semantics', async (t) => {
             const result = await router.deliver(targetAddress, message);
 
             // All handler response fields should be in result
-            return result.acknowledged === true &&
-                   result.customField1 === responseFields.customField1 &&
-                   result.customField2 === responseFields.customField2 &&
-                   result.status === responseFields.status;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.customField1 === responseFields.customField1 &&
+                   result.answer.customField2 === responseFields.customField2 &&
+                   result.answer.status === responseFields.status;
           } finally {
             await router.shutdown();
           }

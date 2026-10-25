@@ -16,7 +16,7 @@ import {MessageRouter} from '../../src/transport/message-router.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../../src/transport/transport-semantic-outcome.js';
 
 // Initialize configuration and logging for tests (module level)
@@ -90,8 +90,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify handler was invoked with correct message
-            return result.acknowledged === true &&
-                   result.handlerId === targetAddress &&
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.handlerId === targetAddress &&
                    receivedMessages.length === 1 &&
                    receivedMessages[0].address === targetAddress &&
                    receivedMessages[0].payload.type === messagePayload.type &&
@@ -163,8 +163,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Only handler1 should be called
-            return result.acknowledged === true &&
-                   result.handler === 'handler1' &&
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.handler === 'handler1' &&
                    handler1Calls.length === 1 &&
                    handler2Calls.length === 0;
           } catch (_error) {
@@ -226,9 +226,9 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify response fields are in result
-            return result.acknowledged === true &&
-                   result.data === responseData.responseData &&
-                   result.code === responseData.responseCode;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.data === responseData.responseData &&
+                   result.answer.code === responseData.responseCode;
           } catch (_error) {
             await router.shutdown();
             return false;
@@ -276,8 +276,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // The target router's frame-level no-handler fact: FAILED/no_handler.
-            return result.noHandler === true &&
-              classifyTransportDeliveryOutcome(result).reasonCode ===
+            return result.transport.noHandler === true &&
+              result.transport.reasonCode ===
                 TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
           } catch (_error) {
             await router.shutdown();
@@ -330,8 +330,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Should not be acknowledged and should have error
-            return result.acknowledged === false &&
-                   result.error === errorMessage;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                   result.transport.error === errorMessage;
           } catch (_error) {
             await router.shutdown();
             // The deliver itself might throw if the error propagates
@@ -385,8 +385,8 @@ test('Property 4: Routing Correctness', async (t) => {
             await router.shutdown();
 
             // Verify async result is returned
-            return result.acknowledged === true &&
-                   result.asyncResult === asyncData;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+                   result.answer.asyncResult === asyncData;
           } catch (_error) {
             await router.shutdown();
             return false;

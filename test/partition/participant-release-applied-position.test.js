@@ -135,7 +135,6 @@ async function assertGenericUnsafeEnvelopes(handler, transport, request, onRead)
       status: ReplicaOperationResponseStatus.ERROR,
       error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
       correlationId: 'fixture-participant-release',
-      acknowledged: true,
     });
   }
 }
@@ -456,7 +455,6 @@ test('one applied-position observation owns duplicate, conflict and successor li
         status: ReplicaOperationResponseStatus.ERROR,
         error: REPLICA_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE(undefined),
         correlationId: 'fixture-participant-release',
-        acknowledged: true,
       });
       assert.equal(topAccessorReads, 0);
 

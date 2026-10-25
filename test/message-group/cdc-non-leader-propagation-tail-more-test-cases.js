@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {NodeService} from '../../src/node/node-service.js';
 import assert from 'node:assert/strict';
 import {
@@ -12,6 +13,7 @@ import {
 import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+  MESSAGE_GROUP_APPLICATION_STATUS,
   MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
@@ -94,20 +96,13 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           attempts.push(address);
           if (address ===
               'remote-node-2/message-group/mg-backpressure-suppress-r2') {
-            return {
-              acknowledged: false,
-              success: true,
-              error: ROUTER_ERROR_MSG.outboundQueueBackpressured(
+            return buildDeliveryEnvelope(
+              {acknowledged: false, error: ROUTER_ERROR_MSG.outboundQueueBackpressured(
                 'remote-node-2',
                 64,
-              ),
-              errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
-            };
+              ), errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE});
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -230,10 +225,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         let deliverAttempts = 0;
         router.deliver = async () => {
           deliverAttempts += 1;
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await t.rejects(
@@ -320,11 +312,8 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const attempts = [];
         router.deliver = async (address) => {
           attempts.push(address);
-          return {
-            acknowledged: false,
-            success: true,
-            error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
-          };
+          return buildDeliveryEnvelope(
+            {acknowledged: false, error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT});
         };
 
         await t.rejects(
@@ -412,10 +401,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           if (address === 'stale-host/message-group/mg-enotfound-suppress-r2') {
             throw new Error('getaddrinfo ENOTFOUND stale-host');
           }
-          return {
-            acknowledged: true,
-            success: true,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true});
         };
 
         await mg.applyCDCEvent(
@@ -517,7 +503,9 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const forwardedPayloads = [];
         router.deliver = async (address, payload) => {
           forwardedPayloads.push({address, payload});
-          return {acknowledged: true, status: 'latency_cdc_propagated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'latency_cdc_propagated',
+          });
         };
 
         const result = await mg.handleApplicationMessage({
@@ -534,7 +522,8 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           sourceReplica: 'mg-remote-r1',
         });
 
-        t.equal(result.acknowledged, true, 'relay path should acknowledge message');
+        t.equal(result.status, MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+          'relay answers with its application propagation status');
         t.equal(
           forwardedPayloads.length,
           1,
@@ -618,7 +607,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           sourceReplica: 'mg-remote-r1',
         });
 
-        t.equal(result.acknowledged, true);
+        t.equal(result.status, MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED);
         const cache = NodeService.getInstance().getSystemTableCache();
         t.ok(cache.get(TABLES.PARTITIONS, 'batch-partition-1'));
         t.ok(cache.get(TABLES.PARTITIONS, 'batch-partition-2'));
@@ -676,7 +665,9 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const forwardedPayloads = [];
         router.deliver = async (address, payload) => {
           forwardedPayloads.push({address, payload});
-          return {acknowledged: true, status: 'latency_cdc_batch_propagated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'latency_cdc_batch_propagated',
+          });
         };
 
         const result = await mg.handleApplicationMessage({
@@ -696,7 +687,7 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           sourceReplica: 'mg-remote-r1',
         });
 
-        t.equal(result.acknowledged, true);
+        t.equal(result.status, MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED);
         t.equal(forwardedPayloads.length, 1);
         t.equal(
           forwardedPayloads[0].payload.type,
@@ -772,7 +763,9 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
         const forwardedPayloads = [];
         router.deliver = async (address, payload) => {
           forwardedPayloads.push({address, payload});
-          return {acknowledged: true, status: 'latency_cdc_propagated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: 'latency_cdc_propagated',
+          });
         };
 
         const result = await mg.handleApplicationMessage({
@@ -789,7 +782,8 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           sourceReplica: 'mg-relay-stale-r1',
         });
 
-        t.equal(result.acknowledged, true, 'stale relay path should acknowledge message');
+        t.equal(result.status, MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+          'stale relay answers with its application propagation status');
         t.equal(
           forwardedPayloads.length,
           1,
@@ -1038,11 +1032,10 @@ export function registerCdcNonLeaderPropagationTailMoreTests({
           .FORWARD_DELIVERY_REJECTED
           .repeat(100);
         router.deliver = async () => {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             error: hugeRemoteError,
-          };
+          });
         };
 
         // The forward should fail, but the error message must stay bounded

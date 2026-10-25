@@ -21,6 +21,7 @@
  * same way, is stale - so the witness can see staleness at all.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -109,7 +110,7 @@ function coordinatorWithTarget(targetStatus) {
       // A transiently unreachable target: a ping is not the failure
       // detector's verdict.
       pingNode: async () => false,
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       getConnectionState: () => 'disconnected',
       isOutboundQueueAvailable: () => true,
     },
@@ -196,7 +197,7 @@ async function removeGuardsRefuse(cachedOperations) {
     nodeId: 'node-planner',
     cacheData: {replicaOperations: cachedOperations},
     messageRouter: {
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       getOutboundPressureSummary: () => ({backpressured: true}),
       getConnectionState: () => 'connected',
       pingNode: async () => true,

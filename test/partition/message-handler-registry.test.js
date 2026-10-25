@@ -52,7 +52,7 @@ test('MessageHandlerRegistry', async (t) => {
 
     const result = await registry.handle(message);
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
+    t.equal(result.success, false, 'should be a domain refusal');
     t.equal(
       result.error,
       'Unknown message type: UNKNOWN_TYPE',
@@ -69,7 +69,7 @@ test('MessageHandlerRegistry', async (t) => {
 
     const result = await registry.handle(message);
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
+    t.equal(result.success, false, 'should be a domain refusal');
     t.equal(
       result.error,
       'Unknown message type: undefined',
@@ -86,7 +86,7 @@ test('MessageHandlerRegistry', async (t) => {
 
     const result = await registry.handle(message);
 
-    t.equal(result.acknowledged, false, 'should not be acknowledged');
+    t.equal(result.success, false, 'should be a domain refusal');
     t.equal(
       result.error,
       'Unknown message type: undefined',

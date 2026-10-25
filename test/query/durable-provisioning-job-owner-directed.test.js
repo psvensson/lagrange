@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import Database from 'better-sqlite3';
 import {TABLES} from '../../src/constants/index.js';
@@ -250,7 +251,7 @@ function createRuntime(options) {
         address: `${targetNodeId}/partition/${request.partitionId}`,
       });
     }
-    return {acknowledged: true, status: 'completed'};
+    return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
   };
   const sqlPersistence = {
     executeQuery: (sql, params) => gateway.executeQuery(sql, params),

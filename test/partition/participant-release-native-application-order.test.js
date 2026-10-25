@@ -643,7 +643,7 @@ function assertObservationRefresh(state, held) {
   const outcome = state.routeOutcome;
   assert.equal(outcome?.kind, 'observation-settled',
     `${state.replicaId}: the exact observation route settles successfully`);
-  const answer = outcome.response[PARTICIPANT_RELEASE_RESULT_FIELD];
+  const answer = outcome.response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
   assert.equal(answer?.outcome, RELEASE_OUTCOME.OBSERVED,
     `${state.replicaId}: the original observation returns canonical facts`);
   assert.equal(answer.partitionId, PARTITION_ID);
@@ -747,7 +747,7 @@ function createReleaseRouteObserver(router, {gate, leader, statuses, settled,
     callOrdinal) => {
     try {
       if (error !== null) throw error;
-      const answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+      const answer = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
       if (finalInspect !== null) finalInspect.answer = answer;
       if (request.action === PARTICIPANT_RELEASE_ACTION.PAUSE) {
         const identity = requestIdentityOf(request);

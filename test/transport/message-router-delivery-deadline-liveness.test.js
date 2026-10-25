@@ -96,9 +96,9 @@ function childProgram(mode, deadlineMs) {
     const settledResources = process.getActiveResourcesInfo();
     await (stopping ?? router.shutdown());
     console.log(JSON.stringify({${WITNESS_KEY}: {
-      acknowledged: outcome.result?.acknowledged ?? null,
-      errorCode: outcome.result?.errorCode ?? outcome.error?.code ?? null,
-      error: outcome.result?.error ?? outcome.error?.message ?? null,
+      deliveryState: outcome.result?.transport.deliveryState ?? null,
+      errorCode: outcome.result?.transport.errorCode ?? outcome.error?.code ?? null,
+      error: outcome.result?.transport.error ?? outcome.error?.message ?? null,
       settledResources,
       closedResources: process.getActiveResourcesInfo(),
     }}));
@@ -125,7 +125,7 @@ function assertTypedTimeout(t, run) {
     'the child must not exit with the delivery still unsettled');
   t.equal(run.status, 0, `the child exits cleanly (stderr: ${run.stderr})`);
   t.ok(run.witness, 'the delivery settled and the child reported it');
-  t.equal(run.witness?.acknowledged, false, 'the delivery is refused');
+  t.equal(run.witness?.deliveryState === 'delivered', false, 'the delivery is refused');
   t.equal(run.witness?.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
     'the refusal is the typed delivery-deadline timeout');
 }
@@ -150,14 +150,14 @@ test('a pending SERVICE_RESPONSE deadline after ACK fires with nothing else on t
 test('router shutdown clears a pending delivery deadline', async (t) => {
   const run = runChild(MODE.SHUTDOWN, LONG_DEADLINE_MS);
   t.ok(run.witness, 'the shutdown refusal settled the delivery');
-  t.equal(run.witness?.acknowledged, false, 'the delivery is refused at shutdown');
+  t.equal(run.witness?.deliveryState === 'delivered', false, 'the delivery is refused at shutdown');
   t.equal(run.witness?.error, 'Router shutdown', 'the refusal names the router shutdown');
   assertNothingHeldOpen(t, run);
 });
 
 test('a settled delivery disposes its deadline timer', async (t) => {
   const run = runChild(MODE.ACK_AND_RESPONSE, LONG_DEADLINE_MS);
-  t.equal(run.witness?.acknowledged, true,
+  t.equal(run.witness?.deliveryState, 'delivered',
     'the ACK and SERVICE_RESPONSE settle the delivery');
   t.notOk(run.witness?.settledResources.includes(TIMER_RESOURCE),
     'dispose cleared the deadline timer as soon as the delivery settled');

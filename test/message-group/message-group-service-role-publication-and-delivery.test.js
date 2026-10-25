@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createTestTransport,
@@ -838,11 +839,7 @@ test('MessageGroupService - QUERY direct-only delivery clears pending envelope '
 async (t) => {
   const transport = {
     async deliver() {
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [{value: 1}],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{value: 1}]});
     },
     async initialize() {},
     async shutdown() {},
@@ -878,10 +875,7 @@ test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'Message timeout',
-        };
+        return buildDeliveryEnvelope({acknowledged: false, error: 'Message timeout'});
       },
       async initialize() {},
       async shutdown() {},
@@ -931,13 +925,14 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata',
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed',
-          errorCode: 'ROUTER_NO_CONNECTION',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'No connection to node seed',
+            errorCode: 'ROUTER_NO_CONNECTION',
+            deferRetry: true,
+            retryAfterMs: 250,
+          });
       },
       async initialize() {},
       async shutdown() {},
@@ -1039,11 +1034,7 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
     const transport = {
       async deliver(_targetService, _message, options) {
         capturedOptions.push(options);
-        return {
-          acknowledged: true,
-          success: true,
-          rows: [],
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
       },
       async initialize() {},
       async shutdown() {},
@@ -1074,7 +1065,7 @@ test('MessageGroupService - QUERY payload forwards transport delivery options',
       },
     );
 
-    t.equal(result.acknowledged, true,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result.delivery)), true,
       'query delivery should still succeed');
     t.equal(capturedOptions.length, 1,
       'query delivery should perform one direct transport attempt');
@@ -1090,13 +1081,14 @@ test('MessageGroupService - idempotent control-plane payloads use direct-only de
     const transport = {
       async deliver() {
         deliverCalls += 1;
-        return {
-          acknowledged: false,
-          error: 'No connection to node seed',
-          errorCode: 'ROUTER_NO_CONNECTION',
-          deferRetry: true,
-          retryAfterMs: 250,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'No connection to node seed',
+            errorCode: 'ROUTER_NO_CONNECTION',
+            deferRetry: true,
+            retryAfterMs: 250,
+          });
       },
       async initialize() {},
       async shutdown() {},

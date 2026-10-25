@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Unit tests for MessageRouter.
  * Tests local and remote message routing.
@@ -122,12 +123,12 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
         'background rejection should fail fast instead of waiting in the queue',
       );
       t.equal(
-        backgroundRejected.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(backgroundRejected)),
         false,
         'background delivery should be rejected once non-reserved capacity is full',
       );
       t.match(
-        backgroundRejected.error,
+        backgroundRejected.transport.error,
         /queue/i,
         'background rejection should surface queue pressure',
       );
@@ -841,12 +842,12 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
 
       const queue = router.getOutboundQueue('remote-node');
       t.equal(
-        result.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
         false,
         'scheduled reconnect delivery should be deferred as retryable',
       );
       t.equal(
-        result.errorCode,
+        result.transport.errorCode,
         'ROUTER_CONNECTION_CLOSED',
         'scheduled reconnect failure should keep the connection-closed code',
       );
@@ -920,8 +921,8 @@ t.test('MessageRouter unit tests chunk 2', async (t) => {
       const queue = router.getOutboundQueue('remote-node');
       t.equal(
         results.every((result) =>
-          result?.acknowledged === false &&
-          result?.errorCode === 'ROUTER_CONNECTION_CLOSED'),
+          isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+          result?.transport?.errorCode === 'ROUTER_CONNECTION_CLOSED'),
         true,
         'pending reconnect deliveries should all be deferred as retryable',
       );

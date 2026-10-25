@@ -8,7 +8,6 @@ import {
 } from '../../control-plane/control-plane-constants.js';
 import {
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
 } from '../../transport/transport-semantic-outcome.js';
 import {
   JOINING_ERROR_MSG,
@@ -107,9 +106,8 @@ function buildNodeStateUpdatePublicationDiagnostics(
   });
 }
 
-function buildNodeStateUpdateDeliveryError(deliveryResult, targetAddress) {
-  const deliveryOutcome =
-    classifyTransportDeliveryOutcome(deliveryResult);
+// `deliveryOutcome` is the transport outcome of an undelivered publication.
+function buildNodeStateUpdateDeliveryError(deliveryOutcome, targetAddress) {
   const defaultErrorMessage =
     deliveryOutcome?.reasonCode ===
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?

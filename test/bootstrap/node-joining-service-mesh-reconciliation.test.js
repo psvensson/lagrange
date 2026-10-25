@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -94,12 +95,13 @@ test('NodeJoiningService - keeps heartbeat-maintenance NODE_STATE_UPDATE on the 
     service.messageRouter = {
       async deliver(targetAddress, message, options) {
         deliveries.push({targetAddress, message, options});
-        return {
-          acknowledged: false,
-          error: 'Distributed operation failed due to participant failures',
-          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
-          retryAfterMs: 25,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+            retryAfterMs: 25,
+          });
       },
     };
 
@@ -193,7 +195,7 @@ test('NodeJoiningService - prefers live local control-plane ingress over a stale
     const deliveries = [];
     service.messageRouter.deliver = async (targetAddress) => {
       deliveries.push(targetAddress);
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     };
 
     await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
@@ -274,7 +276,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   const deliveries = [];
   service.messageRouter.deliver = async (targetAddress) => {
     deliveries.push(targetAddress);
-    return {acknowledged: true};
+    return buildDeliveryEnvelope({acknowledged: true});
   };
 
   await service.sendControlPlaneNodeStateUpdate({
@@ -357,7 +359,7 @@ test('NodeJoiningService - READY heartbeats ignore a stale local ingress lease '
   const deliveries = [];
   service.messageRouter.deliver = async (targetAddress) => {
     deliveries.push(targetAddress);
-    return {acknowledged: true};
+    return buildDeliveryEnvelope({acknowledged: true});
   };
 
   await service.sendControlPlaneNodeStateUpdate({
@@ -402,13 +404,11 @@ test('NodeJoiningService - READY heartbeats retry a local ingress fallback ' +
         targetAddress ===
           `${REMOTE_CANONICAL_LEADER_NODE_ID}/message-group/mg-1-r3`
       ) {
-        return {
-          acknowledged: false,
-          error:
-            `No handler registered for address ${targetAddress}`,
-        };
+        return buildDeliveryEnvelope(
+          {acknowledged: false, error:
+            `No handler registered for address ${targetAddress}`});
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
   service.controlPlaneKernelIngress = new ControlPlaneKernelIngress({
@@ -551,7 +551,7 @@ test('NodeJoiningService - READY heartbeats evaluate local target routing on ' +
   const deliveries = [];
   service.messageRouter.deliver = async (targetAddress) => {
     deliveries.push(targetAddress);
-    return {acknowledged: true};
+    return buildDeliveryEnvelope({acknowledged: true});
   };
 
   await service.sendControlPlaneNodeStateUpdate({
@@ -593,10 +593,7 @@ test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport fai
     service.messageRouter = {
       async deliver(targetAddress) {
         deliveries.push(targetAddress);
-        return {
-          acknowledged: false,
-          error: 'validation failed',
-        };
+        return buildDeliveryEnvelope({acknowledged: false, error: 'validation failed'});
       },
     };
 
@@ -912,7 +909,7 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
       },
       async deliver(targetAddress, message) {
         callOrder.push(`deliver:${targetAddress}:${message.state}`);
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       getConnectedNodes() {
         return ['seed-node', 'late-peer'];
@@ -1047,7 +1044,7 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
       },
       async deliver(targetAddress, message) {
         callOrder.push(`deliver:${targetAddress}:${message.state}`);
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       getConnectedNodes() {
         return ['seed-node', 'late-peer'];
@@ -1116,7 +1113,7 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
       },
       async deliver(targetAddress, message) {
         callOrder.push(`deliver:${targetAddress}:${message.state}`);
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       getConnectedNodes() {
         return ['seed-node'];

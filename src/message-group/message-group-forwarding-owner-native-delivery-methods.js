@@ -7,6 +7,8 @@ import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, checkedCdcRemainingMs
   createCdcDeliveryBudget, prepareCdcDeliveryMessage} from
   '../cdc/cdc-delivery-budget.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
+import {deliveryAnswerOf, deliveryReadingOf, forwardedDeliveryAnswer} from
+  '../transport/transport-semantic-outcome.js';
 import {MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE, MESSAGE_GROUP_CDC_ERROR_MSG} from './constants.js';
 import {CDC_FORWARD_MAX_RELAY_DEPTH, cdcRelaySendDepth} from
   './message-group-service-runtime-support.js';
@@ -130,10 +132,11 @@ function forwardEventContext(service, events, options) {
   return {...event, ...options, events};
 }
 
-function successfulForward(answer, events, groupId, terminal) {
-  return isCommittedCdcDelivery(answer, events, groupId) ||
-    (!terminal && isProvisionalCdcDelivery(answer, events, groupId));
+function successfulForward(delivery, events, groupId, terminal) {
+  return isCommittedCdcDelivery(delivery, events, groupId) ||
+    (!terminal && isProvisionalCdcDelivery(delivery, events, groupId));
 }
+
 
 function durableForwardTargetStep(owner, target, result) {
   if (result.accepted) return CDC_FORWARD_TARGET_STEP.ACCEPTED;
@@ -183,7 +186,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
         ...(terminal ? {cdcForwardMode: MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT} : {})};
       const profile = resolveCDCForwardDeliveryProfile(events[0].tableName, payload,
         options.replayOnly === true);
-      const answer = await service.transport.deliver(address, request, {
+      const delivery = await service.transport.deliver(address, request, {
         deliveryPriority: profile.deliveryPriority, deliverySource: profile.deliverySource,
         timeoutMs: options.remainingMs(), remainingMs: options.remainingMs,
         ...(options.deliveryContext === null ? {} : {deliveryContext: options.deliveryContext}),
@@ -194,7 +197,7 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
         },
       });
       options.assertCurrent();
-      return {answer, terminal, address};
+      return {delivery, terminal, address};
     },
 
     async tryDurableCdcForwardTargets(targets, payload, events, options) {
@@ -216,15 +219,18 @@ function createMessageGroupForwardingOwnerNativeDeliveryMethods() {
 
     async tryDurableCdcForwardTarget(target, payload, events, options) {
       try {
-        const {answer, terminal, address} =
+        const {delivery, terminal, address} =
           await this.deliverDurableCdcForwardTarget(target, payload, events, options);
-        if (successfulForward(answer, events, this.service.groupId, terminal)) {
+        // The forward answers with the onward hop's answer, never its envelope.
+        if (successfulForward(delivery, events, this.service.groupId, terminal)) {
           this.clearForwardTargetSuppression({serviceId: target.serviceId, address});
-          return {accepted: true, answer};
+          return {accepted: true, answer: deliveryAnswerOf(delivery)};
         }
+        const failure = deliveryReadingOf(delivery);
         const addressedConvergence = await this.observeDurableCdcForwardFailure(
-          target, answer, answer?.error, options);
-        return {accepted: false, answer, addressedConvergence};
+          target, failure, failure?.error, options);
+        return {accepted: false, answer: forwardedDeliveryAnswer(delivery),
+          addressedConvergence};
       } catch (error) {
         options.assertCurrent();
         const addressedConvergence = await this.observeDurableCdcForwardFailure(

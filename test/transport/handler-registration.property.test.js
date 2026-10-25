@@ -118,7 +118,7 @@ describe('Replica handler registration on the MessageRouter API', () => {
           testRouter.register(address, deliverFn);
           assert.ok(testRouter.isRegistered(address));
 
-          testRouter.unregister(address);
+          assert.strictEqual(testRouter.unregisterExact(address, deliverFn), true);
           assert.strictEqual(testRouter.isRegistered(address), false);
         },
       ),
@@ -144,7 +144,7 @@ describe('Replica handler registration on the MessageRouter API', () => {
           const handlerCount = testRouter.handlers.size;
 
           assert.strictEqual(testRouter.isRegistered(address), false);
-          assert.doesNotThrow(() => testRouter.unregister(address));
+          assert.strictEqual(testRouter.unregisterExact(address, () => ({})), false);
           assert.strictEqual(testRouter.isRegistered(address), false);
           assert.strictEqual(testRouter.handlers.size, handlerCount);
         },
@@ -253,9 +253,12 @@ describe('Replica handler registration on the MessageRouter API', () => {
           const initialCount = testRouter.handlers.size;
 
           // Register handlers
+          const registered = new Map();
           for (const replicaId of replicaIds) {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.register(address, async () => ({}));
+            const handler = async () => ({});
+            registered.set(address, handler);
+            testRouter.register(address, handler);
           }
 
           assert.strictEqual(
@@ -267,7 +270,7 @@ describe('Replica handler registration on the MessageRouter API', () => {
           // Unregister handlers
           for (const replicaId of replicaIds) {
             const address = `${nodeId}/${ENTITY_TYPE.PARTITION}/${replicaId}`;
-            testRouter.unregister(address);
+            testRouter.unregisterExact(address, registered.get(address));
           }
 
           assert.strictEqual(

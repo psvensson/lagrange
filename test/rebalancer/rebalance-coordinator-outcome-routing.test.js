@@ -14,6 +14,7 @@
  * as the canonical owner path for executor outcomes.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -246,7 +247,7 @@ function createTestCoordinator(options = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {
@@ -488,10 +489,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -577,10 +577,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -997,7 +996,7 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1408,10 +1407,9 @@ test('Executor outcome routing through owner-key reconcile path',
         coordinator.messageRouter = {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.INITIATED,
-            };
+            });
           },
         };
         // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1548,10 +1546,9 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1613,11 +1610,10 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
         [ReplicaOperationField.REPLICA_STATUS]: ReplicaStatus.SYNCING,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the
@@ -1680,10 +1676,9 @@ async (t) => {
   coordinator.messageRouter = {
     async deliver(target, payload, options) {
       deliveries.push({target, payload, options});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
-      };
+      });
     },
   };
   // The witness replica's answers (quest replace-source-removal-owner): the

@@ -58,7 +58,6 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
     TIME_MS,
     boundCdcForwardErrorDetail,
     buildDeferredCdcForwardError,
-    buildLatencyCdcPropagationResult,
     getOrCreateCauseId,
     normalizeCauseId,
     wrapCdcProposeError,
@@ -71,7 +70,6 @@ function createMessageGroupServiceCdcReplicationRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
     MESSAGE_GROUP_SERVICE_LITERAL,
     NUM,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   };
 

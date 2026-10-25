@@ -1,5 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 import {
   LEARNER_PROMOTION_PROOF_REASON,
@@ -204,9 +204,9 @@ class PartitionServiceLearnerPromotionProofMethods {
         {},
       );
     }
-    let response = null;
+    let delivery = null;
     try {
-      response = await this.transport.deliver(
+      delivery = await this.transport.deliver(
         leaderAddress,
         {
           type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
@@ -224,7 +224,8 @@ class PartitionServiceLearnerPromotionProofMethods {
         {error: deliverError.message},
       );
     }
-    if (!this.learnerPromotionProofResponseBindsThisLearner(response)) {
+    const response = deliveryAnswerOf(delivery);
+    if (!this.learnerPromotionProofResponseBindsThisLearner(delivery)) {
       return this.refuseLearnerPromotionProofResponse(
         LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
         LEARNER_PROMOTION_PROOF_REFUSAL_CAUSE.RESPONSE_BINDING_MISMATCH,
@@ -304,13 +305,14 @@ class PartitionServiceLearnerPromotionProofMethods {
   /**
    * A proof response authorizes promotion only when it is acknowledged and
    * bound to exactly this partition and this learner replica.
-   * @param {Object|null} response leader response envelope
+   * @param {Object} delivery leader delivery envelope
    * @return {boolean}
    * @private
    */
-  learnerPromotionProofResponseBindsThisLearner(response) {
-    return isDeliveredTransportDeliveryOutcome(
-      classifyTransportDeliveryOutcome(response)) &&
+  learnerPromotionProofResponseBindsThisLearner(delivery) {
+    const transport = deliveryTransportOf(delivery);
+    const response = deliveryAnswerOf(delivery);
+    return isDeliveredTransportDeliveryOutcome(transport) &&
       response?.partitionId === this.partitionId &&
       response?.learnerReplicaId === this.replicaId &&
       Boolean(response?.proof) &&

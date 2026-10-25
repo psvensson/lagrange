@@ -21,6 +21,7 @@
 // expectation is the owners' (the classifier, the kernel, the partition's
 // defaults) or read from the replicas' own databases.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -264,7 +265,7 @@ async function withPartitionedLeader(body) {
   network.deliver = (address, envelope, ...rest) => {
     const packet = envelope?.payload ?? envelope;
     return blocked.has(`${packet?.from}>${packet?.to}`) ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       deliver.call(network, address, envelope, ...rest);
   };
   try {

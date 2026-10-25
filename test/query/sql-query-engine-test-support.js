@@ -6,6 +6,7 @@
  * preserved unchanged; this module is the single semantic home for them.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {COLUMN} from '../../src/constants/index.js';
 import {answerParticipantTransactionRequest} from
   '../test-helpers/participant-protocol-double.js';
@@ -23,19 +24,19 @@ export function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(replicaId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: 0,
-        };
+        });
       }
       // A participant answers the transaction protocol (TX1 design 2.2): a
       // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return answerParticipantTransactionRequest(message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 }

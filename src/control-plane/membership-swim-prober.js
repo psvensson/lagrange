@@ -16,7 +16,7 @@
 import {resolveTimeSource} from '../time/time-source.js';
 import {resolveRandomSource} from '../random/random-source.js';
 import {SWIM_DETECTOR_DEFAULTS} from './membership-swim-detector.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const SWIM_RELAY_SERVICE = 'swim-relay';
@@ -113,12 +113,13 @@ function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} =
       } catch (_error) {
         return null;
       }
-      if (isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(resolved)) &&
-          resolved.alive === true) {
+      const transport = deliveryTransportOf(resolved);
+      const answer = deliveryAnswerOf(resolved);
+      if (isDeliveredTransportDeliveryOutcome(transport) && answer?.alive === true) {
         return {
           alive: true,
-          incarnation: resolved.incarnation,
-          updates: Array.isArray(resolved.updates) ? resolved.updates : [],
+          incarnation: answer.incarnation,
+          updates: Array.isArray(answer.updates) ? answer.updates : [],
         };
       }
       return null;
@@ -137,11 +138,11 @@ function buildSwimMessageRouterTransport({messageRouter, pingTimeoutMs = null} =
       } catch (_error) {
         return null;
       }
-      if (
-        isDeliveredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(resolved)) &&
-        typeof resolved.reachable === 'boolean'
-      ) {
-        return resolved.reachable;
+      const transport = deliveryTransportOf(resolved);
+      const answer = deliveryAnswerOf(resolved);
+      if (isDeliveredTransportDeliveryOutcome(transport) &&
+          typeof answer?.reachable === 'boolean') {
+        return answer.reachable;
       }
       return null;
     },

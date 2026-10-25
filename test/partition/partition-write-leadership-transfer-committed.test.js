@@ -30,6 +30,7 @@
 // voter cut off from the group, so it can only abort one election timeout
 // later.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -189,7 +190,7 @@ async function withTransferToCutOffVoter(raftTiming, body) {
     assert.equal((await writeRow(leader, 'row-before', 'before')).success,
       true, 'setup: the group serves a write');
     network.deliver = (address, ...rest) => (address === cutOffAddress ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       transportDeliver.call(network, address, ...rest));
     cutOff.raft.stopScheduling();
     const termBefore = leader.raft.readStatus().term;

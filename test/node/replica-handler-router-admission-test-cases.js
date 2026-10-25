@@ -1,3 +1,4 @@
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
 import {
   buildReplicaCreateAdmissionToken,
   buildReplicaCreateAttemptToken,
@@ -11,9 +12,7 @@ function createMockRouter() {
       register(address, handlerFn) {
         registeredHandlers.set(address, handlerFn);
       },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
+      ...handlerIdentityApi(registeredHandlers),
     },
   };
 }

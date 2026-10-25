@@ -8,13 +8,13 @@ import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
 import {COMMITTED_LEARNER_ACTION_KIND as KIND,
   COMMITTED_LEARNER_ACTION_REASON as REASON} from '../raft/raft-committed-membership-constants.js';
 import {ReplicaOperationField as FIELD, ReplicaOperationMessageType as TYPE,
-  ReplicaOperationResponseStatus as STATUS} from './replica-operation-constants.js';
+  isCompletedReplicaOperationAnswer} from './replica-operation-constants.js';
 import {MEMBERSHIP_AUTHORIZATION_OUTCOME as OUTCOME} from
   './replica-operation-message-group-membership-permit.js';
 import {MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS as ADDRESS} from
   '../node/message-group-service-handler-constants.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const {OPERATION_WORKFLOW_OWNER_LITERAL} = OPERATION_WORKFLOW_OWNER_SHARED;
@@ -26,16 +26,18 @@ async function readAtRecipient(owner, recipient, query, isCurrent) {
   if (!isCurrent()) return unavailable();
   const address = `${recipient.nodeId}/${ADDRESS.SERVICE_SEGMENT}/${ADDRESS.HANDLER_ID}`;
   try {
-    const result = classifyTransportDeliveryOutcome(await owner.messageRouter.deliver(address, {
+    const deliveryEnvelope = await owner.messageRouter.deliver(address, {
       [FIELD.TYPE]: TYPE.READ_COMMITTED_MEMBERSHIP,
       [FIELD.ENTITY_TYPE]: SERVICE_TYPE.MESSAGE_GROUP, [FIELD.ENTITY_ID]: query.groupId,
       [FIELD.REPLICA_ID]: recipient.replicaId, [FIELD.MEMBERSHIP_QUERY]: query,
     }, {targetNodeId: recipient.nodeId, deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-      timeoutMs: owner.replicaOperationDispatchTimeoutMs}));
-    if (!isCurrent() || !isDeliveredTransportDeliveryOutcome(result) ||
-      result.noHandler === true) return unavailable();
-    if (result.status !== STATUS.COMPLETED || result.nodeId !== recipient.nodeId) return invalid();
-    return result[FIELD.MEMBERSHIP];
+      timeoutMs: owner.replicaOperationDispatchTimeoutMs});
+    const transport = deliveryTransportOf(deliveryEnvelope);
+    const answer = deliveryAnswerOf(deliveryEnvelope);
+    if (!isCurrent() || !isDeliveredTransportDeliveryOutcome(transport)) return unavailable();
+    if (!isCompletedReplicaOperationAnswer(answer) ||
+      answer.nodeId !== recipient.nodeId) return invalid();
+    return answer[FIELD.MEMBERSHIP];
   } catch {
     return unavailable();
   }

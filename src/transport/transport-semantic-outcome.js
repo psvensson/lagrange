@@ -14,9 +14,9 @@ const TRANSPORT_DELIVERY_OUTCOME_STATE = Object.freeze({
   FAILED: 'failed',
 });
 
-const TRANSPORT_COMPLETED_STATUS = 'completed';
-
 const objectHasOwn = Object.hasOwn;
+const transportOutcomes = new WeakSet();
+const deliveryEnvelopes = new WeakSet();
 
 const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD = Object.freeze({
   DELIVERY_STATE: 'deliveryState',
@@ -37,8 +37,10 @@ const TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS = Object.freeze([
 ]);
 
 // Transport decides the delivery state; every other metadata field is a value
-// a reply may supply. A supplied value is emitted exactly as supplied and only
-// an absent one is computed, so transport adds facts and never rewrites a claim.
+// a router producer may supply. A supplied value is emitted exactly as supplied
+// and only an absent one is computed, so building is a fixed point. Every input
+// is router-internal: a handler answer never reaches this builder (it travels
+// beside the outcome as the envelope's `answer`).
 const TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS = Object.freeze(
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS.filter((field) =>
     field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.DELIVERY_STATE),
@@ -46,7 +48,6 @@ const TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS = Object.freeze(
 
 const TRANSPORT_DELIVERY_OUTCOME_REASON_CODE = Object.freeze({
   ACK_REJECTED: 'ack_rejected',
-  COMPLETED_WITH_ERROR: 'completed_with_error',
   CONNECTION_CLOSED: 'connection_closed',
   CONTRADICTORY_DELIVERY_STATE: 'contradictory_delivery_state',
   HANDLER_FAILED: 'handler_failed',
@@ -123,7 +124,6 @@ function classifyTransportDeliveryState(options) {
     claim === TRANSPORT_DELIVERY_OUTCOME_STATE.DEFERRED;
   const hasConflict =
     options.noHandler ||
-    options.completedWithError ||
     isTransportDeliveryErrorCode(options.errorCode);
   const supported = options.acknowledged && !deferralRequested && !hasConflict;
   // FAILED dominates deferral, so a normalized outcome is a fixed point.
@@ -144,7 +144,6 @@ function resolveTransportDeliveryReasonCode(
   deferred,
   noHandler,
   delivered,
-  completedWithError,
 ) {
   if (noHandler === true) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER;
@@ -173,16 +172,17 @@ function resolveTransportDeliveryReasonCode(
   if (deferred) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.TRANSPORT_DEFERRED;
   }
-  if (completedWithError) {
-    return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.COMPLETED_WITH_ERROR;
-  }
   if (!delivered) {
     return TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.ACK_REJECTED;
   }
   return null;
 }
 
+// The closed key set of a transport outcome: the router's identity of this
+// delivery, its acknowledgement and error text, and the owner metadata. The
+// builder emits exactly these keys and copies nothing else from its input.
 function buildTransportDeliveryOutcome(options = {}) {
+  if (transportOutcomes.has(options)) return options;
   const retryAfterMs = normalizePositiveRetryAfterMs(
     options.retryAfterMs,
     null,
@@ -190,8 +190,6 @@ function buildTransportDeliveryOutcome(options = {}) {
   const errorCode = normalizeOptionalString(options.errorCode);
   const noHandler = options.noHandler === true;
   const acknowledged = options.acknowledged === true;
-  const completedWithError = options.status === TRANSPORT_COMPLETED_STATUS &&
-    normalizeOptionalString(options.error) !== null;
   const {contradicted, deferralRequested, delivered, deferred, deliveryState} =
     classifyTransportDeliveryState({
       acknowledged,
@@ -201,7 +199,6 @@ function buildTransportDeliveryOutcome(options = {}) {
       errorCode,
       noHandler,
       retryAfterMs,
-      completedWithError,
     });
   // An absent deferRetry reports the deferral evidence, as before; a failed
   // contradiction does not withdraw a retry request it carried.
@@ -212,30 +209,87 @@ function buildTransportDeliveryOutcome(options = {}) {
     noHandler,
     reasonCode: contradicted ?
       TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONTRADICTORY_DELIVERY_STATE :
-      resolveTransportDeliveryReasonCode(
-        errorCode,
-        deferred,
-        noHandler,
-        delivered,
-        completedWithError,
-      ),
+      resolveTransportDeliveryReasonCode(errorCode, deferred, noHandler, delivered),
   };
-  const outcome = {...options, acknowledged, deliveryState};
+  const outcome = {
+    messageId: normalizeOptionalString(options.messageId),
+    correlationId: normalizeOptionalString(options.correlationId),
+    recoverableBeforeSend: options.recoverableBeforeSend === true,
+    deliveryState,
+    error: options.error ?? null,
+  };
   for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
     outcome[field] = objectHasOwn(options, field) ?
       options[field] :
       computed[field];
   }
+  transportOutcomes.add(outcome);
   return Object.freeze(outcome);
 }
 
-// Classifies a router answer, or a thrown error as the outcome it carries. A
-// thrown Error is the one other representation a delivery failure takes: its
-// message is the error text, its code the error code (the JavaScript error
-// convention), and its own value fields are carried as they are. An answer is
-// handed to the builder exactly as supplied.
+// The one shape `deliver()` resolves to: the router-built transport outcome
+// of THIS hop and, beside it, the handler's answer. Only a delivered outcome
+// carries an answer; the router is the only writer of `transport`.
+function buildDeliveryEnvelope(transportFacts = {}, answer = null, identity = null) {
+  if (deliveryEnvelopes.has(transportFacts)) return transportFacts;
+  let transport = buildTransportDeliveryOutcome(transportFacts);
+  if (identity !== null) {
+    transport = Object.freeze({...transport,
+      messageId: normalizeOptionalString(identity.messageId),
+      correlationId: normalizeOptionalString(identity.correlationId)});
+    transportOutcomes.add(transport);
+  }
+  const envelope = Object.freeze({
+    transport,
+    answer: isDeliveredTransportDeliveryOutcome(transport) && answer !== undefined ?
+      answer : null,
+  });
+  deliveryEnvelopes.add(envelope);
+  return envelope;
+}
+
+const INVALID_DELIVERY_TRANSPORT = buildTransportDeliveryOutcome();
+const EMPTY_DELIVERY_ANSWER = Object.freeze({});
+
+function deliveryTransportOf(delivery) {
+  return deliveryEnvelopes.has(delivery) ? delivery.transport : INVALID_DELIVERY_TRANSPORT;
+}
+
+function deliveryAnswerOf(delivery) {
+  return deliveryEnvelopes.has(delivery) ? delivery.answer : null;
+}
+
+// The one reading a consumer decides on once the transport has spoken: the
+// handler's answer when delivered (an answer-less delivery reads as an empty
+// answer), else the transport outcome itself. One namespace, never a merge.
+function deliveryReadingOf(delivery) {
+  const transport = deliveryTransportOf(delivery);
+  return isDeliveredTransportDeliveryOutcome(transport) ?
+    deliveryAnswerOf(delivery) ?? EMPTY_DELIVERY_ANSWER : transport;
+}
+
+// What a forwarding handler answers for the onward hop it delivered: that
+// hop's answer when it was delivered, otherwise a typed refusal carrying the
+// onward hop's failure at answer level. The forwarder's own transport stays
+// the forwarder's; no onward transport fact reaches it.
+function forwardedDeliveryAnswer(delivery) {
+  const transport = deliveryTransportOf(delivery);
+  if (isDeliveredTransportDeliveryOutcome(transport)) return deliveryAnswerOf(delivery);
+  return {
+    success: false,
+    error: transport.error ?? transport.reasonCode,
+    deferRetry: transport.deferRetry,
+    retryAfterMs: transport.retryAfterMs,
+    forwardedReasonCode: transport.reasonCode,
+  };
+}
+
+// A thrown Error is the one other representation a delivery failure takes:
+// its message is the error text, its code the error code (the JavaScript error
+// convention), and its own value fields are carried as they are.
 function thrownErrorOutcome(error) {
-  const outcome = {errorCode: error.code ?? null, error: error.message};
+  const outcome = {errorCode: error.code ?? null, error: error.message,
+    recoverableBeforeSend: error.recoverableBeforeSend === true};
   for (const field of TRANSPORT_DELIVERY_OUTCOME_VALUE_FIELDS) {
     if (field !== TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELD.ERROR_CODE &&
         objectHasOwn(error, field)) {
@@ -253,23 +307,23 @@ function buildHandlerFailedError(text) {
 }
 
 // A queued delivery replaced by a newer one under the same replace key before
-// it was sent (decision D3): DELIVERED, with no answer, named superseded.
-function buildSupersededDeliveryOutcome(fields = {}) {
-  return buildTransportDeliveryOutcome({...fields, acknowledged: true, coalesced: true,
+// it was sent (decision D3): DELIVERED, with no answer, named superseded. The
+// one named state is the reason code (finding F-V4).
+function buildSupersededDeliveryOutcome() {
+  return buildTransportDeliveryOutcome({acknowledged: true,
     reasonCode: TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED});
 }
 
 function isSupersededTransportDeliveryOutcome(outcome = null) {
   return isDeliveredTransportDeliveryOutcome(outcome) &&
-    outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED &&
-    outcome.coalesced === true;
+    outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.SUPERSEDED;
 }
 
-function classifyTransportDeliveryOutcome(value = null) {
-  const resolvedValue = value && typeof value === 'object' ? value : {};
-  return buildTransportDeliveryOutcome(resolvedValue instanceof Error ?
-    thrownErrorOutcome(resolvedValue) :
-    resolvedValue);
+// The transport outcome a thrown delivery error carries. A value that is not
+// an Error carries no transport fact and reads as a failed delivery.
+function classifyThrownDeliveryError(error = null) {
+  return buildTransportDeliveryOutcome(error instanceof Error ?
+    thrownErrorOutcome(error) : {});
 }
 
 function isDeliveredTransportDeliveryOutcome(outcome = null) {
@@ -281,14 +335,18 @@ function isDeferredTransportDeliveryOutcome(outcome = null) {
 }
 
 export {
-  TRANSPORT_COMPLETED_STATUS,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
   TRANSPORT_DELIVERY_OUTCOME_STATE,
+  buildDeliveryEnvelope,
   buildHandlerFailedError,
   buildSupersededDeliveryOutcome,
   buildTransportDeliveryOutcome,
-  classifyTransportDeliveryOutcome,
+  classifyThrownDeliveryError,
+  deliveryAnswerOf,
+  deliveryReadingOf,
+  deliveryTransportOf,
+  forwardedDeliveryAnswer,
   isDeferredTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
   isSupersededTransportDeliveryOutcome,

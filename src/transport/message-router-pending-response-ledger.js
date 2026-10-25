@@ -486,28 +486,6 @@ class MessageRouterPendingResponseLedger {
     }
   }
   /**
-   * Normalize SERVICE_RESPONSE payload to transport delivery shape.
-   * @param {*} result - Handler result payload.
-   * @return {Object} Normalized payload fields.
-   * @private
-   */
-  normalizeServiceResponseResult(result) {
-    if (!result || typeof result !== TRANSPORT_TYPEOF.OBJECT) {
-      return {};
-    }
-    const {type: handlerType, ...rest} = result;
-    if (
-      handlerType &&
-      !Object.prototype.hasOwnProperty.call(
-        rest,
-        MESSAGE_ROUTER_LITERAL.STRING_RESPONSETYPE,
-      )
-    ) {
-      rest.responseType = handlerType;
-    }
-    return rest;
-  }
-  /**
    * Handle acknowledgment message. An ACK carries only messageId,
    * acknowledged and error; it never carries a handler answer.
    * @param {Object} message - Acknowledgment message.

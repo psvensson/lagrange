@@ -33,11 +33,7 @@ import {
 import {
   STATE,
 } from '../../constants/index.js';
-import {
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
-  isDeliveredTransportDeliveryOutcome,
-} from '../../transport/transport-semantic-outcome.js';
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from '../../transport/transport-semantic-outcome.js';
 import {
   NODE_STATE_PUBLICATION_OWNER_LITERAL,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
@@ -479,7 +475,7 @@ class NodeStatePublicationOwner {
             ),
           ) :
           deliveryTimeoutBudgetMs;
-        const rawDeliveryResult = await this.messageRouter().deliver(
+        const deliveryEnvelope = await this.messageRouter().deliver(
           targetAddress,
           message,
           {
@@ -487,21 +483,15 @@ class NodeStatePublicationOwner {
             timeoutMs: deliveryTimeoutMs,
           },
         );
-        const deliveryResult = classifyTransportDeliveryOutcome(
-          rawDeliveryResult,
-        );
-        if (!isDeliveredTransportDeliveryOutcome(deliveryResult) ||
-            deliveryResult?.reasonCode ===
-              TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
-          throw buildNodeStateUpdateDeliveryError(
-            deliveryResult,
-            targetAddress,
-          );
+        const transport = deliveryTransportOf(deliveryEnvelope);
+        const answer = deliveryAnswerOf(deliveryEnvelope);
+        if (!isDeliveredTransportDeliveryOutcome(transport)) {
+          throw buildNodeStateUpdateDeliveryError(transport, targetAddress);
         }
         const durableCompletion =
-          rawDeliveryResult?.completionKind ===
+          answer?.completionKind ===
             CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
-          rawDeliveryResult?.completionCompleted === true;
+          answer?.completionCompleted === true;
         if (options.requireDurableCompletion === true && !durableCompletion) {
           const completionError = new Error(
             NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
@@ -524,16 +514,16 @@ class NodeStatePublicationOwner {
         return buildNodeStateUpdatePublicationOutcome({
           publicationMode,
           publicationDiagnostics,
-          completionKind: rawDeliveryResult?.completionKind ||
+          completionKind: answer?.completionKind ||
             CONTROL_PLANE_MESSAGE_COMPLETION_KIND.NOT_OBSERVED,
           completionCompleted: durableCompletion,
           [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]:
-            rawDeliveryResult?.[
+            answer?.[
               CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
             ] || null,
           [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
             .AUTHORITATIVE_OBSERVED_AT_MS]:
-              rawDeliveryResult?.[
+              answer?.[
                 CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
                   .AUTHORITATIVE_OBSERVED_AT_MS
               ] ?? null,

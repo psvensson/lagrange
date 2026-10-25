@@ -9,6 +9,7 @@
 // contract itself uses the real chain
 // (test/raft/raft-rs-backend/committed-membership-harness.js) instead.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -86,17 +87,11 @@ function answerFixtureCommittedMembership(cache, payload) {
       ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
     return undefined;
   }
-  return {
-    acknowledged: true,
-    noHandler: false,
-    deliveryState: 'delivered',
-    deferRetry: false,
-    errorCode: null,
-    retryAfterMs: null,
+  return buildDeliveryEnvelope({acknowledged: true}, {
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: fixtureCommittedMembershipAnswer(
       cache, payload[ReplicaOperationField.PARTITION_ID]),
-  };
+  });
 }
 
 const FIXTURE_WRAPPED = Symbol('fixture committed-membership router');

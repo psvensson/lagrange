@@ -7,6 +7,7 @@
  */
 
 import {EventEmitter} from 'node:events';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ControllableConsensusPort} from
   '../test-helpers/controllable-consensus-port.js';
 import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -89,16 +90,13 @@ export function createLoopbackTransport() {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
     ...handlerIdentityApi(handlers),
     async deliver(address, payload) {
       const handler = handlers.get(address);
       if (!handler) {
         throw new Error(`No handler registered for ${address}`);
       }
-      return handler({payload});
+      return buildDeliveryEnvelope({acknowledged: true}, await handler({payload}));
     },
   };
 }

@@ -18,16 +18,14 @@ async function completeApplicationMessage(
     service.applicationMessageCompletionHandlers.get(
       applicationEvent.payload?.type,
     );
-  // The answer is MG's own: the message was received and its application
-  // acknowledgement is still pending (acknowledgeMessage). It is not a
-  // transport refusal, so it never uses the router's `acknowledged` name
-  // (decision D2, finding F-B).
+  // The answer is MG's own: the message was received; its application
+  // acknowledgement is MG's later acknowledgeMessage, never a field of this
+  // answer (decision D2, findings F-B and F-V2).
   if (typeof completionHandler === 'function') {
     const completion = await completionHandler(applicationEvent);
     return {
       messageId: applicationEvent.messageId,
       status: applicationStatus.RECEIVED,
-      applicationAcknowledged: false,
       ...(completion && typeof completion === 'object' ? completion : {}),
     };
   }
@@ -35,7 +33,6 @@ async function completeApplicationMessage(
   return {
     messageId: applicationEvent.messageId,
     status: applicationStatus.RECEIVED,
-    applicationAcknowledged: false,
   };
 }
 
@@ -51,7 +48,6 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
     NUM,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   } = deps;
   const cdcPropagationRuntimeDeps = {
@@ -62,7 +58,6 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
     MESSAGE_GROUP_SERVICE_LITERAL,
     NUM,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   };
 

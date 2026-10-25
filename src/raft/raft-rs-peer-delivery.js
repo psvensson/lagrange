@@ -13,9 +13,8 @@ import {
   RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
-import {
+import {deliveryTransportOf,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
 
@@ -80,12 +79,13 @@ function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
 // a FAILED or DEFERRED outcome, including a contradictory one, is a failed
 // delivery.
 function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
-  const outcome = classifyTransportDeliveryOutcome(delivery);
+  // A port that resolved without a delivery envelope has no outcome: failed.
+  const outcome = deliveryTransportOf(delivery);
   if (!isDeliveredTransportDeliveryOutcome(outcome)) {
     return peerDeliveryFailed(group, raftPeerId,
-      outcome.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
+      outcome?.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
         RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
-      outcome.error || outcome.reasonCode, failedPeers);
+      outcome?.error || outcome?.reasonCode, failedPeers);
   }
   recordPeerDelivery(group, raftPeerId, {
     outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,

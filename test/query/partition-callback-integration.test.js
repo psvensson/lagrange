@@ -12,6 +12,7 @@
  * router (same pattern as execute-request.test.js).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from
   '../../src/query/sql-query-engine.js';
@@ -116,22 +117,16 @@ function createMockMessageRouter(partitionRows, opts = {}) {
 
       if (opts.failPartitions &&
           opts.failPartitions.includes(partitionId)) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'partition unavailable',
           rows: [],
           changes: 0,
-        };
+        });
       }
 
       const rows = partitionRows[partitionId] || [];
-      return {
-        acknowledged: true,
-        success: true,
-        rows,
-        changes: 0,
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows, changes: 0});
     },
   };
 }

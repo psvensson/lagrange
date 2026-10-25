@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -296,11 +297,10 @@ test(
       messageRouter: {
         async deliver() {
           deliveries += 1;
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             error: 'No leader available for write operation',
-          };
+          });
         },
       },
     });
@@ -354,7 +354,7 @@ test(
       messageRouter: {
         async deliver() {
           deliveries += 1;
-          return {acknowledged: true, success: true, rows: []};
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       },
     });
@@ -449,11 +449,8 @@ test(
         deliveredEntryIds.push(message.entryId || null);
         const response = await leader.handleRemoteQuery(message);
         if (deliveries === 1) {
-          return {
-            acknowledged: false,
-            success: false,
-            error: 'Message timeout after committed response loss',
-          };
+          return buildDeliveryEnvelope(
+            {acknowledged: false, error: 'Message timeout after committed response loss'});
         }
         return response;
       },

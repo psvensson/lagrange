@@ -1,7 +1,7 @@
 // One client for the release lifecycle route. Node hints select where to
 // ask; only the answering consensus owner can name the current leader.
 import {AddressManager} from '../address/address-manager.js';
-import {classifyTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome,
+import {deliveryTransportOf, deliveryAnswerOf, classifyThrownDeliveryError, isDeliveredTransportDeliveryOutcome,
   TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
   '../transport/transport-semantic-outcome.js';
 import {participantReleaseClockMeasured, participantReleaseSafeClockInteger,
@@ -96,13 +96,15 @@ function prepareParticipantReleaseRequest(owner, nodeId, request) {
   return {answer};
 }
 
-function participantReleaseDeliveryAnswer(response, prepared, nodeId) {
-  const result = response[PARTICIPANT_RELEASE_RESULT_FIELD];
-  if (isDeliveredTransportDeliveryOutcome(response) && response.noHandler !== true &&
+function participantReleaseDeliveryAnswer(delivery, prepared, nodeId) {
+  const transport = deliveryTransportOf(delivery);
+  const answer = deliveryAnswerOf(delivery);
+  const result = answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
+  if (isDeliveredTransportDeliveryOutcome(transport) &&
       result && typeof result === 'object') return result;
   return prepared.observation &&
-    response.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
-    observationUnavailable(prepared.request, nodeId, response.reasonCode) :
+    transport.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
+    observationUnavailable(prepared.request, nodeId, transport.reasonCode) :
     observationUnavailable(prepared.request, nodeId);
 }
 
@@ -116,14 +118,14 @@ async function askParticipantRelease(owner, nodeId, request) {
       {missingFact: MISSING_FACT.RELEASE_DEADLINE, owner: nodeId});
   }
   try {
-    const response = classifyTransportDeliveryOutcome(await owner.messageRouter.deliver(
+    const delivery = await owner.messageRouter.deliver(
       `${nodeId}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`,
       {...prepared.request, type: PARTICIPANT_RELEASE_TYPE},
       {targetNodeId: nodeId, deliveryPriority: PARTICIPANT_RELEASE_PRIORITY,
-        timeoutMs: prepared.timeoutMs}));
-    return participantReleaseDeliveryAnswer(response, prepared, nodeId);
+        timeoutMs: prepared.timeoutMs});
+    return participantReleaseDeliveryAnswer(delivery, prepared, nodeId);
   } catch (error) {
-    const delivery = classifyTransportDeliveryOutcome(error);
+    const delivery = classifyThrownDeliveryError(error);
     return prepared.observation &&
       delivery.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT ?
       observationUnavailable(prepared.request, nodeId, delivery.reasonCode) :

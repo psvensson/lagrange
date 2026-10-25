@@ -24,6 +24,7 @@ import {
 } from '../../src/rebalancer/operation-workflow-replace-witness.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
   '../../src/partition/partition-replica-membership-constants.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_NO_CONNECTION_ERROR_CODE,
@@ -47,7 +48,8 @@ function operation() {
   };
 }
 
-function owner(answer) {
+// The owner fixture's router resolves the given delivery envelope.
+function owner(delivery) {
   return {
     repository: {
       getReplaceSourceReplicaId: () => 'replace-witness-boundary-r1',
@@ -55,7 +57,7 @@ function owner(answer) {
       getObservedReplicaStatusFromCache: () => 'active',
     },
     getCachedCriticalReplicaRows: () => [],
-    messageRouter: {deliver: async () => answer},
+    messageRouter: {deliver: async () => delivery},
   };
 }
 
@@ -78,13 +80,12 @@ function membership(overrides = {}) {
 
 test('ACK-before-handler-lookup remains a named deferred delivery with its ' +
   'retry contract', async () => {
-  const answer = {
-    acknowledged: true,
+  const target = owner(buildDeliveryEnvelope({
+    acknowledged: false,
     noHandler: true,
     deferRetry: true,
     retryAfterMs: 250,
-  };
-  const target = owner(answer);
+  }));
   const delivered = await deliverToReplaceWitness(
     target, operation(), 'READ_REPLICA_MEMBERSHIP');
   assert.equal(delivered.outcome,
@@ -113,11 +114,10 @@ test('malformed completed membership answers fail closed across numeric and ' +
     Object.create(base),
   ];
   for (const malformed of cases) {
-    const target = owner({
-      acknowledged: true,
+    const target = owner(buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.COMPLETED,
       membership: malformed,
-    });
+    }));
     const decision = await decideReplaceCompletion(target, operation());
     assert.notEqual(decision.verdict, 'source_retired');
     assert.equal(decision.observation.state,
@@ -132,11 +132,10 @@ test('valid-shaped membership is bound to the addressed replica and operation ' 
     membership({partitionId: 'other-partition-p9'}),
   ];
   for (const mismatched of cases) {
-    const target = owner({
-      acknowledged: true,
+    const target = owner(buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.COMPLETED,
       membership: mismatched,
-    });
+    }));
     const decision = await decideReplaceCompletion(target, operation());
     assert.notEqual(decision.verdict, 'source_retired');
     assert.equal(decision.observation.state,
@@ -146,21 +145,23 @@ test('valid-shaped membership is bound to the addressed replica and operation ' 
 
 test('ACK cannot expose an application-looking witness across contradictory ' +
   'transport metadata', async () => {
+  // Router facts that contradict the acknowledgement, and an answer whose
+  // completed status carries an error (the replica-operation answer's own
+  // refusal, never a completion).
   const cases = [
-    {deferRetry: true, retryAfterMs: 25},
-    {errorCode: 'ROUTER_CONNECTION_CLOSED'},
-    {errorCode: ROUTER_NO_CONNECTION_ERROR_CODE},
-    {errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE},
-    {deliveryState: 'failed'},
-    {error: 'connection failed'},
+    [{deferRetry: true, retryAfterMs: 25}, {}],
+    [{errorCode: 'ROUTER_CONNECTION_CLOSED'}, {}],
+    [{errorCode: ROUTER_NO_CONNECTION_ERROR_CODE}, {}],
+    [{errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE}, {}],
+    [{deliveryState: 'failed'}, {}],
+    [{}, {error: 'connection failed'}],
   ];
-  for (const conflict of cases) {
-    const target = owner({
-      acknowledged: true,
+  for (const [conflict, answerConflict] of cases) {
+    const target = owner(buildDeliveryEnvelope({acknowledged: true, ...conflict}, {
       status: ReplicaOperationResponseStatus.COMPLETED,
       membership: membership(),
-      ...conflict,
-    });
+      ...answerConflict,
+    }));
     const decision = await decideReplaceCompletion(target, operation());
     assert.notEqual(decision.verdict, 'source_retired');
     assert.equal(decision.observation.state,

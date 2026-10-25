@@ -8,6 +8,7 @@
  * next evaluation schedules a duplicate canonical ADD.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -228,7 +229,7 @@ function createInProcessRuntimeRouter(handlerByNodeId) {
       const nodeId = target.split('/')[0];
       const handler = handlerByNodeId.get(nodeId);
       if (!handler) {
-        return {acknowledged: false, error: `No handler for ${nodeId}`};
+        return buildDeliveryEnvelope({acknowledged: false, error: `No handler for ${nodeId}`});
       }
       let response;
       if (payload?.[ReplicaOperationField.TYPE] ===
@@ -237,7 +238,7 @@ function createInProcessRuntimeRouter(handlerByNodeId) {
       } else {
         response = await handler.handleRemoveReplica(payload);
       }
-      return {acknowledged: true, ...response};
+      return buildDeliveryEnvelope({acknowledged: true}, {...response});
     },
   };
 }

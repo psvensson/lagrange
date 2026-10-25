@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -125,10 +126,9 @@ function createRebalancer({infoLogs, mockCoordinator}) {
     },
     messageRouter: {
       getConnectionState: () => PRE_EXECUTION_HANDOFF_TEST.CONNECTED_STATE,
-      deliver: async () => ({
-        acknowledged: true,
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
         status: PRE_EXECUTION_HANDOFF_TEST.COMPLETED_STATUS,
-      }),
+      })),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

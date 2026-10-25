@@ -1,5 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {ERRORS} from '../constants/errors.js';
+import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE} from
+  '../transport/transport-semantic-outcome.js';
 import {
   PARTITION_WRITE_LEADERSHIP_REFUSAL,
   isWriteOutcomeUnknown,
@@ -163,6 +165,17 @@ function createUnknownOutcomeRedelivery({entryId, forRead, now}) {
         reason: typeof error?.message === STRING_TYPE ? error.message : null,
         logIndex: null,
       });
+    },
+    // A resolved transport failure can lose the answer just as a rejection
+    // can. Only the router's outcome supplies this fact; domain answer fields
+    // never manufacture transport loss or erase an already retained debt.
+    observeTransport(outcome) {
+      if (forRead || outcome.recoverableBeforeSend === true) return;
+      if (outcome.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.CONNECTION_CLOSED &&
+          outcome.reasonCode !== TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.MESSAGE_TIMEOUT) return;
+      state.lostAnswers += 1;
+      markUnresolved({state: UNKNOWN_OUTCOME_LOST_ANSWER_STATE,
+        reason: outcome.error, logIndex: null});
     },
     isUnresolved,
     /**

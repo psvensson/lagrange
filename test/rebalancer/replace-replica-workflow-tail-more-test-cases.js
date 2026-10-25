@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerReplaceReplicaWorkflowAddTopologyTests} from './replace-replica-workflow-add-topology-test-cases.js';
 
 const PARTITION_ENTITY_TYPE = 'partition';
@@ -27,10 +28,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: deliveries.length === 1 ? 'initiated' : 'completed',
-          };
+          });
         },
       };
 
@@ -146,17 +146,15 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           if (payload?.type ===
               ReplicaOperationMessageType.CREATE_REPLICA) {
             createDispatchCount += 1;
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: createDispatchCount === 1 ?
                 ReplicaOperationResponseStatus.INITIATED :
                 ReplicaOperationResponseStatus.COMPLETED,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -285,17 +283,15 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           if (payload?.type ===
               ReplicaOperationMessageType.CREATE_REPLICA) {
             createDispatchCount += 1;
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: createDispatchCount === 1 ?
                 ReplicaOperationResponseStatus.INITIATED :
                 ReplicaOperationResponseStatus.COMPLETED,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -425,17 +421,15 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           if (payload?.type ===
               ReplicaOperationMessageType.CREATE_REPLICA) {
             createDispatchCount += 1;
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: createDispatchCount === 1 ?
                 ReplicaOperationResponseStatus.INITIATED :
                 ReplicaOperationResponseStatus.COMPLETED,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -540,10 +534,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: deliveries.length === 1 ? 'initiated' : 'completed',
-          };
+          });
         },
       };
 
@@ -642,10 +635,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
       };
 
@@ -882,10 +874,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
       };
 
@@ -1032,10 +1023,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: deliveries.length === 1 ? 'initiated' : 'completed',
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -1163,10 +1153,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -1282,10 +1271,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
-            status: 'initiated',
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -1432,10 +1418,9 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
       const messageRouter = {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,

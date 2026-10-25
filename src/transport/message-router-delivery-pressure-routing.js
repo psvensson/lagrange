@@ -1,10 +1,11 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
-import {classifyTransportDeliveryOutcome} from './transport-semantic-outcome.js';
+import {deliveryTransportOf, deliveryAnswerOf,
+  classifyThrownDeliveryError,
+  isDeferredTransportDeliveryOutcome,
+} from './transport-semantic-outcome.js';
 
 const {
   QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
-  QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE,
   QUERY_TRANSPORT_SELECTION,
   ROUTER_ERROR_MSG,
   ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
@@ -129,15 +130,14 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     };
   },
 
-  // A query transport failure is either a thrown Error or a delivery answer;
-  // the transport owner converts both, so the text, code and retry fields are
-  // read from one classified outcome.
+  // A query transport failure is a thrown Error; the transport owner converts
+  // it, so the text, code and retry fields are read from one outcome.
   buildCanonicalDeferredQueryTransportOutcome(
     messageId,
     correlationId,
     failure,
   ) {
-    const outcome = classifyTransportDeliveryOutcome(failure);
+    const outcome = classifyThrownDeliveryError(failure);
     return this.buildDeferredDeliveryFailure(
       messageId,
       correlationId,
@@ -151,13 +151,11 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     );
   },
 
-  buildQueryTransportFailureError(failure, _targetNodeId) {
-    const outcome = classifyTransportDeliveryOutcome(failure);
-    const normalizedMessage =
+  buildQueryTransportFailureError(failure) {
+    const outcome = classifyThrownDeliveryError(failure);
+    const error = failure;
+    error.message =
       outcome.error ?? ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED;
-    const error =
-      failure instanceof Error ? failure : new Error(normalizedMessage);
-    error.message = normalizedMessage;
     if (
       typeof outcome.errorCode === TRANSPORT_TYPEOF.STRING &&
       outcome.errorCode.length > TRANSPORT_NUM.ZERO
@@ -173,19 +171,11 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         Math.floor(outcome.retryAfterMs),
       );
     }
-    if (failure?.recoverableBeforeSend === true) {
-      error.recoverableBeforeSend = true;
-    }
     return error;
   },
 
-  resolveQueryTransportDeliveryState(failure) {
-    const outcome = classifyTransportDeliveryOutcome(failure);
-    return outcome.acknowledged ?
-      QUERY_TRANSPORT_DELIVERY_STATE.SUCCESS :
-      QUERY_TRANSPORT_DELIVERY_STATE_BY_OUTCOME_STATE[outcome.deliveryState];
-  },
-
+  // The query transport rejected: a deferred outcome is the router's
+  // deferral, a recoverable one is retried, and anything else rejects.
   async normalizeQueryTransportFailure({
     failure,
     targetNodeId,
@@ -194,20 +184,18 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     message,
     correlationId,
   }) {
-    const deliveryState = this.resolveQueryTransportDeliveryState(failure);
-    if (deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.DEFER_RETRY) {
+    if (!(failure instanceof Error)) {
+      throw failure;
+    }
+    if (isDeferredTransportDeliveryOutcome(classifyThrownDeliveryError(failure))) {
       return this.buildCanonicalDeferredQueryTransportOutcome(
         messageId,
         correlationId,
         failure,
       );
     }
-    const transportError = this.buildQueryTransportFailureError(
-      failure,
-      targetNodeId,
-    );
     const recoverableFailure = await this.resolveRecoverableDeliveryError({
-      error: transportError,
+      error: this.buildQueryTransportFailureError(failure),
       targetNodeId,
       targetAddress,
       messageId,
@@ -217,13 +205,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
     if (recoverableFailure) {
       return recoverableFailure;
     }
-    if (
-      deliveryState === QUERY_TRANSPORT_DELIVERY_STATE.HARD_FAILURE &&
-      failure instanceof Error
-    ) {
-      throw failure;
-    }
-    return failure;
+    throw failure;
   },
 
   buildQueryTransportSendOptions(options = {}) {
@@ -265,37 +247,37 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
   ) {
     const queryTransport = queryTransportSelection.service;
     if (!queryTransport) {
-      return this.buildDeferredQueryTransportOutcome(queryTransportSelection);
+      return this.buildDeliveryOutcomeResult(
+        this.buildDeferredQueryTransportOutcome(queryTransportSelection));
     }
+    let record;
     try {
-      const queryResult = await queryTransport.sendMessage(
+      record = await queryTransport.sendMessage(
         targetAddress,
         message,
         this.buildQueryTransportSendOptions(options),
       );
-      return await this.normalizeQueryTransportFailure({
-        failure: queryResult,
-        targetNodeId,
-        targetAddress,
-        messageId,
-        message,
-        correlationId,
-      });
     } catch (error) {
-      return this.normalizeQueryTransportFailure({
+      return this.buildDeliveryOutcomeResult(await this.normalizeQueryTransportFailure({
         failure: error,
         targetNodeId,
         targetAddress,
         messageId,
         message,
         correlationId,
-      });
+      }));
     }
+    // The query transport resolves with its own record of the inner
+    // delivery; that delivery's envelope passes through unchanged.
+    const delivery = record.delivery;
+    return this.buildDeliveryOutcomeResult(
+      deliveryTransportOf(delivery), deliveryAnswerOf(delivery));
   },
 
-  buildDeliveryOutcomeResult(result) {
+  buildDeliveryOutcomeResult(result, answer = null) {
     return {
       result,
+      answer,
       queueWaitMs: TRANSPORT_NUM.ZERO,
     };
   },
@@ -324,7 +306,7 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
           options,
         );
       }
-      const queryResult = await this.resolveQueryTransportDeliveryOutcome(
+      return this.resolveQueryTransportDeliveryOutcome(
         targetAddress,
         message,
         targetNodeId,
@@ -333,7 +315,6 @@ const MESSAGE_ROUTER_DELIVERY_PRESSURE_ROUTING_METHODS = Object.freeze({
         queryTransportSelection,
         options,
       );
-      return this.buildDeliveryOutcomeResult(queryResult);
     }
     if (targetNodeId === this.nodeId) {
       return this.deliverLocal(

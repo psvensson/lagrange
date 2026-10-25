@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
@@ -123,7 +124,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         error.retryAfterMs = 250;
         throw error;
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     };
     const coordinator = createRemoteHandoffCoordinator({
       authoritativeRead,
@@ -255,7 +256,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -443,7 +444,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -630,7 +631,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),

@@ -42,6 +42,7 @@
  * three distinct surviving nodes).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -157,10 +158,9 @@ function buildInitiatedDeliveryRouter(deliveries) {
   return {
     async deliver(target, payload) {
       deliveries.push({target, payload});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.INITIATED,
-      };
+      });
     },
     getConnectionState: () => 'connected',
     pingNode: async () => true,

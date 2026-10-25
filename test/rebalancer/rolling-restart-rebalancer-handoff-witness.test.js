@@ -13,6 +13,7 @@
 // whether the same node is re-planned into a fresh operation is a different
 // claim, carried to formation-sim (formation-contracts-registration, 2026-09-12).
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
@@ -94,9 +95,13 @@ function createHandoffOwner() {
       async deliver(target) {
         deliveries.push(target);
         // Not acknowledged, retry later: the deferral the invariant is about.
-        return {acknowledged: false, error: 'remote owner did not answer',
-          errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-          retryAfterMs: OPERATION_WORKFLOW_OWNER_SHARED.DISPATCH_RETRY_DELAY_MS};
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            error: 'remote owner did not answer',
+            errorCode: ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
+            retryAfterMs: OPERATION_WORKFLOW_OWNER_SHARED.DISPATCH_RETRY_DELAY_MS,
+          });
       },
     },
     tablePolicyService: hosts.tablePolicyService,

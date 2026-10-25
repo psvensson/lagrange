@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createControllableMessageGroupService,
@@ -104,7 +105,7 @@ test('MessageGroupService - constructor requires transport', async (t) => {
 test('MessageGroupService - constructor requires WebSocket-based transport', async (t) => {
   // Create a transport that doesn't have WebSocket markers
   const invalidTransport = {
-    deliver: async () => ({acknowledged: true}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     initialize: async () => {},
     shutdown: async () => {},
     // Missing setMessageRouter and setServiceNodeResolver
@@ -998,7 +999,7 @@ test(
   async (t) => {
     const transport = {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
       async initialize() {},
       async shutdown() {},

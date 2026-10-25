@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -135,12 +136,10 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       const messageGroupLogger = createRecordingLogger();
       const transport = {
         async deliver() {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
             success: false,
-            noHandler: true,
             error: 'No handler for address: seed-node/message-group/mg-pressure-r1',
-          };
+          });
         },
         async initialize() {},
         async shutdown() {},

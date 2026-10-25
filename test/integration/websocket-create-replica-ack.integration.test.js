@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Integration test for CREATE_REPLICA ACK delivery via WebSocket.
  *
@@ -129,13 +130,13 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.ok(result.acknowledged, 'should be acknowledged');
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'should be acknowledged');
 
       // With flat structure, ACK fields are directly on result
       // Handler's type is preserved as responseType
-      t.equal(result.request_id, requestId, 'ACK should have correct request_id');
-      t.equal(result.status, 'initiated', 'ACK should have status');
-      t.equal(result.responseType, 'CREATE_REPLICA_ACK', 'ACK should have correct responseType');
+      t.equal(result.answer.request_id, requestId, 'ACK should have correct request_id');
+      t.equal(result.answer.status, 'initiated', 'ACK should have status');
+      t.equal(result.answer.responseType, 'CREATE_REPLICA_ACK', 'ACK should have correct responseType');
     } finally {
       await seedRouter.shutdown();
       await joiningRouter.shutdown();
@@ -189,10 +190,10 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.ok(result.acknowledged,
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
         'transport ACK should remain true even when response times out');
-      t.ok(result.error, 'should have error');
-      t.match(result.error, /timeout/i, 'error should mention timeout');
+      t.ok(result.transport.error, 'should have error');
+      t.match(result.transport.error, /timeout/i, 'error should mention timeout');
     } finally {
       await seedRouter.shutdown();
       await joiningRouter.shutdown();

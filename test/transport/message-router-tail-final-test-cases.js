@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 import {acknowledgeThenRespond} from '../test-helpers/message-router-remote-answer.js';
 export async function registerMessageRouterTailFinalTests({
@@ -56,9 +57,9 @@ export async function registerMessageRouterTailFinalTests({
     );
     const elapsedMs = Date.now() - startMs;
 
-    t.equal(result.acknowledged, false,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), false,
       'delivery should still fail when the ACK times out');
-    t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+    t.equal(result.transport.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
       'timeout override should preserve the deferred timeout error code');
     t.ok(elapsedMs < 80,
       'delivery should honor the per-call timeout override instead of the router default');
@@ -120,22 +121,22 @@ export async function registerMessageRouterTailFinalTests({
       );
 
       t.equal(
-        firstResult.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(firstResult)),
         false,
         'first delivery should fail when ACK times out',
       );
       t.match(
-        firstResult.error,
+        firstResult.transport.error,
         /Message timeout/i,
         'first delivery should surface the ACK timeout',
       );
       t.equal(
-        firstResult.deferRetry,
+        firstResult.transport.deferRetry,
         true,
         'first delivery should ask callers to defer while recovery is pending',
       );
       t.equal(
-        firstResult.errorCode,
+        firstResult.transport.errorCode,
         'ROUTER_MESSAGE_TIMEOUT',
         'first delivery should surface the deferred-timeout error code',
       );
@@ -185,17 +186,17 @@ export async function registerMessageRouterTailFinalTests({
       t.same(connectCalls, [],
         'next delivery should respect the armed reconnect owner');
       t.equal(
-        secondResult.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(secondResult)),
         false,
         'next delivery should still fail closed while reconnect is pending',
       );
       t.equal(
-        secondResult.deferRetry,
+        secondResult.transport.deferRetry,
         true,
         'next delivery should ask callers to defer while reconnect is pending',
       );
       t.equal(
-        secondResult.errorCode,
+        secondResult.transport.errorCode,
         'ROUTER_CONNECTION_CLOSED',
         'next delivery should surface the reconnect-in-progress error code',
       );
@@ -213,12 +214,12 @@ export async function registerMessageRouterTailFinalTests({
         'scheduled reconnect should eventually redial exactly once',
       );
       t.equal(
-        thirdResult.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(thirdResult)),
         true,
         'delivery should succeed after the scheduled reconnect completes',
       );
       t.equal(
-        thirdResult.recovered,
+        thirdResult.answer.recovered,
         true,
         'delivery should use the recovered connection after reconnect completes',
       );
@@ -309,12 +310,12 @@ export async function registerMessageRouterTailFinalTests({
         'delivery recovery should prefer canonical reconnect authority over the observed transport address',
       );
       t.equal(
-        result.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
         true,
         'delivery should succeed after reconnecting via the configured address',
       );
       t.equal(
-        result.recovered,
+        result.answer.recovered,
         true,
         'delivery should use the recovered connection after fallback',
       );
@@ -400,12 +401,12 @@ export async function registerMessageRouterTailFinalTests({
         'delivery recovery should reconnect through canonical authority before considering observed fallback addresses',
       );
       t.equal(
-        result.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
         true,
         'delivery should succeed after reconnecting via canonical authority',
       );
       t.equal(
-        result.recovered,
+        result.answer.recovered,
         true,
         'delivery should use the recovered connection after the canonical reconnect',
       );
@@ -481,7 +482,7 @@ export async function registerMessageRouterTailFinalTests({
         {type: 'TEST'},
       );
       t.equal(
-        firstResult.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(firstResult)),
         true,
         'first delivery should recover through the fresh resolver-owned address',
       );
@@ -495,7 +496,7 @@ export async function registerMessageRouterTailFinalTests({
         {type: 'TEST'},
       );
       t.equal(
-        secondResult.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(secondResult)),
         true,
         'second delivery should also recover',
       );
@@ -613,7 +614,7 @@ export async function registerMessageRouterTailFinalTests({
             (entry) => entry.details?.address === staleAddress,
           );
 
-          t.equal(result.acknowledged, true,
+          t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
             'delivery should recover through freshly resolved authority');
           t.same(connectCalls, [staleAddress, freshAddress],
             'delivery should suppress stale handshake failure then dial fresh authority');
@@ -725,7 +726,7 @@ export async function registerMessageRouterTailFinalTests({
         'delivery recovery should dial the authoritative resolver address instead of the stale configured hostname',
       );
       t.equal(
-        result.acknowledged,
+        isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
         true,
         'delivery should recover through the authoritative address',
       );
@@ -858,7 +859,7 @@ export async function registerMessageRouterTailFinalTests({
       {type: 'TEST'},
     );
 
-    t.equal(result.acknowledged, true,
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), true,
       'delivery should succeed after normalizing the bare address');
     t.equal(connectCalls.length, 1,
       'should attempt exactly one reconnect');

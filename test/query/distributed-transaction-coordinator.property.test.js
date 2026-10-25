@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -390,7 +391,7 @@ test(
             messageRouter: {
               deliver: async (_address, payload) => {
                 deliveredMessages.push(payload);
-                return {acknowledged: true, success: true};
+                return buildDeliveryEnvelope({acknowledged: true}, {success: true});
               },
             },
             transactionEpochSource: () => {

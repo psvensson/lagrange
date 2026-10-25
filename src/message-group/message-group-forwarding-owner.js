@@ -29,8 +29,6 @@ import {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwne
 import {normalizeCauseId} from '../utils/cause-id.js';
 import {hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
-import {classifyTransportDeliveryOutcome, isDeferredTransportDeliveryOutcome} from
-  '../transport/transport-semantic-outcome.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
   MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE,
@@ -162,19 +160,24 @@ class MessageGroupForwardingOwner {
     return Math.max(normalizedBaseRetryAfterMs, boundedErrorRetryAfterMs);
   }
 
-  isRetryableForwardDeliveryFailure(deliveryResult = null, errorMessage = null) {
+  // `failure` is the onward hop's transport outcome when it was not
+  // delivered, else the leader's answer; either asks to defer by deferRetry.
+  isRetryableForwardDeliveryFailure(failure = null, errorMessage = null) {
     const normalizedErrorMessage = typeof errorMessage === 'string' ?
       errorMessage :
       '';
-    if (isDeferredTransportDeliveryOutcome(
-      classifyTransportDeliveryOutcome(deliveryResult))) {
+    if (failure?.deferRetry === true) {
       return true;
     }
     return this.service.isForwardTargetBackpressured(
-      deliveryResult,
+      failure,
       normalizedErrorMessage,
     ) ||
-      normalizedErrorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
+      this.isForwardNetworkFailure(normalizedErrorMessage);
+  }
+
+  isForwardNetworkFailure(normalizedErrorMessage) {
+    return normalizedErrorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
       normalizedErrorMessage.includes(
         MESSAGE_GROUP_FORWARDING_OWNER_LITERAL.ENOTFOUND,
       ) ||

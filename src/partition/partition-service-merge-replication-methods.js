@@ -1,4 +1,5 @@
 import {ERRORS, SQL} from '../constants/index.js';
+import {forwardedDeliveryAnswer} from '../transport/transport-semantic-outcome.js';
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
@@ -208,16 +209,16 @@ class PartitionServiceMergeReplicationMethods {
   forwardStartMergeReplicationToLeader(payload, transitionMetadata) {
     const leaderAddress = this.resolveLeaderAddress();
     if (leaderAddress && this.transport) {
+      // A forwarding hop answers with the leader's answer (or its refusal).
       return this.transport.deliver(leaderAddress, {
         type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
         partitionId: payload?.partitionId || this.partitionId,
         tableId: payload?.tableId || this.tableId,
         tableName: payload?.tableName || this.tableName,
         transitionMetadata,
-      });
+      }).then(forwardedDeliveryAnswer);
     }
     return Promise.resolve({
-      acknowledged: false,
       success: false,
       error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
     });

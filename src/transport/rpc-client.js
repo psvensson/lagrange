@@ -1,3 +1,4 @@
+import {deliveryAnswerOf} from './transport-semantic-outcome.js';
 /**
  * RPCClient - Request-response pattern over message groups.
  *
@@ -162,10 +163,11 @@ class RPCClient extends EventEmitter {
           return;
         }
 
-        // If the message group returns a direct response, handle it
-        // ACK structure is flat - correlationId is directly on result
-        if (result && result.correlationId === correlationId) {
-          this.handleResponse(correlationId, result);
+        // A direct delivery carries the target's answer in its envelope;
+        // the answer's own correlationId names the request it answers.
+        const answer = deliveryAnswerOf(result?.delivery);
+        if (answer && answer.correlationId === correlationId) {
+          this.handleResponse(correlationId, answer);
         }
       }).catch((error) => {
         // Check if request was already handled

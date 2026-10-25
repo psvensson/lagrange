@@ -14,7 +14,7 @@ import {createSQLQueryEngineTransactionPersistenceMethods} from
   './sql-query-engine-transaction-persistence-methods.js';
 import {
   isParticipantTransactionAnswer,
-  participantAnswerSnapshotOf,
+  participantDeliveryAnswerOf,
   participantDeliveryKeyOf,
   participantEntryIdOf,
   participantFailureOf,
@@ -452,8 +452,8 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       sessionId,
       buildRequest: () => ({...request}),
       buildSuccessResult: () => ({...acceptedAnswer}),
-      isSuccessfulResponse: (response) => {
-        acceptedAnswer = participantAnswerSnapshotOf(response, expectedAnswer);
+      isSuccessfulResponse: (delivery) => {
+        acceptedAnswer = participantDeliveryAnswerOf(delivery, expectedAnswer);
         return acceptedAnswer !== null &&
           isParticipantTransactionAnswer(acceptedAnswer, expectedAnswer);
       },

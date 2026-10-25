@@ -23,6 +23,7 @@
  * routing heuristic is driven both ways through its readiness authority.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -97,10 +98,9 @@ function createCausalCluster(seedOwnerRoutingReady) {
       async deliver(target, payload) {
         ownerDispatches.push({target, payload});
         sourceNode.receive(payload);
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     // The owner sees itself healthy; its own lease is live.
@@ -126,10 +126,9 @@ function createCausalCluster(seedOwnerRoutingReady) {
     messageRouter: {
       async deliver(target, payload) {
         seedDispatches.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService:

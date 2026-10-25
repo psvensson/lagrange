@@ -203,7 +203,7 @@ class ManagedSplitTopologyAdapter {
     return this.messageRouter.deliver(
       nodeId + LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX,
       request.message,
-    );
+    ).then(({answer}) => answer);
   }
 
   /**

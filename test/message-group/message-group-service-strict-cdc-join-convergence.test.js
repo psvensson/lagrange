@@ -163,7 +163,8 @@ test(
         },
       );
 
-      t.equal(result.acknowledged, true, 'join-suppressed strict propagation should acknowledge receipt');
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(result.success, false, 'join-suppressed strict propagation should defer instead of succeeding');
       t.equal(result.deferRetry, true, 'join-suppressed strict propagation should surface typed defer semantics');
       t.equal(result.retryAfterMs, 250, 'join-suppressed strict propagation should preserve retry hint');
@@ -267,7 +268,8 @@ test(
         },
       );
 
-      t.equal(result.acknowledged, true, 'canonical local ingress should acknowledge strict CDC');
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         result.success,
         undefined,
@@ -365,7 +367,8 @@ test(
         },
       );
 
-      t.equal(result.acknowledged, true, 'local live leader ingress should acknowledge strict CDC');
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(TABLES.NODES, 'node-strict-local-live-hint')?.[
           COLUMN.STATUS
@@ -458,7 +461,8 @@ test(
         },
       );
 
-      t.equal(result.acknowledged, true, 'addressed local fallback should acknowledge strict CDC');
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(TABLES.NODES, 'node-strict-local-addressed-fallback')?.[
           COLUMN.STATUS
@@ -556,11 +560,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'addressed local metadata-publication fallback should acknowledge strict CDC',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(
           TABLES.NODES,
@@ -664,11 +665,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'relayed addressed local ingress should acknowledge strict CDC',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(
           TABLES.NODES,
@@ -763,11 +761,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'relayed addressed local ingress should acknowledge strict CDC batches',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         result.eventCount,
         2,
@@ -889,11 +884,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'relayed competing-target local ingress should acknowledge strict CDC',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(
           TABLES.NODES,
@@ -1049,11 +1041,8 @@ test(
         },
       );
 
-      t.equal(
-        result.acknowledged,
-        true,
-        'the strict CDC execution path should acknowledge locally applied convergence ingress',
-      );
+      t.notOk(Object.hasOwn(result, 'acknowledged'),
+        'the receipt is the router\'s fact, not a field of the CDC answer');
       t.equal(
         service.systemTableCache.get(
           TABLES.NODES,

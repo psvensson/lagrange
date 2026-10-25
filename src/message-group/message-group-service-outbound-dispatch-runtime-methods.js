@@ -1,7 +1,7 @@
 import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_GROUP_COMMAND_TYPE} from './constants.js';
 import {proposeMessageGroupCommand} from './message-group-proposal-routing.js';
-import {classifyTransportDeliveryOutcome, isDeferredTransportDeliveryOutcome} from
+import {deliveryTransportOf, isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const MESSAGE_GROUP_SERVICE_OUTBOUND_DISPATCH_RUNTIME_LITERAL = {
@@ -127,17 +127,13 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
               targetService,
             },
           );
-          // Spread the transport result directly - ACK structure is flat
-          const {
-            delivered: _d,
-            attempt: _a,
-            ...transportResult
-          } = deliveryResult;
+          // MG's own record carries the router's delivery envelope; it never
+          // spreads the transport outcome or the answer into itself.
           return {
             messageId,
             status: MessageStatus.DELIVERED,
             deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-            ...transportResult,
+            delivery: deliveryResult.delivery,
           };
         }
         this.logger.debug(
@@ -222,7 +218,7 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
               sourceReplica: this.replicaId,
             },
           );
-          const result = await this.transport.deliver(
+          const delivery = await this.transport.deliver(
             targetService,
             {
               messageId,
@@ -232,28 +228,25 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
             },
             deliveryOptions,
           );
-          if (result && result.acknowledged) {
-            // Spread transport result directly - ACK structure is flat
-            return {
-              delivered: true,
-              attempt: attempt + 1,
-              ...result,
-            };
+          // The transport outcome decides; MG does not interpret the answer.
+          const outcome = deliveryTransportOf(delivery);
+          if (isDeliveredTransportDeliveryOutcome(outcome)) {
+            return {delivered: true, attempt: attempt + 1, delivery};
           }
-          if (isDeferredTransportDeliveryOutcome(classifyTransportDeliveryOutcome(result))) {
+          if (isDeferredTransportDeliveryOutcome(outcome)) {
             return {
               delivered: false,
               attempt: attempt + 1,
               error:
-                result?.error ||
+                outcome.error ||
                 MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_DEFERRED,
               deferRetry: true,
-              retryAfterMs: result.retryAfterMs,
-              errorCode: result?.errorCode || null,
+              retryAfterMs: outcome.retryAfterMs,
+              errorCode: outcome.errorCode || null,
             };
           }
           lastError = new Error(
-            result?.error ||
+            outcome.error ||
               MESSAGE_GROUP_SERVICE_LITERAL.MESSAGE_DELIVERY_NOT_ACKNOWLEDGED,
           );
         } catch (error) {
@@ -361,23 +354,18 @@ function createMessageGroupServiceOutboundDispatchRuntimeMethods(deps = {}) {
           },
         );
         if (!deliveryResult.delivered) {
-          throw isDeferredTransportDeliveryOutcome(
-            classifyTransportDeliveryOutcome(deliveryResult)) ?
+          // MG's own record names its deferral explicitly.
+          throw deliveryResult.deferRetry === true ?
             buildDeferredDeliveryError(deliveryResult) :
             new Error(deliveryResult.error || failureDescription);
         }
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.pendingMessages.delete(messageId);
-        const {
-          delivered: _d,
-          attempt: _a,
-          ...transportResult
-        } = deliveryResult;
         return {
           messageId,
           status: MessageStatus.DELIVERED,
           deliveryType: MESSAGE_GROUP_SERVICE_LITERAL.DIRECT,
-          ...transportResult,
+          delivery: deliveryResult.delivery,
         };
       } catch (error) {
         const logLevel = error?.deferRetry === true ? 'debug' : 'error';

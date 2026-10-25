@@ -4,6 +4,7 @@
  * Requirements: 3.2, 3.3, 10.1, 10.3, 10.4, 11.1, 11.2, 11.3, 11.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {resumeFixtureParticipantAdmission} from
@@ -183,7 +184,7 @@ test('proposeWrite includes forward phase timing when forwarded',
     partition.leaderId = 'leader-r1';
     partition.resolveLeaderAddress = () => 'leader-node/partition/test_table';
     partition.transport = {
-      deliver: async () => ({acknowledged: true, request_id: 'req-1'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {request_id: 'req-1'})),
       unregister: () => {},
     };
 

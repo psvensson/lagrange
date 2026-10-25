@@ -1,8 +1,8 @@
 /**
  * ReplicaHandler - Handles replica operations on target node.
  *
- * Simplified from ReplicaLifecycleManager - only handles execution,
- * not tracking (that's the coordinator's job).
+ * It only executes replica operations on this node; tracking them is the
+ * operation workflow coordinator's job.
  *
  * This file owns the public ReplicaHandler class: construction and the
  * composition of the responsibility-scoped method mixins (lifecycle,

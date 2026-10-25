@@ -152,7 +152,7 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
             await runParticipantCutover(this, request) :
             await receiveParticipantRelease(this, request,
               observationValidated));
-        return {acknowledged: true, [PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
+        return {[PARTICIPANT_RELEASE_RESULT_FIELD]: response, correlationId};
       }
       await this.awaitRemovedReplicaCleanupAdmissionBarrier();
       this.logger.debug(REPLICA_HANDLER_LOG_MSG.MESSAGE_RECEIVED, {

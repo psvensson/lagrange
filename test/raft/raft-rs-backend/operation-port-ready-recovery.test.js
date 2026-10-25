@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -129,7 +130,7 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
         if (transportFault.armed && transportFault.phase ===
             'send-no-handler') {
           transportFault.armed = false;
-          return {acknowledged: false, noHandler: true};
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
         }
         return undefined;
       },
@@ -322,7 +323,7 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       assert.equal(fatal.outcome, CORE_FATAL);
       const replaced = await cluster.node(victim).readStatus();
       const entriesAfterReplacement = cluster.coreEntryCount();
-      releaseDelivery({acknowledged: true});
+      releaseDelivery(buildDeliveryEnvelope({acknowledged: true}));
       const staleContinuation = await pendingReady;
       assert.equal(staleContinuation.outcome, HOST_FAILURE);
       assert.equal(staleContinuation.phase, 'runtime-generation-changed');

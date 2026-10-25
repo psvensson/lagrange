@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -104,11 +105,7 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {
@@ -215,11 +212,7 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {

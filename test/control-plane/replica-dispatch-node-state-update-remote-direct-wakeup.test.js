@@ -1,3 +1,5 @@
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   ControlPlaneField,
@@ -79,7 +81,7 @@ test('ReplicaDispatchService sends direct remote wake-up for target-owned ' +
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     cdcIntegrationService: {
@@ -221,7 +223,7 @@ test(DIRECT_WAKEUP_VERIFICATION_TEST_NAME, async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     cdcIntegrationService: {
@@ -416,7 +418,7 @@ test('ReplicaDispatchService coalesces duplicate remote direct wake-ups ' +
       DIRECT_WAKEUP_IN_FLIGHT_ASSERT_COALESCED,
     );
 
-    resolveDelivery({acknowledged: true});
+    resolveDelivery(buildDeliveryEnvelope({acknowledged: true}));
     await firstWakeup;
 
     t.equal(
@@ -560,13 +562,13 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
       async deliver(address, payload, options) {
         deliveries.push({address, payload, options});
         if (deliveries.length === DIRECT_WAKEUP_RETRY_EXPECTED_SINGLE_CALL) {
-          return {
+          return buildDeliveryEnvelope({
             error: DIRECT_WAKEUP_RETRY_ERROR,
             deferRetry: true,
             retryAfterMs: DIRECT_WAKEUP_RETRY_AFTER_MS,
-          };
+          });
         }
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     cdcIntegrationService: {
@@ -742,15 +744,14 @@ test('ReplicaDispatchService registers a direct dispatch wake-up handler',
     initEnv();
 
     const registrations = [];
-    const unregistrations = [];
+    const handlers = new Map();
     const service = createService({
       messageRouter: {
         register(address, handler) {
           registrations.push({address, handler});
+          handlers.set(address, handler);
         },
-        unregister(address) {
-          unregistrations.push(address);
-        },
+        ...handlerIdentityApi(handlers),
       },
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
@@ -817,9 +818,9 @@ test('ReplicaDispatchService registers a direct dispatch wake-up handler',
       service.stop();
     }
 
-    t.same(
-      unregistrations,
-      ['node-1/service/replica-dispatch'],
-      'dispatch service should unregister the direct wake-up handler on stop',
+    t.equal(
+      handlers.has('node-1/service/replica-dispatch'),
+      false,
+      'dispatch service should retire its exact direct wake-up handler on stop',
     );
   });

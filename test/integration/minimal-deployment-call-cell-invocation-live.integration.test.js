@@ -15,6 +15,7 @@
  * not-invocable; sessions lacking BINDING_CALL are denied before dispatch.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -612,12 +613,13 @@ function createLiveMessageRouter(partitionStores) {
     async deliver(address, message) {
       const handler = handlers.get(address);
       if (handler) {
-        return handler(message);
+        return buildDeliveryEnvelope({acknowledged: true}, await handler(message));
       }
       if (isPartitionQueryMessage(message)) {
-        return executePartitionQuery(partitionStores, address, message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          executePartitionQuery(partitionStores, address, message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
     send: async () => ({success: true}),
   };

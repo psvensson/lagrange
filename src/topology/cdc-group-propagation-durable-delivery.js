@@ -1,3 +1,4 @@
+import {deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 // CDCGroupPropagationService's durable wave, its one propagation path. Source
 // debt and between-attempt progress remain with the source lane; the service
 // keeps no payload of its own between attempts or after the wave.
@@ -62,27 +63,36 @@ function targetDeliveryPayload(owner, source, events, target) {
   };
 }
 
+// A target leaf is either delivered (the router's envelope) or not sent at
+// all (no envelope, with the unknown-acceptance answer naming why); a
+// not-sent leaf stays uncovered and the wave retries it.
+function notSentTarget(error = undefined) {
+  return {delivery: null, answer: unknownCdcAcceptance(error)};
+}
+
 async function deliverTarget(owner, source, events, leaf, context) {
   context.assertCurrent();
   if (owner.resolvePropagationPressure(events).action === PRESSURE_GOVERNOR_ACTION.DEFER) {
-    return unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE);
+    return notSentTarget(CDC_COMPLETION.BACKPRESSURE);
   }
   if (!owner.messageRouter || typeof owner.messageRouter.deliver !== 'function') {
-    return unknownCdcAcceptance();
+    return notSentTarget();
   }
   const profile = resolveCdcPropagationDeliveryProfile(events);
   const payload = targetDeliveryPayload(owner, source, events, leaf.route);
-  return context.run(() => owner.messageRouter.deliver(leaf.route.address, payload, {
-    targetNodeId: leaf.route.coordinatorNodeId,
-    deliveryPriority: profile.deliveryPriority,
-    deliverySource: profile.deliverySource,
-    timeoutMs: context.remainingMs(),
-    remainingMs: context.remainingMs,
-    deliveryContext: context,
-    signal: context.signal,
-    prepareDeliveryMessage: prepareCdcDeliveryMessage,
-    deliveryDurationField: CDC_DELIVERY_REMAINING_MS,
-  }));
+  const delivery = await context.run(() => owner.messageRouter.deliver(
+    leaf.route.address, payload, {
+      targetNodeId: leaf.route.coordinatorNodeId,
+      deliveryPriority: profile.deliveryPriority,
+      deliverySource: profile.deliverySource,
+      timeoutMs: context.remainingMs(),
+      remainingMs: context.remainingMs,
+      deliveryContext: context,
+      signal: context.signal,
+      prepareDeliveryMessage: prepareCdcDeliveryMessage,
+      deliveryDurationField: CDC_DELIVERY_REMAINING_MS,
+    }));
+  return {delivery, answer: deliveryAnswerOf(delivery)};
 }
 
 async function deliverUncoveredLeaves(owner, wave, progress, events) {
@@ -96,14 +106,15 @@ async function deliverUncoveredLeaves(owner, wave, progress, events) {
     const leaf = progress.next();
     if (leaf === null) break;
     try {
-      const answer = progress.isSource(leaf) ?
-        await context.run(() => source.applyCDCBatch(events, {
+      // The source applies locally (its answer); a target is a delivery.
+      const {delivery, answer} = progress.isSource(leaf) ?
+        {delivery: null, answer: await context.run(() => source.applyCDCBatch(events, {
           deliveryContext: context, remainingMs: context.remainingMs,
-        })) : await deliverTarget(owner, source, events, leaf, context);
+        }))} : await deliverTarget(owner, source, events, leaf, context);
       context.assertCurrent();
-      progress.observe(leaf, answer);
+      progress.observe(leaf, progress.isSource(leaf) ? answer : delivery);
       if (answer?.success !== true) {
-        lastFailure = {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: answer};
+        lastFailure = {state: DURABLE_PROPAGATION_CAUSE.RESPONSE, cause: delivery ?? answer};
       }
     } catch (error) {
       context.assertCurrent();

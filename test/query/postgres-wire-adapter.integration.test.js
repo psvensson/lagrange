@@ -9,6 +9,7 @@
  * Requirements: 3.1, 3.2, 3.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {PG_SESSION_STATE} from
   '../../src/query/pg/postgres-wire-adapter.js';
@@ -48,19 +49,19 @@ function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = partitionStore.get(replicaId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: 0,
-        };
+        });
       }
       // A participant answers the transaction protocol (TX1 design 2.2): a
       // PREPARE names its state and digest, a COMMIT its outcome.
       if (message.type === 'TRANSACTION') {
-        return answerParticipantTransactionRequest(message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 }

@@ -4,6 +4,7 @@
  * Requirements: 1.1, 13.1
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {createSqlRequest} from '../../src/query/sql-request.js';
@@ -46,8 +47,7 @@ function createMockMessageRouter() {
             runExport: 'run_batch',
             exports: ['run_batch'],
           });
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [{
               function_id: 'mod-wasm',
@@ -56,10 +56,9 @@ function createMockMessageRouter() {
               code_blob: artifact,
             }],
             changes: 0,
-          };
+          });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{
             function_id: 'mod-1',
@@ -70,11 +69,10 @@ function createMockMessageRouter() {
               '};\n',
           }],
           changes: 0,
-        };
+        });
       }
       if (sql.includes('from module_manifests')) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{
             namespace: 'examples',
@@ -89,14 +87,13 @@ function createMockMessageRouter() {
             run_export: 'run_batch',
           }],
           changes: 0,
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{id: 1, name: 'Alice'}],
         changes: 0,
-      };
+      });
     },
   };
 }

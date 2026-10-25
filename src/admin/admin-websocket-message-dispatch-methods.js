@@ -314,7 +314,7 @@ const ADMIN_WEBSOCKET_MESSAGE_DISPATCH_METHODS = {
         principal: envelope.principal || null,
       });
 
-      const deliveryPayload = dispatchResult.delivery?.payload || {};
+      const deliveryPayload = dispatchResult.answer?.payload || {};
       const operation = dispatchResult.envelope.operation;
 
       if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {

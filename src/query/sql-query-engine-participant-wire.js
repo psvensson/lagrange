@@ -55,7 +55,7 @@ import {
 import {completePrepareEvidenceOf} from
   './distributed/distributed-transaction-prepare-evidence.js';
 import {copyStrictOwnDataRecord} from '../utils/strict-own-data.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
   '../transport/transport-semantic-outcome.js';
 
 const REQUEST_IDENTITY_FIELDS = Object.freeze([
@@ -135,17 +135,16 @@ function participantEntryIdOf(operation, request) {
 }
 
 /**
- * Whether a delivered answer is the participant's own (a success or a typed
- * participant refusal) rather than one the delivery owner routes again (the
- * write kernel's leadership, backpressure and unknown-outcome answers).
+ * The participant's answer as a strict own-data snapshot, bound to the
+ * expected identity when one is given. Transport facts are not answer
+ * fields: whether the answer was delivered is the delivery envelope's
+ * (participantDeliveryAnswerOf).
  * @param {Object} response - The partition's answer.
- * @return {boolean}
+ * @return {Object|null}
  */
 function participantAnswerSnapshotOf(response, expected = null) {
   const answer = copyStrictOwnDataRecord(response);
-  if (answer === null || answer.acknowledged !== true ||
-      classifyTransportDeliveryOutcome(answer).reasonCode ===
-        TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
+  if (answer === null) {
     return null;
   }
   if (expected !== null &&
@@ -158,6 +157,22 @@ function participantAnswerSnapshotOf(response, expected = null) {
   return answer;
 }
 
+// The delivered participant answer of one delivery envelope, or null when the
+// transport did not deliver it (a no-handler reply is never an answer).
+function participantDeliveryAnswerOf(delivery, expected = null) {
+  const transport = deliveryTransportOf(delivery);
+  const answer = deliveryAnswerOf(delivery);
+  return isDeliveredTransportDeliveryOutcome(transport) ?
+    participantAnswerSnapshotOf(answer, expected) : null;
+}
+
+/**
+ * Whether a delivered answer is the participant's own (a success or a typed
+ * participant refusal) rather than one the delivery owner routes again (the
+ * write kernel's leadership, backpressure and unknown-outcome answers).
+ * @param {Object} response - The partition's answer.
+ * @return {boolean}
+ */
 function isParticipantTransactionAnswer(response, expected = null) {
   const answer = participantAnswerSnapshotOf(response, expected);
   if (answer === null) {
@@ -330,6 +345,7 @@ export {
   committedAnswerOf,
   isParticipantTransactionAnswer,
   participantAnswerSnapshotOf,
+  participantDeliveryAnswerOf,
   participantDeliveryKeyOf,
   participantEntryIdOf,
   participantFailureOf,

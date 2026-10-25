@@ -6,6 +6,7 @@
 // reopened on a lost database, is refused reseed-required at open and held
 // durably (its lifecycle row says so), never re-founded empty.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -36,7 +37,7 @@ const ROUTER = Object.freeze({
   unregister() {},
   getRegisteredHandler: () => null,
   unregisterExact: () => true,
-  deliver: async () => ({acknowledged: true}),
+  deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
 });
 
 function seedPhase(directory, services, admission) {

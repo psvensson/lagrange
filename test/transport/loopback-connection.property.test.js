@@ -137,7 +137,7 @@ describe('Property 4: Loopback Connection Maintenance', () => {
           router.register(address, deliverFn);
           assert.ok(router.handlers.has(address));
 
-          router.unregister(address);
+          assert.strictEqual(router.unregisterExact(address, deliverFn), true);
           assert.strictEqual(router.handlers.has(address), false);
         },
       ),

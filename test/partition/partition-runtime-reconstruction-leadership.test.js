@@ -39,6 +39,7 @@
 // store owner's own reader; the retry window is the tuning owner's; a
 // reconstruction is counted where the runtime owner reports its core entries.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -1141,7 +1142,7 @@ test('F-z: a pending write released when its leader stops leading is ' +
     // The leader's outgoing is acknowledged by the transport and never
     // delivered: A is proposed, persisted on the leader, and never committed.
     network.deliver = async (address, ...rest) =>
-      toFollower(address) ? {acknowledged: true} :
+      toFollower(address) ? buildDeliveryEnvelope({acknowledged: true}) :
         deliver.call(network, address, ...rest);
     const pendingA = insert(leader, 'row-A', 'pending', 'fz-A');
     assert.equal(await Promise.race([pendingA,

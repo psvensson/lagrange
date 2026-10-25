@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   withOwnerReadPlanningEvidence,
 } from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
@@ -48,7 +49,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -263,7 +264,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -498,7 +499,7 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: (nodeId) => {
             if (nodeId === 'node-c') return 'disconnected';
@@ -720,10 +721,9 @@ export function registerQuorumConditionedRemoveSafetyTailMoreTests(context) {
         messageRouter: {
           deliver: async (target, payload, options) => {
             deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.COMPLETED,
-            };
+            });
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,

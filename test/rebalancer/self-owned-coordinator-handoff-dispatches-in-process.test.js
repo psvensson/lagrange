@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -58,7 +59,7 @@ function buildCoordinatorWithDeliverySpy(nodeId) {
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),

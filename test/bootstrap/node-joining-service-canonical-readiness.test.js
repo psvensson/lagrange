@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -910,18 +911,16 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
             'replica fanout should query the propagated table directly',
           );
           if (address === 'seed/partition/service_endpoints-p1-r1') {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               rows: replicaRowsA,
-            };
+            });
           }
           if (address === 'seed/partition/service_endpoints-p1-r2') {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               rows: replicaRowsB,
-            };
+            });
           }
           throw new Error(`unexpected address ${address}`);
         },
@@ -1196,11 +1195,7 @@ test(
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {

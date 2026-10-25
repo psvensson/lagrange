@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Property test for Location Transparent Communication.
  * Property 20: For any pair of partition replicas, communication should work
@@ -90,7 +91,8 @@ test('Property 20: Location Transparent Communication', async (t) => {
             const result2 = await router2.deliver(address2, message);
 
             // Results should be identical (both determined by handler)
-            return result1.acknowledged === result2.acknowledged;
+            return deliveryTransportOf(result1).deliveryState ===
+              deliveryTransportOf(result2).deliveryState;
           } finally {
             await router1.shutdown();
             await router2.shutdown();
@@ -197,7 +199,8 @@ test('Property 20: Location Transparent Communication', async (t) => {
             const result = await router.deliver(targetAddress, message);
 
             // Local handler should be called
-            return localHandlerCalled && result.acknowledged === true;
+            return localHandlerCalled &&
+              isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result));
           } finally {
             await router.shutdown();
           }
@@ -249,7 +252,7 @@ test('Property 20: Location Transparent Communication', async (t) => {
 
             // Result acknowledgment should match handler response
             // (handler returning acknowledged: false still gets delivered)
-            return typeof result.acknowledged === 'boolean';
+            return Object.hasOwn(result.transport, 'deliveryState') && !Object.hasOwn(result.transport, 'acknowledged');
           } finally {
             await router.shutdown();
           }
@@ -313,8 +316,8 @@ test('Property 20: Location Transparent Communication', async (t) => {
 
             // All results should have consistent structure
             return results.every((r) =>
-              typeof r.messageId === 'string' &&
-              typeof r.acknowledged === 'boolean',
+              typeof r.transport.messageId === 'string' &&
+              Object.hasOwn(r.transport, 'deliveryState') && !Object.hasOwn(r.transport, 'acknowledged'),
             );
           } finally {
             await router.shutdown();
@@ -364,11 +367,11 @@ test('Property 20: Location Transparent Communication', async (t) => {
             const result = await router.deliver(address, message);
 
             // Should support unregister
-            router.unregister(address);
+            router.unregisterExact(address, handler);
 
             // Results should have expected structure
-            return typeof result.messageId === 'string' &&
-                   typeof result.acknowledged === 'boolean';
+            return typeof result.transport.messageId === 'string' &&
+                   Object.hasOwn(result.transport, 'deliveryState') && !Object.hasOwn(result.transport, 'acknowledged');
           } finally {
             await router.shutdown();
           }

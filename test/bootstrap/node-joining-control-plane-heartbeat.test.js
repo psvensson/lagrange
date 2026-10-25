@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -48,7 +49,7 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
     service.messageRouter = {
       deliver: async (targetAddress, message, options) => {
         deliveries.push({targetAddress, message, options});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
     setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
@@ -272,10 +273,8 @@ test('NodeJoiningService treats unacknowledged control-plane heartbeats as failu
     });
 
     service.messageRouter = {
-      deliver: async () => ({
-        acknowledged: false,
-        error: 'Message timeout',
-      }),
+      deliver: async () => (buildDeliveryEnvelope(
+        {acknowledged: false, error: 'Message timeout'})),
     };
     setHeartbeatNodeStateUpdateTargets(service, 'seed-node/message-group/mg-1-r1');
 
@@ -305,7 +304,7 @@ test('NodeJoiningService does not block READY heartbeats on cluster mesh reconci
     service.messageRouter = {
       deliver: async (targetAddress, message) => {
         deliveries.push({targetAddress, message});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
     service.joinReadinessEvaluator.shouldReconnectClusterMesh =
@@ -353,7 +352,7 @@ test('NodeJoiningService does not block CONNECTED publication on cluster mesh re
     service.messageRouter = {
       deliver: async (targetAddress, message) => {
         deliveries.push({targetAddress, message});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
     service.joinReadinessEvaluator.shouldReconnectClusterMesh =

@@ -24,6 +24,7 @@
  * Each witness runs for both lab-observed deferral causes (see PROFILES).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -234,15 +235,14 @@ async function createDeferredReplaceHarness(profile) {
     },
     messageRouter: {
       deliver: async (target, payload) => {
-        const witnessAnswer = witness.answer(payload);
+        const witnessAnswer = witness.deliveryFor(payload);
         if (witnessAnswer) {
           return witnessAnswer;
         }
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,

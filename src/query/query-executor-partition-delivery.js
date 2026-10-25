@@ -23,7 +23,8 @@ import {
   withWriteEntryIdentity,
 } from './query-executor-unknown-outcome.js';
 import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
-import {TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyTransportDeliveryOutcome} from
+import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError,
+  deliveryReadingOf} from
   '../transport/transport-semantic-outcome.js';
 
 const {
@@ -387,14 +388,18 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           deliverySubmitted = true;
           unknownOutcome.recordDelivery();
-          const response = await this.messageRouter.deliver(
+          const delivery = await this.messageRouter.deliver(
             address,
             request,
             attemptRouterDeliveryOptions,
           );
+          unknownOutcome.observeTransport(deliveryTransportOf(delivery));
           deliverySubmitted = false;
           this.throwIfCancelled(cancellationToken);
-          if (isSuccessfulResponse(response)) {
+          // Every later read takes exactly one namespace: the partition's
+          // answer when delivered, else the transport outcome.
+          const response = deliveryReadingOf(delivery);
+          if (isSuccessfulResponse(delivery)) {
             this.clearTemporarilyUnroutableAddress(partitionId, address);
             if (
               executionOptions.clearSessionPartitionAffinityOnSuccess === true
@@ -410,7 +415,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 address,
               );
             }
-            return buildSuccessResult(response, {
+            return buildSuccessResult(deliveryAnswerOf(delivery), {
               partitionId,
               address,
               request,
@@ -449,7 +454,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             }
             deliverySubmitted = true;
             unknownOutcome.recordDelivery();
-            const redirectResponse = await this.messageRouter.deliver(
+            const redirectDelivery = await this.messageRouter.deliver(
               response.leaderAddress,
               buildRequest({
                 partitionId,
@@ -462,8 +467,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               }),
               redirectRouterDeliveryOptions,
             );
+            unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
             deliverySubmitted = false;
-            if (isSuccessfulResponse(redirectResponse)) {
+            const redirectResponse = deliveryReadingOf(redirectDelivery);
+            if (isSuccessfulResponse(redirectDelivery)) {
               this.clearTemporarilyUnroutableAddress(
                 partitionId,
                 response.leaderAddress,
@@ -482,7 +489,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   response.leaderAddress,
                 );
               }
-              return buildSuccessResult(redirectResponse, {
+              return buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
                 partitionId,
                 address: response.leaderAddress,
                 redirectedFromAddress: address,
@@ -558,7 +565,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             candidateState.requestRetryCurrentAddress();
             break;
           }
-          if (classifyTransportDeliveryOutcome(response).reasonCode ===
+          if (deliveryTransportOf(delivery).reasonCode ===
               TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
             const errorMessage =
               response.error || `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`;
@@ -714,7 +721,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             !forRead &&
             this.isLeaderUnavailable(
               errorMessage,
-              classifyTransportDeliveryOutcome(error).errorCode,
+              classifyThrownDeliveryError(error).errorCode,
             )
           ) {
             const controlPlaneWriteRetryDecision =

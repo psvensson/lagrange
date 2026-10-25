@@ -1,6 +1,7 @@
 // Real native command history, not the 141-member original-allocation or public
 // startup proof. No history is edited: one application callback fails, or one
 // exact native commit carrier is held, while native persistence runs normally.
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -271,7 +272,7 @@ test('one real RF3 ENABLE is locally uncommitted then committed-pending before n
       }
       heldCarriers++;
       if (firstCarrier === null) firstCarrier = {receiver: this, args};
-      return Promise.resolve({acknowledged: true});
+      return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}));
     };
     router.deliver = deliver;
     t.after(() => {

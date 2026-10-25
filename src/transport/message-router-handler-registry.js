@@ -92,18 +92,6 @@ class MessageRouterHandlerRegistry {
     return ROUTER_VALID_ENTITY_TYPES.includes(entityType);
   }
   /**
-   * Unregister a service handler.
-   * @param {string} address - Service address.
-   */
-  unregister(address) {
-    this.handlers.delete(address);
-    this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
-      address,
-      routerId: this.routerId,
-      totalHandlers: this.handlers.size,
-    });
-  }
-  /**
    * The exact handler registered at an address (identity, not presence), so
    * an owner can prove its own handler is the one registered.
    * @param {string} address - Service address.
@@ -115,14 +103,19 @@ class MessageRouterHandlerRegistry {
   /**
    * Remove the handler at an address only when it is exactly `handler`: a
    * retiring owner never removes a successor's handler under the same
-   * address.
+   * address. This is the router's only removal (one identity policy).
    * @param {string} address - Service address.
    * @param {Function} handler - The handler the caller registered.
    * @return {boolean} True when that exact handler was removed.
    */
   unregisterExact(address, handler) {
     if (this.handlers.get(address) !== handler) return false;
-    this.unregister(address);
+    this.handlers.delete(address);
+    this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
+      address,
+      routerId: this.routerId,
+      totalHandlers: this.handlers.size,
+    });
     return true;
   }
 }

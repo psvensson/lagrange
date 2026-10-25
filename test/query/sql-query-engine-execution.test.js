@@ -4,6 +4,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 15.1, 15.2, 15.3, 15.4, 20.6, 20.7
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {CancellationToken} from
@@ -656,7 +657,11 @@ test('SQLQueryEngine - refuses INSERT ... RETURNING before any write',
     const recordingRouter = {
       deliver: async (address, message) => {
         if (message.type === 'QUERY') delivered.push(message.sql);
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       },
     };
     const engine = new SQLQueryEngine({
@@ -687,21 +692,20 @@ test('SQLQueryEngine - surfaces partial failure for distributed UPDATE', async (
     deliver: async (address, message) => {
       const partitionId = address.split('/')[2];
       if (message.type !== 'QUERY') {
-        return answerParticipantTransactionRequest(message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          answerParticipantTransactionRequest(message));
       }
       if (partitionId === 'p2') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'partition unavailable',
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{id: 'alice'}],
         changes: 1,
-      };
+      });
     },
   };
   const engine = new SQLQueryEngine({
@@ -1095,7 +1099,8 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
       messageRouter: {
         async deliver(address, message) {
           if (message.type === 'TRANSACTION') {
-            return answerParticipantTransactionRequest(message);
+            return buildDeliveryEnvelope({acknowledged: true},
+              answerParticipantTransactionRequest(message));
           }
           if (message.type === 'QUERY' &&
               /^\s*(INSERT|UPDATE|DELETE)/i.test(message.sql || '')) {
@@ -1104,12 +1109,11 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
               splitMirrorOrigin: message.splitMirrorOrigin || null,
             });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [],
             changes: 1,
-          };
+          });
         },
       },
     });

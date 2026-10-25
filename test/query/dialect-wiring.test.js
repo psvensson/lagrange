@@ -7,6 +7,7 @@
  * Requirements: 15.1, 15.2, 15.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {createTestPostgresWireAdapter} from
   '../helpers/pgwire-auth-handler.js';
@@ -82,12 +83,11 @@ function createMinimalSystemCache() {
 function createMockRouter() {
   return {
     async deliver() {
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [{id: 1}],
         changes: 0,
-      };
+      });
     },
   };
 }

@@ -144,7 +144,7 @@ function beginSelectedEnable(host, request, seedIntent) {
 
 function settleSelectedEnable(host, response) {
   const selected = host.selected;
-  selected.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+  selected.answer = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
   selected.after = readPartitionWriteOrigin(selected.db);
   selected.settledAtMs = host.originalHandlerClock.now();
   selected.admissionAfterEnable = participantReleaseAdmissionOf(selected.service);
@@ -165,7 +165,7 @@ function deliverParticipant(host, router, original, args) {
   if (seedIntent !== null) beginSelectedEnable(host, request, seedIntent);
   const operation = Reflect.apply(original, router, args);
   return Promise.resolve(operation).then((response) => {
-    record.answer = response[PARTICIPANT_RELEASE_RESULT_FIELD];
+    record.answer = response.answer?.[PARTICIPANT_RELEASE_RESULT_FIELD];
     record.settled = true;
     if (seedIntent === null) return response;
     try {

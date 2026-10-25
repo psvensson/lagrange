@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Verification tests for transport delivery path cleanup (Requirement 3).
  *
@@ -255,17 +256,15 @@ describe('MessageRouter transport cleanup verification', () => {
               const directOutcome = await testRouter.deliverLocal(
                 address, 'direct-msg-id', payload, 'direct-corr',
               );
-              const directResult = directOutcome.result;
-
               // Capture what deliver() returns
               const deliverResult = await testRouter.deliver(
                 address, {...payload, messageId: 'deliver-msg-id'},
               );
 
-              // Both paths must produce acknowledged: true and preserve payload fields.
-              return directResult.acknowledged === true &&
-                     deliverResult.acknowledged === true &&
-                     directResult.echo === deliverResult.echo;
+              // Both paths acknowledge and carry the same handler answer.
+              return directOutcome.result.acknowledged === true &&
+                     isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliverResult)) &&
+                     directOutcome.answer.echo === deliverResult.answer.echo;
             } finally {
               await testRouter.shutdown();
             }
@@ -310,7 +309,8 @@ describe('MessageRouter transport cleanup verification', () => {
                 const deliverResult = await testRouter.deliver(
                   address, payload, {targetNodeId: remoteId},
                 );
-                deliverFailed = deliverResult?.acknowledged === false;
+                deliverFailed =
+                  !isDeliveredTransportDeliveryOutcome(deliveryTransportOf(deliverResult));
               } catch (_error) {
                 deliverFailed = true;
               }

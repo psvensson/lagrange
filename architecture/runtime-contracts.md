@@ -476,6 +476,21 @@ Required contract:
 
 ## Query Routing And Transport
 
+`MessageRouter.deliver` resolves to one owner-built `{transport, answer}`
+envelope. The transport owner alone computes this hop's outcome and identity;
+consumers read it through `deliveryTransportOf` and `deliveryAnswerOf`, which
+refuse unowned copies. ACK frames remain internal evidence; `deliveryState`
+is the public outcome. A handler's refusal, retry advice or fields named like
+transport fields cannot rewrite that outcome. Forwarders consume the onward
+envelope and return its answer or an explicit domain refusal.
+
+The local answer is the handler's returned value, without copying or property
+evaluation. Remote answers use the existing JSON frame encoding. A handler
+throw, or a remote answer serialization failure, is `handler_failed`; local
+reference semantics do not introduce a second JSON conversion. A lost answer
+after submission retains the existing owner's retry/unknown-outcome obligation.
+Router-proven pre-send refusal remains distinct through `recoverableBeforeSend`.
+
 During splits, moves, and leader elections, queries may be slower but must not
 fail because topology is transient.
 

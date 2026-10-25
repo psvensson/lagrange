@@ -11,6 +11,7 @@ import {HLCTimestamp} from '../../src/hlc/hlc-timestamp.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {isRaftRsTransportEnvelope} from '../../src/raft/raft-packet-utils.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {CDC_COMPLETION, cdcCommitWaitIdentity, isCommittedCdcOutcome} from
   '../../src/cdc/cdc-delivery-outcome.js';
 import {CDC_DELIVERY_REMAINING_MS, cdcDeliveryBudgetError, createCdcDeliveryBudget} from
@@ -218,8 +219,8 @@ function holdNativeForwardAnswer(f, event, follower) {
     }
     const call = {address, payload: structuredClone(payload), answer: null};
     calls.push(call);
-    return Reflect.apply(deliver, this, [address, payload, ...options]).then(async (answer) => {
-      call.answer = answer;
+    return Reflect.apply(deliver, this, [address, payload, ...options]).then(async (delivery) => {
+      call.answer = delivery.answer;
       const members = payload.events ?? [payload];
       if (payload.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT &&
           members.some((member) => member.eventKey === event.eventKey)) {
@@ -227,7 +228,7 @@ function holdNativeForwardAnswer(f, event, follower) {
         hold.response = call;
         await release.promise;
       }
-      return answer;
+      return delivery;
     });
   };
   return hold;
@@ -630,9 +631,9 @@ test('C1 forward raw resolving a deferred transport failure is UNKNOWN with no r
     const f = await recipientFixture(t, KEY);
     const follower = f.services[1];
     const queue = configureOneSlot(follower);
-    const forward = controlledForwardAnswers(f, [() => Promise.resolve(
+    const forward = controlledForwardAnswers(f, [() => Promise.resolve(buildDeliveryEnvelope(
       f.router.buildDeferredDeliveryFailure('controlled-deferral', 'controlled-deferral',
-        'controlled deferral'))]);
+        'controlled deferral')))]);
     try {
       const event = sourceEvent(1);
       const pending = await settle(f, receive(follower, event, true, 'deferred-forward'),

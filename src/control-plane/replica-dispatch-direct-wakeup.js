@@ -1,3 +1,4 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 
 const {
@@ -5,7 +6,6 @@ const {
   ControlPlaneMessageType,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   REPLICA_DISPATCH_SERVICE_LITERAL,
-  classifyTransportDeliveryOutcome,
   classifySystemPartition,
   isDeliveredTransportDeliveryOutcome,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
@@ -116,25 +116,28 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
     }
     this.markDirectDispatchWakeupInFlight(operation.operationId, operationRow);
     try {
-      const deliveryOutcome = classifyTransportDeliveryOutcome(
-        await this.messageRouter.deliver(
-          targetAddress,
-          {
-            type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
-            [ControlPlaneField.OPERATION_ID]: operation.operationId,
-            [ControlPlaneField.OPERATION_ROW]: operationRow,
-          },
-          this.buildDirectDispatchWakeupDeliveryOptions(
-            operation,
-            ownerNodeId,
-          ),
+      const deliveryEnvelope = await this.messageRouter.deliver(
+        targetAddress,
+        {
+          type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+          [ControlPlaneField.OPERATION_ID]: operation.operationId,
+          [ControlPlaneField.OPERATION_ROW]: operationRow,
+        },
+        this.buildDirectDispatchWakeupDeliveryOptions(
+          operation,
+          ownerNodeId,
         ),
       );
+      const transport = deliveryTransportOf(deliveryEnvelope);
+      const answer = deliveryAnswerOf(deliveryEnvelope);
       const latestOperationRow = this.clearDirectDispatchWakeupInFlight(
         operation.operationId,
         operationRow,
       );
-      if (isDeliveredTransportDeliveryOutcome(deliveryOutcome)) {
+      // Woken only when delivered and the dispatch owner did not refuse; its
+      // own refusal defers through the dispatch owner, not the transport.
+      const delivered = isDeliveredTransportDeliveryOutcome(transport);
+      if (delivered && answer?.success !== false) {
         this.scheduleRemoteDispatchWakeupVerification(
           operation.operationId,
           latestOperationRow,
@@ -143,7 +146,7 @@ const REPLICA_DISPATCH_DIRECT_WAKEUP_METHODS = {
       }
       this.deferOperationDispatchRetry(
         operation.operationId,
-        deliveryOutcome,
+        delivered ? answer : transport,
         latestOperationRow,
         {
           [REPLICA_DISPATCH_SERVICE_LITERAL.REFRESH_ROW_BEFORE_DISPATCH]:
