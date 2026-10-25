@@ -42,25 +42,38 @@ role maintains it using
 [`documentation-lifecycle.md`](../../docs/development/documentation-lifecycle.md).
 The contracts and immutable records it links remain the acceptance authorities.
 
-Lineage port, 2026-10-26: this section and the next were carried onto the
-rs-raft lineage from main's `a75050381` (owner review
-[decision 1](raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md)).
-The table rows are main's 2026-10-22 observation at `67c92b496` and are not a
-lineage measurement. On this lineage `src/` carries no Liferaft provider, so the
-construction-fact row does not describe the lineage; the integration owner
-refreshes the rows as the owner review's first execution step (steering and
-status). The dated lineage sections below keep their own records unchanged.
+Codex takeover, checked 2026-10-25 at 06:31 UTC. This summary replaces the
+imported main-only coordination snapshot; the dated evidence below remains
+unchanged. The user's existing implementation authority and
+[owner decisions](raft-rs-full-cutover/evidence/owner-review-2026-10-26/OWNER-REVIEW-2026-10-26.md)
+persist. Diagnose each failure across the complete owner interaction, search
+project history for previous occurrences, and use primary sources from comparable
+systems to challenge assumptions before concluding that a defect is local.
 
 | Field | Current observation |
 | --- | --- |
-| Governing steering | Rule-set revision 4 in [`rule-set.json`](../../docs/steering/rule-set.json); identify the containing commit on resume with `git log -1 --format=%H -- docs/steering/rule-set.json` |
-| Last checked | 2026-10-22; source baseline `67c92b49629b5da765d19f8feaba1ff03427d28b`, read-only source and retained-record inspection during the coordinated steering revision |
-| Current bounded unit | [`steering-stabilization-20261022`](../quests/steering-stabilization-20261022/quest.json) updates operating instructions; it does not claim a runtime repair or milestone completion |
-| Integration responsibility | The coordinating agent for this revision; at runtime-work resumption, record the receiving integration agent and its source commit before assigning overlapping writes |
-| Verified construction fact | `PartitionService.createOperationPort` selects the rs-raft provider exclusively; message-group and generic replica defaults still use the legacy provider. Source inspection establishes reachability, not successful distributed execution |
-| First established acceptance blocker | Full-cutover evidence is incomplete: [`raft-rs-full-cutover.json`](../oracle/raft-rs-full-cutover.json) retains metric 8 and no terminal evidence. Its old transport status is not a fresh runtime diagnosis; the first causal failure of a current representative run has not been measured by this revision |
-| Next action | The integration agent reconciles current in-flight repairs and their exact commits/receipts, selects the smallest existing supported representative service configuration, and runs the next missing bounded proof under existing authority |
-| Current review/evidence index | [Revision 4 coverage and review](raft-rs-full-cutover/steering-revision-4-review.md); prior repair truth remains in each Quest's own record and log |
+| Governing steering | Rule-set revision 4, ported in `ebe2c5d8e77c0669d490eaae738f4619fff40968`; [revision coverage](raft-rs-full-cutover/steering-revision-4-review.md) |
+| Accepted integration baseline | `work/mg-delivery-resume-r2-20261023` at `af8a0381be10bebbb3daf78bd331f7aa3fcacbbf`, clean at takeover and matching its remote; composed bounded approvals remain in the [handoff log](../quests/retained-seed-original-handoff/log.ndjson) |
+| Integration responsibility | Codex `/root` owns serialized composition and the current summary. Separate writers below own only their named interactions; original Claude worktrees remain preserved. |
+| First established service blocker | [Fresh-seed activation](../quests/fresh-seed-activation/quest.json) is sealed but has no accepted implementation. `assertOriginalSeedContinuation` still refuses ordinary registration/election with the original-allocation continuation hold. Its current [receipt](../quests/fresh-seed-activation/evidence/receipt.json) is red; no successful public startup is claimed. |
+| Accepted prerequisites | Lifecycle Q1-Q5, CDC D2, D4 stage A, initial TX1 validation repair, Q6 stages 1-2, retired public-API removal and PG-wire tag-first correction are composed. Their bounded approvals do not close service or release acceptance. |
+| Release evidence | [Full-cutover oracle](../oracle/raft-rs-full-cutover.json) remains metric 8 with no terminal evidence. Retained-seed, FreshMG, transaction, snapshot and WASM receipts remain incomplete; W7/W9 and exact-candidate certification are still required. |
+| Lab observation | Five discovered workers ready and unlocked at 06:31 UTC: adam-laptop, adams-gamla, carinas-windows, lenovo-laptop, tv-dator; distinct boot IDs and matching dependency graphs. This is capacity observation only, not a submitted proof. Use canonical placement and machine locks. |
+
+| Interaction / work | Exact input and current owner | Next action |
+| --- | --- | --- |
+| Fresh-seed activation | `/root/fresh_seed`, Astra xhigh, isolated `work/codex-fresh-seed-activation-20261025` from `af8a0381b` | Implement the sealed live-issuer activation, monotonic handoff and public-admission contract; independent review follows. |
+| Router envelope Q6 stage 3b | `/root/q6_resume`, Astra high, isolated `work/codex-router-envelope-q6-20261025` from `f0060ff36`; 357 interrupted paths copied and byte-verified | Complete the approved transport/answer migration and handler-identity unit. Original dirty tree is untouched; preservation manifest is in `/tmp/codex-rs-raft-20261025/q6-preservation`. |
+| CDC D1 reclamation | `/root/cdc_d1_review`, Astra xhigh, candidate `e1d26e0eb2e0947f56440427fc1be5ccb56c65a2` versus `b32f0eca960891cf937655077616e77a7e25e47b` | Independently attack prefix reclamation, replay, subscriber-registration races and bounded retained state. No approval or composition yet. |
+| TX1 recovery-owner registry | `/root` resumes independent review of `7722a36544df33394e78ccb72a20c484fe2c4fec` | Reconcile interrupted verifier artifacts, validate the complete session/recovery interaction and compose only after approval. |
+| Seed-harness completion | `c261ff1b4b0dd5c643133fd031b00cde71e2a405`; final review queued, not running | Review the round-6 fixture, predicate and runner-boundary fixes at high effort; preserve prior applicable evidence. |
+| SQL admission / admin operations | `8fee98abecb29133815f9ffab9c096019692f24b`; independent review queued, not running | Resume xhigh review; resolve the missing PG-wire scaling contract and concrete remaining raw-writer migrations before composition. |
+| CDC D4 window deletion | `06e3cfcf7d2084799718a61dc7757510e0d35330`, held for W-D4b | Run the declared distributed handoff witness after fresh-seed activation, then independently review the deletion. Joining-group fan-out admission remains a recorded design question. |
+
+New review assignments are bounded to the changed interaction and its reachable
+consequences. No interrupted agent is considered active merely because an old
+shell remains alive. The root agent collects actual test results and owns
+continuation; final acceptance retains the [closeout plan](raft-rs-full-cutover/closeout-plan-2026-10-17.md).
 
 Independent in-flight interactions may continue; this summary does not cancel,
 restart or absorb them. Count waiting review, proof and integration work before
