@@ -12,9 +12,16 @@
 // lease) that passed the rc.2 proof by margin and failed the 0.2.4 proof
 // twice; scaled by 3 on that host, both pass. Non-numeric or absent means 1.
 
-// The factor itself has one reader, the test runner, which also records it on
-// every timeout.
-import {resolveTestMachineFactor} from '../../../scripts/run-test-files.js';
+// One leaf owns the factor and scaling for runtime test budgets, static timeout
+// declarations and runner diagnostics. It imports no runner or fixture.
+const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
+const REFERENCE_MACHINE_FACTOR = 1;
+
+function resolveTestMachineFactor(env = process.env) {
+  const parsed = Number(env?.[MACHINE_FACTOR_ENV]);
+  return Number.isFinite(parsed) && parsed >= REFERENCE_MACHINE_FACTOR ?
+    parsed : REFERENCE_MACHINE_FACTOR;
+}
 
 const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
 
@@ -23,8 +30,8 @@ const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
  * @param {number} referenceMs the budget as calibrated on the reference machine
  * @return {number}
  */
-function scaleByMachineFactor(referenceMs) {
-  return Math.round(referenceMs * TEST_MACHINE_FACTOR);
+function scaleByMachineFactor(referenceMs, machineFactor = TEST_MACHINE_FACTOR) {
+  return Math.round(referenceMs * machineFactor);
 }
 
-export {scaleByMachineFactor};
+export {resolveTestMachineFactor, scaleByMachineFactor};

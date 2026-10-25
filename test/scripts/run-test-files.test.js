@@ -29,6 +29,7 @@ const RUNAWAY_DIRECTIVE_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-runaway-directive.fixture.mjs`;
 const FAILS_ONCE_FIXTURE = `${FIXTURE_DIRECTORY}/fails-once.fixture.mjs`;
 const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
+const MACHINE_FACTOR_FIXTURE = `${FIXTURE_DIRECTORY}/machine-factor.fixture.mjs`;
 
 describe('run-test-files', () => {
   const temporaryDirectories = [];
@@ -110,6 +111,16 @@ describe('run-test-files', () => {
     assert.equal(summary.ok, true);
     assert.equal(summary.total, 1);
     assert.equal(summary.results[0].file, TAP_PASS_FIXTURE);
+  });
+
+  it('uses the per-run child environment for machine-scaled declarations', async () => {
+    const summary = await runTestFiles([MACHINE_FACTOR_FIXTURE], {
+      jobs: 1,
+      print: false,
+      env: {LAGRANGE_TEST_MACHINE_FACTOR: '3', TAP_TIMEOUT: undefined,
+        TAP_TIMEOUT_FLOOR: undefined},
+    });
+    assert.equal(summary.ok, true, JSON.stringify(summary.results?.[0]?.reasons));
   });
 
   it('runs Tap and node:test files with assertions and Tap plugins intact', async () => {

@@ -22,6 +22,7 @@ import {VIRGIN_SEED_COMPOSE_REFERENCE_MS, createVirginSeedBootstrapService,
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 /**
  * Required keys in a successful bootstrap result.
@@ -159,7 +160,8 @@ const isContinuationHold = (result) => isOriginalAllocationHold(result.cause,
   ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE);
 
 test('Property 7: Return Value Completeness',
-  {timeout: SEED_CLASS_COUNT * VIRGIN_SEED_COMPOSE_REFERENCE_MS}, async (t) => {
+  {timeout: SEED_CLASS_COUNT * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS)},
+  async (t) => {
     initializeTestEnvironment();
     t.equal(SEED_CLASSES.length, SEED_CLASS_COUNT, 'the budget counts every seed');
     const results = [];

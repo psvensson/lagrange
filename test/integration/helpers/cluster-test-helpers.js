@@ -290,28 +290,31 @@ const seedStartupAuthorities = new WeakMap();
  *   membershipOwnerOutcome, startupServicesAdmission}.
  */
 async function acquireSeedStartupAuthority(dataDir, options, admit) {
-  const acquiredOwner = Object.hasOwn(options, 'dataDirectoryProcessOwner') ?
-    null : acquireDataDirectoryProcessOwner(dataDir);
+  const suppliedProcessOwner = Object.hasOwn(options, 'dataDirectoryProcessOwner');
+  const dataDirectoryProcessOwner = suppliedProcessOwner ?
+    options.dataDirectoryProcessOwner : acquireDataDirectoryProcessOwner(dataDir);
+  const acquiredOwner = suppliedProcessOwner ? null : dataDirectoryProcessOwner;
   try {
     const suppliedOutcome = Object.hasOwn(options, 'membershipOwnerOutcome');
+    const capturedOutcome = suppliedOutcome ? options.membershipOwnerOutcome : null;
     const startupDecision = suppliedOutcome ? null :
       await resolveAutoRejoinStartupDecision({
         dataDir,
         nodeId: options.nodeId,
         nodeAddress: options.nodeAddress,
       });
+    const membershipOwnerOutcome = suppliedOutcome ?
+      capturedOutcome : startupDecision.membershipOwnerOutcome;
     const startupServicesAdmission = await readSeedStartupStorageAdmission(
       dataDir,
       (acquisition) => acquisition,
     );
     admit(startupServicesAdmission);
     return {
-      dataDirectoryProcessOwner: acquiredOwner ??
-        options.dataDirectoryProcessOwner,
+      dataDirectoryProcessOwner,
       acquiredOwner,
       startupDecision,
-      membershipOwnerOutcome: suppliedOutcome ?
-        options.membershipOwnerOutcome : startupDecision.membershipOwnerOutcome,
+      membershipOwnerOutcome,
       startupServicesAdmission,
     };
   } catch (error) {
@@ -400,9 +403,9 @@ export function createVirginSeedBootstrapService(options = {}) {
 // <= 8.5s). Production has no seed-start budget constant to derive this from:
 // startup acquisition is bounded by its abort signal (awaitStartupAcquisition),
 // not by a duration. A test declares its budget as a seed count times this
-// reference, statically, because the test runner reads timeout declarations
-// statically (scripts/checks/test-timeout-declarations.js) and lifts the file
-// cap to them; a call such as scaleByMachineFactor() is refused there.
+// reference scaled by the machine-factor owner. The test runner resolves
+// that same owner operation in declarations and lifts the file cap to it;
+// arbitrary timeout calls remain refused.
 export const VIRGIN_SEED_COMPOSE_REFERENCE_MS = 10000;
 
 /**

@@ -235,6 +235,8 @@ test('the budget scales with the machine factor and bounds the percent', (t) => 
   t.same(resolveFormationSeedBudget({}), {
     machineFactor: 1, maxBlockedMs: 10000, maxBlockedPercent: 25,
   });
+  t.same(resolveFormationSeedBudget(null), resolveFormationSeedBudget({}),
+    'an explicitly absent environment retains the reference budget');
   t.equal(
     resolveFormationSeedBudget({LAGRANGE_TEST_MACHINE_FACTOR: '3'}).maxBlockedMs,
     30000,
@@ -242,6 +244,11 @@ test('the budget scales with the machine factor and bounds the percent', (t) => 
   t.equal(
     resolveFormationSeedBudget({LAGRANGE_TEST_MACHINE_FACTOR: 'x'}).machineFactor,
     1,
+  );
+  t.equal(
+    resolveFormationSeedBudget({LAGRANGE_TEST_MACHINE_FACTOR: '0.5'}).machineFactor,
+    1,
+    'the shared test-budget owner retains the reference-machine floor',
   );
   const withinBudgetButHighPercent = deriveFormationVerdict({
     seedLogText: [
@@ -261,6 +268,24 @@ test('the budget scales with the machine factor and bounds the percent', (t) => 
   });
   t.equal(withinBudgetButHighPercent.seedStarved, true,
     '3 s blocked of an 8 s window exceeds the percent budget');
+  t.end();
+});
+
+test('formation starvation diagnostics use the canonical test-factor floor', (t) => {
+  const input = {
+    seedLogText: [plainLine(0, 'start'), gapLine(1, 7500, 7500, 'site'),
+      plainLine(100, 'stop')].join('\n'),
+    schemaAdmission: admission({admitted: true, blocker: null, spreadGap: 0, inFlight: 0}),
+    formation: {clusterStartedAtMs: BASE_MS, clusterFormedAtMs: BASE_MS + 100 * SECOND_MS},
+  };
+  const belowReference = deriveFormationVerdict({...input,
+    environment: {LAGRANGE_TEST_MACHINE_FACTOR: '0.5'}});
+  const reference = deriveFormationVerdict({...input,
+    environment: {LAGRANGE_TEST_MACHINE_FACTOR: '1'}});
+  t.equal(belowReference.seedStarved, false,
+    '7500ms fits the canonical 10000ms reference floor, not the old private 5000ms budget');
+  t.equal(belowReference.seedStarved, reference.seedStarved,
+    'the diagnostic gate uses the same normalized factor as test budgets');
   t.end();
 });
 

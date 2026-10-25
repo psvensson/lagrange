@@ -41,7 +41,7 @@ import {
   encodeParam,
   exposedProperty,
 } from './embedded-node-protocol.js';
-import {scaleByMachineFactor} from './test-machine-factor.js';
+import {scaleByMachineFactor} from '../../../scripts/test-machine-factor.js';
 
 const EMBEDDED_NODE_ROLE = Object.freeze({
   JOINER: 'joiner',

@@ -31,6 +31,8 @@ import {createParticipantReleaseAuthorizationOwner} from
 import {RUNTIME_BUILD_STATE, runtimeBuildProvenance} from
   '../../src/diagnostics/runtime-build-provenance.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../src/storage/data-directory-process-owner.js';
 import {URL} from 'url';
 import Database from 'better-sqlite3';
 import {existsSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs';
@@ -403,6 +405,7 @@ test('virgin seed fixture preserves startup-owner identity and explicit ' +
   initializeTestEnvironment();
   const services = [];
   const directories = [];
+  const directoryOwners = [];
   const releaseOwner = createParticipantReleaseAuthorizationOwner({});
   const create = async (label, options = {}) => {
     const dataDir = mkdtempSync(join(tmpdir(), `lagrange-seed-${label}-`));
@@ -525,17 +528,22 @@ test('virgin seed fixture preserves startup-owner identity and explicit ' +
 
     const presentDataDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-present-'));
     directories.push(presentDataDir);
+    const presentDirectoryOwner = acquireDataDirectoryProcessOwner(presentDataDir);
+    directoryOwners.push(presentDirectoryOwner);
     const presentOptions = {
       dataDir: presentDataDir,
       nodeId: 'present-captured-node',
       nodeAddress: 'ws://present-captured:9191',
       membershipOwnerOutcome: invalidOutcome,
+      dataDirectoryProcessOwner: presentDirectoryOwner,
     };
     const presentPromise = createVirginSeedBootstrapService(presentOptions);
     presentOptions.nodeId = 'present-mutated-node';
     presentOptions.nodeAddress = 'ws://present-mutated:9191';
     presentOptions.membershipOwnerOutcome = expectedDecision.membershipOwnerOutcome;
     delete presentOptions.membershipOwnerOutcome;
+    presentOptions.dataDirectoryProcessOwner = null;
+    delete presentOptions.dataDirectoryProcessOwner;
     const present = await presentPromise;
     services.push(present);
     t.equal(present.nodeId, 'present-captured-node',
@@ -544,10 +552,13 @@ test('virgin seed fixture preserves startup-owner identity and explicit ' +
       'own-present node address is captured before the first helper await');
     t.equal(present.membershipOwnerOutcome, invalidOutcome,
       'own-present authority retains its exact captured pre-await value');
+    t.equal(present.dataDirectoryProcessOwner, presentDirectoryOwner,
+      'supplied directory custody retains its exact captured pre-await owner');
     t.equal(authorize(present.membershipOwnerOutcome), null,
       'the actual owner refuses the captured value after caller replacement');
   } finally {
     await Promise.all(services.map((service) => service.shutdown()));
+    for (const owner of directoryOwners) owner.release();
     t.ok(directories.every((dataDir) => existsSync(dataDir)),
       'shutdown leaves every caller-owned directory with the caller');
     for (const dataDir of directories) {

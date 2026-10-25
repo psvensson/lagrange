@@ -28,7 +28,7 @@
   "censusSize": 2452,
   "digest": "fnv1a32-9fc27657",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-f5ba9e5f",
+  "observationDigest": "fnv1a32-688175d6",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -7998,9 +7998,6 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
-      ],
-      "env": [
-        "LAGRANGE_TEST_MACHINE_FACTOR"
       ]
     },
     "test/integration/public-application-database-multinode.integration.test.js": {
@@ -8048,9 +8045,6 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/storage/data-directory-process-owner.js"
-      ],
-      "env": [
-        "LAGRANGE_TEST_MACHINE_FACTOR"
       ]
     },
     "test/integration/replica-handler-metadata-propagation.integration.test.js": {
@@ -11111,8 +11105,8 @@
     },
     "test/query/sql-query-engine-managed-split-children.test.js": {
       "files": [
+        "scripts/test-machine-factor.js",
         "src/partition/partition-participant-transaction-constants.js",
-        "test/integration/helpers/test-machine-factor.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
@@ -11146,8 +11140,8 @@
     },
     "test/query/sql-query-engine-provision-partition-waits.test.js": {
       "files": [
+        "scripts/test-machine-factor.js",
         "src/partition/partition-participant-transaction-constants.js",
-        "test/integration/helpers/test-machine-factor.js",
         "test/test-helpers/participant-protocol-double.js"
       ]
     },
@@ -13088,6 +13082,7 @@
     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/test-machine-factor.js",
         "src/bootstrap/shared/runtime-service-handler-setup.js",
         "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
         "src/bootstrap/system-table-schemas-constants.js",
@@ -13812,6 +13807,7 @@
     "test/rebalancer/runtime-service-replace-canonical-target-handoff.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/test-machine-factor.js",
         "src/bootstrap/system-table-schemas-constants.js",
         "src/node/runtime-service-handler.js",
         "src/rebalancer/replica-status.js",
@@ -14177,6 +14173,7 @@
     "test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js": {
       "files": [
         "scripts/checks/guard-test-scenario-runner.js",
+        "scripts/test-machine-factor.js",
         "src/node/runtime-service-handler.js",
         "src/runtime/runtime-driver-registry.js",
         "src/runtime/service-runtime-lifecycle.js",
@@ -14535,6 +14532,7 @@
       "files": [
         "package.json",
         "scripts/run-test-files.js",
+        "scripts/test-machine-factor.js",
         "test/admin/admin-websocket-external-bind-policy.test.js",
         "test/closure/CL-040.repro.test.js",
         "test/closure/CL-041.repro.test.js",
@@ -14704,6 +14702,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -14732,6 +14731,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -14774,6 +14774,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -15316,6 +15317,7 @@
     },
     "test/scripts/effective-placement-serial-priority-planner-scenario.test.js": {
       "files": [
+        "scripts/test-machine-factor.js",
         "test/convergence/dt-formation-priority-placement-before-active.test.js",
         "test/rebalancer/effective-placement-serial-priority-planner.test.js",
         "test/rebalancer/move-planner-critical-replace-serialization.test.js",
@@ -15394,6 +15396,7 @@
         "scripts/inventory-ordinal-segments.js",
         "scripts/solve.js",
         "scripts/solve/store.js",
+        "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "solve/epics/solve-v2/migration-report.md",
@@ -15550,6 +15553,7 @@
         "scripts/participant-release-completion-audit.js",
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/bootstrap/bootstrap-service-seed-workflow.js",
@@ -15744,6 +15748,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -15783,6 +15788,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -15806,7 +15812,8 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/lab.js",
         "scripts/run-classified-test-files.js",
-        "scripts/select-change-tests.js"
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js"
       ],
       "env": [
         "APPDATA",
@@ -15838,6 +15845,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json"
       ],
       "directories": [
@@ -16189,6 +16197,7 @@
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve.js",
+        "scripts/test-machine-factor.js",
         "src/cli/cli-constants.js",
         "src/constants/entrypoint.js",
         "test/manifests/pre-push-stages.json",
@@ -16354,6 +16363,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/address/address-manager.test.js",
         "test/bootstrap/_min-test.test.js",
         "test/examples/service-compiler-account-summary-parity.test.js",
@@ -16493,6 +16503,9 @@
       ]
     },
     "test/scripts/run-test-files.test.js": {
+      "files": [
+        "scripts/test-machine-factor.js"
+      ],
       "directories": [
         "test/scripts/__fixtures__/run-test-files"
       ]
@@ -16511,6 +16524,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-distributed-matrix.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/utils/canonical-json-data.js",
@@ -16547,6 +16561,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/summarize-harness-runs.js",
+        "scripts/test-machine-factor.js",
         "src/admin/admin-authoritative-repair-policy.js",
         "src/admin/static/playback-viewer.html",
         "src/control-plane/priority-recovery-observation-snapshot.js",
@@ -16591,6 +16606,7 @@
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
         "scripts/solve/commands.js",
+        "scripts/test-machine-factor.js",
         "src/query/sql-query-engine.js",
         "src/rebalancer/move-planner.js",
         "test/address/address-manager.test.js",
@@ -16622,6 +16638,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/shards/primary-classes.json",
         "test/shards/selection-golden-corpus.json"
       ],
@@ -16769,7 +16786,8 @@
         "scripts/checks/wait-for-thermal-headroom.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/run-classified-test-files.js",
-        "scripts/select-change-tests.js"
+        "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js"
       ],
       "directories": [
         "test"
@@ -16791,6 +16809,7 @@
         "scripts/run-classified-test-files.js",
         "scripts/run-test-files.js",
         "scripts/select-change-tests.js",
+        "scripts/test-machine-factor.js",
         "test/query/budget-limit-error.test.js",
         "test/query/distributed-merge-engine.test.js",
         "test/scripts/check-operation-dispatch-completion-owner.test.js",
@@ -16865,7 +16884,8 @@
     },
     "test/scripts/test-timeout-declarations.test.js": {
       "files": [
-        "scripts/run-test-files.js"
+        "scripts/run-test-files.js",
+        "scripts/test-machine-factor.js"
       ],
       "env": [
         "TAP_TIMEOUT",
@@ -17218,6 +17238,7 @@
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/generate-priority-recovery-owner-inventory.js",
         "scripts/inventory-ordinal-segments.js",
+        "scripts/test-machine-factor.js",
         "solve/changes/global-owner-debt-inventory/inventory.json",
         "solve/changes/priority-recovery-owner-inventory/inventory.json",
         "src/admin/admin-authoritative-repair-policy.js",

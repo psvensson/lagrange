@@ -27,6 +27,7 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {NUM} from '../../src/constants/index.js';
 import {createOwnedVirginSeedBootstrapService,
   installMinimumSeedBootstrapLifecycleFixture, VIRGIN_SEED_COMPOSE_REFERENCE_MS} from
@@ -101,7 +102,8 @@ function initializeTestEnvironment() {
 const COMPOSED_SEED_COUNT = 8;
 
 test('Seed bootstrap - emits phase:start and phase:complete in correct order',
-  {timeout: COMPOSED_SEED_COUNT * VIRGIN_SEED_COMPOSE_REFERENCE_MS}, async (t) => {
+  {timeout: COMPOSED_SEED_COUNT * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS)},
+  async (t) => {
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(

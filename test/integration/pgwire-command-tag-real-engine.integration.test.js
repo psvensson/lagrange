@@ -31,7 +31,7 @@ import {
   stopPlacedPgwireReplicas,
   useSingleNodeReplicaShape,
 } from './helpers/public-binding-seam-harness.js';
-import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const TEST_TIMEOUT_MS = 300_000;
 const WAIT_MS = scaleByMachineFactor(60_000);
