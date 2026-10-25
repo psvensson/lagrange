@@ -25,6 +25,14 @@ const TYPE = Object.freeze({
   MEMBER: 'MemberExpression',
   BLOCK: 'BlockStatement',
   THIS: 'ThisExpression',
+  FUNCTION: 'FunctionDeclaration',
+  RETURN: 'ReturnStatement',
+  SPREAD: 'SpreadElement',
+  CLASS: 'ClassDeclaration',
+  EXPORT_SPECIFIER: 'ExportSpecifier',
+  ARROW: 'ArrowFunctionExpression',
+  FIELD: 'PropertyDefinition',
+  LITERAL: 'Literal',
 });
 const BINDING = Object.freeze({
   COMPOSE_METHOD: '_composeSeedDelegates',
@@ -43,6 +51,10 @@ const BINDING = Object.freeze({
   CDC: 'cdcIntegrationService',
   DELEGATES: 'delegates',
   PARTITION: 'PartitionService',
+  SERVICE: 'BootstrapService',
+  OBJECT: 'Object',
+  ASSIGN: 'assign',
+  DESCRIPTORS: 'defineProperties',
 });
 const SYNTAX = Object.freeze({
   DELETE: 'delete',
@@ -63,7 +75,6 @@ const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayFindLast = Function.call.bind(Array.prototype.findLast);
-const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arraySlice = Function.call.bind(Array.prototype.slice);
 const arrayAt = Function.call.bind(Array.prototype.at);
@@ -83,13 +94,75 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CALLER = 'src/bootstrap/phases/seed-partitions-phase.js';
 const DELEGATES = 'src/bootstrap/bootstrap-service-seed-delegates.js';
 const RUNTIME = 'src/bootstrap/bootstrap-service-runtime-methods.js';
+const WORKFLOW = 'src/bootstrap/bootstrap-service-seed-workflow.js';
+const REPLICA_RUNTIME = 'src/bootstrap/bootstrap-service-replica-registration-methods.js';
+const CONTROL_RUNTIME = 'src/bootstrap/bootstrap-service-control-plane-runtime-methods.js';
 const CDC = 'src/cdc/cdc-integration-service.js';
 const SERVICE = 'src/bootstrap/bootstrap-service.js';
 const ASSERT = 'src/utils/assert.js';
 const PARTITION = 'src/partition/partition-service.js';
+const FACTORY_MODULES = new Map([
+  [BINDING.DELEGATE_FACTORY, DELEGATES],
+  [BINDING.RUNTIME_FACTORY, RUNTIME],
+  ['createBootstrapServiceSeedWorkflowMethods', WORKFLOW],
+  ['createBootstrapServiceReplicaHandlerRuntimeMethods', REPLICA_RUNTIME],
+  ['createBootstrapServiceReplicaStateRuntimeMethods', REPLICA_RUNTIME],
+  ['createBootstrapServiceControlPlaneRuntimeMethods', CONTROL_RUNTIME],
+]);
+const SERVICE_IMPORTS = [
+  ['SeedPartitionsPhase', CALLER],
+  [BINDING.DELEGATE_FACTORY, DELEGATES],
+  [BINDING.RUNTIME_FACTORY, RUNTIME],
+  ['createBootstrapServiceSeedWorkflowMethods', WORKFLOW],
+  ['SeedInfrastructurePhase', 'src/bootstrap/phases/seed-infrastructure-phase.js'],
+  ['SeedMessageGroupsPhase', 'src/bootstrap/phases/seed-message-groups-phase.js'],
+  ['SeedRegistrationPhase', 'src/bootstrap/phases/seed-registration-phase.js'],
+  ['SeedCacheHydrationPhase', 'src/bootstrap/phases/seed-cache-hydration-phase.js'],
+  ['SeedCleanupHandler', 'src/bootstrap/phases/seed-cleanup-handler.js'],
+  ['SeedRegistrationRuntimeOwner', 'src/bootstrap/owners/seed-registration-runtime-owner.js'],
+  ['SeedRuntimeBridgeOwner', 'src/bootstrap/owners/seed-runtime-bridge-owner.js'],
+];
+const DELEGATE_BUILDERS = [
+  ['_buildSeedDelegateBundles', 'buildSeedDelegateBundles'],
+  ['_buildPhaseExecutionDelegates', 'buildPhaseExecutionDelegates'],
+  ['_buildReadinessDelegates', 'buildReadinessDelegates'],
+  ['_buildCleanupDelegates', 'buildCleanupDelegates'],
+  ['_buildRuntimeWiringDelegates', 'buildRuntimeWiringDelegates'],
+];
+const PASSIVE_BUILDERS = [
+  'buildPhaseExecutionDelegates', 'buildReadinessDelegates', 'buildCleanupDelegates',
+];
+const PASSIVE_BUILDER_HEADER = 'function dependency(service) { const self = service; return {}; }';
+const INSTALLATION = `Object.assign(BootstrapService.prototype,
+  createBootstrapServiceSeedDelegateMethods(),
+  createBootstrapServiceSeedWorkflowMethods(),
+  createBootstrapServiceRuntimeMethods());`;
+// One contiguous wiring operation: the bundle and composed handle are private
+// until these exact owned consumers receive them. Unknown interleavings revoke
+// the proof, rather than classifying arbitrary constructor forwarding as safe.
+const SERVICE_WIRING = `function wire() {
+  const delegateBundles = this._buildSeedDelegateBundles();
+  const seedDelegates = this._composeSeedDelegates(delegateBundles);
+  this.seedInfrastructurePhase = new SeedInfrastructurePhase({
+    delegates: seedDelegates, nodeService: this.nodeService, routerFactory: this.routerFactory,
+  });
+  this.seedMessageGroupsPhase = new SeedMessageGroupsPhase({delegates: seedDelegates});
+  this.seedPartitionsPhase = new SeedPartitionsPhase({delegates: seedDelegates});
+  this.seedRegistrationPhase = new SeedRegistrationPhase({delegates: seedDelegates});
+  this.seedRegistrationRuntimeOwner = new SeedRegistrationRuntimeOwner({delegates: seedDelegates});
+  this.seedRuntimeBridgeOwner = new SeedRuntimeBridgeOwner({delegates: seedDelegates});
+  this.seedCacheHydrationPhase = new SeedCacheHydrationPhase({
+    delegates: seedDelegates, runtimeBridgeOwner: this.seedRuntimeBridgeOwner,
+  });
+  this.seedRuntimeBridgeOwner.compatibilityPhase = this.seedCacheHydrationPhase;
+  this.seedCleanupHandler = new SeedCleanupHandler({
+    delegates: this._composeSeedDelegates(delegateBundles, {cleanupOnly: true}),
+  });
+}`;
 const METHOD = 'createBootstrapPartitionReplica';
 const CONTEXTS = new WeakMap();
 const CONTRACT_AST = new Map();
+const SOURCE_AST = new Map();
 const TRIVIA = new Set(['loc', 'range', 'start', 'end', 'raw', 'comments', 'tokens']);
 const FUNCTION_TYPES = new Set([
   'FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression',
@@ -187,19 +260,6 @@ function namedProperty(node, name) {
   return setHas(PROPERTY_TYPES, node.type) && !node.computed && node.key?.name === name;
 }
 
-function uniqueProperty(ast, name, expected) {
-  const found = arrayFilter(records(ast), ({node}) => namedProperty(node, name));
-  return found.length === 1 && same(found[0].node, expected) &&
-    noLaterOverride(found[0]);
-}
-
-function noLaterOverride(record) {
-  if (record.parent?.type !== TYPE.OBJECT) return false;
-  const properties = record.parent.properties;
-  return arrayEvery(arraySlice(properties, arrayIndexOf(properties, record.node) + 1), (property) =>
-    property.type === TYPE.PROPERTY && !property.computed);
-}
-
 function uniqueFunction(ast, source) {
   const expected = expectedAst(source).body[0];
   const found = arrayFilter(records(ast), ({node}) =>
@@ -252,31 +312,109 @@ function exportsName(ast, name) {
       specifier.local.name === name && specifier.exported.name === name));
 }
 
-function delegateWrappersProved(ast) {
-  const methods = [
-    ['_buildSeedDelegateBundles', 'return buildSeedDelegateBundles(this);'],
-    ['_buildRuntimeWiringDelegates', 'return buildRuntimeWiringDelegates(this);'],
-  ];
-  return arrayEvery(methods, ([name, body]) => uniqueProperty(ast, name,
-    expression(`({${name}() { ${body} }})`).properties[0])) &&
-    uniqueProperty(ast, BINDING.COMPOSE_METHOD, expression(
-      COMPOSE_WRAPPER_OPEN +
-      COMPOSE_WRAPPER_CLOSE).properties[0]);
+// Only a directly returned object is a factory result. Dead method-shaped
+// fragments and unknown statements/returns never supply installed providers.
+function factoryObject(ast, name) {
+  const fn = arrayFind(ast.body, (node) => node.type === TYPE.FUNCTION && node.id?.name === name);
+  if (!fn || fn.async || fn.generator || fn.params.length !== 0 ||
+      fn.body.body.length !== 1 || !exportsName(ast, name)) return null;
+  const returned = fn.body.body[0];
+  return returned.type === TYPE.RETURN && returned.argument?.type === TYPE.OBJECT ?
+    returned.argument : null;
+}
+
+function spreadFactory(parsed, ast, file, property, trail) {
+  const call = property.argument;
+  if (call?.type !== TYPE.CALL || call.optional || call.arguments.length !== 0 ||
+      call.callee.type !== TYPE.IDENTIFIER) return null;
+  const name = call.callee.name;
+  const owner = mapGet(FACTORY_MODULES, name);
+  if (!owner || !imported(ast, file, name, owner) || !stableBinding(ast, name)) return null;
+  return factoryMethods(parsed, name, trail);
+}
+
+function plainMethodProperty(property) {
+  return property.type === TYPE.PROPERTY && !property.computed &&
+    property.kind === SYNTAX.INITIALIZER && property.key.type === TYPE.IDENTIFIER;
+}
+
+function factoryMethods(parsed, name, trail = []) {
+  if (arrayIncludes(trail, name)) return null;
+  const file = mapGet(FACTORY_MODULES, name);
+  const ast = mapGet(parsed, file);
+  const object = ast && factoryObject(ast, name);
+  if (!object) return null;
+  const methods = new Map();
+  for (const property of object.properties) {
+    if (property.type === TYPE.SPREAD) {
+      const spread = spreadFactory(parsed, ast, file, property, [...trail, name]);
+      if (!spread) return null;
+      for (const [key, value] of spread) mapSet(methods, key, value);
+    } else {
+      if (!plainMethodProperty(property)) return null;
+      mapSet(methods, property.key.name, property);
+    }
+  }
+  return methods;
+}
+
+function providerContracts() {
+  const wrappers = arrayMap(DELEGATE_BUILDERS, ([method, builder]) =>
+    `({${method}() { return ${builder}(this); }})`);
+  return [CACHE_CONTRACT, PEEK_CONTRACT, ...wrappers,
+    COMPOSE_WRAPPER_OPEN + COMPOSE_WRAPPER_CLOSE];
+}
+
+function installedMethodsProved(parsed, installation) {
+  const ast = mapGet(parsed, SERVICE);
+  const methods = new Map();
+  for (const call of arraySlice(installation.expression.arguments, 1)) {
+    const name = call.callee.name;
+    const file = mapGet(FACTORY_MODULES, name);
+    if (!imported(ast, SERVICE, name, file)) return false;
+    const supplied = factoryMethods(parsed, name);
+    if (!supplied) return false;
+    for (const [key, value] of supplied) mapSet(methods, key, value);
+  }
+  return arrayEvery(providerContracts(), (source) => {
+    const expected = expression(source).properties[0];
+    return same(mapGet(methods, expected.key.name), expected);
+  });
+}
+
+function passiveDelegateBuilder(ast, name) {
+  const fn = arrayFind(ast.body, (node) => node.type === TYPE.FUNCTION && node.id?.name === name);
+  const expected = expectedAst(PASSIVE_BUILDER_HEADER).body[0];
+  if (!fn || fn.async || fn.generator || !stableBinding(ast, name) ||
+      !same(fn.params, expected.params) || fn.body.body.length !== 2 ||
+      !same(fn.body.body[0], expected.body.body[0])) return false;
+  const returned = fn.body.body[1];
+  return returned.type === TYPE.RETURN && returned.argument?.type === TYPE.OBJECT &&
+    arrayEvery(returned.argument.properties, (property) =>
+      plainMethodProperty(property) && property.value.type === TYPE.ARROW);
 }
 
 function delegatesProved(ast) {
   return uniqueFunction(ast, WIRING_CONTRACT) && uniqueFunction(ast, COMPOSE_CONTRACT) &&
     uniqueFunction(ast, BUNDLES_CONTRACT) &&
     stableBinding(ast, BINDING.WIRING) && stableBinding(ast, BINDING.COMPOSE) &&
-    exportsName(ast, BINDING.DELEGATE_FACTORY) && delegateWrappersProved(ast);
+    arrayEvery(PASSIVE_BUILDERS, (name) => passiveDelegateBuilder(ast, name));
 }
 
 function cacheProved(ast) {
-  return uniqueProperty(ast, BINDING.HANDLE, expression(CACHE_CONTRACT).properties[0]) &&
-    uniqueProperty(ast, BINDING.PEEK, expression(PEEK_CONTRACT).properties[0]) &&
-    imported(ast, RUNTIME, BINDING.ASSERT, ASSERT) &&
-    stableBinding(ast, BINDING.ASSERT) &&
-    exportsName(ast, BINDING.RUNTIME_FACTORY);
+  return imported(ast, RUNTIME, BINDING.ASSERT, ASSERT) && stableBinding(ast, BINDING.ASSERT);
+}
+
+function plainReceiverUses(fn) {
+  return !arraySome(records(fn), ({node, parent}) => node.type === TYPE.THIS &&
+    (parent.type !== TYPE.MEMBER || parent.object !== node || parent.computed));
+}
+
+function ownEngineField(constructor, initialization) {
+  const field = initialization?.expression.left;
+  return plainReceiverUses(constructor) && !arraySome(records(constructor), ({node}) =>
+    node.type === TYPE.MEMBER && node.object.type === TYPE.THIS &&
+    node.property.name === BINDING.ENGINE && node !== field);
 }
 
 function cdcProved(ast) {
@@ -288,7 +426,8 @@ function cdcProved(ast) {
       namedProperty(member, BINDING.ENGINE))) return false;
   const constructor = arrayFind(owner.body.body, (member) => member.kind === 'constructor');
   const expected = expectedAst('this.sqlQueryEngine = options.sqlQueryEngine || null;').body[0];
-  return same(constructor?.value.body.body[1], expected);
+  const initialization = constructor?.value.body.body[1];
+  return same(initialization, expected) && ownEngineField(constructor, initialization);
 }
 
 function partitionProved(ast) {
@@ -297,25 +436,73 @@ function partitionProved(ast) {
   return arrayFilter(ast.body, (node) => same(node, expected)).length === 1;
 }
 
-function serviceProved(ast) {
-  const imports = [['SeedPartitionsPhase', CALLER],
-    ['createBootstrapServiceSeedDelegateMethods', DELEGATES],
-    ['createBootstrapServiceRuntimeMethods', RUNTIME]];
-  if (!arrayEvery(imports, ([name, file]) => imported(ast, SERVICE, name, file) &&
+// Installation proves prototype providers only while no visible write shadows
+// those exact contract members. Other method names are not classified by name.
+function providerWritesAbsent(ast) {
+  const names = new Set(arrayMap(providerContracts(), (source) =>
+    expression(source).properties[0].key.name));
+  return !arraySome(records(ast), ({node}) => {
+    if (node.type === TYPE.LITERAL && setHas(names, node.value)) return true;
+    if (node.type === TYPE.FIELD && (node.computed || setHas(names, node.key.name))) return true;
+    return arraySome(records(mutationTarget(node)), ({node: target}) =>
+      target.type === TYPE.MEMBER && (setHas(names, target.property.name) ||
+        (target.object.type === TYPE.THIS && target.computed)));
+  });
+}
+
+function visiblePropertyDefinitions(ast, installation) {
+  const names = new Set(arrayMap(providerContracts(), (source) =>
+    expression(source).properties[0].key.name));
+  return arrayEvery(records(ast), ({node, parent}) => {
+    if (node.type !== TYPE.MEMBER || node.object.name !== BINDING.OBJECT) return true;
+    if (node.computed) return false;
+    if (node.property.name === BINDING.ASSIGN) return node === installation.expression.callee;
+    if (node.property.name !== BINDING.DESCRIPTORS) return true;
+    if (parent.type !== TYPE.CALL || parent.callee !== node || parent.arguments.length !== 2) {
+      return false;
+    }
+    const descriptors = parent.arguments[1];
+    return descriptors.type === TYPE.OBJECT && arrayEvery(descriptors.properties, (property) =>
+      plainMethodProperty(property) && !setHas(names, property.key.name));
+  });
+}
+
+function installationOf(ast, owner) {
+  const matches = arrayFilter(ast.body, (node) => same(node, expectedAst(INSTALLATION).body[0]));
+  if (matches.length !== 1 || !stableBinding(ast, BINDING.SERVICE) ||
+      !stableBinding(ast, BINDING.OBJECT, 0) || !providerWritesAbsent(ast)) return null;
+  const installation = matches[0];
+  if (!visiblePropertyDefinitions(ast, installation)) return null;
+  const target = installation.expression.arguments[0];
+  const valid = arrayEvery(records(ast), ({node, parent}) => {
+    if (node.type !== TYPE.IDENTIFIER || node.name !== BINDING.SERVICE) return true;
+    if (node === owner.id || node === target.object) return true;
+    if (parent.type === TYPE.EXPORT_SPECIFIER) return true;
+    return parent.type === 'NewExpression' && parent.callee === node &&
+      node.range[0] >= owner.range[0] && node.range[1] <= owner.range[1];
+  });
+  return valid ? installation : null;
+}
+
+function privateWiring(constructor) {
+  const expected = expectedAst(SERVICE_WIRING).body[0].body.body;
+  const actual = arraySlice(constructor.value.body.body, -expected.length);
+  if (!same(actual, expected)) return false;
+  return arrayEvery([BINDING.BUNDLES, BINDING.COMPOSED], (name) =>
+    stableBinding(constructor, name) && arrayEvery(records(constructor), ({node}) =>
+      node.type !== TYPE.IDENTIFIER || node.name !== name ||
+      node.range[0] >= actual[0].range[0]));
+}
+
+function serviceProved(ast, parsed) {
+  if (!arrayEvery(SERVICE_IMPORTS, ([name, file]) => imported(ast, SERVICE, name, file) &&
       stableBinding(ast, name))) return false;
   const owner = arrayFind(ast.body, (node) =>
-    node.type === 'ClassDeclaration' && node.id?.name === 'BootstrapService');
-  const constructor = arrayFind(owner?.body.body, (node) => node.kind === 'constructor');
-  if (!constructor) return false;
-  const statements = constructor.value.body.body;
-  const contracts = [
-    'const delegateBundles = this._buildSeedDelegateBundles();',
-    'const seedDelegates = this._composeSeedDelegates(delegateBundles);',
-    'this.seedPartitionsPhase = new SeedPartitionsPhase({delegates: seedDelegates});',
-  ];
-  return arrayEvery(contracts, (source) => arraySome(statements, (node) =>
-    same(node, expectedAst(source).body[0]))) &&
-    stableBinding(constructor, BINDING.BUNDLES) && stableBinding(constructor, BINDING.COMPOSED);
+    node.type === TYPE.CLASS && node.id?.name === BINDING.SERVICE);
+  const constructor = arrayFind(owner?.body.body || [], (node) => node.kind === 'constructor');
+  if (!constructor || !privateWiring(constructor)) return false;
+  const installation = installationOf(ast, owner);
+  return installation !== null && installedMethodsProved(parsed, installation);
 }
 
 function assertionProved(ast) {
@@ -336,10 +523,21 @@ function assertionProved(ast) {
   return arraySome(ast.body, (node) => same(node, expectedAst(source).body[0]));
 }
 
+// Every load still reads each owner. Reuse parsing only for its identical
+// current bytes, retaining at most one AST per finite owner role.
+function currentSourceAst(file, source) {
+  const previous = mapGet(SOURCE_AST, file);
+  if (previous?.source === source) return previous.ast;
+  const ast = parseSourceFile(source);
+  mapSet(SOURCE_AST, file, {source, ast});
+  return ast;
+}
+
 // Only the collector issues proof, bound to the actual caller bytes and path.
 // Missing owner files revoke the allowance rather than supplying a fallback.
 export async function loadSeedConstructorInjectionProof(root = ROOT) {
-  const files = [CALLER, DELEGATES, RUNTIME, CDC, PARTITION, SERVICE, ASSERT];
+  const files = [CALLER, DELEGATES, RUNTIME, WORKFLOW, REPLICA_RUNTIME, CONTROL_RUNTIME,
+    CDC, PARTITION, SERVICE, ASSERT];
   const sources = new Map();
   try {
     for (const file of files) {
@@ -349,10 +547,12 @@ export async function loadSeedConstructorInjectionProof(root = ROOT) {
     if (error.code !== MISSING_FILE) throw error;
     return null;
   }
+  const parsed = new Map();
+  for (const [file, source] of sources) mapSet(parsed, file, currentSourceAst(file, source));
   const checks = [[DELEGATES, delegatesProved], [RUNTIME, cacheProved],
     [CDC, cdcProved], [PARTITION, partitionProved],
     [SERVICE, serviceProved], [ASSERT, assertionProved]];
-  if (!arrayEvery(checks, ([file, check]) => check(parseSourceFile(mapGet(sources, file))))) {
+  if (!arrayEvery(checks, ([file, check]) => check(mapGet(parsed, file), parsed))) {
     return null;
   }
   const context = objectFreeze({});

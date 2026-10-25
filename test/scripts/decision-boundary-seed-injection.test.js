@@ -28,7 +28,12 @@ const CDC = 'src/cdc/cdc-integration-service.js';
 const PARTITION = 'src/partition/partition-service.js';
 const SERVICE = 'src/bootstrap/bootstrap-service.js';
 const ASSERT = 'src/utils/assert.js';
-const FILES = [CALLER, DELEGATES, RUNTIME, CDC, PARTITION, SERVICE, ASSERT];
+const WORKFLOW = 'src/bootstrap/bootstrap-service-seed-workflow.js';
+const CONTROL_RUNTIME = 'src/bootstrap/bootstrap-service-control-plane-runtime-methods.js';
+const FILES = [CALLER, DELEGATES, RUNTIME, CDC, PARTITION, SERVICE, ASSERT,
+  WORKFLOW,
+  'src/bootstrap/bootstrap-service-replica-registration-methods.js',
+  CONTROL_RUNTIME];
 const CACHE = 'systemTableCache: d.getSystemTableCache(),';
 const ENGINE = 'sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine,';
 const CONSTRUCTION = 'const partition = new PartitionService({';
@@ -99,6 +104,75 @@ const MUTATIONS = [
     'this.seedPartitionsPhase = new SeedPartitionsPhase({\n      delegates: seedDelegates,',
     'this.seedPartitionsPhase = new SeedPartitionsPhase({\n      delegates: unknown,'],
   ['dependency assertion reads', ASSERT, '  return value;', '  return db.query(value);'],
+  ['CDC owner escapes to unknown call', CDC,
+    'this.sqlQueryEngine = options.sqlQueryEngine || null;',
+    'this.sqlQueryEngine = options.sqlQueryEngine || null; unknown(this);'],
+  ['CDC engine overwritten after initialization', CDC,
+    'this.sqlQueryEngine = options.sqlQueryEngine || null;',
+    'this.sqlQueryEngine = options.sqlQueryEngine || null; this.sqlQueryEngine = db.query();'],
+  ['CDC runtime getter installation', CDC, 'this.sqlQueryEngine = options.sqlQueryEngine || null;',
+    'this.sqlQueryEngine = options.sqlQueryEngine || null; ' +
+    'Object.defineProperty(this, "sqlQueryEngine", {get() { return db.query(); }});'],
+  ['phase receiver escapes before capture', CALLER, 'const d = this.delegates;',
+    'Object.defineProperty(this, "delegates", {get() { return unknown(); }}); ' +
+    'const d = this.delegates;'],
+  ['composed delegates escape to mutation', SERVICE,
+    'this.seedInfrastructurePhase = new SeedInfrastructurePhase({',
+    'Object.assign(seedDelegates, {getSystemTableCache: () => cache.get("key")}); ' +
+    'this.seedInfrastructurePhase = new SeedInfrastructurePhase({'],
+  ['final installed accessor overridden', SERVICE,
+    'export {BootstrapService, BootstrapPhase, DEFAULT_BOOTSTRAP_CONFIG};',
+    'Object.assign(BootstrapService.prototype, {getSystemTableCache() { ' +
+    'return this.systemTableCache.get("key"); }});\n' +
+    'export {BootstrapService, BootstrapPhase, DEFAULT_BOOTSTRAP_CONFIG};'],
+  ['runtime provider not installed', SERVICE, '  createBootstrapServiceRuntimeMethods(),', '  {},'],
+  ['runtime factory returns another object', RUNTIME,
+    'function createBootstrapServiceRuntimeMethods() {',
+    'function createBootstrapServiceRuntimeMethods() { return Object.create(null);'],
+  ['delegate factory returns another object', DELEGATES,
+    'function createBootstrapServiceSeedDelegateMethods() {',
+    'function createBootstrapServiceSeedDelegateMethods() { return Object.create(null);'],
+  ['bundle mutated before composition', SERVICE,
+    '    const seedDelegates = this._composeSeedDelegates(',
+    '    Object.assign(delegateBundles, {runtimeWiring: {getSystemTableCache: ' +
+    '() => this.systemTableCache.get("key")}});\n' +
+    '    const seedDelegates = this._composeSeedDelegates('],
+  ['unknown constructor mutates forwarded provider', SERVICE,
+    '    this.seedInfrastructurePhase = new SeedInfrastructurePhase({',
+    '    new class { constructor({delegates}) { const old = delegates.getSystemTableCache; ' +
+    'delegates.getSystemTableCache = () => old().get("key"); } }({delegates: seedDelegates});\n' +
+    '    this.seedInfrastructurePhase = new SeedInfrastructurePhase({'],
+  ['prototype escapes through alias', SERVICE,
+    'export {BootstrapService, BootstrapPhase, DEFAULT_BOOTSTRAP_CONFIG};',
+    'const target = BootstrapService.prototype; Object.assign(target, {getSystemTableCache() {' +
+    ' return this.systemTableCache.get("key"); }});\n' +
+    'export {BootstrapService, BootstrapPhase, DEFAULT_BOOTSTRAP_CONFIG};'],
+  ['instance field shadows installed provider', SERVICE,
+    '    const delegateBundles = this._buildSeedDelegateBundles();',
+    '    this.getSystemTableCache = () => this.systemTableCache.get("key");\n' +
+    '    const delegateBundles = this._buildSeedDelegateBundles();'],
+  ['composed workflow overrides delegate method', WORKFLOW,
+    'function createBootstrapServiceSeedWorkflowMethods() {\n  return {',
+    'function createBootstrapServiceSeedWorkflowMethods() {\n  return {' +
+    ' _composeSeedDelegates() { return unknown(); },'],
+  ['nested runtime spread overrides delegate method', CONTROL_RUNTIME,
+    'function createBootstrapServiceControlPlaneRuntimeMethods() {\n  return {',
+    'function createBootstrapServiceControlPlaneRuntimeMethods() {\n  return {' +
+    ' _buildRuntimeWiringDelegates() { return unknown(); },'],
+  ['bundle builder executes mutation before returning', DELEGATES,
+    'function buildPhaseExecutionDelegates(service) {',
+    'function buildPhaseExecutionDelegates(service) { unknown(service);'],
+  ['bundle builder supplies computed property', DELEGATES,
+    '    assertOriginalSeedAttempt: () => self.assertOriginalSeedAttempt(),',
+    '    [unknown()]: () => self.assertOriginalSeedAttempt(),'],
+  ['own descriptor shadows installed provider', SERVICE,
+    '    Object.defineProperties(this, {',
+    '    Object.defineProperties(this, {getSystemTableCache: ' +
+    '{value: () => this.systemTableCache.get("key")},'],
+  ['own bulk assignment shadows installed provider', SERVICE,
+    '    const delegateBundles = this._buildSeedDelegateBundles();',
+    '    Object.assign(this, {getSystemTableCache: () => this.systemTableCache.get("key")});\n' +
+    '    const delegateBundles = this._buildSeedDelegateBundles();'],
   ['constructor reexport changes', PARTITION, 'from \'./partition-service-assembly.js\'',
     'from \'./imposter.js\''],
 ];
@@ -133,6 +207,12 @@ test('owned injection proof refuses adversarial argument and provider changes', 
       `${name}: conservative mixed evidence remains`);
     await fs.writeFile(path.join(root, file), original);
   }
+  t.same(await check(), [], 'restoring exact current owner bytes restores the proof');
+  const unrelated = sources.get(SERVICE).replace('    this.lastError = null;',
+    '    void 0; this.lastError = null;');
+  await fs.writeFile(path.join(root, SERVICE), unrelated);
+  t.same(await check(), [], 'unrelated constructor work is not covered by a whole-function hash');
+  await fs.writeFile(path.join(root, SERVICE), sources.get(SERVICE));
   const proof = await loadSeedConstructorInjectionProof(root);
   const source = sources.get(CALLER);
   t.equal(mixed(collectDecisionBoundaryViolationsFromSource(source, CALLER,
