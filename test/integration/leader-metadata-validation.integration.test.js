@@ -29,7 +29,7 @@ import {
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {URL} from 'url';
-import {scaleByMachineFactor} from './helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 import {
   createVirginSeedBootstrapService,
   initializeTestEnvironment,

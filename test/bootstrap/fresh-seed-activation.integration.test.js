@@ -28,7 +28,7 @@ import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
 import {acquireDataDirectoryProcessOwner} from
   '../../src/storage/data-directory-process-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN, isOriginalAllocationHold} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
@@ -50,7 +50,6 @@ const NATIVE_OPEN = 'create_node';
 const CAMPAIGN = 'campaign';
 const READY_SURFACE = 'rest-readyz';
 const allocator = createPortAllocator(import.meta.url);
-const hold = (error) => error?.code === STATE.HOLD;
 
 // --- the shared positive observation ---------------------------------------
 
@@ -244,7 +243,7 @@ test('R5 a restart on the same durable data serves or is held typed and resets n
         [{id: 'row-1', value: 'written-before-restart'}],
         'the restarted seed serves the pre-restart write');
     } else {
-      assert.ok(hold(report.startupError),
+      assert.ok(isOriginalAllocationHold(report.startupError),
         `an unserved restart must be an owner-named hold, got ${holdLabel(report.startupError)}`);
     }
     assert.deepEqual(observed.afterRestart, observed.transferred,
@@ -297,7 +296,7 @@ test('R1 negative: without a live original attempt (null opening mode) every con
   const {dataDir, service} = await negativeSeed(t, {prepare: false});
   for (const [name, invoke] of continuationEntries(service)) {
     await assert.rejects(async () => invoke(), (error) =>
-      hold(error) && error.reason === REASON.AUTHORITY, name);
+      isOriginalAllocationHold(error, REASON.AUTHORITY), name);
   }
   assert.equal(fs.existsSync(originalSeedAnchor(dataDir).dbPath), false,
     'no original allocation is issued by any continuation entry');
@@ -312,7 +311,7 @@ test('R3 negative: with original rights untransferred every public admission ent
     assert.ok(Object.values(before).every((rights) =>
       rights[COLUMN.SERVICE_RIGHT] === STATE.UNUSED), 'the live attempt holds UNUSED rights');
     for (const [name, invoke] of admissionEntries(service)) {
-      await assert.rejects(async () => invoke(), hold, name);
+      await assert.rejects(async () => invoke(), (error) => isOriginalAllocationHold(error), name);
       assert.deepEqual(readOwnerRights(declaration), before, `${name} preserves every right`);
       assert.equal(service.messageRouter.server, null, `${name} opens no listener`);
       assert.equal(service.messageRouter.isExternalAdmissionEnabled(), false,

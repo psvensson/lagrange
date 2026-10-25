@@ -14,6 +14,7 @@
  * Requirements: 5.1, 5.2, 5.3
  */
 
+import {resolveTestMachineFactor} from '../../scripts/test-machine-factor.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {v4 as uuidv4} from 'uuid';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
@@ -51,16 +52,9 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
-// Hardware-relative budget scaling (doctrine: hardware-relative-convergence-
-// budget epic - scale WORK-BOUND budgets by a machine factor, never
-// correctness). CI lanes export LAGRANGE_TEST_MACHINE_FACTOR (release/ci
-// workflows set 3); the reference machine stays 1, so the SLO intent is
-// preserved where it was calibrated and the assertion stays binary
-// elsewhere. Parsed once; non-numeric or absent means 1.
-const TEST_MACHINE_FACTOR = (() => {
-  const parsed = Number(process.env.LAGRANGE_TEST_MACHINE_FACTOR);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
-})();
+// The shared owner resolves the hardware factor; these budgets retain their
+// existing multiplication at the point of use.
+const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
 const TEST_TIMEOUT_MS = 120000;
 const REBALANCER_IDLE_INTERVAL_MS = 600000;
 const REBALANCER_STABILIZATION_MS = 10000;

@@ -17,7 +17,7 @@ import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.j
 import {readOriginalAllocationRow, transitionOriginalRight} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN, isOriginalAllocationHold} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {RAFT_RS_OPENING_HISTORY as HISTORY} from
   '../../src/raft/raft-rs-opening-history-constants.js';
@@ -25,7 +25,7 @@ import {RAFT_OPERATION_PORT_REQUEST as REQUEST} from '../../src/raft/raft-operat
 
 const TIMING = Object.freeze({heartbeatMs: 50, electionMinMs: 150,
   electionMaxMs: 300, tickIntervalMs: 10});
-const hold = (reason) => (error) => error.code === STATE.HOLD && error.reason === reason;
+const hold = (reason) => (error) => isOriginalAllocationHold(error, reason);
 
 function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-effect-cut-'));

@@ -17,7 +17,7 @@ import {acquireDataDirectoryProcessOwner, ownsDataDirectoryProcessOwner,
 import {createStartupAcquisitionLedger, runStartupWithCleanup} from
   '../../src/entrypoint-startup-acquisition-ledger.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
-  ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
+  ORIGINAL_ALLOCATION_COLUMN as COLUMN, isOriginalAllocationHold} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
   '../../src/raft/raft-rs-replica-lifecycle-constants.js';
@@ -122,7 +122,7 @@ test('formatter and exact close failures retain both errors, the DB and director
     assert.throws(() => acquireDataDirectoryProcessOwner(f.dataDir),
       (error) => error.code === DATA_DIRECTORY_OWNER_ERROR_CODE);
     assert.throws(() => f.preparation.assertCurrent(),
-      (error) => error.code === STATE.HOLD && error.reason === REASON.CLOSED);
+      (error) => isOriginalAllocationHold(error, REASON.CLOSED));
   } finally {
     pragmaFault.mock.restore();
     closeFault.mock.restore();
@@ -159,7 +159,7 @@ test('post-ISSUED close failure retains only the exact failed handle and never r
     assert.deepEqual(f.preparation.observeResources().map((slot) => slot.replicaId),
       [first.replicaId]);
     assert.throws(() => f.preparation.assertCurrent(),
-      (error) => error.code === STATE.HOLD && error.reason === REASON.CLOSED);
+      (error) => isOriginalAllocationHold(error, REASON.CLOSED));
     assert.equal(ownsDataDirectoryProcessOwner(f.directoryOwner, f.dataDir), true);
   } finally {
     fault.mock.restore();

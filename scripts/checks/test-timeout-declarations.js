@@ -17,6 +17,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+
+import {resolveTestMachineFactor, scaleByMachineFactor} from
+  '../test-machine-factor.js';
 
 import * as espree from 'espree';
 
@@ -49,6 +53,10 @@ const NODE_TYPE = Object.freeze({
   OBJECT: 'ObjectExpression',
   PROPERTY: 'Property',
   VARIABLE_DECLARATOR: 'VariableDeclarator',
+  REST: 'RestElement',
+  ASSIGNMENT_PATTERN: 'AssignmentPattern',
+  ARRAY_PATTERN: 'ArrayPattern',
+  OBJECT_PATTERN: 'ObjectPattern',
 });
 const AMBIGUOUS_IDENTIFIER_PROBLEM =
   'timeout declaration names an identifier bound more than once to different ' +
@@ -79,6 +87,8 @@ const ARITHMETIC_OPERATORS = Object.freeze(new Set([
   OPERATOR_MULTIPLY, OPERATOR_ADD, OPERATOR_SUBTRACT, OPERATOR_DIVIDE,
 ]));
 const AST_METADATA_KEYS = Object.freeze(new Set(['loc', 'range', 'parent']));
+const MACHINE_FACTOR_OWNER = fileURLToPath(new URL('../test-machine-factor.js', import.meta.url));
+const MACHINE_FACTOR_OPERATION = 'scaleByMachineFactor';
 
 // Ambient-intrinsic hardening (system-guidelines): capture at module load so a
 // replaced prototype cannot reroute declaration resolution.
@@ -196,6 +206,38 @@ function walk(node, visit) {
   }
 }
 
+function visitBindingNames(pattern, visit) {
+  if (!pattern) return;
+  if (pattern.type === NODE_TYPE.IDENTIFIER) visit(pattern.name);
+  else if (pattern.type === NODE_TYPE.REST) visitBindingNames(pattern.argument, visit);
+  else if (pattern.type === NODE_TYPE.ASSIGNMENT_PATTERN) visitBindingNames(pattern.left, visit);
+  else if (pattern.type === NODE_TYPE.ARRAY_PATTERN) {
+    for (const element of pattern.elements) visitBindingNames(element, visit);
+  } else if (pattern.type === NODE_TYPE.OBJECT_PATTERN) {
+    for (const property of pattern.properties) {
+      visitBindingNames(property.type === NODE_TYPE.REST ?
+        property.argument : property.value, visit);
+    }
+  }
+}
+
+// An imported operation shadowed in any nested scope is conservatively
+// unresolved. A same-named local function must never acquire the owner's
+// static evaluation privilege.
+function collectImportShadows(ast, imports) {
+  const shadowed = new Set();
+  const record = (name) => {
+    if (imports.has(name)) shadowed.add(name);
+  };
+  walk(ast, (node) => {
+    visitBindingNames(node.id, record);
+    visitBindingNames(node.param, record);
+    if (node.type === NODE_TYPE.ASSIGNMENT) visitBindingNames(node.left, record);
+    for (const parameter of node.params || []) visitBindingNames(parameter, record);
+  });
+  return shadowed;
+}
+
 // Named imports of numeric constants, resolved ONE level deep against a
 // relative specifier. The project's canonical pattern is a shared owner such
 // as src/test-helpers/test-timeout-constants.js, so refusing to follow it
@@ -227,6 +269,33 @@ function resolveImportedConstant(bindings, name, fromFile) {
   return value === undefined ? null : value;
 }
 
+function resolveArithmeticTimeout(valueNode, bindings, context, problems) {
+  const left = resolveTimeoutValue(valueNode.left, bindings, context, problems);
+  const right = resolveTimeoutValue(valueNode.right, bindings, context, problems);
+  if (left === null || right === null) return null;
+  const folded = applyArithmetic(valueNode.operator, left, right);
+  if (folded === null) {
+    problems.push(`${DIVIDE_BY_ZERO_PROBLEM} at ${context.location}`);
+    return null;
+  }
+  if (!Number.isFinite(folded)) {
+    problems.push(`${UNSUPPORTED_EXPRESSION_PROBLEM}: non-finite result at ${context.location}`);
+    return null;
+  }
+  return folded;
+}
+
+function isMachineFactorCall(node, bindings, fromFile) {
+  if (node.callee?.type !== NODE_TYPE.IDENTIFIER || node.arguments.length !== 1) return false;
+  const name = node.callee.name;
+  const binding = bindings.imports.get(name);
+  return binding?.importedName === MACHINE_FACTOR_OPERATION &&
+    !bindings.shadowedImports.has(name) &&
+    !bindings.ambiguous.has(name) &&
+    stringStartsWith(binding.specifier, RELATIVE_SPECIFIER_PREFIX) &&
+    path.resolve(path.dirname(fromFile), binding.specifier) === MACHINE_FACTOR_OWNER;
+}
+
 function resolveTimeoutValue(valueNode, bindings, context, problems) {
   const {location, fromFile} = context;
   if (valueNode.type === NODE_TYPE.LITERAL &&
@@ -252,21 +321,15 @@ function resolveTimeoutValue(valueNode, bindings, context, problems) {
   // propagates as a reported problem, never as a silent fallback.
   if (valueNode.type === NODE_TYPE.BINARY &&
     ARITHMETIC_OPERATORS.has(valueNode.operator)) {
-    const left = resolveTimeoutValue(valueNode.left, bindings, context, problems);
-    const right =
-      resolveTimeoutValue(valueNode.right, bindings, context, problems);
-    if (left === null || right === null) return null;
-    const folded = applyArithmetic(valueNode.operator, left, right);
-    if (folded === null) {
-      problems.push(`${DIVIDE_BY_ZERO_PROBLEM} at ${location}`);
-      return null;
-    }
-    if (!Number.isFinite(folded)) {
-      problems.push(
-        `${UNSUPPORTED_EXPRESSION_PROBLEM}: non-finite result at ${location}`);
-      return null;
-    }
-    return folded;
+    return resolveArithmeticTimeout(valueNode, bindings, context, problems);
+  }
+  // Only this imported owner's one-argument operation is evaluated, using
+  // exactly the same scaler as the runtime test. Arbitrary calls stay refused.
+  if (valueNode.type === NODE_TYPE.CALL && isMachineFactorCall(valueNode, bindings, fromFile)) {
+    const reference = resolveTimeoutValue(valueNode.arguments[0], bindings, context, problems);
+    if (reference === null) return null;
+    const scaled = scaleByMachineFactor(reference, context.machineFactor);
+    if (Number.isFinite(scaled)) return scaled;
   }
   problems.push(
     `${UNSUPPORTED_EXPRESSION_PROBLEM}: ${valueNode.type} at ${location}`);
@@ -277,7 +340,7 @@ function resolveTimeoutValue(valueNode, bindings, context, problems) {
 // declaration (0 when there is none); `problems` is non-empty when a
 // declaration exists but could not be resolved — callers must fail closed on
 // it rather than fall back to the default cap.
-export function extractTimeoutDeclarations(source, filePath) {
+export function extractTimeoutDeclarations(source, filePath, {env = process.env} = {}) {
   const problems = [];
   let ast;
   try {
@@ -290,6 +353,8 @@ export function extractTimeoutDeclarations(source, filePath) {
   }
   const bindings = collectNumericConstants(ast);
   bindings.imports = collectImportBindings(ast);
+  bindings.shadowedImports = collectImportShadows(ast, bindings.imports);
+  const machineFactor = resolveTestMachineFactor(env);
   let largest = 0;
   walk(ast, (node) => {
     if (node.type !== NODE_TYPE.CALL || !isTestCallee(node.callee)) return;
@@ -312,6 +377,7 @@ export function extractTimeoutDeclarations(source, filePath) {
         const value = resolveTimeoutValue(property.value, bindings, {
           fromFile: filePath,
           location,
+          machineFactor,
         }, problems);
         if (value !== null && value > largest) largest = value;
       }

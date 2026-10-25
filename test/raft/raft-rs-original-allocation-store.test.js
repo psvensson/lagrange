@@ -8,6 +8,7 @@ import {prepareReplicaLifecycleForOriginalAllocation, readOriginalAllocationRow,
   prepareOriginalAllocationRow, markOriginalAllocationIssued, transitionOriginalRight} from
   '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  isOriginalAllocationHold,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
@@ -42,7 +43,7 @@ function issue(db, declaration, anchor) {
 }
 
 function hold(reason) {
-  return (error) => error.code === STATE.HOLD && error.reason === reason;
+  return (error) => isOriginalAllocationHold(error, reason);
 }
 
 const RIGHTS = [COLUMN.SERVICE_RIGHT, COLUMN.IDENTITY_RIGHT];

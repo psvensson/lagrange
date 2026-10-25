@@ -241,8 +241,9 @@ const RATCHET_TARGETS = [
     // family and ReplicaLifecycleManager tests deleted).
     // Q6 stages 1-2: tightened 658/24752 -> 656/24700 (no-handler property
     // tests read the transport owner).
-    baselineCloneGroupCount: 656,
-    baselineDuplicatedLineCount: 24700,
+    // Seed-harness round7 composition: measured 655/24678; ratchet down.
+    baselineCloneGroupCount: 655,
+    baselineDuplicatedLineCount: 24678,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

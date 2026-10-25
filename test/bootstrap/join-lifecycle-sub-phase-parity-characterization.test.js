@@ -12,7 +12,6 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {
   BOOTSTRAP_EVENT,
@@ -36,7 +35,8 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {installMinimumSeedBootstrapLifecycleFixture} from
+import {createOwnedVirginSeedBootstrapService,
+  installMinimumSeedBootstrapLifecycleFixture} from
   '../integration/helpers/cluster-test-helpers.js';
 
 // -- Suite-local fixture constants --
@@ -154,7 +154,7 @@ test('Bootstrap executePhase updates lifecycle sub-phases during phase execution
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,
@@ -225,7 +225,7 @@ test('Bootstrap terminal sub-phase CACHE_HYDRATION auto-advances to CONNECTING',
     initializeTestEnvironment();
 
     const bootstrap = installMinimumSeedBootstrapLifecycleFixture(
-      new BootstrapService({
+      await createOwnedVirginSeedBootstrapService(t, {
         bootIncarnation: 1,
         nodeId: TEST_NODE_ID,
         nodeAddress: TEST_NODE_ADDRESS,

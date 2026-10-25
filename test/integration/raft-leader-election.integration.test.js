@@ -11,6 +11,7 @@
  * Requirements: 7.3, 7.4
  */
 
+import {resolveTestMachineFactor} from '../../scripts/test-machine-factor.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createVirginSeedBootstrapService,
@@ -49,16 +50,9 @@ function generateUniqueNodeId(counter) {
 // Counter for generating unique node IDs
 let nodeIdCounter = 0xc00000000000;
 
-// Hardware-relative budget scaling (doctrine: hardware-relative-convergence-
-// budget epic - scale WORK-BOUND budgets by a machine factor, never
-// correctness). CI lanes export LAGRANGE_TEST_MACHINE_FACTOR (release/ci
-// workflows set 3); the reference machine stays 1, so the SLO intent is
-// preserved where it was calibrated and the assertion stays binary
-// elsewhere. Parsed once; non-numeric or absent means 1.
-const TEST_MACHINE_FACTOR = (() => {
-  const parsed = Number(process.env.LAGRANGE_TEST_MACHINE_FACTOR);
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
-})();
+// The shared owner resolves the hardware factor; these budgets retain their
+// existing multiplication at the point of use.
+const TEST_MACHINE_FACTOR = resolveTestMachineFactor();
 
 test('Raft leader election', {timeout: 120000}, async (t) => {
   t.beforeEach(() => {

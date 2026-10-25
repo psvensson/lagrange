@@ -17,6 +17,7 @@ import {setActualCoreEntryObserver} from '../../src/raft/raft-rs-runtime-owner.j
 import {readOriginalAllocationRow} from '../../src/raft/raft-rs-replica-lifecycle-owner.js';
 import {durableRecordBootstrap} from '../../src/raft/raft-committed-membership-stamp.js';
 import {ORIGINAL_ALLOCATION as STATE, ORIGINAL_ALLOCATION_REASON as REASON,
+  isOriginalAllocationHold,
   ORIGINAL_ALLOCATION_COLUMN as COLUMN} from
   '../../src/raft/raft-rs-original-allocation-constants.js';
 import {REPLICA_LIFECYCLE_TABLE as TABLE} from
@@ -29,7 +30,7 @@ import {RAFT_RS_ENTRY_TYPE} from '../../src/raft/raft-rs-ready-loop-constants.js
 
 const TIMING = Object.freeze({heartbeatMs: 50, electionMinMs: 150,
   electionMaxMs: 300, tickIntervalMs: 10});
-const hold = (reason) => (error) => error.code === STATE.HOLD && error.reason === reason;
+const hold = (reason) => (error) => isOriginalAllocationHold(error, reason);
 
 function fixture(t) {
   const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'original-opening-authority-'));

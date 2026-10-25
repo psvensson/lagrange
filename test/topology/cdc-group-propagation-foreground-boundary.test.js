@@ -15,7 +15,7 @@ import {RESPONSE, assertDebtWithoutAck, topologyProgressFixture} from
   '../test-helpers/cdc-topology-progress-fixture.js';
 import {settleTicks} from '../test-helpers/participant-transaction-fixture.js';
 import {setupConfig, teardownConfig} from './cdc-group-propagation-service-harness.js';
-import {scaleByMachineFactor} from '../integration/helpers/test-machine-factor.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 const RETRY_DELAY_MS = 50;
 // A hang guard over the real source fixture (its first leader start warms the

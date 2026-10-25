@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {resolveTestMachineFactor} from './test-machine-factor.js';
 
 import {
   appendFileSync,
@@ -111,10 +112,8 @@ const LOAD_DECIMALS = 2;
 // Hardware-relative budget scaling (hardware-relative-convergence-budget
 // epic): CI lanes and placed lab runs export LAGRANGE_TEST_MACHINE_FACTOR; the
 // reference machine is 1, and non-numeric, absent or below 1 means 1. This is
-// its one reader: the runner records it on a timeout, and the integration
-// budget helper (test/integration/helpers/test-machine-factor.js) scales by it.
-const MACHINE_FACTOR_ENV = 'LAGRANGE_TEST_MACHINE_FACTOR';
-const REFERENCE_MACHINE_FACTOR = 1;
+// owner is scripts/test-machine-factor.js. The runner records it on a timeout
+// and resolves that owner's scaling operation in timeout declarations.
 
 const CLI_OPTION = Object.freeze({
   FILTER: '--filter',
@@ -324,7 +323,7 @@ function prepareTestRun(file, options) {
   // declared budget said otherwise. The per-file kill (--timeout-ms,
   // default 600s) still bounds the whole process.
   if (env.TAP_TIMEOUT === undefined) {
-    const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile);
+    const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile, env);
     const resolvedTimeoutSeconds = Math.max(
       declaredTimeoutSeconds ?? 0,
       parsedTimeoutFloorSeconds(env.TAP_TIMEOUT_FLOOR),
@@ -366,7 +365,7 @@ function parsedTimeoutFloorSeconds(value) {
   return Number.isInteger(seconds) && seconds > 0 ? seconds : 0;
 }
 
-function largestDeclaredTimeoutSeconds(absoluteFile) {
+function largestDeclaredTimeoutSeconds(absoluteFile, env) {
   let source;
   try {
     source = readFileSync(absoluteFile, TEXT_ENCODING);
@@ -374,7 +373,7 @@ function largestDeclaredTimeoutSeconds(absoluteFile) {
     return null;
   }
   const {milliseconds, problems} =
-    extractTimeoutDeclarations(source, absoluteFile);
+    extractTimeoutDeclarations(source, absoluteFile, {env});
   if (problems.length > 0) {
     throw new Error(
       `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
@@ -585,18 +584,6 @@ function finalizeTestRun(run, processResult, elapsedMs) {
     stderrFile: run.stderrFile,
     timeout,
   };
-}
-
-/**
- * The machine factor the environment declares, or 1 on the reference machine.
- * @param {object} [env] process environment
- * @return {number} >= 1
- */
-function resolveTestMachineFactor(env = process.env) {
-  const parsed = Number(env[MACHINE_FACTOR_ENV]);
-  return Number.isFinite(parsed) && parsed >= REFERENCE_MACHINE_FACTOR ?
-    parsed :
-    REFERENCE_MACHINE_FACTOR;
 }
 
 // What the host was doing when a file ran out of budget, so a timeout on a
@@ -943,7 +930,6 @@ export {
   TEST_FILE_LINE,
   TEST_NODE_ARGS,
   TEST_RESULTS_LEDGER_ROTATE_BYTES,
-  resolveTestMachineFactor,
   analyzeTapOutput,
   filterTestFiles,
   formatBatchSignalLine,
