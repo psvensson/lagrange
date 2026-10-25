@@ -156,6 +156,10 @@ const FAILURE_REASON = Object.freeze({
 // (3bac105f1); NODE_COMPILE_CACHE is evaluated on the canary first.
 const TEST_NODE_ARGS = Object.freeze([
   `--import=${import.meta.resolve('@tapjs/mock/import')}`,
+  // Both TAP and node:test files reach this one runner. Node's implicit
+  // node:test reporter may emit human-readable output, which the TAP parser
+  // cannot certify. Pin the output contract for every test process.
+  '--test-reporter=tap',
   '--enable-source-maps',
   '--no-compilation-cache',
   '--max-old-space-size=512',
