@@ -24,6 +24,7 @@ import {
 import {
   CAPABILITIES_PATH,
   OUTPUT_PATH,
+  PORTABILITY_PATH,
   generate,
 } from './generate-current-capabilities-doc.js';
 
@@ -38,6 +39,22 @@ const PARTITION_CONSTRUCTOR_PATH = 'src/partition/partition-service-core-base.js
 const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
+
+// Single owner for the fixture's complete file-backed observation surface.
+// Add every new readText/readJson or generated-document input here so tests
+// exercise the same source graph as the production capability check.
+const CHECKED_FILE_PATHS = Object.freeze([
+  CAPABILITIES_PATH,
+  OUTPUT_PATH,
+  PORTABILITY_PATH,
+  CHART_VALUES_PATH,
+  PARTITIONING_ARCHITECTURE_PATH,
+  REPLICATION_ARCHITECTURE_PATH,
+  SNAPSHOT_CADENCE_PATH,
+  PARTITION_CONSTRUCTOR_PATH,
+  TRANSPORT_SERVER_PATH,
+  HTTP_AUTHENTICATOR_PATH,
+]);
 
 const EXPECTED_STATUS = Object.freeze({
   SECONDARY_INDEXES: 'unsupported',
@@ -264,4 +281,4 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
 }
 
-export {checkCurrentCapabilities};
+export {CHECKED_FILE_PATHS, checkCurrentCapabilities};

@@ -4,23 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import {checkCurrentCapabilities} from
+import {CHECKED_FILE_PATHS, checkCurrentCapabilities} from
   '../../scripts/check-current-capabilities.js';
 
 import {generate, renderCurrentCapabilitiesDocument} from
   '../../scripts/generate-current-capabilities-doc.js';
 
 const TEMP_PREFIX = 'current-capabilities-';
-const FIXTURE_PATHS = Object.freeze([
-  'architecture/process-partitioning.md',
-  'architecture/process-replication.md',
-  'charts/lagrange-node/values.yaml',
-  'docs/current-capabilities-and-limitations.md',
-  'docs/current-capabilities.json',
-  'docs/service-portability-capabilities.json',
-  'src/transport/router-server-manager.js',
-  'src/service/request-cell-http-authenticator.js',
-]);
+const FIXTURE_PATHS = CHECKED_FILE_PATHS;
 
 function createFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
@@ -49,6 +40,32 @@ test('current capabilities detect a stale generated document', () => {
     assert.match(result.problems.join('\n'), /stale/iu);
   } finally {
     fs.rmSync(fixtureRoot, {recursive: true, force: true});
+  }
+});
+
+test('current capabilities detect drift in both raft-rs source owners', () => {
+  const driftCases = [
+    ['src/partition/partition-service-core-base.js',
+      'new RaftRsWasmProvider()'],
+    ['src/partition/partition-snapshot-cadence.js',
+      'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED'],
+  ];
+  for (const [relativePath, marker] of driftCases) {
+    const fixtureRoot = createFixture();
+    try {
+      const sourcePath = path.join(fixtureRoot, relativePath);
+      const source = fs.readFileSync(sourcePath, 'utf8');
+      assert.ok(source.includes(marker), `missing source marker: ${relativePath}`);
+      fs.writeFileSync(
+        sourcePath, source.replace(marker, '__test_owner_drift__'), 'utf8',
+      );
+      const result = checkCurrentCapabilities(fixtureRoot);
+      assert.equal(result.valid, false, relativePath);
+      assert.match(result.problems.join('\n'),
+        /replication capability fields contradict the active snapshot path/u);
+    } finally {
+      fs.rmSync(fixtureRoot, {recursive: true, force: true});
+    }
   }
 });
 
