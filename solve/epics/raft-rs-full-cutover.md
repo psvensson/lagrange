@@ -78,6 +78,31 @@ consumer and remove superseded logic, aliases and compatibility fallbacks.
 | Owned retention follow-ups | Message-group acknowledged IDs and completed workflow records remain retained; representative service endurance measurement pending | Preserve stale-row resurrection protection. No arbitrary TTL or new release blocker without measured endurance evidence; these are separate retention-owner follow-ups. |
 | CDC D4 window deletion | `06e3cfcf7d2084799718a61dc7757510e0d35330`, held for W-D4b | Run the declared distributed handoff witness after fresh-seed activation, then independently review the deletion. Joining-group fan-out admission remains a recorded design question. |
 
+
+### Convergence snapshot (observed 2026-10-26)
+
+This is a read-only, derived coordination view under the existing integration
+owner, not another tracker, an agent restart or any amendment to sealed
+acceptance. The branch observation is
+`work/cloud-metric-runner-composition-20261026` at
+`aef927106067d6a581a6aa4aea184f67dd14fb0e`; that HEAD is **not**
+declared an exact-candidate certification result. The 2026-10-25 stop
+instruction above remains in effect.
+
+| Signal | Evidence-bound observation |
+| --- | --- |
+| Integration candidate | The observed branch/HEAD above; exact whole-candidate source, public-service and R8 gates remain open. Integration baseline and composed checkpoints are listed in the live rows above. |
+| First representative-service blocker | Fresh-seed startup admission/custody has bounded positive component witnesses, and public startup/CREATE/INSERT/SELECT were observed in a limited path; no full distributed public WASI request plus restart/failover/recovery and resource-pressure run has been accepted at this exact head. The first **current** failing step is unmeasured until that scenario is run, not silently assigned to a prior failure. |
+| Distinct unresolved causal families and age | **Unmeasured as a deduplicated inventory.** The interaction rows preserve evidence for startup/activation, SQL admission, TX1, CDC, routing, metrics and retention; their counts are not additive defect-family counts. Find first observed failures and causal equivalence in the original records before reporting a number/age. |
+| Approved, awaiting integration/verification | SQL admission/admin still has an independent core **REVISE** verdict despite approved bounded subrepairs. Metric provenance's first independent review was **REVISE**, with later correction awaiting its completed delta verdict. CDC D4 remains explicitly held for its distributed witness. The rows above identify already composed approved work separately; do not double-count it as waiting. |
+| Delivery time by phase | **Unmeasured in comparable units.** Existing timestamps can distinguish diagnosis, independent review, queue wait, proof result, composition and context recovery for a chosen recent cycle; no durations are invented from branch age or an old job's existence. |
+
+Maintain this small snapshot only when the integration owner observes a
+material candidate, blocker, proof or queue change, preferably using existing
+event timestamps and source-pinned receipts. Weekly external reviews may read
+it but do not write it or determine acceptance. Distinguish completed repair,
+representative service and full R8/release readiness.
+
 New review assignments are bounded to the changed interaction and its reachable
 consequences. No interrupted agent is considered active merely because an old
 shell remains alive. The root agent collects actual test results and owns
