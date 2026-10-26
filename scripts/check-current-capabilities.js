@@ -33,13 +33,17 @@ const EXPECTED_SCHEMA_VERSION = 1;
 const CHART_VALUES_PATH = 'charts/lagrange-node/values.yaml';
 const PARTITIONING_ARCHITECTURE_PATH = 'architecture/process-partitioning.md';
 const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
+const SNAPSHOT_CADENCE_PATH = 'src/partition/partition-snapshot-cadence.js';
 const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
 
 const EXPECTED_STATUS = Object.freeze({
   SECONDARY_INDEXES: 'unsupported',
-  SQLITE_SNAPSHOT: 'active_sqlite_partition_path',
+  SNAPSHOT_COMPONENT: 'component_present_integration_unverified',
+  RAFT_RS_UNVERIFIED: 'not_verified_on_raft_rs',
+  RAFT_RS_CADENCE_UNAVAILABLE: 'unavailable_on_raft_rs',
+  HISTORICAL_SNAPSHOT_PROOF: 'historical_pre_cutover_only',
   MESSAGE_GROUP_COMPACTION: 'unsupported',
   LEARNER_PROMOTION: 'time_based_not_progress_based',
   NODE_TRANSPORT: 'plain_websocket_trusted_network_only',
@@ -52,7 +56,9 @@ const AUDIT_MARKER = Object.freeze({
   SECONDARY_INDEX_ID: 'secondary-indexes',
   SECONDARY_INDEX_CONTRADICTION:
     'secondary-index capability contradicts the active architecture',
-  SQLITE_BOUNDED: 'SQLite partition logs are bounded',
+  RAFT_RS_NOT_CERTIFIED:
+    'Current rs-raft partition checkpoint cadence is unavailable',
+  CADENCE_REFUSAL: 'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED',
   MESSAGE_GROUP_UNBOUNDED: 'message-group logs still grow without bound',
   LEARNER_TIME_BASED: 'time-based, not progress-based',
   REPLICATION_CONTRADICTION:
@@ -176,17 +182,25 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
 
   const replication = readText(REPLICATION_ARCHITECTURE_PATH, root);
   addProblem(problems,
-    replication.includes(AUDIT_MARKER.SQLITE_BOUNDED) &&
+    replication.includes(AUDIT_MARKER.RAFT_RS_NOT_CERTIFIED) &&
       replication.includes(AUDIT_MARKER.MESSAGE_GROUP_UNBOUNDED) &&
       replication.includes(AUDIT_MARKER.LEARNER_TIME_BASED),
     'replication limitations lost their current architecture evidence');
+  const cadence = readText(SNAPSHOT_CADENCE_PATH, root);
   addProblem(problems,
-    capabilities.replication.snapshotCheckpointCreation ===
-      EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+    cadence.includes(AUDIT_MARKER.CADENCE_REFUSAL) &&
+      capabilities.replication.snapshotCheckpointCreation ===
+        EXPECTED_STATUS.SNAPSHOT_COMPONENT &&
       capabilities.replication.snapshotTransferInstall ===
-        EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+        EXPECTED_STATUS.SNAPSHOT_COMPONENT &&
       capabilities.replication.physicalLogCompaction ===
-        EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+        EXPECTED_STATUS.RAFT_RS_UNVERIFIED &&
+      capabilities.replication.automaticSnapshotCadence ===
+        EXPECTED_STATUS.RAFT_RS_CADENCE_UNAVAILABLE &&
+      capabilities.replication.integratedReplicaRecovery ===
+        EXPECTED_STATUS.RAFT_RS_UNVERIFIED &&
+      capabilities.evidence.sqliteSnapshotLiveRebuild ===
+        EXPECTED_STATUS.HISTORICAL_SNAPSHOT_PROOF &&
       capabilities.replication.messageGroupLogCompaction ===
         EXPECTED_STATUS.MESSAGE_GROUP_COMPACTION &&
       capabilities.replication.learnerPromotion ===
