@@ -227,9 +227,10 @@ Active translations:
 - Function name mapping (PG -> SQLite equivalents via extensible registry)
 - Date/time functions (`NOW()`, `EXTRACT`, `DATE_TRUNC`) -> `strftime()`
 - `ILIKE` -> `LOWER() LIKE LOWER()`
-- User-table `INSERT ON CONFLICT` may translate to SQLite conflict handling
-  forms where semantics are preserved, but system-table lifecycle/status writes
-  must keep partial-update semantics and must not use `INSERT OR REPLACE`.
+- Only explicitly verified `INSERT ON CONFLICT` forms may translate to
+  SQLite conflict handling. `DO UPDATE` currently violates `SET`/`WHERE`
+  semantics and must not be treated as supported; system-table status writes
+  must preserve partial-update semantics and never use `INSERT OR REPLACE`.
 - `RETURNING` clause pass-through (SQLite 3.35+)
 - Subqueries, CTEs, CASE WHEN, derived tables, set operations pass-through
 
@@ -238,6 +239,44 @@ Dialect flows through `SqlRequest.dialect` from `PostgresWireAdapter` to
 to SQLite mode. No component outside the parse phase is aware of dialect.
 
 The compatibility layer described above lives in `SQLParser`.
+
+### Public semantic admission: required contract and present gap
+
+The parser, adapter and transaction owners must preserve the meaning of every
+statement admitted through PostgreSQL wire (and each other public SQL entry
+path). If a construct is outside the implemented semantics, its owner must
+refuse it with a typed, protocol-compatible error **before any write or
+transaction side effect**. A compatibility subset is legitimate; silent
+translation to a different operation is not. Internal fixtures do not certify
+the public request path.
+
+A verified current-source violation is
+[`translateOnConflict()`](../src/query/pg/pg-translate.js):
+PostgreSQL `ON CONFLICT DO UPDATE` currently sets SQLite `orReplace`.
+Replacement ignores the original `SET` and `WHERE` semantics. This is an
+**open implementation defect**, not approved behavior. The owning correction
+must implement the full accepted semantics or refuse `DO UPDATE` on the
+public path before mutation; it must not disguise replacement as an upsert.
+Likewise a dollar-quoted string or any unrecognized expression must preserve
+its literal value or fail explicitly, never fall back to an apparent `NULL`.
+Do not claim these outcomes are fixed until a public-path witness runs.
+
+For multi-partition transactions, a timeout, lost acknowledgement or uncertain
+`COMMIT` remains an explicit unknown outcome with its durable obligations;
+neither caller nor adapter may infer `ABORTED`, mint a fresh idempotency token
+or retry a possibly committed effect as new. A public retry/reconciliation
+promise needs an owned durable identity and positive and negative witnesses,
+including restart and retry. No public PostgreSQL-wire caller idempotency
+contract is currently certified.
+
+Acceptance evidence must include positive, negative and partial-failure
+public-ingress tests with exact source identity: admitted `ON CONFLICT` forms
+obey PostgreSQL semantics; unsupported forms are refused before any side
+effect; dollar-quoted inputs retain bytes or are refused; ambiguous commit
+is not reported as definite abort/success; and acknowledged state survives
+recovery. Classify any failure at its first causal owner. These are
+implementation obligations under existing acceptance rules, **not**
+additional R8 release criteria or proof that code has already changed.
 
 ### Multi-Partition Transactions
 
