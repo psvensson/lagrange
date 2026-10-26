@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runner-fixture-output-root-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The shared runner's own bounded-output fixture must create its repository-relative test-output parent before making a temporary directory, so the exact Node24 runner contract passes independently in a new clean checkout as well as after an earlier test has created generated output.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runner-fixture-output-root-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "fresh-clone-fixture-root",
+        "runner-contract-regression-and-negative-controls",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "fixture-only",
+      "statement": "Do not alter production runner implementation, test-output reporting semantics, baseline, retry or timeout. The test fixture itself owns creation of the generated repository-relative parent; it must still assert relative elision paths and clean its own temporary child."
+    },
+    {
+      "id": "historical-negative",
+      "statement": "Retain the observed clean-clone ENOENT red at remote fa5aa7c6a1901c7241c96a272913938c96c5a44f and require the exact test to turn green before another source-pinned lab run. Preserve separate full-corpus and static blockers."
+    }
+  ],
+  "sealedAt": "fa5aa7c6a1901c7241c96a272913938c96c5a44f"
+}

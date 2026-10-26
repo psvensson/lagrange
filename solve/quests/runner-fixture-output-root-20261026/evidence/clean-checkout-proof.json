@@ -1,0 +1,39 @@
+{
+  "schema": "runner-fixture-output-root-proof/1",
+  "predecessorRemoteCommit": "fa5aa7c6a1901c7241c96a272913938c96c5a44f",
+  "reviewedTestBlob": "bc12d68e765b6d6b8893381e80dac63027d8a0fc",
+  "negative": {
+    "checkout": "git shallow clone of exact remote predecessor",
+    "command": "LAGRANGE_RETRY_FAILED_ONCE=0 LAGRANGE_PLACEMENT=local LAGRANGE_LANE_JOBS_CAP=1 npm run test:file -- test/scripts/run-test-files.test.js",
+    "exitCode": 1,
+    "reportedAssertions": 41,
+    "failure": "ENOENT: no such file or directory, mkdtemp '<repo>/test-output/run-test-files-bound-XXXXXX'",
+    "otherTests": "34/35 Node subtests pass; one fixture fails before its bounded-output assertions"
+  },
+  "positive": {
+    "checkout": "separate git worktree at predecessor commit, no test-output directory before run, with only reviewed test blob applied and the same locked Node24 dependencies linked",
+    "testOutputAbsentBefore": true,
+    "command": "LAGRANGE_RETRY_FAILED_ONCE=0 LAGRANGE_PLACEMENT=local LAGRANGE_LANE_JOBS_CAP=1 npm run test:file -- test/scripts/run-test-files.test.js",
+    "exitCode": 0,
+    "filesPassed": 1,
+    "reportedAssertions": 41,
+    "retries": 0
+  },
+  "independentReview": {
+    "reviewer": "subagent:native_review",
+    "verdict": "approve",
+    "sourceBlob": "bc12d68e765b6d6b8893381e80dac63027d8a0fc",
+    "scope": "Test fixture parent only; existing cleanup removes the unique child, not the shared parent. No production or fallback changes."
+  },
+  "scopedGates": {
+    "eslintExactTestFile": "pass",
+    "scopedCyclomaticComplexity": "pass-0-violations",
+    "scopedCognitiveComplexity": "pass-0-violations",
+    "gitDiffCheck": "pass"
+  },
+  "precedent": "test/scripts/test-timeout-declarations.test.js owns fs.mkdirSync(FIXTURE_PARENT,{recursive:true}) before mkdtempSync in the same generated directory",
+  "limits": [
+    "The parent runner-native integration Quest remains blocked by the distinct full-corpus/static gates.",
+    "A source-pinned combined lab request at job #2127 was submitted on the predecessor tree and is not evidence for this newer fixture correction."
+  ]
+}

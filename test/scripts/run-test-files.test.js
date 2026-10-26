@@ -375,8 +375,10 @@ describe('bounded output reading', () => {
     // Under the repository, because the elision names the file and an excerpt
     // can end up inside a committed report: the name must not be this
     // machine's absolute path when the file is one of ours.
+    const outputRoot = path.join(process.cwd(), 'test-output');
+    fs.mkdirSync(outputRoot, {recursive: true});
     const directory = fs.mkdtempSync(
-      path.join(process.cwd(), 'test-output', 'run-test-files-bound-'));
+      path.join(outputRoot, 'run-test-files-bound-'));
     written.push(directory);
     const file = path.join(directory, 'edges.tap');
     fs.writeFileSync(file,
