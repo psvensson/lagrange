@@ -155,7 +155,7 @@
     {
       "id": "message-group-log-lifecycle",
       "area": "Replication",
-      "summary": "The current raft-rs partition leader checkpoint cadence explicitly refuses automatic checkpointing; partition compaction and full snapshot recovery are not certified on this path. Message-group log compaction also remains unsupported."
+      "summary": "In-memory message-group logs still grow without bounded compaction and recover by full replay. This is separate from SQLite partition snapshot recovery."
     },
     {
       "id": "learner-promotion",

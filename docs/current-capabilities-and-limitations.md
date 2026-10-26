@@ -169,7 +169,7 @@ turning evidence into a product claim.
 | Query routing | Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition. |
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
 | Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
-| Replication | The current raft-rs partition leader checkpoint cadence explicitly refuses automatic checkpointing; partition compaction and full snapshot recovery are not certified on this path. Message-group log compaction also remains unsupported. |
+| Replication | In-memory message-group logs still grow without bounded compaction and recover by full replay. This is separate from SQLite partition snapshot recovery. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
 | Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
