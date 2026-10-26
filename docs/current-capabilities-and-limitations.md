@@ -7,9 +7,11 @@ generated: true
 
 # Current Capabilities And Limitations
 
-This is the implementation-status authority for the checked-in tree. It says
-what is active, what evidence exists, and what remains outside the current
-product promise. Roadmaps and architecture direction do not override it.
+This page is generated from the checked-in capability declaration and
+source-consistency checks. It distinguishes available components, integrated
+behavior, original proof and unverified gaps. A generated label alone is
+not a runtime owner or exact-candidate acceptance witness; roadmaps and
+architecture intent do not override current source.
 
 **Maturity:** Experimental alpha; substantial implementation, but no general production-support or backward-compatibility guarantee on 0.x.
 
