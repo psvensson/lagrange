@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "approved-source-hashes-and-owner-merge", "passed": true},
+    {"id": "official-seven-file-cone", "passed": false},
+    {"id": "effective-home-negative-control-and-unchanged-reuse", "passed": false},
+    {"id": "independent-composition-review-and-gates", "passed": false}
+  ]
+}

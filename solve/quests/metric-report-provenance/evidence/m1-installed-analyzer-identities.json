@@ -1,0 +1,38 @@
+[
+  {
+    "name": "madge",
+    "version": "8.0.0",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/madge/lib/api.js",
+    "entrySha256": "ac4fd47e6d92c3ea2fdc76222cd92349271e1650db22f006e017c970927b6fec"
+  },
+  {
+    "name": "dependency-tree",
+    "version": "11.4.0",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/dependency-tree/index.js",
+    "entrySha256": "d1d8f2914397270feb6578758614a09c02383e1667375182feefd9d6df8607ae"
+  },
+  {
+    "name": "precinct",
+    "version": "12.2.1",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/precinct/index.js",
+    "entrySha256": "204e2ef3c531d5c464ce625046576aa32782cdd38b05bf406dd132e8ac420298"
+  },
+  {
+    "name": "filing-cabinet",
+    "version": "5.2.0",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/filing-cabinet/index.js",
+    "entrySha256": "a64ef41f518dd2248a39687b0be0c35ad00b52bca71e3ec3a1e411942b6a63b3"
+  },
+  {
+    "name": "resolve",
+    "version": "1.22.11",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/resolve/index.js",
+    "entrySha256": "4952fa49a809ad740f6d9b6a1c1e9a9c93777f37b03efd253291ff68753a56b8"
+  },
+  {
+    "name": "resolve-dependency-path",
+    "version": "4.0.1",
+    "entry": "/mnt/data/peter/projects/lagrange/node_modules/resolve-dependency-path/index.js",
+    "entrySha256": "7f605777614c14f9a4d1b4aa92039a1c0332e1b1c80ba7e8b58f4b7763f32108"
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "date": "2026-10-25",
+  "base": "5485381b70d7c963f30e1468c5e8ca17d156f569",
+  "reviewer": "subagent:/root/metric_review",
+  "source_sha256": {
+    "scripts/metric-report-inputs.js": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+    "test/scripts/metric-cycle-resolution.test.js": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c"
+  },
+  "prior_verdict": "REVISE: changed effective home reused stale zero-cycle report although fresh producer measured one cycle",
+  "correction_verdict": "APPROVE bounded home-context correction",
+  "independent_correction_checks_passed": 12,
+  "experiments": "Tiny actual static-analyzer producer/reader fixtures; no Lagrange/native/distributed execution",
+  "raw_evidence_bindings": {
+    "home-context-5485381-r2/result.json": {
+      "sha256": "fcd13a2417ede8d7d3130fbd5b7863c0bc1eb5e18ef6862af397c1dff23b5998",
+      "bytes": 12072
+    },
+    "home-context-correction-r1/result.json": {
+      "sha256": "8de4060ee001d7cfd9caa882401e5f88cdae3261dc14b0fb0a64f5a90b2b9270",
+      "bytes": 9398
+    },
+    "source-and-artifact-manifest.json": {
+      "sha256": "97f61e27b02a124f5cea8308c98116e0720d22a30f0a2e315d2346fb4452c113",
+      "bytes": 6029
+    },
+    "m2-correction-artifact-manifest.json": {
+      "sha256": "f4da819e9f0227159f4d804ae80c697208a8ef1374faf59018a2f1d7b356938d",
+      "bytes": 2648
+    }
+  },
+  "raw_evidence_location": "External metric-review-evidence directory; upload through the existing solve-evidence owner remains pending",
+  "reports": {
+    "REVIEW-M2-5485381-home-context.md": "08c803c076c64cf5ca5b3a0bf2193cfbf510c572a41477eceed218604a9f497c",
+    "REVIEW-M2-home-context-correction.md": "bc0182239438d2132c0ef9a4cf038989666466b17ef751c8a5d35beec7efcf4a"
+  },
+  "official_regression_suite_rerun": false,
+  "normal_commit_hook_completed": false,
+  "release_or_integration_acceptance": false
+}

@@ -1,0 +1,2 @@
+/mnt/data/peter/projects/.worktrees/codex-metric-provenance-20261025/solve/changes/global-owner-debt-inventory/inventory.json
+{"filesWithDebt":1267,"rankedBoundaryCount":113,"semanticBoundaryCount":20,"fallbackBoundaryCount":93,"childQuestCount":16}

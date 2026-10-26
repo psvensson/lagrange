@@ -20,15 +20,15 @@
     "solver-tooling": 7,
     "storage-partition": 205,
     "storage-raft": 146,
-    "test-infrastructure": 148,
+    "test-infrastructure": 153,
     "transactions": 16,
     "transport-messaging": 110,
     "wasm-toolchain": 74
   },
-  "censusSize": 2470,
-  "digest": "fnv1a32-977bb4e2",
+  "censusSize": 2475,
+  "digest": "fnv1a32-32e53e1f",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-8151dfae",
+  "observationDigest": "fnv1a32-aaf7b621",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -2199,6 +2199,11 @@
     "test/scripts/list-commands.test.js": "test-infrastructure",
     "test/scripts/local-corpus.test.js": "test-infrastructure",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "test-infrastructure",
+    "test/scripts/metric-cycle-custody.test.js": "test-infrastructure",
+    "test/scripts/metric-cycle-resolution.test.js": "test-infrastructure",
+    "test/scripts/metric-duplication-inputs.test.js": "test-infrastructure",
+    "test/scripts/metric-report-inputs.test.js": "test-infrastructure",
+    "test/scripts/metric-report-provenance.test.js": "test-infrastructure",
     "test/scripts/model-contract-tools.test.js": "test-infrastructure",
     "test/scripts/model-invariants.test.js": "test-infrastructure",
     "test/scripts/model-tlc-mode-selection.test.js": "test-infrastructure",
@@ -15420,10 +15425,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/global-owner-debt-inventory/helpers.js",
         "scripts/inventory-ordinal-segments.js",
@@ -15440,10 +15441,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/inventory-ordinal-segments.js",
         "solve/changes/global-owner-debt-inventory/inventory.json"
@@ -15459,10 +15456,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/inventory-ordinal-segments.js",
@@ -15477,6 +15470,13 @@
         "src/query",
         "src/rebalancer",
         "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
       ]
     },
     "test/scripts/distributed-matrix-cli.test.js": {
@@ -15561,10 +15561,6 @@
         "docs/steering/rules.md",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
@@ -15783,10 +15779,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/checks/impact-proof-cone-constants.js",
         "scripts/checks/test-primary-classification.js",
@@ -15814,10 +15806,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/checks/impact-proof-cone-inputs.js",
         "scripts/checks/test-primary-classification.js",
@@ -15840,10 +15828,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/generate-global-owner-debt-inventory.js",
         "scripts/global-owner-debt-inventory/helpers.js",
@@ -15859,6 +15843,13 @@
         "src/query",
         "src/rebalancer",
         "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
       ]
     },
     "test/scripts/impact-proof-cone.test.js": {
@@ -15867,10 +15858,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
@@ -16044,6 +16031,127 @@
     "test/scripts/local-leader-row-visibility-model-contract.test.js": {
       "files": [
         "scripts/model-tlc.js"
+      ]
+    },
+    "test/scripts/metric-cycle-custody.test.js": {
+      "files": [
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/metric-cycle-input-facts.js"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "METRIC_CUSTODY_MODE",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
+      ]
+    },
+    "test/scripts/metric-cycle-resolution.test.js": {
+      "files": [
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
+      ]
+    },
+    "test/scripts/metric-duplication-inputs.test.js": {
+      "files": [
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json"
+      ],
+      "directories": [
+        "scripts",
+        "src",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
+      ]
+    },
+    "test/scripts/metric-report-inputs.test.js": {
+      "files": [
+        "README.md",
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/checks/test-primary-classification-constants.js",
+        "scripts/inventory-ordinal-segments.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json"
+      ],
+      "directories": [
+        "scripts",
+        "solve/quests",
+        "src",
+        "src/bootstrap",
+        "src/control-plane",
+        "src/query",
+        "src/rebalancer",
+        "test",
+        "test/shards"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
+      ]
+    },
+    "test/scripts/metric-report-provenance.test.js": {
+      "files": [
+        "dependency-cruiser.config.cjs",
+        "package-lock.json",
+        "package.json",
+        "scripts/check-complexity.js",
+        "scripts/check-file-size-thresholds.js",
+        "scripts/generate-global-owner-debt-inventory.js",
+        "scripts/global-owner-debt-inventory/helpers.js",
+        "scripts/inventory-ordinal-segments.js",
+        "scripts/metric-report-provenance.js",
+        "solve/changes/global-owner-debt-inventory/inventory.json",
+        "test/scripts/metric-report-fixture.js"
+      ],
+      "directories": [
+        "scripts",
+        "solve/quests",
+        "src",
+        "src/bootstrap",
+        "src/control-plane",
+        "src/query",
+        "src/rebalancer",
+        "test"
+      ],
+      "env": [
+        "LANG",
+        "LC_ALL",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "TZ"
       ]
     },
     "test/scripts/model-contract-tools.test.js": {
@@ -16266,10 +16374,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/inventory-ordinal-segments.js",
         "scripts/run-quest-proof.js",
@@ -16498,10 +16602,6 @@
         "package-lock.json",
         "package.json",
         "scripts/action-authority.js",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
@@ -17405,10 +17505,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",
@@ -17463,10 +17559,6 @@
         "dependency-cruiser.config.cjs",
         "package-lock.json",
         "package.json",
-        "scripts/check-circular-dependencies.js",
-        "scripts/check-cognitive-complexity.js",
-        "scripts/check-complexity.js",
-        "scripts/check-duplication.js",
         "scripts/check-file-size-thresholds.js",
         "scripts/check-guideline-ambient-intrinsics.js",
         "scripts/check-guideline-decision-boundaries.js",

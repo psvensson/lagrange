@@ -1,0 +1,76 @@
+{
+  "base": "ddc34a6a6272a94415b989d33ad79968426aac71",
+  "sourceDigest": "084f0f7f63fc82d945a4a9f8690867ee36544600ea24cd7ad20cdabbc97d5323",
+  "sourceFiles": [
+    {
+      "path": "scripts/check-circular-dependencies.js",
+      "bytes": 2508,
+      "sha256": "1c4d6d002c218bf30a2e715d8d9c2bc2ccf67a85289e6a293a8c9a6c3fe43603"
+    },
+    {
+      "path": "scripts/check-cognitive-complexity.js",
+      "bytes": 6020,
+      "sha256": "13746f79d1e99a3ab56f504a480bdedc8f24e346ebc02d5a65be37ca41ef001d"
+    },
+    {
+      "path": "scripts/check-complexity.js",
+      "bytes": 10386,
+      "sha256": "c2a3d3f7421c787bbca13714344926b6dd10376f87835eb01d0cd38d755f807b"
+    },
+    {
+      "path": "scripts/check-duplication.js",
+      "bytes": 20153,
+      "sha256": "b8b14c80732f9d0987fd9b2c34d0968011a43eddc21a42592ea82e197dc253e1"
+    },
+    {
+      "path": "scripts/checks/write-complexity-ratchet-closure-oracle.js",
+      "bytes": 2488,
+      "sha256": "cfbdd7100c9aa2909455f65addf776aa73b2849c15d073aaacc0fec40a5cafb6"
+    },
+    {
+      "path": "scripts/generate-global-owner-debt-inventory.js",
+      "bytes": 40456,
+      "sha256": "11978584361044638d776ffcb6c2f76a2dd796587a9ee8ccf13761c4e7ba6f4e"
+    },
+    {
+      "path": "scripts/global-owner-debt-inventory/constants.js",
+      "bytes": 4489,
+      "sha256": "7c431eabfb698e5669a36fc40a57316908b2f554de1cce2a3b77f18af52059cd"
+    },
+    {
+      "path": "scripts/metric-check-helpers.js",
+      "bytes": 774,
+      "sha256": "e8fb0b7cafcc22f27e6eadca644a48d3ab16047a886bd4f8187930e516d6a165"
+    },
+    {
+      "path": "scripts/metric-report-constants.js",
+      "bytes": 1915,
+      "sha256": "53b031737ce139188cd80e520c384cf7257cd52c765c187c011436dc27ab80d1"
+    },
+    {
+      "path": "scripts/metric-report-inputs.js",
+      "bytes": 5141,
+      "sha256": "5e2e073e3c1520a6a52e52f90fdc238fbb6cb3c8d6e59cb06663d50006d08ae2"
+    },
+    {
+      "path": "scripts/metric-report-provenance.js",
+      "bytes": 3199,
+      "sha256": "6770f18d699964ab4067f737214f048d2cbbadabf5e375355e6ec8a7c0998205"
+    },
+    {
+      "path": "test/scripts/metric-report-fixture.js",
+      "bytes": 2809,
+      "sha256": "2f1ac46004a17e2f5a4b62d71476e6d9b57466dae0f24163567b2b83e1205052"
+    },
+    {
+      "path": "test/scripts/metric-report-inputs.test.js",
+      "bytes": 3228,
+      "sha256": "9490b8986b4686c91d7b345fb5a2768cd6fde9b9e8a8adf4fe2ed14f107666f1"
+    },
+    {
+      "path": "test/scripts/metric-report-provenance.test.js",
+      "bytes": 6567,
+      "sha256": "0e0f9c0615820e0452600d44f071aed425193610053b6cc704217ef4b376bbb3"
+    }
+  ]
+}

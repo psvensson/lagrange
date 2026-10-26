@@ -6,6 +6,9 @@
  * --strict mode: fails if any function exceeds the target threshold.
  */
 
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import * as sonarjsNamespace from 'eslint-plugin-sonarjs';
 
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
@@ -13,7 +16,6 @@ import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 import {
   collectRuleViolations,
   printRatchetTighteningHint,
-  writeJsonReport,
 } from './metric-check-helpers.js';
 
 const LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS = 'scripts/check-cognitive-complexity.js';
@@ -48,9 +50,8 @@ const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
 const SONAR_RULE_ID = 'sonarjs/cognitive-complexity';
 const SONAR_PLUGIN_NAME = 'sonarjs';
-const SOURCE_DIRECTORIES = ['src/', 'scripts/'];
-const REPORT_RELATIVE_PATH =
-  'test-output/analysis/cognitive-complexity-src-scripts.json';
+const SOURCE_DIRECTORIES = METRIC_REPORTS.cognitive.targets;
+const REPORT_RELATIVE_PATH = METRIC_REPORTS.cognitive.reportPath;
 const SCOPED_REPORT_RELATIVE_PATH =
   'test-output/analysis/cognitive-complexity-scoped.json';
 const PRINT_LIMIT = 40;
@@ -101,11 +102,14 @@ const eslint = new LegacyESLint({
   },
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
+const measurement = beginMetricMeasurement('cognitive', {
+  targets: lintTargets, reportPath: reportRelativePath,
+});
 const results = await eslint.lintFiles(lintTargets);
 const violations = collectRuleViolations(results, SONAR_RULE_ID);
 const count = violations.length;
 
-writeJsonReport(reportRelativePath, {
+finishMetricMeasurement(measurement, {
   targetThreshold: TARGET_THRESHOLD,
   baselineCount: BASELINE_COUNT,
   scoped,

@@ -11,11 +11,14 @@
  * src/scripts target (test duplication stays ratchet-governed only).
  */
 
+import path from 'node:path';
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 
 import {
-  getRepoPath,
   printRatchetTighteningHint,
 } from './metric-check-helpers.js';
 
@@ -30,7 +33,6 @@ const LOCAL_STR_1Q3KT = 'scripts/check-duplication.js';
 const MINIMUM_LINE_COUNT = 20;
 const MINIMUM_TOKEN_COUNT = 100;
 const STRICT_FLAG = '--strict';
-const REPORT_FILE_NAME = 'jscpd-report.json';
 const TOP_OFFENDER_COUNT = 10;
 
 const RATCHET_TARGETS = [
@@ -40,8 +42,8 @@ const RATCHET_TARGETS = [
     // to 75/2283). Ratcheted DOWN 2026-07-05 after extracting the shared
     // count-based baseline machinery + getEnclosingFunctionName into
     // guideline-check-shared.js. Ratchet DOWN only from here.
-    name: 'src+scripts',
-    directories: ['src', 'scripts'],
+    name: METRIC_REPORTS.duplicationSource.targetName,
+    metricId: 'duplicationSource',
     // 2026-07-25: tightened 73/2239 -> 66/2095 (measured; one-way-baseline rule).
     // 2026-07-28: tightened 66/2095 -> 66/2088 (complexity-checker violation
     // mapping hoisted into metric-check-helpers; measured in a clean worktree).
@@ -92,7 +94,6 @@ const RATCHET_TARGETS = [
     // family, RouterMessageHandler and ReplicaLifecycleManager deleted).
     baselineCloneGroupCount: 44,
     baselineDuplicatedLineCount: 1383,
-    reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
   {
@@ -104,8 +105,8 @@ const RATCHET_TARGETS = [
     // this gate locally — the drift the test:static wiring now prevents).
     // Re-anchored at the executable no-skip test corpus after the
     // proof-integrity cutover. Ratchet DOWN only from here.
-    name: 'test',
-    directories: ['test'],
+    name: METRIC_REPORTS.duplicationTest.targetName,
+    metricId: 'duplicationTest',
     // 2026-07-19: tightened 845/32308 -> 842/32209 (measured; one-way-baseline rule).
     // 2026-07-25: re-measured 842/32140 after extracting the shared
     // binding-compilation test harness; line baseline tightened, group
@@ -244,7 +245,6 @@ const RATCHET_TARGETS = [
     // Q6/seed-harness composition measured 654 groups and 24609 lines.
     baselineCloneGroupCount: 654,
     baselineDuplicatedLineCount: 24609,
-    reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
 ];
@@ -259,13 +259,15 @@ const strict = process.argv.includes(STRICT_FLAG);
  * @return {Promise<{totals: object, sourceStats: object[]}>}
  */
 async function measureTargetDuplication(target) {
+  const descriptor = METRIC_REPORTS[target.metricId];
+  const measurement = beginMetricMeasurement(target.metricId);
   await detectClones({
-    path: target.directories,
+    path: descriptor.targets,
     minLines: MINIMUM_LINE_COUNT,
     minTokens: MINIMUM_TOKEN_COUNT,
     format: ['javascript'],
     reporters: ['json'],
-    output: target.reportOutputDirectory,
+    output: path.dirname(descriptor.reportPath),
     silent: true,
     // The publish gate runs inside a worktree whose node_modules is a
     // symlink into the main tree; jscpd's default cache lives under
@@ -275,13 +277,13 @@ async function measureTargetDuplication(target) {
     // function of the checked-out source.
     cache: false,
   });
-  const reportRelativePath =
-    `${target.reportOutputDirectory}/${REPORT_FILE_NAME}`;
-  const reportPath = getRepoPath(reportRelativePath);
+  const reportRelativePath = descriptor.reportPath;
+  const reportPath = path.join(measurement.root, reportRelativePath);
   if (!fs.existsSync(reportPath)) {
     throw new Error(`jscpd did not produce ${reportRelativePath}.`);
   }
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  finishMetricMeasurement(measurement, report);
   const sourceStats =
     Object.entries(report.statistics.formats.javascript.sources)
       .map(([filePath, stats]) => ({
@@ -314,7 +316,14 @@ function printTopOffenders(sourceStats) {
 
 let failed = false;
 
+const UNKNOWN_TARGET_ERROR = 'Unknown duplication target';
+const selectedTarget = process.argv.indexOf('--target');
+const targetName = selectedTarget < 0 ? null : process.argv[selectedTarget + 1];
+if (selectedTarget >= 0 && !RATCHET_TARGETS.some((target) => target.name === targetName)) {
+  throw new Error(UNKNOWN_TARGET_ERROR);
+}
 for (const target of RATCHET_TARGETS) {
+  if (targetName && target.name !== targetName) continue;
   if (strict && target.strictEligible !== true) {
     continue;
   }

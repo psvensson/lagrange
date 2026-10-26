@@ -1,0 +1,60 @@
+{
+  "schema": "metric-provenance-composition-stop/1",
+  "date": "2026-10-26",
+  "state": "wip-blocked",
+  "lineage": {
+    "firstParentLocal": "7aee1d55c8c9cf6e80f17920dcadab7c2d91dd28",
+    "firstParentPublishedEquivalent": "49fd3ab7976dd1ccb2ae135cefe9d8867e5ed11e",
+    "metricParent": "0e6923bb82fb83db3015b51e7f48ae1336d5f581",
+    "publishBranch": "work/cloud-metric-runner-composition-20261026"
+  },
+  "source": {
+    "independentVerdict": "reviewed-for-preservation-only",
+    "incomingMetricJavaScriptFiles": 19,
+    "incomingByteIdentical": 18,
+    "oneDifference": "Only two retained cognitive-checker history comments, no executable difference.",
+    "runtimeSourceChangesRelativeToFirstParent": 0,
+    "approvedM2Sha256": {
+      "scripts/metric-report-inputs.js": "ff23a957d07acb6d960fa866210c69b20f06c5b20ac81f5b58e50305eb817080",
+      "test/scripts/metric-cycle-resolution.test.js": "a03a97773f407075aab534c899b3fc2e6299070cb930ab283ec965a4cde7042c"
+    }
+  },
+  "tests": {
+    "command": "LAGRANGE_RETRY_FAILED_ONCE=0 LAGRANGE_PLACEMENT=local LAGRANGE_LANE_JOBS_CAP=1 npm run test:file -- test/scripts/metric-report-provenance.test.js test/scripts/metric-report-inputs.test.js test/scripts/metric-cycle-custody.test.js test/scripts/metric-cycle-resolution.test.js test/scripts/metric-duplication-inputs.test.js test/scripts/complexity-ratchet-closure.test.js",
+    "result": "fail",
+    "selectedFiles": 6,
+    "requiredFiles": 7,
+    "requiredButNotSelected": "test/scripts/inventory-ordinal-segments.test.js",
+    "passedFiles": 3,
+    "failedFiles": 3,
+    "runnerReportedAssertions": 173,
+    "retries": 0,
+    "byFile": [
+      {"file": "test/scripts/complexity-ratchet-closure.test.js", "status": "pass", "assertions": 4},
+      {"file": "test/scripts/metric-cycle-custody.test.js", "status": "pass", "assertions": 23},
+      {"file": "test/scripts/metric-duplication-inputs.test.js", "status": "pass", "assertions": 6},
+      {"file": "test/scripts/metric-cycle-resolution.test.js", "status": "fail", "assertions": 81, "firstFailure": "30s TAP test-file expiry after nine observed HOME checks passed"},
+      {"file": "test/scripts/metric-report-inputs.test.js", "status": "fail", "assertions": 28, "firstFailure": "30s TAP test-file expiry after preceding M1 checks passed"},
+      {"file": "test/scripts/metric-report-provenance.test.js", "status": "fail", "assertions": 31, "firstFailure": "30s TAP expiry in first asynchronous case after 17 checks; late ENOENT under removed temporary fixture; two runtime-context assertions not reached"}
+    ],
+    "rawLocalEvidenceNotPublished": true,
+    "ledgerSha256": "aa14396ed3c8450724726987496afee94779484d131eeb73d3261ab1513aaa55",
+    "tapSha256": {
+      "metric-report-provenance.test.js": "680c9f8577debdb7f835d64ed6de9141279dc22186889810b64668d38fb4c9c3",
+      "metric-report-provenance.test.js.stderr": "12605ce2e54998490c1064ea0e6aa36815de38298dea8aef2b78eda9e4934b64",
+      "metric-report-inputs.test.js": "c5960540f40723df883598c8f5fa04c3944ef94a3c3ad43f3236f5b281fe62f8",
+      "metric-cycle-resolution.test.js": "3df07d3fc5abd3e3b28a1b7eec0bd290c805dd3d598a701a52f4bad4d47d9424"
+    }
+  },
+  "generatedRefresh": {
+    "testMetadata": "pass",
+    "ownerDebtInventory": "pass",
+    "cyclomatic": {"observed": 1765, "baseline": 1755, "status": "fail"},
+    "cognitive": "150/150",
+    "cycles": "0/0",
+    "sourceDuplication": "44/44 clone groups, 1383/1383 lines",
+    "testDuplication": "653/654 clone groups, 24536/24609 lines"
+  },
+  "nextOwner": "verification",
+  "acceptance": "blocked: preserve merged implementation without landing Quest or merging main"
+}
