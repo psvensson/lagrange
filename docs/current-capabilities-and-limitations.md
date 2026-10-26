@@ -28,6 +28,7 @@ The rows used by a data-local operation must live in Lagrange partitions.
 | Table partitioning | range-based |
 | Default replica count | 3 |
 | Partition consensus | raft |
+| Partition consensus backend | Raft-rs WASM operation port |
 | Runtime-service Cell consensus | none; durable state uses ordinary replicated tables |
 | Secondary indexes | Unsupported |
 | Global secondary indexes | No |

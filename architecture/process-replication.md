@@ -12,18 +12,22 @@ land on is [rebalancing](process-rebalancing.md).
 Every partition is a Raft consensus group. Current placement policy uses odd
 replica counts (three by default, with its minimum floor from
 `POLICY_DEFAULT.MIN_REPLICA_COUNT`) so an added voter improves failure tolerance
-instead of only raising the write quorum. Consensus runs on a local wrapper
-around a fork of liferaft (`@markwylde/liferaft`, wrapped by
-`src/raft/liferaft.js`) which adds catch-up batching and a committed-entry write
-guard.
+instead of only raising the write quorum.
+
+Production partition construction uses one frozen
+`RaftRsWasmProvider` through the raft-rs operation port
+([`partition-service-core-base.js`](../src/partition/partition-service-core-base.js)).
+It refuses both legacy backend selection and provider injection; the old
+Liferaft-backed machinery still exists in other replica kinds and tests
+pending the broader cutover, but it is not an alternate partition backend.
 
 The active entity kinds share replica-operation accounting, but they do not all
 replicate state through Raft:
 
 | Group type | State | Raft log | Consensus today |
 | --- | --- | --- | --- |
-| Partition | SQLite rows | SQLite, persistent | Yes |
-| Message group | transport only | in-memory | Yes, but log state is ephemeral across a full-group restart |
+| Partition | SQLite rows | Raft-rs durable store | Yes, through the single raft-rs operation port |
+| Message group | transport only | in-memory | Yes, using the legacy provider; log state is ephemeral across a full-group restart |
 | Runtime-service Cell (`runtime_service`) | disposable process-local execution state; durable application state remains in tables | — | No; Cells are placed and repaired through `replica_operations`, not a service-state Raft group |
 | Legacy WASM scaffold (`wasm_service`) | `WasmServiceReplica` exposes session/KV, safety-interval, and timer classes | — | Not active; production startup constructs neither a `wasm_service` rebalancer nor its Raft instance |
 
@@ -95,14 +99,16 @@ Three details that matter when reading the code or a trace:
   (`partitions.leader_node_id`), not the `services` table, which carries only
   supporting replica detail. A non-leader replica is transport toward the
   leader, never a write target.
-- **Commit mode is a decision with three outcomes,** resolved per write by the
-  write kernel:
+- **Commit mode is a decision with two outcomes,** resolved by the
+  [write kernel](../src/partition/partition-write-kernel.js):
 
   | Mode | Condition | Effect |
   | --- | --- | --- |
-  | `RAFT` | more than one replica **and** local Raft state is leader | replicate, commit on majority, apply |
-  | `DIRECT` | one replica or fewer **and** no known remote leader | apply locally without consensus |
-  | `REJECTED` | anything else | write is not committed here; it is forwarded to the leader |
+  | `RAFT` | Local raft state is leader without a contradictory known remote leader | propose through consensus, including in a one-voter group; commit/apply on the port's durable outcome |
+  | `REJECTED` | Otherwise | no direct write; return the owner-defined routing/refusal outcome |
+
+  The former single-replica `DIRECT` bypass is absent. A one-voter leader
+  proposes through raft-rs, not through a parallel local-apply path.
 
 - **CDC is emitted from the apply callback, not the propose path,** and only when
   the local replica is the leader. The leader stamps `updated_at_hlc` onto the
@@ -210,10 +216,11 @@ mislead you when reading this code. The promotion check waits a fixed delay
 (30 s; 5 s for priority control-plane partitions, re-polled every second) and
 then requires only a discovered leader plus voter-count safety arithmetic: no
 overflow past the target replica count, and no even voter count. It does **not**
-compare the learner's log index against the leader's. Checkpoint/install components do not yet certify the automatic raft-rs
-recovery path; promotion timing is unchanged and still does not check the
-index — so a learner that has not finished catching up can in principle be
-promoted before it is genuinely current.
+compare the learner's log index against the leader's.
+Checkpoint/install components do not yet certify the automatic raft-rs recovery
+path; promotion timing is unchanged and still does not check the index — so a
+learner that has not finished catching up can in principle be promoted before
+it is genuinely current.
 
 Learner mode is not universal either: replicas created during fresh bootstrap,
 or when no viable leader row is visible, start as voters and skip the learner

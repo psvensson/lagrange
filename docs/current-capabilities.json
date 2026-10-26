@@ -44,6 +44,7 @@
   },
   "replication": {
     "partitionConsensus": "raft",
+    "partitionConsensusBackend": "raft_rs_wasm",
     "runtimeCellConsensus": "none",
     "runtimeCellDurableState": "ordinary replicated tables",
     "snapshotCheckpointCreation": "component_present_integration_unverified",

@@ -16,6 +16,7 @@ const UNDERSCORE = '_';
 const WORD_SEPARATOR = ' ';
 const DISPLAY_LABEL = Object.freeze({
   active_sqlite_partition_path: 'Active for file-backed SQLite partitions',
+  raft_rs_wasm: 'Raft-rs WASM operation port',
   component_present_integration_unverified:
     'Component exists; integration on raft-rs is unverified',
   not_verified_on_raft_rs: 'Not verified on the raft-rs path',
@@ -118,6 +119,7 @@ ${capabilities.productBoundary.dataLocalRequirement}
 | Table partitioning | ${capabilities.dataAndQueries.tablePartitioning}-based |
 | Default replica count | ${capabilities.dataAndQueries.defaultReplicaCount} |
 | Partition consensus | ${capabilities.replication.partitionConsensus} |
+| Partition consensus backend | ${displayCapability(capabilities.replication.partitionConsensusBackend)} |
 | Runtime-service Cell consensus | ${capabilities.replication.runtimeCellConsensus}; durable state uses ${capabilities.replication.runtimeCellDurableState} |
 | Secondary indexes | ${displayCapability(capabilities.dataAndQueries.secondaryIndexes)} |
 | Global secondary indexes | ${displayCapability(capabilities.dataAndQueries.globalSecondaryIndexes)} |

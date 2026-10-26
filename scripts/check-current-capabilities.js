@@ -34,12 +34,14 @@ const CHART_VALUES_PATH = 'charts/lagrange-node/values.yaml';
 const PARTITIONING_ARCHITECTURE_PATH = 'architecture/process-partitioning.md';
 const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
 const SNAPSHOT_CADENCE_PATH = 'src/partition/partition-snapshot-cadence.js';
+const PARTITION_CONSTRUCTOR_PATH = 'src/partition/partition-service-core-base.js';
 const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
 
 const EXPECTED_STATUS = Object.freeze({
   SECONDARY_INDEXES: 'unsupported',
+  PARTITION_BACKEND: 'raft_rs_wasm',
   SNAPSHOT_COMPONENT: 'component_present_integration_unverified',
   RAFT_RS_UNVERIFIED: 'not_verified_on_raft_rs',
   RAFT_RS_CADENCE_UNAVAILABLE: 'unavailable_on_raft_rs',
@@ -59,6 +61,8 @@ const AUDIT_MARKER = Object.freeze({
   RAFT_RS_NOT_CERTIFIED:
     'Current rs-raft partition checkpoint cadence is unavailable',
   CADENCE_REFUSAL: 'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED',
+  PARTITION_RAFT_RS_CONSTRUCTOR: 'new RaftRsWasmProvider()',
+  PARTITION_ALTERNATE_REFUSAL: 'refuseBackendSelection(options)',
   MESSAGE_GROUP_UNBOUNDED: 'message-group logs still grow without bound',
   LEARNER_TIME_BASED: 'time-based, not progress-based',
   REPLICATION_CONTRADICTION:
@@ -187,8 +191,13 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
       replication.includes(AUDIT_MARKER.LEARNER_TIME_BASED),
     'replication limitations lost their current architecture evidence');
   const cadence = readText(SNAPSHOT_CADENCE_PATH, root);
+  const partitionConstructor = readText(PARTITION_CONSTRUCTOR_PATH, root);
   addProblem(problems,
-    cadence.includes(AUDIT_MARKER.CADENCE_REFUSAL) &&
+    partitionConstructor.includes(AUDIT_MARKER.PARTITION_RAFT_RS_CONSTRUCTOR) &&
+      partitionConstructor.includes(AUDIT_MARKER.PARTITION_ALTERNATE_REFUSAL) &&
+      capabilities.replication.partitionConsensusBackend ===
+        EXPECTED_STATUS.PARTITION_BACKEND &&
+      cadence.includes(AUDIT_MARKER.CADENCE_REFUSAL) &&
       capabilities.replication.snapshotCheckpointCreation ===
         EXPECTED_STATUS.SNAPSHOT_COMPONENT &&
       capabilities.replication.snapshotTransferInstall ===
