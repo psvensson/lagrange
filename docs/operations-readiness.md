@@ -53,28 +53,26 @@ preserve structured retry or wait outcomes from long-running cluster changes.
 
 ## Replica recovery
 
-Each SQLite-backed partition is a Raft group. The active recovery path includes:
+The code contains checkpoint creation and snapshot transfer/install components,
+but those component paths are not a certified automatic recovery lifecycle on
+raft-rs. The leader's current
+[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js)
+returns `COMMITTED_LOG_UNSUPPORTED` for a live file-backed leader, because
+the old compaction proof depended on a committed-log owner absent from raft-rs.
 
-- leader-created checkpoints;
-- bulk snapshot transfer;
-- atomic snapshot installation;
-- follower recreation and resumed log application; and
-- proof-gated compaction of the committed SQLite log prefix.
+Therefore **do not assume automatic snapshots, bounded partition-log growth,
+full snapshot catch-up or a published recovery time** on the current backend.
+Historical five-node snapshot tests on the predecessor log cannot prove this
+path. The remaining work must bind creation, bounded transfer, atomic install,
+durable apply/catch-up, compaction and follower readiness to the same owner
+and exact tested candidate.
 
-This bounds SQLite partition-log growth and allows a follower whose required
-prefix was compacted to rebuild from a snapshot.
-
-Important remaining limitations:
-
-- message-group logs remain in memory, grow without the same compaction path,
-  and recover by full replay;
-- learner promotion is time-based and safety-count-based, not based on measured
-  follower progress; and
-- no public RTO is stated for a replica of a given size on named hardware and
-  network links.
-
-A pilot should wipe and rebuild one non-leader replica under foreground load,
-then reconcile every acknowledged write against an independent oracle.
+Message-group logs still lack an established compaction lifecycle. Learner
+promotion remains time-based rather than follower-progress-based. A pilot must
+wipe and rebuild one non-leader replica under foreground writes and reconcile
+all acknowledged writes against an independent oracle before claiming recovery.
+The [capability page](current-capabilities-and-limitations.md) records the
+current unsupported/unverified states.
 
 ## Node loss and replacement
 
@@ -110,6 +108,22 @@ Current routing limitations make key choice operationally important:
 
 Before a pilot load, verify the primary-key shape, expected split points, write
 hot spots, and fan-out behavior with `EXPLAIN DISTRIBUTED` and telemetry.
+
+## Public SQL semantic safety
+
+Public PostgreSQL-wire and other exposed SQL write operations must preserve
+accepted statement semantics or be refused by the SQL/transaction owner with
+a typed result **before any side effect**. The current PostgreSQL
+`ON CONFLICT DO UPDATE` translation uses replacement rather than its
+`SET`/`WHERE` semantics. It is not a safe compatibility claim. Dollar-quoted
+literals and other unverified expressions also require public-path regression
+proof; an unsupported literal must never be silently coerced to `NULL`.
+
+A lost reply or timed-out distributed `COMMIT` is not proof of abort. Until
+a caller-visible idempotency/reconciliation contract is proven on the public
+path, clients must treat an unknown outcome as unknown and avoid blind retries.
+See the owned [PostgreSQL compatibility contract](../architecture/postgres-wire.md)
+for the required refusal and verification boundary.
 
 ## Service operation
 
