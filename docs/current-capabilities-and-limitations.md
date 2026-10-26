@@ -104,13 +104,18 @@ constructors refuse its absence.
 
 | Capability | Current state |
 | --- | --- |
-| SQLite partition checkpoint creation | Active for file-backed SQLite partitions |
-| SQLite partition snapshot transfer/install | Active for file-backed SQLite partitions |
-| SQLite partition proof-gated log compaction | Active for file-backed SQLite partitions |
+| SQLite partition checkpoint creation | Component exists; integration on raft-rs is unverified |
+| SQLite partition snapshot transfer/install | Component exists; integration on raft-rs is unverified |
+| SQLite partition proof-gated log compaction | Not verified on the raft-rs path |
+| Automatic partition checkpoint cadence | Unavailable on the current raft-rs path |
+| Integrated replica recovery on raft-rs | Not verified on the raft-rs path |
 | In-memory message-group log compaction | Unsupported |
 | Learner promotion | time based not progress based |
 
-Snapshot recovery is replica repair, not a user backup or PITR product.
+Component presence, automatic execution and full recovery are distinct claims. The
+current raft-rs partition leader cadence reports an unsupported committed-log
+owner; no historical snapshot test certifies the new path. Snapshot recovery
+is replica repair, not a user backup or PITR product.
 
 ## PostgreSQL wire
 
@@ -147,7 +152,7 @@ Snapshot recovery is replica repair, not a user backup or PITR product.
 | --- | --- |
 | Code-first public service demo | Single-node, two-partition functional proof |
 | Multi-node data-local comparison | Internal measurement path |
-| SQLite snapshot live rebuild | Five-node certification window |
+| Historical SQLite snapshot live rebuild | Historical predecessor-path proof only |
 | Public-path scale benchmark | Not available |
 
 Functional tests, a demo, and a certification scenario are not the same as a
@@ -161,7 +166,7 @@ turning evidence into a product claim.
 | Query routing | Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition. |
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
 | Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
-| Replication | SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay. |
+| Replication | The current raft-rs partition leader checkpoint cadence explicitly refuses automatic checkpointing; partition compaction and full snapshot recovery are not certified on this path. Message-group log compaction also remains unsupported. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
 | Storage lifecycle | Replica cleanup and recreation are durably serialized by services.service_id. A directory-local SQLite ownership lock rejects a second live OS process before provenance, rejoin, or replica storage activity. |
 | Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
@@ -171,6 +176,10 @@ turning evidence into a product claim.
 | PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
 | Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
 | Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
+| Replication | Checkpoint and transfer/install components exist, but the current leader cadence returns committed_log_unsupported. No integrated automatic checkpoint, bounded raft-rs log compaction or end-to-end recovery guarantee is established. |
+| PostgreSQL compatibility | The PG ON CONFLICT DO UPDATE translation currently selects SQLite replacement semantics, which do not preserve the PG SET/WHERE contract. Do not rely on this clause until correct execution or pre-side-effect typed refusal is verified. |
+| PostgreSQL compatibility | Unverified PostgreSQL expressions (including dollar-quoted literal handling) are not certified. A valid PG literal must not silently become NULL; use public-path semantic tests before relying on it. |
+| Transactions | Public PostgreSQL-wire callers have no general idempotency-key/retry contract. A timeout or lost reply can leave COMMIT outcome unknown; do not infer rollback or retry an ambiguous mutation blindly. |
 
 Continue with [security](security.md), [operations readiness](operations-readiness.md),
 [execution semantics](execution-semantics.md), and the
