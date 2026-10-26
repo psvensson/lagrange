@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {"id": "canonical-tap-reporter", "passed": true},
+    {"id": "standalone-child-context", "passed": true},
+    {"id": "node24-native-affected-cone", "passed": true},
+    {"id": "review-and-applicable-gates", "passed": false}
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "rs-raft-runner-native-composition-verification/1",
+  "lineageLocalBase": "c99946c407ab18fef966dee6fa39bc05090111ee",
+  "sourceOwner": "scripts/run-test-files.js",
+  "reviewedSourceBlobs": {
+    "scripts/run-test-files.js": "ac19fd5edfe6d3afb3ea47ca71231f3c92e05c6c",
+    "test/scripts/run-test-files.test.js": "c17c90973fa43a03ba326bfaf9d95b76bd6cfd9b"
+  },
+  "negativeControl": {
+    "before": "Node24 node:test fixture reports zero parsed assertions and fails while its child test passes",
+    "after": "Explicit TAP and Node24 node:test fixtures pass with counts 3 and 1 using one TAP parser"
+  },
+  "composedLocalProof": {
+    "runnerContractFiles": 1,
+    "runnerContractAssertions": 41,
+    "nativeFiles": 19,
+    "nativeFilesPassed": 19,
+    "nativeTapEntries": 192,
+    "nativeLeafAssertions": 185,
+    "nativeFilesFailed": 0,
+    "nativeRetryCount": 0,
+    "skipsFailuresEmptyAndTodoRefused": true,
+    "parentNodeTestContextClearedForAsyncAndSync": true
+  },
+  "independentReview": {
+    "reviewer": "subagent:native_review",
+    "verdict": "approve",
+    "sourceByteIdentityAndNegativeControls": "verified"
+  },
+  "staticGates": {
+    "eslintReviewedFiles": "pass",
+    "scopedMetrics": "pass-with-inherited-retryFailedOnce-complexity-16-of-12",
+    "fileSizeRatchet": "pass",
+    "globalComplexity": "fail-1765-versus-1755-inherited-baseline",
+    "globalProductTestLint": "fail-69-preexisting-errors-outside-reviewed-diff",
+    "globalScriptsLint": "fail-140-preexisting-errors-outside-reviewed-diff"
+  },
+  "fullChangeProof": {
+    "selection": "npm test (working tree), current Node24",
+    "ledger": "test-output/reports/test-results.ndjson",
+    "ledgerInterpretation": "append-only; excludes first 23 prior run entries and excludes nested intentional test-output failure fixtures",
+    "reportedDistinctFailingProductionTestFiles": [
+      "test/scripts/check-current-capabilities.test.js",
+      "test/scripts/formation-health.test.js",
+      "test/scripts/local-corpus.test.js",
+      "test/scripts/model-contract-tools.test.js",
+      "test/scripts/prune-test-output.test.js",
+      "test/scripts/publish-head.test.js",
+      "test/scripts/run-formation-release-handoff-gcp-negative-control.test.js",
+      "test/scripts/solve-footprint-accounting.test.js",
+      "test/scripts/steering-diet.test.js",
+      "test/scripts/push-gate-change-proof.test.js",
+      "test/transport/message-router-api.property.test.js",
+      "test/scripts/test-placement.test.js"
+    ],
+    "status": "fail",
+    "scopeLimit": "The exact parent npm test controller exit code was not captured after the command output exceeded the tool limit; failure classification uses retained per-file ledger. Two additional negative-control echo-timeout fixtures in test-output were counted inside nested tests, not as canonical selected files."
+  },
+  "decision": "Keep fourth Quest receipt failed and do not solve-land; preserve these separate proof blockers without weakening the runner or changing product behavior."
+}
