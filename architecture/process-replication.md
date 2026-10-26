@@ -31,36 +31,38 @@ Current WASI component execution uses Binding-derived `runtime_service` Cells.
 The `wasm_service` enum and replica classes remain compatibility/scaffold code;
 they are not evidence of an active replicated service-state path.
 
-### SQLite partition logs are bounded by production snapshotting
+### Partition checkpoint and recovery status at the raft-rs boundary
 
-The Raft snapshot protocol (create / atomic install / bulk transfer /
-compacted-follower catch-up / proof-gated retention-compaction) exists for
-file-backed SQLite partition replicas (`src/raft/snapshot-*.js`; certified
-through the six-stage snapshot-transfer-install ladder, now complete) and
-is now WIRED INTO PRODUCTION. A leader-only checkpoint cadence
-(`src/partition/partition-snapshot-cadence.js`) rides the 1s
-prepared-state-hold sweep; on fire it seals a generation and proof-gate-
-compacts the committed prefix past it. Explicit proofless compaction still
-returns the typed `snapshot_protocol_unavailable` no-op; proof-gated
-compaction requires a durable local checkpoint whose term-anchored descriptor
-covers the removed prefix. The only truncation on the live path besides
-snapshot compaction is conflict truncation, clamped so it can never reach the
-committed prefix. S6 certified this live on a five-node docker cluster: a
-wiped follower rebuilds ACTIVE via snapshot install under continuous
-foreground writes with zero lost acknowledged writes (N=15 window ABOVE_BAR).
+The checkpoint creation and snapshot transfer/install components exist, and
+historical S6 tests measured a five-node live rebuild on the predecessor
+consensus/log path. That evidence **does not** establish active automatic
+checkpointing, bounded compaction or end-to-end recovery for raft-rs.
 
-Operational consequences by adapter:
+**Current rs-raft partition checkpoint cadence is unavailable.** In
+[`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js)
+a live file-backed leader returns the typed
+`COMMITTED_LOG_UNSUPPORTED` outcome. The original cadence depended on a
+committed-log owner that raft-rs does not expose. A component can create or
+install a snapshot without the production lifecycle selecting, transferring,
+installing and compacting it safely. No current proof closes that full chain.
 
-- **SQLite partition logs are bounded** — the leader cadence compacts the
-  committed prefix behind a sealed, durably-proven checkpoint, so log growth
-  is capped rather than unbounded for the group lifetime.
-- **A lagging or from-scratch SQLite follower is caught up by snapshot
-  install**, not full log replay, once its required prefix has been compacted
-  away — this is the production recovery path the learner-promotion code was
-  written to accommodate.
-- **In-memory message-group logs still grow without bound** — that adapter's
-  weaker durability contract forbids deleting committed entries while it is
-  live, so it retains its full prefix and relies on full replay.
+Operational consequences:
+
+- Do not claim SQLite partition logs are bounded on raft-rs from historical
+  S6 results. Snapshot creation, automatic cadence, transfer/install,
+  compaction and restored follower readiness need separately attributable
+  exact-source evidence.
+- A lagging follower is **not certified** to recover by the automatic
+  snapshot path on this backend. Retain the original failure and prove the
+  real recovery and no-loss outcome before changing this status.
+- In-memory message-group logs still grow without bound and rely on full replay.
+- Learner promotion remains time-based, not progress-based.
+
+The active [capability declaration](../docs/current-capabilities.json) and
+generated [capability page](../docs/current-capabilities-and-limitations.md)
+record these separate states. The
+[full-cutover epic](../solve/epics/raft-rs-full-cutover.md) retains the
+certification owner; the current documentation does not change its gates.
 
 ## The write path
 
@@ -208,12 +210,10 @@ mislead you when reading this code. The promotion check waits a fixed delay
 (30 s; 5 s for priority control-plane partitions, re-polled every second) and
 then requires only a discovered leader plus voter-count safety arithmetic: no
 overflow past the target replica count, and no even voter count. It does **not**
-compare the learner's log index against the leader's. Even though SQLite
-partitions now have a production snapshot-install catch-up path (a far-behind
-follower can be rebuilt by install rather than long replay), promotion timing
-is unchanged and still does not check the index — so a learner that has not
-finished catching up can in principle be promoted before it is genuinely
-current.
+compare the learner's log index against the leader's. Checkpoint/install components do not yet certify the automatic raft-rs
+recovery path; promotion timing is unchanged and still does not check the
+index — so a learner that has not finished catching up can in principle be
+promoted before it is genuinely current.
 
 Learner mode is not universal either: replicas created during fresh bootstrap,
 or when no viable leader row is visible, start as voters and skip the learner
