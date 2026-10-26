@@ -64,9 +64,9 @@ Operational consequences:
 
 The active [capability declaration](../docs/current-capabilities.json) and
 generated [capability page](../docs/current-capabilities-and-limitations.md)
-record these separate states. The
-[full-cutover epic](../solve/epics/raft-rs-full-cutover.md) retains the
-certification owner; the current documentation does not change its gates.
+record these separate states. The RS-Raft full-cutover milestone retains
+its established certification owner and acceptance criteria; this document
+does not change or close them.
 
 ## The write path
 
