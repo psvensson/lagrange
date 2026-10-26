@@ -57,6 +57,40 @@ Retain standing rules separately from dated operating heuristics and hypotheses
 that still need measurement. A policy update never establishes a new product
 capability; generated capability facts change only with their own evidence.
 
+## Evidence-bound capability and convergence claims
+
+The canonical [capability source](../current-capabilities.json) describes
+the checked-in code, not an unmerged candidate or an earlier backend.
+Generated [public status](../current-capabilities-and-limitations.md)
+is a projection, not independent proof (R05/R19/R22). For every material
+capability, distinguish: a component can be constructed; the owner actually
+invokes it in the selected backend; its public ingress preserves semantics;
+and the complete integrated failure/recovery scenario passed at an exact
+source. These are separate observations. Missing measurements are
+`unverified`, not `active`. A historical lab receipt never transfers
+automatically to a different backend, topology or candidate.
+
+When source and public claims disagree, correct the canonical capability
+source, its producer, source-bound checker, generated output, and affected
+current operational/architecture explanations together. Bind positive
+claims to the relevant owner and original executable witness; a grep or
+passing unrelated unit test does not turn an integrated product claim green.
+Keep implementation gaps visible to pilots without inventing a separate
+capability ledger. The [current-capabilities checker](../../scripts/check-current-capabilities.js)
+is a source consistency guard, **not** end-to-end certification.
+
+An active milestone's existing current summary may also include a small
+**convergence snapshot**: exact integration candidate, first demonstrated
+representative-service blocker, distinct unresolved causal families and ages
+when established, reviewed-but-unintegrated work, and elapsed diagnosis,
+review, queue, test and integration phases where original timestamps exist.
+Derive every entry from the existing Quest/PR/runner records. Say
+`unmeasured` for unavailable counts or phase times, never manufacture a
+trend, sum incompatible test cones or create another tracker. Update on
+material integration/blocker change, not each agent heartbeat. Bounded
+repair completion, public-service readiness and full release remain
+different claims.
+
 ## Graduation Rules
 
 When a change finishes an operation, the same Quest must:

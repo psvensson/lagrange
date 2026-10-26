@@ -44,13 +44,16 @@
   },
   "replication": {
     "partitionConsensus": "raft",
+    "partitionConsensusBackend": "raft_rs_wasm",
     "runtimeCellConsensus": "none",
     "runtimeCellDurableState": "ordinary replicated tables",
-    "snapshotCheckpointCreation": "active_sqlite_partition_path",
-    "snapshotTransferInstall": "active_sqlite_partition_path",
-    "physicalLogCompaction": "active_sqlite_partition_path",
+    "snapshotCheckpointCreation": "component_present_integration_unverified",
+    "snapshotTransferInstall": "component_present_integration_unverified",
+    "physicalLogCompaction": "not_verified_on_raft_rs",
     "messageGroupLogCompaction": "unsupported",
-    "learnerPromotion": "time_based_not_progress_based"
+    "learnerPromotion": "time_based_not_progress_based",
+    "automaticSnapshotCadence": "unavailable_on_raft_rs",
+    "integratedReplicaRecovery": "not_verified_on_raft_rs"
   },
   "deployment": {
     "publicModel": [
@@ -130,7 +133,7 @@
   "evidence": {
     "publicCodeFirstDemo": "single_node_two_partition_functional_proof",
     "multiNodeDataLocalComparison": "internal_service_path",
-    "sqliteSnapshotLiveRebuild": "five_node_certification_window",
+    "sqliteSnapshotLiveRebuild": "historical_pre_cutover_only",
     "publicPathScaleBenchmark": "not_available"
   },
   "limitations": [
@@ -152,7 +155,7 @@
     {
       "id": "message-group-log-lifecycle",
       "area": "Replication",
-      "summary": "SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay."
+      "summary": "In-memory message-group logs still grow without bounded compaction and recover by full replay. This is separate from SQLite partition snapshot recovery."
     },
     {
       "id": "learner-promotion",
@@ -198,6 +201,26 @@
       "id": "backup-and-upgrades",
       "area": "Operations",
       "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
+    },
+    {
+      "id": "raft-rs-recovery-cadence",
+      "area": "Replication",
+      "summary": "Checkpoint and transfer/install components exist, but the current leader cadence returns committed_log_unsupported. No integrated automatic checkpoint, bounded raft-rs log compaction or end-to-end recovery guarantee is established."
+    },
+    {
+      "id": "postgres-conflict-update-semantics",
+      "area": "PostgreSQL compatibility",
+      "summary": "The PG ON CONFLICT DO UPDATE translation currently selects SQLite replacement semantics, which do not preserve the PG SET/WHERE contract. Do not rely on this clause until correct execution or pre-side-effect typed refusal is verified."
+    },
+    {
+      "id": "postgres-unverified-expression-semantics",
+      "area": "PostgreSQL compatibility",
+      "summary": "Unverified PostgreSQL expressions (including dollar-quoted literal handling) are not certified. A valid PG literal must not silently become NULL; use public-path semantic tests before relying on it."
+    },
+    {
+      "id": "public-transaction-unknown-outcome",
+      "area": "Transactions",
+      "summary": "Public PostgreSQL-wire callers have no general idempotency-key/retry contract. A timeout or lost reply can leave COMMIT outcome unknown; do not infer rollback or retry an ambiguous mutation blindly."
     }
   ]
 }

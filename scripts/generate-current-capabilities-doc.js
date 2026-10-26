@@ -16,6 +16,12 @@ const UNDERSCORE = '_';
 const WORD_SEPARATOR = ' ';
 const DISPLAY_LABEL = Object.freeze({
   active_sqlite_partition_path: 'Active for file-backed SQLite partitions',
+  raft_rs_wasm: 'Raft-rs WASM operation port',
+  component_present_integration_unverified:
+    'Component exists; integration on raft-rs is unverified',
+  not_verified_on_raft_rs: 'Not verified on the raft-rs path',
+  unavailable_on_raft_rs: 'Unavailable on the current raft-rs path',
+  historical_pre_cutover_only: 'Historical predecessor-path proof only',
   basic_against_configured_pgwire_credentials:
     'HTTP Basic against the configured PostgreSQL-wire credential verifier',
   code_first_javascript_service: 'Code-first JavaScript service compiler',
@@ -92,9 +98,11 @@ generated: true
 
 # Current Capabilities And Limitations
 
-This is the implementation-status authority for the checked-in tree. It says
-what is active, what evidence exists, and what remains outside the current
-product promise. Roadmaps and architecture direction do not override it.
+This page is generated from the checked-in capability declaration and
+source-consistency checks. It distinguishes available components, integrated
+behavior, original proof and unverified gaps. A generated label alone is
+not a runtime owner or exact-candidate acceptance witness; roadmaps and
+architecture intent do not override current source.
 
 **Maturity:** ${capabilities.productMaturity.summary}
 
@@ -111,6 +119,7 @@ ${capabilities.productBoundary.dataLocalRequirement}
 | Table partitioning | ${capabilities.dataAndQueries.tablePartitioning}-based |
 | Default replica count | ${capabilities.dataAndQueries.defaultReplicaCount} |
 | Partition consensus | ${capabilities.replication.partitionConsensus} |
+| Partition consensus backend | ${displayCapability(capabilities.replication.partitionConsensusBackend)} |
 | Runtime-service Cell consensus | ${capabilities.replication.runtimeCellConsensus}; durable state uses ${capabilities.replication.runtimeCellDurableState} |
 | Secondary indexes | ${displayCapability(capabilities.dataAndQueries.secondaryIndexes)} |
 | Global secondary indexes | ${displayCapability(capabilities.dataAndQueries.globalSecondaryIndexes)} |
@@ -184,10 +193,15 @@ constructors refuse its absence.
 | SQLite partition checkpoint creation | ${displayCapability(capabilities.replication.snapshotCheckpointCreation)} |
 | SQLite partition snapshot transfer/install | ${displayCapability(capabilities.replication.snapshotTransferInstall)} |
 | SQLite partition proof-gated log compaction | ${displayCapability(capabilities.replication.physicalLogCompaction)} |
+| Automatic partition checkpoint cadence | ${displayCapability(capabilities.replication.automaticSnapshotCadence)} |
+| Integrated replica recovery on raft-rs | ${displayCapability(capabilities.replication.integratedReplicaRecovery)} |
 | In-memory message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
 | Learner promotion | ${displayCapability(capabilities.replication.learnerPromotion)} |
 
-Snapshot recovery is replica repair, not a user backup or PITR product.
+Component presence, automatic execution and full recovery are distinct claims. The
+current raft-rs partition leader cadence reports an unsupported committed-log
+owner; no historical snapshot test certifies the new path. Snapshot recovery
+is replica repair, not a user backup or PITR product.
 
 ## PostgreSQL wire
 
@@ -224,7 +238,7 @@ Snapshot recovery is replica repair, not a user backup or PITR product.
 | --- | --- |
 | Code-first public service demo | ${displayCapability(evidence.publicCodeFirstDemo)} |
 | Multi-node data-local comparison | ${displayCapability(evidence.multiNodeDataLocalComparison)} |
-| SQLite snapshot live rebuild | ${displayCapability(evidence.sqliteSnapshotLiveRebuild)} |
+| Historical SQLite snapshot live rebuild | ${displayCapability(evidence.sqliteSnapshotLiveRebuild)} |
 | Public-path scale benchmark | ${displayCapability(evidence.publicPathScaleBenchmark)} |
 
 Functional tests, a demo, and a certification scenario are not the same as a
