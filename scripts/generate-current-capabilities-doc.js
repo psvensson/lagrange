@@ -16,6 +16,11 @@ const UNDERSCORE = '_';
 const WORD_SEPARATOR = ' ';
 const DISPLAY_LABEL = Object.freeze({
   active_sqlite_partition_path: 'Active for file-backed SQLite partitions',
+  component_present_integration_unverified:
+    'Component exists; integration on raft-rs is unverified',
+  not_verified_on_raft_rs: 'Not verified on the raft-rs path',
+  unavailable_on_raft_rs: 'Unavailable on the current raft-rs path',
+  historical_pre_cutover_only: 'Historical predecessor-path proof only',
   basic_against_configured_pgwire_credentials:
     'HTTP Basic against the configured PostgreSQL-wire credential verifier',
   code_first_javascript_service: 'Code-first JavaScript service compiler',
@@ -184,10 +189,15 @@ constructors refuse its absence.
 | SQLite partition checkpoint creation | ${displayCapability(capabilities.replication.snapshotCheckpointCreation)} |
 | SQLite partition snapshot transfer/install | ${displayCapability(capabilities.replication.snapshotTransferInstall)} |
 | SQLite partition proof-gated log compaction | ${displayCapability(capabilities.replication.physicalLogCompaction)} |
+| Automatic partition checkpoint cadence | ${displayCapability(capabilities.replication.automaticSnapshotCadence)} |
+| Integrated replica recovery on raft-rs | ${displayCapability(capabilities.replication.integratedReplicaRecovery)} |
 | In-memory message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
 | Learner promotion | ${displayCapability(capabilities.replication.learnerPromotion)} |
 
-Snapshot recovery is replica repair, not a user backup or PITR product.
+Component presence, automatic execution and full recovery are distinct claims. The
+current raft-rs partition leader cadence reports an unsupported committed-log
+owner; no historical snapshot test certifies the new path. Snapshot recovery
+is replica repair, not a user backup or PITR product.
 
 ## PostgreSQL wire
 
@@ -224,7 +234,7 @@ Snapshot recovery is replica repair, not a user backup or PITR product.
 | --- | --- |
 | Code-first public service demo | ${displayCapability(evidence.publicCodeFirstDemo)} |
 | Multi-node data-local comparison | ${displayCapability(evidence.multiNodeDataLocalComparison)} |
-| SQLite snapshot live rebuild | ${displayCapability(evidence.sqliteSnapshotLiveRebuild)} |
+| Historical SQLite snapshot live rebuild | ${displayCapability(evidence.sqliteSnapshotLiveRebuild)} |
 | Public-path scale benchmark | ${displayCapability(evidence.publicPathScaleBenchmark)} |
 
 Functional tests, a demo, and a certification scenario are not the same as a
