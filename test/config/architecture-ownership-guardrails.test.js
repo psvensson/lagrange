@@ -231,14 +231,4 @@ test('Ownership guardrails: runtime startup wiring creation is constrained', asy
     'createRuntimeStartupWiring() should only appear in constrained files. ' +
       `Violations: ${JSON.stringify(violations)}`,
   );
-
-  const callbackMatches = matches.filter((match) => {
-    return match.file === 'query/callback-runtime-driver-registry.js';
-  });
-
-  t.equal(
-    callbackMatches.length,
-    0,
-    'Callback runtime registry must not create startup wiring implicitly',
-  );
 });

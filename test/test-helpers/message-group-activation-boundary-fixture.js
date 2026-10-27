@@ -98,7 +98,7 @@ function createMessageGroupReplicaRuntime(replica) {
   const service = {groupId: replica.groupId, replicaId: replica.replicaId,
     unifiedAddress: replica.address, transport: replica.router,
     isLeaderReplica: () => false,
-    receiveMessage: () => ({acknowledged: true})};
+    receiveMessage: () => (null)};
   if (replica.register !== false) {
     registerMessageGroupTransportHandler(service, {
       messageRouter: replica.router, address: replica.address,

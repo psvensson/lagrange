@@ -17,8 +17,6 @@ import {
   buildTrackedPriorityRecoveryDecisionSnapshots,
   isPriorityRecoveryEmergencyPartition,
   normalizePriorityRecoveryDispatchPendingDecisionSnapshot,
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   resolvePriorityRecoveryAdmissionPlanFromPublication,
   resolveTrackedPriorityRecoveryAdmissionPlan,
@@ -69,8 +67,16 @@ import {
 const PUBLICATION_PRIORITY_PARTITION_ID = 'control_plane_publications-p1';
 const REPLICA_OPERATION_PRIORITY_PARTITION_ID = 'replica_operations-p1';
 const SQL_TRANSACTION_PRIORITY_PARTITION_ID = 'sql_transactions-p1';
+// A reason code recorded by snapshots written before the 2026-10-04
+// deletion of the operational-target credit; fixtures that replay such
+// recorded snapshots keep it as data. No producer emits it any more.
 const PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE =
   'operational_target_visible_on_eligible_node';
+const PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD =
+  'active_operation_still_blocks_spread';
+const PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON_UNSATISFIED = 'unsatisfied';
+const PRIORITY_RECOVERY_PROGRESS_ACTION_SCHEDULE_FOLLOWUP_REBALANCE =
+  'schedule_followup_rebalance';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
   'spread_satisfied_in_flight';
 const PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT =
@@ -276,8 +282,12 @@ const PRIORITY_RECOVERY_FAILED_REPLACE_ACTIVE_TARGET_TEST_NAME =
   'priority recovery failed REPLACE with active target satisfies spread instead of missing operation';
 const PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_TEST_NAME =
   'priority recovery serial-wait witnesses retain blocking operation evidence';
+// SUPERSEDED (owner decision 2026-10-04): a CREATING-step REPLACE with an
+// operational target used to "satisfy spread" and release the serial wait.
+// Only the REPLACE remove-dispatch grace credits spread now, so the CREATING
+// REPLACE keeps the serial wait and the remove-dispatch variant releases it.
 const PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_TEST_NAME =
-  'priority recovery serial-wait ignores spread-satisfying replace targets';
+  'priority recovery serial-wait releases only remove-dispatch replace sources';
 const PRIORITY_RECOVERY_ACTIVE_TARGET_NOT_MISSING_OPERATION_MESSAGE =
   'an active operational replacement target should not be reported as missing operation work';
 const PRIORITY_RECOVERY_ACTIVE_TARGET_SPREAD_WITNESS_MESSAGE =
@@ -297,7 +307,7 @@ const PRIORITY_RECOVERY_SERIAL_WAIT_BLOCKING_PARTITION_MESSAGE =
 const PRIORITY_RECOVERY_SERIAL_WAIT_WITNESS_ID_MESSAGE =
   'serial-wait operation ids should remain diagnostic witness ids';
 const PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_MESSAGE =
-  'spread-satisfying ordinary-lane replacements should not retain the serial wait blocker';
+  'only a remove-dispatch ordinary-lane replacement releases the serial wait blocker';
 const PRIORITY_RECOVERY_SERIAL_WAIT_RELEASE_PROGRESS_MESSAGE =
   'released serial-wait partitions should return to scheduling ownership';
 const PRIORITY_RECOVERY_STALE_SERIAL_WAIT_RELEASE_TEST_NAME =
@@ -439,8 +449,6 @@ const priorityRecoverySnapshotTestContext = {
   PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
   PRIORITY_RECOVERY_BLOCKER_REASON_RECOVERY_ELIGIBLE_EXCLUDED,
   PRIORITY_RECOVERY_BLOCKER_REASON_SERIAL_OPERATION_WAIT,
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_COMPLETION_STATE,
   PRIORITY_RECOVERY_CONVERGENCE_STATE_CONVERGED,
@@ -544,6 +552,9 @@ const priorityRecoverySnapshotTestContext = {
   PRIORITY_RECOVERY_READY_ELIGIBLE_NODE_COUNT,
   PRIORITY_RECOVERY_REASON_CLUSTER_MEMBER_UNHEALTHY,
   PRIORITY_RECOVERY_REASON_CONTROL_PLANE_WRITE_UNHEALTHY,
+  PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
+  PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON_UNSATISFIED,
+  PRIORITY_RECOVERY_PROGRESS_ACTION_SCHEDULE_FOLLOWUP_REBALANCE,
   PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
   PRIORITY_RECOVERY_REASON_PLANNER_READY,
   PRIORITY_RECOVERY_REASON_PRIORITY_PARTITIONS_NOT_SPREAD,

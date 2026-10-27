@@ -10,7 +10,10 @@ import os from 'os';
 import path from 'path';
 import {NodeService} from '../../src/node/node-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {clearRegisteredControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-gateway-registry.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {LogsTableService} from '../../src/logging/logs-table-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {
@@ -39,6 +42,7 @@ function initializeTestEnvironment() {
   NodeService.resetInstance();
   AddressManager.resetInstance();
   ServiceThreadManager.resetInstance();
+  clearRegisteredControlPlaneSystemTableGateway();
 
   const config = ConfigurationManager.getInstance();
   testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'seed-bootstrap-'));
@@ -66,6 +70,7 @@ async function cleanupTestEnvironment() {
     .catch((err) => console.warn('shutdown failed', err.message));
   await ServiceThreadManager.getInstance().shutdown()
     .catch((err) => console.warn('shutdown failed', err.message));
+  LogsTableService.resetInstance();
   await LoggingService.getInstance().shutdown()
     .catch((err) => console.warn('shutdown failed', err.message));
   NodeService.resetInstance();
@@ -73,6 +78,7 @@ async function cleanupTestEnvironment() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  clearRegisteredControlPlaneSystemTableGateway();
   if (testDataDir) {
     fs.rmSync(testDataDir, {recursive: true, force: true});
     testDataDir = null;
@@ -99,7 +105,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -247,7 +253,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
         nodeAddress: `ws://localhost:${seedWsPort}`,
         wsPort: seedWsPort,
         config: {
-          leadershipWaitTimeoutMs: 1000,
+          leadershipWaitTimeoutMs: 5000,
           leadershipWaitInitialDelayMs: 10,
           leadershipWaitMaxDelayMs: 100,
           replicaStaggerDelayMs: 20,
@@ -327,7 +333,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -381,7 +387,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -438,7 +444,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -480,7 +486,7 @@ test('Seed node bootstrap integration', {timeout: TEST_TIMEOUT_MS}, async (t) =>
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

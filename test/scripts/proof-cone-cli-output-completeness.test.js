@@ -5,6 +5,7 @@ import {test} from 'node:test';
 import {
   selectRunnableFullProofCensus,
 } from '../../scripts/checks/impact-proof-cone.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const root = process.cwd();
 const SELECTOR = 'scripts/select-proof-cone.js';
@@ -17,7 +18,7 @@ const PIPE_BUFFER_BYTES = 65536;
 // the selector escalates to the full census no matter what HEAD's last commit
 // touched. HEAD~1 only did so by accident — a docs-only HEAD (an epic edit)
 // selects six floor tests, ~283 bytes, and cannot exercise the pipe boundary.
-const DIFF_BASE = spawnSync('git', ['hash-object', '-t', 'tree', '/dev/null'], {
+const DIFF_BASE = spawnGit(['hash-object', '-t', 'tree', '/dev/null'], {
   cwd: root, encoding: UTF8,
 }).stdout.trim();
 

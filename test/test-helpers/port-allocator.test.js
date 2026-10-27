@@ -131,3 +131,60 @@ test('createPortAllocator reserves one runtime listener block the ' +
   t.notOk(Object.values(next).some((port) => taken.has(port)),
     'a second runtime never shares a listener port with the first');
 });
+
+// A port held by a socket the allocator's state file does not know (on the
+// WSL2 lab host: a port the Windows side holds inside its dynamic range) is
+// skipped: every reservation test-binds before it hands a port out.
+const HELD_PORT_CHILD_SCRIPT = `
+  import net from 'node:net';
+  import {createPortAllocator} from './src/test-helpers/port-allocator.js';
+  const hold = (options) => new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(options, () => resolve(server));
+  });
+  const allocator = createPortAllocator(process.env.TEST_FILE_ID);
+  const first = allocator.getPort();
+  // The next request is first + 1: hold it on the wildcard address.
+  const wildcard = await hold({port: first + 1});
+  const second = allocator.getPort();
+  // The next request walks to first + 3: hold it on the test host only.
+  const loopback = await hold({host: '127.0.0.1', port: first + 3});
+  const third = allocator.getPort();
+  // A block whose middle port is held is never handed out.
+  const blockHeld = await hold({port: first + 5});
+  const block = allocator.getPortBlock(3);
+  process.stdout.write(JSON.stringify({block, first, second, third}) + '\\n');
+  for (const server of [wildcard, loopback, blockHeld]) server.close();
+`;
+
+test('a reservation test-binds: a port held by another socket (wildcard or ' +
+  'loopback) is skipped, and so is a block containing one', async (t) => {
+  const output = await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath,
+      ['--input-type=module', '-e', HELD_PORT_CHILD_SCRIPT], {
+        cwd: process.cwd(),
+        env: {...process.env,
+          DDB_TEST_PORT_ALLOCATOR_NAMESPACE: `port-held-${randomUUID()}`,
+          TEST_FILE_ID: `port-held-${randomUUID()}`},
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve(stdout) :
+      reject(new Error(`held-port child exited ${code}\n${stderr}`))));
+  });
+  const {block, first, second, third} = JSON.parse(output);
+  t.equal(second, first + 2, 'the wildcard-held port is skipped');
+  t.equal(third, first + 4, 'the loopback-held port is skipped');
+  t.notOk(block.includes(first + 5), 'no block contains a held port');
+  t.same(block, [block[0], block[0] + 1, block[0] + 2],
+    'the block is still consecutive');
+});

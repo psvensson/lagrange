@@ -475,7 +475,27 @@ function buildPlacementOwnerDecision(options = {}) {
 // raw policy field names because the planner evaluates before placement-owner
 // evidence normalization. Entities without preferDataAffinity return false
 // unconditionally — their evaluation is byte-identical to before.
-function isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes) {
+function isDataAffinityPlacementSuboptimal(
+  policy,
+  healthyReplicas = [],
+  readyNodes = [],
+) {
+  const incumbentNodeIds = new Set(
+    healthyReplicas.map((replica) => replica?.node_id).filter(Boolean),
+  );
+  const readyNodeIds = new Set(
+    readyNodes.map((node) => node?.node_id).filter(Boolean),
+  );
+  const pinnedNodeIds = Array.isArray(policy?.activationPinNodeIds) ?
+    policy.activationPinNodeIds :
+    [];
+  if (
+    pinnedNodeIds.some(
+      (nodeId) => readyNodeIds.has(nodeId) && !incumbentNodeIds.has(nodeId),
+    )
+  ) {
+    return true;
+  }
   const constraints =
     policy?.[PLACEMENT_OWNER_POLICY_FIELD.PLACEMENT_CONSTRAINTS];
   if (
@@ -487,11 +507,6 @@ function isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes) 
     policy?.[PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY]?.[
       PLACEMENT_OWNER_POLICY_FIELD.DATA_AFFINITY_NODE_WEIGHTS
     ] || {};
-  const incumbentNodeIds = new Set(
-    (Array.isArray(healthyReplicas) ? healthyReplicas : [])
-      .map((replica) => replica?.node_id)
-      .filter(Boolean),
-  );
   if (incumbentNodeIds.size === 0) {
     return false;
   }
@@ -501,9 +516,8 @@ function isDataAffinityPlacementSuboptimal(policy, healthyReplicas, readyNodes) 
       (Number.isFinite(weight) && weight > 0 ? weight : 0);
   };
   let bestChallengerScore = null;
-  for (const node of Array.isArray(readyNodes) ? readyNodes : []) {
-    const nodeId = node?.node_id;
-    if (!nodeId || incumbentNodeIds.has(nodeId)) {
+  for (const nodeId of readyNodeIds) {
+    if (incumbentNodeIds.has(nodeId)) {
       continue;
     }
     const score = affinityScoreOf(nodeId);

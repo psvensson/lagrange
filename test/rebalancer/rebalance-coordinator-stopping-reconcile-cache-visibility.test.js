@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_NO_DELIVERY_ASSERTION, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_PARTITION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SERVICE_TYPE, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_STOPPING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_SYNCING_OPERATION_ID, PRIORITY_DRAIN_TEST_REMOTE_RELEASE_VOTER_ROLE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_OPERATION_ID, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STATUS_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_STEP_ASSERTION, PRIORITY_DRAIN_TEST_TERMINAL_GUARD_TRANSITION_ASSERTION, PRIORITY_DRAIN_TEST_UNAVAILABLE_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 test('RebalanceCoordinator does not let stale failed target cache override ' +
@@ -261,10 +262,9 @@ test('RebalanceCoordinator hands back (never releases) a remote-owned ACTIVE pri
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService:
@@ -392,10 +392,9 @@ async (t) => {
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService:
@@ -523,10 +522,9 @@ test('RebalanceCoordinator hands back (never releases) a remote-owned STOPPING p
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService:

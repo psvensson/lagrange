@@ -59,6 +59,8 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {forwardHandlerRegistry} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 export const PARTITION_ID = 'progress-proof-p1';
 const TABLE_NAME = 'progress_proof_table';
@@ -265,11 +267,7 @@ function createFixtureNetwork() {
   const state = {closed: false};
   return {
     state,
-    register: (address, handler) => loopback.register(address, handler),
-    unregister: (address) => loopback.unregister(address),
-    getRegisteredHandler: (address) => loopback.getRegisteredHandler(address),
-    unregisterExact: (address, handler) =>
-      loopback.unregisterExact(address, handler),
+    ...forwardHandlerRegistry(loopback),
     deliver: async (address, payload, options) => {
       if (state.closed) {
         return undefined;
@@ -287,11 +285,7 @@ function createPartitionableTransport(inner) {
   const state = {dropToLearner: false};
   return {
     state,
-    register: (address, handler) => inner.register(address, handler),
-    unregister: (address) => inner.unregister(address),
-    getRegisteredHandler: (address) => inner.getRegisteredHandler(address),
-    unregisterExact: (address, handler) =>
-      inner.unregisterExact(address, handler),
+    ...forwardHandlerRegistry(inner),
     deliver: async (address, payload, options) => {
       if (state.dropToLearner && address === LEARNER_ADDRESS) {
         return undefined;

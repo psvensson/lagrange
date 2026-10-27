@@ -14,6 +14,7 @@ import {
   filterTestFiles,
   parseOptions,
   retryFailedOnce,
+  runTestFileSync,
   runTestFiles,
 } from '../../scripts/run-test-files.js';
 
@@ -29,6 +30,7 @@ const RUNAWAY_DIRECTIVE_FIXTURE =
   `${FIXTURE_DIRECTORY}/tap-runaway-directive.fixture.mjs`;
 const FAILS_ONCE_FIXTURE = `${FIXTURE_DIRECTORY}/fails-once.fixture.mjs`;
 const HANGS_FIXTURE = `${FIXTURE_DIRECTORY}/hangs.fixture.mjs`;
+const MACHINE_FACTOR_FIXTURE = `${FIXTURE_DIRECTORY}/machine-factor.fixture.mjs`;
 
 describe('run-test-files', () => {
   const temporaryDirectories = [];
@@ -112,6 +114,16 @@ describe('run-test-files', () => {
     assert.equal(summary.results[0].file, TAP_PASS_FIXTURE);
   });
 
+  it('uses the per-run child environment for machine-scaled declarations', async () => {
+    const summary = await runTestFiles([MACHINE_FACTOR_FIXTURE], {
+      jobs: 1,
+      print: false,
+      env: {LAGRANGE_TEST_MACHINE_FACTOR: '3', TAP_TIMEOUT: undefined,
+        TAP_TIMEOUT_FLOOR: undefined},
+    });
+    assert.equal(summary.ok, true, JSON.stringify(summary.results?.[0]?.reasons));
+  });
+
   it('runs Tap and node:test files with assertions and Tap plugins intact', async () => {
     const summary = await runFixtures([TAP_PASS_FIXTURE, NODE_TEST_PASS_FIXTURE]);
 
@@ -120,6 +132,23 @@ describe('run-test-files', () => {
     assert.equal(summary.failed, 0);
     assert.ok(summary.assertions >= 2);
     assert.ok(summary.results.every((result) => result.output.length > 0));
+  });
+
+  it('separately launched tests retain TAP output under a Node test parent', async () => {
+    const resultsDirectory = await mkdtemp(path.join(tmpdir(), 'run-test-files-context-'));
+    temporaryDirectories.push(resultsDirectory);
+    const options = {
+      env: {NODE_TEST_CONTEXT: 'child-v8'},
+      print: false,
+      resultsDirectory,
+    };
+    const summary = await runTestFiles([TAP_PASS_FIXTURE, NODE_TEST_PASS_FIXTURE],
+      {...options, jobs: 1});
+    assert.equal(summary.ok, true, JSON.stringify(summary.results?.map((r) => r.reasons)));
+    assert.deepEqual(summary.results.map((result) => result.assertions), [3, 1]);
+    const sync = runTestFileSync(NODE_TEST_PASS_FIXTURE, options);
+    assert.equal(sync.ok, true, JSON.stringify(sync.reasons));
+    assert.equal(sync.assertions, 1);
   });
 
   it('fails closed when a test file emits no assertions', async () => {
@@ -346,8 +375,10 @@ describe('bounded output reading', () => {
     // Under the repository, because the elision names the file and an excerpt
     // can end up inside a committed report: the name must not be this
     // machine's absolute path when the file is one of ours.
+    const outputRoot = path.join(process.cwd(), 'test-output');
+    fs.mkdirSync(outputRoot, {recursive: true});
     const directory = fs.mkdtempSync(
-      path.join(process.cwd(), 'test-output', 'run-test-files-bound-'));
+      path.join(outputRoot, 'run-test-files-bound-'));
     written.push(directory);
     const file = path.join(directory, 'edges.tap');
     fs.writeFileSync(file,

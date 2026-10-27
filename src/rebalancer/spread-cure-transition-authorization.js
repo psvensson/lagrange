@@ -62,6 +62,7 @@ import {
 import {
   memoizedParseStepsHistoryString,
 } from './steps-history-parse-memo.js';
+import {isPositiveSafeInteger} from '../utils/safe-integer.js';
 
 const SPREAD_CURE_TRANSITION_INTENT = 'critical_spread_cure';
 // The field the authorization rides on a move and on the coordinator's
@@ -128,10 +129,6 @@ const objectPrototype = Object.prototype;
 // admit a record whose "exact transition" is a rounding artefact.
 function isNonNegativeSafeInteger(value) {
   return Number.isSafeInteger(value) && value >= 0;
-}
-
-function isPositiveSafeInteger(value) {
-  return Number.isSafeInteger(value) && value > 0;
 }
 
 function isNonEmptyString(value) {

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
@@ -1149,10 +1150,9 @@ async function runSelfMovePlannedBeforeAddsScenario(
               },
             });
           }
-          resolve({
-            acknowledged: true,
+          resolve(buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          });
+          }));
         }, ackLatencyMsOf(operationId)),
       );
     }
@@ -1176,17 +1176,15 @@ async function runSelfMovePlannedBeforeAddsScenario(
               refreshStartupAuthority();
             });
           }, LEDGER_REMOVE_TERMINAL_AFTER_ACK_MS);
-          resolve({
-            acknowledged: true,
+          resolve(buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          });
+          }));
         }, LEDGER_REMOVE_ACK_MS),
       );
     }
-    return Promise.resolve({
-      acknowledged: true,
+    return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, {
       status: DELIVERY_ACKNOWLEDGED_STATUS,
-    });
+    }));
   };
   // The self-move REPLACE's target configuration as its owner reads it (quest
   // replace-source-removal-owner, C1): the source leaves it at the terminal.
@@ -1245,10 +1243,9 @@ async function runSelfMovePlannedBeforeAddsScenario(
       request?.type !== MESSAGE_TYPE.CREATE_REPLICA ||
       !isWitnessedLedgerSelfMove(operationId)
     ) {
-      return Promise.resolve({
-        acknowledged: true,
+      return Promise.resolve(buildDeliveryEnvelope({acknowledged: true}, {
         status: DELIVERY_ACKNOWLEDGED_STATUS,
-      });
+      }));
     }
     if (state.selfMoveSentAtMs === null) {
       state.selfMoveSentAtMs = elapsed();
@@ -1281,10 +1278,9 @@ async function runSelfMovePlannedBeforeAddsScenario(
             });
           }, SELF_MOVE_TERMINAL_AFTER_ACTIVE_MS);
         }, SELF_MOVE_ACTIVE_AFTER_ACK_MS);
-        resolve({
-          acknowledged: true,
+        resolve(buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        });
+        }));
       }, SELF_MOVE_CREATE_ACK_MS),
     );
   };

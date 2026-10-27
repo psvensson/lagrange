@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {VirtualTimeSource} from '../../src/time/time-source.js';
@@ -428,10 +429,9 @@ function injectDispatchAckLatency({coordinator, timeSource, onSent, onAcked}) {
     return new Promise((resolve) =>
       timeSource.setTimeout(() => {
         onAcked(operationId);
-        resolve({
-          acknowledged: true,
+        resolve(buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        });
+        }));
       }, DISPATCH_ACK_LATENCY_MS),
     );
   };

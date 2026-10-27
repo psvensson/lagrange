@@ -39,6 +39,7 @@
  *    retarget it.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -109,12 +110,11 @@ function serviceRow(replicaId, nodeId, raftRole) {
   };
 }
 
+// The router's delivery of the STEP_DOWN answer; a null answer is a request
+// the target never answered (an undelivered transport outcome).
 function confirmedDelivery(response) {
-  return response === null ? null : {
-    acknowledged: true,
-    deliveryState: 'delivered',
-    ...response,
-  };
+  return response === null ? buildDeliveryEnvelope({acknowledged: false}) :
+    buildDeliveryEnvelope({acknowledged: true}, response);
 }
 
 async function createHarness({stepDownResponse} = {}) {
@@ -131,7 +131,7 @@ async function createHarness({stepDownResponse} = {}) {
     replaceWitness: false,
     messageRouter: {
       deliver: async (target, payload) => {
-        const witnessAnswer = witness.answer(payload);
+        const witnessAnswer = witness.deliveryFor(payload);
         if (witnessAnswer) {
           return witnessAnswer;
         }
@@ -144,8 +144,9 @@ async function createHarness({stepDownResponse} = {}) {
                 REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
             });
         }
-        return {acknowledged: true, deliveryState: 'delivered',
-          status: ReplicaOperationResponseStatus.INITIATED};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          status: ReplicaOperationResponseStatus.INITIATED,
+        });
       },
       getConnectionState: () => 'connected',
       pingNode: async () => true,

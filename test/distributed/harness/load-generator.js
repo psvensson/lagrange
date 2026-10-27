@@ -66,7 +66,7 @@ const LOAD_LANE_TRANSIENT_TIMEOUT_FRAGMENT = 'query timeout after';
 const LOAD_LANE_TRANSIENT_CONNECTION_FRAGMENT = 'connection closed';
 const ADMIN_LANE_LOAD = 'load';
 
-const LOAD_TABLE_NAME = 'logs';
+const LOAD_TABLE_NAME = 'user_load_logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
 const LOAD_NODE_ID = 'load-generator';
 const LOAD_LOG_ID_PREFIX = 'load-';
@@ -289,7 +289,7 @@ class LoadRun {
     this._opsPerSec = options.opsPerSec;
     this._durationMs = options.durationMs;
     this._operations = options.operations;
-    this._tableName = options.tableName || LOAD_TABLE_NAME;
+    this._tableName = normalizeTableName(options.tableName, LOAD_TABLE_NAME);
     this._workloadProfile =
       options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
     this._sqlDialect =
@@ -1496,4 +1496,4 @@ class LoadGenerator {
     return run;
   }
 }
-export {LoadGenerator, LoadRun, computeMetrics};
+export {LOAD_TABLE_NAME, LoadGenerator, LoadRun, computeMetrics};

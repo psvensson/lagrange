@@ -1,6 +1,15 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {LoggingService} from '../../logging/logging-service.js';
 import {
+  affectedRowsField,
+  sumAffectedRowCounts,
+} from '../application-database-result.js';
+import {
+  isAppliedWithUnknownCount,
+  pickTypedWriteAnswer,
+} from '../../partition/partition-write-kernel.js';
+import {buildParticipantFailureEntry} from '../query-execution-budget.js';
+import {
   QUERY_AST_NODE,
   QUERY_AST_TYPE,
   QUERY_ERROR_CODE,
@@ -26,19 +35,6 @@ const UNARY_PLUS = '+';
 const PARTICIPANT_ROLE_PRIMARY = 'primary';
 const PARTICIPANT_ROLE_MIRROR = 'mirror';
 
-function participantFailureDisposition(result = {}) {
-  return {
-    failureCode: typeof result.failureCode === 'string' ?
-      result.failureCode : null,
-    committed: result.committed === true,
-    outcome: typeof result.outcome === 'string' ? result.outcome : null,
-    disposition: typeof result.disposition === 'string' ?
-      result.disposition : null,
-    logIndex: Number.isSafeInteger(result.logIndex) ? result.logIndex : null,
-    entryId: typeof result.entryId === 'string' ? result.entryId : null,
-  };
-}
-
 // One log line per failed fan-out: the operation identity plus the
 // partition/service ids and error codes of every failed participant, so the
 // server log names what the client envelope names.
@@ -62,6 +58,24 @@ function buildParticipantFailureLogContext(plan, participantFailures) {
       failedTable: entry.failedTable,
     })),
   };
+}
+
+/**
+ * The entryId one logical write is proposed under on one partition: derived
+ * from the write's idempotency key and the partition, so every attempt of
+ * the write - an engine retry, a caller's re-drive under the same key, a
+ * local-leader leg - is the same committed entry (the one derivation of a
+ * write's entry identity).
+ * @param {string} idempotencyKey - The logical write's key.
+ * @param {string} partitionId - The participant partition.
+ * @return {string} The participant entryId.
+ */
+function deriveParticipantEntryId(idempotencyKey, partitionId) {
+  const entryIdentityDigest = createHash(HASH_ALGORITHM)
+    .update(JSON.stringify({idempotencyKey, partitionId}))
+    .digest(DIGEST_ENCODING)
+    .slice(0, DIGEST_PREFIX_LENGTH);
+  return `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`;
 }
 
 /**
@@ -245,7 +259,10 @@ class DistributedWriteCoordinator {
       .map((result) => result.partitionId)
       .filter(Boolean);
     const rows = [];
-    let affectedRows = 0;
+    const affectedRows = sumAffectedRowCounts(participantResults
+      .filter((result) =>
+        result.success && result.role !== PARTICIPANT_ROLE_MIRROR)
+      .map((result) => result.affectedRows));
     const retryCount = participantResults.reduce((sum, result) => {
       const attempts = Number.isInteger(result.attempts) ?
         result.attempts : 1;
@@ -263,49 +280,20 @@ class DistributedWriteCoordinator {
       if (result.role === PARTICIPANT_ROLE_MIRROR) {
         continue;
       }
-      affectedRows += result.affectedRows || 0;
       if (Array.isArray(result.rows) && result.rows.length > 0) {
         rows.push(...result.rows);
       }
     }
 
     if (failedParticipants.length > 0) {
-      const participantFailures = failedParticipants.map((result) => ({
-        partitionId: result.partitionId,
-        participantNodeId:
-            typeof result.participantNodeId === 'string' ?
-              result.participantNodeId :
-              null,
-        participantAddress:
-            typeof result.participantAddress === 'string' ?
-              result.participantAddress :
-              null,
-        errorCode:
-            typeof result.errorCode === 'string' ?
-              result.errorCode :
-              null,
-        ...participantFailureDisposition(result),
-        error:
-            result.error ||
+      // The one participant failure entry (INSERT, UPDATE and DELETE alike).
+      const participantFailures = failedParticipants.map((result) =>
+        buildParticipantFailureEntry({
+          ...result,
+          error: result.error ||
             QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        durationMs:
-            Number.isFinite(result?.durationMs) ?
-              Math.max(0, Math.floor(result.durationMs)) :
-              null,
-        retryAfterMs:
-            Number.isFinite(result?.retryAfterMs) &&
-            result.retryAfterMs > 0 ?
-              Math.floor(result.retryAfterMs) :
-              null,
-        deferRetry: result?.deferRetry === true,
-        backpressured: result?.backpressured === true,
-        failedTable:
-            typeof result.failedTable === 'string' ?
-              result.failedTable :
-              (typeof result.tableName === 'string' ?
-                result.tableName :
-                null),
-      }));
+          failedTable: result.failedTable ?? result.tableName,
+        }));
       const firstFailedParticipant =
           participantFailures.length > 0 ?
             participantFailures[0] :
@@ -327,7 +315,7 @@ class DistributedWriteCoordinator {
       return {
         success: false,
         operation: plan.statementType,
-        affectedRows,
+        ...affectedRowsField(affectedRows),
         rows,
         partitions: primaryPartitions,
         mirrorPartitions,
@@ -347,10 +335,17 @@ class DistributedWriteCoordinator {
       };
     }
 
+    // A primary participant acknowledged as a settled replay whose count is
+    // not known leaves the statement's count unknown: the result carries the
+    // named state, never a sum that counts it as zero rows.
+    const unknownCount = participantResults.find((result) =>
+      result.success && result.role !== PARTICIPANT_ROLE_MIRROR &&
+      isAppliedWithUnknownCount(result));
     return {
       success: true,
       operation: plan.statementType,
-      affectedRows,
+      ...(unknownCount === undefined ? affectedRowsField(affectedRows) :
+        {settledReplay: unknownCount.settledReplay}),
       rows,
       partitions: primaryPartitions,
       mirrorPartitions,
@@ -416,7 +411,7 @@ class DistributedWriteCoordinator {
             error.errorCode.length > 0 ?
               error.errorCode :
               null),
-        ...participantFailureDisposition(error),
+        ...pickTypedWriteAnswer(error),
         retryAfterMs:
           Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0 ?
             Math.floor(error.retryAfterMs) :
@@ -575,22 +570,14 @@ class DistributedWriteCoordinator {
     executionOptions = {},
     participantOptions = {},
   ) {
-    const entryIdentityPayload = JSON.stringify({
-      idempotencyKey: plan.idempotencyKey,
-      partitionId,
-    });
-    const entryIdentityDigest = createHash(HASH_ALGORITHM)
-      .update(entryIdentityPayload)
-      .digest(DIGEST_ENCODING)
-      .slice(0, DIGEST_PREFIX_LENGTH);
     return {
       ...(executionOptions || {}),
       operationId: plan.operationId,
       idempotencyKey: plan.idempotencyKey,
-      entryId: `${PARTICIPANT_ENTRY_ID_PREFIX}${entryIdentityDigest}`,
+      entryId: deriveParticipantEntryId(plan.idempotencyKey, partitionId),
       ...(participantOptions || {}),
     };
   }
 }
 
-export {DistributedWriteCoordinator};
+export {DistributedWriteCoordinator, deriveParticipantEntryId};

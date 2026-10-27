@@ -8,6 +8,7 @@ import {createRequire} from 'node:module';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
+import {QUERY_ERROR_CODE, QUERY_ERROR_MSG} from '../../src/query/query-constants.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -1050,12 +1051,18 @@ test('SQLParser - INSERT ON CONFLICT DO UPDATE in PG mode', async (t) => {
     'ON CONFLICT (id) DO UPDATE SET name = \'Bob\'',
     {dialect: PARSER_DIALECT.POSTGRESQL},
   );
-  const ast = parser.parse();
-
-  t.equal(ast.type, 'INSERT');
-  t.equal(ast.table, 'users');
-  t.equal(ast.orReplace, true);
-  t.equal(ast.orIgnore, false);
+  t.throws(
+    () => parser.parse(),
+    /INSERT \.\.\. ON CONFLICT DO UPDATE is not supported/,
+    'throws UNSUPPORTED_SQL_FEATURE',
+  );
+  try {
+    parser.parse();
+    t.fail('should have thrown');
+  } catch (err) {
+    t.equal(err.code, QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE);
+    t.equal(err.message, QUERY_ERROR_MSG.ON_CONFLICT_DO_UPDATE_UNSUPPORTED);
+  }
 });
 
 test('SQLParser - INSERT without ON CONFLICT in PG mode', async (t) => {
@@ -1095,3 +1102,113 @@ test('SQLParser - SQLite INSERT OR IGNORE unchanged in default mode',
     t.equal(ast.orIgnore, true);
     t.equal(ast.orReplace, false);
   });
+
+// One query text is one statement: more than one is refused whole (code
+// MULTIPLE_STATEMENTS_UNSUPPORTED, nothing to execute), never truncated to
+// the first; terminators, comments and `;` inside literals stay one
+// statement; a text with no statement is EMPTY_STATEMENT.
+const MULTIPLE_STATEMENTS = [
+  'UPDATE t SET a = 1; DELETE FROM t',
+  'INSERT INTO t (id) VALUES (1); INSERT INTO t (id) VALUES (2)',
+  'SELECT 1; SELECT 2',
+  'SELECT a FROM t; ; DELETE FROM t',
+  'BEGIN; INSERT INTO t (id) VALUES (1); COMMIT',
+  'BEGIN ; DELETE FROM t',
+  'COMMIT; DELETE FROM t',
+];
+const SINGLE_STATEMENTS = [
+  ['UPDATE t SET a = 1;', 'UPDATE'],
+  ['UPDATE t SET a = 1; ;', 'UPDATE'],
+  ['UPDATE t SET a = \'x;y\' WHERE id = 1; -- done; really', 'UPDATE'],
+  ['-- lead\nDELETE FROM t WHERE id = 1', 'DELETE'],
+  ['/* lead */ INSERT INTO t (id) VALUES (1)', 'INSERT'],
+  ['BEGIN;', 'BEGIN_TRANSACTION'],
+  ['COMMIT ;', 'COMMIT'],
+  ['ROLLBACK;', 'ROLLBACK'],
+];
+
+test('SQLParser - refuses a multi-statement text whole', async (t) => {
+  // The SQLite grammar (the facade's default dialect) has no transaction
+  // statements, so it is checked on the DML forms.
+  const cases = [
+    ...MULTIPLE_STATEMENTS.map((sql) => [PARSER_DIALECT.POSTGRESQL, sql]),
+    ...MULTIPLE_STATEMENTS.slice(0, 4).map((sql) => [undefined, sql]),
+  ];
+  for (const [dialect, sql] of cases) {
+    let caught = null;
+    try {
+      new SQLParser(sql, {dialect}).parse();
+    } catch (error) {
+      caught = error;
+    }
+    t.equal(caught?.code, 'MULTIPLE_STATEMENTS_UNSUPPORTED',
+      `${dialect}: ${sql}`);
+    t.match(caught?.message,
+      /multiple statements in one query are not supported/u);
+  }
+});
+
+test('SQLParser - one statement with terminators and comments', async (t) => {
+  for (const [sql, type] of SINGLE_STATEMENTS) {
+    t.equal(new SQLParser(sql, {dialect: PARSER_DIALECT.POSTGRESQL})
+      .parse().type, type, sql);
+  }
+});
+
+test('SQLParser - a text with no statement is EMPTY_STATEMENT', async (t) => {
+  for (const sql of [';', '; ;', '-- nothing', '/* nothing */']) {
+    let caught = null;
+    try {
+      new SQLParser(sql, {dialect: PARSER_DIALECT.POSTGRESQL}).parse();
+    } catch (error) {
+      caught = error;
+    }
+    t.equal(caught?.code, 'EMPTY_STATEMENT', sql);
+  }
+});
+
+test('SQLParser - refuses non-literal or nondeterministic column DEFAULT in ' +
+  'CREATE TABLE and ALTER TABLE while admitting literal defaults', async (t) => {
+  const refusedSqls = [
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIMESTAMP)',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT CURRENT_DATE)',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT CURRENT_TIME)',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT (datetime(\'now\')))',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT datetime(\'now\'))',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts TEXT DEFAULT (random()))',
+    'CREATE TABLE events (id INT PRIMARY KEY, ts INT DEFAULT (1 + 2))',
+    'ALTER TABLE events ADD COLUMN ts TEXT DEFAULT CURRENT_TIMESTAMP',
+    'ALTER TABLE events ADD COLUMN ts TEXT DEFAULT CURRENT_DATE',
+    'ALTER TABLE events ADD COLUMN ts TEXT DEFAULT CURRENT_TIME',
+    'ALTER TABLE events ADD COLUMN ts TEXT DEFAULT (datetime(\'now\'))',
+    'ALTER TABLE events ADD COLUMN ts TEXT DEFAULT datetime(\'now\')',
+  ];
+  for (const dialect of [undefined, PARSER_DIALECT.POSTGRESQL]) {
+    for (const sql of refusedSqls) {
+      let caught = null;
+      try {
+        new SQLParser(sql, {dialect}).parse();
+      } catch (error) {
+        caught = error;
+      }
+      t.equal(
+        caught?.code,
+        QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+        `${dialect || 'sqlite'} refuses non-literal DEFAULT: ${sql}`,
+      );
+      t.equal(
+        caught?.message,
+        QUERY_ERROR_MSG.NON_LITERAL_DEFAULT_UNSUPPORTED,
+        `${dialect || 'sqlite'} message: ${sql}`,
+      );
+    }
+  }
+  const createAst = new SQLParser(
+    'CREATE TABLE events (id INT PRIMARY KEY, status TEXT DEFAULT \'open\', ' +
+      'retries INT DEFAULT 0, delta INT DEFAULT -5, note TEXT DEFAULT NULL)',
+  ).parse();
+  t.equal(createAst.columns[1].defaultValue.value, 'open');
+  t.equal(createAst.columns[2].defaultValue.value, 0);
+  t.equal(createAst.columns[3].defaultValue.value, -5);
+  t.equal(createAst.columns[4].defaultValue.value, null);
+});

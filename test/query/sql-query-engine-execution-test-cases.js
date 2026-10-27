@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
@@ -23,6 +24,8 @@ import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
 } from './routing-repair-test-helpers.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 
 const SQL_ENGINE_SYSTEM_TABLE_UPDATE_SQL =
   'UPDATE nodes SET status = \'active\' WHERE node_id = \'node-a\'';
@@ -34,8 +37,12 @@ const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_SESSION_ID = 'session-1';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_PARTITION_ID =
   'replica_operations-p1';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_OPERATION = 'COMMIT';
+// The delivery identity is bound to the exact transaction and operation, not
+// to the session (TX1 seam A; design 2.1: the sessionId is routing context
+// only).
+const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_ID = 'tx-priority-1';
 const TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE =
-  'query:transaction:replica_operations-p1:session-1:COMMIT';
+  'query:transaction:replica_operations-p1:tx-priority-1:COMMIT';
 
 function registerSqlQueryEngineExecutionTestCases({
   createMockMessageRouter,
@@ -133,7 +140,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const engine = new SQLQueryEngine({
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
-        deliver: async () => ({acknowledged: true, success: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
       },
       nodeId: 'local-node',
     });
@@ -167,6 +174,7 @@ function registerSqlQueryEngineExecutionTestCases({
       TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_SESSION_ID,
       TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_PARTITION_ID,
       TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_OPERATION,
+      {transactionId: TEST_PRIORITY_CONTROL_PLANE_TRANSACTION_ID},
     );
 
     t.equal(routingCalls.length, 1,
@@ -193,7 +201,7 @@ function registerSqlQueryEngineExecutionTestCases({
     const engine = new SQLQueryEngine({
       systemCache: createMockSystemCache([], [], [], []),
       messageRouter: {
-        deliver: async () => ({acknowledged: true, success: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {success: true})),
       },
       nodeId: 'local-node',
     });
@@ -511,6 +519,18 @@ function registerSqlQueryEngineExecutionTestCases({
       sameServiceId: true,
       refreshedAddress: 'new-owner/partition/replica_operations-p1-r1',
     });
+    const baseDeliver = fixture.messageRouter.deliver.bind(fixture.messageRouter);
+    fixture.messageRouter.deliver = async (address, message, options) => {
+      if (address === fixture.refreshedAddress && message?.type === 'TRANSACTION') {
+        fixture.deliveries.push(address);
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          ...answerParticipantTransactionRequest(message, fixture.partitionId),
+          transactionId: message.transactionId,
+          participantId: message.participantId,
+        });
+      }
+      return baseDeliver(address, message, options);
+    };
 
     const engine = new SQLQueryEngine({
       systemCache: fixture.systemCache,

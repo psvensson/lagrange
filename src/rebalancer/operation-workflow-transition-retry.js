@@ -140,12 +140,30 @@ async function resumeDeferredTransitionOperation(owner, operationId) {
   await owner.reconcileTimeoutOperation(operation, now);
 }
 
+function cannotRegisterTransitionRetry(owner, retryContext) {
+  if (owner.isShuttingDown) {
+    return true;
+  }
+  const expectedOwnershipFenceEpoch =
+    retryContext.operationOwnershipFenceEpoch;
+  if (!Number.isInteger(expectedOwnershipFenceEpoch)) {
+    return false;
+  }
+  return (
+    typeof owner.getOperationOwnershipFenceEpoch === 'function' &&
+    owner.getOperationOwnershipFenceEpoch() !== expectedOwnershipFenceEpoch
+  );
+}
+
 function deferTransitionRetry(
   owner,
   operationId,
   errorLike,
   retryContext = {},
 ) {
+  if (cannotRegisterTransitionRetry(owner, retryContext)) {
+    return false;
+  }
   const retryAfterMs = getControlPlaneRetryAfterMs(errorLike);
   const retryOutcome = buildOperationOwnerRetryOutcome({
     operationId,

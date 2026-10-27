@@ -1,6 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
+  buildReservationAuthorityUnavailableError,
 } from './operation-reservation-attempt-outcome.js';
 import {
   applyReplaceIntentIdentity,
@@ -35,6 +37,43 @@ const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
   'Storage reservation creation failed for operation ';
 const RESERVATION_INSERT_REJECTED_FALLBACK = 'reservation insert rejected';
 const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
+const RUNTIME_TARGET_CLAIM_RETRY_WAIT = Object.freeze({
+  wait: 'RUNTIME_TARGET_CLAIM_RETRY_LIMIT',
+  awaited: 'runtime target claim without a conflicting replica id',
+});
+
+/**
+ * The runtime target claim refusal: when it is the spent retry bound (not a
+ * missing claim key or conflict id), one wait_bound_spent ERROR naming the
+ * conflicting replica ids seen; the throw that follows is unchanged.
+ * @param {Object} coordinator
+ * @param {Object} operation
+ * @param {Array<string>} collisionReplicaIds
+ * @param {string|undefined} conflictingReplicaId
+ * @return {void}
+ */
+function reportRuntimeTargetClaimRetrySpent(
+  coordinator, operation, collisionReplicaIds, conflictingReplicaId) {
+  if (collisionReplicaIds.length < RUNTIME_TARGET_CLAIM_RETRY_LIMIT) {
+    return;
+  }
+  reportWaitBoundSpent(coordinator.logger, {
+    ...RUNTIME_TARGET_CLAIM_RETRY_WAIT,
+    boundMs: null,
+    lastObserved: () => ({
+      attempts: collisionReplicaIds.length,
+      attemptLimit: RUNTIME_TARGET_CLAIM_RETRY_LIMIT,
+      collisionReplicaIds: collisionReplicaIds.slice(-RUNTIME_TARGET_CLAIM_RETRY_LIMIT),
+      conflictingReplicaId: conflictingReplicaId || null,
+      targetClaimKey: operation.targetClaimKey || null,
+    }),
+    scope: {
+      nodeId: coordinator.nodeId || null,
+      partitionId: operation.partitionId || null,
+      operationId: operation.operationId || null,
+    },
+  });
+}
 const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
   'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
 
@@ -383,6 +422,7 @@ class RebalanceCoordinatorOperationCreation {
    */
   async createOperationInternal(move, creationContext = {}) {
     this.assertMembershipPublicationEpoch(move);
+    this.assertGroupNotRetiring(move);
 
     const normalizedMoveType = this.normalizeMoveType(move?.type);
     const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
@@ -646,6 +686,23 @@ class RebalanceCoordinatorOperationCreation {
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
+    const failedCreateTargetCleanupPrecondition = move?.[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ];
+    if (
+      normalizedMoveType === OperationType.REMOVE &&
+      failedCreateTargetCleanupPrecondition &&
+      typeof failedCreateTargetCleanupPrecondition === 'object' &&
+      !Array.isArray(failedCreateTargetCleanupPrecondition) &&
+      operation.stepsHistory.length > 0
+    ) {
+      operation[
+        ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = failedCreateTargetCleanupPrecondition;
+      operation.stepsHistory[0][
+        OPERATION_METADATA_KEY.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+      ] = failedCreateTargetCleanupPrecondition;
+    }
     if (
       entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
       (
@@ -770,6 +827,8 @@ class RebalanceCoordinatorOperationCreation {
         targetClaimCollisionReplicaIds.length >=
           RUNTIME_TARGET_CLAIM_RETRY_LIMIT
       ) {
+        reportRuntimeTargetClaimRetrySpent(
+          this, operation, targetClaimCollisionReplicaIds, conflictingReplicaId);
         throw new Error(
           `Runtime target claim retry exhausted: ${operation.operationId}`,
         );
@@ -806,6 +865,8 @@ class RebalanceCoordinatorOperationCreation {
     // rejects here, and the dispatch-time gate re-attempts the deterministic
     // insert through ensureReservationForOperation for any row that
     // predates this guard.
+    const reservationOwnershipFenceEpoch =
+      this.workflowOwner?.getOperationOwnershipFenceEpoch?.();
     const reservationAttempt = await this.createReservationForOperation(
       operation,
       {resolvedEntitySizeBytes},
@@ -814,11 +875,26 @@ class RebalanceCoordinatorOperationCreation {
       reservationAttempt?.outcome ===
       OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED
     ) {
-      throw new Error(
+      const reservationErrorMessage =
         RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX +
           `${operation.operationId}: ` +
-          (reservationAttempt.error || RESERVATION_INSERT_REJECTED_FALLBACK),
-      );
+          (reservationAttempt.error || RESERVATION_INSERT_REJECTED_FALLBACK);
+      const reservationError = reservationAttempt.authorityUnavailable === true ?
+        buildReservationAuthorityUnavailableError(reservationErrorMessage) :
+        new Error(reservationErrorMessage);
+      if (reservationAttempt.authorityUnavailable === true) {
+        this.workflowOwner?.deferCoordinatorCreatedOperationTransitionRetry?.(
+          operation.operationId,
+          operation,
+          reservationError,
+          {
+            includeOperationSnapshot: true,
+            operationOwnershipFenceEpoch: reservationOwnershipFenceEpoch,
+            partitionId: operation.partitionId || null,
+          },
+        );
+      }
+      throw reservationError;
     }
 
     if (shouldEmitOperationCreated) {

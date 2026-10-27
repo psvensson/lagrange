@@ -1,3 +1,4 @@
+import {admitsPublicationConvergence} from './publication-convergence-claim.js';
 import {CLUSTER_CLASS_SHARED_CONTEXT} from './cluster-class-shared-context.js';
 
 const {
@@ -109,7 +110,7 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
       evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotErrorPresent !== true,
@@ -119,7 +120,7 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_LOAD &&
       evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotAdminReady === true &&
@@ -131,7 +132,7 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotAdminReady === true &&
@@ -145,7 +146,7 @@ const PARTIAL_COVERAGE_CONVERGENCE_DECISION_TABLE = Object.freeze([
     matches: (evidence) =>
       evidence.readinessMode === CLUSTER_READINESS_MODE_STARTUP &&
       evidence.activeByStatus === true &&
-      evidence.publicationGateReady === true &&
+      evidence.publicationGateAdmitted === true &&
       evidence.snapshotCoverageComplete !== true &&
       evidence.bestCoverageNodeCount > ZERO &&
       evidence.selectedSnapshotAdminReady === true &&
@@ -571,7 +572,7 @@ function canResolveSelectedPendingAckThroughOwnerReconcile({
   if (pendingAckNodeIds.length === ZERO) {
     return false;
   }
-  if (publicationConvergenceGate?.ready !== true) {
+  if (!admitsPublicationConvergence(publicationConvergenceGate)) {
     return false;
   }
   if (
@@ -607,7 +608,7 @@ function canResolveSelectedMissingPublishedThroughOwnerReconcile({
   ) {
     return false;
   }
-  if (publicationConvergenceGate?.ready !== true) {
+  if (!admitsPublicationConvergence(publicationConvergenceGate)) {
     return false;
   }
   if (
@@ -691,7 +692,8 @@ function normalizePartialCoverageConvergenceEvidence({
   return Object.freeze({
     readinessMode,
     activeByStatus: activeByStatus === true,
-    publicationGateReady: publicationConvergenceGate?.ready === true,
+    publicationGateAdmitted:
+      admitsPublicationConvergence(publicationConvergenceGate),
     snapshotCoverageComplete: snapshotCoverage?.completeCoverage === true,
     bestCoverageNodeCount,
     selectedSnapshotAdminReady,

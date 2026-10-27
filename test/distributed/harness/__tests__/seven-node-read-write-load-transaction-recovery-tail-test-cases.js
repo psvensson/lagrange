@@ -9,7 +9,6 @@ const SQL_SELECT_TRANSACTION_STATUSES =
   'SELECT transaction_id, status FROM sql_transactions';
 const SQL_FROM_TABLES = 'FROM tables';
 const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
-const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const SQL_FROM_PARTITIONS = 'FROM partitions';
 const SQL_FROM_SERVICES = 'FROM services';
 const TABLE_POLICIES_JSON = JSON.stringify({
@@ -74,11 +73,11 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             }],
           };
         },
+        updateTablePolicy: async () => {
+          return {success: true, outcome: 'applied'};
+        },
         query: async (sql, params = []) => {
           if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-            return {rows: []};
-          }
-          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {
@@ -303,9 +302,9 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             }],
           };
         },
+        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS) ||
-                sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {
@@ -458,9 +457,9 @@ export function registerSevenNodeTransactionRecoveryTailTests({
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
+        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
         query: async (sql) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS) ||
-                sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {
@@ -625,9 +624,9 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             }],
           };
         },
+        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS) ||
-                sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {
@@ -819,9 +818,9 @@ export function registerSevenNodeTransactionRecoveryTailTests({
             }],
           };
         },
+        updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
         query: async (sql, params = []) => {
-          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS) ||
-                sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {

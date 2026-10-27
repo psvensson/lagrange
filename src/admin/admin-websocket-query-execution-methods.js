@@ -1,6 +1,29 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_NESTED_OPERATION_ADMIN_SQL_QUERY = 'admin_sql_query';
+const ADMIN_SQL_QUERY_WAIT = Object.freeze({
+  wait: 'ADMIN_DEFAULT.QUERY_TIMEOUT_MS',
+  awaited: 'SQL query engine answer to an admin query',
+  queryStateInFlight: 'in_flight',
+});
+
+// The engine did not answer within the admin query timeout; the query is
+// cancelled and the caller gets the timeout failure.
+function reportAdminSqlQueryWaitSpent(owner, sqlRequest, timeoutBudget, boundMs) {
+  const now = typeof owner.nowFn === 'function' ? owner.nowFn : Date.now;
+  reportWaitBoundSpent(owner.logger, {
+    wait: ADMIN_SQL_QUERY_WAIT.wait,
+    awaited: ADMIN_SQL_QUERY_WAIT.awaited,
+    boundMs,
+    elapsedMs: now() - timeoutBudget.startedAtMs,
+    lastObserved: {
+      queryState: ADMIN_SQL_QUERY_WAIT.queryStateInFlight,
+      executionMode: sqlRequest?.executionMode ?? null,
+    },
+    scope: {nodeId: owner.nodeId ?? null, sessionId: sqlRequest?.sessionId ?? null},
+  });
+}
 
 const {
   ADMIN_ENFORCEMENT_MODE,
@@ -151,65 +174,6 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
     return result;
   },
 
-  async executeLocalPartitionCallbackEnvelope(payload, _executionContext = {}) {
-    const queryId = payload?.queryId || null;
-    const statement = payload?.statement;
-    const parameters = payload?.parameters || [];
-    const callbackModuleRef = payload?.callbackModuleRef;
-    const callbackExport = payload?.callbackExport;
-    const runtimeKind = payload?.runtimeKind;
-    const timeoutMs = resolveRequestedQueryTimeoutMs(payload?.timeoutMs);
-
-    if (!queryId) {
-      throw createAdminOperationError(
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_QUERY_ID,
-        ADMIN_ERROR_HINT.MISSING_QUERY_ID,
-      );
-    }
-    if (!statement || typeof statement !== 'string') {
-      throw createAdminOperationError(
-        ErrorCode.SYNTAX_ERROR,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_STATEMENT,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_STATEMENT,
-      );
-    }
-    if (!callbackModuleRef || typeof callbackModuleRef !== 'string') {
-      throw createAdminOperationError(
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_MODULE_REF,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_MODULE_REF,
-      );
-    }
-    if (!callbackExport || typeof callbackExport !== 'string') {
-      throw createAdminOperationError(
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_EXPORT,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_EXPORT,
-      );
-    }
-    if (!runtimeKind || typeof runtimeKind !== 'string') {
-      throw createAdminOperationError(
-        ErrorCode.MALFORMED_JSON,
-        ADMIN_ERROR_MESSAGE.MISSING_CALLBACK_RUNTIME_KIND,
-        ADMIN_ERROR_HINT.MISSING_CALLBACK_RUNTIME_KIND,
-      );
-    }
-
-    return this.executeSqlRequestWithTimeout(
-      createSqlRequest({
-        statement,
-        parameters,
-        sessionId: queryId,
-        executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-        callbackModuleRef,
-        callbackExport,
-        runtimeKind,
-      }),
-      timeoutMs === null ? undefined : timeoutMs,
-    );
-  },
-
   executeLocalCacheDumpEnvelope() {
     const routed = guardedAdaptAdminAction(
       ADMIN_META_ACTION.GET_CACHE_DUMP,
@@ -247,50 +211,6 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
 
     try {
       const result = await this.executeLocalQueryEnvelope(payload, {clientInfo});
-      this.sendQueryResult(clientInfo, queryId, result);
-    } catch (error) {
-      const errorCode = this.getErrorCode(error);
-      this.sendError(
-        clientInfo,
-        queryId,
-        errorCode,
-        error.message,
-        error.adminHint,
-        error,
-      );
-    }
-  },
-
-  async handlePartitionCallbackMessage(clientInfo, message) {
-    const queryId = message.queryId || null;
-    const payload = {
-      queryId,
-      statement: message.statement || message.sql,
-      parameters: message.parameters || message.params || [],
-      callbackModuleRef: message.callbackModuleRef,
-      callbackExport: message.callbackExport,
-      runtimeKind: message.runtimeKind,
-      timeoutMs: resolveRequestedQueryTimeoutMs(message.timeoutMs),
-    };
-
-    this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
-      clientId: clientInfo.id,
-      queryId,
-      sql:
-        typeof payload.statement === 'string' ?
-          payload.statement.substring(
-            0,
-            ADMIN_LIMIT.SQL_PREVIEW_LENGTH,
-          ) :
-          null,
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef: payload.callbackModuleRef,
-      callbackExport: payload.callbackExport,
-      runtimeKind: payload.runtimeKind,
-    });
-
-    try {
-      const result = await this.executeLocalPartitionCallbackEnvelope(payload);
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);
@@ -345,6 +265,8 @@ const ADMIN_WEBSOCKET_QUERY_EXECUTION_METHODS = {
     try {
       const timeoutPromise = new Promise((resolve, reject) => {
         timeoutId = setTimeout(() => {
+          reportAdminSqlQueryWaitSpent(
+            this, sqlRequest, timeoutBudget, timeoutMs);
           cancellationToken.cancel(
             ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs),
           );

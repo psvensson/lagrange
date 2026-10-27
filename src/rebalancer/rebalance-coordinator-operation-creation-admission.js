@@ -23,6 +23,12 @@ import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
+import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+import {isGroupRetiringInView} from
+  '../partition/group-retirement-evidence.js';
+
+const GROUP_RETIRING_CREATION_REFUSED = 'Replica operation refused: the ' +
+  'group is being retired as a unit by its durable workflow record: ';
 
 const OPERATION_CREATION_ADMISSION_ERROR_CODE =
   'OPERATION_CREATION_ADMISSION_REENTER';
@@ -214,6 +220,21 @@ function buildRouteObservation(candidateResolution) {
 }
 
 const operationCreationAdmissionMethods = {
+  /**
+   * Fail closed at the one creation boundary: no ADD, REPLACE or REMOVE of
+   * a group its durable record retires as a unit (its member set is frozen
+   * by group-retirement-members.js), before anything is persisted. The
+   * refusal is a skip (the cadence backs off), never a hot loop.
+   * @param {Object} move
+   */
+  assertGroupNotRetiring(move) {
+    if (isGroupRetiringInView(this.systemTableCache, move?.partitionId)) {
+      throw Object.assign(new Error(GROUP_RETIRING_CREATION_REFUSED +
+        String(move.partitionId)), {
+        rebalanceSkipReason: REBALANCER_SKIP_REASON.GROUP_RETIRING});
+    }
+  },
+
   captureOperationCreationPlanningIdentity(nodeId) {
     const readinessOwner = this.controlPlaneReadinessService;
     if (

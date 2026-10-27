@@ -46,7 +46,7 @@ test('current capabilities detect a stale generated document', () => {
 test('current capabilities detect drift in both raft-rs source owners', () => {
   const driftCases = [
     ['src/partition/partition-service-core-base.js',
-      'new RaftRsWasmProvider()'],
+      'createRaftRsOperationPort(request)'],
     ['src/partition/partition-snapshot-cadence.js',
       'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED'],
   ];

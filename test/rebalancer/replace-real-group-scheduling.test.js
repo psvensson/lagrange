@@ -66,6 +66,8 @@ import {
   settleTurns,
   waitUntil,
 } from './replace-real-group-harness.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../src/raft/raft-rs-ingress-constants.js';
 
 test('T5-prime installs the canonical waiter and fallback before returning ' +
   'from a re-sent removal effect', async (t) => {
@@ -277,8 +279,7 @@ test('S6: source-row delete x T5\'/R-1f preconditions - decide-first waits ' +
   try {
     for (const world of [first, second]) {
       // The source node acknowledges the effect but its row lags.
-      world.removeEffectAnswer = {acknowledged: true,
-        status: ReplicaOperationResponseStatus.INITIATED};
+      world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
       await driveToIntent(world);
       world.eventsSuppressed = true;
       t.equal(world.retirements.length, 0, 'setup: no R-1f yet');
@@ -517,8 +518,7 @@ test('S11 (T5\' re-send): a concurrent operation active at STOPPING defers ' +
   try {
     // The source node acknowledges but its row lags: the intent is durable
     // and the effect must be re-sent later (T5').
-    world.removeEffectAnswer = {acknowledged: true,
-      status: ReplicaOperationResponseStatus.INITIATED};
+    world.removeEffectAnswer = {status: ReplicaOperationResponseStatus.INITIATED};
     await driveToIntent(world);
     world.eventsSuppressed = true;
     t.equal(world.removeEffects.length, 1, 'setup: the first effect left');
@@ -762,7 +762,12 @@ test('S15: a leader corroborated by a term majority decides although a ' +
   try {
     const leader = world.group.leader();
     t.equal(leader, `${ORDINARY_PARTITION_ID}-r2`, 'setup: r2 leads');
-    world.group.holdInbox(world.targetReplicaId);
+    // The target is held from the log (its appends wait) but still answers
+    // heartbeats: under check_quorum a leader whose only other voter is
+    // silent for an election timeout steps down, and this scenario is a
+    // voter in contact whose commit index lags.
+    world.group.holdInbox(world.targetReplicaId,
+      [RAFT_RS_MESSAGE_TYPE.APPEND]);
     await driveToIntent(world);
     await settleTurns();
     world.eventsSuppressed = true;

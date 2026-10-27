@@ -51,6 +51,11 @@ const localText = Object.freeze({
   DURABILITY_FAILED: 'operation durability evidence failed',
   ERROR: 'Error',
   FINALIZED_EVIDENCE_REQUIRED: 'finalized window evidence is required',
+  LAGRANGE_RESET_IDENTITY_MISMATCH:
+    'isolated Lagrange reset session runtime identity drifted',
+  LAGRANGE_RESET_RECEIPT_INVALID:
+    'isolated Lagrange session reset receipt is invalid',
+  LAGRANGE_RESET_STATE: 'public_request_isolated_session_reset',
   LAGRANGE_SESSION_REQUIRED:
     'open Lagrange public request session is required',
   OPERATION_INDEX_INVALID: 'operation index is invalid',
@@ -314,7 +319,10 @@ function createAdapter({
       coordinate: state.context,
       operationEvidence: objectFreeze(operationEvidence),
       ownerReceipt: state.ownerReceipt,
-      runtimeOwnerEvidence,
+      runtimeOwnerEvidence:
+        typeof runtimeOwnerEvidence === 'function' ?
+          runtimeOwnerEvidence() :
+          runtimeOwnerEvidence,
       semanticReceipt: state.semanticReceipt,
     });
     state = IDLE_ADAPTER_STATE;
@@ -399,25 +407,12 @@ function lagrangeOperationEvidence(
   };
 }
 
-export function createMovielensLagrangeCapacityAdapter({
+function buildLagrangeRuntimeOwnerEvidence(
   session,
-  sideId,
   operationManifest,
-  semanticOracleDigest,
-}) {
-  if (!session?.prepared?.executeCapacityOperation) {
-    fail(localText.LAGRANGE_SESSION_REQUIRED);
-  }
-  const semanticOracleExpected =
-    expectedRankingFromAlternative(session.alternative);
-  if (
-    !isPlainDataRecord(operationManifest) ||
-    !isSha256Digest(operationManifest.datasetDigest) ||
-    operationManifest.datasetDigest !== session.dataset.digest
-  ) {
-    fail(localText.OPERATION_MANIFEST_REQUIRED);
-  }
-  const runtimeOwnerEvidence = objectFreeze({
+  semanticOracleExpected,
+) {
+  return objectFreeze({
     version: LAGRANGE_OWNER_VERSION,
     bindingName: session.prepared.deployment.binding.name,
     bindingVersionId:
@@ -429,7 +424,15 @@ export function createMovielensLagrangeCapacityAdapter({
     semanticOracleExpected,
     operationManifest,
   });
-  const adapterIdentity = createBenchmarkCapacityAdapterIdentity({
+}
+
+function buildLagrangeAdapterIdentity(
+  sideId,
+  session,
+  operationManifest,
+  runtimeOwnerEvidence,
+) {
+  return createBenchmarkCapacityAdapterIdentity({
     adapterId: 'movielens-lagrange-public-request',
     adapterVersion: ADAPTER_VERSION,
     sideId,
@@ -441,22 +444,127 @@ export function createMovielensLagrangeCapacityAdapter({
     ownerEvidenceDigest:
       digestBenchmarkSemanticData(runtimeOwnerEvidence),
   });
+}
+
+function assertLagrangeIsolatedResetOutcome(
+  resetOutcome,
+  previousSession,
+  operationManifest,
+  semanticOracleExpected,
+  adapterIdentity,
+  sideId,
+) {
+  const nextSession = resetOutcome?.session;
+  const ownerReceipt = resetOutcome?.ownerReceipt;
+  const teardown = ownerReceipt?.previousSessionTeardown;
+  const fresh = ownerReceipt?.freshSession;
+  if (
+    !nextSession?.prepared?.executeCapacityOperation ||
+    typeof nextSession.resetRunState !== 'function' ||
+    nextSession === previousSession ||
+    nextSession.prepared === previousSession.prepared ||
+    !isPlainDataRecord(ownerReceipt) ||
+    ownerReceipt.state !== localText.LAGRANGE_RESET_STATE ||
+    ownerReceipt.durableResultRows !== 0 ||
+    ownerReceipt.invocationJournalRows !== 0 ||
+    !isPlainDataRecord(teardown) ||
+    teardown.cellAbsent !== true ||
+    teardown.nodeStopped !== true ||
+    teardown.temporaryDirectoryAbsent !== true ||
+    typeof teardown.storagePath !== 'string' ||
+    teardown.storagePath.length === 0 ||
+    !isPlainDataRecord(fresh) ||
+    typeof fresh.storagePath !== 'string' ||
+    fresh.storagePath.length === 0 ||
+    fresh.storagePath === teardown.storagePath
+  ) {
+    fail(localText.LAGRANGE_RESET_RECEIPT_INVALID);
+  }
+  const nextRuntimeOwnerEvidence = buildLagrangeRuntimeOwnerEvidence(
+    nextSession,
+    operationManifest,
+    semanticOracleExpected,
+  );
+  const nextAdapterIdentity = buildLagrangeAdapterIdentity(
+    sideId,
+    nextSession,
+    operationManifest,
+    nextRuntimeOwnerEvidence,
+  );
+  if (
+    nextAdapterIdentity.adapterIdentityDigest !==
+      adapterIdentity.adapterIdentityDigest ||
+    fresh.bindingName !== nextRuntimeOwnerEvidence.bindingName ||
+    fresh.bindingVersionId !== nextRuntimeOwnerEvidence.bindingVersionId ||
+    fresh.executableDigest !== nextRuntimeOwnerEvidence.executableDigest ||
+    fresh.routeServiceId !== nextRuntimeOwnerEvidence.routeServiceId ||
+    fresh.runtimeKind !== nextRuntimeOwnerEvidence.runtimeKind
+  ) {
+    fail(localText.LAGRANGE_RESET_IDENTITY_MISMATCH);
+  }
+  return {nextRuntimeOwnerEvidence, nextSession, ownerReceipt};
+}
+
+export function createMovielensLagrangeCapacityAdapter({
+  session,
+  sideId,
+  operationManifest,
+  semanticOracleDigest,
+}) {
+  if (
+    !session?.prepared?.executeCapacityOperation ||
+    typeof session.resetRunState !== 'function'
+  ) {
+    fail(localText.LAGRANGE_SESSION_REQUIRED);
+  }
+  const semanticOracleExpected =
+    expectedRankingFromAlternative(session.alternative);
+  if (
+    !isPlainDataRecord(operationManifest) ||
+    !isSha256Digest(operationManifest.datasetDigest) ||
+    operationManifest.datasetDigest !== session.dataset.digest
+  ) {
+    fail(localText.OPERATION_MANIFEST_REQUIRED);
+  }
+  let activeSession = session;
+  let activeRuntimeOwnerEvidence = buildLagrangeRuntimeOwnerEvidence(
+    activeSession,
+    operationManifest,
+    semanticOracleExpected,
+  );
+  const adapterIdentity = buildLagrangeAdapterIdentity(
+    sideId,
+    activeSession,
+    operationManifest,
+    activeRuntimeOwnerEvidence,
+  );
   return createAdapter({
     adapterIdentity,
-    runtimeOwnerEvidence,
+    runtimeOwnerEvidence: () => activeRuntimeOwnerEvidence,
     semanticOracleDigest,
     async executeOperation({operationId, signal}) {
-      return session.prepared.executeCapacityOperation({
+      return activeSession.prepared.executeCapacityOperation({
         idempotencyKey: operationId,
         operationId,
       }, signal);
     },
     async resetRunState() {
-      return session.prepared.resetRunState();
+      const resetOutcome = await activeSession.resetRunState();
+      const verified = assertLagrangeIsolatedResetOutcome(
+        resetOutcome,
+        activeSession,
+        operationManifest,
+        semanticOracleExpected,
+        adapterIdentity,
+        sideId,
+      );
+      activeSession = verified.nextSession;
+      activeRuntimeOwnerEvidence = verified.nextRuntimeOwnerEvidence;
+      return verified.ownerReceipt;
     },
     projectOperation(result, operationId, operationIndex) {
       return lagrangeOperationEvidence(
-        session,
+        activeSession,
         result,
         operationId,
         operationIndex,

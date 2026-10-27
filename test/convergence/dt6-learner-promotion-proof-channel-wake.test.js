@@ -1,7 +1,10 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {RaftRole} from '../../src/partition/partition-service.js';
+import {forwardHandlerRegistry} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_LOG_MSG,
@@ -222,8 +225,8 @@ async function failProofDeliveryAtBound(request, clock, boundMs) {
 }
 
 function completeProofRequest(request, clock, response, listeners) {
-  request.outcome = response?.proof?.reason ?? null;
-  request.proof = response?.proof ?? null;
+  request.outcome = response?.answer?.proof?.reason ?? null;
+  request.proof = response?.answer?.proof ?? null;
   request.completedAtMs = clock.now();
   if (typeof listeners.onResponse === 'function') {
     listeners.onResponse(request);
@@ -242,8 +245,7 @@ function createProofChannelTransport(inner, clock, stallPlan, latencyMs) {
     requests,
     listeners,
     messageTimeoutMs: ROUTER_TIMEOUT_MS,
-    register: (address, handler) => inner.register(address, handler),
-    unregister: (address) => inner.unregister(address),
+    ...forwardHandlerRegistry(inner),
     deliver: async (address, payload, options) => {
       if (payload?.type !== PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF) {
         return inner.deliver(address, payload, options);
@@ -669,8 +671,7 @@ test(
 
       const realTransport = learner.transport;
       learner.transport = {
-        deliver: async () => ({
-          acknowledged: true,
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
           partitionId: PARTITION_ID,
           learnerReplicaId: FOREIGN_LEARNER_REPLICA,
           proof: evaluateLearnerPromotionProof({
@@ -681,7 +682,7 @@ test(
             leaderMembershipEpoch: BOOTSTRAP_EPOCH,
             learnerMembershipEpoch: BOOTSTRAP_EPOCH,
           }),
-        }),
+        })),
       };
       let bindingProof = null;
       try {

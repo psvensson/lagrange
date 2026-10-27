@@ -1,0 +1,1548 @@
+diff --git a/solve/changes/global-owner-debt-inventory/inventory.json b/solve/changes/global-owner-debt-inventory/inventory.json
+index f1aa571d6..8df76a07f 100644
+--- a/solve/changes/global-owner-debt-inventory/inventory.json
++++ b/solve/changes/global-owner-debt-inventory/inventory.json
+@@ -6,7 +6,7 @@
+       {
+         "path": "test-output/analysis/complexity-src-test.json",
+         "bytes": 417274,
+-        "sha256": "d8c7aa9af7e92492cce404d4a9156b8167f3500f6c11aadb4c16f2b90ce8cc2e"
++        "sha256": "8d13095e1bbd788beaa631bc8662aca4881bfabcc6128cf220d24e444863c760"
+       },
+       {
+         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
+@@ -20,8 +20,8 @@
+       },
+       {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 3091326,
+-        "sha256": "8f716368a28cb06effab4aaaee4205567efbb4869824e8e18fd135e98b10b497"
++        "bytes": 3091718,
++        "sha256": "80d0e5cf4cc814b0aa7e12e504998dcd41d56082409d9665fcc96fab0b395d3a"
+       },
+       {
+         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
+@@ -39,7 +39,7 @@
+           "duplicates",
+           "statistics.detectionDate"
+         ],
+-        "sha256": "4bdad8288decd0ea97dd7be02bfe06adb38f71623fc9b1f74ff1d137c4f6d9d8"
++        "sha256": "201a9ecad43c1e64e4267ad8abf877d3ef0b495d56ebfbce54aeb61bdb55bad0"
+       },
+       {
+         "path": "scripts/check-file-size-thresholds.js",
+@@ -62,14 +62,14 @@
+         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
+       }
+     ],
+-    "inputDigest": "19c4b25265ff46b08dc399992fe72ea9bc47a36df753f26a1c5bd4fe8960c909"
++    "inputDigest": "06e9245c0ec5f26eb0da843633d26fa5b1be9ceabf320bf33957a7e895334660"
+   },
+   "reconciliation": {
+     "complexity": {
+       "identity": {
+         "path": "test-output/analysis/complexity-src-test.json",
+         "bytes": 417274,
+-        "sha256": "d8c7aa9af7e92492cce404d4a9156b8167f3500f6c11aadb4c16f2b90ce8cc2e"
++        "sha256": "8d13095e1bbd788beaa631bc8662aca4881bfabcc6128cf220d24e444863c760"
+       },
+       "declaredCount": 1767,
+       "observedCount": 1767,
+@@ -130,12 +130,12 @@
+             "duplicates",
+             "statistics.detectionDate"
+           ],
+-          "sha256": "4bdad8288decd0ea97dd7be02bfe06adb38f71623fc9b1f74ff1d137c4f6d9d8"
++          "sha256": "201a9ecad43c1e64e4267ad8abf877d3ef0b495d56ebfbce54aeb61bdb55bad0"
+         },
+         "cloneGroups": 675,
+-        "duplicatedLines": 25566,
++        "duplicatedLines": 25567,
+         "sourceCloneTouches": 1350,
+-        "sourceDuplicatedLineTouches": 51132,
++        "sourceDuplicatedLineTouches": 51134,
+         "nonzeroSourceCount": 435,
+         "touchMultiplicity": 2
+       }
+@@ -167,17 +167,17 @@
+     "importGraph": {
+       "identity": {
+         "path": "test-output/analysis/global-owner-debt-import-graph.json",
+-        "bytes": 3091326,
+-        "sha256": "8f716368a28cb06effab4aaaee4205567efbb4869824e8e18fd135e98b10b497"
++        "bytes": 3091718,
++        "sha256": "80d0e5cf4cc814b0aa7e12e504998dcd41d56082409d9665fcc96fab0b395d3a"
+       },
+       "authority": {
+         "path": "dependency-cruiser.config.cjs",
+         "bytes": 2680,
+         "sha256": "5996859c276c9bd3be33d783d85ca823f17ca86cec4c9ff0b56fd84fd2d26642"
+       },
+-      "sourceDigest": "068d76ee5ae12be27377597e8e8c75bff6a3c1179a431a6be51cf565c9c3d451",
+-      "moduleCount": 5629,
+-      "edgeCount": 29908,
++      "sourceDigest": "d7b4361cc0bb9dc9a7530b71d7b8c00d184b0be7d6a5009c4911fbfe46334d75",
++      "moduleCount": 5630,
++      "edgeCount": 29910,
+       "unresolvedCount": 36
+     }
+   },
+@@ -185,7 +185,7 @@
+     "sourceSignalCount": 2495,
+     "assignedSignalCount": 2495,
+     "uniqueAssignmentCount": 2495,
+-    "digest": "01a9d4e5ab8a7b5f16533fb4c917ba8245658c0b22fea25d2ea85630c53d0a94"
++    "digest": "01587bc58ca825a9f1a0548d3d1ff6049669c0b075a3b01a32db09db98bcf68d"
+   },
+   "signalCounts": {
+     "cognitive": 151,
+@@ -215,7 +215,7 @@
+       "complexity": 391,
+       "cognitive": 0,
+       "oversizedFiles": 11,
+-      "duplicatedLines": 12946,
++      "duplicatedLines": 12948,
+       "cloneTouches": 302,
+       "cycleGroups": 0,
+       "lintExclusions": 10,
+@@ -387,7 +387,7 @@
+       "cloneTouches": 8,
+       "cycleGroups": 0,
+       "lintExclusions": 0,
+-      "importIn": 74,
++      "importIn": 75,
+       "importOut": 139,
+       "score": 561.4,
+       "topPaths": [
+@@ -3685,14 +3685,14 @@
+         "engagementTargets": [
+           {
+             "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js",
+-            "duplicatedLines": 740,
++            "duplicatedLines": 741,
+             "oversizedLines": 0,
+             "lintExclusions": 1,
+             "structuralScore": 53
+           },
+           {
+             "path": "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js",
+-            "duplicatedLines": 878,
++            "duplicatedLines": 879,
+             "oversizedLines": 0,
+             "lintExclusions": 1,
+             "structuralScore": 53
+@@ -3724,7 +3724,7 @@
+           "complexity": 391,
+           "cognitive": 0,
+           "oversizedFiles": 11,
+-          "duplicatedLines": 12946,
++          "duplicatedLines": 12948,
+           "lintExclusions": 10
+         },
+         "proof": "focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count"
+diff --git a/solve/quests/admin-partition-cohort-readback/evidence/receipt.json b/solve/quests/admin-partition-cohort-readback/evidence/receipt.json
+new file mode 100644
+index 000000000..a6cfb1d45
+--- /dev/null
++++ b/solve/quests/admin-partition-cohort-readback/evidence/receipt.json
+@@ -0,0 +1,33 @@
++{
++  "schema": "test-receipt/1",
++  "status": "partial",
++  "receipts": [
++    {
++      "id": "full-cohort-negative-and-positive-readback",
++      "passed": true
++    },
++    {
++      "id": "existing-benchmark-readiness-callers",
++      "passed": true
++    },
++    {
++      "id": "independent-review-and-applicable-checks",
++      "passed": false
++    }
++  ],
++  "evidence": [
++    {
++      "path": "/tmp/codex-admin-partition-readback-20261025/green-r2.log",
++      "sha256": "7537462f8ceb67029329af03282a100c55a44f4789b465693df9630286fba9f6"
++    },
++    {
++      "path": "/tmp/codex-admin-partition-readback-20261025/green-fixture-cone.log",
++      "sha256": "c9ebf287d4524287efc59289d9a93aefe0931537bc21f188d421b36ba6deef50"
++    },
++    {
++      "path": "/tmp/codex-admin-partition-readback-20261025/green-post-load-final.log",
++      "sha256": "b353ca4d1a37fd2537749822c90835be1f8a3ebd6294f277c69b6f8776638b2f"
++    }
++  ],
++  "applicability": "17 distinct canonical files covered: focused readback proof 35 reported assertions plus existing benchmark cone 139 reported cases. The broad run passed 15/16; only the final post-load fixture file changed afterward, and its targeted rerun passed all 11 cases. No other source bytes changed between these measurements."
++}
+diff --git a/solve/quests/admin-partition-cohort-readback/log.ndjson b/solve/quests/admin-partition-cohort-readback/log.ndjson
+new file mode 100644
+index 000000000..3c3858bcd
+--- /dev/null
++++ b/solve/quests/admin-partition-cohort-readback/log.ndjson
+@@ -0,0 +1,4 @@
++{"ts":"2026-10-25T11:21:45.831Z","type":"finding","kind":"decision","text":"sealed at a97f79c35b7e1f6428032493918e16e623339688; seal-time probe test-receipt metric=3 target=0 measuring=true","seal":{"sealedAt":"a97f79c35b7e1f6428032493918e16e623339688","statement":"The benchmark table readiness owner resolves the intended catalog table ID and reads its complete partition cohort. Every observed cohort row must carry the exact intended table name before readiness succeeds; any missing or conflicting name is an explicit product finding. Empty or temporarily unavailable metadata remains subject to existing readiness retry. The harness never repairs or writes system metadata.","doneWhen":{"probe":"test-receipt","args":{"file":"solve/quests/admin-partition-cohort-readback/evidence/receipt.json","requiredReceipts":["full-cohort-negative-and-positive-readback","existing-benchmark-readiness-callers","independent-review-and-applicable-checks"]}},"metric":3,"target":0,"measuring":true,"reason":"measured"}}
++{"ts":"2026-10-25T11:27:27.604Z","type":"attempt","text":"The independent reviewer red reproduced on a97. The readback owner now resolves the catalog table ID first, selects all three partition identity fields for that complete cohort, and rejects any missing/conflicting row; the obsolete by-name early-success query path and builder are removed. New engaged helper cases pass for partial missing/null/wrong-case/wrong-table cohorts, empty-to-visible metadata and existing read retry. Existing benchmark fixtures declared valid metadata but returned only partition_id; their canonical table_id/table_name fields are completed consistently with their existing tbl-benchmark/benchmark_events catalog rows. No assertion weakening, repair adapter, system write, timeout or runtime policy change.","at":"a97f79c35b7e1f6428032493918e16e623339688","pathCount":23,"paths":["test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js","test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js","test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js"]}
++{"ts":"2026-10-25T11:38:05.535Z","type":"attempt","text":"Full existing benchmark fixture cone completed: 15/16 files green, 139 reported assertions. The two failing post-load cases contain extra p2 and mapped partition rows omitted by the first mechanical p1 fixture correction; completed those four exact row declarations with their existing catalog table ID/name. Snapshot mismatch/repair behavior and assertions are unchanged. Targeted one-file rerun is queued; no new source policy or timeout change.","at":"a97f79c35b7e1f6428032493918e16e623339688","pathCount":24,"paths":["test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js","test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js","test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js","test/shards/impact-contracts.json"]}
++{"ts":"2026-10-25T11:41:53.086Z","type":"attempt","text":"Corrected post-load fixture file passed all 11 reported cases in 783ms under canonical retries0/cap1. The other 15 existing benchmark files and readback owner source are byte-identical to their green cone measurement. Along with the 35-assertion focused readback witness, all 17 distinct applicable files now pass (174 reported assertions/cases). Retained the intermediate fixture failure, added receipt hashes and exact applicability; normal hook and independent review remain pending.","at":"a97f79c35b7e1f6428032493918e16e623339688","pathCount":24,"paths":["test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js","test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js","test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js","test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js","test/shards/impact-contracts.json"]}
+diff --git a/solve/quests/admin-partition-cohort-readback/quest.json b/solve/quests/admin-partition-cohort-readback/quest.json
+new file mode 100644
+index 000000000..d2407ab66
+--- /dev/null
++++ b/solve/quests/admin-partition-cohort-readback/quest.json
+@@ -0,0 +1,36 @@
++{
++  "schema": "solve-quest/2",
++  "id": "admin-partition-cohort-readback",
++  "class": "fix",
++  "epic": "raft-rs-full-cutover",
++  "statement": "The benchmark table readiness owner resolves the intended catalog table ID and reads its complete partition cohort. Every observed cohort row must carry the exact intended table name before readiness succeeds; any missing or conflicting name is an explicit product finding. Empty or temporarily unavailable metadata remains subject to existing readiness retry. The harness never repairs or writes system metadata.",
++  "doneWhen": {
++    "probe": "test-receipt",
++    "args": {
++      "file": "solve/quests/admin-partition-cohort-readback/evidence/receipt.json",
++      "requiredReceipts": [
++        "full-cohort-negative-and-positive-readback",
++        "existing-benchmark-readiness-callers",
++        "independent-review-and-applicable-checks"
++      ]
++    }
++  },
++  "constraints": [
++    {
++      "id": "cause",
++      "statement": "Repair F-ADMIN-2 only at waitForSutBenchmarkTableReady and its existing full-cohort assertion. The exact a97 predecessor accepts mixed correct and nameless rows after a by-name early success. Preserve frozen original, node, scale and case checkpoints."
++    },
++    {
++      "id": "scope",
++      "statement": "Remove early acceptance from partial by-name results; consume catalog table ID and every row returned for it. No raw repair UPDATE, new metadata owner, fallback alias, widened timeout, generic SQL bypass, production lifecycle change or schema normalization."
++    },
++    {
++      "id": "proof",
++      "statement": "Seal before source. Preserve the independent reviewer red; exercise actual helper with partial missing/wrong names, all correct, empty then present, and refused/unavailable reads. Canonical runner retries0 and thermal/controller coordination, exact predecessor function metric deltas, normal hook and independent review before composition. No main merge or publish."
++    }
++  ],
++  "verificationTemplates": [
++    "owner-interaction"
++  ],
++  "sealedAt": "a97f79c35b7e1f6428032493918e16e623339688"
++}
+diff --git a/test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js b/test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js
+new file mode 100644
+index 000000000..13c467ca3
+--- /dev/null
++++ b/test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js
+@@ -0,0 +1,81 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {POSTGRES_BASELINE_COMPARISON_BENCHMARK_TABLE_LOAD_BUNDLE} from
++  '../../scenarios/postgres-baseline-comparison-benchmark-table-load.js';
++
++const {waitForSutBenchmarkTableReady} =
++  POSTGRES_BASELINE_COMPARISON_BENCHMARK_TABLE_LOAD_BUNDLE;
++const TABLE_ID = 'tbl-one';
++const TABLE_NAME = 'Events';
++const GOOD = Object.freeze({partition_id: 'p-good', table_id: TABLE_ID,
++  table_name: TABLE_NAME});
++
++function fixture(readCohort, readCatalog = () => ({rows: [{table_id: TABLE_ID}]})) {
++  const statements = [];
++  let now = 0;
++  let cohortReads = 0;
++  const client = {async queryControl(_node, sql) {
++    statements.push(sql);
++    if (sql.includes('FROM partitions WHERE table_id')) return readCohort(cohortReads++);
++    if (sql.includes('FROM partitions WHERE table_name')) return {rows: [GOOD]};
++    if (sql.includes('FROM tables WHERE table_name')) return readCatalog();
++    throw new Error('unexpected source query: ' + sql);
++  }};
++  return {statements, wait: () => waitForSutBenchmarkTableReady(client,
++    [{id: 'seed'}], TABLE_NAME, {timing: {now: () => now,
++      sleep: async (ms) => {
++        now += ms;
++      }}, timeoutMs: 100, pollIntervalMs: 10})};
++}
++
++function assertReadOnlyFullCohort(t, f) {
++  t.ok(f.statements.some((sql) => sql.includes(
++    'SELECT partition_id, table_id, table_name FROM partitions WHERE table_id')),
++  'read includes every identity field from the table ID cohort');
++  t.notOk(f.statements.some((sql) => sql.includes('FROM partitions WHERE table_name')),
++    'no partial by-name success path');
++  t.ok(f.statements.every((sql) => /^SELECT\b/.test(sql)), 'no repair writes');
++}
++
++test('every cohort row must retain the exact catalog identity', async (t) => {
++  for (const row of [
++    {partition_id: 'p-missing', table_id: TABLE_ID},
++    {partition_id: 'p-null', table_id: TABLE_ID, table_name: null},
++    {partition_id: 'p-wrong', table_id: TABLE_ID, table_name: 'other'},
++    {partition_id: 'p-folded', table_id: TABLE_ID, table_name: 'events'},
++    {partition_id: 'p-other-table', table_id: 'other', table_name: TABLE_NAME},
++  ]) {
++    const f = fixture(() => ({rows: [GOOD, row]}));
++    await t.rejects(f.wait(), /partition_table_name_missing/);
++    assertReadOnlyFullCohort(t, f);
++  }
++});
++
++test('a complete cohort succeeds after empty metadata becomes visible', async (t) => {
++  const f = fixture((read) => ({rows: read === 0 ? [] :
++    [GOOD, {...GOOD, partition_id: 'p-second'}]}));
++  await f.wait();
++  t.equal(f.statements.filter((sql) => sql.includes('FROM partitions')).length, 2);
++  assertReadOnlyFullCohort(t, f);
++});
++
++test('missing catalog identity cannot be bypassed by a matching name row', async (t) => {
++  const f = fixture(() => ({rows: [GOOD]}), () => ({rows: []}));
++  await t.rejects(f.wait(), /not ready within 100ms/);
++  t.notOk(f.statements.some((sql) => sql.includes('FROM partitions')),
++    'no cohort is invented without its catalog identity');
++});
++
++test('unavailable reads never become successful readiness', async (t) => {
++  const refused = fixture(() => {
++    throw new Error('authority_refused');
++  });
++  await t.rejects(refused.wait(), /all_system_table_read_nodes_failed:seed=authority_refused/);
++  const temporary = fixture((read) => {
++    if (read === 0) throw new Error('connect ECONNREFUSED');
++    return {rows: [GOOD]};
++  });
++  await temporary.wait();
++  t.equal(temporary.statements.filter((sql) => sql.includes('FROM partitions')).length, 2,
++    'existing transient-read retry remains owned by the readiness loop');
++  assertReadOnlyFullCohort(t, temporary);
++});
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js
+index 8578ff4d7..cc9ac7ef4 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js
+@@ -136,7 +136,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -293,7 +293,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js
+index f2e8fd56e..7cddd8b5e 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js
+@@ -168,7 +168,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -373,7 +373,7 @@ describe('postgres-baseline-comparison scenario', () => {
+         }
+         if (statement.includes('FROM partitions')) {
+           return benchmarkTableVisible ?
+-            {rows: [{partition_id: 'p1'}]} :
++            {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]} :
+             {rows: []};
+         }
+         return {rows: []};
+@@ -649,7 +649,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           };
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -969,7 +969,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1112,7 +1112,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js
+index bcb73c90f..211c5602a 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js
+@@ -136,7 +136,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -403,7 +403,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -616,7 +616,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -850,7 +850,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js
+index 35c24785a..b8dadb4e3 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js
+@@ -188,7 +188,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           if (statement.includes('FROM replica_operations') &&
+             statement.includes('status NOT IN')) {
+@@ -457,7 +457,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -620,7 +620,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM replica_operations') &&
+               statement.includes('status NOT IN')) {
+@@ -813,7 +813,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM replica_operations') &&
+               statement.includes('status NOT IN')) {
+@@ -991,7 +991,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js
+index bc89c1806..780454039 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js
+@@ -47,7 +47,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -193,7 +193,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -363,7 +363,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -539,7 +539,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -705,7 +705,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -871,7 +871,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1044,7 +1044,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js
+index 3d14bd456..6c0c4e222 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js
+@@ -58,7 +58,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -225,7 +225,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -424,7 +424,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -617,7 +617,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js
+index 896ffd665..57aa709b3 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js
+@@ -54,7 +54,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -308,7 +308,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -558,7 +558,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           if (statement.includes('FROM replica_operations') &&
+             statement.includes('status NOT IN')) {
+@@ -873,7 +873,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           if (statement.includes('FROM replica_operations') &&
+             statement.includes('status NOT IN')) {
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js
+index 5946e232f..8a09b33af 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js
+@@ -56,7 +56,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -278,7 +278,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM replica_operations') &&
+               statement.includes('status NOT IN')) {
+@@ -460,7 +460,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM replica_operations') &&
+               statement.includes('status NOT IN')) {
+@@ -698,7 +698,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -867,7 +867,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1018,7 +1018,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js
+index 6543679b3..486eaa313 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js
+@@ -122,7 +122,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -266,7 +266,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -403,7 +403,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -528,7 +528,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -655,7 +655,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -788,7 +788,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -906,7 +906,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -1037,7 +1037,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js
+index 66ddf4a22..25a14c57d 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js
+@@ -391,7 +391,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -556,7 +556,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -672,7 +672,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -832,7 +832,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1095,7 +1095,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -1219,7 +1219,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js
+index b71303af9..5ec80b9be 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load-tail-test-cases.js
+@@ -73,7 +73,7 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -247,7 +247,7 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -416,7 +416,7 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -639,7 +639,7 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -847,7 +847,7 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
+             return {rows: [{count: 0}]};
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js
+index cb619de20..3181e1853 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js
+@@ -51,7 +51,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -257,7 +257,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -404,7 +404,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -561,8 +561,8 @@ describe('postgres-baseline-comparison scenario', () => {
+           if (statement.includes('FROM partitions')) {
+             return {
+               rows: [
+-                {partition_id: 'p1'},
+-                {partition_id: 'p2'},
++                {partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
++                {partition_id: 'p2', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
+               ],
+             };
+           }
+@@ -615,8 +615,8 @@ describe('postgres-baseline-comparison scenario', () => {
+           if (statement.includes('FROM partitions')) {
+             return {
+               rows: [
+-                {partition_id: 'p1'},
+-                {partition_id: 'p2'},
++                {partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
++                {partition_id: 'p2', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
+               ],
+             };
+           }
+@@ -808,7 +808,8 @@ describe('postgres-baseline-comparison scenario', () => {
+         if (statement.includes('FROM partitions')) {
+           return {
+             rows: sharedPartitions.map(
+-              (partitionId) => ({partition_id: partitionId}),
++              (partitionId) => ({partition_id: partitionId,
++                table_id: 'tbl-benchmark', table_name: 'benchmark_events'}),
+             ),
+           };
+         }
+@@ -862,7 +863,8 @@ describe('postgres-baseline-comparison scenario', () => {
+         if (statement.includes('FROM partitions')) {
+           return {
+             rows: sharedPartitions.map(
+-              (partitionId) => ({partition_id: partitionId}),
++              (partitionId) => ({partition_id: partitionId,
++                table_id: 'tbl-benchmark', table_name: 'benchmark_events'}),
+             ),
+           };
+         }
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js
+index 2e6c40a61..4a1b0817d 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js
+@@ -221,7 +221,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM services')) {
+               return {
+@@ -486,7 +486,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM services')) {
+               return {
+@@ -619,7 +619,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -778,7 +778,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -810,7 +810,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -957,7 +957,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1216,7 +1216,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js
+index c9ec58dc7..0aeb95585 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js
+@@ -63,7 +63,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -219,7 +219,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -422,7 +422,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -649,7 +649,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -856,7 +856,7 @@ describe('postgres-baseline-comparison scenario', () => {
+           };
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js
+index 38a2463f2..f7c9b9e4b 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-more-test-cases.js
+@@ -49,7 +49,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailMoreTests
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -216,7 +216,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailMoreTests
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -370,7 +370,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailMoreTests
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -522,7 +522,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailMoreTests
+           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+         }
+         if (statement.includes('FROM partitions')) {
+-          return {rows: [{partition_id: 'p1'}]};
++          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+         }
+         return {rows: []};
+       },
+@@ -675,7 +675,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailMoreTests
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js
+index 7a11291ba..9f3e7cb7d 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics-tail-test-cases.js
+@@ -48,7 +48,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailTests({
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -206,7 +206,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailTests({
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -380,7 +380,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailTests({
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -567,7 +567,7 @@ export function registerPostgresBaselineComparisonStrictDiagnosticsTailTests({
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js
+index 5278c2b88..27395d31a 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js
+@@ -158,7 +158,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -913,7 +913,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             };
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -1190,7 +1190,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js
+index 627815d88..74ff5d923 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js
+@@ -122,7 +122,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM services')) {
+               return {
+@@ -405,7 +405,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement.includes('FROM services')) {
+               return {
+@@ -610,7 +610,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -789,7 +789,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -962,7 +962,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               };
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+                 statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js
+index 081ddea9f..9562785af 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js
+@@ -153,7 +153,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [], changes: 1};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -284,7 +284,7 @@ describe('postgres-baseline-comparison scenario', () => {
+             return {rows: [], changes: 1};
+           }
+           if (statement.includes('FROM partitions')) {
+-            return {rows: [{partition_id: 'p1'}]};
++            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+           }
+           return {rows: []};
+         },
+@@ -435,7 +435,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [], changes: 1};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -566,7 +566,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [], changes: 1};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -694,7 +694,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [], changes: 1};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+@@ -859,7 +859,7 @@ describe('postgres-baseline-comparison scenario', () => {
+               return {rows: [], changes: 1};
+             }
+             if (statement.includes('FROM partitions')) {
+-              return {rows: [{partition_id: 'p1'}]};
++              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+             }
+             return {rows: []};
+           },
+diff --git a/test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js b/test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js
+index 883ddc88c..d6f8412dd 100644
+--- a/test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js
++++ b/test/distributed/harness/__tests__/postgres-baseline-comparison-test-helpers.js
+@@ -469,7 +469,7 @@ function buildVersionedStrictReadinessCluster(options = {}) {
+         };
+       }
+       if (statement.includes('FROM partitions')) {
+-        return {rows: [{partition_id: 'p1'}]};
++        return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
+       }
+       return {rows: []};
+     },
+diff --git a/test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js b/test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js
+index 7a60d44f8..7032b6aa1 100644
+--- a/test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js
++++ b/test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js
+@@ -36,7 +36,6 @@ const {
+   LoadGenerator,
+   ZERO,
+   buildBenchmarkPartitionLookupByTableIdSql,
+-  buildBenchmarkPartitionLookupSql,
+   buildBenchmarkTableCreateNodeClientContext,
+   buildBenchmarkTableDdl,
+   buildBenchmarkTableLookupSql,
+@@ -695,19 +694,16 @@ function isRetriableTableReadyError(error) {
+ 
+ /**
+  * The read-back that replaced the harness partition repair: the partition
+- * rows found by table_id must also be found by table_name. A row that lacks
+- * its table name is a product finding and fails the scenario.
+- * @param {Object} nodeClient
+- * @param {Array<Object>} systemTableReadNodes
++ * complete cohort found by table_id must carry its exact catalog identity.
++ * Any incomplete or conflicting row is a product finding, even when another
++ * row in the cohort is correct.
++ * @param {Array<Object>} rows
+  * @param {string} tableName
+  * @param {string} tableId
+- * @return {Promise<void>}
++ * @return {void}
+  */
+-async function assertBenchmarkPartitionRowsCarryTableName(nodeClient,
+-  systemTableReadNodes, tableName, tableId) {
+-  const byName = await queryControlWithNodeFallback(nodeClient,
+-    systemTableReadNodes, buildBenchmarkPartitionLookupSql(tableName));
+-  if (rowsFromQueryResult(byName.result).length > ZERO) {
++function assertBenchmarkPartitionRowsCarryTableName(rows, tableName, tableId) {
++  if (rows.every((row) => row?.table_id === tableId && row.table_name === tableName)) {
+     return;
+   }
+   throw new Error(BENCHMARK_PARTITION_TABLE_NAME_MISSING + ': partition ' +
+@@ -733,17 +729,6 @@ async function waitForSutBenchmarkTableReady(
+ 
+   while (timing.now() < deadline) {
+     try {
+-      const tableNameLookup = await queryControlWithNodeFallback(
+-        nodeClient,
+-        systemTableReadNodes,
+-        buildBenchmarkPartitionLookupSql(tableName),
+-      );
+-      const tableNameResult = tableNameLookup.result;
+-      const tableNameRows = rowsFromQueryResult(tableNameResult);
+-      if (tableNameRows.length > ZERO) {
+-        return;
+-      }
+-
+       const tableId = await querySutTableId(
+         nodeClient,
+         systemTableReadNodes,
+@@ -760,8 +745,7 @@ async function waitForSutBenchmarkTableReady(
+         if (tableIdRows.length > ZERO) {
+           // Partition rows of this table exist: each must carry its table
+           // name (table creation writes it; nothing here repairs it).
+-          await assertBenchmarkPartitionRowsCarryTableName(nodeClient,
+-            systemTableReadNodes, tableName, tableId);
++          assertBenchmarkPartitionRowsCarryTableName(tableIdRows, tableName, tableId);
+           return;
+         }
+       }
+diff --git a/test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js b/test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js
+index 5bf5b2bcd..516fb4580 100644
+--- a/test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js
++++ b/test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js
+@@ -597,14 +597,6 @@ function escapeSqlLiteral(value) {
+   return String(value).replace(/'/g, '\'\'');
+ }
+ 
+-function buildBenchmarkPartitionLookupSql(tableName) {
+-  return (
+-    'SELECT partition_id FROM partitions WHERE table_name = \'' +
+-    escapeSqlLiteral(tableName) +
+-    '\''
+-  );
+-}
+-
+ function buildBenchmarkTableLookupSql(tableName) {
+   return (
+     'SELECT * FROM tables WHERE table_name = \'' +
+@@ -615,7 +607,7 @@ function buildBenchmarkTableLookupSql(tableName) {
+ 
+ function buildBenchmarkPartitionLookupByTableIdSql(tableId) {
+   return (
+-    'SELECT partition_id FROM partitions WHERE table_id = \'' +
++    'SELECT partition_id, table_id, table_name FROM partitions WHERE table_id = \'' +
+     escapeSqlLiteral(tableId) +
+     '\''
+   );
+@@ -1376,7 +1368,6 @@ export const POSTGRES_BASELINE_COMPARISON_CONSTANTS_AND_IMPORTS_BUNDLE = {
+   normalizeTableId,
+   buildBenchmarkTableDdl,
+   escapeSqlLiteral,
+-  buildBenchmarkPartitionLookupSql,
+   buildBenchmarkTableLookupSql,
+   buildBenchmarkPartitionLookupByTableIdSql,
+   buildSutTableProbeSql,
+diff --git a/test/shards/impact-contracts.json b/test/shards/impact-contracts.json
+index 725d11f86..ba806b754 100644
+--- a/test/shards/impact-contracts.json
++++ b/test/shards/impact-contracts.json
+@@ -1516,6 +1516,17 @@
+         "test/query/schema-provisioning-job-owner.test.js",
+         "test/control-plane/runtime-access-policy-owner.test.js"
+       ]
++    },
++    "benchmark-full-partition-cohort-readback": {
++      "description": "Benchmark readiness reads the complete catalog table ID partition cohort and rejects every incomplete/conflicting identity without repair writes.",
++      "owners": [
++        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js",
++        "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js"
++      ],
++      "tests": [
++        "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js",
++        "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js"
++      ]
+     }
+   },
+   "coupledPairs": {
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 45c055fe8..be2a56451 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "068d76ee5ae12be27377597e8e8c75bff6a3c1179a431a6be51cf565c9c3d451",
+-  "producerInputDigest": "d47be44189dacd78497dee3bdadae884955433cf3277e3f4343e364bb2a2fb6e",
++  "sourceDigest": "d7b4361cc0bb9dc9a7530b71d7b8c00d184b0be7d6a5009c4911fbfe46334d75",
++  "producerInputDigest": "7b20066bcdc8e6523be1bf6024934242c3a9c3a983bd197f3a570207990c525d",
+   "resolverStateDigest": "acf0e96c3f024cb58f0beedbdd100062a98f99f35255f05d922c47528fa83532",
+-  "snapshotDigest": "eaf60f18c8ed3b9bfa86333c9ddcb6a4544d0d0dea7c47baa2584d62ae7d47b5"
++  "snapshotDigest": "81229466496c2567cb216df775b9a3054f42bd9a26a770b90dd62bca6d604b7a"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 1507efa9b..a3ab13d61 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 2144,
++    "unit": 2145,
+     "integration": 112,
+     "bootstrap": 215,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2478,
+-  "digest": "fnv1a32-2399cfe0",
++  "censusSize": 2479,
++  "digest": "fnv1a32-36abd06b",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "unit",
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+@@ -799,6 +799,7 @@
+     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "unit",
+     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "unit",
+     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "unit",
++    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "unit",
+     "test/distributed/harness/__tests__/assert-consistency.test.js": "unit",
+     "test/distributed/harness/__tests__/assertion-policy.test.js": "unit",
+     "test/distributed/harness/__tests__/assertions.test.js": "unit",
+diff --git a/test/shards/resource-classes.json b/test/shards/resource-classes.json
+index 9d3a8c6f9..5b2d2ac1f 100644
+--- a/test/shards/resource-classes.json
++++ b/test/shards/resource-classes.json
+@@ -2,13 +2,13 @@
+   "schemaVersion": 1,
+   "id": "test-resource-classification",
+   "counts": {
+-    "ordinary": 2461,
++    "ordinary": 2462,
+     "cpu-heavy": 0,
+     "external-toolchain": 14,
+     "exclusive": 3
+   },
+-  "censusSize": 2478,
+-  "digest": "fnv1a32-75c7f916",
++  "censusSize": 2479,
++  "digest": "fnv1a32-351b2f05",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "ordinary",
+     "test/address/address-malformed-rejection.property.test.js": "ordinary",
+@@ -798,6 +798,7 @@
+     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "ordinary",
+     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "ordinary",
+     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "ordinary",
++    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "ordinary",
+     "test/distributed/harness/__tests__/assert-consistency.test.js": "ordinary",
+     "test/distributed/harness/__tests__/assertion-policy.test.js": "ordinary",
+     "test/distributed/harness/__tests__/assertions.test.js": "ordinary",
+diff --git a/test/shards/subsystem-classes.json b/test/shards/subsystem-classes.json
+index b74a5adf4..bba50f2bb 100644
+--- a/test/shards/subsystem-classes.json
++++ b/test/shards/subsystem-classes.json
+@@ -9,7 +9,7 @@
+     "cli-tooling": 97,
+     "control-plane": 222,
+     "convergence-topology": 78,
+-    "distributed-harness": 178,
++    "distributed-harness": 179,
+     "examples-e2e": 7,
+     "pgwire-compat": 21,
+     "placement-rebalance": 268,
+@@ -25,10 +25,10 @@
+     "transport-messaging": 112,
+     "wasm-toolchain": 74
+   },
+-  "censusSize": 2478,
+-  "digest": "fnv1a32-732d5d90",
++  "censusSize": 2479,
++  "digest": "fnv1a32-723c670b",
+   "observationSchemaVersion": 2,
+-  "observationDigest": "fnv1a32-18df9ce1",
++  "observationDigest": "fnv1a32-d0dfbf54",
+   "classes": {
+     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
+     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
+@@ -818,6 +818,7 @@
+     "test/diagnostics/topology-convergence-readiness-support-evidence.test.js": "admin-diagnostics",
+     "test/distributed/harness/__tests__/acknowledged-write-visibility-retry.test.js": "distributed-harness",
+     "test/distributed/harness/__tests__/active-gate-closure-classification.test.js": "distributed-harness",
++    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": "distributed-harness",
+     "test/distributed/harness/__tests__/assert-consistency.test.js": "distributed-harness",
+     "test/distributed/harness/__tests__/assertion-policy.test.js": "distributed-harness",
+     "test/distributed/harness/__tests__/assertions.test.js": "distributed-harness",
+@@ -5470,6 +5471,15 @@
+         "test/distributed/harness/container-memory-working-set.js"
+       ]
+     },
++    "test/distributed/harness/__tests__/admin-partition-cohort-readback.test.js": {
++      "files": [
++        "Dockerfile",
++        "src/admin/static/playback-viewer.html",
++        "test/distributed/config/local.json",
++        "test/distributed/harness/active-probe-snapshot-lane-constants.js",
++        "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js"
++      ]
++    },
+     "test/distributed/harness/__tests__/assertion-policy.test.js": {
+       "files": [
+         "Dockerfile",

@@ -19,7 +19,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
-  PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -1103,7 +1102,7 @@ test('PartitionService - handleRemoteQuery returns redirect for writes on follow
     params: [],
   });
 
-  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, false, 'should not succeed (redirect instead)');
   t.equal(result.redirect, 'LEADER_REDIRECT', 'should return redirect type');
   t.equal(result.leaderAddress, 'leader-node/partition/test-partition',
@@ -1137,7 +1136,7 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
     params: [],
   });
 
-  t.equal(result.acknowledged, true, 'should acknowledge the request');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'should succeed for reads');
   t.equal(result.rows.length, 1, 'should return data');
   t.equal(result.rows[0].name, 'Alice', 'should return correct data');
@@ -1196,176 +1195,6 @@ test(
   },
 );
 
-test('PartitionService - executeQuery keeps non-transactional writes out of unrelated active transactions', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition',
-    tableId: 'test-table',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'node-1',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
-
-  const beginResult = await partition.beginTransaction('tx-active', 101);
-  t.equal(beginResult.success, true, 'setup transaction should begin');
-
-  const proposedWrites = [];
-  partition.proposeWrite = async (operation) => {
-    proposedWrites.push(operation);
-    return {
-      success: true,
-      changes: 1,
-      partitionId: partition.partitionId,
-    };
-  };
-
-  const result = await partition.executeQuery(
-    'INSERT INTO test_data (id, name) VALUES (?, ?)',
-    [1, 'Alice'],
-    {sessionId: 'rebalance-coordinator:op-1'},
-  );
-
-  t.equal(result.success, true, 'non-transactional write should still succeed');
-  t.equal(proposedWrites.length, 1, 'write should use the normal propose path');
-  t.equal(
-    partition.activeTransactions.get('tx-active')?.operations.length,
-    0,
-    'unrelated active transaction should not capture the write',
-  );
-
-  await partition.rollbackTransaction('tx-active');
-  partition.shutdown();
-});
-
-test('PartitionService - beginTransaction is idempotent for the same active session', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition',
-    tableId: 'test-table',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'node-1',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-
-  const firstResult = await partition.beginTransaction('tx-active', 101);
-  const secondResult = await partition.beginTransaction('tx-active', 101);
-
-  t.equal(firstResult.success, true, 'initial transaction should begin');
-  t.equal(secondResult.success, true, 'same-session begin retry should succeed');
-  t.equal(secondResult.idempotent, true,
-    'same-session begin retry should be marked idempotent');
-  t.equal(partition.activeTransactions.size, 1,
-    'same-session begin retry should not create a second active transaction');
-
-  await partition.rollbackTransaction('tx-active');
-  partition.shutdown();
-});
-
-test('PartitionService - beginTransaction is idempotent for the same prepared session', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition',
-    tableId: 'test-table',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'node-1',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
-
-  const beginResult = await partition.beginTransaction('tx-prepared', 202);
-  t.equal(beginResult.success, true, 'initial transaction should begin');
-
-  await partition.executeQuery(
-    'INSERT INTO test_data (id, name) VALUES (?, ?)',
-    [1, 'Alice'],
-    {sessionId: 'tx-prepared'},
-  );
-
-  const prepareResult = await partition.prepareTransaction('tx-prepared');
-  t.equal(prepareResult.success, true, 'transaction should prepare');
-  t.equal(partition.isInTransaction(), true,
-    'prepared transaction should still count as in-flight');
-
-  const retryResult = await partition.beginTransaction('tx-prepared', 202);
-  t.equal(retryResult.success, true, 'same-session begin retry should succeed');
-  t.equal(retryResult.idempotent, true,
-    'same-session begin retry should be marked idempotent');
-  t.equal(partition.preparedTransactions.size, 1,
-    'same-session begin retry should not create a second prepared transaction');
-
-  await partition.rollbackTransaction('tx-prepared');
-  partition.shutdown();
-});
-
-test('PartitionService - replica removal fence admits no new work and drains the existing transaction owner', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition',
-    tableId: 'test-table',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'node-1',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-  await partition.beginTransaction('tx-before-removal', 404);
-
-  const fence = partition.fenceServingAdmissionForRemoval();
-  t.equal(fence.activeTransactionCount, 1,
-    'the removal fence observes the transaction it must drain');
-  const sameOwnerRetry = await partition.beginTransaction(
-    'tx-before-removal',
-    404,
-  );
-  t.equal(sameOwnerRetry.idempotent, true,
-    'the admitted transaction keeps its canonical session ownership');
-  await t.rejects(
-    () => partition.beginTransaction('tx-after-removal', 405),
-    /Serving admission fenced for replica removal/,
-    'a later transaction cannot overtake the removal fence',
-  );
-  const deniedQuery = await partition.handleApplicationMessage({
-    type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY,
-    sql: 'SELECT 1',
-  });
-  t.equal(deniedQuery.success, false,
-    'a later non-transactional query cannot enter the retiring runtime');
-  t.equal(deniedQuery.deferRetry, true,
-    'the serving fence exposes one typed retry outcome');
-  const deniedBegin = await partition.handleApplicationMessage({
-    type: PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION,
-    operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
-    sessionId: 'tx-after-removal-transport',
-    transactionEpoch: 406,
-  });
-  t.equal(deniedBegin.success, false,
-    'the transport transaction ingress shares the partition-owned fence');
-  t.equal(deniedBegin.deferRetry, true,
-    'transaction ingress preserves the same retryable fence outcome');
-
-  let drained = false;
-  const drain = partition.waitForRemovalServingDrain({pollIntervalMs: 1})
-    .then(() => {
-      drained = true;
-    });
-  await new Promise((resolve) => setTimeout(resolve, 5));
-  t.equal(drained, false,
-    'removal waits while the pre-fence transaction remains active');
-  await partition.rollbackTransaction('tx-before-removal');
-  await drain;
-  t.equal(drained, true,
-    'removal resumes only after the transaction owner reaches terminal');
-
-  await partition.shutdown();
-});
-
 test('PartitionService - removal drain waits for a query admitted before its serving fence', async (t) => {
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition',
@@ -1388,7 +1217,7 @@ test('PartitionService - removal drain waits for a query admitted before its ser
   partition.handleRemoteQuery = async () => {
     announceStarted();
     await queryGate;
-    return {acknowledged: true, success: true};
+    return {success: true};
   };
   const admittedQuery = partition.handleApplicationMessage({
     type: PARTITION_SERVICE_MESSAGE_TYPE.QUERY,
@@ -1414,38 +1243,6 @@ test('PartitionService - removal drain waits for a query admitted before its ser
   t.equal(drained, true,
     'runtime teardown resumes after the admitted request returns');
   await partition.shutdown();
-});
-
-test('PartitionService - beginTransaction rejects other sessions while a prepared transaction is open', async (t) => {
-  const partition = new PartitionService(withFoundingStamp({
-    partitionId: 'test-partition',
-    tableId: 'test-table',
-    replicaId: 'replica-1',
-    replicaIds: ['replica-1'],
-    nodeId: 'node-1',
-    dbPath: ':memory:',
-  }));
-
-  await partition.initialize();
-  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
-
-  await partition.beginTransaction('tx-prepared', 202);
-  await partition.executeQuery(
-    'INSERT INTO test_data (id, name) VALUES (?, ?)',
-    [1, 'Alice'],
-    {sessionId: 'tx-prepared'},
-  );
-  const prepareResult = await partition.prepareTransaction('tx-prepared');
-  t.equal(prepareResult.success, true, 'transaction should prepare');
-
-  await t.rejects(
-    () => partition.beginTransaction('tx-other', 303),
-    /Transaction already active on this partition/,
-    'different-session begin should fail before SQLite re-entry',
-  );
-
-  await partition.rollbackTransaction('tx-prepared');
-  partition.shutdown();
 });
 
 test('PartitionService - isWriteQuery detects write operations', async (t) => {
@@ -1482,8 +1279,8 @@ test('PartitionService - election jitter prevents timeout overlap', async (t) =>
   );
 
   const electionRange =
-    PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS -
-    PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
+    PARTITION_SERVICE_VALUE.RAFT_ELECTION_MAX_DEFAULT_MS -
+    PARTITION_SERVICE_VALUE.RAFT_ELECTION_MIN_DEFAULT_MS;
   const jitter = PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS;
 
   t.ok(

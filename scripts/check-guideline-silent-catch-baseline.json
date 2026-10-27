@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-08-23T07:57:42.459Z",
-  "rawViolationCount": 98,
+  "rawViolationCount": 87,
   "violations": [
     {
       "filePath": "src/admin/admin-control-snapshot-readiness-diagnostics-methods.js",
@@ -481,24 +481,6 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 753,
-      "column": 8,
-      "functionName": "commitTransaction",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 839,
-      "column": 10,
-      "functionName": "rollbackTransaction",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/partition/partition-service-write-metrics-base.js",
       "line": 79,
       "column": 10,
@@ -530,15 +512,6 @@
       "line": 535,
       "column": 10,
       "functionName": "proposeWrite",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/partition/partition-transaction-handler.js",
-      "line": 195,
-      "column": 6,
-      "functionName": "forceRollback",
       "kind": "silent_catch",
       "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
@@ -679,15 +652,6 @@
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
     },
     {
-      "filePath": "src/raft/spike/raft-logic-spike-adapter.js",
-      "line": 78,
-      "column": 6,
-      "functionName": "decodeCommittedCommand",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-transition-persistence.js",
       "line": 429,
       "column": 6,
@@ -791,69 +755,6 @@
       "line": 250,
       "column": 6,
       "functionName": "<anonymous>",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 164,
-      "column": 8,
-      "functionName": "<anonymous>",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 189,
-      "column": 10,
-      "functionName": "connectToPeer",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 257,
-      "column": 14,
-      "functionName": "<anonymous>",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 279,
-      "column": 14,
-      "functionName": "<anonymous>",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 323,
-      "column": 12,
-      "functionName": "<anonymous>",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 405,
-      "column": 12,
-      "functionName": "handleIdentification",
-      "kind": "silent_catch",
-      "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
-      "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."
-    },
-    {
-      "filePath": "src/transport/websocket-transport.js",
-      "line": 482,
-      "column": 10,
-      "functionName": "handleConnectionClose",
       "kind": "silent_catch",
       "reason": "catch block swallows the error with no statements; emit a typed log, increment a suppressed counter, or record a typed outcome instead",
       "ruleReference": "loud-by-construction guideline: a catch block with no statements (empty or comment-only) makes a failure path invisible to log-driven debugging. Runs 23-26 of the affinity demo each traced to a silent branch; every swallowed error must at least emit a typed log, bump a suppressed counter, or record a typed outcome."

@@ -333,7 +333,7 @@ readback; only the exact destination is idempotent success.
 
 ### ReplicaStateMachine (Single Replica State Owner)
 - Single authority for all replica state tracking
-- ReplicaLifecycleManager and ReplicaHandler delegate to it (no independent state maps)
+- ReplicaHandler delegates to it (no independent state maps)
 - All replica state changes produce exactly one CDC write to the services table
 - Owns partition-replica lifecycle persistence in `services`:
   initial row creation for runtime-created replicas and later partial lifecycle

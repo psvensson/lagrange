@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -11,6 +11,7 @@ import {
   PRIMARY_CLASS_MANIFEST_PATH,
   loadManifest as loadPrimaryManifest,
 } from '../../scripts/checks/test-primary-classification.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 // Deterministic witness for the formation-release-handoff-interaction-registry
 // quest: the seed-owned formation-release handoff contract and its joiner
@@ -29,7 +30,6 @@ const REGISTRY_PATH = 'test/shards/impact-contracts.json';
 const UTF8_ENCODING = 'utf8';
 const AUDIT_SCRIPT = 'scripts/checks/impact-contract-registry.js';
 const NODE_EXECUTABLE = 'node';
-const GIT_EXECUTABLE = 'git';
 const AUDIT_PASS_PREFIX = 'impact-contracts: PASS (';
 const EXIT_OK = 0;
 const EMPTY_STRING = '';
@@ -184,7 +184,7 @@ test('impact-contracts-audit-passes: the registry audit exits 0, prints ' +
 
 test('no-owner-semantics-change: the candidate carries no formation-release ' +
   'owner delta against HEAD', () => {
-  const delta = execFileSync(GIT_EXECUTABLE, GIT_OWNER_DELTA_ARGUMENTS, {
+  const delta = execGit(GIT_OWNER_DELTA_ARGUMENTS, {
     cwd: REPOSITORY_ROOT,
     encoding: UTF8_ENCODING,
   }).trim();

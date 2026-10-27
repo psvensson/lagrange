@@ -50,14 +50,19 @@ test('Bootstrap lifecycle - startWebSocketServer after bootstrap is a no-op',
       const result = await bootstrap.bootstrap();
 
       t.equal(result.success, true, 'bootstrap should succeed');
-      t.ok(result.messageRouter.server, 'WebSocket server should be running');
-      t.ok(result.messageRouter.hasSelfConnection(),
-        'self-connection should be established');
+      t.equal(result.messageRouter.server, null,
+        'WebSocket server remains closed until startWebSocketServer is called');
       t.equal(
         result.messageRouter.isExternalAdmissionEnabled(),
         true,
         'bootstrap should open external transport admission before returning success',
       );
+
+      await bootstrap.startWebSocketServer();
+
+      t.ok(result.messageRouter.server, 'WebSocket server should be running');
+      t.ok(result.messageRouter.hasSelfConnection(),
+        'self-connection should be established');
 
       await bootstrap.startWebSocketServer();
 

@@ -1,0 +1,82 @@
+# Temporary WIP evidence lane. Do not merge this workflow to main.
+# Exact branch/HEAD focused assertions only; not a locked-host or publisher gate.
+name: rs-raft-cloud-controls-wip
+on:
+  push:
+    branches: [continue/rs-raft-cloud-controls-correction-20261014]
+    paths:
+      - .github/workflows/rs-raft-cloud-controls-wip.yml
+      - test/partition/participant-release-applied-position.test.js
+      - test/node/replica-handler-release-recovery.test.js
+      - test/partition/participant-release-protocol.test.js
+      - test/test-helpers/participant-transaction-fixture.js
+      - test/test-helpers/participant-release-recovery-harness.js
+      - test/test-helpers/participant-release-observer-resource-fixture.js
+      - src/partition/partition-participant-transaction-pause.js
+      - src/node/replica-handler-participant-release.js
+      - src/node/replica-handler-release-recovery.js
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-cloud-controls-wip
+  cancel-in-progress: false
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact locked dependencies
+        run: npm ci
+      - name: Measure each focused file once; preserve red
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          mkdir -p test-output/rs-raft-cloud-controls-wip
+          git rev-parse HEAD > test-output/rs-raft-cloud-controls-wip/sha.txt
+          for f in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js; do
+            name="${f##*/}"
+            node --check "$f" > "test-output/rs-raft-cloud-controls-wip/$name.syntax.log" 2>&1
+            syntax_status=$?
+            npm run -s test:file -- "$f" > "test-output/rs-raft-cloud-controls-wip/$name.log" 2>&1
+            status=$?
+            printf '%s\n' "$syntax_status" > "test-output/rs-raft-cloud-controls-wip/$name.syntax.status"
+            printf '%s\n' "$status" > "test-output/rs-raft-cloud-controls-wip/$name.status"
+            if test -d test-output/reports; then
+              mkdir -p "test-output/rs-raft-cloud-controls-wip/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "test-output/rs-raft-cloud-controls-wip/$name.canonical/" \;
+            fi
+            echo "$f syntax_status=$syntax_status test_status=$status"
+            if test "$status" -ne 0; then
+              grep -A 25 -B 2 -E "^not ok|^  error:|^  failureType:" "test-output/rs-raft-cloud-controls-wip/$name.log" | head -n 170 || true
+            fi
+            tail -n 18 "test-output/rs-raft-cloud-controls-wip/$name.log"
+          done
+          failed=0
+          for f in test-output/rs-raft-cloud-controls-wip/*.status; do
+            test "$(cat "$f")" = "0" || failed=1
+          done
+          exit "$failed"
+      - name: Preserve all focused source-bound outcomes
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-controls-wip-${{ github.sha }}
+          path: test-output/rs-raft-cloud-controls-wip/
+          retention-days: 10
+          if-no-files-found: warn

@@ -69,7 +69,7 @@ async function exposeJoinerBootstrapApi(joiningService, joinResult, identity) {
     replicaHandler: joiningService.replicaHandler,
     systemTableCache: null,
     bootstrapStartupAdapter: joiningService,
-    bootstrapService: null,
+    runtimeOwner: joiningService.runtimeDependencyOwner,
     epochManager: joiningService.epochManager,
     messageRouter: joiningService.messageRouter,
   });
@@ -138,7 +138,9 @@ test('fresh join completes through a non-seed node when the first candidate is d
       systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
       epochManager: bootstrapResult.epochManager,
-      bootstrapService,
+      bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+      runtimeOwner: bootstrapService.runtimeDependencyOwner,
+      assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     });
     await seedApi.initialize(0, {listen: false});
     seedApi.setSqlQueryEngine(new SQLQueryEngine({

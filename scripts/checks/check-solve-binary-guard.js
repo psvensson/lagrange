@@ -14,8 +14,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+
+import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -30,7 +31,6 @@ const REPO_ROOT = path.resolve(
 );
 const TEXT_ENCODING = 'utf8';
 const ARGV_OFFSET = 2;
-const GIT_BINARY = 'git';
 const GIT_STAGED_ARGUMENTS = Object.freeze([
   'diff', '--cached', '--name-only', '--diff-filter=ACMR', '-z',
 ]);
@@ -58,7 +58,7 @@ const REFUSAL_SUFFIX =
   'and reference it from the log)';
 
 function stagedPaths() {
-  const out = execFileSync(GIT_BINARY, [...GIT_STAGED_ARGUMENTS], {
+  const out = execGit([...GIT_STAGED_ARGUMENTS], {
     cwd: REPO_ROOT, encoding: TEXT_ENCODING,
   });
   return arrayFilter(stringSplit(out, NUL), Boolean);
@@ -68,7 +68,7 @@ function stagedPaths() {
 // file when the path is not in the index (an explicit path argument).
 function stagedOrTreeSize(relative) {
   try {
-    const size = execFileSync(GIT_BINARY, [...GIT_CAT_FILE_SIZE_ARGUMENTS,
+    const size = execGit([...GIT_CAT_FILE_SIZE_ARGUMENTS,
       `${INDEX_STAGE_PREFIX}${relative}`], {cwd: REPO_ROOT, encoding: TEXT_ENCODING});
     return Number(size);
   } catch (_error) {

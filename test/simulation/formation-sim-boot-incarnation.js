@@ -4,6 +4,8 @@ import {join} from 'node:path';
 
 import {reserveBootIncarnation} from
   '../../src/bootstrap/boot-incarnation-owner.js';
+import {runtimeBuildProvenance} from
+  '../../src/diagnostics/runtime-build-provenance.js';
 
 const SIMULATED_DATA_DIR_PREFIX = 'lagrange-sim-boot-incarnation-';
 
@@ -18,6 +20,7 @@ const SIMULATED_DATA_DIR_PREFIX = 'lagrange-sim-boot-incarnation-';
  * @return {Promise<number>} The incarnation the owner issued.
  */
 async function reserveSimulatedBootIncarnation() {
+  await runtimeBuildProvenance();
   const dataDir = await mkdtemp(join(tmpdir(), SIMULATED_DATA_DIR_PREFIX));
   try {
     return await reserveBootIncarnation(dataDir);

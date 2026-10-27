@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SERVICE_TYPE, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OperationType,
@@ -404,7 +405,7 @@ export function registerCoordinatorCreatedRemoteHandoffPriorityRecoveryTests({
     coordinator.initialize();
     coordinator.messageRouter.deliver = async (target, payload, options) => {
       deliveries.push({target, payload, options});
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     };
 
     coordinator.controlPlaneReadinessService

@@ -3,13 +3,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {analyzeFormationReleaseEvents} from
   './formation-release-handoff-gcp-analysis.js';
+import {execGitAsync, isGitOutputTooLarge} from './git-invocation.js';
 import {
   startGcpAffinityCluster,
 } from '../../examples/service-data-affinity/gcp-cluster-provider.js';
@@ -80,7 +80,6 @@ const CANDIDATE_COMMIT = 'cc66e0a04ac5fdd0efcb9d588fd4f5e952dd80cd';
 const CONTRACT_RELATIVE_PATH =
   'src/control-plane/formation-release-handoff-contract.js';
 const SOURCE_SUBDIR = 'src';
-const GIT_COMMAND = 'git';
 const WORKTREE_PREFIX = 'formation-release-handoff-reverted-control-';
 // Reverse-patch and git-invocation scalar owners (§4).
 const PATCH_DELETION_PREFIX = '-';
@@ -136,19 +135,18 @@ function sha256(bytes) {
   return createHash(HASH_ALGORITHM).update(bytes).digest(HASH_ENCODING);
 }
 
-function execGit(args, cwd) {
-  return new Promise((resolvePromise, rejectPromise) => {
-    execFile(GIT_COMMAND, args, {cwd}, (error, stdout, stderr) => {
-      if (error) {
-        rejectPromise(new Error(
-          `git ${arrayJoin(args, SINGLE_SPACE)} failed: ` +
-          stringTrim(stringConstructor(stderr)),
-        ));
-        return;
-      }
-      resolvePromise(stringTrim(stringConstructor(stdout)));
-    });
-  });
+async function execGit(args, cwd) {
+  let stdout;
+  try {
+    ({stdout} = await execGitAsync(args, {cwd}));
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
+    throw new Error(
+      `git ${arrayJoin(args, SINGLE_SPACE)} failed: ` +
+      stringTrim(stringConstructor(error.stderr)),
+    );
+  }
+  return stringTrim(stringConstructor(stdout));
 }
 
 // Build the deterministic reverse patch text that restores the known-bad

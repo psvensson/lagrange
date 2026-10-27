@@ -9,6 +9,7 @@
  * inferred.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -62,7 +63,7 @@ function createRebalancer(options = {}) {
     },
     messageRouter: {
       getConnectionState: () => 'connected',
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

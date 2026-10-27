@@ -1,0 +1,211 @@
+name: rs-raft-shared-runtime-repair
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-shared-runtime-repair.yml
+      - scripts/quest-evidence/prepare-shared-runtime-repair.py
+      - scripts/quest-evidence/prepare-shared-runtime-witnesses.py
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-shared-runtime-repair-20261012
+  cancel-in-progress: false
+jobs:
+  exact-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      BASE: 9529902fd39be90db5f3ba6725de8bc7145df279
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      QUEST: replicated-transaction-decision-and-apply
+      EVIDENCE: test-output/shared-runtime-repair
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind baseline and prepare native witnesses
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code "$BASE" -- src
+          mkdir -p "$EVIDENCE"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          python3 scripts/quest-evidence/prepare-shared-runtime-witnesses.py > "$EVIDENCE/witness-preparation.log"
+          node --check test/raft/raft-rs-backend/runtime-load-recovery-child.js
+          node --check test/raft/raft-rs-backend/runtime-replacement-review-child.js
+          npm run -s test:metadata:refresh > "$EVIDENCE/metadata-baseline.log" 2>&1
+          node scripts/solve.js note --id "$QUEST" --attempt 'PR117 shared replacement interaction: source-bound baseline with native partial-restore, callback, pressure, mid-restore trap, close, mixed-clock and final-close witnesses. Existing tests retain safety assertions and original budgets; load-refusal recovery waits the existing owner-advertised retry window. Not independent approval.' --json > "$EVIDENCE/attempt-baseline.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- test/raft/raft-rs-backend/runtime-load-recovery-child.js test/raft/raft-rs-backend/runtime-replacement-review-child.js test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js test/shards/impact-contracts.json test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: bind shared-replacement native witnesses and contract before source repair'
+          git rev-parse HEAD > "$EVIDENCE/baseline-sha.txt"
+          git diff --exit-code "$BASE" -- src
+      - name: Measure retained-source baseline
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js > "$EVIDENCE/baseline.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/baseline-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/baseline-load"
+          test ! -d test-output/runtime-review-native || mv test-output/runtime-review-native "$EVIDENCE/baseline-review"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/baseline-tap"
+          tail -20 "$EVIDENCE/baseline.log"
+      - name: Prepare and commit exact WIP source candidate
+        id: candidate
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quest-evidence/prepare-shared-runtime-repair.py > "$EVIDENCE/source-preparation.log"
+          for f in src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js; do node --check "$f"; done
+          node scripts/solve.js note --id "$QUEST" --attempt 'PR117 source candidate: existing runtime owner now holds one shared replacement barrier, invalidates all handles/views, accounts for each group, retains queued resumption and close obligations, and uses one captured-clock election-derived load retry window. Existing binding/reseed/queue owners retained. WIP only, awaiting independent source review and all gates.' --json > "$EVIDENCE/attempt-candidate.json"
+          npm run -s test:metadata:refresh > "$EVIDENCE/metadata-candidate.log" 2>&1
+          git diff --check
+          git add -- src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: fence complete shared replacement and bound native reload retries'
+          git rev-parse HEAD > "$EVIDENCE/candidate-sha.txt"
+          git diff "$BASE" -- src > "$EVIDENCE/source.patch"
+          sha256sum src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js test/raft/raft-rs-backend/runtime-load-recovery-child.js test/raft/raft-rs-backend/runtime-replacement-review-child.js > "$EVIDENCE/candidate-sources.sha256"
+      - name: Measure exact candidate native cases
+        if: steps.candidate.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js > "$EVIDENCE/candidate.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/candidate-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/candidate-load"
+          test ! -d test-output/runtime-review-native || mv test-output/runtime-review-native "$EVIDENCE/candidate-review"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/candidate-tap"
+          tail -30 "$EVIDENCE/candidate.log"
+      - name: Source-only revert with unchanged tests
+        if: steps.candidate.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js; do git show "$BASE:$f" > "$f"; done
+          set +e
+          npm run -s test:file -- test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js > "$EVIDENCE/revert.log" 2>&1
+          STATUS=$?
+          set -e
+          printf '%s\n' "$STATUS" > "$EVIDENCE/revert-exit.txt"
+          test ! -d test-output/runtime-load-native || mv test-output/runtime-load-native "$EVIDENCE/revert-load"
+          test ! -d test-output/runtime-review-native || mv test-output/runtime-review-native "$EVIDENCE/revert-review"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/revert-tap"
+          for f in src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js; do git show "$(cat "$EVIDENCE/candidate-sha.txt"):$f" > "$f"; done
+          git diff --exit-code -- src test/raft
+          tail -20 "$EVIDENCE/revert.log"
+      - name: Existing recovery lifecycle and participation regression cone
+        if: steps.candidate.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- test/raft/raft-rs-backend/operation-port-provenance.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js test/raft/raft-rs-backend/operation-port-throw-containment.test.js test/raft/raft-rs-backend/runtime-trap-and-restore.test.js test/raft/raft-rs-backend/operation-port-lifecycle.test.js test/raft/raft-rs-backend/restart-from-durable-record.test.js test/raft/raft-rs-backend/participation-gate.test.js test/raft/raft-rs-backend/durable-rejoin-record-refusal.test.js > "$EVIDENCE/regressions.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/regressions-exit.txt"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/regressions-tap"
+          tail -40 "$EVIDENCE/regressions.log"
+      - name: Retain static boundary and guideline audit outcomes
+        if: steps.candidate.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          node scripts/checks/raft-rs-operation-boundary-audit.js > "$EVIDENCE/boundary-audit.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/boundary-audit-exit.txt"
+          npm run -s audit:guidelines > "$EVIDENCE/guidelines.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/guidelines-exit.txt"
+          git diff --check > "$EVIDENCE/whitespace.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/whitespace-exit.txt"
+      - name: Derive proof from engaged cases and exact source hashes
+        if: steps.candidate.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          e=Path(os.environ['EVIDENCE']); checks={}; data={}
+          cases={'load':['control','missing-glue','changed-glue','repeated-refusal'],'review':['control','partial-restore','reentrant-restore','reload-backoff','trap-during-restore','close-during-restore','mixed-clocks','last-close']}
+          for mode in ['baseline','candidate','revert']:
+              data[mode]={}
+              for kind,names in cases.items():
+                  for name in names:
+                      p=e/f'{mode}-{kind}'/f'{name}.json'
+                      x=json.loads(p.read_text()) if p.exists() else {}
+                      prefix='NATIVE_RECOVERY ' if kind=='load' else 'RUNTIME_REVIEW '
+                      line=next((s for s in x.get('stdout','').splitlines() if s.startswith(prefix)),None)
+                      r=json.loads(line[len(prefix):]) if line else {}
+                      data[mode][kind+':'+name]={'exit':x.get('status'),'phase':r.get('phase'),'traps':r.get('traps'),'source':x.get('sourceDigests',{}).get('src/raft/raft-rs-runtime-owner.js')}
+                      checks[f'{mode}:engaged:{kind}:{name}']=x.get('error') is None and x.get('signal') is None and r.get('traps')==1
+                      if mode=='candidate': checks[f'candidate:pass:{kind}:{name}']=x.get('status')==0 and r.get('phase')=='complete'
+          for name in ['partial-restore','reentrant-restore','reload-backoff']:
+              for mode in ['baseline','revert']: checks[f'{mode}:behavioral-red:{name}']=data[mode]['review:'+name]['exit']==1
+          for key in data['baseline']:
+              checks['revert:identity:'+key]=data['baseline'][key]==data['revert'][key]
+              checks['candidate:treatment:'+key]=data['candidate'][key]['source'] is not None and data['candidate'][key]['source']!=data['baseline'][key]['source']
+          for mode in ['baseline','candidate','revert','regressions']:
+              p=e/f'{mode}-exit.txt'; code=p.read_text().strip() if p.exists() else None
+              checks['runner:'+mode]=code==('1' if mode in ['baseline','revert'] else '0')
+          raw=e/'regressions-tap/test/raft/raft-rs-backend/operation-port-throw-containment.test.js.tap'
+          text=raw.read_text() if raw.exists() else ''; m=re.search(r'duration_ms:\s*([\d.]+)',text)
+          duration=float(m.group(1)) if m else None
+          checks['scheduled-unit-two-second-bar']=duration is not None and duration<=2000
+          audits={name:(e/f'{name}-exit.txt').read_text().strip() for name in ['boundary-audit','guidelines','whitespace']}
+          summary={'candidate':(e/'candidate-sha.txt').read_text().strip(),'baseline':(e/'baseline-sha.txt').read_text().strip(),'checks':checks,'cases':data,'behavioralProofPassed':all(checks.values()),'staticAuditExitCodes':audits,'allRunGatesPassed':all(checks.values()) and all(x=='0' for x in audits.values()),'scheduledCaseDurationMs':duration,'independentApproval':False,'mergeReady':False,'scope':'Real raft-rs/SQLite single-process native fixtures and eight existing regression files; not RF3/multi-host or full release certification.'}
+          (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Preserve source candidate and every result on work branch only
+        if: always() && steps.candidate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- src test/raft
+          DEST="solve/quests/$QUEST/evidence/shared-runtime-repair-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$EVIDENCE/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: retain exact shared-replacement source and all positive and negative evidence'
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Always retain current source and diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE/current-source"
+          cp src/raft/raft-rs-runtime-owner.js src/raft/raft-rs-runtime-owner-constants.js src/raft/raft-rs-runtime-faults.js "$EVIDENCE/current-source/"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-shared-runtime-repair-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/shared-runtime-repair/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep all unpassed gates visible
+        if: always()
+        shell: bash
+        run: |
+          python3 -c 'import json,os; from pathlib import Path; p=Path(os.environ["EVIDENCE"])/"summary.json"; assert p.exists() and json.loads(p.read_text())["allRunGatesPassed"], "Candidate or static gate is incomplete/failed; no approval or merge"'

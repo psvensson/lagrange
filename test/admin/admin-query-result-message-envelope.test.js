@@ -9,7 +9,6 @@ import {ADMIN_WEBSOCKET_API_SHARED} from
 
 const {
   ADMIN_QUERY_RESULT,
-  EXECUTION_MODE,
   ErrorCode,
   MessageType,
   QUERY_RESULT_MESSAGE_KIND,
@@ -20,11 +19,6 @@ const TEST_TABLE_NAME = 'widgets';
 const TEST_PARTITION_ID = 'partition-a';
 const TEST_REASON_CODE = 'admission_deferred';
 const TEST_WARNING = 'partial_result';
-const TEST_HOST_RESULT = {
-  accepted: true,
-};
-const TEST_CALLBACK_MODULE_REF = 'module:callbacks';
-const TEST_CALLBACK_EXPORT = 'run';
 const TEST_ERROR_MESSAGE = 'query failed';
 const TEST_ERROR_HINT = 'retry later';
 const TEST_RETRY_AFTER_MS = 250.9;
@@ -216,38 +210,6 @@ test('admin write receipt rejects a negative acceptance timestamp',
     t.equal(message.writeReceipt.witnessedParticipantCount, 0);
     t.equal(message.writeReceipt.participantReceipts[0].acknowledgedAtMs, null);
   });
-
-test('admin query result envelope builds host callback messages', async (t) => {
-  const callbackResult = {
-    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-    results: [{ok: true}],
-    hostResult: TEST_HOST_RESULT,
-    callbackModuleRef: TEST_CALLBACK_MODULE_REF,
-    callbackExport: TEST_CALLBACK_EXPORT,
-  };
-  const message = createAdminQueryResultMessageEnvelope(
-    TEST_QUERY_ID,
-    callbackResult,
-  );
-
-  t.equal(
-    message.operation,
-    EXECUTION_MODE.PARTITION_CALLBACK,
-    'should mark host callback operation',
-  );
-  t.same(message.results, callbackResult.results, 'should preserve results');
-  t.same(message.hostResult, TEST_HOST_RESULT, 'should preserve host result');
-  t.equal(
-    message.callbackModuleRef,
-    TEST_CALLBACK_MODULE_REF,
-    'should preserve callback module ref',
-  );
-  t.equal(
-    message.callbackExport,
-    TEST_CALLBACK_EXPORT,
-    'should preserve callback export',
-  );
-});
 
 test('admin query result envelope builds error messages', async (t) => {
   const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {

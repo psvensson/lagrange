@@ -15,12 +15,14 @@
  * - Cleanup verification checks both service Maps and worker handle Maps
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {createVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {BOOTSTRAP_EVENT, BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {NodeService} from '../../src/node/node-service.js';
 
 /**
  * Check if all replica resources are cleared after cleanup.
@@ -63,6 +65,34 @@ function initializeTestEnvironment() {
   }
 }
 
+// Each run boots a virgin seed over its own data directory: message-group
+// consensus is durable since the raft-rs-only cutover, so every iteration
+// opens real replica databases before the phase under test fails. Nine
+// properties x ten runs need more than tap's default file budget.
+const PHASE_FAILURE_PROPERTY_TIMEOUT_MS = 600000;
+t.setTimeout(PHASE_FAILURE_PROPERTY_TIMEOUT_MS);
+
+// Each run prepares the original seed attempt and creates every seed replica
+// before the continuation hold: on the 1.00x controller (2026-10-25) ten runs
+// per property took 601s, six 359-456s and four 256-407s on a contended host,
+// so three keep the file well inside the budget. Until fresh-seed activation
+// lands these properties measure the original-handoff-continuation hold, not
+// phase failure handling, and three runs of that one outcome lose little.
+const PHASE_FAILURE_PROPERTY_RUNS = 3;
+
+/**
+ * One property run's seed, on its own node runtime as each production process
+ * has. Runs sharing the process NodeService singleton would keep the first
+ * run's node id, so a later seed's phases would no longer match the original
+ * allocation its attempt declared under its own id.
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} The admitted virgin seed.
+ */
+function createPropertyRunSeed(options) {
+  return createVirginSeedBootstrapService({...options,
+    nodeService: new NodeService()});
+}
+
 /**
  * Arbitrary for valid node IDs (alphanumeric with hyphens, no special chars).
  */
@@ -81,7 +111,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             // No wsPort - will fail during leadership wait
@@ -114,7 +144,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return phaseFailedEventReceived && eventHasErrorDetails && eventHasPhase;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('phase failure emits event with error details');
@@ -132,7 +162,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -164,7 +194,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return phaseFailedEventReceived && eventHasError && eventHasDuration;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('phase failure emits phase:failed event');
@@ -182,7 +212,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -211,7 +241,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return typeof result.phase === 'string' && validPhases.includes(result.phase);
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('failure result contains phase name');
@@ -229,7 +259,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -263,7 +293,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
              result.error.includes('error'));
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('error message contains failure context');
@@ -281,7 +311,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -315,7 +345,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return replicasCleared && routerCleared;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('cleanup is attempted on phase failure');
@@ -333,7 +363,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -373,7 +403,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
             eventHasError;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('FAILED event is emitted with complete information');
@@ -391,7 +421,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -425,7 +455,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return typeof phaseDuration === 'number' && phaseDuration >= 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('failure duration is tracked correctly');
@@ -443,7 +473,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -473,7 +503,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
             result.servicesCreated >= 0;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('servicesCreated reflects state at failure');
@@ -490,7 +520,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
       fc.asyncProperty(
         nodeIdArb,
         async (nodeId) => {
-          const bootstrap = new BootstrapService({
+          const bootstrap = await createPropertyRunSeed({
             bootIncarnation: 1,
             nodeId,
             config: {
@@ -519,7 +549,7 @@ test('Property 8: Phase Failure Handling', async (t) => {
           return true;
         },
       ),
-      {numRuns: 10},
+      {numRuns: PHASE_FAILURE_PROPERTY_RUNS},
     );
 
     t.pass('failed bootstrap returns success=false');

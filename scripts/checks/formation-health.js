@@ -28,13 +28,17 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {
   FORMATION_VERDICT,
 } from '../../examples/service-data-affinity/formation-verdict.js';
 import {FORMATION_OWNER} from '../../src/diagnostics/formation-diagnostics-contract.js';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
+import {execGit} from './git-invocation.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
@@ -62,7 +66,6 @@ const ARGV_OFFSET = 2;
 const EXIT_OK = 0;
 const EXIT_FAIL = 1;
 const DEFAULT_SUMMARY_LIMIT = 20;
-const GIT_BINARY = 'git';
 const GIT_HEAD_ARGS = Object.freeze(['rev-parse', '--short', 'HEAD']);
 const HEAD_UNKNOWN = 'unknown';
 const PERCENT = 100;
@@ -73,6 +76,11 @@ const EMPTY_CELL = '-';
 const CELL_SEPARATOR = ' ';
 const STDIO_INHERIT = 'inherit';
 const NO_REPORT_MESSAGE = 'formation health: no live report to record';
+// A standing health signal (local processes or one node per GCP VM, no
+// host-level placement requirement, no real publication-convergence
+// observation): never certification evidence, and every rendering says so.
+const NOT_CERTIFICATION_LINE =
+  `formation health: ${NOT_CERTIFICATION_EVIDENCE.statement}`;
 const UNKNOWN_VERDICT_MESSAGE = 'formation health: the run produced no ' +
   'measuring verdict (UNKNOWN) - nothing recorded; a non-verdict is a failed ' +
   'run, not a trend record';
@@ -105,8 +113,6 @@ const TREND_PUSH_NO_SHA = '0000000000000000000000000000000000000000';
 const TREND_PUSH_NEWLINE_BYTE = 0x0a;
 // The time a writer stamps (Date.prototype.toISOString): nothing looser.
 const TREND_PUSH_ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/u;
-// A whole trend file, read through one git call, fits well inside this.
-const TREND_PUSH_MAX_BLOB_BYTES = 64 * 1024 * 1024;
 // Git answers for the objects the push carries: no replace refs substitute
 // another commit, and a gitlink is a change however .gitmodules says to
 // ignore it.
@@ -293,13 +299,14 @@ function renderTrendSummary(records, limit = DEFAULT_SUMMARY_LIMIT) {
     header, ...rows,
     `formation health: ${passCount}/${recent.length} passed (${rate}%), ` +
     `${starvedCount} with a starved seed`,
+    NOT_CERTIFICATION_LINE,
   ].join(LINE_SEPARATOR);
 }
 
 function resolveHead(root) {
   try {
     return stringTrim(
-      execFileSync(GIT_BINARY, GIT_HEAD_ARGS, {cwd: root}).toString(TEXT_ENCODING),
+      execGit(GIT_HEAD_ARGS, {cwd: root}).toString(TEXT_ENCODING),
     );
   } catch (_error) {
     return HEAD_UNKNOWN;
@@ -339,11 +346,11 @@ function uncoveredCalibrationOwners(tablePath) {
 // Commits by the nightly author that touch anything but the trend file: the
 // workflow token commits one inert data file and nothing else.
 function botCommitsOutsideTrend(root, trend) {
-  const shas = arrayFilter(stringSplit(execFileSync(GIT_BINARY, [...GIT_LOG_ARGS],
+  const shas = arrayFilter(stringSplit(execGit([...GIT_LOG_ARGS],
     {cwd: root, encoding: TEXT_ENCODING}), LINE_SEPARATOR), (line) => line.length > 0);
   const offending = [];
   for (let index = 0; index < shas.length; index += 1) {
-    const paths = arrayFilter(stringSplit(execFileSync(GIT_BINARY,
+    const paths = arrayFilter(stringSplit(execGit(
       [...GIT_DIFF_TREE_ARGS, shas[index]], {cwd: root, encoding: TEXT_ENCODING}),
     LINE_SEPARATOR), (line) => line.length > 0);
     if (arrayFilter(paths, (candidate) => candidate !== trend).length > 0) {
@@ -362,8 +369,9 @@ function workflowRun(env) {
 }
 
 function gitOutput(root, args, encoding = TEXT_ENCODING) {
-  return execFileSync(GIT_BINARY, args, {cwd: root, encoding, stdio: TREND_PUSH_GIT_STDIO,
-    env: {...process.env, ...TREND_PUSH_GIT_ENV}, maxBuffer: TREND_PUSH_MAX_BLOB_BYTES});
+  // A whole trend file, read through one git call, fits the git output bound.
+  return execGit(args, {cwd: root, encoding, stdio: TREND_PUSH_GIT_STDIO,
+    env: {...process.env, ...TREND_PUSH_GIT_ENV}});
 }
 
 // Canonical: exactly the bytes JSON.stringify writes for this object, so a

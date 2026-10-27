@@ -92,7 +92,6 @@ const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-  classifyTransportDeliveryOutcome,
   isDeliveredTransportDeliveryOutcome,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 const REPLICA_DISPATCH_SERVICE_LITERAL = Object.freeze({
@@ -287,5 +286,4 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   unwrapRowReadResult,
   wasNodeRecordReadyWhenWritten,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-  classifyTransportDeliveryOutcome,
 };

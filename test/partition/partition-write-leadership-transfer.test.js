@@ -15,6 +15,7 @@
 // message type read from the binding's own num_to_msg_type match arm), to a
 // voter cut off from the group so that it can only abort.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +23,7 @@ import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -36,8 +38,10 @@ import {
 import * as partitionWriteKernel from
   '../../src/partition/partition-write-kernel.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {RAFT_MEMBERSHIP_ADMISSION_OUTCOME} from
-  '../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
+  RAFT_OPERATION_OUTCOME,
+} from '../../src/raft/raft-operation-port-constants.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../src/raft/raft-rs-ingress-constants.js';
 import {recoveryRetryWindowMsOf} from
@@ -105,10 +109,16 @@ async function withTransferRunning(partitionId, body) {
   const network = leader.transport;
   const deliver = network.deliver;
   const transfereeAddress = group.addressOf(members[2]);
-  network.deliver = (address, ...rest) => (address === transfereeAddress ?
-    Promise.resolve({acknowledged: true}) :
-    deliver.call(network, address, ...rest));
+  let owners = null;
   try {
+    // The group is released the way production releases it: the real
+    // release owners run the cohort cutover before the group serves.
+    owners = await attachPartitionReleaseOwners(group.services,
+      {directory: path.dirname(group.dbFileOf(members[0])), budgetMs: GROUP_BUDGET_MS});
+    await owners.release(partitionId);
+    network.deliver = (address, ...rest) => (address === transfereeAddress ?
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
+      deliver.call(network, address, ...rest));
     assert.equal((await insert(leader, 'row-0', 'setup')).success, true,
       'setup: the group serves a write');
     transferee.raft.stopScheduling();
@@ -120,13 +130,19 @@ async function withTransferRunning(partitionId, body) {
       groupId: partitionId,
       from: transfereeId,
       to: status.peerId,
+      // The shape raft-rs's own sender writes: a forwarded transfer request
+      // carries the forwarding follower's term (raft.rs send()); the
+      // ingress refuses a term-less one.
       message: {msgType: transferLeaderMessageType(), from: transfereeId,
-        to: status.peerId},
+        to: status.peerId, term: String(status.term)},
     });
-    assert.ok(delivered, 'setup: the transfer request was handed over');
+    assert.equal(delivered?.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+      'setup: the leader admits the transfer request a peer delivered ' +
+      `(${JSON.stringify(delivered)})`);
     await body({leader, status});
   } finally {
     network.deliver = deliver;
+    await owners?.dispose();
     await group.dispose();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();

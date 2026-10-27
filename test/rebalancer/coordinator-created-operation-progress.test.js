@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -56,10 +57,9 @@ test('armCoordinatorCreatedOperation immediately dispatches locally owned ' +
     },
     messageRouter: {
       async deliver() {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: TEST_CRITICAL_CREATED_INITIATED_STATUS,
-        };
+        });
       },
     },
     sqlQueryEngine: {
@@ -284,7 +284,7 @@ async (t) => {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -513,7 +513,7 @@ test('createOperation defers retryable participant-pressure failures and ' +
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -737,7 +737,7 @@ test('dispatchOperation defers priority claim misses when durable ' +
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -897,7 +897,7 @@ test('dispatchOperationInternal executes the claimed operation snapshot ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -1043,7 +1043,7 @@ test('dispatchOperationInternal rehydrates REPLACE source replica metadata ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -1220,7 +1220,7 @@ async (t) => {
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),

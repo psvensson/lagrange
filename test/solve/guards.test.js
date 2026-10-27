@@ -3,7 +3,6 @@
 // registry handling.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +12,7 @@ import {
   changedPaths, coupledPairProblems, epicScopeProblems, headSha, requiresVerification,
   staticQualityProblems,
 } from '../../scripts/solve/guards.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const QUEST_ID = 'q';
 const EPIC_ID = 'e';
@@ -23,7 +23,7 @@ const GIT_USER = ['-c', 'user.name=t', '-c', 'user.email=t@example.com'];
 const ESLINT_STUB = 'node_modules/eslint/bin/eslint.js';
 
 function git(root, args) {
-  return execFileSync('git', [...GIT_USER, ...args], {cwd: root, encoding: 'utf8'});
+  return execGit([...GIT_USER, ...args], {cwd: root, encoding: 'utf8'});
 }
 
 function write(root, relative, content) {

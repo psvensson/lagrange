@@ -22,7 +22,6 @@ const PROVIDER_PATHS = Object.freeze([
   'src/control-plane/membership-publication-coordinator-reconcile.js',
 ]);
 const HANDOFF_BEHAVIORAL_WITNESSES = Object.freeze([
-  'test/convergence/dt4-full-chain-scenario.test.js',
   'test/convergence/dt6-control-plane-migration-network.test.js',
   'test/convergence/dt6-publication-failback-network.test.js',
   'test/convergence/dt6-publication-ack-recovery-gate-network.test.js',

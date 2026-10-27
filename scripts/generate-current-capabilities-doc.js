@@ -47,6 +47,8 @@ const DISPLAY_LABEL = Object.freeze({
   five_node_certification_window: 'Five-node certification window',
   not_available: 'Not available',
   unsupported: 'Unsupported',
+  raft_promises_synced_before_send:
+    'Synced to disk before any dependent message is sent (survives power loss)',
   unsupported_on_0x: 'Unsupported on 0.x',
 });
 
@@ -197,6 +199,7 @@ constructors refuse its absence.
 | Integrated replica recovery on raft-rs | ${displayCapability(capabilities.replication.integratedReplicaRecovery)} |
 | In-memory message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
 | Learner promotion | ${displayCapability(capabilities.replication.learnerPromotion)} |
+| Raft votes, appended entries and snapshots | ${displayCapability(capabilities.replication.raftPersistDurability)} |
 
 Component presence, automatic execution and full recovery are distinct claims. The
 current raft-rs partition leader cadence reports an unsupported committed-log

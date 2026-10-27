@@ -78,18 +78,6 @@ const SUBSYSTEM = Object.freeze({
   /** Main message router for inter-node communication */
   MESSAGE_ROUTER: 'message-router',
 
-  /** WebSocket transport layer */
-  WEBSOCKET_TRANSPORT: 'websocket-transport',
-
-  /** WebSocket transport provider factory */
-  WEBSOCKET_TRANSPORT_PROVIDER: 'websocket-transport-provider',
-
-  /** Transport registry for endpoint management */
-  TRANSPORT_REGISTRY: 'transport-registry',
-
-  /** Connection pool for WebSocket connections */
-  CONNECTION_POOL: 'connection-pool',
-
   /** RPC client for request-response communication */
   RPC_CLIENT: 'rpc-client',
 

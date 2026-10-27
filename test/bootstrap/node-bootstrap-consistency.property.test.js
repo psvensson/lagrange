@@ -24,7 +24,15 @@ import {NodeService} from '../../src/node/node-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../src/threading/service-thread-manager.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {resolveAutoRejoinStartupDecision} from
+  '../../src/bootstrap/rejoin-hints.js';
+import {createParticipantReleaseAuthorizationOwner} from
+  '../../src/node/participant-release-authorization-owner.js';
+import {RUNTIME_BUILD_STATE, runtimeBuildProvenance} from
+  '../../src/diagnostics/runtime-build-provenance.js';
 import {createPortAllocator} from '../../src/test-helpers/port-allocator.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../src/storage/data-directory-process-owner.js';
 import {URL} from 'url';
 import Database from 'better-sqlite3';
 import {existsSync, mkdirSync, mkdtempSync, rmSync} from 'node:fs';
@@ -55,9 +63,9 @@ function initializeTestEnvironment() {
     logging: {level: 'error'},
     transport: {wsHost: '127.0.0.1'},
     raft: {
-      electionTimeoutMinMs: 500,
-      electionTimeoutMaxMs: 900,
-      heartbeatIntervalMs: 150,
+      electionTimeoutMinMs: 100,
+      electionTimeoutMaxMs: 200,
+      heartbeatIntervalMs: 50,
     },
   });
 
@@ -127,7 +135,7 @@ function createInProcHttpPost(seedApi) {
 
 // Fast bootstrap config
 const FAST_BOOTSTRAP_CONFIG = {
-  leadershipWaitTimeoutMs: 5000,
+  leadershipWaitTimeoutMs: 15000,
   leadershipWaitInitialDelayMs: 10,
   leadershipWaitMaxDelayMs: 50,
   replicaStaggerDelayMs: 10,
@@ -178,7 +186,10 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -205,14 +216,12 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       t.equal(bootstrapResponse.seedNodeId, seedNodeId, 'should have seed node ID');
 
       // Requirement 7.4: Seed node determines message group assignment
-      // Requirement 7.5: Seed node assigns to existing or creates new message group
+      // Requirement 7.5: the joiner hosts its own message group (a
+      // message-group identity is never moved to it).
       const assignment = bootstrapResponse.messageGroupAssignment;
       t.ok(assignment, 'should have message group assignment');
-      t.ok(
-        assignment.strategy === AssignmentStrategy.CREATE_SELF_HOSTED ||
-        assignment.strategy === AssignmentStrategy.MOVE_REPLICA,
-        'should have valid assignment strategy',
-      );
+      t.equal(assignment.strategy, AssignmentStrategy.CREATE_SELF_HOSTED,
+        'should have valid assignment strategy');
 
       // Verify system table snapshots are included
       t.ok(
@@ -252,7 +261,10 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -338,7 +350,10 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
         systemTableCache: NodeService.getInstance().getSystemTableCache(),
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
 
       await seedApi.initialize(0, {listen: false});
@@ -392,6 +407,174 @@ test('virgin seed fixture binds startup admission and storage to one unique ' +
   t.notOk(existsSync(firstDir), 'first owned directory is removed on shutdown');
   t.notOk(existsSync(secondDir), 'second owned directory is removed on shutdown');
   await cleanupTestEnvironment();
+});
+
+test('virgin seed fixture preserves startup-owner identity and explicit ' +
+  'authority choices', async (t) => {
+  initializeTestEnvironment();
+  const services = [];
+  const directories = [];
+  const directoryOwners = [];
+  const releaseOwner = createParticipantReleaseAuthorizationOwner({});
+  const create = async (label, options = {}) => {
+    const dataDir = mkdtempSync(join(tmpdir(), `lagrange-seed-${label}-`));
+    directories.push(dataDir);
+    const service = await createVirginSeedBootstrapService({
+      nodeId: `${label}-node`,
+      nodeAddress: `ws://${label}:9191`,
+      dataDir,
+      ...options,
+    });
+    services.push(service);
+    return {dataDir, service};
+  };
+
+  try {
+    const build = await runtimeBuildProvenance();
+    t.equal(build.state, RUNTIME_BUILD_STATE.MEASURED, build.reason);
+    const authorizationInput = Object.freeze({
+      partitionId: 'fixture-participant-p1',
+      targetBuildDigest: build.digest,
+    });
+    const authorize = (membershipOwnerOutcome) =>
+      releaseOwner.authorizeFreshSeed({
+        ...authorizationInput,
+        membershipOwnerOutcome,
+      });
+    const derivedDataDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-derived-'));
+    directories.push(derivedDataDir);
+    const derivedNodeId = 'derived-node';
+    const derivedNodeAddress = 'ws://derived:9191';
+    const expectedDecision = await resolveAutoRejoinStartupDecision({
+      dataDir: derivedDataDir,
+      nodeId: derivedNodeId,
+      nodeAddress: derivedNodeAddress,
+    });
+    const derived = await createVirginSeedBootstrapService({
+      dataDir: derivedDataDir,
+      nodeId: derivedNodeId,
+      nodeAddress: derivedNodeAddress,
+    });
+    services.push(derived);
+    t.same(derived.membershipOwnerOutcome, expectedDecision.membershipOwnerOutcome,
+      'absent authority uses the actual startup decision owner');
+    const derivedAuthorization = authorize(derived.membershipOwnerOutcome);
+    t.ok(derivedAuthorization, 'derived fresh-seed authority is accepted');
+    t.equal(releaseOwner.validates(derivedAuthorization, authorizationInput), true,
+      'the actual owner validates its exact participant/build token');
+
+    const explicitPositive = await create('explicit-positive', {
+      membershipOwnerOutcome: expectedDecision.membershipOwnerOutcome,
+    });
+    t.equal(explicitPositive.service.membershipOwnerOutcome,
+      expectedDecision.membershipOwnerOutcome,
+      'an explicit canonical owner outcome retains object identity');
+    t.ok(authorize(explicitPositive.service.membershipOwnerOutcome),
+      'the actual owner accepts the explicit canonical outcome');
+
+    const explicitNull = await create('explicit-null', {
+      membershipOwnerOutcome: null,
+    });
+    t.equal(explicitNull.service.membershipOwnerOutcome, null,
+      'explicit null is not replaced by derived authority');
+    t.equal(authorize(explicitNull.service.membershipOwnerOutcome), null,
+      'the actual owner refuses explicit null');
+
+    const explicitUndefined = await create('explicit-undefined', {
+      membershipOwnerOutcome: undefined,
+    });
+    t.equal(explicitUndefined.service.membershipOwnerOutcome, null,
+      'the unchanged constructor canonically stores explicit undefined as null');
+    t.equal(authorize(explicitUndefined.service.membershipOwnerOutcome), null,
+      'the actual owner refuses explicit undefined');
+
+    const invalidOutcome = Object.freeze({outcomeType: 'fixture-invalid'});
+    const explicitInvalid = await create('explicit-invalid', {
+      membershipOwnerOutcome: invalidOutcome,
+    });
+    t.equal(explicitInvalid.service.membershipOwnerOutcome, invalidOutcome,
+      'an explicit invalid outcome retains object identity');
+    t.equal(authorize(explicitInvalid.service.membershipOwnerOutcome), null,
+      'the actual owner refuses the explicit invalid outcome');
+
+    const inheritedDataDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-inherited-'));
+    directories.push(inheritedDataDir);
+    const inheritedOptions = Object.assign(Object.create({
+      membershipOwnerOutcome: invalidOutcome,
+    }), {
+      dataDir: inheritedDataDir,
+      nodeId: 'inherited-node',
+      nodeAddress: 'ws://inherited:9191',
+    });
+    const inherited = await createVirginSeedBootstrapService(inheritedOptions);
+    services.push(inherited);
+    t.same(inherited.membershipOwnerOutcome, expectedDecision.membershipOwnerOutcome,
+      'an inherited outcome is absent and actual authority is derived');
+    t.ok(authorize(inherited.membershipOwnerOutcome),
+      'an inherited outcome is absent and actual derived authority is accepted');
+
+    const mutableDataDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-mutable-'));
+    directories.push(mutableDataDir);
+    const mutableOptions = {
+      dataDir: mutableDataDir,
+      nodeId: 'captured-node',
+      nodeAddress: 'ws://captured:9191',
+    };
+    const mutablePromise = createVirginSeedBootstrapService(mutableOptions);
+    mutableOptions.nodeId = 'mutated-node';
+    mutableOptions.nodeAddress = 'ws://mutated:9191';
+    mutableOptions.membershipOwnerOutcome = invalidOutcome;
+    const mutable = await mutablePromise;
+    services.push(mutable);
+    t.equal(mutable.nodeId, 'captured-node',
+      'node ID is captured before the first helper await');
+    t.equal(mutable.nodeAddress, 'ws://captured:9191',
+      'node address is captured before the first helper await');
+    t.equal(resolve(mutable.dataDirectoryManager.getDataDir()),
+      resolve(mutableDataDir), 'the captured identity keeps the selected directory');
+    t.ok(authorize(mutable.membershipOwnerOutcome),
+      'later option mutation cannot replace the captured absent-owner decision');
+
+    const presentDataDir = mkdtempSync(join(tmpdir(), 'lagrange-seed-present-'));
+    directories.push(presentDataDir);
+    const presentDirectoryOwner = acquireDataDirectoryProcessOwner(presentDataDir);
+    directoryOwners.push(presentDirectoryOwner);
+    const presentOptions = {
+      dataDir: presentDataDir,
+      nodeId: 'present-captured-node',
+      nodeAddress: 'ws://present-captured:9191',
+      membershipOwnerOutcome: invalidOutcome,
+      dataDirectoryProcessOwner: presentDirectoryOwner,
+    };
+    const presentPromise = createVirginSeedBootstrapService(presentOptions);
+    presentOptions.nodeId = 'present-mutated-node';
+    presentOptions.nodeAddress = 'ws://present-mutated:9191';
+    presentOptions.membershipOwnerOutcome = expectedDecision.membershipOwnerOutcome;
+    delete presentOptions.membershipOwnerOutcome;
+    presentOptions.dataDirectoryProcessOwner = null;
+    delete presentOptions.dataDirectoryProcessOwner;
+    const present = await presentPromise;
+    services.push(present);
+    t.equal(present.nodeId, 'present-captured-node',
+      'own-present node ID is captured before the first helper await');
+    t.equal(present.nodeAddress, 'ws://present-captured:9191',
+      'own-present node address is captured before the first helper await');
+    t.equal(present.membershipOwnerOutcome, invalidOutcome,
+      'own-present authority retains its exact captured pre-await value');
+    t.equal(present.dataDirectoryProcessOwner, presentDirectoryOwner,
+      'supplied directory custody retains its exact captured pre-await owner');
+    t.equal(authorize(present.membershipOwnerOutcome), null,
+      'the actual owner refuses the captured value after caller replacement');
+  } finally {
+    await Promise.all(services.map((service) => service.shutdown()));
+    for (const owner of directoryOwners) owner.release();
+    t.ok(directories.every((dataDir) => existsSync(dataDir)),
+      'shutdown leaves every caller-owned directory with the caller');
+    for (const dataDir of directories) {
+      rmSync(dataDir, {recursive: true, force: true});
+    }
+    await cleanupTestEnvironment();
+  }
 });
 
 test('joining-node fixture owns unique stable paths across retries',

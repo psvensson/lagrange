@@ -19,6 +19,11 @@ import {
   OWNER_CONTRACT_STATE,
 } from '../../control-plane/owner-contract-outcome.js';
 import {JOINING_LOG_MSG} from '../node-joining-constants.js';
+
+const JOIN_ADMISSION_WRITE_WAIT = Object.freeze({
+  wait: 'joinAdmissionWriteRetryTimeoutMs',
+  awaited: 'join-admission control-plane system-table write accepted',
+});
 import {
   ENDPOINT_INCARNATION_OUTCOME,
   isEndpointIncarnationOutcomeCompleted,
@@ -457,7 +462,7 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
     return runRetryableControlPlaneWrite(
-      () => controlPlaneSystemTableGateway.submitMutation(
+      (attemptIdentity) => controlPlaneSystemTableGateway.submitMutation(
         {
           operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
           tableName: TABLES.SERVICES,
@@ -465,6 +470,7 @@ class NodeRegistrationOwnerPublicationMethods {
         },
         {
           ...joinTimeOptions,
+          ...attemptIdentity,
           queryTimeoutMs,
         },
       ),
@@ -476,6 +482,9 @@ class NodeRegistrationOwnerPublicationMethods {
           options.admissionTarget || null,
         ),
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.delegates.getLogger?.() ?? null,
+        spentWait: JOIN_ADMISSION_WRITE_WAIT,
+        scope: {nodeId: this.nodeId, tableName: TABLES.SERVICES},
       },
     );
   }
@@ -501,12 +510,13 @@ class NodeRegistrationOwnerPublicationMethods {
     const joinTimeOptions = this.getJoinTimeUpsertOptions();
     const queryTimeoutMs = this.getJoinAdmissionWriteRetryTimeoutMs();
     return runRetryableControlPlaneWrite(
-      () => controlPlaneSystemTableGateway.updateSystemTableRow(
+      (attemptIdentity) => controlPlaneSystemTableGateway.updateSystemTableRow(
         tableName,
         whereClause,
         data,
         {
           ...joinTimeOptions,
+          ...attemptIdentity,
           queryTimeoutMs,
         },
       ),
@@ -518,6 +528,9 @@ class NodeRegistrationOwnerPublicationMethods {
           options.admissionTarget || null,
         ),
         sleep: (delayMs) => this.sleep(delayMs),
+        logger: this.delegates.getLogger?.() ?? null,
+        spentWait: JOIN_ADMISSION_WRITE_WAIT,
+        scope: {nodeId: this.nodeId, tableName: tableName},
       },
     );
   }

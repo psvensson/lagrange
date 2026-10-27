@@ -272,8 +272,19 @@ function ensureSnapshotClusterNodes(result, adapted) {
   }
 }
 
+// The default answer of the table-policy owner operation on a fake node
+// handle (ClusterNodeHandle.updateTablePolicy); a test that observes the
+// owner write supplies its own.
+const FAKE_TABLE_POLICY_OWNER_ANSWER = Object.freeze({
+  success: true,
+  outcome: 'applied',
+});
+
 function asNodeHandle(node) {
   const adapted = {...node};
+  if (typeof adapted.updateTablePolicy !== 'function') {
+    adapted.updateTablePolicy = async () => FAKE_TABLE_POLICY_OWNER_ANSWER;
+  }
   if (Array.isArray(node?.discoveryNodeIds)) {
     adapted._discoveryNodeIds =
       node.discoveryNodeIds.map((value) => String(value));
@@ -433,6 +444,7 @@ function buildVersionedStrictReadinessCluster(options = {}) {
   };
 
   const seedNode = {
+    updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
     id: 'seed-1',
     role: 'seed',
     query: async function(sql) {
@@ -456,11 +468,8 @@ function buildVersionedStrictReadinessCluster(options = {}) {
           }],
         };
       }
-      if (statement.startsWith('UPDATE partitions SET table_name')) {
-        return {rows: [], changes: 1};
-      }
       if (statement.includes('FROM partitions')) {
-        return {rows: [{partition_id: 'p1'}]};
+        return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
       }
       return {rows: []};
     },

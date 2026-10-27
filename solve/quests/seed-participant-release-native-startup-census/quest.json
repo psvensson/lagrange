@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-participant-release-native-startup-census",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Fresh-seed startup must release its actual partition cohort through the existing participant-release and native application owners within the current shared startup budget, preserve exact drain and admission authority, and proceed to the existing bootstrap and SQL/Raft/cache acceptance bodies. Identify the measured rejected work and its owning transition before repairing the smallest demonstrated interaction; no speculative ordering repair, deadline expansion, cached permission, or healthy timeout exhaustion can satisfy this Quest.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-participant-release-native-startup-census/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-rejected-census-and-owner",
+        "engaged-real-owner-regression",
+        "fresh-seed-startup-at-existing-bounds",
+        "recovery-and-interaction-preserved",
+        "independent-review-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "diagnose-before-repair",
+      "statement": "First attempt is test-only observation of existing real startup transport requests and replies, or existing owner evidence. No production edit is authorized until the actual blocked fact/owner and a bounded interaction proposal have independent review. Successful CUT_OVER is only a positive control and cannot substitute for engaging the failed final census."
+    },
+    {
+      "id": "existing-authority-and-one-path",
+      "statement": "Preserve canonical release classification and precedence, exact generations and membership, origin durability, serialized seed order, current control-owner requirements, current pause/resume fences, exact stored attempt lifetime, native application transaction and operation-only Raft boundary. No duplicate classifier, fallback, compatibility path, second semantic owner, cached OPEN proof or local convergence loop."
+    },
+    {
+      "id": "bounded-observation-only",
+      "statement": "Test observation may capture original delivered INSPECT/ENABLE/RELEASE answers and request identity. It must call the real transport once and preserve exact original promise/results/errors, perform no extra owner read or protocol action, add no await/sleep, bound memory and report dropped records. Emit only after startup settles. Instrumentation overhead is disclosed; observations do not become runtime authority."
+    },
+    {
+      "id": "test-first-and-existing-workloads",
+      "statement": "Retain actual claim-cache and bootstrap tests, their assertion bodies, fresh-storage authorization, configuration, deadlines, cleanup and expected success. Diagnostic tracing never converts an existing red to expected success. Extend the nearest real-owner regression only when evidence identifies a concrete defect; retain meaningful source-only same-test red and positive controls."
+    },
+    {
+      "id": "locked-exact-evidence",
+      "statement": "Root owns canonical locked lab runs. Use immutable exact SHAs and byte-bound inputs. Compare introduced behavior on the same physical host with identical witness bytes. No retry-only green, skip, host substitution, prewarm or timeout/baseline increase. Fully spent healthy deadlines remain system bugs."
+    },
+    {
+      "id": "implementation-and-review",
+      "statement": "Implementation stays with the assigned GPT-5.6 worker; root owns integration and lab measurement. Source and test changes require independent exact-byte review with relevant complete verification categories. Use ordinary metadata generators and existing interaction registry and receipt probe; never add a parallel result classifier or per-Quest producer."
+    },
+    {
+      "id": "scope-and-closure",
+      "statement": "This unit addresses the measured fresh-seed participant-release startup failure. It cannot close existing TX1, C2, recovery, FreshMG, snapshot, CDC, full-corpus or exact-main certification by implication. Previously sealed diagnostic acceptance remains unchanged and OPEN/HOLD on static debt."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "ffe35e77d51cbd4ba35fb30518de1307eaaa2eec"
+}

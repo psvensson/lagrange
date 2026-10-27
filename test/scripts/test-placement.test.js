@@ -14,14 +14,15 @@ import {test} from 'node:test';
 
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
 import {
-  DISCOVERY_FAILURE, PLACEMENT_EXIT, formatLabDecision, labTestCommit, labTestDeps, placeLabLanes,
+  DISCOVERY_FAILURE, PLACEMENT_EXIT, labTestCommit, labTestDeps,
   placeTestFiles, placementDeps, placementMachines, recordPlacementMisses, runLabTest,
   runPlacedTestFiles, startRemoteShard,
 } from '../../scripts/lab/probe.js';
 import {runClassifiedTestFiles} from '../../scripts/run-classified-test-files.js';
+import {CONTROLLER, LANE, fakeInventory, lab} from './test-placement-fixtures.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const MINUTE = 60000;
-const CONTROLLER = Object.freeze({name: '(controller)', controller: true, speed: 1});
 // A pure unit file of about 50 ms: the witnesses below wait on events, not on
 // wall-clock budgets, because the hosted runner is several times slower
 // (2026-09-18: a repository-scanning file took over a minute there).
@@ -60,10 +61,6 @@ function runnerFixture(t) {
   fs.writeFileSync(path.join(root, RUNNER_FAST_FIXTURE),
     `${RUNNER_FIXTURE_HEAD}test('passes', () => assert.ok(true));\n`);
   return {root, tap: (file) => path.join(root, '.tap', 'test-results', `${file}.tap`)};
-}
-
-function lab(name, speed, extra = {}) {
-  return {name, controller: false, speed, avoid: [], gapsKey: 'k', ...extra};
 }
 
 function machineOf(shards, file) {
@@ -184,6 +181,7 @@ function fakeDeps(overrides = {}) {
       return 0;
     },
     lastGreen: () => true,
+    checkBase: () => null,
     commitAt: () => {
       calls.commit += 1;
       return 'a'.repeat(40);
@@ -277,7 +275,7 @@ test('a small plan, a tree that is not a commit or an empty fleet runs locally',
   // The real commit check: clean is a commit, modified or untracked is not.
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-commit-'));
   try {
-    const git = (...args) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    const git = (...args) => spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t',
       ...args], {cwd: repo, encoding: 'utf8', env: gitProcessEnvironment()});
     git('init', '-q');
     fs.writeFileSync(path.join(repo, 'a.txt'), 'a\n');
@@ -338,12 +336,12 @@ test('a file red on a lab machine is decided on the controller and routed away a
   assert.equal(await runPlacedTestFiles(MANY, run.deps), 1);
   assert.deepEqual(run.calls.record, []);
 
-  // The lab machine is handed the controller's own retry and timeout policy,
-  // gets its deadline from its estimate, and is started before the
-  // controller's lanes block.
-  run = fakeDeps({env: {LAGRANGE_RETRY_FAILED_ONCE: '1', TAP_TIMEOUT: '900'}});
+  // The lab machine is handed the controller's retry and timeout policy and check
+  // base, gets its deadline from its estimate, and starts before the controller's lanes.
+  run = fakeDeps({env: {LAGRANGE_RETRY_FAILED_ONCE: '1', TAP_TIMEOUT: '900'}, checkBase: () => 'c0'});
   await runPlacedTestFiles(MANY, run.deps);
-  assert.deepEqual(run.calls.options[0].options.forward, {retry: '1', tapTimeout: '900'});
+  assert.deepEqual(run.calls.options[0].options.forward,
+    {retry: '1', tapTimeout: '900', checkBase: 'c0'});
   assert.equal(run.calls.options[0].options.deadlineMs, 30 * MINUTE,
     'never under half an hour');
   assert.deepEqual(run.calls.order, ['remote', 'local'], 'lab shards first, then this one');
@@ -352,6 +350,11 @@ test('a file red on a lab machine is decided on the controller and routed away a
   const {shard, options} = run.calls.options[0];
   assert.ok(shard.loadMs * 3 > 30 * MINUTE);
   assert.equal(options.deadlineMs, 3 * shard.loadMs, 'three times its estimate');
+
+  run = fakeDeps({checkBase: () => assert.fail('no commit: nope')});
+  assert.equal(await runPlacedTestFiles(MANY, run.deps), 0);
+  assert.deepEqual([run.calls.remote, run.calls.local], [[], [MANY]]);
+  assert.ok(run.calls.lines.some((line) => /is unresolved: no commit: nope$/u.test(line)));
 
   // Past the cap it is breakage: red, and nothing runs twice.
   const many = Array.from({length: 60}, (_, index) => `test/g${index}.test.js`);
@@ -564,8 +567,8 @@ test('an interrupted placed run stops every machine at once', async (t) => {
     const real = placementDeps({root: ${JSON.stringify(fixture.root)}});
     await runPlacedTestFiles(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], {
       env: {}, write: () => {},
-      planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})),
-      commitAt: () => 'a'.repeat(40), lastGreen: () => true, runLocal: () => 1,
+      planCosts: (files) => files.map((file) => ({file, ms: 120000, jobs: 1})), runLocal: () => 1,
+      commitAt: () => 'a'.repeat(40), checkBase: () => null, lastGreen: () => true,
       discover: async () => ({machines: [{name: 'lab', controller: false, speed: 1,
         avoid: []}], record: async () => {}}),
       runRemote: () => {
@@ -735,6 +738,33 @@ test('the controller child runs with placement switched off', async (t) => {
 });
 
 const GATE_TEST = 'test/scripts/lab-stream-gate.test.js';
+// push-gate-change-proof's precondition, as a file a fixture commit carries:
+// the sealed import graph loads in the checkout the file runs in.
+const SEALED_GRAPH_TEST = 'test/scripts/lab-sealed-graph.test.js';
+const SEALED_GRAPH_TEST_SOURCE = [
+  'import assert from \'node:assert/strict\';',
+  'import {test} from \'node:test\';',
+  'import {loadSealedImporters} from \'../../scripts/checks/helper-import-closure.js\';',
+  'test(\'the sealed import graph loads here\', () => {',
+  '  const sealed = loadSealedImporters(process.cwd());',
+  '  assert.ok(sealed.ok, `the sealed import graph: ${sealed.problem}`);',
+  '});',
+  '',
+].join('\n');
+// What the change taxonomy enumerates in a lab machine's checkout: none of
+// the placement's workspace links (a linked tools/alloy-* directory was).
+const LINK_UNIVERSE_TEST = 'test/scripts/lab-link-universe.test.js';
+const LINK_UNIVERSE_TEST_SOURCE = [
+  'import assert from \'node:assert/strict\';',
+  'import fs from \'node:fs\';',
+  'import {test} from \'node:test\';',
+  'import {candidatePaths} from \'../../scripts/checks/change-selection.js\';',
+  'test(\'no workspace link is a candidate\', () => {',
+  '  assert.deepEqual(candidatePaths(process.cwd()).untracked',
+  '    .filter((file) => fs.lstatSync(file).isSymbolicLink()), []);',
+  '});',
+  '',
+].join('\n');
 const RESULTS_FILE = 'test-output/reports/test-results.ndjson';
 const RESULTS_TEXT = '{"file":"a","ok":true}\n{"file":"b","ok":false}\n';
 
@@ -783,7 +813,7 @@ test('the controller child gets its file list even while this process is busy', 
 });
 
 function git(cwd, ...args) {
-  const result = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+  const result = spawnGit(['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
     {cwd, encoding: 'utf8', env: gitProcessEnvironment()});
   assert.equal(result.status, 0, `git ${args.join(' ')}: ${result.stderr}`);
   return result.stdout.trim();
@@ -862,9 +892,23 @@ function labLockFixture(scratch, env) {
     calls: () => (fs.existsSync(calls) ? fs.readFileSync(calls, 'utf8').trim().split('\n') : [])};
 }
 
+// The import-graph producer a fixture commit carries unless a witness asks
+// for the real one: it says where and how it ran, and writes the graph.
+const IMPORT_GRAPH_PRODUCER = 'scripts/generate-global-owner-debt-inventory.js';
+const PRODUCER_STUB = [
+  'import {execSync} from \'node:child_process\';',
+  'import fs from \'node:fs\';',
+  'const head = execSync(\'git rev-parse HEAD\', {encoding: \'utf8\'}).trim();',
+  'process.stderr.write(`producer ${process.argv.slice(2).join(\' \')} at ${head}\\n`);',
+  'if (process.env.PRODUCER_FAILS) process.exit(1);',
+  'fs.mkdirSync(\'test-output/analysis\', {recursive: true});',
+  'fs.writeFileSync(\'test-output/analysis/global-owner-debt-import-graph.json\', \'{}\');',
+  '',
+].join('\n');
+
 // A lab machine's checkout at this commit, and a controller one commit on,
 // in scratch repositories; `start` places files there in local-sh mode.
-function labFixture(t) {
+function labFixture(t, {realProducer = false} = {}) {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'placement-remote-'));
   t.after(() => fs.rmSync(scratch, {recursive: true, force: true}));
   const node = path.join(scratch, 'node');
@@ -877,6 +921,10 @@ function labFixture(t) {
   // older checkout.
   fs.mkdirSync(path.join(node, 'data', 'examples'), {recursive: true});
   fs.writeFileSync(path.join(node, 'data', 'examples', 'witness.txt'), 'x');
+  // A fetched model checker: tools/ is untracked, its entries ignored one by one.
+  fs.mkdirSync(path.join(node, 'tools'), {recursive: true});
+  fs.writeFileSync(path.join(node, 'tools', 'tla2tools.jar'), 'x');
+  fs.mkdirSync(path.join(node, 'tools', 'alloy-6.2.0'));
   // What an earlier, interrupted run left behind.
   const parent = path.join(node, 'test-output', 'placement-worktrees');
   fs.mkdirSync(path.join(parent, 'old-run'), {recursive: true});
@@ -893,7 +941,10 @@ function labFixture(t) {
   fs.writeFileSync(path.join(controller, GATE_TEST), gateTestSource(gate));
   fs.mkdirSync(path.join(controller, 'test-output', 'reports'), {recursive: true});
   fs.writeFileSync(path.join(controller, RESULTS_FILE), RESULTS_TEXT);
-  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE);
+  if (!realProducer) fs.writeFileSync(path.join(controller, IMPORT_GRAPH_PRODUCER), PRODUCER_STUB);
+  fs.writeFileSync(path.join(controller, SEALED_GRAPH_TEST), SEALED_GRAPH_TEST_SOURCE);
+  fs.writeFileSync(path.join(controller, LINK_UNIVERSE_TEST), LINK_UNIVERSE_TEST_SOURCE);
+  git(controller, 'add', '-f', GATE_TEST, RESULTS_FILE, SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST);
   git(controller, 'commit', '-qam', 'placement witness');
   const sha = git(controller, 'rev-parse', 'HEAD');
   const machine = {name: 'lab', sshTarget: null, repoPath: node, repoHead: basis,
@@ -910,15 +961,15 @@ function labFixture(t) {
   const labLock = labLockFixture(scratch, env);
   const start = (files, options = {}) => startRemoteShard({machine, files},
     {sha, deadlineMs: 10 * MINUTE, root: controller, env, holder: FIXTURE_HOLDER, ...options});
-  return {node, controller, parent, machine, sha, env, start, labLock,
+  return {node, controller, parent, machine, sha, basis, env, start, labLock,
     releaseGate: () => fs.writeFileSync(gate, 'go')};
 }
 
 test('a lab machine proves the exact commit in a throwaway worktree and leaves nothing behind',
   async (t) => {
-    const {node, controller, parent, machine, sha, env, start} = labFixture(t);
+    const {node, controller, parent, machine, sha, basis, env, start} = labFixture(t);
     const started = start([FAST_TEST], {runId: 'capped',
-      forward: {retry: '1', tapTimeout: '900'}});
+      forward: {retry: '1', tapTimeout: '900', checkBase: basis}});
     assert.equal(typeof started.then, 'undefined', 'a shard is started, not awaited');
     // The lab-side script as sent, read before its shard removes it and
     // asserted once the shard has settled, so a red leaves nothing running.
@@ -940,11 +991,14 @@ test('a lab machine proves the exact commit in a throwaway worktree and leaves n
     const cores = Number(spawnSync('getconf', ['_NPROCESSORS_ONLN'], {encoding: 'utf8'})
       .stdout.trim());
     assert.match(green.log, new RegExp('^placement-env=factor:1\\.5 mode:local retry:1 ' +
-      `timeout:900 lanecap:${Math.max(1, cores - 1)}$`, 'mu'),
-    'its own budgets scaled, the controller\'s retry and timeout policy, never placed ' +
-      'again, and its lanes capped at its cores less one');
+      `timeout:900 lanecap:${Math.max(1, cores - 1)} base:${basis}$`, 'mu'),
+    'its own budgets scaled, the controller\'s retry and timeout policy and check base, ' +
+      'never placed again, and its lanes capped at its cores less one');
+    assert.match(sent, /else unset LAGRANGE_CHECK_BASE; fi$/mu, 'none forwarded, none kept');
     assert.match(green.log, /^placement-link=node_modules$/mu);
     assert.match(green.log, /^placement-link=data\/examples$/mu, 'an ignored entry is linked');
+    assert.match(green.log, /^placement-link=tools\/tla2tools\.jar$/mu,
+      'a fetched model checker is linked');
     assert.doesNotMatch(green.log, /^placement-link=data\/storage-load$/mu,
       'a tracked entry the commit deleted stays deleted');
     assert.deepEqual(leftovers(node), {worktrees: 1, refs: '', files: []},
@@ -1240,78 +1294,6 @@ test('a hand lab run on a held host reports it and never counts its files as pas
 // [--split]` sends the exact commit through the same shard path, streams each
 // file's verdict as it lands, and prints the runner's own summary.
 
-const LANE = Object.freeze({ORDINARY: 'ordinary', EXCLUSIVE: 'exclusive',
-  BOOTSTRAP: 'bootstrap', EXTERNAL: 'external-toolchain'});
-
-// A fake inventory: the machines, their measured facts and the controller's.
-function fakeInventory() {
-  const ready = {ready: true, missing: [], gaps: []};
-  const cap = (extra = {}) => ({repoPath: '/srv/lagrange', cpuSampleMs: 260, cores: 12,
-    memKiB: 16 * 1024 * 1024, nodeVersion: 'v22.22.3', repo: {head: 'c'.repeat(40)}, ...extra});
-  const fleet = [
-    {name: '(controller)', controller: true,
-      capability: {cpuSampleMs: 200, cores: 20, memKiB: 32 * 1024 * 1024}, readiness: ready},
-    {name: 'alpha', capability: cap(), readiness: ready},
-    {name: 'beta', capability: cap({cpuSampleMs: 150, cores: 8}), readiness: ready},
-    {name: 'gamma', capability: cap(), readiness: {ready: false, missing: ['no-repository'],
-      gaps: []}},
-  ];
-  const nodes = Object.fromEntries(fleet.filter((entry) => !entry.controller)
-    .map((entry) => [entry.name, {name: entry.name, ssh: `peer@${entry.name}`}]));
-  return {fleet, state: {nodes}};
-}
-
-const LANE_PLAN = Object.freeze([
-  {resourceClass: LANE.ORDINARY, files: ['o1', 'o2'], jobs: 4},
-  {resourceClass: LANE.EXTERNAL, files: ['t1'], jobs: 1},
-  {resourceClass: LANE.BOOTSTRAP, files: ['b1'], jobs: 2},
-  {resourceClass: LANE.EXCLUSIVE, files: ['x1'], jobs: 1},
-]);
-
-test('a hand lab run takes its machine from measured facts, never a written host', () => {
-  const {fleet, state} = fakeInventory();
-  const machines = placementMachines(fleet, state);
-  assert.deepEqual(machines.map((machine) => [machine.name, machine.cores, machine.memKiB]),
-    [['alpha', 12, 16 * 1024 * 1024], ['beta', 8, 16 * 1024 * 1024]],
-    'each machine carries its measured capacity');
-  const controller = {name: '(controller)', controller: true, speed: 1, cores: 20,
-    memKiB: 32 * 1024 * 1024};
-  const names = (assignments) => assignments.map((one) =>
-    [one.machine.name, one.lanes.map((lane) => lane.resourceClass)]);
-
-  // One lane, nowhere named: the fastest ready machine, measured this run.
-  assert.deepEqual(names(placeLabLanes([LANE_PLAN[3]], machines, {controller})),
-    [['beta', [LANE.EXCLUSIVE]]]);
-  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {on: 'alpha', controller})),
-    [['alpha', LANE_PLAN.map((lane) => lane.resourceClass)]], '--on names the machine');
-  assert.throws(() => placeLabLanes(LANE_PLAN, machines, {on: 'gamma', controller}),
-    /gamma is not a ready lab machine/u);
-  assert.throws(() => placeLabLanes(LANE_PLAN, [], {controller}), /no lab machine is ready/u);
-
-  // Split: the exclusive lane alone on the fastest lab machine; the rest on
-  // whichever is measured faster of the controller and the next lab machine.
-  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines, {split: true, controller})),
-    [['beta', [LANE.EXCLUSIVE]],
-      ['(controller)', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
-    'a second machine slower than the controller is not used');
-  const quick = [...machines, {...machines[0], name: 'delta', speed: 0.5}];
-  assert.deepEqual(names(placeLabLanes(LANE_PLAN, quick, {split: true, controller})),
-    [['delta', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
-    'a second lab machine faster than the controller takes the other lanes');
-  assert.deepEqual(names(placeLabLanes(LANE_PLAN, machines,
-    {split: true, on: 'alpha', controller})),
-  [['alpha', [LANE.EXCLUSIVE]], ['beta', [LANE.ORDINARY, LANE.EXTERNAL, LANE.BOOTSTRAP]]],
-  'the next lab machine, measured faster than the controller, takes the rest');
-
-  // The decision is printed with the capacities it was made from.
-  const lines = formatLabDecision(placeLabLanes(LANE_PLAN, machines, {split: true, controller}));
-  assert.deepEqual(lines, [
-    'lab test: beta: exclusive (1 files) cores=8 mem=16.0GiB speed x0.75',
-    'lab test: (controller): ordinary, external-toolchain, bootstrap (4 files) ' +
-      'cores=20 mem=32.0GiB speed x1.00',
-  ]);
-});
-
 test('a lab shard streams its lines while it runs and relays its results ledger', async (t) => {
   const {start, releaseGate} = labFixture(t);
   const streamed = [];
@@ -1342,6 +1324,32 @@ test('a lab shard streams its lines while it runs and relays its results ledger'
   assertLedgerCameBack(relayed, [FAST_TEST, GATE_TEST]);
 });
 
+test('a lab machine generates the placed commit\'s import graph before its files run',
+  async (t) => {
+    const {start, sha, env} = labFixture(t);
+    const ran = await start([FAST_TEST], {runId: 'graph'}).done;
+    assert.equal(ran.status, 0, ran.log + ran.errors);
+    assert.match(ran.errors, new RegExp(`^producer --refresh-import-graph-only at ${sha}$`, 'mu'),
+      'its own producer, in the worktree at the placed commit');
+    assert.match(ran.log, /^placement-prepared=import-graph$/mu);
+    assert.ok(ran.log.indexOf('placement-prepared=') < ran.log.indexOf('placement-pid='),
+      'before the runner starts');
+    env.PRODUCER_FAILS = '1';
+    const failed = await start([FAST_TEST], {runId: 'graph-failed'}).done;
+    assert.equal(failed.status, PLACEMENT_EXIT.SETUP, 'a graph it cannot make is a setup failure');
+    assert.match(failed.errors, /placement: the import graph could not be generated/u);
+  });
+
+test('the change proof\'s sealed-graph precondition holds in a lab machine\'s checkout',
+  async (t) => {
+    const {start} = labFixture(t, {realProducer: true});
+    const ran = await start([SEALED_GRAPH_TEST, LINK_UNIVERSE_TEST], {runId: 'sealed'}).done;
+    assert.equal(ran.status, 0, ran.log + ran.errors);
+    assert.match(ran.log, new RegExp(`^ok ${SEALED_GRAPH_TEST} `, 'mu'));
+    assert.match(ran.log, /^placement-link=tools\/alloy-6\.2\.0$/mu, 'a model checker is linked');
+    assert.match(ran.log, new RegExp(`^ok ${LINK_UNIVERSE_TEST} `, 'mu'), 'and no candidate');
+  });
+
 // The ledger in the throwaway worktree came back whole before it was
 // removed: the commit's own records first, then the runner's record of every
 // file the shard ran (the runner appends one per attempt).
@@ -1356,16 +1364,20 @@ function assertLedgerCameBack(records, files) {
   }
 }
 
-test('a split lab run sends the exclusive lane away, runs the rest here and merges', async (t) => {
+test('a split lab run spreads its files by cost and merges what each ran', async (t) => {
   const {controller, machine, sha, env} = labFixture(t);
   fs.symlinkSync(path.join(process.cwd(), 'node_modules'),
     path.join(controller, 'node_modules'));
   const {fleet} = fakeInventory();
-  const lab = {...machine, controller: false, speed: 0.9, cores: 12, memKiB: 1024 * 1024,
+  const lab = {...machine, controller: false, speed: 0.5, cores: 12, memKiB: 1024 * 1024,
     avoid: []};
   const lines = [];
   const deps = {...labTestDeps({root: controller, env}),
-    discover: async () => ({fleet, machines: [lab]})};
+    discover: async () => ({fleet, machines: [lab]}), controllerHeadroom: () => ({fit: true})};
+  // Four minutes serial there finishes before here; a minute's share of the
+  // ordinary lane finishes here first.
+  const costs = [{file: FAST_TEST, ms: 4 * MINUTE, jobs: 1},
+    {file: OTHER_FAST_TEST, ms: 4 * MINUTE, jobs: 4}];
   const plan = [
     {resourceClass: LANE.ORDINARY, files: [OTHER_FAST_TEST], jobs: 4},
     {resourceClass: LANE.EXCLUSIVE, files: [FAST_TEST], jobs: 1},
@@ -1373,11 +1385,11 @@ test('a split lab run sends the exclusive lane away, runs the rest here and merg
   const commit = labTestCommit({root: controller});
   t.after(() => commit.release());
   assert.equal(commit.sha, sha);
-  const status = await runLabTest({plan, commit, split: true, root: controller,
+  const status = await runLabTest({plan, commit, costs, split: true, root: controller,
     write: (line) => lines.push(line)}, deps);
   assert.equal(status, 0, lines.join('\n'));
-  assert.ok(lines.includes('lab test: lab: exclusive (1 files) cores=12 mem=1.0GiB speed x0.90'),
-    lines.join('\n'));
+  assert.ok(lines.includes('lab test: lab: exclusive (1 files) cores=12 mem=1.0GiB speed x0.50 ' +
+  '~2.5 min'), lines.join('\n'));
   assert.ok(lines.some((line) => line.startsWith(`[lab] ok ${FAST_TEST} `)), 'streamed there');
   assert.ok(lines.some((line) => line.startsWith(`[(controller)] ok ${OTHER_FAST_TEST} `)),
     'and here');
@@ -1396,9 +1408,18 @@ test('a split lab run sends the exclusive lane away, runs the rest here and merg
   commit.release();
   assert.equal(fs.existsSync(commit.gitRoot), false, 'the planning checkout is gone');
 
-  // A share for the controller needs this tree to be exactly the commit.
-  await assert.rejects(runLabTest({plan, commit: {sha: 'f'.repeat(40), gitRoot: controller,
-    release: () => {}}, split: true, root: controller, write: () => {}}, deps),
+  // A controller whose tree is not exactly the commit takes no share, and
+  // a file only it could take is refused.
+  const other = {sha: 'f'.repeat(40), gitRoot: controller, release: () => {}};
+  const elsewhere = [];
+  const stubbed = {...deps, runRemote: () => ({done: Promise.resolve({status: 0, log: '',
+    errors: ''})})};
+  await runLabTest({plan, commit: other, costs, split: true, root: controller,
+    write: (line) => elsewhere.push(line)}, stubbed);
+  assert.ok(elsewhere.includes('lab test: skipped (controller): the controller runs its ' +
+  `lanes in this tree, which is not exactly ${'f'.repeat(40)}`), elsewhere.join('\n'));
+  await assert.rejects(runLabTest({plan, commit: other, split: true, root: controller,
+    costs: costs.map((cost) => ({...cost, ms: 20 * MINUTE})), write: () => {}}, stubbed),
   /the controller runs its lanes in this tree, which is not exactly f{40}/u);
 });
 

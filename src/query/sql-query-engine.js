@@ -1,9 +1,25 @@
 import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {
+  STATEMENT_ADMISSION,
+  admitExpectedTransaction,
+} from './sql-query-engine-statement-admission.js';
+import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {SQLQueryEngineWriteExecution} from './sql-query-engine-write-execution.js';
+import {COMMIT_POINT_REACHED_FIELD} from
+  './distributed/distributed-transaction-commit-point.js';
 import {createSQLQueryEngineTableRoutingMethods} from './sql-query-engine-table-routing-methods.js';
+import {createSQLQueryEngineTransactionPersistenceMethods} from
+  './sql-query-engine-transaction-persistence-methods.js';
+import {
+  isParticipantTransactionAnswer,
+  participantDeliveryAnswerOf,
+  participantDeliveryKeyOf,
+  participantEntryIdOf,
+  participantFailureOf,
+  participantTransactionRequestOf,
+} from './sql-query-engine-participant-wire.js';
 
 const LOCAL_STR_SHA1 = 'sha1';
 const LOCAL_STR_HEX = 'hex';
@@ -16,23 +32,20 @@ const LOCAL_STR_TIMEOUT = 'timeout';
 const LOCAL_STR_BOOLEAN = 'boolean';
 
 const {
-  CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READINESS_DIMENSION,
-  PRESSURE_WORK_CLASS,
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
   QUERY_OPERATION,
   QUERY_SESSION,
   SQLParser,
-  TABLES,
   WRITE_OPERATION_STATUS,
   createHash,
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
 const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY = 'critical';
-const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000;
+const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_TIMEOUT_MS = 15000; // ends-on: the priority control-plane partition delivery succeeds
 const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE_PREFIX =
   'query:transaction';
 const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_KEY_SEPARATOR = ':';
@@ -45,44 +58,32 @@ const PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED =
   Object.freeze({
     state: PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE.OMITTED,
   });
+const TYPED_PARTICIPANT_FAILURE_FIELDS = Object.freeze([
+  'failureCode',
+  'refusalCause',
+  'refusalLayer',
+]);
 const NON_TRANSACTIONAL_WRITE_TRACKING_DISPOSITION = Object.freeze({
   PERSIST: 'persist',
   SKIP_RETRYABLE_CONTROL_PLANE_FAILURE:
     'skip_retryable_control_plane_failure',
 });
 
-function normalizePriorityControlPlaneTransactionDeliveryPart(value) {
-  return typeof value === LOCAL_STR_STRING ?
-    value.trim() :
-    '';
-}
-
+// The delivery identity of one transaction-control message: bound to the
+// exact transaction and operation (TX1 seam A), never to the session.
 function buildPriorityControlPlaneTransactionDeliveryIdentity({
-  sessionId,
+  transactionId,
   partitionId,
   operation,
 } = {}) {
-  const normalized = Object.freeze({
-    sessionId:
-      normalizePriorityControlPlaneTransactionDeliveryPart(sessionId),
-    partitionId:
-      normalizePriorityControlPlaneTransactionDeliveryPart(partitionId),
-    operation:
-      normalizePriorityControlPlaneTransactionDeliveryPart(operation),
-  });
-  const completeIdentity = [
-    normalized.sessionId,
-    normalized.partitionId,
-    normalized.operation,
-  ].every((part) => part.length > 0);
-  if (!completeIdentity) {
+  const parts = participantDeliveryKeyOf({transactionId, partitionId,
+    operation});
+  if (parts === null) {
     return PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED;
   }
   const deliveryKey = [
     PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_SOURCE_PREFIX,
-    normalized.partitionId,
-    normalized.sessionId,
-    normalized.operation,
+    ...parts,
   ].join(PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_KEY_SEPARATOR);
   return Object.freeze({
     state: PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_STATE.RESOLVED,
@@ -92,145 +93,6 @@ function buildPriorityControlPlaneTransactionDeliveryIdentity({
 }
 
 class SQLQueryEngine extends SQLQueryEngineWriteExecution {
-  assertDistributedTransactionMutationSucceeded(result, tableName) {
-    if (result?.success === true) {
-      return;
-    }
-    const error = new Error(
-      result?.error || QUERY_ERROR_MSG.TRANSACTION_STATE_PERSIST_FAILED,
-    );
-    error.code =
-      result?.errorCode || QUERY_ERROR_CODE.TRANSACTION_STATE_PERSIST_FAILED;
-    error.tableName = tableName;
-    throw error;
-  }
-
-  async persistDistributedTransactionRow(record) {
-    if (!this.canPersistDistributedTransactionState()) {
-      return;
-    }
-    const transactionId = String(record?.transactionId || '').trim();
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SQL_TRANSACTIONS,
-      row: {
-        transaction_id: transactionId,
-        session_id: record.sessionId,
-        status: record.status,
-        transaction_epoch: record.transactionEpoch,
-        timeout_deadline: record.timeoutDeadline,
-        transaction_mode: record.transactionMode,
-        participant_set_state: record.participantSetState,
-        commit_mode: record.commitMode,
-        frozen_participant_count: record.frozenParticipantCount,
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-      },
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_TRANSACTIONS,
-      {
-        // Durable transaction state must bypass interactive admission
-        // pressure and retain critical delivery priority so recovery metadata
-        // does not stall behind background control-plane backlog.
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: transactionId.length > 0 ?
-          `sql-transaction:${transactionId}` :
-          null,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_TRANSACTIONS,
-    );
-  }
-
-  /**
-   * Persist one distributed transaction participant row.
-   * @param {Object} record - Participant persistence payload.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistDistributedTransactionParticipantRow(record) {
-    if (!this.canPersistDistributedTransactionState()) {
-      return;
-    }
-    const participantId = String(record?.participantId || '').trim();
-    const transactionId = String(record?.transactionId || '').trim();
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      row: {
-        participant_id: participantId,
-        transaction_id: transactionId,
-        partition_id: record.partitionId,
-        status: record.status,
-        last_error: record.lastError,
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-      },
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      {
-        workClass: PRESSURE_WORK_CLASS.CRITICAL,
-        coalescingKey: participantId.length > 0 ?
-          `sql-transaction-participant:${participantId}` :
-          null,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
-    );
-  }
-
-  /**
-   * Persist one distributed write operation row.
-   * @param {Object} record - Write operation persistence payload.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistDistributedWriteOperationRow(record) {
-    if (!this.canPersistDistributedTransactionState()) {
-      return;
-    }
-    const operationId = String(record?.operationId || '').trim();
-    const transactionId = String(record?.transactionId || '').trim();
-    const workClass =
-      typeof record?.workClass === 'string' &&
-        record.workClass.length > 0 ?
-        record.workClass :
-        PRESSURE_WORK_CLASS.INTERACTIVE;
-    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
-      tableName: TABLES.SQL_WRITE_OPERATIONS,
-      row: {
-        operation_id: operationId,
-        transaction_id: transactionId || null,
-        statement_type: record.statementType,
-        status: record.status,
-        idempotency_key: record.idempotencyKey,
-        payload_hash: record.payloadHash,
-        retry_count: record.retryCount || 0,
-        last_error: record.lastError || null,
-        partition_ids: JSON.stringify(record.partitionIds || []),
-        created_at: record.createdAt,
-        updated_at: record.updatedAt,
-      },
-    }, this.buildDistributedTransactionMutationOptions(
-      TABLES.SQL_WRITE_OPERATIONS,
-      {
-        workClass,
-        coalescingKey: operationId.length > 0 ?
-          `sql-write-operation:${operationId}` :
-          null,
-      },
-    ));
-    this.assertDistributedTransactionMutationSucceeded(
-      result,
-      TABLES.SQL_WRITE_OPERATIONS,
-    );
-  }
-
   /**
    * Persist a distributed write operation not associated with a transaction.
    * @param {Object} writePlan - DistributedWritePlan.
@@ -344,31 +206,64 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   }
 
   /**
+   * BEGIN for a session that may expect to be inside a transaction already:
+   * when the engine no longer holds the expected one, BEGIN is refused
+   * rather than opening a fresh transaction under the client's old block.
+   * @param {string} sessionId - Session ID.
+   * @param {Object} options - Query options (expectedTransactionId).
+   * @return {Promise<Object>} Transaction result.
+   * @private
+   */
+  async handleAdmittedBegin(sessionId, options = {}) {
+    const admission = admitExpectedTransaction(this.transactionCoordinator,
+      sessionId, options.expectedTransactionId);
+    return admission.state === STATEMENT_ADMISSION.REFUSED ?
+      admission.failure :
+      this.handleBeginTransaction(sessionId, options);
+  }
+
+  /**
    * Handle BEGIN TRANSACTION.
    * @param {string} sessionId - Session ID for tracking.
    * @return {Object} Transaction result.
    * @private
    */
-  handleBeginTransaction(sessionId = QUERY_SESSION.DEFAULT) {
+  handleBeginTransaction(sessionId = QUERY_SESSION.DEFAULT, options = {}) {
     this.logger.debug(QUERY_LOG_MSG.BEGIN_TRANSACTION, {sessionId});
-    return this.transactionCoordinator.begin(sessionId);
+    return this.transactionCoordinator.begin(sessionId, options);
   }
 
   /**
    * Handle COMMIT.
    * Routes through message router to the bound partition.
    * @param {string} sessionId - Session ID.
+   * @param {Object} [options] - Query options (expectedTransactionId: the
+   *   block's transaction, so a missing one is answered from its own record).
    * @return {Promise<Object>} Commit result.
    * @private
    */
-  async handleCommit(sessionId = QUERY_SESSION.DEFAULT) {
+  async handleCommit(sessionId = QUERY_SESSION.DEFAULT, options = {}) {
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     this.logger.debug(QUERY_LOG_MSG.COMMIT, {
       sessionId,
       participants: txState?.participants || [],
     });
 
-    const result = await this.transactionCoordinator.commit(sessionId);
+    let result;
+    try {
+      result = await this.transactionCoordinator.commit(sessionId, {
+        expectedTransactionId: options.expectedTransactionId ?? null,
+      });
+    } catch (error) {
+      // A COMMIT that threw is answered as a failed COMMIT carrying the
+      // coordinator's commit-point fact (absent: unknown).
+      return {
+        ...this.buildCaughtQueryExecutionFailure(error),
+        ...(typeof error?.[COMMIT_POINT_REACHED_FIELD] === LOCAL_STR_BOOLEAN ?
+          {[COMMIT_POINT_REACHED_FIELD]: error[COMMIT_POINT_REACHED_FIELD]} :
+          {}),
+      };
+    }
     if (!result.success && !result.errorCode) {
       return {
         ...result,
@@ -386,14 +281,14 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
    * @return {Promise<Object>} Rollback result.
    * @private
    */
-  async handleRollback(sessionId = QUERY_SESSION.DEFAULT) {
+  async handleRollback(sessionId = QUERY_SESSION.DEFAULT, options = {}) {
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     this.logger.debug(QUERY_LOG_MSG.ROLLBACK, {
       sessionId,
       participants: txState?.participants || [],
     });
 
-    const result = await this.transactionCoordinator.rollback(sessionId);
+    const result = await this.transactionCoordinator.rollback(sessionId, options);
     if (!result.success && !result.errorCode) {
       return {
         ...result,
@@ -518,41 +413,50 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
   }
 
   /**
-   * Deliver one transaction control operation to a partition service.
-   * @param {string} sessionId - Session ID.
+   * Deliver one transaction control operation to a participant: the request
+   * carries the transaction identity (and a decision's binding), a PREPARE or
+   * decision is delivered under the participant's deterministic entryId, and
+   * an answer that did not succeed is thrown as the participant wire's typed
+   * failure (sql-query-engine-participant-wire.js).
+   * @param {string} sessionId - Session ID (routing context).
    * @param {string} partitionId - Partition ID.
    * @param {string} operation - Transaction operation.
-   * @param {Object} [options] - Delivery options.
-   * @param {number} [options.transactionEpoch] - Snapshot epoch.
-   * @return {Promise<void>}
+   * @param {Object} [options] - The identity fields (transactionId,
+   *   participantId, commitMode, transactionEpoch) and a decision's binding.
+   * @return {Promise<Object>} The participant's successful answer.
    * @private
    */
   async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
     const deliveryProfile =
       this.buildTransactionOperationDeliveryProfile(partitionId);
+    const request = participantTransactionRequestOf(sessionId, operation,
+      options);
     const deliveryIdentity =
       deliveryProfile.deliveryPriority ===
         PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_PRIORITY ?
         buildPriorityControlPlaneTransactionDeliveryIdentity({
-          sessionId,
+          transactionId: request.transactionId,
           partitionId,
           operation,
         }) :
         PRIORITY_CONTROL_PLANE_TRANSACTION_DELIVERY_IDENTITY_OMITTED;
-    const payload = {
-      type: QUERY_OPERATION.TRANSACTION,
+    const entryId = participantEntryIdOf(operation, request);
+    const expectedAnswer = {
       operation,
-      sessionId,
+      partitionId,
+      transactionId: request.transactionId,
+      participantId: request.participantId,
     };
-    if (Number.isFinite(options.transactionEpoch)) {
-      payload.transactionEpoch = Math.floor(options.transactionEpoch);
-    }
+    let acceptedAnswer = null;
     const executionOptions = {
-      buildRequest: () => ({...payload}),
-      buildSuccessResult: (response) => ({...response, success: true}),
-      isSuccessfulResponse: (response) =>
-        response?.acknowledged === true &&
-        response?.success === true,
+      sessionId,
+      buildRequest: () => ({...request}),
+      buildSuccessResult: () => ({...acceptedAnswer}),
+      isSuccessfulResponse: (delivery) => {
+        acceptedAnswer = participantDeliveryAnswerOf(delivery, expectedAnswer);
+        return acceptedAnswer !== null &&
+          isParticipantTransactionAnswer(acceptedAnswer, expectedAnswer);
+      },
       routingReadinessDimension:
         deliveryProfile.routingReadinessDimension,
       deliveryPriority: deliveryProfile.deliveryPriority,
@@ -560,6 +464,7 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       clearSessionPartitionAffinityOnSuccess:
         operation === QUERY_OPERATION.COMMIT ||
         operation === QUERY_OPERATION.ROLLBACK,
+      ...(entryId === null ? {} : {entryId}),
     };
     if (
       deliveryIdentity.state ===
@@ -577,17 +482,8 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
       false,
       executionOptions,
     );
-    if (!result.success) {
-      if (operation === QUERY_OPERATION.BEGIN) {
-        throw new Error(result.error || QUERY_ERROR_MSG.BEGIN_FAILED);
-      }
-      if (operation === QUERY_OPERATION.PREPARE) {
-        throw new Error(result.error || QUERY_ERROR_MSG.PREPARE_FAILED);
-      }
-      if (operation === QUERY_OPERATION.COMMIT) {
-        throw new Error(result.error || QUERY_ERROR_MSG.COMMIT_FAILED);
-      }
-      throw new Error(result.error || QUERY_ERROR_MSG.ROLLBACK_FAILED);
+    if (result?.success !== true) {
+      throw participantFailureOf(operation, result);
     }
     return result;
   }
@@ -688,6 +584,15 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
         error.outcome.length > 0) {
       result.outcome = error.outcome;
     }
+    // A participant's typed refusal reaches the client by its own code (TX1
+    // design 2.2): a refused BEGIN, a doomed session, a PREPARE refusal and
+    // its cause.
+    for (const field of TYPED_PARTICIPANT_FAILURE_FIELDS) {
+      if (typeof error?.[field] === LOCAL_STR_STRING &&
+          error[field].length > 0) {
+        result[field] = error[field];
+      }
+    }
     if (typeof error?.contractState === LOCAL_STR_STRING &&
         error.contractState.length > 0) {
       result.contractState = error.contractState;
@@ -751,6 +656,10 @@ class SQLQueryEngine extends SQLQueryEngineWriteExecution {
 Object.defineProperties(
   SQLQueryEngine.prototype,
   createSQLQueryEngineTableRoutingMethods(),
+);
+Object.defineProperties(
+  SQLQueryEngine.prototype,
+  createSQLQueryEngineTransactionPersistenceMethods(),
 );
 
 export {SQLQueryEngine};

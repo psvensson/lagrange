@@ -3,6 +3,7 @@
 import fs from 'node:fs/promises';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
+import {PRIORITY_RECOVERY_SEMANTIC_STATE} from '../src/control-plane/priority-recovery-diagnostics-constants.js';
 
 const ENCODING_UTF8 = 'utf8';
 const EXIT_SUCCESS = 0;
@@ -23,8 +24,12 @@ const COMMAND_SEPARATOR = ' ';
 const SCHEMA_VERSION = 'priority-recovery-residuals-v1';
 const UNKNOWN_VALUE = 'unknown';
 const PRIORITY_REASON = 'priority_recovery_progress_blocked';
+// The one non-blocking semantic state, read from its owner. Since the owner
+// decision of 2026-10-04 it means the REPLACE remove-dispatch grace or a
+// census-ready partition with an operation still open - never an operation
+// standing in for a census gap - so it stays non-blocking here.
 const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
-  'spread_satisfied_in_flight';
+  PRIORITY_RECOVERY_SEMANTIC_STATE.SPREAD_SATISFIED_IN_FLIGHT;
 const QUEST_NEW_COMMAND_PREFIX = 'write solve/quests/<id>/quest.json then: node scripts/solve.js start';
 const QUEST_NEW_FLAG_ID = '--id';
 const QUEST_NEW_FLAG_STATEMENT = '--statement';

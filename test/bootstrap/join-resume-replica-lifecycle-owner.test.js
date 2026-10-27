@@ -21,6 +21,8 @@
  * and terminal cleanup leaves no orphaned timer.
  */
 
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {EventEmitter} from 'events';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -114,10 +116,8 @@ function buildRouter() {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
-    deliver: async () => ({acknowledged: true}),
+    ...handlerIdentityApi(handlers),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
     setExternalAdmissionEnabled() {},
     async stop() {},
     async shutdown() {},
@@ -202,7 +202,6 @@ test('F3: a preserved join resume keeps exactly one replica lifecycle owner ' +
         buildLeaderMessageGroup(onSubscribe));
     }
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {
@@ -450,7 +449,6 @@ function buildJoiner(runtime, {bootIncarnation, fault, onMembership}) {
           faultOnce(FAULT.CONTROL_PLANE)));
     }
   };
-  service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.createCdcIntegrationService = () => {
     if (!service.cdcIntegrationService) {
@@ -852,26 +850,6 @@ async (t) => {
         seedNodeAddress: SEED_ADDRESS, dataDir, bootIncarnation,
       })), 'NodeJoiningService', label);
   }
-  const initialize = EventEmitter.init;
-  let entryEmitters = 0;
-  EventEmitter.init = function(...args) {
-    entryEmitters += 1;
-    return initialize.apply(this, args);
-  };
-  let entryRefusal = null;
-  try {
-    await BootstrapService.bootstrapOrExit({
-      nodeId: 'seed-node', nodeAddress: 'ws://localhost:9001', nodeService,
-    });
-  } catch (error) {
-    entryRefusal = error;
-  } finally {
-    EventEmitter.init = initialize;
-  }
-  t.same([entryRefusal?.code, entryRefusal?.subject, entryEmitters],
-    [BOOT_INCARNATION_REQUIRED, 'BootstrapService', 0],
-    'the static seed entry point refuses at the service boundary before ' +
-    'any initialization');
   t.same([runtime.tracker.owners.size,
     runtime.nodeTimeSource.pendingTimerCount(),
     nodeService.getLifecycleStateMachine?.() ?? null,

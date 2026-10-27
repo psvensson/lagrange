@@ -4,16 +4,15 @@ audience: human
 
 # Admin API Reference
 
-How admin commands are structured and routed. All admin mutations are owned
-by two replicated meta-services; the WebSocket endpoint is an adapter ingress
-only, never a node-local mutation owner:
+How admin commands are structured and routed. The WebSocket endpoint is an
+adapter ingress; its commands route through replicated meta-services:
 
 - `sys-admin-meta` - cluster/node state queries, cache dumps
 - `sys-wasm-meta` - WASM module and service lifecycle
 
 Ingress defaults to `ws://<host>:8081/api/admin/stream` (REST port + 1) and can
 be overridden with `ADMIN_WS_PORT`. Dispatchable admin messages
-(`query`, `partition_callback`, `refresh`) are translated into
+(`query`, `refresh`) are translated into
 canonical `Service_Message` envelopes (`messageId`, `serviceId`,
 `serviceType`, `operation`, `payload`, `traceId`) by
 `adaptAdminMessageToServiceMessage(...)` before execution, so one envelope
@@ -56,6 +55,41 @@ lifecycle SQL statements (`INSTALL SERVICE`, `CREATE BINDING`,
 `CONFIGURE SERVICE ACCESS`) described in that guide's section 5.
 
 ## Operational Diagnostics Endpoints
+
+`PUT /api/admin/config/:configKey` and
+`PATCH /api/admin/tables/:tableId/policy` report applied success only after
+their semantic owner confirms one affected row through the mutation gateway.
+An observed zero-row effect returns HTTP 409 with
+`CONFIG_MUTATION_OBSERVATION_CHANGED` or
+`TABLE_POLICY_MUTATION_OBSERVATION_CHANGED`. An uncertain count or pending
+visibility returns HTTP 503 with the corresponding
+`*_MUTATION_OUTCOME_UNCONFIRMED` code; this does not establish that the write
+failed to commit. Gateway refusals retain their original error and mutation
+outcome. Unconfirmed writes do not publish successful-write statistics,
+invalidate the policy cache, or emit a policy-updated event.
+
+The operator-only built-in PostgreSQL wire scale operation is
+`POST /api/admin/services/sys-postgres-wire/scale`, with JSON
+`{"replicaCount": 1, "runtimeConfig": {"host": "127.0.0.1", "authMode": "password", "tlsMode": "disable"}}`.
+It delegates to `ServiceDefinitionsOwner` and reports
+`scaleState: "desired_state_persisted"`. Placement, running listeners, and their
+current configuration must be observed separately. Configuration applies when
+a replica next starts; this operation does not restart existing listeners.
+See [PostgreSQL wire scale operations](../architecture/postgres-wire.md#postgresql-wire-scale-operations)
+for outcomes and the existing ingress trust requirements.
+
+`POST /api/admin/logs/markers` records a fixed diagnostic marker through
+`LogsOwner`. Its body is exactly `{"markerId":"operator-probe-1","message":"probe"}`.
+The server supplies its node identity, timestamps, level and metadata. A confirmed
+answer includes `markerState: "recorded"`, `logId`, `nodeId` and the original
+`timestamp`. Repeating the same marker on the same ingress preserves the first
+row. Different content or ingress node returns `LOG_MARKER_IDENTITY_CONFLICT`
+(409); malformed intent returns `LOG_MARKER_REQUEST_INVALID` (400). An uncertain
+write or unavailable authoritative observation returns
+`LOG_MARKER_OUTCOME_UNCONFIRMED` (503), which does not prove that no write occurred.
+A disconnected or timed-out client also has an unknown outcome. The operation
+inherits the admin ingress bind/trust configuration; it adds no authentication
+layer and accepts no arbitrary log fields or SQL.
 
 Admin ingress exposes unified operational diagnostics:
 

@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {"id": "callback-axis-source-and-fixture-deletion", "passed": true},
+    {"id": "wasm-service-failover-wasi-binding-reanchor", "passed": true},
+    {"id": "zero-allowlist-and-portability-contract-gates", "passed": true},
+    {"id": "complexity-ratchet-and-independent-verification", "passed": true}
+  ]
+}

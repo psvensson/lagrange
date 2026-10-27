@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "dynamic-admission-callers-migration-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Migrate dynamic system-table write callers off raw SQL writes and default logs load: convert write-ack-visibility.js to appendDiagnosticMarker + SELECT readback, move default user mixed-load in load-generator.js and scenario-config.js from logs to provisioned user_load_logs, provision user_load_logs and record fixed system-log diagnostic markers across the 7 default mixed-load scenarios, and remove logs fallbacks from rolling-restart.js and table-distribution-helpers.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/dynamic-admission-callers-migration-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "write-ack-visibility-marker-migration",
+        "mixed-load-user-table-and-marker-migration",
+        "rolling-restart-and-config-no-logs-fallback",
+        "targeted-test-cone-and-independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "write-ack-visibility-marker",
+      "statement": "Keep write-ack-visibility.js as a log-propagation scenario, replace raw INSERT INTO logs with appendDiagnosticMarker, and retain SELECT visibility checks and convergence gates."
+    },
+    {
+      "id": "mixed-load-user-table-and-markers",
+      "statement": "Move default user mixed-load in load-generator.js to user_load_logs, provision user_load_logs before load in the 7 default mixed-load scenarios while preserving all 4 operation types and acknowledged-write tracking, and record fixed appendDiagnosticMarker + SELECT readback on logs across fault/recovery."
+    },
+    {
+      "id": "no-logs-fallbacks",
+      "statement": "Remove capability-missing and default table fallbacks to logs in rolling-restart.js, scenario-config.js, and table-distribution-helpers."
+    }
+  ],
+  "sealedAt": "3ef41153fc5deeb5c060b4858053ce43f1718fce"
+}

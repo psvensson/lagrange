@@ -4,22 +4,22 @@
 //
 // A committed entry is applied on every replica and cannot be taken back, so
 // a command the application would refuse (an unknown type fails the
-// application closed; a marker from outside the transaction owner or a
-// session-bound command without its session would be consumed and never
-// answer its proposer) is refused here, before it is proposed, with a typed
+// application closed) is refused here, before it is proposed, with a typed
 // code of PARTITION_COMMITTED_COMMAND_ERROR_CODE:
 //
 // - COMMAND_TYPE_UNKNOWN: the type is not a committed command type;
-// - SESSION_MISSING: a session-bound type (a transaction marker) carries no
-//   sessionId;
-// - MARKER_NOT_ADMISSIBLE: a transaction marker enters consensus only from the
-//   transaction owner, after its local COMMIT or ROLLBACK;
 // - ENTRY_ID_INVALID: a command carries an entryId that is not a non-empty
 //   string. The entryId keys the outcome row the application records and the
 //   pending answer; a replacement minted for it would make the client's retry
 //   a new write, so it is refused. (An absent entryId is minted by the entry
 //   builder before the command is asked about.)
 // - STATEMENT_MISSING: an SQL command type carries no statement.
+// - a participant transaction command (PARTICIPANT_PREPARE,
+//   PARTICIPANT_DECISION, PARTICIPANT_GENERATION_ORIGIN) enters consensus only
+//   from the transaction owner (PARTICIPANT_TRANSACTION_ADMISSION_CODE.
+//   ORIGIN_REFUSED) and only in the pinned byte form the leader builds -
+//   identity, digests and its deterministic entryId (BYTES_INVALID); a
+//   committed one is applied by partition-participant-transaction-apply.js.
 //
 // It also answers which recognised types exist (the application's own
 // dispatch asks it): the type lists are frozen arrays in the constants owner,
@@ -28,18 +28,36 @@
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_TYPES,
-  PARTITION_COMMITTED_MARKER_COMMAND_TYPES,
   PARTITION_COMMITTED_SQL_COMMAND_TYPES,
   PARTITION_SERVICE_ERROR_MSG,
 } from './partition-service-constants.js';
+import {
+  PARTICIPANT_TRANSACTION_ADMISSION_CODE,
+  PARTICIPANT_TRANSACTION_COMMAND_TYPES,
+  PARTICIPANT_TRANSACTION_MESSAGE,
+} from './partition-participant-transaction-constants.js';
+import {isPinnedParticipantCommand} from
+  './partition-participant-transaction-bytes.js';
+import {
+  PARTITION_CDC_COMMAND_TYPES,
+  PARTITION_CDC_OBLIGATION_FAILURE_CODE,
+  PARTITION_CDC_OBLIGATION_MESSAGE,
+  PARTITION_CDC_OBLIGATION_ORIGIN,
+} from './partition-cdc-obligation-constants.js';
+import {isPinnedCdcAcknowledgementCommand} from
+  './partition-cdc-obligation-ledger.js';
+import {isPinnedCoordinatorSettlementCommand} from './partition-coordinator-settlement-command.js';
+import {COORDINATOR_SETTLEMENT_TYPE, COORDINATOR_SETTLEMENT_ERROR} from
+  './partition-coordinator-settlement-constants.js';
 
-// Who asks to propose a committed command. A transaction marker enters
-// consensus only from the transaction owner, after its local COMMIT or
-// ROLLBACK; every other command comes through the write path (applyWrite,
-// including a forwarded write).
+// Who asks to propose a committed command. Participant commands enter only
+// from their transaction owner; a CDC_DELIVERED only from the CDC delivery
+// owner; every other command comes through its declared owner.
 const PARTITION_COMMITTED_COMMAND_ORIGIN = Object.freeze({
   WRITE_PATH: 'write-path',
   TRANSACTION_OWNER: 'transaction-owner',
+  CDC_DELIVERY_OWNER: PARTITION_CDC_OBLIGATION_ORIGIN.CDC_DELIVERY_OWNER,
+  COORDINATOR_OWNER: 'coordinator-owner',
 });
 
 // What a refused write is answered with.
@@ -47,13 +65,6 @@ const PARTITION_COMMITTED_COMMAND_ADMISSION_MSG = Object.freeze({
   commandTypeUnknown: (type) =>
     'Partition write refused before it was proposed: command type ' +
     `${JSON.stringify(type ?? null)} is not a committed command type`,
-  markerNotAdmissible: (type, origin) =>
-    `Partition write refused before it was proposed: the ${type} ` +
-    'transaction marker enters consensus only from the transaction owner ' +
-    `(origin ${origin})`,
-  sessionMissing: (type) =>
-    `Partition write refused before it was proposed: ${type} is bound to ` +
-    'a transaction session and carries no sessionId',
   entryIdInvalid: (entryId) =>
     'Partition write refused before it was proposed: its entryId (a ' +
     `${typeof entryId}) is not a non-empty string, so its outcome row and ` +
@@ -86,26 +97,49 @@ function refused(code, reason) {
   return Object.freeze({admitted: false, code, reason});
 }
 
-function markerRefusal(command, origin) {
-  if (!isNonEmptyString(command.sessionId)) {
-    return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.SESSION_MISSING,
-      PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.sessionMissing(command.type));
-  }
-  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER) {
-    return refused(
-      PARTITION_COMMITTED_COMMAND_ERROR_CODE.MARKER_NOT_ADMISSIBLE,
-      PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.markerNotAdmissible(
-        command.type, origin));
-  }
-  return ADMITTED;
-}
-
 function sqlCommandRefusal(command) {
   if (!isNonEmptyString(command.sql)) {
     return refused(PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_MISSING,
       PARTITION_SERVICE_ERROR_MSG.WRITE_STATEMENT_MISSING);
   }
   return ADMITTED;
+}
+
+function participantCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.TRANSACTION_OWNER) {
+    return refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.ORIGIN_REFUSED,
+      PARTICIPANT_TRANSACTION_MESSAGE.ORIGIN_REFUSED);
+  }
+  return isPinnedParticipantCommand(command) ? ADMITTED :
+    refused(PARTICIPANT_TRANSACTION_ADMISSION_CODE.BYTES_INVALID,
+      PARTICIPANT_TRANSACTION_MESSAGE.BYTES_INVALID);
+}
+
+// A CDC_DELIVERED enters consensus only from the CDC delivery owner and only
+// in the pinned form it builds (partition-cdc-obligation-ledger.js).
+function cdcCommandRefusal(command, origin) {
+  if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.CDC_DELIVERY_OWNER) {
+    return refused(PARTITION_CDC_OBLIGATION_FAILURE_CODE.ORIGIN_REFUSED,
+      PARTITION_CDC_OBLIGATION_MESSAGE.ORIGIN_REFUSED);
+  }
+  return isPinnedCdcAcknowledgementCommand(command) ? ADMITTED :
+    refused(PARTITION_CDC_OBLIGATION_FAILURE_CODE.BYTES_INVALID,
+      PARTITION_CDC_OBLIGATION_MESSAGE.BYTES_INVALID);
+}
+
+function commandRefusalByKind(command, origin) {
+  if (command.type === COORDINATOR_SETTLEMENT_TYPE) {
+    if (origin !== PARTITION_COMMITTED_COMMAND_ORIGIN.COORDINATOR_OWNER) {
+      return refused(COORDINATOR_SETTLEMENT_ERROR.ORIGIN, COORDINATOR_SETTLEMENT_ERROR.ORIGIN);
+    }
+    return isPinnedCoordinatorSettlementCommand(command) ? ADMITTED :
+      refused(COORDINATOR_SETTLEMENT_ERROR.BYTES, COORDINATOR_SETTLEMENT_ERROR.BYTES);
+  }
+  if (PARTITION_CDC_COMMAND_TYPES.includes(command.type)) {
+    return cdcCommandRefusal(command, origin);
+  }
+  return PARTICIPANT_TRANSACTION_COMMAND_TYPES.includes(command.type) ?
+    participantCommandRefusal(command, origin) : sqlCommandRefusal(command);
 }
 
 // Present and not a non-empty string. An absent entryId (undefined, or null
@@ -133,8 +167,7 @@ function admitCommittedCommand(command, {origin}) {
       PARTITION_COMMITTED_COMMAND_ADMISSION_MSG.entryIdInvalid(
         command.entryId));
   }
-  return PARTITION_COMMITTED_MARKER_COMMAND_TYPES.includes(type) ?
-    markerRefusal(command, origin) : sqlCommandRefusal(command);
+  return commandRefusalByKind(command, origin);
 }
 
 /**

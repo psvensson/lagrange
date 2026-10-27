@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generatedAt": "2026-09-30T12:15:04.226Z",
-  "rawViolationCount": 1287,
+  "rawViolationCount": 1286,
   "violations": [
     {
       "filePath": "scripts/analyze-cl039-link-rate.js",
@@ -10860,15 +10860,6 @@
     {
       "filePath": "src/partition/partition-service-rebalancer-methods.js",
       "line": 245,
-      "column": 18,
-      "value": "'constructor'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "docs/steering/rules.md R06. Scalars, states and names have owners"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-session-methods.js",
-      "line": 160,
       "column": 18,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",

@@ -1,0 +1,19 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cdc-d4-window-deletion-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Delete the legacy 256-slot CDC sliding window, volatile-buffer handshake catch-up, catch-up modes/events, and streamMode after proving both partition-boundary (W-D4a) and 3-node group-boundary (W-D4b) hydration-to-live-CDC handoffs, while preserving retryAfterMs hints in propagationIsProvisional, preventing obligation retry backoff escalation on explicit hints, and deduplicating subscribeToCDCWithHandshake by subscriberId.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cdc-d4-window-deletion-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "d4-sliding-window-and-catchup-deleted",
+        "w-d4a-and-w-d4b-handoff-witnesses-green",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "sealedAt": "900fbc8f7a76282c478970d04c89658466dc4157"
+}

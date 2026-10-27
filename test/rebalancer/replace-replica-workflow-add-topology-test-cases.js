@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export async function registerReplaceReplicaWorkflowAddTopologyTests({
   t,
   OperationType,
@@ -127,10 +128,7 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
       const messageRouter = {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {
-            acknowledged: true,
-            status: 'initiated',
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       };
 
@@ -189,10 +187,7 @@ export async function registerReplaceReplicaWorkflowAddTopologyTests({
       const messageRouter = {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {
-            acknowledged: true,
-            status: 'initiated',
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       };
 

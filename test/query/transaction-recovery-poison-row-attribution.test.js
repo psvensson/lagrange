@@ -26,11 +26,14 @@ import {TRANSACTION_STATUS} from
   '../../src/query/distributed/distributed-transaction-coordinator-constants.js';
 import {DistributedTransactionCoordinator} from
   '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {validateRecoveryRowsBeforeMutation} from
+  '../../src/query/distributed/distributed-transaction-recovery-validation.js';
 
 const INCOMPLETE_FROZEN_ROW = Object.freeze({
   transaction_id: 'tx-poison-incomplete-frozen',
   session_id: 'session-poison-incomplete-frozen',
   status: TRANSACTION_STATUS.COMMITTING,
+  transaction_epoch: 1,
   transaction_mode: TRANSACTION_MODE.EXPLICIT,
   participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
   commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,
@@ -47,13 +50,18 @@ const INCOMPLETE_FROZEN_PARTICIPANTS = Object.freeze([
   }),
 ]);
 
+// The retired ONE_PHASE_COMMIT mode (TX1 prepare-first, design 9.2
+// derivation 4): a legacy row naming it is a poison row for recovery.
+const RETIRED_ONE_PHASE_COMMIT_MODE = 'ONE_PHASE_COMMIT';
+
 const MULTI_PARTICIPANT_ONE_PHASE_ROW = Object.freeze({
   transaction_id: 'tx-poison-multi-participant-1pc',
   session_id: 'session-poison-multi-participant-1pc',
   status: TRANSACTION_STATUS.COMMITTING,
+  transaction_epoch: 1,
   transaction_mode: TRANSACTION_MODE.EXPLICIT,
   participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
-  commit_mode: COMMIT_MODE.ONE_PHASE_COMMIT,
+  commit_mode: RETIRED_ONE_PHASE_COMMIT_MODE,
   frozen_participant_count: 2,
   created_at: 1,
   updated_at: 1,
@@ -73,6 +81,7 @@ function recoverExpectingThrow(transactions, participants) {
   const coordinator = new DistributedTransactionCoordinator();
   let thrown = null;
   try {
+    validateRecoveryRowsBeforeMutation(coordinator, transactions, participants);
     coordinator.recoverFromSystemTables({transactions, participants});
   } catch (error) {
     thrown = error;
@@ -158,6 +167,7 @@ test(
         transaction_id: 'tx-valid-frozen',
         session_id: 'session-valid-frozen',
         status: TRANSACTION_STATUS.COMMITTING,
+        transaction_epoch: 1,
         transaction_mode: TRANSACTION_MODE.EXPLICIT,
         participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
         commit_mode: COMMIT_MODE.TWO_PHASE_COMMIT,

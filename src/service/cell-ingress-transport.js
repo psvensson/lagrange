@@ -11,7 +11,7 @@
 
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 
-const DEFAULT_DEADLINE_MS = 5_000;
+const DEFAULT_DEADLINE_MS = 5_000; // ends-on: the cell dispatch response arrives
 const DEFAULT_MAX_ATTEMPTS = 2;
 const DEFAULT_MAX_IN_FLIGHT = 128;
 const DEFAULT_MAX_IN_FLIGHT_PER_TARGET = 32;
@@ -323,10 +323,10 @@ class CellIngressAdapterBase {
         ),
         fields.activeRequest,
       );
-      if (result.delivery?.processed === true) {
-        return this._kit.mapProcessedDelivery(result.delivery, fields);
+      if (result.answer?.processed === true) {
+        return this._kit.mapProcessedDelivery(result.answer, fields);
       }
-      throw this._kit.failureFromDelivery(result.delivery);
+      throw this._kit.failureFromDelivery(result.answer);
     } finally {
       release();
     }

@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -89,11 +90,7 @@ test('QueryExecutor - sends bounded SELECT result limits and deadline to ' +
     messageRouter: {
       async deliver(_address, message) {
         delivered.push(message);
-        return {
-          acknowledged: true,
-          rows: [],
-          success: true,
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {rows: [], success: true});
       },
     },
     systemCache: createMockSystemCache(['p1']),
@@ -673,12 +670,11 @@ test('QueryExecutor - fails closed on partition query errors', async (t) => {
   // Create a message router that returns errors
   const errorRouter = {
     deliver: async function(_address, _message) {
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'Database error',
         rows: [],
-      };
+      });
     },
   };
 

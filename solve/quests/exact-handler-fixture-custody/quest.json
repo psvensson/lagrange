@@ -1,0 +1,43 @@
+{
+  "schema": "solve-quest/2",
+  "id": "exact-handler-fixture-custody",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The three historical exact-handler transport fixtures use the current identity contract. Positive adapters model exact registration and removal; the presence-only negative still proves typed refusal, retained exact handler and reporting. Its real WASM replica retains the original open database after refused shutdown and settles that same owner's cleanup before temporary storage is removed. No production retirement contract is changed.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/exact-handler-fixture-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "preserved-original-red",
+        "reviewed-fixture-contracts-and-custody",
+        "exact-candidate-positive-and-negative",
+        "applicable-gates-and-independent-result-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "reuse-and-provenance",
+      "statement": "Reuse the three test deltas from PR139 at e14736eeda2dd5d9dc9f36227e18fcc320e892f2, with current preimages verified against 2016726f66bdb910e8b4de04bdedb89d2689bb0d. Regenerate metadata for the actual composition; do not import the historical generated seal or merge its unreviewed branch."
+    },
+    {
+      "id": "negative-remains-negative",
+      "statement": "Keep the negative transport presence-only until typed rejection, exact retained handler, original open DB, CLEANUP_REQUIRED and reporting have been observed. Then restore genuine Map-backed exact identity and retry the same normal shutdown owner. Do not null the handler, forge ALREADY_ABSENT, directly close native storage, or suppress a primary error."
+    },
+    {
+      "id": "fixture-custody",
+      "statement": "Remove a native fixture directory only after owner shutdown succeeds and the original database is closed. On failed closure retain the directory and surface both the primary and cleanup errors. Settle the other negative fixture obligations through their real owners."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "Preserve original failures, use locked same-host execution with retries disabled, verify exact amended bytes and targeted semantic negative, and run applicable owner audits and regenerated metadata. No timeout, baseline, assertion, owner or seal is weakened. This fixture unit is not U1, cleanup Quest, full transport, restart or release acceptance."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity",
+    "concurrency-serialization",
+    "owner-interaction"
+  ],
+  "sealedAt": "2016726f66bdb910e8b4de04bdedb89d2689bb0d"
+}

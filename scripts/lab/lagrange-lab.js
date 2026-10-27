@@ -11,12 +11,14 @@ import {
 } from './state.js';
 import {commandExists, run} from './process.js';
 import {doctorHarnessNodes, runHarness} from './harness.js';
+import {keepCertificationEvidence} from './certification-preflight.js';
 import {initK3sServer, joinK3sNode, k3sKubectl, syncK3sLabels} from './k3s.js';
 import {configureRunner, runnerLabels} from './runner.js';
 import {
   WORKER_SETUP_FILE, copyWorkerSetup, discoverFleet, fleetRequirement, formatFleet,
   formatFleetRequirement,
-  labTestCommit, labTestDeps, labTestSelectorArgs, probeRemoteNode, recordFleet, runLabTest,
+  labTestCommit, labTestDeps, labTestSelectorArgs, prepareSelectorImportGraph, probeRemoteNode,
+  recordFleet, runLabTest,
   workerCloneUrl, workerSetupScript,
 } from './probe.js';
 import {
@@ -24,6 +26,8 @@ import {
 } from '../run-classified-test-files.js';
 import {parseLaneArgs, planLane} from '../plan-test-lane.js';
 import {capture} from './process.js';
+import {resolvedCheckBaseCommit} from '../checks/changed-paths.js';
+import {execGitAsync} from '../checks/git-invocation.js';
 import {gitProcessEnvironment} from '../checks/git-process-environment.js';
 import {existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {homedir, tmpdir} from 'node:os';
@@ -53,7 +57,11 @@ const USAGE = [
   '  lab runner configure NAME --repo OWNER/PRIVATE-LAB-REPO [--service]\n',
   '  lab harness doctor [--nodes a,b,c]\n',
   '  lab harness run [SCENARIO] [--base CONFIG] [--nodes a,b,c] ',
-  '[--nodes-per-host N] [--dry-run] [-- ...harness args]\n',
+  '[--nodes-per-host N] [--certify SHA [--quest ID]] [--dry-run] [-- ...harness args]\n',
+  '      (--certify SHA: a certification run - one node per distinct ',
+  'machine, a clean checkout at SHA; with --dry-run its pre-flight; see ',
+  'docs/development/home-lab.md)\n',
+  '  lab harness keep-evidence RUN_DIR [--to DIR] [--quest ID]\n',
   '  lab k3s init-server NAME [--version VERSION]\n',
   '  lab k3s join NAME --server SERVER\n',
   '  lab k3s status --server SERVER\n',
@@ -104,6 +112,7 @@ const ACTION = Object.freeze({
   CORDON: 'cordon',
   UNCORDON: 'uncordon',
   DRAIN: 'drain',
+  KEEP_EVIDENCE: 'keep-evidence',
 });
 const FLAG = Object.freeze({
   PREFIX: '--',
@@ -112,6 +121,9 @@ const FLAG = Object.freeze({
   K3S_NODE: 'k3s-node',
   NODES_PER_HOST: 'nodes-per-host',
   DRY_RUN: 'dry-run',
+  CERTIFY: 'certify',
+  QUEST: 'quest',
+  TO: 'to',
 });
 const FLAG_PREFIX_LENGTH = 2;
 const ARGV_COMMAND_OFFSET = 2;
@@ -147,6 +159,10 @@ const ERROR_TEXT = Object.freeze({
   BASE_NEEDS_CHANGED: '--base-sha measures the change cone: it takes the changed profile',
   NOT_THE_RUNNER: ' no longer runs the classified runner: ',
   NO_LANE_FILES: ' has no files in lane ',
+  SPLIT_OR_ON: '--split spreads over every ready machine and --on names one: take one or the other',
+  UNKNOWN_FLAG: 'unknown flag --',
+  NO_CERTIFY_SHA: '--certify needs the full commit sha it certifies',
+  FLAGS_TAKEN: ': lab test takes --',
 });
 // How the corpus profile's npm script reads: `node <runner> <lane filters>`.
 const LAB_TEST_SCRIPT = Object.freeze({NODE: 'node',
@@ -156,6 +172,8 @@ const LAB_TEST_LINE = /\r?\n/u;
 const LAB_TEST_SHA_DIGITS = 12;
 const POSITIONAL = Object.freeze({COMMAND: 0, ACTION: 1, NAME: 2});
 const EXIT_FAILURE = 1;
+// A flag no command reads is a usage error: nothing runs on it.
+const EXIT_USAGE = 2;
 
 function usage() {
   process.stdout.write(USAGE);
@@ -360,14 +378,14 @@ async function commandProvision(args) {
   const manifest = JSON.parse(readFileSync(joinPath(FLEET_REPO_ROOT, FLEET_PACKAGE), FLEET_TEXT));
   // Git asks this checkout, never a repository a hook exported GIT_DIR for.
   const gitEnv = {env: gitProcessEnvironment()};
-  const head = await capture('git', ['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD'],
-    gitEnv);
+  const gitText = async (args) => (await execGitAsync(args, gitEnv)).stdout.trim();
+  const head = await gitText(['-C', FLEET_REPO_ROOT, 'rev-parse', '--short', 'HEAD']);
   const script = workerSetupScript({
     workflow: parseYaml(readFileSync(joinPath(FLEET_REPO_ROOT, PROVISION_WORKFLOW), FLEET_TEXT)),
     // The engines floor has one reader: the fleet requirement's.
     nodeMinimum: fleetRequirement(FLEET_REPO_ROOT).nodeMinimum,
     repoUrl: workerCloneUrl(
-      await capture('git', ['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'], gitEnv)),
+      await gitText(['-C', FLEET_REPO_ROOT, 'remote', 'get-url', 'origin'])),
     authorizedKeys: await controllerPublicKeys(node?.ssh),
     generatedFrom: `${manifest.name} ${head}`,
   });
@@ -414,11 +432,19 @@ async function commandRunner(action, args) {
 }
 
 async function commandHarness(action, args) {
+  if (action === ACTION.KEEP_EVIDENCE) {
+    await keepCertificationEvidence({runDir: args.positional[POSITIONAL.NAME],
+      to: typeof args.flags[FLAG.TO] === 'string' ? args.flags[FLAG.TO] : undefined,
+      quest: typeof args.flags[FLAG.QUEST] === 'string' ? args.flags[FLAG.QUEST] : null});
+    return;
+  }
   const state = await loadState();
   const nodes = selectNodesByRole(state, ROLE.HARNESS, csv(args.flags.nodes));
   if (action === ACTION.DOCTOR) return doctorHarnessNodes(nodes);
   if (action !== ACTION.RUN) throw new Error(`Unknown harness action: ${action}`);
   const scenario = args.positional[POSITIONAL.NAME] || null;
+  const certify = args.flags[FLAG.CERTIFY];
+  if (certify === true) throw new Error(ERROR_TEXT.NO_CERTIFY_SHA);
   await runHarness({
     nodes,
     scenario,
@@ -428,6 +454,8 @@ async function commandHarness(action, args) {
       undefined,
     dryRun: args.flags[FLAG.DRY_RUN] === true,
     extraArgs: args.passthrough,
+    certify: typeof certify === 'string' ? certify : null,
+    quest: typeof args.flags[FLAG.QUEST] === 'string' ? args.flags[FLAG.QUEST] : null,
   });
 }
 
@@ -462,6 +490,12 @@ async function commandK3s(action, args) {
 async function commandTest(profile, args) {
   const selected = TEST_PROFILE_COMMANDS[profile];
   if (!selected) throw new Error(`Unknown test profile: ${profile}`);
+  const flags = Object.values(LAB_TEST_FLAG);
+  const unknown = Object.keys(args.flags).find((flag) => !flags.includes(flag));
+  if (unknown !== undefined) {
+    throw Object.assign(new Error(`${ERROR_TEXT.UNKNOWN_FLAG}${unknown}${ERROR_TEXT.FLAGS_TAKEN}` +
+      `${flags.join(`${LIST_SEPARATOR} ${FLAG.PREFIX}`)}`), {exitCode: EXIT_USAGE});
+  }
   if (!Object.values(LAB_TEST_FLAG).some((flag) => Object.hasOwn(args.flags, flag))) {
     await run(NPM, [...selected]);
     return;
@@ -474,6 +508,8 @@ async function commandTest(profile, args) {
       plan,
       costs: estimateFileCosts(plan, lastResultsRoots(FLEET_REPO_ROOT)),
       commit,
+      // The base the cone was selected from is the one its history walks use.
+      checkBase: resolvedCheckBaseCommit(request.baseSha, process.env, commit.gitRoot),
       on: request.on,
       split: request.split,
       root: FLEET_REPO_ROOT,
@@ -500,6 +536,7 @@ function labTestRequest(profile, flags) {
   if (split && lane !== LAB_TEST_LANE_ALL) throw new Error(ERROR_TEXT.SPLIT_NEEDS_ALL);
   if (flags[LAB_TEST_FLAG.ON] === true) throw new Error(ERROR_TEXT.NO_MACHINE_NAME);
   if (flags[LAB_TEST_FLAG.SHA] === true) throw new Error(ERROR_TEXT.NO_COMMIT_NAME);
+  if (split && flags[LAB_TEST_FLAG.ON] !== undefined) throw new Error(ERROR_TEXT.SPLIT_OR_ON);
   return {lane, split: split === true, on: flags[LAB_TEST_FLAG.ON] ?? null,
     sha: flags[LAB_TEST_FLAG.SHA] ?? null, baseSha: labTestBaseSha(profile, flags)};
 }
@@ -519,10 +556,15 @@ function labTestBaseSha(profile, flags) {
 // named), and the chosen lane of the classified plan of those files - planned
 // from the commit's own tree.
 async function labTestPlan(profile, {lane, baseSha}, commit) {
+  const node = (args) => capture(process.execPath, args,
+    {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS});
+  if (profile !== LAB_TEST_PROFILE.ALL) {
+    await prepareSelectorImportGraph(FLEET_REPO_ROOT,
+      {produce: node, write: (line) => process.stdout.write(`${line}\n`)});
+  }
   const files = profile === LAB_TEST_PROFILE.ALL ?
     corpusFiles(commit.gitRoot, TEST_PROFILE_COMMANDS[profile].at(-1)) :
-    (await capture(process.execPath, labTestSelectorArgs({sha: commit.sha, baseSha}),
-      {cwd: FLEET_REPO_ROOT, timeoutMs: LAB_TEST_SELECT_DEADLINE_MS}))
+    (await node(labTestSelectorArgs({sha: commit.sha, baseSha})))
       .split(LAB_TEST_LINE).filter(Boolean);
   const plan = planClassifiedTestFiles(commit.gitRoot, files, lastResultsRoots(FLEET_REPO_ROOT));
   const chosen = lane === LAB_TEST_LANE_ALL ? plan :
@@ -573,5 +615,5 @@ async function main() {
 
 main().catch((error) => {
   process.stderr.write(`lab: ${error.message}\n`);
-  process.exitCode = EXIT_FAILURE;
+  process.exitCode = error.exitCode ?? EXIT_FAILURE;
 });

@@ -2,6 +2,7 @@
  * UnifiedRebalancer safety preflight tests.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -103,7 +104,7 @@ test('UnifiedRebalancer - skips REMOVE when coordinator safety preflight blocks'
     },
     messageRouter: {
       getConnectionState: () => 'connected',
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },
@@ -174,7 +175,9 @@ test('UnifiedRebalancer - defers non-failed REMOVE when no ADD target is ready',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+          status: 'completed',
+        })),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -260,7 +263,9 @@ test('UnifiedRebalancer - continues standalone-safe cleanup REMOVE when ADD targ
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+          status: 'completed',
+        })),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },

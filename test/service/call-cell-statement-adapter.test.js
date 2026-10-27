@@ -51,7 +51,7 @@ function makeCollaborators(deliveryOverrides = {}) {
       captured.envelopes.push(envelope);
       captured.contexts.push(context);
       return {
-        delivery: {
+        answer: {
           processed: true,
           handlerProcessed: true,
           componentResult: RESULT_JSON,

@@ -332,6 +332,7 @@ intentionally narrow. Among the important limits today:
 - the current distributed call path is read-only for user tables;
 - PostgreSQL compatibility is a subset, not drop-in PostgreSQL;
 - secondary indexes are not supported;
+- external change data capture (CDC) streaming on user tables is disabled and unsupported in the initial stable core (`CDC_EVENT_STREAM_DISABLED`);
 - node-to-node transport currently assumes a trusted private network; and
 - backup/restore, rolling upgrades, and production service-level objectives
   (SLOs) are not yet supported product contracts.

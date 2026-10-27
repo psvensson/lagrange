@@ -11,7 +11,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 // must scale with the machine factor the same way the integration files
 // already scale theirs (doctrine: hardware-relative-convergence-budget).
 import {scaleByMachineFactor} from
-  '../integration/helpers/test-machine-factor.js';
+  '../../scripts/test-machine-factor.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {

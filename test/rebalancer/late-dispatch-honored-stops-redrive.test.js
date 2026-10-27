@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
@@ -118,7 +119,7 @@ function buildCoordinator(nodeId) {
       return 1024;
     }},
     messageRouter: {async deliver() {
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     }, on() {}, removeListener() {}},
     controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     transactionCoordinator: createMockTransactionCoordinator(),

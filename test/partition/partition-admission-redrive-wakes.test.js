@@ -44,7 +44,7 @@ import {RUNTIME_REASON} from '../../src/raft/raft-rs-runtime-owner-constants.js'
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
 
@@ -98,7 +98,7 @@ async function openLeader(t, answer, members = [LOCAL]) {
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATIONS.INSERT,
       serviceRow(member, 1));
   }
-  const provider = new ControllablePartitionRaftProvider();
+  const provider = new ControllableConsensusPort();
   provider.confChangeHandler = () => answer;
   const partition = createControllablePartitionService({
     partitionId: PARTITION_ID,
@@ -170,8 +170,9 @@ const REDRIVE_WAKES = Object.freeze({
 });
 const NOT_A_WAKE = Object.freeze([RAFT_EVENT.DATA, RAFT_EVENT.FOLLOWER,
   RAFT_EVENT.CANDIDATE, RAFT_EVENT.LEADER_CHANGE, RAFT_EVENT.COMMIT,
-  RAFT_EVENT.TERM_CHANGE, RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE,
-  RAFT_EVENT.MEMBERSHIP_CHANGED, RAFT_EVENT.GATE_OPENED]);
+  RAFT_EVENT.APPLIED_PROGRESS, RAFT_EVENT.TERM_CHANGE,
+  RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, RAFT_EVENT.MEMBERSHIP_CHANGED,
+  RAFT_EVENT.GATE_OPENED]);
 
 test('the re-drive wakes are classified out of the production port events',
   (t) => {

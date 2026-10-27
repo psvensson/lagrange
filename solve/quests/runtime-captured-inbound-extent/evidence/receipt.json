@@ -1,0 +1,42 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "frozen-w07-green",
+      "passed": true,
+      "reason": "First locked lenovo candidate run: frozen W07 4/4 pass, exact blob unchanged."
+    },
+    {
+      "id": "capture-and-remainder-controls",
+      "passed": true,
+      "reason": "Companion4/4 pass: capture after enqueue and ensureExecution, consumed wake and pre-dequeue generation preservation."
+    },
+    {
+      "id": "identical-tests-source-negative",
+      "passed": true,
+      "reason": "19de88997 predecessor-only runtime: unchanged W07 returns exact4>1 semantic RED,3pass1fail."
+    },
+    {
+      "id": "incorrect-capture-negative",
+      "passed": true,
+      "reason": "fbcc14d8 before-ensure and3b4560b1 blanket-one each return intended semantic RED with unchanged companion bytes."
+    },
+    {
+      "id": "affected-owner-suites",
+      "passed": false,
+      "reason": "Nine required affected files pass. Canonical1442-file cone:1339pass,96fail,7incomplete after normal owned cancellation. Three F1 mid-turn failures are confirmed against predecessor; other classifications retained separately."
+    },
+    {
+      "id": "static-impact-and-independent-review",
+      "passed": false,
+      "reason": "Changed-path static passes; inherited decision gate remains red and final source certification waits for explicit F1/W07 late-arrival contract reconciliation."
+    }
+  ],
+  "baseline": {
+    "head": "cf34d0b73b294e38b836a971d3b54d6c0799addb",
+    "evidence": "solve/quests/seed-control-current-proof-amortization/evidence/native-runtime-service-w07-20261015/raw/native-first/raw.tap",
+    "failure": "4 > 1 at W07 selected proposal service assertion; whole-file 3 pass / 1 fail"
+  },
+  "sourceHead": "4aa8780cfec6f2718b86b4d1e27ee9711492be59"
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-participant-release-failure-projection-alpha",
+  "status": "pass",
+  "base": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f",
+  "generatedAt": "2026-10-13T17:51:00.604594+00:00",
+  "receipts": [
+    {
+      "id": "one-canonical-blocked-entry",
+      "passed": true,
+      "detail": "The engaged pending-proposal/same-build-join witness proves one canonical initial find supplies the exact generation/work projection; immutable V2 protocol10/10, source-only control fails after DRAIN_PENDING engagement."
+    },
+    {
+      "id": "first-observations-survive",
+      "passed": true,
+      "detail": "Actual workflow/client witness preserves first blocked and joined observations over distinct later answers and the terminal client deadline; no growing history or overwritten first slots."
+    },
+    {
+      "id": "typed-relative-time",
+      "passed": true,
+      "detail": "Measured/unavailable/unsafe/nonmonotonic relative clock cases, invalid budgets, throwing/boxed/boolean reads, backward and derived overflow precedence pass the exact reviewed witnesses."
+    },
+    {
+      "id": "accessor-free-bounded-trigger",
+      "passed": true,
+      "detail": "Fixed strict-own-data trigger capture and hostile getter/coercion controls pass; copied diagnostic data has no retained accessor or proxy authority."
+    },
+    {
+      "id": "exact-shared-promise",
+      "passed": true,
+      "detail": "Same-build callers await the exact stored attempt promise; mixed-build refusal, successful unchanged answer and starter-only identity cleanup pass source review and focused witnesses."
+    },
+    {
+      "id": "underlying-answer-identity",
+      "passed": true,
+      "detail": "Removing only joinedAttempt reproduces the settled owner answer; success remains unchanged. Existing client terminal answer identity is retained alongside diagnostics."
+    },
+    {
+      "id": "actual-workflow-client-retention",
+      "passed": true,
+      "detail": "Actual seed workflow, validated fresh-seed authorization and actual participant-release client execute delivered refusal then client deadline with exact first-only custody, position and counts."
+    },
+    {
+      "id": "existing-interaction-registered",
+      "passed": true,
+      "detail": "Both existing raft-rs-runtime-application-transaction forms include the helper, seed workflow, client and named seed witness; existing owners/witnesses and exactly two coupled endpoints retained; canonical impact/shards checks pass."
+    },
+    {
+      "id": "source-revert-engagement",
+      "passed": true,
+      "detail": "Candidate3231b131 and source-only control38b43ed7 use identical test bytes on the same respective hosts. Six diagnostic groups fail on control after intended behavior engages, with seven older protocol cases still positive; no setup/import failure."
+    },
+    {
+      "id": "healthy-path-and-policy-unchanged",
+      "passed": true,
+      "detail": "Diagnostics-only policy preservation is supported by exact review and18 passing candidate files/225 runner assertions covering admission, application, native recovery and runtime. Two startup files remain failures; no deadline/retry/authority change or startup repair claimed."
+    },
+    {
+      "id": "static-and-review-gate",
+      "passed": true,
+      "detail": "HOLD: exact source/content and bounded evidence are independently approved, but inherited static gates still fail: two dependency cycles, test clone lines+46, scoped literals8, existing retry/complexity debt. Broader corpus/main certification remains unproved.",
+      "verifiedOnComposedLineage": "03d5f1c384c8ab27a2af21308f90a5859c5e9dda"
+    }
+  ],
+  "design": {
+    "v3Sha256": "f3fcf5c22571bc4388239637f77014da3d067f504e7d12a0a4f82580a64c5eb4",
+    "registryCorrectionSha256": "587f3475319c6cb38cfb040213feb04a6f37fe0a89d799a684482dd5551262c2",
+    "independentReviewSha256": "2e1d96d6503bc9292119ed79fc0c4c3e1aa9b0a624c2e2499e17345151cbc5f0"
+  },
+  "limit": "Partial diagnostics-only receipt:10/11 supported, static-and-review-gate false. Quest remains OPEN/HOLD. Neither focused green nor source review waives the two live startup failures, inherited static debt, full-corpus, integration, exact-main or epic requirements.",
+  "candidate": "3231b1311ad79fb933d059877c97fc296b951e5d",
+  "candidateTree": "b3adccaa73f0bb401144a7e212916446ec370d44",
+  "sourceOnlyControl": "38b43ed7167435fc22dd4e95dc1d519cf06c64bd",
+  "evidence": {
+    "pairedResult": "paired-result-v2.json",
+    "pairedResultSha256": "f384ac8e64005fbcc6e4b1240c7fb7ce9940f38a1243848d21a3a0554dd1d38a",
+    "independentSourceReview": "implementation-review-v2.md",
+    "independentSourceReviewSha256": "8a1e0e37420f1a70fc08595617495832037e7fe5c701b264cf302a1df4156251",
+    "independentEvidenceReview": "evidence-review-v2.md",
+    "independentEvidenceReviewSha256": "86b16c888f9e650e7c32cc574d62a6b36175bf05d9faae227a85a740e05525f0"
+  }
+}

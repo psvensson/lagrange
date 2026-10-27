@@ -19,6 +19,11 @@
  * - subscribeToCDCWithHandshake for already-subscribed subscriber
  *   returns status: 'already_subscribed'
  * - bufferCDCEventForRetry re-buffers events independently
+ *
+ * CDC decision D4 (2026-10-26) deleted the handshake's catch-up (the
+ * sliding window and the volatile-buffer replay): a handshake registers and
+ * drives the obligation lane only, so it replays nothing outside the lane.
+ * The hand-off property is W-D4a (cdc-hydration-live-handoff.test.js).
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -302,11 +307,10 @@ test(
      * subscribeToCDCWithHandshake returns the existing wrapper with
      * status 'already_subscribed' unchanged.
      *
-     * Observed on unfixed code:
      * - First call returns status: 'ok'
      * - Second call returns status: 'already_subscribed'
-     * - catchup.mode is 'none' when buffer is empty on second call
-     * - streamMode remains 'steady'
+     * - neither handshake carries a catch-up or replays a buffered
+     *   event outside the obligation lane (decision D4)
      */
     t.test(
       'already-subscribed subscriber returns already_subscribed ' +
@@ -330,7 +334,7 @@ test(
                   deliveredEvents.push(cdcEvent);
                 };
 
-                // First subscription — should be 'ok' with backfill
+                // First subscription — 'ok', registered, nothing replayed
                 const firstHandshake =
                   await partition.subscribeToCDCWithHandshake(
                     subscriber,
@@ -340,12 +344,7 @@ test(
                     PARTITION_SERVICE_CDC.HANDSHAKE_STATUS_OK) {
                   return false;
                 }
-                if (firstHandshake.catchup.mode !==
-                    PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL) {
-                  return false;
-                }
-                if (firstHandshake.catchup.bufferedEventsReplayed !==
-                    events.length) {
+                if (Object.hasOwn(firstHandshake, 'catchup')) {
                   return false;
                 }
 
@@ -362,24 +361,11 @@ test(
                   return false;
                 }
 
-                // Buffer is empty after first replay, so catchup
-                // mode should be 'none'
-                if (secondHandshake.catchup.mode !==
-                    PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE) {
+                if (Object.hasOwn(secondHandshake, 'catchup')) {
                   return false;
                 }
-                if (secondHandshake.catchup
-                  .bufferedEventsAtHandshake !== 0) {
-                  return false;
-                }
-                if (secondHandshake.catchup
-                  .bufferedEventsReplayed !== 0) {
-                  return false;
-                }
-
-                // Stream mode should be steady
-                if (secondHandshake.streamMode !==
-                    PARTITION_SERVICE_CDC.STREAM_MODE_STEADY) {
+                // No handshake replayed a buffered event outside the lane.
+                if (deliveredEvents.length !== 0) {
                   return false;
                 }
 

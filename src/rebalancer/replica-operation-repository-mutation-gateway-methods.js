@@ -5,6 +5,12 @@ import {
 import {isReroutableWriteError} from '../constants/errors.js';
 import {isReroutableWriteFailureCode} from
   '../partition/partition-write-kernel.js';
+import {
+  mintControlPlaneWriteKey,
+  releaseControlPlaneWriteIdentity,
+} from '../control-plane/control-plane-write-identity.js';
+import {reportOperationMutationRetrySpent} from
+  './replica-operation-repository-mutation-retry-observability.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
@@ -12,6 +18,23 @@ const REPLICA_OPERATION_MUTATION_COALESCING_KEY_PREFIX =
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_PREFIX =
   'control-plane:write';
 const REPLICA_OPERATION_MUTATION_DELIVERY_SOURCE_SEPARATOR = ':';
+// Every attempt of one retried mutation is one logical write: it is
+// delivered under the caller's write identity, or one named for this retry
+// loop, so an attempt after an unknown outcome is the same entry. A name the
+// loop named dies with it: released when the loop ends, whatever the
+// outcome.
+async function withMutationWriteIdentity(callerOptions, loop) {
+  if (typeof callerOptions?.writeIdentity === 'string' &&
+    callerOptions.writeIdentity.length > 0) {
+    return loop(callerOptions);
+  }
+  const writeIdentity = mintControlPlaneWriteKey();
+  try {
+    return await loop({...callerOptions, writeIdentity});
+  } finally {
+    releaseControlPlaneWriteIdentity(writeIdentity);
+  }
+}
 
 function assignReplicaOperationRepositoryMutationGatewayMethods(
   ReplicaOperationRepository,
@@ -25,16 +48,13 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     OPERATION_PERSIST_RETRY_DELAY_MS,
     OPERATION_PERSIST_RETRY_TIMEOUT_MS,
     OPERATION_MUTATION_SESSION_RETRY_DECISION,
-    PARTITION_SERVICE_ERROR_MSG,
     PRESSURE_WORK_CLASS,
     QUERY_ERROR_MSG,
     REBALANCE_COORDINATOR_LOG_MSG,
     REBALANCER_SUBSYSTEM,
     REPLICA_OPERATION_MUTATION_WORKLOAD_PROFILE,
-    REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
     RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
-    RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES,
     RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES,
     ROUTER_ERROR_MSG,
     SYSTEM_TABLE_NAME,
@@ -42,7 +62,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     cloneControlPlaneFailureParticipants,
     getControlPlaneErrorCode,
     getControlPlaneRetryAfterMs,
-    getRemainingBudgetMs,
     hasControlPlaneMutationRoutingGapFailureSignature,
     isRetryableControlPlaneError,
     isRetryableWorkflowParticipantLookupErrorMessage,
@@ -50,7 +69,12 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
   } = options;
 
   class ReplicaOperationRepositoryMutationGatewayMethods {
-    async executeOperationMutationWithRetry(sql, params, options = {}) {
+    async executeOperationMutationWithRetry(sql, params, callerOptions = {}) {
+      return withMutationWriteIdentity(callerOptions, (options) =>
+        this.retryOperationMutation(sql, params, options));
+    }
+
+    async retryOperationMutation(sql, params, options) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       while (true) {
@@ -60,11 +84,8 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         );
         let result = null;
         try {
-          result = await this.controlPlaneSystemTableGateway.executeQuery(
-            sql,
-            params,
-            queryOptions,
-          );
+          result = await this.runAdmittedOperationMutationAttempt(options, () =>
+            this.controlPlaneSystemTableGateway.executeQuery(sql, params, queryOptions));
         } catch (error) {
           result = error;
         }
@@ -77,6 +98,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget,
         );
         if (remainingMs <= 0) {
+          reportOperationMutationRetrySpent(this, result,
+            {elapsedMs, remainingMs, retryAttempt, options},
+            getControlPlaneErrorCode, OPERATION_PERSIST_RETRY_TIMEOUT_MS);
           return result;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(result, options)) {
@@ -94,6 +118,27 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         );
         await this.waitForOperationPersistRetry(waitMs);
       }
+    }
+
+    // Host-only submission admission, matching the canonical mutation ingress.
+    // A synchronous lifetime predicate is checked without an intervening await;
+    // asynchronous policy callers retain their existing beforeAttempt semantics.
+    // This is NOT a commit-time fence for an already-submitted replicated write.
+    async runAdmittedOperationMutationAttempt(options, invoke) {
+      if (typeof options.beforeAttempt === 'function') {
+        const admission = options.beforeAttempt();
+        if (admission !== true && await admission !== true) {
+          return {success: false, admissionRefused: true};
+        }
+      }
+      // Async admission may have yielded. This last synchronous host check is
+      // adjacent to invoke(), and never travels in the query/wire options.
+      if (options.submissionIsCurrent !== undefined &&
+        (typeof options.submissionIsCurrent !== 'function' ||
+          options.submissionIsCurrent() !== true)) {
+        return {success: false, admissionRefused: true};
+      }
+      return invoke();
     }
 
     bindPriorMutationDeliveryAttemptResult(failureResult) {
@@ -165,9 +210,15 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
 
     async executeReplicaOperationGatewayMutationWithRetry(
       mutation,
-      options = {},
+      callerOptions = {},
       fallback = {},
     ) {
+      return withMutationWriteIdentity(callerOptions, (options) =>
+        this.retryReplicaOperationGatewayMutation(mutation, options,
+          fallback));
+    }
+
+    async retryReplicaOperationGatewayMutation(mutation, options, fallback) {
       const startedAt = this.timeSource.now();
       let retryAttempt = 0;
       let priorMutationDeliveryMayHaveBeenAttempted = false;
@@ -204,6 +255,9 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
           options.timeoutBudget,
         );
         if (remainingMs <= 0) {
+          reportOperationMutationRetrySpent(this, scanResult,
+            {elapsedMs, remainingMs, retryAttempt, options},
+            getControlPlaneErrorCode, OPERATION_PERSIST_RETRY_TIMEOUT_MS);
           return scanResult;
         }
         if (this.shouldRotateOperationMutationSessionOnRetry(scanResult, options)) {
@@ -229,23 +283,21 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       fallback,
       retryAttempt,
     ) {
-      if (typeof options.beforeAttempt === 'function' &&
-          await options.beforeAttempt() !== true) {
-        return {success: false, admissionRefused: true};
-      }
-      const queryOptions = this.buildOperationMutationQueryOptions(
-        options,
-        retryAttempt,
-      );
-      try {
-        return await this.executeReplicaOperationGatewayMutation(
-          mutation,
-          queryOptions,
-          fallback,
+      return this.runAdmittedOperationMutationAttempt(options, async () => {
+        const queryOptions = this.buildOperationMutationQueryOptions(
+          options,
+          retryAttempt,
         );
-      } catch (error) {
-        return error;
-      }
+        try {
+          return await this.executeReplicaOperationGatewayMutation(
+            mutation,
+            queryOptions,
+            fallback,
+          );
+        } catch (error) {
+          return error;
+        }
+      });
     }
 
     async executeReplicaOperationGatewayMutation(
@@ -343,7 +395,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             errorMessage.includes(fragment),
           ) ||
           isRetryableWorkflowParticipantLookupErrorMessage(errorMessage) ||
-          RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES.includes(errorMessage) ||
           RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES.some((prefix) =>
             errorMessage.startsWith(prefix),
           ))
@@ -457,13 +508,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
       return error;
     }
 
-    isOperationMutationPartitionContention(errorResult) {
-      return (
-        this.getOperationPersistErrorMessage(errorResult) ===
-        PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE
-      );
-    }
-
     hasOperationMutationParticipantFailureEvidence(errorResult, errorMessage) {
       return (
         (Array.isArray(errorResult?.participantFailures) &&
@@ -520,10 +564,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
             OPERATION_MUTATION_SESSION_RETRY_DECISION.RETAIN_EXISTING_SESSION,
         };
       }
-      if (
-        this.isOperationMutationPartitionContention(errorResult) ||
-        this.isOperationMutationRouteRepairCandidate(errorResult)
-      ) {
+      if (this.isOperationMutationRouteRepairCandidate(errorResult)) {
         return {
           state:
             OPERATION_MUTATION_SESSION_RETRY_DECISION.ROTATE_IMPLICIT_SESSION,
@@ -549,19 +590,7 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         Number.isFinite(retryAfterMs) && retryAfterMs > 0 ?
           Math.floor(retryAfterMs) :
           OPERATION_PERSIST_RETRY_DELAY_MS;
-      if (!this.isOperationMutationPartitionContention(errorResult)) {
-        return baseDelayMs;
-      }
-      const jitterCeilingMs = Math.max(
-        1,
-        Math.floor(baseDelayMs / 2),
-      );
-      const boundedRandom = Math.max(
-        0,
-        Math.min(1, this.random()),
-      );
-      const jitterMs = Math.floor(boundedRandom * jitterCeilingMs);
-      return baseDelayMs + jitterMs;
+      return baseDelayMs;
     }
 
     // The persist-retry budgets above are measured on this repository's
@@ -569,38 +598,6 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
     // budget is never spent under a virtual one.
     async waitForOperationPersistRetry(delayMs) {
       await new Promise((resolve) => this.timeSource.setTimeout(resolve, delayMs));
-    }
-
-    resolveOperationMutationRemainingRetryMs(elapsedMs, timeoutBudget = null) {
-      const localRemainingMs = OPERATION_PERSIST_RETRY_TIMEOUT_MS - elapsedMs;
-      if (
-        !timeoutBudget ||
-        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
-      ) {
-        return localRemainingMs;
-      }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
-      return Math.min(localRemainingMs, budgetRemainingMs);
-    }
-
-    resolveOperationMutationQueryTimeoutMs(timeoutBudget = null) {
-      if (
-        !timeoutBudget ||
-        typeof timeoutBudget !== REPLICA_OPERATION_REPOSITORY_LITERAL.OBJECT
-      ) {
-        return REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS;
-      }
-      const budgetRemainingMs = getRemainingBudgetMs(timeoutBudget);
-      if (budgetRemainingMs <= 0) {
-        return 1;
-      }
-      return Math.max(
-        1,
-        Math.min(
-          REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS,
-          budgetRemainingMs,
-        ),
-      );
     }
 
     buildOperationMutationQueryOptions(options = {}, retryAttempt = 0) {
@@ -652,6 +649,10 @@ function assignReplicaOperationRepositoryMutationGatewayMethods(
         ...(coalescingKey ? {coalescingKey} : {}),
         ...(deliverySource ? {deliverySource} : {}),
         ...(coalescingKey ? {replacePendingKey: coalescingKey} : {}),
+        ...(typeof options.writeIdentity === 'string' ?
+          {writeIdentity: options.writeIdentity} : {}),
+        ...(options.pendingAppliedSettles === true ?
+          {pendingAppliedSettles: true} : {}),
       };
     }
 

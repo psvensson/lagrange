@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -31,18 +32,12 @@ test('system writes stay routable across transient leader gaps', async (t) => {
     deliver: async (address, _message) => {
       deliveries.push(address);
       if (address === 'node-leader/partition/node_endpoints-p1-r1') {
-        return {
-          acknowledged: true,
-          success: true,
-          changes: 1,
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
         success: false,
-        noHandler: true,
         error: `No handler for address ${address}`,
-      };
+      });
     },
   };
 
@@ -156,11 +151,7 @@ test('split routing fails closed when canonical leader owner metadata is missing
       messageRouter: {
         deliver: async (address) => {
           deliveries.push(address);
-          return {
-            acknowledged: true,
-            success: true,
-            changes: 1,
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
         },
       },
       systemCache,

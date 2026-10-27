@@ -13,6 +13,13 @@ import {
   SPLIT_MERGE_REASON,
   SPLIT_MERGE_SQL,
 } from './partition-constants.js';
+import {
+  hasTrafficSignal,
+  resolveEffectiveMergeThresholds,
+  resolveMergeDecision,
+  resolvePairTrafficSpanMs,
+  resolvePartitionCreatedAtMs,
+} from './partition-split-merge-policy.js';
 
 const LOCAL_STR_PARTITION_SPLIT_EVALUATION = 'partition:split:evaluation';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
@@ -329,10 +336,13 @@ class PartitionSplitMergeManagerCoreMethods {
       metrics.sizeBytes = Number.isFinite(sizeBytes) ? sizeBytes : 0;
     }
 
-    if (metrics.queriesPerMinute === undefined ||
-        metrics.queriesPerMinute === null) {
-      metrics.queriesPerMinute = 0;
+    // No traffic signal stays null: a missing measurement is never read as
+    // low load (the merge gate refuses it; the split gate ignores it).
+    if (!hasTrafficSignal(metrics)) {
+      metrics.queriesPerMinute = null;
     }
+    // The durable age fact rides with the metrics: partitions.created_at.
+    metrics.createdAtMs = resolvePartitionCreatedAtMs(partition);
 
     return metrics;
   }
@@ -478,11 +488,15 @@ class PartitionSplitMergeManagerCoreMethods {
       policy.splitTrafficThreshold ?? this.splitTrafficThreshold;
 
     const sizeBytes = metrics.sizeBytes || 0;
-    const queriesPerMinute = metrics.queriesPerMinute || 0;
+    // Traffic splits only on a full-window signal; no signal never splits.
+    const queriesPerMinute = hasTrafficSignal(metrics) ?
+      metrics.queriesPerMinute :
+      null;
 
     // Split if EITHER threshold is exceeded
     const shouldSplit = sizeBytes >= storageThreshold ||
-                        queriesPerMinute >= trafficThreshold;
+                        (queriesPerMinute !== null &&
+                          queriesPerMinute >= trafficThreshold);
 
     this.logger.debug(SPLIT_MERGE_LOG_MSG.EVALUATED_SPLIT_CRITERIA, {
       partitionId,
@@ -497,8 +511,47 @@ class PartitionSplitMergeManagerCoreMethods {
   }
 
   /**
+   * Decide one adjacent pair: the minimum-age gate on the durable
+   * partitions.created_at of BOTH partitions, then a full-window traffic
+   * signal on both read over a span within the merge span limit, then the
+   * hysteresis thresholds.
+   * @param {Object} input - {leftId, rightId, leftMetrics, rightMetrics,
+   *   policy}.
+   * @return {string} A SPLIT_MERGE_MERGE_DECISION value.
+   */
+  evaluateMergeEligibility(input) {
+    const decision = resolveMergeDecision({
+      nowMs: this.now(),
+      minimumAgeMs: this.mergeMinimumAgeMs,
+      leftCreatedAtMs: input.leftMetrics.createdAtMs,
+      rightCreatedAtMs: input.rightMetrics.createdAtMs,
+      trafficKnown: hasTrafficSignal(input.leftMetrics) &&
+        hasTrafficSignal(input.rightMetrics),
+      trafficSpanMs: resolvePairTrafficSpanMs(
+        input.leftMetrics, input.rightMetrics),
+      trafficSpanLimitMs: this.mergeTrafficSpanLimitMs,
+      withinThresholds: () => this.evaluateMergeCriteria(
+        input.leftId,
+        input.rightId,
+        input.leftMetrics,
+        input.rightMetrics,
+        input.policy,
+      ),
+    });
+    this.logger.debug(SPLIT_MERGE_LOG_MSG.MERGE_ELIGIBILITY_DECIDED, {
+      leftPartitionId: input.leftId,
+      rightPartitionId: input.rightId,
+      decision,
+      minimumAgeMs: this.mergeMinimumAgeMs,
+    });
+    return decision;
+  }
+
+  /**
    * Evaluate if two adjacent partitions should be merged.
-   * Merge criteria: combined storage <= threshold AND combined traffic <= threshold
+   * Merge criteria: combined storage <= threshold AND combined traffic <=
+   * threshold, each threshold clamped under the hysteresis bound of its
+   * split threshold; a pair without a traffic signal is never within it.
    * @param {string} leftPartitionId - Left partition ID.
    * @param {string} rightPartitionId - Right partition ID.
    * @param {Object} leftMetrics - Left partition metrics.
@@ -508,18 +561,20 @@ class PartitionSplitMergeManagerCoreMethods {
    */
   evaluateMergeCriteria(leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
     policy = {}) {
-    const storageThreshold =
-      policy.mergeStorageThreshold ?? this.mergeStorageThreshold;
-    const trafficThreshold =
-      policy.mergeTrafficThreshold ?? this.mergeTrafficThreshold;
+    const {storageThreshold, trafficThreshold} =
+      resolveEffectiveMergeThresholds(policy, this);
 
     const combinedStorage = (leftMetrics.sizeBytes || 0) +
       (rightMetrics.sizeBytes || 0);
-    const combinedTraffic = (leftMetrics.queriesPerMinute || 0) +
-      (rightMetrics.queriesPerMinute || 0);
+    const trafficKnown = hasTrafficSignal(leftMetrics) &&
+      hasTrafficSignal(rightMetrics);
+    const combinedTraffic = trafficKnown ?
+      leftMetrics.queriesPerMinute + rightMetrics.queriesPerMinute :
+      null;
 
-    // Merge if BOTH thresholds are satisfied
+    // Merge if BOTH thresholds are satisfied on a known signal
     const shouldMerge = combinedStorage <= storageThreshold &&
+                        trafficKnown &&
                         combinedTraffic <= trafficThreshold;
 
     this.logger.debug(SPLIT_MERGE_LOG_MSG.EVALUATED_MERGE_CRITERIA, {

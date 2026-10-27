@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   UnifiedRebalancer,
@@ -56,7 +57,10 @@ test('UnifiedRebalancer shutdown guard skips rebalance checks after shutdown', a
       getPolicyForPartition: async () => ({replicaCount: 3}),
     },
     messageRouter: {
-      deliver: async () => ({acknowledged: true, success: true, rows: []}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+        success: true,
+        rows: [],
+      })),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

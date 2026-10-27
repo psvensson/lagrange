@@ -106,7 +106,7 @@ test('A2c-1. five node environments coexist without sharing node-local state',
 test('A2c-2. mounting the seed on node-0 changes nothing on node-1 to node-4',
   async () => {
     const {scenario, environments} = fiveEnvironments();
-    const seed = createProductionSeedSimHost(environments.get(SEED_ID),
+    const seed = await createProductionSeedSimHost(environments.get(SEED_ID),
       {bootIncarnation: await reserveSimulatedBootIncarnation()});
 
     await runOnSimulationGenerationRoot(GENERATION, () =>
@@ -133,12 +133,12 @@ test('A2c-2. mounting the seed on node-0 changes nothing on node-1 to node-4',
         false, `${nodeId} bound no endpoint`);
     }
 
-    // Endpoint ownership is per node, and only one node has an owner yet.
-    const endpoint = scenario.connectionEnvironment.environment
-      .lookupEndpoint(BASE_PORT);
-    assert.equal(endpoint.nodeId, SEED_ID,
-      'the only bound endpoint belongs to the seed');
-    assert.equal(endpoint.router, seed.bootstrap.messageRouter);
+    // Retired since 7fa4d79ae: the seed's bound endpoint. With external
+    // admission fenced during bootstrap no node, the seed included, binds one.
+    assert.equal(scenario.connectionEnvironment.environment
+      .hasEndpoint(BASE_PORT), false, 'the fenced seed bound no endpoint');
+    assert.equal(seed.bootstrap.messageRouter.isExternalAdmissionEnabled(),
+      false, 'and its router admits no remote node yet');
 
     // And the transcript names one node, because one node did something.
     const nodesInTranscript = new Set(scenario.transcript.entries()

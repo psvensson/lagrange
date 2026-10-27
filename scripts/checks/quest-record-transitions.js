@@ -4,18 +4,17 @@
  * history, `check-closed-quest-shape.js` for closed-quest proof).
  *
  * Neither of those owns branch topology, so the admitted range comes from the
- * repository's change-selection owner at the CLI boundary and otherwise from
- * the merge base with `origin/main` of the repository being examined. The
+ * repository's change-selection owner (`repositoryCheckBase` in
+ * changed-paths.js): the declared range of this repository, or the merge base
+ * with `origin/main` of any other repository being examined. The
  * publisher requires a fast-forward but does not forbid merges inside the
  * range, so a commit is compared against every parent rather than the first.
  */
 
-import {execFileSync} from 'node:child_process';
+import {GIT_OUTPUT_BOUND, execGit} from './git-invocation.js';
 
-const GIT_BINARY = 'git';
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
-const MAX_BUFFER_BYTES = 512 * 1024 * 1024;
 const HEAD_REV = 'HEAD';
 const SHA_SEPARATOR = ' ';
 const BATCH_MISSING = 'missing';
@@ -32,9 +31,10 @@ const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 
+// Every read here is bounded as a history read: one cat-file answer carries
+// every quest record revision the admitted range touched.
 function git(root, args, options = {}) {
-  return execFileSync(GIT_BINARY, args, {cwd: root,
-    maxBuffer: MAX_BUFFER_BYTES, ...options});
+  return execGit(args, {cwd: root, bound: GIT_OUTPUT_BOUND.HISTORY_BLOB_BATCH, ...options});
 }
 
 /**

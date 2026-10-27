@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
   registerCase,
   dependencies,
@@ -282,7 +283,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -432,7 +435,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -608,7 +613,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -792,7 +799,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -942,7 +951,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {
@@ -1063,7 +1074,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {
@@ -1171,7 +1184,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -1300,7 +1315,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -1487,7 +1504,9 @@ export function registerPriorityRecoverySnapshotHandoffTimeoutReentryTestCases({
         messageRouter: {
           async deliver(target, payload, options) {
             deliveries.push({target, payload, options});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {async getPolicyForPartition() {

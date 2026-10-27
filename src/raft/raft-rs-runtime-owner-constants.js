@@ -23,6 +23,11 @@ import {
 
 const HEALTHY = 'healthy';
 const UNHEALTHY = 'unhealthy';
+const REPLACING = 'replacing';
+const RUNTIME_RESUME_DELAY_MS = 0;
+// An accepted native inbound wake whose timer fired during a shared replacement.
+// This belongs to the runtime group, not to a release observer or caller.
+const INBOUND_WAKE_DEBT = Object.freeze({NONE: 'none', SHARED_RUNTIME: 'shared-runtime'});
 const USABLE = 'usable';
 const RECOVERY_REQUIRED = 'recovery-required';
 const NO_LEADER = '0';
@@ -44,7 +49,12 @@ const CORE_CALL_WITHOUT_HANDLE = new Set([
 // its last (re)construction or restore: no ConfState key (a JSON array) can
 // equal it, so the first observation is always announced.
 const CONF_STATE_NOT_ANNOUNCED = 'conf-state-not-announced';
-const CORE_OPERATION = Object.freeze({CONF_STATE: 'conf_state'});
+const CORE_OPERATION = Object.freeze({
+  CONF_STATE: 'conf_state',
+  SEED_STORAGE: 'seed_storage',
+  SET_CONF_STATE: 'set_conf_state',
+  PERSIST_COMMIT_INDEX: 'persist_commit_index',
+});
 const RUNTIME_COMMAND = Object.freeze({
   READ_STATUS: 'read-status',
   CAMPAIGN: 'campaign',
@@ -59,10 +69,12 @@ const RUNTIME_COMMAND = Object.freeze({
   // The committed-membership read, answered from the recorded observation
   // like a status read (committed-read amendment 1, section 3.1).
   READ_COMMITTED_MEMBERSHIP: 'read-committed-membership',
+  PROPOSE_MEMBERSHIP_TRANSITION: 'propose-membership-transition',
 });
 const RUNTIME_EVENT = Object.freeze({
   TERM_CHANGE: RAFT_EVENT.TERM_CHANGE,
   LEADER_CHANGE: RAFT_EVENT.LEADER_CHANGE,
+  APPLIED_PROGRESS: RAFT_EVENT.APPLIED_PROGRESS,
   MEMBERSHIP_CHANGED: RAFT_EVENT.MEMBERSHIP_CHANGED,
   CONF_CHANGE_APPLIED: RAFT_EVENT.CONF_CHANGE_APPLIED,
 });
@@ -89,6 +101,7 @@ const PEER_DELIVERY_OBSERVATION_LIMIT = 256;
 // same bound as its per-peer delivery observations.
 const INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT = PEER_DELIVERY_OBSERVATION_LIMIT;
 const RUNTIME_PHASE = Object.freeze({
+  RUNTIME_REPLACEMENT: 'runtime-replacement',
   GENERATION_CHANGED: 'runtime-generation-changed',
   BOOTSTRAP_PERSISTENCE: 'bootstrap-persistence',
   ADDRESS_RESOLUTION: 'address-resolution',
@@ -97,6 +110,7 @@ const RUNTIME_PHASE = Object.freeze({
   APPLICATION: 'application',
   READY_DRAIN: 'ready-drain',
   READY_PERSISTENCE: 'ready-persistence',
+  INBOUND_TIMER_CLEANUP: 'inbound-timer-cleanup',
   CAMPAIGN_ELIGIBILITY: 'campaign-eligibility',
   DISPATCH: 'dispatch',
   ADMISSION: 'admission',
@@ -110,8 +124,12 @@ const RUNTIME_PHASE = Object.freeze({
   DURABLE_RECORD_READ: 'durable-record-read',
   // A throw the runtime did not type, contained by the group's port.
   UNEXPECTED_THROW: 'unexpected-throw',
+  // A delivered envelope refused before step by the local-log guard
+  // (raft-rs-local-log-guard.js).
+  LOCAL_LOG_GUARD: 'local-log-guard',
 });
 const RUNTIME_REASON = Object.freeze({
+  REPLACEMENT_IN_PROGRESS: 'runtime-replacement-in-progress',
   CORE_REFUSED: 'core-refused',
   GENERATION_CHANGED:
     'execution generation changed while host work was pending',
@@ -146,6 +164,10 @@ const RUNTIME_REASON = Object.freeze({
   // under the hard cutover (owner decision O3) it is refused for a reseed,
   // never retried and never opened.
   DURABLE_RECORD_INCOMPATIBLE: 'durable-record-incompatible',
+  // The replica's own history is proven lost while it runs (owner decision
+  // O4 detected at the ingress): the group is held durably and every further
+  // operation is refused; the value is the committed-membership boundary's.
+  RESEED_REQUIRED: COMMITTED_MEMBERSHIP_REFUSAL.RESEED_REQUIRED,
   CLOSED: 'closed',
   // A conf-change proposal the core would drop (a pending configuration
   // index above its applied index, or a joint configuration): answered as a
@@ -159,6 +181,42 @@ const RUNTIME_REASON = Object.freeze({
   // The command reached the core; the Readies it produced wait in the core
   // until the store admits their persistence again.
   READY_DEFERRED: 'ready-deferred-user-transaction-open',
+});
+// Why the local-log guard refused a delivered envelope (each one a
+// panicking precondition of the core; raft-rs-local-log-guard.js names the
+// producer each one implies).
+const RAFT_RS_LOCAL_LOG_REFUSAL = Object.freeze({
+  PEER_COMMIT_BEYOND_LOCAL_LOG: 'peer-commit-beyond-local-log',
+  // The same heartbeat from a raft id outside this replica's configuration
+  // or at a term below its own: it proves nothing about this replica, so it
+  // is refused and never holds it (M5).
+  UNADMITTED_COMMIT_BEYOND_LOCAL_LOG:
+    'unadmitted-sender-commit-beyond-local-log',
+  // A forwarded MsgTransferLeader reaching a follower that knows a leader at
+  // the message's term (raft.rs send() traps re-forwarding it with its term
+  // set).
+  TRANSFER_REQUEST_AT_NON_LEADER: 'transfer-request-at-follower-with-leader',
+  EMPTY_FORWARDED_PROPOSAL: 'empty-forwarded-proposal',
+  APPEND_RESPONSE_BEYOND_LOCAL_LOG: 'append-response-beyond-local-log',
+});
+// What the runtime reports to its port's structured log: a refused delivery
+// (rate limited per group and reason), a core trap, a runtime replacement
+// and a reseed hold not yet durable.
+const RUNTIME_FAULT_REPORT = Object.freeze({
+  INBOUND_STEP_REFUSED: 'inbound-step-refused',
+  CORE_TRAPPED: 'core-trapped',
+  RUNTIME_REPLACED: 'runtime-replaced',
+  // The durable record of a reseed hold could not be written (the hold stays
+  // in force in memory and the write is asked again by the group's next
+  // operation or delivery): reported on the first failure.
+  RESEED_HOLD_WRITE_FAILED: 'reseed-hold-write-failed',
+  // A spent wait bound (visibility only; the runtime's answer is unchanged):
+  // the Ready drain's cycle cap, a taken Ready's persistence admission wait,
+  // and the delivered-inbound drain's persistence admission deadline.
+  READY_DRAIN_BOUND_EXCEEDED: 'ready-drain-bound-exceeded',
+  PERSISTENCE_ADMISSION_BOUND_EXCEEDED: 'persistence-admission-bound-exceeded',
+  INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED:
+    'inbound-drain-admission-bound-exceeded',
 });
 // A Ready already taken holds the core's pending Ready, so its remaining
 // durable writes cannot be refused after an asynchronous send: they wait for
@@ -191,19 +249,24 @@ export {
   DURABLE_PROGRESS_OBSERVATION,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_WAKE_DEBT,
   INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   NO_LEADER,
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OBSERVATION_LIMIT,
   PEER_DELIVERY_OUTCOME,
   PERSISTENCE_ADMISSION_WAIT,
+  RAFT_RS_LOCAL_LOG_REFUSAL,
   RECOVERY_REQUIRED,
   ROLE,
   ROLE_LEADER,
   RUNTIME_COMMAND,
   RUNTIME_EVENT,
+  RUNTIME_FAULT_REPORT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
   UNHEALTHY,
+  REPLACING,
+  RUNTIME_RESUME_DELAY_MS,
   USABLE,
 };

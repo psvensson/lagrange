@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Property Test: Error Response Correlation ID
  * **Property 11: Error Response Correlation ID**
@@ -100,17 +101,17 @@ test('Property 11: Error Response Correlation ID', async (t) => {
             const result = await deliverWithRouter(nodeId, targetAddress, payload);
 
             // Error response must include correlationId
-            if (!result.correlationId) {
+            if (!result.transport.correlationId) {
               return false;
             }
 
             // correlationId must be a valid UUID
-            if (!UUID_REGEX.test(result.correlationId)) {
+            if (!UUID_REGEX.test(result.transport.correlationId)) {
               return false;
             }
 
             // Response should indicate failure
-            return result.acknowledged === false;
+            return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false;
           },
         ),
         {numRuns: 10},
@@ -137,12 +138,12 @@ test('Property 11: Error Response Correlation ID', async (t) => {
           const result = await deliverWithRouter(nodeId, targetAddress, payload);
 
           // Error response must preserve the original correlationId
-          if (result.correlationId !== originalCorrelationId) {
+          if (result.transport.correlationId !== originalCorrelationId) {
             return false;
           }
 
           // Response should indicate failure
-          return result.acknowledged === false;
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false;
         },
       ),
       {numRuns: 10},
@@ -174,17 +175,17 @@ test('Property 11: Error Response Correlation ID', async (t) => {
           const result = await deliverWithRouter(localNodeId, targetAddress, payload);
 
           // Error response must include correlationId
-          if (!result.correlationId) {
+          if (!result.transport.correlationId) {
             return false;
           }
 
           // correlationId must be a valid UUID
-          if (!UUID_REGEX.test(result.correlationId)) {
+          if (!UUID_REGEX.test(result.transport.correlationId)) {
             return false;
           }
 
           // Response should indicate failure
-          return result.acknowledged === false;
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false;
         },
       ),
       {numRuns: 10},
@@ -217,12 +218,12 @@ test('Property 11: Error Response Correlation ID', async (t) => {
           const result = await deliverWithRouter(localNodeId, targetAddress, payload);
 
           // Error response must preserve the original correlationId
-          if (result.correlationId !== originalCorrelationId) {
+          if (result.transport.correlationId !== originalCorrelationId) {
             return false;
           }
 
           // Response should indicate failure
-          return result.acknowledged === false;
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false;
         },
       ),
       {numRuns: 10},
@@ -248,18 +249,18 @@ test('Property 11: Error Response Correlation ID', async (t) => {
           const result = await deliverWithRouter(nodeId, targetAddress, payload);
 
           // correlationId must be present
-          if (!result.correlationId) {
+          if (!result.transport.correlationId) {
             return false;
           }
 
           // correlationId must be a valid UUID
-          if (!UUID_REGEX.test(result.correlationId)) {
+          if (!UUID_REGEX.test(result.transport.correlationId)) {
             return false;
           }
 
           // If original had correlationId, it should be preserved
           if (payload.correlationId) {
-            return result.correlationId === payload.correlationId;
+            return result.transport.correlationId === payload.correlationId;
           }
 
           return true;
@@ -295,17 +296,17 @@ test('Property 11: Error Response Correlation ID', async (t) => {
           const resultWith = await deliverWithRouter(nodeId, targetAddress, payloadWithId);
 
           // Both must have correlationId
-          if (!resultWithout.correlationId || !resultWith.correlationId) {
+          if (!resultWithout.transport.correlationId || !resultWith.transport.correlationId) {
             return false;
           }
 
           // Result with provided correlationId must preserve it
-          if (resultWith.correlationId !== providedCorrelationId) {
+          if (resultWith.transport.correlationId !== providedCorrelationId) {
             return false;
           }
 
           // Result without correlationId must have a valid UUID
-          return UUID_REGEX.test(resultWithout.correlationId);
+          return UUID_REGEX.test(resultWithout.transport.correlationId);
         },
       ),
       {numRuns: 10},

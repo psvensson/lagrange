@@ -1,3 +1,4 @@
+import {PUBLICATION_CONVERGENCE_CLAIM_STATE} from './publication-convergence-claim.js';
 import {CLUSTER_BASE_LAYER} from './cluster-base-layer.js';
 import {
   TYPEOF_OBJECT,
@@ -33,6 +34,10 @@ const {
 } = CLUSTER_BASE_LAYER;
 
 const PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD = Object.freeze({});
+const PUBLICATION_CONVERGENCE_EVIDENCE_STATE = Object.freeze({
+  PRESENT: 'publication_convergence_evidence_present',
+  ABSENT: 'publication_convergence_evidence_absent',
+});
 const PUBLICATION_CONVERGENCE_GATE_SUMMARY_TEXT = Object.freeze({
   BLOCKED: 'blocked',
   DETAIL_SEPARATOR: '#',
@@ -198,11 +203,19 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
     options.readinessMode === CLUSTER_READINESS_MODE_LOAD ?
       CLUSTER_READINESS_MODE_LOAD :
       CLUSTER_READINESS_MODE_STARTUP;
-  const publicationConvergenceGate =
+  // An absent publication convergence gate is absent evidence, never a ready
+  // gate: the empty record has no `ready`, so a cluster-active claim made
+  // without it fails the convergence invariant under a named state.
+  const publicationConvergenceEvidenceState =
     options.publicationConvergenceGate &&
     typeof options.publicationConvergenceGate === 'object' ?
+      PUBLICATION_CONVERGENCE_EVIDENCE_STATE.PRESENT :
+      PUBLICATION_CONVERGENCE_EVIDENCE_STATE.ABSENT;
+  const publicationConvergenceGate =
+    publicationConvergenceEvidenceState ===
+      PUBLICATION_CONVERGENCE_EVIDENCE_STATE.PRESENT ?
       options.publicationConvergenceGate :
-      {ready: true, reasons: []};
+      PUBLICATION_CONVERGENCE_GATE_EMPTY_RECORD;
   const gateReasons = normalizeDistinctStringArray(
     publicationConvergenceGate.reasons,
   );
@@ -357,8 +370,13 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
     },
   });
 
+  // Startup readiness explicitly does not claim publication convergence
+  // (the gate says so by name); every other active claim requires it.
+  const publicationConvergenceNotClaimed =
+    publicationConvergenceGate.claimState ===
+      PUBLICATION_CONVERGENCE_CLAIM_STATE.NOT_CLAIMED_STARTUP;
   const clusterActiveRequiresConvergencePassed =
-    options.allActive === true ?
+    options.allActive === true && !publicationConvergenceNotClaimed ?
       publicationConvergenceGate.ready === true :
       true;
   invariants.push({
@@ -374,6 +392,9 @@ function evaluatePriorityRecoveryCrossServiceInvariants(options = {}) {
     details: {
       mode: readinessMode,
       allActive: options.allActive === true,
+      publicationConvergenceEvidenceState,
+      publicationConvergenceClaimState:
+        publicationConvergenceGate.claimState ?? null,
       publicationConvergenceReady: publicationConvergenceGate.ready === true,
       publicationConvergenceReasons: gateReasons,
     },

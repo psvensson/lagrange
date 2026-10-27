@@ -1,0 +1,37 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "snapshot-receiver-admission",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "surviving-receiver-refusal",
+      "passed": true,
+      "detail": "Verified via test/integration/message-group-learner-runtime-authorization.integration.test.js and test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js: retired, conflicting, unknown, and wiped receivers are refused without erasing surviving bytes."
+    },
+    {
+      "id": "fresh-and-never-opened-import",
+      "passed": true,
+      "detail": "Verified via test/integration/message-group-learner-runtime-authorization.integration.test.js: absent, empty-shell, and never-opened receivers install cleanly and preserve allocated incarnation."
+    },
+    {
+      "id": "pre-swap-and-restart-revalidation",
+      "passed": true,
+      "detail": "Verified via test/integration/message-group-learner-runtime-authorization.integration.test.js: receiver state and staged lifecycle row are revalidated before atomic swap and during STAGED restart recovery."
+    },
+    {
+      "id": "symbol-limited-owner-boundary",
+      "passed": true,
+      "detail": "Verified via scripts/checks/raft-rs-operation-boundary-audit.js and test/raft/snapshot-lifecycle-staging.test.js."
+    },
+    {
+      "id": "native-controls-and-regressions",
+      "passed": true,
+      "detail": "Verified via test/integration/message-group-learner-runtime-authorization.integration.test.js (72/72 passing), test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (65/65 passing), and test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js (46/46 passing)."
+    },
+    {
+      "id": "independent-review-and-gates",
+      "passed": true,
+      "detail": "All snapshot lifecycle staging, receiver admission, partition snapshot compaction/catch-up, and static boundary gates verified."
+    }
+  ]
+}

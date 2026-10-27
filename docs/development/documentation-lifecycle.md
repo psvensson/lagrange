@@ -90,7 +90,6 @@ trend, sum incompatible test cones or create another tracker. Update on
 material integration/blocker change, not each agent heartbeat. Bounded
 repair completion, public-service readiness and full release remain
 different claims.
-
 ## Graduation Rules
 
 When a change finishes an operation, the same Quest must:

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,9 +7,10 @@ import {test} from 'node:test';
 import {
   OUTCOME, PROOF, RECEIPT_REF_ROOT, proofRef, recordProof, resolveProof,
 } from '../../scripts/proof-authority.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 function git(cwd, ...args) {
-  return execFileSync('git', args, {cwd, encoding: 'utf8'}).trim();
+  return execGit(args, {cwd, encoding: 'utf8'}).trim();
 }
 
 function fixture() {

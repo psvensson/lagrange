@@ -44,7 +44,7 @@ A scalable distributed database where:
 ## Core Principles
 
 1. **Tables as the Universal Storage Model** - System metadata and user data are stored in tables
-2. **Partitions as Raft Groups** - Each partition is a Raft consensus group. `PartitionService` constructs its frozen operation port exclusively through the Rust raft-rs/WASM provider and refuses retired backend-selection and provider-injection options. Message-group and generic replica paths still retain the legacy consensus backend, so the system-wide cutover remains incomplete.
+2. **Partitions as Raft Groups** - Each partition is a Raft consensus group behind the semantic Raft operation-port boundary. Production consensus is implemented by the vendored raft-rs/WASM runtime; there is no selectable alternate consensus backend.
 3. **System Cache as Canonical Observational Read Model** - In-memory cache of
    CDC-propagated system tables, updated by CDC events. It is the steady-state
    read model for propagated metadata, but it is not a second completion oracle

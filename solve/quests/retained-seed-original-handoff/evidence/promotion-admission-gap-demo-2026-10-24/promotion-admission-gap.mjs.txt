@@ -1,0 +1,95 @@
+// Read-only demonstration against the real modules of the lineage head worktree.
+// Usage: node promotion-admission-gap.mjs <worktree> <scratchDir>
+import fs from 'node:fs';
+import path from 'node:path';
+import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
+const [W, OUT] = process.argv.slice(2);
+const src = (p) => import(path.join(W, 'src', p));
+const require = createRequire(path.join(W, 'package.json'));
+const Database = require('better-sqlite3');
+const {RAFT_MEMBERSHIP_TRANSITION_STAGE: STAGE} = await src('raft/raft-operation-port-constants.js');
+const ctx = await src('raft/raft-rs-committed-membership-context.js');
+const {RaftRsPeerIdentityRegistry, readRaftRsPeerIdentityReservations, deriveRaftRsPeerId} =
+  await src('raft/raft-rs-peer-identity.js');
+const {raftRsConfStateKey} = await src('raft/raft-rs-conf-state-key.js');
+const fmt = await src('raft/snapshot-checkpoint-format.js');
+const store = await src('raft/snapshot-checkpoint-store.js');
+const C = await src('raft/snapshot-checkpoint-constants.js');
+const {writeAtomicDurable} = await src('runtime/oci-host-agent-durable-files.js');
+
+fs.rmSync(OUT, {recursive: true, force: true}); fs.mkdirSync(OUT, {recursive: true});
+const sort = (ids) => [...ids].sort((a, b) => a.length - b.length || a.localeCompare(b));
+const G = 'mg-1';
+const [A, B, T] = ['replica-a', 'replica-b', 'replica-target'].map((r) => ({r, p: deriveRaftRsPeerId(r)}));
+const base = {operationId: 'op-1', transitionIdentity: 'tr-1', replicaIdentity: T.r, peerId: T.p};
+const learnerAdmission = ctx.encodeCommittedLearnerAdmission({groupId: G, index: '5', term: '1',
+  context: {...base, permitSequence: 1, stage: STAGE.ADD_LEARNER}});
+const beforeCs = {voters: sort([A.p, B.p]), votersOutgoing: [], learners: [T.p], learnersNext: [], autoLeave: false};
+const afterVoters = sort([A.p, B.p, T.p]);
+const afterCs = {voters: afterVoters, votersOutgoing: [], learners: [], learnersNext: [], autoLeave: false};
+const fact = (over = {}) => ctx.encodeCommittedPromotionAdmission({version: 1, groupId: G,
+  index: over.index ?? '8', term: over.term ?? '2',
+  context: {...base, permitSequence: 2, stage: STAGE.PROMOTE}, learnerAdmission,
+  before: {configurationKey: raftRsConfStateKey(beforeCs), membershipGenerationIndex: '6'},
+  after: {voters: afterVoters, votersOutgoing: [], learners: [], learnersNext: [],
+    configurationKey: raftRsConfStateKey(afterCs), membershipGenerationIndex: over.index ?? '8'}});
+const honestFact = fact();
+const futureFact = fact({index: '50', term: '9'});   // beyond the image boundary below
+
+function peerDb(file, promotion) {
+  const db = new Database(file);
+  const reg = new RaftRsPeerIdentityRegistry(db);
+  db.transaction(() => {
+    for (const m of [A, B, T]) reg.registerReplica(m.r);
+    reg.recordCommittedLearnerAdmission(T.r, learnerAdmission);
+    if (promotion) reg.recordCommittedPromotionAdmission(T.r, promotion);
+  })();
+  return db;
+}
+const boundary = {groupId: G, appliedIndex: '10', appliedTerm: '2', membershipGenerationIndex: '8'};
+function descriptorFor(reservations, payloadFile) {
+  const bytes = fs.readFileSync(payloadFile);
+  return fmt.buildCheckpointDescriptor({clusterId: 'c1', raftGroupId: G,
+    entity: {kind: 'message_group', id: G}, membershipEpoch: 8, lastIncludedIndex: 10,
+    lastIncludedTerm: 2, maxCommittedHlc: '0000000000000:0000:none',
+    payloadKind: C.RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE,
+    payloadVersion: C.RAFT_CHECKPOINT_PAYLOAD_VERSION[C.RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE],
+    payloadByteLength: bytes.length,
+    payloadDigest: 'sha256:' + createHash('sha256').update(bytes).digest('hex'),
+    raftRs: {...boundary, confState: afterCs, peerReservations: reservations}});
+}
+function sealed(name, promotion, strip) {
+  const dir = path.join(OUT, name); fs.mkdirSync(dir);
+  const payload = path.join(dir, C.RAFT_CHECKPOINT_PAYLOAD_FILE);
+  const db = peerDb(payload, promotion);
+  db.pragma('journal_mode = DELETE');
+  const reservations = readRaftRsPeerIdentityReservations(db);
+  db.close();
+  const described = strip ? reservations.map(({promotionAdmission, ...rest}) => rest) : reservations;
+  const descriptor = descriptorFor(described, payload);
+  writeAtomicDurable(path.join(dir, C.RAFT_CHECKPOINT_DESCRIPTOR_FILE), descriptor);
+  return {dir, descriptor, reservations};
+}
+const show = (label, v) => console.log(label.padEnd(74), JSON.stringify(v));
+
+// S0: control - learner-only image (no promotion fact) is VALID.
+const s0 = sealed('s0-learner-only', null, false);
+show('S0 learner-only image: readCheckpoint', store.readCheckpoint({checkpointDir: s0.dir}).outcome);
+// S1: honest image after a managed PROMOTE applied: the reservation carries promotionAdmission.
+const s1 = sealed('s1-honest-promoted', honestFact, false);
+show('S1 reservation keys read from the image', Object.keys(s1.reservations.find((x) => x.replicaIdentity === T.r)));
+show('S1 honest post-PROMOTE image: validateCheckpointDescriptor', fmt.validateCheckpointDescriptor(s1.descriptor));
+show('S1 honest post-PROMOTE image: readCheckpoint', store.readCheckpoint({checkpointDir: s1.dir}).outcome);
+// S2: descriptor omits the fact, payload carries a fact BEYOND the image boundary.
+const s2 = sealed('s2-undescribed-future-fact', futureFact, true);
+show('S2 descriptor w/o fact, payload fact index 50 > applied 10: readCheckpoint', store.readCheckpoint({checkpointDir: s2.dir}).outcome);
+const pdb = new Database(path.join(s2.dir, C.RAFT_CHECKPOINT_PAYLOAD_FILE), {readonly: true});
+show('S2 payload promotion_admission column (installed verbatim)', JSON.parse(readRaftRsPeerIdentityReservations(pdb).find((x) => x.replicaIdentity === T.r).promotionAdmission).index);
+pdb.close();
+// S3: the orphaned check on the same inputs.
+const resv = {replicaIdentity: T.r, peerId: T.p, learnerAdmission};
+show('S3 promotionAdmissionMatchesReservation(honest fact, image boundary)', ctx.promotionAdmissionMatchesReservation(honestFact, resv, boundary));
+show('S3 promotionAdmissionMatchesReservation(future fact, image boundary)', ctx.promotionAdmissionMatchesReservation(futureFact, resv, boundary));
+show('S3 ...(honest fact, other learnerAdmission)', ctx.promotionAdmissionMatchesReservation(honestFact, {...resv, learnerAdmission: learnerAdmission.replace('"5"', '"4"')}, boundary));
+show('S3 ...(honest fact, foreign group boundary)', ctx.promotionAdmissionMatchesReservation(honestFact, resv, {...boundary, groupId: 'mg-2'}));

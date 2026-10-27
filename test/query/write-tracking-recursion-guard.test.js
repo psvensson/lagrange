@@ -9,6 +9,7 @@
  * SQL engine, which would re-enter executeInsert and overflow the stack.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -67,12 +68,11 @@ function createCacheForTable(tableName) {
 
 function createTestRouter() {
   return {
-    deliver: async () => ({
-      acknowledged: true,
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
       success: true,
       rows: [],
       changes: 1,
-    }),
+    })),
   };
 }
 

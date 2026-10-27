@@ -21,7 +21,6 @@
  */
 import {mkdirSync, renameSync, writeFileSync} from 'node:fs';
 import {dirname, isAbsolute, join, relative, resolve} from 'node:path';
-import {spawnSync} from 'node:child_process';
 import {refuseUnderProbe} from '../../src/test-helpers/probe-guard.js';
 import {
   STORAGE_LOAD_REPORT,
@@ -32,6 +31,7 @@ import {
 } from './in-process-three-node-cluster.js';
 import {collectStorageFootprint} from './storage-footprint.js';
 import {LoadFigures, PacedLoadStream} from './paced-load.js';
+import {spawnGit} from '../../scripts/checks/git-invocation.js';
 
 const HARNESS_NAME = 'storage-load scenario';
 // Each table is one full-range partition, so "per partition" figures are
@@ -136,7 +136,7 @@ function resolvePath(root, candidate) {
 }
 
 function currentHead(root) {
-  const result = spawnSync('git', GIT_HEAD, {cwd: root, encoding: 'utf8'});
+  const result = spawnGit(GIT_HEAD, {cwd: root, encoding: 'utf8'});
   const head = String(result.stdout || '').trim();
   return head.length > 0 ? head : UNKNOWN_HEAD;
 }

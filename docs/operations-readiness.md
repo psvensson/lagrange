@@ -59,13 +59,18 @@ raft-rs. The leader's current
 [`partition-snapshot-cadence.js`](../src/partition/partition-snapshot-cadence.js)
 returns `COMMITTED_LOG_UNSUPPORTED` for a live file-backed leader, because
 the old compaction proof depended on a committed-log owner absent from raft-rs.
+The message-group replica image in
+[`snapshot-checkpoint-store.js`](../src/raft/snapshot-checkpoint-store.js)
+preserves consensus/peer identity and deliberately scrubs application tables;
+it is not a SQL-partition recovery image or a user backup.
 
 Therefore **do not assume automatic snapshots, bounded partition-log growth,
 full snapshot catch-up or a published recovery time** on the current backend.
 Historical five-node snapshot tests on the predecessor log cannot prove this
-path. The remaining work must bind creation, bounded transfer, atomic install,
+path. Recovery evidence must bind creation, bounded transfer, atomic install,
 durable apply/catch-up, compaction and follower readiness to the same owner
-and exact tested candidate.
+and exact tested candidate while preserving application rows, transaction/outcome
+state, clock and applied boundaries, and replica identity.
 
 Message-group logs still lack an established compaction lifecycle. Learner
 promotion remains time-based rather than follower-progress-based. A pilot must
@@ -113,11 +118,11 @@ hot spots, and fan-out behavior with `EXPLAIN DISTRIBUTED` and telemetry.
 
 Public PostgreSQL-wire and other exposed SQL write operations must preserve
 accepted statement semantics or be refused by the SQL/transaction owner with
-a typed result **before any side effect**. The current PostgreSQL
-`ON CONFLICT DO UPDATE` translation uses replacement rather than its
-`SET`/`WHERE` semantics. It is not a safe compatibility claim. Dollar-quoted
-literals and other unverified expressions also require public-path regression
-proof; an unsupported literal must never be silently coerced to `NULL`.
+a typed result **before any side effect**. PostgreSQL `ON CONFLICT DO UPDATE`
+is refused before mutation with SQLSTATE `0A000` (`UNSUPPORTED_SQL_FEATURE`)
+rather than using replacement semantics. Dollar-quoted literals and other
+unverified expressions also require public-path regression proof; an
+unsupported literal must never be silently coerced to `NULL`.
 
 A lost reply or timed-out distributed `COMMIT` is not proof of abort. Until
 a caller-visible idempotency/reconciliation contract is proven on the public
@@ -163,6 +168,14 @@ Do not claim an RPO or RTO that has not been measured end to end.
 
 `0.x` releases carry no backward-compatibility guarantee. There is no published
 supported rolling-upgrade, downgrade, or mixed-version contract.
+
+In-place upgrade, rolling or full-stop, is unsupported from any build that moved
+a message-group replica to a joining node under its existing replica name:
+every release through 0.2.5, the unreleased 0.2.6, and main before the
+identity-reuse fix. After such an upgrade a node holding a message-group replica
+whose name it did not create can elect a second leader and lose acknowledged
+writes. Rebuild such a cluster, or dump and restore it, instead. See
+[current capabilities and limitations](current-capabilities-and-limitations.md).
 
 Before changing versions:
 

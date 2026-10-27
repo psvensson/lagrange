@@ -130,9 +130,6 @@ const LOCAL_STR_HELP = 'help';
 const LOCAL_STR_QUIT = 'quit';
 const LOCAL_STR_CONNECT = 'connect';
 const LOCAL_STR_DRAIN = 'drain';
-const LOCAL_STR_DRAINING = 'draining';
-const LOCAL_STR_ACTIVATE = 'activate';
-const LOCAL_STR_ACTIVE = 'active';
 const LOCAL_STR_REMOVE_NODE = 'remove-node';
 const LOCAL_STR_HISTORY = 'history';
 const LOCAL_STR_SINCE = 'since';
@@ -292,9 +289,6 @@ export {
   LOCAL_STR_QUIT,
   LOCAL_STR_CONNECT,
   LOCAL_STR_DRAIN,
-  LOCAL_STR_DRAINING,
-  LOCAL_STR_ACTIVATE,
-  LOCAL_STR_ACTIVE,
   LOCAL_STR_REMOVE_NODE,
   LOCAL_STR_HISTORY,
   LOCAL_STR_SINCE,

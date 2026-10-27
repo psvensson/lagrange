@@ -11,6 +11,7 @@ import {
   PEER_ADDRESS_STATUS,
   PEER_DELIVERY_OUTCOME,
   ROLE,
+  ROLE_LEADER,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
 import {
@@ -20,6 +21,13 @@ import {
 const NO_DELIVERY_OBSERVED = Object.freeze({
   outcome: PEER_DELIVERY_OUTCOME.NONE_OBSERVED,
 });
+let nativeStatusObserver = null;
+
+// Passive observation of the existing runtime's native status publication.
+// This introduces no core read, scheduler wake, authority or cached decision.
+function setNativeStatusObserver(observer) {
+  nativeStatusObserver = typeof observer === 'function' ? observer : null;
+}
 
 // One configured peer's identity and address, each a named state. A peer
 // whose identity this replica never reserved is reported, not thrown: its
@@ -89,10 +97,26 @@ function followerProgressSnapshot(group, status) {
   return snapshot;
 }
 
+// This replica leads and its core has applied past its pending configuration
+// index. raft-rs sets that index to the last log index when the replica becomes
+// leader and only raises it while leading (raft-0.7.0 src/raft.rs:1227-1232,
+// 2077), and every entry after that index is the leader's own: an entry of the
+// current term has committed and been applied here, so no entry of an earlier
+// term that this replica has not applied can commit any more. A replica that
+// does not lead, or a status missing either index, answers false.
+function currentTermApplied(status) {
+  if (ROLE[status.raftState] !== ROLE_LEADER ||
+      status.applied === undefined || status.applied === null ||
+      status.pendingConfIndex === undefined || status.pendingConfIndex === null) {
+    return false;
+  }
+  return BigInt(status.applied) > BigInt(status.pendingConfIndex);
+}
+
 /**
  * The status one observation of the core describes.
  * @param {Object} group - The runtime group.
- * @param {Object} observation - {status, confState, appliedIndex,
+ * @param {Object} observation - {status, confState, appliedIndex, lastIndex,
  *   runtimeHealth, runtimeGeneration} as the runtime owner recorded them.
  * @param {Function} leaderIdentityUnresolved - The owner's outcome when the
  *   leader's identity cannot be resolved.
@@ -110,16 +134,26 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     // reservation state.
     return leaderIdentityUnresolved(error);
   }
-  return deepFreeze({
+  const result = deepFreeze({
     outcome: RAFT_OPERATION_OUTCOME.CORE_OK,
     groupId: group.groupId,
     replicaIdentity: group.replicaIdentity,
     peerId: group.peerId,
     term: Number(status.term),
     commitIndex: Number(status.commit),
+    // The core holds a proposed configuration change it has not applied
+    // (the conf-change admission's own pending check).
+    confChangePending:
+      BigInt(status.pendingConfIndex ?? 0) > BigInt(status.applied ?? 0),
+    currentTermApplied: currentTermApplied(status),
     // The runtime's applied index of this same observation (the one its
-    // confState came from).
+    // confState came from), and the persisted last index of the log it
+    // applies from: equal when every entry this replica holds has applied.
     appliedIndex: observation.appliedIndex,
+    lastIndex: Number(observation.lastIndex),
+    configurationKey: observation.configurationKey,
+    membershipGenerationIndex: observation.membershipGenerationIndex,
+    lifecycleIncarnation: observation.lifecycleIncarnation,
     role: ROLE[status.raftState] || RUNTIME_REASON.UNKNOWN,
     ...leader,
     peerCount: Math.max(0,
@@ -137,6 +171,8 @@ function shapeGroupObservation(group, observation, leaderIdentityUnresolved) {
     groupHealth: group.health,
     runtimeGeneration: observation.runtimeGeneration,
   });
+  nativeStatusObserver?.(result);
+  return result;
 }
 
-export {shapeGroupObservation};
+export {shapeGroupObservation, setNativeStatusObserver};

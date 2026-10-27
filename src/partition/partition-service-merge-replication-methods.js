@@ -1,6 +1,9 @@
 import {ERRORS, SQL} from '../constants/index.js';
-import {RAFT_ROLE} from '../raft/constants.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
+import {forwardSourceReplicationStart} from './managed-source-replication-start-delivery.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+  PARTICIPANT_ACK_RESULT,
+} from '../workflow/workflow-constants.js';
 import {
   PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_STATE,
@@ -34,9 +37,13 @@ import {
   buildReplayCursorCheckpoint,
   resolveSnapshotBarrierIndex,
 } from './partition-mirror-replay-cursor.js';
+import {reportMergeCutoverWaitSpent} from './merge-cutover-wait-report.js';
+import {
+  beginSourceReplicationActivityForService,
+  finishSourceReplicationActivityForService,
+} from './partition-service-source-replication-start-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-
 /**
  * Failure acknowledgement per local phase at the moment a merge
  * replication run fails. The owner aborts the merge fail-safe on any of
@@ -58,6 +65,79 @@ const MERGE_FAILURE_ACK_STATUS_BY_PHASE = Object.freeze(new Map([
   ],
 ]));
 
+async function authorizeMergeSnapshotStart(owner, metadata, options) {
+  if (options.startAuthorized === true) return;
+  const start = await owner.emitMergeSourceAck(
+    metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
+  const accepted = start?.result === PARTICIPANT_ACK_RESULT.ACCEPTED;
+  const duplicate = start?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+  if (!accepted && !duplicate) {
+    throw new Error(
+      PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED);
+  }
+}
+
+function mergeHandleAcceptsAfterWrite(owner, mergeReplication) {
+  const metadata = mergeReplication?.metadata;
+  return Boolean(metadata) &&
+    metadata.sourcePartitionIds.includes(owner.partitionId) &&
+    !mergeReplication.quiescing && !mergeReplication.quiesced &&
+    mergeReplication.authorized === true;
+}
+
+async function runMergeBackfillPhase(owner, handle, metadata) {
+  if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_BACKFILLING) return;
+  handle.snapshotBarrierIndex = resolveSnapshotBarrierIndex(owner);
+  handle.replayWatermarkIndex = handle.snapshotBarrierIndex;
+  const snapshot = owner.openSplitSnapshotDatabase();
+  try {
+    await owner.backfillMergeSnapshot(snapshot, metadata);
+  } finally {
+    snapshot?.close?.();
+  }
+  handle.phase = PARTITION_TRANSITION_STATE.MERGE_CATCHUP;
+}
+
+async function runMergeCatchupPhase(owner, handle, metadata) {
+  if (handle.phase !== PARTITION_TRANSITION_STATE.MERGE_CATCHUP) return;
+  await owner.flushMergeReplicationQueue();
+  const catchupAck = await owner.emitMergeSourceAck(
+    metadata,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    buildReplayCursorCheckpoint(
+      MERGE_ACK_CHECKPOINT_FIELD,
+      handle.snapshotBarrierIndex,
+      handle.replayWatermarkIndex,
+    ),
+  );
+  if (catchupAck?.mergeCutoverApplied !== true) {
+    await owner.waitForMergeCutoverActivation(metadata);
+  }
+  handle.phase = PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
+}
+
+async function runMergeCutoverPhase(owner, handle, metadata) {
+  if (handle.phase !==
+      PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE) return;
+  await owner.flushMergeReplicationQueue();
+  await owner.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.CUTOVER_APPLIED);
+  const mirrorRemoved = await owner.emitMergeSourceAck(
+    metadata,
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    {
+      [MERGE_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: true,
+      ...buildReplayCursorCheckpoint(
+        MERGE_ACK_CHECKPOINT_FIELD,
+        handle.snapshotBarrierIndex,
+        handle.replayWatermarkIndex,
+      ),
+    },
+  );
+  handle.terminal =
+    mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.ACCEPTED ||
+    mirrorRemoved?.result === PARTICIPANT_ACK_RESULT.DUPLICATE;
+}
+
 class PartitionServiceMergeReplicationMethods {
   /**
    * Normalize merge transition metadata for this source partition.
@@ -70,84 +150,6 @@ class PartitionServiceMergeReplicationMethods {
   }
 
   /**
-   * Determine whether two merge-replication descriptors describe the
-   * same merge.
-   * @param {Object|null} left
-   * @param {Object|null} right
-   * @return {boolean}
-   * @private
-   */
-  isSameMergeReplication(left, right) {
-    if (!left || !right) {
-      return false;
-    }
-    return (
-      left.primaryKeyColumn === right.primaryKeyColumn &&
-      left.targetPartitionId === right.targetPartitionId &&
-      left.targetPartitionVersion === right.targetPartitionVersion &&
-      Array.isArray(left.sourcePartitionIds) &&
-      Array.isArray(right.sourcePartitionIds) &&
-      left.sourcePartitionIds.length === right.sourcePartitionIds.length &&
-      left.sourcePartitionIds.every(
-        (partitionId, index) =>
-          partitionId === right.sourcePartitionIds[index],
-      )
-    );
-  }
-
-  /**
-   * Validate and start one source-partition merge replication workflow.
-   * The request is acknowledged once accepted; backfill/catch-up continues
-   * asynchronously on the source leader.
-   * @param {Object} payload - Merge replication request.
-   * @return {Promise<Object>} ACK response.
-   * @private
-   */
-  async handleStartMergeReplication(payload) {
-    const transitionMetadata = payload?.transitionMetadata;
-    const metadata = this.normalizeMergeTransitionMetadata(transitionMetadata);
-    if (!metadata) {
-      return {
-        acknowledged: false,
-        error: PARTITION_SERVICE_ERROR_MSG.INVALID_MERGE_REPLICATION,
-      };
-    }
-    this.logger.info(
-      PARTITION_SERVICE_LOG_MSG.START_MERGE_REPLICATION_REQUEST,
-      {
-        partitionId: this.partitionId,
-        tableId: payload?.tableId || this.tableId,
-        tableName: payload?.tableName || this.tableName,
-        targetPartitionId: metadata.targetPartitionId,
-        targetPartitionVersion: metadata.targetPartitionVersion,
-      },
-    );
-    if (this.role !== RAFT_ROLE.LEADER) {
-      return this.forwardStartMergeReplicationToLeader(
-        payload,
-        transitionMetadata,
-      );
-    }
-    const inFlightResponse =
-      this.resolveInFlightMergeReplicationResponse(metadata);
-    if (inFlightResponse) {
-      return inFlightResponse;
-    }
-    this.mergeReplication = {
-      metadata,
-      phase: PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
-      pendingEntries: [],
-      flushPromise: null,
-      startedAt: Date.now(),
-      lastError: null,
-    };
-    this.mergeReplicationRun = this.runMergeReplicationWorkflow().catch(
-      (error) => this.handleMergeReplicationRunFailure(metadata, error),
-    );
-    return {acknowledged: true, success: true};
-  }
-
-  /**
    * Handle one failed merge replication run: mark the local handle FAILED
    * and emit the matching failure acknowledgement so the workflow owner
    * can abort the merge fail-safe BEFORE any cutover.
@@ -156,11 +158,12 @@ class PartitionServiceMergeReplicationMethods {
    * @return {Promise<void>}
    * @private
    */
-  async handleMergeReplicationRunFailure(metadata, error) {
+  async handleMergeReplicationRunFailure(metadata, error,
+    mergeReplication = this.mergeReplication) {
     const failureAckStatus = this.resolveMergeFailureAckStatus();
-    if (this.mergeReplication) {
-      this.mergeReplication.lastError = error.message;
-      this.mergeReplication.phase = PARTITION_TRANSITION_STATE.FAILED;
+    if (this.mergeReplication === mergeReplication) {
+      mergeReplication.lastError = error.message;
+      mergeReplication.phase = PARTITION_TRANSITION_STATE.FAILED;
     }
     this.logger.error(
       PARTITION_SERVICE_LOG_MSG.MERGE_REPLICATION_FAILED,
@@ -206,7 +209,8 @@ class PartitionServiceMergeReplicationMethods {
   forwardStartMergeReplicationToLeader(payload, transitionMetadata) {
     const leaderAddress = this.resolveLeaderAddress();
     if (leaderAddress && this.transport) {
-      return this.transport.deliver(leaderAddress, {
+      // A forwarding hop answers with the leader's answer (or its refusal).
+      return forwardSourceReplicationStart(this.transport, leaderAddress, {
         type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
         partitionId: payload?.partitionId || this.partitionId,
         tableId: payload?.tableId || this.tableId,
@@ -215,32 +219,9 @@ class PartitionServiceMergeReplicationMethods {
       });
     }
     return Promise.resolve({
-      acknowledged: false,
+      success: false,
       error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
     });
-  }
-
-  /**
-   * Resolve the idempotency/conflict response for one merge replication
-   * request while a replication handle is already installed.
-   * @param {Object} metadata - Normalized merge transition metadata.
-   * @return {Object|null} Response to return, or null to proceed.
-   * @private
-   */
-  resolveInFlightMergeReplicationResponse(metadata) {
-    if (
-      this.mergeReplication &&
-      this.isSameMergeReplication(this.mergeReplication.metadata, metadata)
-    ) {
-      return {acknowledged: true, success: true};
-    }
-    if (this.mergeReplication || this.splitReplication) {
-      return {
-        acknowledged: false,
-        error: PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_STATE_REQUIRED,
-      };
-    }
-    return null;
   }
 
   /**
@@ -249,7 +230,7 @@ class PartitionServiceMergeReplicationMethods {
    * @return {Promise<void>}
    * @private
    */
-  async runMergeReplicationWorkflow() {
+  async runMergeReplicationWorkflow(options = {}) {
     const mergeReplication = this.mergeReplication;
     const metadata = mergeReplication?.metadata || null;
     if (!metadata) {
@@ -262,56 +243,12 @@ class PartitionServiceMergeReplicationMethods {
       targetPartitionId: metadata.targetPartitionId,
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
-    await this.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
-    // The snapshot barrier: every Raft log entry up to and including
-    // this index is covered by the backfill, so the replay watermark
-    // starts here and a restarted source replays from the durable log.
-    mergeReplication.snapshotBarrierIndex =
-      resolveSnapshotBarrierIndex(this);
-    mergeReplication.replayWatermarkIndex =
-      mergeReplication.snapshotBarrierIndex;
-    const snapshot = this.openSplitSnapshotDatabase();
-    try {
-      await this.backfillMergeSnapshot(snapshot, metadata);
-      mergeReplication.phase = PARTITION_TRANSITION_STATE.MERGE_CATCHUP;
-      // Drain every queued live write BEFORE acknowledging catch-up
-      // readiness: the owner may apply the durable cutover on this ack,
-      // and it must never fire while this source holds a known
-      // undelivered delta.
-      await this.flushMergeReplicationQueue();
-      const catchupAck = await this.emitMergeSourceAck(
-        metadata,
-        MERGE_ACK_STATUS.CATCHUP_READY,
-        buildReplayCursorCheckpoint(
-          MERGE_ACK_CHECKPOINT_FIELD,
-          mergeReplication.snapshotBarrierIndex,
-          mergeReplication.replayWatermarkIndex,
-        ),
-      );
-      if (catchupAck?.mergeCutoverApplied !== true) {
-        await this.waitForMergeCutoverActivation(metadata);
-      }
-      mergeReplication.phase =
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
-      await this.flushMergeReplicationQueue();
-      await this.emitMergeSourceAck(
-        metadata,
-        MERGE_ACK_STATUS.CUTOVER_APPLIED,
-      );
-      this.mergeReplication = null;
-      this.mergeReplicationRun = null;
-      await this.emitMergeSourceAck(
-        metadata,
-        MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-        {
-          [MERGE_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: true,
-          ...buildReplayCursorCheckpoint(
-            MERGE_ACK_CHECKPOINT_FIELD,
-            mergeReplication.snapshotBarrierIndex,
-            mergeReplication.replayWatermarkIndex,
-          ),
-        },
-      );
+    await authorizeMergeSnapshotStart(this, metadata, options);
+    await runMergeBackfillPhase(this, mergeReplication, metadata);
+    await runMergeCatchupPhase(this, mergeReplication, metadata);
+    await runMergeCutoverPhase(this, mergeReplication, metadata);
+    if (mergeReplication.phase ===
+        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE) {
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.MERGE_REPLICATION_COMPLETED,
         {
@@ -320,8 +257,6 @@ class PartitionServiceMergeReplicationMethods {
           targetPartitionVersion: metadata.targetPartitionVersion,
         },
       );
-    } finally {
-      snapshot?.close?.();
     }
   }
 
@@ -362,12 +297,15 @@ class PartitionServiceMergeReplicationMethods {
     if (Number.isInteger(metadata.workflowFenceToken)) {
       ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
     }
+    // The attempt it was started under (an ack of another attempt is stale).
+    ack[PARTICIPANT_ACK_FIELD.ATTEMPT] = metadata.workflowAttempt ?? 0;
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }
     const result = await mergeWorkflow.acknowledgeMergeSourceParticipant(
       workflowId,
       ack,
+      {metadata, tableId: this.tableId, tableName: this.tableName},
     );
     this.logger.info(PARTITION_SERVICE_LOG_MSG.MERGE_REPLICATION_ACK_EMITTED, {
       partitionId: this.partitionId,
@@ -524,47 +462,51 @@ class PartitionServiceMergeReplicationMethods {
    */
   async handleMergeReplicationAfterWrite(entry) {
     const mergeReplication = this.mergeReplication;
-    if (
-      !mergeReplication ||
-      !mergeReplication.metadata ||
-      !mergeReplication.metadata.sourcePartitionIds.includes(this.partitionId)
-    ) {
+    if (!mergeHandleAcceptsAfterWrite(this, mergeReplication)) {
       return;
     }
-    if (entry.splitMirrorOrigin) {
-      return;
+    const activity = beginSourceReplicationActivityForService(
+      this, mergeReplication);
+    if (!activity) return;
+    try {
+      if (entry.splitMirrorOrigin) {
+        return;
+      }
+      if (
+        mergeReplication.phase ===
+          PARTITION_TRANSITION_STATE.MERGE_BACKFILLING ||
+        mergeReplication.phase === PARTITION_TRANSITION_STATE.MERGE_CATCHUP
+      ) {
+        this.enqueueMergeDeltaBounded(mergeReplication, entry);
+        return;
+      }
+      if (mergeReplication.phase === PARTITION_TRANSITION_STATE.FAILED) {
+        // Fail closed, loudly: an acknowledged write is never silently
+        // dropped from mirroring after a run failure — it is retained in the
+        // queue for the aborted-merge diagnosis trail.
+        this.enqueueMergeDeltaBounded(mergeReplication, entry);
+        this.logger.warn(
+          PARTITION_SERVICE_LOG_MSG
+            .MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE,
+          {
+            partitionId: this.partitionId,
+            pendingEntries: mergeReplication.pendingEntries.length,
+            lastError: mergeReplication.lastError,
+          },
+        );
+        return;
+      }
+      if (
+        mergeReplication.phase !==
+          PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE
+      ) {
+        return;
+      }
+      await this.mirrorCutoverActiveMergeWrite(entry, mergeReplication);
+    } finally {
+      finishSourceReplicationActivityForService(
+        this, mergeReplication, activity);
     }
-    if (
-      mergeReplication.phase ===
-        PARTITION_TRANSITION_STATE.MERGE_BACKFILLING ||
-      mergeReplication.phase === PARTITION_TRANSITION_STATE.MERGE_CATCHUP
-    ) {
-      this.enqueueMergeDeltaBounded(mergeReplication, entry);
-      return;
-    }
-    if (mergeReplication.phase === PARTITION_TRANSITION_STATE.FAILED) {
-      // Fail closed, loudly: an acknowledged write is never silently
-      // dropped from mirroring after a run failure — it is retained in the
-      // queue for the aborted-merge diagnosis trail.
-      this.enqueueMergeDeltaBounded(mergeReplication, entry);
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG
-          .MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE,
-        {
-          partitionId: this.partitionId,
-          pendingEntries: mergeReplication.pendingEntries.length,
-          lastError: mergeReplication.lastError,
-        },
-      );
-      return;
-    }
-    if (
-      mergeReplication.phase !==
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE
-    ) {
-      return;
-    }
-    await this.mirrorCutoverActiveMergeWrite(entry, mergeReplication);
   }
 
   /**
@@ -698,8 +640,11 @@ class PartitionServiceMergeReplicationMethods {
   async waitForMergeCutoverActivation(metadata) {
     const intervalMs = PARTITION_SERVICE_DEFAULT.MERGE_CUTOVER_WAIT_INTERVAL_MS;
     const timeoutMs = PARTITION_SERVICE_DEFAULT.MERGE_CUTOVER_WAIT_TIMEOUT_MS;
-    const deadline = Date.now() + timeoutMs;
+    const startedAtMs = Date.now();
+    const deadline = startedAtMs + timeoutMs;
+    let polls = 0;
     while (Date.now() < deadline) {
+      polls += 1;
       if (this.isShutdown) {
         throw new Error(
           PARTITION_SERVICE_ERROR_MSG.MERGE_CUTOVER_WAIT_TIMEOUT,
@@ -729,6 +674,7 @@ class PartitionServiceMergeReplicationMethods {
         setTimeout(resolve, intervalMs);
       });
     }
+    reportMergeCutoverWaitSpent(this, metadata, {startedAtMs, polls});
     throw new Error(PARTITION_SERVICE_ERROR_MSG.MERGE_CUTOVER_WAIT_TIMEOUT);
   }
 

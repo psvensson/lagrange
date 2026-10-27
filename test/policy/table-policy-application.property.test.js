@@ -10,6 +10,14 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
+import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  PartitionSplitMergeManager,
+} from '../../src/partition/partition-split-merge-manager.js';
+import {SPLIT_MERGE_DEFAULT} from '../../src/partition/partition-constants.js';
+
+const HYSTERESIS = SPLIT_MERGE_DEFAULT.MERGE_HYSTERESIS_FACTOR;
 
 // Generate valid odd replica counts
 const oddReplicaCount =
@@ -65,7 +73,34 @@ function createMockSqlEngine(tablePolicy) {
   };
 }
 
+/**
+ * Decide through the ONE split/merge policy owner (the manager's criteria)
+ * on the policy the table policy service resolves for the partition.
+ * @param {Object} tablePolicy - Stored table policy.
+ * @param {Function} decide - (manager, resolvedPolicy) => boolean.
+ * @return {Promise<boolean>}
+ */
+async function decideThroughThePolicyOwner(tablePolicy, decide) {
+  if (!LoggingService.getInstance().isInitialized()) {
+    LoggingService.getInstance().initialize({level: 'error'});
+  }
+  const manager = new PartitionSplitMergeManager({
+    tablePolicyService: new TablePolicyService({
+      sqlQueryEngine: createMockSqlEngine(tablePolicy),
+    }),
+  });
+  try {
+    return decide(manager, await manager.getTablePolicy('partition-1'));
+  } finally {
+    manager.shutdown();
+  }
+}
+
 test('Property 16: Table Policy Application', async (t) => {
+  t.teardown(() => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
   t.test('split decisions follow table policy thresholds',
     async (t) => {
       await fc.assert(
@@ -73,15 +108,12 @@ test('Property 16: Table Policy Application', async (t) => {
           validTablePolicy,
           partitionMetrics,
           async (policy, metrics) => {
-            const engine = createMockSqlEngine(policy);
-            const service = new TablePolicyService({
-              sqlQueryEngine: engine,
-            });
-
-            const shouldSplit =
-              await service.shouldSplitPartition(
-                'partition-1', metrics,
-              );
+            const shouldSplit = await decideThroughThePolicyOwner(
+              policy,
+              (manager, tablePolicy) => manager.evaluateSplitCriteria(
+                'partition-1', metrics, tablePolicy,
+              ),
+            );
 
             const expectedSplit =
               metrics.sizeBytes >=
@@ -100,47 +132,54 @@ test('Property 16: Table Policy Application', async (t) => {
       t.end();
     });
 
-  t.test('merge decisions follow table policy thresholds',
-    async (t) => {
-      await fc.assert(
-        fc.asyncProperty(
-          validTablePolicy,
-          partitionMetrics,
-          partitionMetrics,
-          async (policy, leftMetrics, rightMetrics) => {
-            const engine = createMockSqlEngine(policy);
-            const service = new TablePolicyService({
-              sqlQueryEngine: engine,
-            });
+  t.test('merge decisions follow table policy thresholds, each clamped ' +
+    'under the hysteresis bound of its split threshold',
+  async (t) => {
+    await fc.assert(
+      fc.asyncProperty(
+        validTablePolicy,
+        partitionMetrics,
+        partitionMetrics,
+        async (policy, leftMetrics, rightMetrics) => {
+          const shouldMerge = await decideThroughThePolicyOwner(
+            policy,
+            (manager, tablePolicy) => manager.evaluateMergeCriteria(
+              'partition-1', 'partition-2',
+              leftMetrics, rightMetrics, tablePolicy,
+            ),
+          );
 
-            const shouldMerge =
-              await service.shouldMergePartitions(
-                'partition-1', 'partition-2',
-                leftMetrics, rightMetrics,
-              );
+          const combinedStorage =
+            leftMetrics.sizeBytes + rightMetrics.sizeBytes;
+          const combinedTraffic =
+            leftMetrics.queriesPerMinute +
+            rightMetrics.queriesPerMinute;
+          const expectedMerge =
+            combinedStorage <= Math.min(policy.mergeStorageThreshold,
+              policy.splitStorageThreshold * HYSTERESIS) &&
+            combinedTraffic <= Math.min(policy.mergeTrafficThreshold,
+              policy.splitTrafficThreshold * HYSTERESIS);
 
-            const combinedStorage =
-              leftMetrics.sizeBytes + rightMetrics.sizeBytes;
-            const combinedTraffic =
-              leftMetrics.queriesPerMinute +
-              rightMetrics.queriesPerMinute;
-            const expectedMerge =
-              combinedStorage <=
-                policy.mergeStorageThreshold &&
-              combinedTraffic <=
-                policy.mergeTrafficThreshold;
+          return shouldMerge === expectedMerge;
+        },
+      ),
+      {numRuns: 10},
+    );
+    t.pass(
+      'Merge decisions correctly apply policy thresholds',
+    );
+    t.end();
+  });
 
-            return shouldMerge === expectedMerge;
-          },
-        ),
-        {numRuns: 10},
-      );
-      t.pass(
-        'Merge decisions correctly apply policy thresholds',
-      );
-      t.end();
-    });
-
+  t.test('one authority: the table policy service holds the thresholds ' +
+    'and decides nothing', async (t) => {
+    const service = new TablePolicyService();
+    t.equal(service.shouldSplitPartition, undefined,
+      'no second split decision beside the split/merge manager');
+    t.equal(service.shouldMergePartitions, undefined,
+      'no second merge decision beside the split/merge manager');
+    t.end();
+  });
 
   t.test('replication settings follow table policy',
     async (t) => {
@@ -287,38 +326,29 @@ test('Property 16: Table Policy Application', async (t) => {
               splitStorageThreshold: storageThresh,
               splitTrafficThreshold: trafficThresh,
             };
-            const engine = createMockSqlEngine(policy);
-            const service = new TablePolicyService({
-              sqlQueryEngine: engine,
+            const decide = (metrics) => decideThroughThePolicyOwner(
+              policy,
+              (manager, tablePolicy) => manager.evaluateSplitCriteria(
+                'partition-1', metrics, tablePolicy,
+              ),
+            );
+
+            const atStorage = await decide({
+              sizeBytes: storageThresh,
+              queriesPerMinute: 0,
             });
-
-            const atStorage =
-              await service.shouldSplitPartition(
-                'partition-1', {
-                  sizeBytes: storageThresh,
-                  queriesPerMinute: 0,
-                });
-
-            const atTraffic =
-              await service.shouldSplitPartition(
-                'partition-1', {
-                  sizeBytes: 0,
-                  queriesPerMinute: trafficThresh,
-                });
-
-            const belowStorage =
-              await service.shouldSplitPartition(
-                'partition-1', {
-                  sizeBytes: storageThresh - 1,
-                  queriesPerMinute: 0,
-                });
-
-            const belowTraffic =
-              await service.shouldSplitPartition(
-                'partition-1', {
-                  sizeBytes: 0,
-                  queriesPerMinute: trafficThresh - 1,
-                });
+            const atTraffic = await decide({
+              sizeBytes: 0,
+              queriesPerMinute: trafficThresh,
+            });
+            const belowStorage = await decide({
+              sizeBytes: storageThresh - 1,
+              queriesPerMinute: 0,
+            });
+            const belowTraffic = await decide({
+              sizeBytes: 0,
+              queriesPerMinute: trafficThresh - 1,
+            });
 
             return atStorage === true &&
                    atTraffic === true &&

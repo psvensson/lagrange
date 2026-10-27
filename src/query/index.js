@@ -41,7 +41,6 @@ export {
   PG_SESSION_STATE,
   PG_WIRE_ERROR_MSG,
 } from './pg/postgres-wire-adapter.js';
-export {WasmCallAdapter} from './wasm-call-adapter.js';
 export {
   registerSqlCore,
   isSqlCoreRegistered,

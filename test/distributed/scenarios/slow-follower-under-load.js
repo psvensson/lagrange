@@ -8,6 +8,10 @@
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {resolveSlowFollowerUnderLoadScenarioConfig} from '../harness/scenario-config.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 
 const ZERO = 0;
 
@@ -33,6 +37,7 @@ async function run(cluster, options = {}) {
   const {
     loadOpsPerSec,
     loadDuration,
+    tableName,
     preFaultDelayMs,
     faultHoldMs,
     postHealDelayMs,
@@ -51,9 +56,14 @@ async function run(cluster, options = {}) {
   const targetNodeId = nonSeedNode?.id || fallbackNodeId;
   assert.ok(targetNodeId, 'Scenario requires one non-seed node for slowdown');
 
+  const provisionedTable = await provisionUserLoadTable(cluster, {
+    tableName,
+  });
+
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   await sleep(preFaultDelayMs);
@@ -103,8 +113,14 @@ async function run(cluster, options = {}) {
 
   await cluster.waitForConsistencyConvergence();
 
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'slow-follower-under-load-post-heal',
+  });
+
   return {
     targetNodeId,
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
     slowdown: {
       latencyMs,
       jitterMs,

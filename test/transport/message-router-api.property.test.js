@@ -50,7 +50,6 @@ function cleanupTestEnvironment() {
 const EXPECTED_API_METHODS = Object.freeze([
   'initialize',
   'register',
-  'unregister',
   'deliver',
   'connectToNode',
   'parseAddress',
@@ -66,9 +65,8 @@ const EXPECTED_API_METHODS = Object.freeze([
   'isOutboundQueueAvailable',
   'getStats',
   'shutdown',
-  'registerWorkerHandler',
-  'unregisterWorkerHandler',
-  'hasWorkerHandler',
+  'getRegisteredHandler',
+  'unregisterExact',
 ]);
 
 /**

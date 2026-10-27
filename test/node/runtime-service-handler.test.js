@@ -25,6 +25,11 @@ import {
   validateRuntimeDescriptor,
 } from '../../src/wasm-service/runtime-descriptor-validator.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {MessageRouter} from '../../src/transport/message-router.js';
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome, TRANSPORT_DELIVERY_OUTCOME_STATE} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {createIdentityTransport} from '../test-helpers/replica-handler-identity-fixture.js';
+import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-1';
 const TEST_ALREADY_ACTIVE_ENTITY_ID = 'sys-postgres-wire';
@@ -73,6 +78,15 @@ function createMockLifecycleManager(options = {}) {
   const calls = [];
   return {
     calls,
+    // The production-shaped manager without a journal (design
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2, with U1 v3
+    // hydration): the journal-only read is UNAVAILABLE before any resume.
+    async readRetainedCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
+    async resumeConsensusCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async createReplica(definition, context) {
       calls.push({method: 'createReplica', definition, context});
       if (options.createError) {
@@ -124,6 +138,7 @@ function createHandler(overrides = {}) {
     cdcIntegrationService: cdc,
     serviceLifecycleManager: lifecycle,
     executorOutcomeEmitter: overrides.executorOutcomeEmitter || null,
+    legacyRemovalAuthority: overrides.legacyRemovalAuthority,
   });
   handler.initialize();
   return {handler, cache, cdc, lifecycle};
@@ -276,39 +291,153 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     );
   });
 
-  it('returns IN_PROGRESS for creating replica', async () => {
+  it('does not acknowledge a foreign CREATE without an execution outcome owner',
+    async () => {
+      const emitted = [];
+      const {handler, lifecycle} = createHandler({
+        executorOutcomeEmitter: {
+          emitOutcome(...args) {
+            emitted.push(args);
+          },
+        },
+      });
+      const request = (operationId) => ({
+        [ReplicaOperationField.OPERATION_ID]: operationId,
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+      });
+      try {
+        const admitted = await handler.handleCreateReplica(request('create-owner'));
+        assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
+        assert.equal(handler.inProgressOperations.size, 1);
+
+        const equal = await handler.handleCreateReplica(request('create-owner'));
+        assert.equal(equal.status, ReplicaOperationResponseStatus.IN_PROGRESS,
+          'AN_EXACT_CREATE_REDELIVERY_LOST_ITS_JOIN');
+        const foreign = await handler.handleCreateReplica(request('create-foreign'));
+        assert.equal(foreign.status, ReplicaOperationResponseStatus.ERROR,
+          'FOREIGN_CREATE_ACKNOWLEDGED_WITHOUT_AN_OUTCOME_OWNER');
+        assert.equal(foreign.deferRetry, true,
+          'UNOBSERVED_FOREIGN_CREATE_MUST_RETAIN_CALLER_RETRY_CUSTODY');
+        assert.equal(handler.inProgressOperations.size, 1);
+        assert.equal(lifecycle.calls.length, 0,
+          'A_FOREIGN_CREATE_DISPATCHED_PHYSICAL_WORK_BEFORE_OWNER_SLOT_RAN');
+
+        await flushImmediate();
+        await flushImmediate();
+        assert.equal(lifecycle.calls.filter((entry) => entry.method === 'createReplica').length, 1);
+        assert.deepEqual(emitted.map((outcome) => [outcome[0], outcome[1]]),
+          [[EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, 'create-owner']],
+          'FOREIGN_CREATE_REUSED_OR_FABRICATED_AN_EXECUTOR_OUTCOME');
+      } finally {
+        handler.shutdown();
+      }
+    });
+
+  it('re-admits an unowned nameless CREATING memo instead of promising nonexistent work',
+    async () => {
+      const emitted = [];
+      const {handler, lifecycle} = createHandler({
+        executorOutcomeEmitter: {
+          emitOutcome(...args) {
+            emitted.push(args);
+          },
+        },
+      });
+      const replicaId = 'sys-postgres-wire-r1';
+      handler.localReplicas.set(replicaId, {
+        replicaId, entityId: 'sys-postgres-wire', status: ReplicaStatus.CREATING,
+      });
+      assert.equal(handler.inProgressOperations.size, 0,
+        'a volatile CREATING memo alone is not an execution owner');
+      try {
+        const reply = await handler.handleCreateReplica({
+          [ReplicaOperationField.OPERATION_ID]: 'unowned-creating-retry',
+          [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+          [ReplicaOperationField.REPLICA_ID]: replicaId,
+        });
+        assert.equal(reply.status, ReplicaOperationResponseStatus.INITIATED,
+          'UNOWNED_CREATING_MEMO_ACKNOWLEDGED_WITHOUT_SCHEDULING_RECOVERY');
+        assert.equal(handler.inProgressOperations.size, 1,
+          'recovery was not admitted under the caller operation');
+        await flushImmediate();
+        await flushImmediate();
+        assert.equal(lifecycle.calls.filter((call) => call.method === 'createReplica').length, 1);
+        assert.equal(handler.getLocalReplica(replicaId).status, ReplicaStatus.ACTIVE);
+        assert.deepEqual(emitted.map((outcome) => [outcome[0], outcome[1]]),
+          [[EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE, 'unowned-creating-retry']],
+          'the recovered CREATE must own its eventual outcome');
+      } finally {
+        handler.shutdown();
+      }
+    });
+
+  it('an unowned nameless CREATING projection schedules its own CREATE retry', async () => {
     const {handler} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
       entityId: 'sys-postgres-wire',
       status: ReplicaStatus.CREATING,
     });
+    assert.equal(handler.inProgressOperations.size, 0,
+      'a memo without an installed execution cannot promise completion');
     const response = await handler.handleCreateReplica({
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
     });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+      'UNOWNED_CREATING_MEMO_RETURNED_IN_PROGRESS_WITH_NO_WORK_OWNER');
+    assert.equal(handler.inProgressOperations.size, 1);
+    await flushImmediate();
+    await flushImmediate();
+    assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status, ReplicaStatus.ACTIVE);
+    handler.shutdown();
   });
 
-  it('returns IN_PROGRESS for duplicate operation ID', async () => {
-    const {handler} = createHandler();
-    handler.inProgressOperations.set('op-1', {
-      type: ReplicaOperationMessageType.CREATE_REPLICA,
-    });
-    const response = await handler.handleCreateReplica({
+  it('returns IN_PROGRESS for a duplicate of the actually admitted CREATE', async () => {
+    const {handler, lifecycle} = createHandler();
+    const request = {
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
-    });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    };
+    try {
+      const first = await handler.handleCreateReplica(request);
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      const duplicate = await handler.handleCreateReplica(request);
+      assert.equal(duplicate.status, ReplicaOperationResponseStatus.IN_PROGRESS);
+      assert.equal(handler.inProgressOperations.size, 1,
+        'the exact duplicate never creates an additional execution owner');
+      await flushImmediate();
+      await flushImmediate();
+      assert.deepEqual(lifecycle.calls.map((call) => call.method),
+        ['createReplica', 'startReplica'], 'DUPLICATE_CREATE_EXECUTED_TWICE');
+    } finally {
+      handler.shutdown();
+    }
   });
+
+  it('a CREATE over a nameless FAILED or REMOVING memo takes the generic path (RV6.1-RV6.3)',
+    async () => {
+      for (const status of [ReplicaStatus.FAILED, ReplicaStatus.REMOVING]) {
+        const {handler} = createHandler();
+        handler.localReplicas.set('sys-postgres-wire-r1', {
+          replicaId: 'sys-postgres-wire-r1', entityId: 'sys-postgres-wire', status,
+        });
+        const response = await handler.handleCreateReplica({
+          [ReplicaOperationField.OPERATION_ID]: 'op-1',
+          [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+          [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
+        });
+        assert.equal(response.status, ReplicaOperationResponseStatus.INITIATED, status);
+        assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status,
+          ReplicaStatus.CREATING, `${status}: the tracker wrote the nameless memo`);
+        for (let turn = 0; turn < 5; turn += 1) await flushImmediate();
+        assert.equal(handler.getLocalReplica('sys-postgres-wire-r1').status,
+          ReplicaStatus.ACTIVE, `${status}: the generic create ran`);
+      }
+    });
 
   it('calls lifecycle create + start without direct workflow-step persistence',
     async () => {
@@ -460,7 +589,13 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
         },
       ],
     });
-    const {handler, lifecycle} = createHandler({cache});
+    const {handler, lifecycle} = createHandler({cache,
+      legacyRemovalAuthority: async ({operationId, entityId, replicaId, nodeId}) =>
+        ({outcome: operationId === 'legacy-runtime-target-cleanup-op' &&
+          entityId === 'sys-postgres-wire' &&
+          replicaId === legacyReplicaId && nodeId === 'test-node' ?
+          'ADMITTED' : 'CONTENT_CONFLICT'}),
+    });
 
     const response = await handler.handleRemoveReplica({
       [ReplicaOperationField.OPERATION_ID]:
@@ -485,28 +620,283 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     );
   });
 
-  it('returns IN_PROGRESS for removing replica', async () => {
-    const {handler} = createHandler();
+  it('refuses an opaque legacy cleanup under the wrong entity despite a matching local services id',
+    async () => {
+      const legacyReplicaId = 'replace-replica-old-opaque-target';
+      const cache = createMockCache({
+        service_definitions: [
+          {service_id: 'sys-postgres-wire', service_type: 'runtime_service',
+            runtime_kind: 'native_js', runtime_ref: 'postgres-wire-runtime'},
+          {service_id: 'unrelated-runtime', service_type: 'runtime_service',
+            runtime_kind: 'native_js', runtime_ref: 'other-runtime'},
+        ],
+        services: [{service_id: legacyReplicaId, service_type: 'runtime_service',
+          node_id: 'test-node', status: ReplicaStatus.ACTIVE}],
+        replica_operations: [{operation_id: 'historical-replace',
+          entity_id: 'sys-postgres-wire', entity_type: 'runtime_service',
+          replica_id: legacyReplicaId, type: 'REPLACE', workflow_step: 'COMPLETED'}],
+      });
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async ({operationId, entityId}) =>
+          ({outcome: operationId === 'original-legacy-cleanup' &&
+            entityId === 'sys-postgres-wire' ? 'ADMITTED' : 'CONTENT_CONFLICT'}),
+      });
+      const answer = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'forged-legacy-cleanup',
+        [ReplicaOperationField.ENTITY_ID]: 'unrelated-runtime',
+        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+      });
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(answer.status, ReplicaOperationResponseStatus.ERROR,
+        'OPAQUE_ID_WITH_UNRELATED_ENTITY_ADMITTED_DESTRUCTIVE_CLEANUP');
+      assert.equal(lifecycle.calls.length, 0,
+        'UNRELATED_ENTITY_CLAIM_STOPPED_A_LEGACY_RESOURCE');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'REFUSED_LEGACY_CLEANUP_LEFT_AN_ADMITTED_EXECUTION');
+      assert.equal(handler.getLocalReplica(legacyReplicaId), undefined,
+        'REFUSED_REQUEST_POISONED_THE_CACHED_ENTITY_ID');
+      const valid = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-cleanup',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: legacyReplicaId,
+      });
+      assert.equal(valid.status, ReplicaOperationResponseStatus.INITIATED,
+        'ORIGINAL_OWNER_CLEANUP_WAS_BLOCKED_BY_PRIOR_WRONG_ENTITY');
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(lifecycle.calls.filter((call) =>
+        call.method === 'stopReplica').length, 1,
+      'ORIGINAL_ENTITY_CLEANUP_LOST_OR_DOUBLED_STOP');
+    });
+
+  it('defers opaque legacy REMOVE without authority, then retries the exact original',
+    async () => {
+      const replicaId = 'replace-replica-owner-temporarily-unavailable';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      let ownerAnswer = 'UNAVAILABLE';
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async ({operationId, entityId, replicaId: id, nodeId}) => ({
+          outcome: operationId === 'original-owner-remove' &&
+            entityId === 'sys-postgres-wire' && id === replicaId && nodeId === 'test-node' ?
+            ownerAnswer : 'CONTENT_CONFLICT',
+        }),
+      });
+      const request = {
+        [ReplicaOperationField.OPERATION_ID]: 'original-owner-remove',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      };
+      const deferred = await handler.handleRemoveReplica(request);
+      assert.deepEqual([deferred.status, deferred.deferRetry],
+        [ReplicaOperationResponseStatus.ERROR, true],
+        'UNAVAILABLE_OWNER_WAS_MISTAKEN_FOR_PERMISSION_OR_PERMANENT_ABSENCE');
+      assert.equal(handler.getLocalReplica(replicaId), undefined);
+      assert.deepEqual(lifecycle.calls, []);
+      ownerAnswer = 'ADMITTED';
+      const admitted = await handler.handleRemoveReplica(request);
+      assert.equal(admitted.status, ReplicaOperationResponseStatus.INITIATED);
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(lifecycle.calls.filter((entry) =>
+        entry.method === 'stopReplica').length, 1,
+      'RETURNING_OWNER_DID_NOT_ALLOW_EXACT_ORIGINAL_CLEANUP');
+    });
+
+  it('does not stop a successor when legacy owner read returns after replacement',
+    async () => {
+      const replicaId = 'replace-replica-late-owner-answer';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const entered = Promise.withResolvers();
+      const released = Promise.withResolvers();
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async () => {
+          entered.resolve();
+          await released.promise;
+          return {outcome: 'ADMITTED'};
+        },
+      });
+      const pending = handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'old-retirement',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      await entered.promise;
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'successor-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      released.resolve();
+      const refused = await pending;
+      assert.deepEqual([refused.status, refused.deferRetry],
+        [ReplicaOperationResponseStatus.ERROR, true],
+        'LATE_OLD_OWNER_ANSWER_RETIRED_SUCCESSOR');
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor);
+      assert.deepEqual(lifecycle.calls, [], 'STALE_POST_AWAIT_OWNER_STOPPED_SUCCESSOR');
+    });
+
+  // WITNESS ONLY: this is the handler's post-admission/pre-STOP queue cut.
+  // A direct local replacement is a labelled race seam, not proof that a
+  // production REPLACE currently exercises this exact scheduling interleave.
+  it('does not STOP a successor installed after admitted legacy REMOVE but before queued STOP',
+    async () => {
+      const replicaId = 'replace-replica-old-before-stop';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const {handler, lifecycle} = createHandler({cache,
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const removed = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'original-legacy-remove',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(removed.status, ReplicaOperationResponseStatus.INITIATED);
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'successor-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor,
+        'STALE_REMOVE_REPLACED_SUCCESSOR_MEMO');
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 0,
+        'STALE_ADMITTED_REMOVE_STOPPED_SUCCESSOR_AFTER_QUEUE_HANDOFF');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'SUPERSEDED_QUEUED_REMOVE_RETAINED_EXECUTION_GATE');
+    });
+
+  // LABELLED AWAIT CUT: the old generic lifecycle STOP has entered but not
+  // settled, and a successor now holds this local replica identity. Only the
+  // physical owner can claim whether the old STOP affected a physical object;
+  // the handler must never publish old completion over the new holder.
+  it('does not publish stale generic REMOVE after STOP settles behind a successor',
+    async () => {
+      const replicaId = 'replace-replica-late-stop-completion';
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const started = Promise.withResolvers();
+      const continueStop = Promise.withResolvers();
+      const emitted = [];
+      const lifecycle = createMockLifecycleManager();
+      const stop = lifecycle.stopReplica.bind(lifecycle);
+      lifecycle.stopReplica = async (...args) => {
+        started.resolve();
+        await continueStop.promise;
+        return stop(...args);
+      };
+      const {handler} = createHandler({cache, lifecycle,
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const answer = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'old-remove-before-successor',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(answer.status, ReplicaOperationResponseStatus.INITIATED);
+      await started.promise;
+      const successor = {replicaId, entityId: 'sys-postgres-wire',
+        status: ReplicaStatus.ACTIVE, operationId: 'newer-creation'};
+      handler.localReplicas.set(replicaId, successor);
+      continueStop.resolve();
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor,
+        'OLD_STOP_SETTLED_AND_OVERWROTE_SUCCESSOR_MEMO');
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 1,
+        'LABELLED_STOP_WAS_NOT_EXERCISED');
+      assert.deepEqual(emitted, [],
+        'OLD_STOP_COMPLETION_ESCAPED_AFTER_SUCCESSOR_TOOK_CUSTODY');
+      assert.equal(handler.inProgressOperations.size, 0,
+        'SUPERSEDED_SETTLED_REMOVE_RETAINED_EXECUTION_GATE');
+    });
+
+  it('admits successor cleanup after a superseded queued REMOVE releases its gate',
+    async () => {
+      const replicaId = 'replace-replica-successor-cleanup';
+      const entityId = 'sys-postgres-wire';
+      const emitted = [];
+      const cache = createMockCache({services: [{service_id: replicaId,
+        service_type: 'runtime_service', node_id: 'test-node', status: ReplicaStatus.ACTIVE}]});
+      const {handler, lifecycle} = createHandler({cache,
+        executorOutcomeEmitter: {emitOutcome: (...args) => emitted.push(args)},
+        legacyRemovalAuthority: async () => ({outcome: 'ADMITTED'})});
+      const request = (operationId) => ({
+        [ReplicaOperationField.OPERATION_ID]: operationId,
+        [ReplicaOperationField.ENTITY_ID]: entityId,
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      const first = await handler.handleRemoveReplica(request('superseded-remove'));
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      // Same labelled queue cut as above, with the production generic memo
+      // shape. A later independently admitted REMOVE owns this successor.
+      const successor = {replicaId, entityId, status: ReplicaStatus.ACTIVE};
+      handler.localReplicas.set(replicaId, successor);
+      await flushImmediate();
+      await flushImmediate();
+      assert.strictEqual(handler.getLocalReplica(replicaId), successor);
+      assert.deepEqual(lifecycle.calls, [], 'SUPERSEDED_REMOVE_REACHED_PHYSICAL_STOP');
+      assert.deepEqual(emitted, [], 'SUPERSEDED_REMOVE_EMITTED_TERMINAL_OUTCOME');
+      const next = await handler.handleRemoveReplica(request('successor-remove'));
+      assert.equal(next.status, ReplicaOperationResponseStatus.INITIATED,
+        'SUPERSEDED_REMOVE_GATE_BLOCKED_SUCCESSOR_CLEANUP');
+      await flushImmediate();
+      await flushImmediate();
+      assert.equal(handler.getLocalReplica(replicaId).status, ReplicaStatus.REMOVED);
+      assert.equal(lifecycle.calls.filter((call) => call.method === 'stopReplica').length, 1);
+      assert.equal(emitted.length, 1);
+      assert.equal(emitted[0][1], 'successor-remove');
+      assert.equal(handler.inProgressOperations.size, 0);
+    });
+
+  it('refuses a pre-canonical REMOVE when its memo falsely names a bound creation',
+    async () => {
+      const replicaId = 'replace-replica-mismatched-bound-identity';
+      const {handler, lifecycle} = createHandler();
+      handler.localReplicas.set(replicaId, {
+        replicaId, entityId: 'sys-postgres-wire', operationId: 'bound-original',
+        status: ReplicaStatus.ACTIVE,
+      });
+      const memo = handler.getLocalReplica(replicaId);
+      const response = await handler.handleRemoveReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'cleanup-attempt',
+        [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
+        [ReplicaOperationField.REPLICA_ID]: replicaId,
+      });
+      assert.equal(response.status, ReplicaOperationResponseStatus.ERROR);
+      assert.equal(response.deferRetry, false);
+      assert.deepEqual(lifecycle.calls, [], 'AN_OPAQUE_ID_WAS_GIVEN_BOUND_STOP_AUTHORITY');
+      assert.strictEqual(handler.getLocalReplica(replicaId), memo,
+        'REFUSED_CLEANUP_OVERWROTE_ANOTHER_CREATION');
+    });
+
+  it('returns IN_PROGRESS for a duplicate of the actually admitted REMOVE', async () => {
+    const {handler, lifecycle} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
       entityId: 'sys-postgres-wire',
-      status: ReplicaStatus.REMOVING,
+      status: ReplicaStatus.ACTIVE,
     });
-    handler.inProgressOperations.set('op-1', {
-      type: ReplicaOperationMessageType.REMOVE_REPLICA,
-      replicaId: 'sys-postgres-wire-r1',
-      entityId: 'sys-postgres-wire',
-      startedAt: Date.now(),
-    });
-    const response = await handler.handleRemoveReplica({
+    const request = {
       [ReplicaOperationField.OPERATION_ID]: 'op-1',
       [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
       [ReplicaOperationField.REPLICA_ID]: 'sys-postgres-wire-r1',
-    });
-    assert.equal(
-      response.status,
-      ReplicaOperationResponseStatus.IN_PROGRESS,
-    );
+    };
+    try {
+      const first = await handler.handleRemoveReplica(request);
+      assert.equal(first.status, ReplicaOperationResponseStatus.INITIATED);
+      const duplicate = await handler.handleRemoveReplica(request);
+      assert.equal(duplicate.status, ReplicaOperationResponseStatus.IN_PROGRESS);
+      assert.equal(handler.inProgressOperations.size, 1,
+        'the exact duplicate never creates another STOP obligation');
+      await flushImmediate();
+      await flushImmediate();
+      assert.deepEqual(lifecycle.calls.map((call) => call.method), ['stopReplica'],
+        'DUPLICATE_REMOVE_DISPATCHED_TWO_STOPS');
+      assert.equal(handler.localReplicas.get('sys-postgres-wire-r1')?.status,
+        ReplicaStatus.REMOVED);
+    } finally {
+      handler.shutdown();
+    }
   });
 
   it('resumes stalled removing replica when no removal task is active',
@@ -689,54 +1079,44 @@ describe('RuntimeServiceHandler router registration', () => {
     );
   });
 
-  it('unregisters handler from router', () => {
+  it('unregisters exactly its own handler from the router', () => {
     const {handler} = createHandler();
-    const unregistered = [];
-    const mockRouter = {
-      register() {},
-      unregister(address) {
-        unregistered.push(address);
-      },
-    };
-    handler.registerWithRouter(mockRouter);
-    handler.unregisterFromRouter(mockRouter);
-    assert.equal(unregistered.length, 1);
-    assert.equal(
-      unregistered[0],
-      'test-node/service/runtime-service-handler',
-    );
+    const transport = createIdentityTransport();
+    handler.registerWithRouter(transport);
+    const address = 'test-node/service/runtime-service-handler';
+    assert.equal(typeof transport.getRegisteredHandler(address), 'function');
+    handler.unregisterFromRouter(transport);
+    assert.equal(transport.getRegisteredHandler(address), null);
   });
 
-  it('registered handler returns acknowledged response',
+  it('a delivered request is router-acknowledged and answered by the handler',
     async () => {
       const {handler} = createHandler();
-      const registered = new Map();
-      const mockRouter = {
-        register(address, fn) {
-          registered.set(address, fn);
-        },
-      };
-      handler.registerWithRouter(mockRouter);
-
-      const routerHandler = registered.get(
-        'test-node/service/runtime-service-handler',
-      );
-      const response = await routerHandler({
-        correlationId: 'corr-1',
-        payload: {
+      const router = new MessageRouter({bootIncarnation: TEST_BOOT_INCARNATION,
+        nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+      try {
+        handler.registerWithRouter(router);
+        const delivery = await router.deliver('test-node/service/runtime-service-handler', {
           [ReplicaOperationField.TYPE]:
             ReplicaOperationMessageType.CREATE_REPLICA,
           [ReplicaOperationField.OPERATION_ID]: 'op-1',
           [ReplicaOperationField.ENTITY_ID]: 'sys-postgres-wire',
           [ReplicaOperationField.REPLICA_ID]:
             'sys-postgres-wire-r1',
-        },
-      });
-      assert.equal(response.acknowledged, true);
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-      );
+        });
+        // The acknowledgement is the router's fact; the handler only answers.
+        assert.equal(delivery.transport.deliveryState,
+          TRANSPORT_DELIVERY_OUTCOME_STATE.DELIVERED);
+        assert.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)), true);
+        assert.equal(Object.hasOwn(delivery.answer, 'acknowledged'), false);
+        assert.equal(
+          delivery.answer.status,
+          ReplicaOperationResponseStatus.INITIATED,
+        );
+      } finally {
+        await router.shutdown();
+      }
     });
 });
 

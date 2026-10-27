@@ -1,0 +1,2050 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/integration/public-binding-cell-invocation-seam.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: hold cpu 76C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2) - CPU package 76C >= 75C, waiting 30s (poll 1/20)
+thermal: ok cpu 64C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/integration/public-binding-cell-invocation-seam.integration.test.js (70 assertions, 58045ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input
+    # runtime start event-loop delay ms: max=1923 p99=124
+LogsTableService initialized
+metrics.logging.logs_table_connect.start {
+  bufferedEntries: 0,
+  flushMode: 'background',
+  chunkSize: 20,
+  yieldMs: 5
+}
+Connected to LoggingService, flushed 0 buffered entries
+{"level":50,"time":"2026-10-06T16:07:51.533Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:51.538Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:51.539Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:51.866Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:51.881Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:51.882Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.268Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.275Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.276Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.540Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition-split-merge","partitionId":"tables-p1","error":"Table already has a partition split transition in progress: key range overlaps a persisted in-flight transition","phase":"workflow_execution","nodeId":"public-binding-seam-node","msg":"Managed split execution failed"}
+{"level":50,"time":"2026-10-06T16:07:52.571Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.589Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.589Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.877Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.881Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:52.881Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.150Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.152Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.152Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.445Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.487Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.488Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.707Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.710Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:53.711Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:54.017Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:54.024Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"sql-query-engine","workflowId":"split-tbl-422c2f07b585250cc157e557759e04f7-tbl-422c2f07b585250cc157e557759e04f7-p1-v2","sourcePartitionId":"tbl-422c2f07b585250cc157e557759e04f7-p1","error":"Group retirement incomplete: unacknowledged replicas schema-job-422c2f07b585250cc157e557759e04f7:replica:public-binding-seam-node","nodeId":"public-binding-seam-node","msg":"Managed split source dissolution failed"}
+{"level":50,"time":"2026-10-06T16:07:54.028Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:54.028Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+    not ok 1 - harness: the canonical merge-disabled policy is visible before split
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,4 @@
+         Object {
+        -  "mergeStorageThreshold": 1,
+        -  "mergeTrafficThreshold": 1,
+        +  "mergeStorageThreshold": 2147483648,
+        +  "mergeTrafficThreshold": 200,
+         }
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 361
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:361:5)
+      source: |2
+          mark('tableSplit');
+          const partitionIds = sortedPartitionIds(partitions);
+          t.same(fanoutShape.visiblePolicy, MERGE_DISABLED_TABLE_POLICY,
+        ----^
+            'harness: the canonical merge-disabled policy is visible before split');
+          t.same(fanoutShape.effectivePolicy, MERGE_DISABLED_TABLE_POLICY,
+      ...
+    
+    not ok 2 - harness: the production manager consumes the same table policy
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,4 @@
+         Object {
+        -  "mergeStorageThreshold": 1,
+        -  "mergeTrafficThreshold": 1,
+        +  "mergeStorageThreshold": 2147483648,
+        +  "mergeTrafficThreshold": 200,
+         }
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 363
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:363:5)
+      source: |2
+          t.same(fanoutShape.visiblePolicy, MERGE_DISABLED_TABLE_POLICY,
+            'harness: the canonical merge-disabled policy is visible before split');
+          t.same(fanoutShape.effectivePolicy, MERGE_DISABLED_TABLE_POLICY,
+        ----^
+            'harness: the production manager consumes the same table policy');
+          t.same(fanoutShape.managerSizeBytes, fanoutShape.liveSizeBytes,
+      ...
+    
+    ok 3 - harness: the production manager consumes both live leader sizes
+    ok 4 - harness: the live child pair contains more than one byte
+    not ok 5 - harness: the production manager keeps the live children merge-ineligible
+      ---
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 371
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:371:5)
+      source: >2
+          t.ok(childPairIsNonvacuous,
+            'harness: the live child pair contains more than one byte');
+          t.notOk(fanoutShape.mergeEligible,
+        ----^
+            'harness: the production manager keeps the live children merge-ineligible');
+          t.same(currentPartitionIds(runtime.engine), partitionIds,
+      ...
+    
+    ok 6 - harness: both exact split children are current after shaping
+    ok 7 - harness: the literal key range lies inside exactly one partition
+PG wire startup message received { user: 'images_seam_app', database: 'images_seam' }
+{"level":50,"time":"2026-10-06T16:07:54.346Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:54.357Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:54.358Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+pgwire.auth {
+  timestamp: 1791302874365,
+  message: 'PG wire authentication failed',
+  decision: 'denied',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: undefined
+  },
+  action: 'pgwire.connect',
+  error: 'Authentication failed'
+}
+    # Subtest: password mode: wrong credentials are refused
+        ok 1 - the listener refuses a wrong password before any SQL
+        # pg receives on bad password: {"code":"28000","message":"Authentication failed","severity":"FATAL"}
+        1..1
+    ok 8 - password mode: wrong credentials are refused # time=278.713ms
+    
+PG wire startup message received { user: 'images_seam_app', database: 'images_seam' }
+PG wire connection closed
+pgwire.auth {
+  timestamp: 1791302874458,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam'
+}
+PG wire authentication successful { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302874504,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+{"level":50,"time":"2026-10-06T16:07:55.027Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:55.030Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:55.030Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:55.687Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:55.742Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:55.743Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.117Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.179Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.179Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:57.401Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+    # Subtest: Artifact identity is immutable
+        ok 1 - should be equal
+        ok 2 - INSTALL returns a package id
+{"level":50,"time":"2026-10-06T16:07:57.423Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.424Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302877428,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 3 - the identical INSTALL is an idempotent replay
+        ok 4 - should be equal
+        ok 5 - should be equal
+        ok 6 - a modified manifest has a different canonical digest
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302877538,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+{"level":50,"time":"2026-10-06T16:07:57.674Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.677Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.678Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:57.988Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:58.006Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:58.007Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 7 - a modified manifest is a different immutable package
+{"level":50,"time":"2026-10-06T16:07:58.129Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"sql-query-engine","workflowId":"merge-tbl-422c2f07b585250cc157e557759e04f7-tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left-tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right-v3","sourcePartitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left","error":"Group retirement incomplete: unacknowledged replicas tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left-r1","nodeId":"public-binding-seam-node","msg":"Managed merge source dissolution failed"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878144,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 8 - a Binding cannot pin the original package to the modified digest
+        # pg receives on cross-pinned Binding: {"code":"XX000","detail":"{\"ownerCode\":\"corrupt_catalog_record\",\"path\":\"/package/manifestDigest\",\"stage\":\"catalog_submission\"}","message":"durable package state is outside the catalog contract","severity":"ERROR"}
+        1..8
+    ok 9 - Artifact identity is immutable # time=3712.685ms
+    
+    not ok 10 - both exact split children remain current after Artifact installation
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,3 @@
+         Array [
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+        +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+         ]
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 443
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:443:5)
+      source: |2
+              JSON.stringify(crossPinned)}`);
+          });
+          t.same(currentPartitionIds(runtime.engine), partitionIds,
+        ----^
+            'both exact split children remain current after Artifact installation');
+      ...
+    
+{"level":50,"time":"2026-10-06T16:07:58.294Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"sql-query-engine","workflowId":"merge-tbl-422c2f07b585250cc157e557759e04f7-tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left-tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right-v3","sourcePartitionId":"tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right","error":"Group retirement incomplete: unacknowledged replicas tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right-r1","nodeId":"public-binding-seam-node","msg":"Managed merge source dissolution failed"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878299,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:58.346Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+    # Subtest: Binding is the durable, create-only execution intent
+        ok 1 - should be equal
+        ok 2 - should be equal
+        ok 3 - should be equal
+{"level":50,"time":"2026-10-06T16:07:58.391Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:58.391Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878475,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 4 - images-seam-owned-range: byte-identical replay is accepted
+        ok 5 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878587,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.access.configure'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:58.671Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878685,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+{"level":50,"time":"2026-10-06T16:07:58.699Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:58.699Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878806,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 9 - images-seam-all-ratings: byte-identical replay is accepted
+        ok 10 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878869,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.access.configure'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878919,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:58.927Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:58.928Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:58.929Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+        ok 11 - a changed declaration under the same name is refused
+        # pg receives on changed Binding: {"code":"XX000","detail":"{\"ownerCode\":\"binding_conflict\",\"path\":\"/name\",\"stage\":\"binding_submission\"}","message":"binding name is already bound to another declaration","severity":"ERROR"}
+        1..11
+    ok 11 - Binding is the durable, create-only execution intent # time=742.002ms
+    
+    not ok 12 - both exact split children remain current after Binding deployment
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,3 @@
+         Array [
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+        +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+         ]
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 476
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:476:5)
+      source: |2
+            });
+          mark('deployed');
+          t.same(currentPartitionIds(runtime.engine), partitionIds,
+        ----^
+            'both exact split children remain current after Binding deployment');
+      ...
+    
+    # Subtest: key-anchored call runs only the owning partition
+        not ok 1 - the literal call starts on the exact two-child topology
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 481
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:481:10)
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:479:11)
+          source: |2
+              await t.test('key-anchored call runs only the owning partition',
+                async (st) => {
+                  st.same(currentPartitionIds(runtime.engine), partitionIds,
+            ---------^
+                    'the literal call starts on the exact two-child topology');
+                  mark('callStart');
+          ...
+        
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302878972,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:59.182Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:59.185Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:59.185Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302879264,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:07:59.439Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:59.443Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:07:59.443Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"ac
+# ... 52444 byte(s) elided; full output in .tap/test-results/test/integration/public-binding-cell-invocation-seam.integration.test.js.tap ...
+d_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.116Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302884312,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:04.371Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.374Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.374Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302884565,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:04.628Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.630Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.630Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302884816,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:04.885Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",179130(node:1694959) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)
+2871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.888Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:04.888Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302885068,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:05.143Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.145Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.147Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302885321,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:05.402Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.404Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.405Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302885572,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:05.662Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.665Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.665Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302885824,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:05.921Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.923Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:05.924Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302886079,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:06.187Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.192Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.192Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302886337,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+{"level":50,"time":"2026-10-06T16:08:06.452Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.455Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.455Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.496Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.497Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"rebalance-coordinator","event":"wait_bound_spent","wait":"OPERATION_PERSIST_RETRY_TIMEOUT_MS","awaited":"replica_operations mutation committed by the control plane","boundMs":15000,"elapsedMs":15008,"lastObserved":{"errorCode":"DISTRIBUTED_PARTICIPANT_FAILURE","error":"Distributed operation failed due to participant failures","retryAttempt":39,"callerBudgetBound":false,"localBoundMs":15000},"scope":{"nodeId":"public-binding-seam-node","ownerId":"9e918c69-9562-4e79-8e35-74b9085d8eaf"},"repeats":0,"nodeId":"public-binding-seam-node","msg":"Wait bound spent"}
+{"level":50,"time":"2026-10-06T16:08:06.499Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"rebalancer","entityId":"sys-postgres-wire","moveType":"add","moveTargetNodeId":"public-binding-seam-node","error":"Storage reservation creation failed for operation 9e918c69-9562-4e79-8e35-74b9085d8eaf: Distributed operation failed due to participant failures","nodeId":"public-binding-seam-node","msg":"Failed to execute move"}
+{"level":50,"time":"2026-10-06T16:08:06.499Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"rebalancer","entityId":"sys-postgres-wire","error":"Storage reservation creation failed for operation 9e918c69-9562-4e79-8e35-74b9085d8eaf: Distributed operation failed due to participant failures","nodeId":"public-binding-seam-node","msg":"Error during rebalance check"}
+{"level":50,"time":"2026-10-06T16:08:06.504Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+{"level":50,"time":"2026-10-06T16:08:06.505Z","nodeId":"public-binding-seam-node","pid":1694959,"subsystem":"partition","partitionId":"storage_reservations-p1","error":"UNIQUE constraint failed: storage_reservations.reservation_id","sql":"INSERT INTO storage_reservations (reservation_id, operation_id, entity_type, entity_id, partition_id","params":["res-9e918c69-9562-4e79-8e35-74b9085d8eaf","9e918c69-9562-4e79-8e35-74b9085d8eaf","runtime_service","sys-postgres-wire","sys-postgres-wire","public-binding-seam-node",6291456,1,"active","add_replica",1791302871489,1791302871489,1791303171489],"nodeId":"public-binding-seam-node","msg":"Failed to apply committed entry"}
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302887147,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302887577,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302887840,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302888092,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302888344,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302888595,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302888846,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302889098,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302889351,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302889605,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302889861,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302890114,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302890369,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302890627,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302890881,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302891151,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302891435,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302891691,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 2 - should be equal
+        # consumer attempts until served: 48; retried (all retry-safe on the wire): ["{\"ownerCode\":\"call_cell_route_unavailable\",\"stage\":\"call_invocation\",\"outcomeClass\":\"temporarily_unavailable\",\"retrySafe\":true}"]
+        ok 3 - the reduced result is exactly the literal key range's rows
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302891949,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 4 - should be equivalent
+        # witnessed shard slots of the new result: 1
+        ok 5 - the published result snapshot witnesses exactly one shard
+        not ok 6 - harness evidence: the canonical planner plans the owning shard only
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 507
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:507:10)
+          source: |2
+                  st.same(witnessed, [ownedPartitionIds.length],
+                    'the published result snapshot witnesses exactly one shard');
+                  st.same(sortedPartitionIds(
+            ---------^
+                    planShardPartitions(runtime.engine, OWNED_RANGE_STATEMENT)),
+                  ownedPartitionIds,
+          ...
+        
+        not ok 7 - the literal call retains both exact split children
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 511
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:511:10)
+          source: |2
+                  ownedPartitionIds,
+                  'harness evidence: the canonical planner plans the owning shard only');
+                  st.same(currentPartitionIds(runtime.engine), partitionIds,
+            ---------^
+                    'the literal call retains both exact split children');
+                });
+          ...
+        
+        1..7
+    not ok 13 - key-anchored call runs only the owning partition # time=13125.879ms
+      ---
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 479
+        columnNumber: 11
+        typeName: Test
+      source: |2
+            'both exact split children remain current after Binding deployment');
+      
+          await t.test('key-anchored call runs only the owning partition',
+        ----------^
+            async (st) => {
+              st.same(currentPartitionIds(runtime.engine), partitionIds,
+      ...
+    
+    # Subtest: the unbounded Binding fans out to every partition
+        not ok 1 - the unbounded call starts on the exact two-child topology
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 517
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:517:10)
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:515:11)
+          source: |2
+              await t.test('the unbounded Binding fans out to every partition',
+                async (st) => {
+                  st.same(currentPartitionIds(runtime.engine), partitionIds,
+            ---------^
+                    'the unbounded call starts on the exact two-child topology');
+                  const served = await callWhenReady(BINDING_NAME.UNBOUNDED);
+          ...
+        
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892099,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 2 - should be equal
+        ok 3 - should be equivalent
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892220,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        ok 4 - should be equivalent
+        not ok 5 - the published result snapshot witnesses every shard
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,3 +1,3 @@
+             Array [
+            -  2,
+            +  1,
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 527
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:527:10)
+          source: |2
+                  st.same(await callBinding(
+                    client, BINDING_NAME.UNBOUNDED, {topN: TOP_N_ALL}), expected);
+                  st.same(await newReducedShardCounts(db, before, wait()),
+            ---------^
+                    [partitionIds.length],
+                    'the published result snapshot witnesses every shard');
+          ...
+        
+        not ok 6 - the canonical planner fans out to both exact split children
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 530
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:530:10)
+          source: |2
+                    [partitionIds.length],
+                    'the published result snapshot witnesses every shard');
+                  st.same(sortedPartitionIds(
+            ---------^
+                    planShardPartitions(runtime.engine, UNBOUNDED_STATEMENT)),
+                  partitionIds,
+          ...
+        
+        not ok 7 - the unbounded call retains both exact split children
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,3 @@
+             Array [
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+            -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+            +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+             ]
+          at:
+            fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+            lineNumber: 534
+            columnNumber: 10
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:534:10)
+          source: |2
+                  partitionIds,
+                  'the canonical planner fans out to both exact split children');
+                  st.same(currentPartitionIds(runtime.engine), partitionIds,
+            ---------^
+                    'the unbounded call retains both exact split children');
+                });
+          ...
+        
+        1..7
+    not ok 14 - the unbounded Binding fans out to every partition # time=284.438ms
+      ---
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 515
+        columnNumber: 11
+        typeName: Test
+      source: |2
+            });
+      
+          await t.test('the unbounded Binding fans out to every partition',
+        ----------^
+            async (st) => {
+              st.same(currentPartitionIds(runtime.engine), partitionIds,
+      ...
+    
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892382,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+    # Subtest: pre-dispatch failures are public, typed and topology-free
+        # pg receives for an unknown Binding: {"code":"XX000","detail":"{\"ownerCode\":\"call_cell_route_not_found\",\"stage\":\"call_invocation\",\"outcomeClass\":\"definitely_not_executed\",\"retrySafe\":false}","message":"Call Binding not found","severity":"ERROR"}
+        ok 1 - should be equivalent
+        ok 2 - should be equivalent
+        1..2
+    ok 15 - pre-dispatch failures are public, typed and topology-free # time=47.911ms
+    
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892427,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+    # Subtest: the consumer cannot name an execution target (F2/F5)
+        ok 1 - a CALL payload carrying 'node' is rejected
+        ok 2 - a payload-contract refusal is never retry-safe
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892472,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        # pg receives for 'node': {"code":"XX000","detail":"{\"path\":\"/payload/node\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: node","severity":"ERROR"}
+        ok 3 - a CALL payload carrying 'partition' is rejected
+        ok 4 - a payload-contract refusal is never retry-safe
+PG wire parse message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791302892515,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+        # pg receives for 'partition': {"code":"XX000","detail":"{\"path\":\"/payload/partition\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: partition","severity":"ERROR"}
+        ok 5 - a CALL payload carrying 'replica' is rejected
+        ok 6 - a payload-contract refusal is never retry-safe
+        # pg receives for 'replica': {"code":"XX000","detail":"{\"path\":\"/payload/replica\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: replica","severity":"ERROR"}
+        1..6
+    ok 16 - the consumer cannot name an execution target (F2/F5) # time=131.308ms
+    
+    # Subtest: consumer import census and no legacy axis (F5/F6)
+        ok 1 - the consumer imports only pg
+        ok 2 - the consumer loads no module through /\\bimport\\s*\\(/u
+        ok 3 - the consumer loads no module through /\\bcreateRequire\\b/u
+        ok 4 - the consumer loads no module through /\\brequire\\s*\\(/u
+        ok 5 - the consumer loads no module through /\\bimport\\.meta\\.resolve\\b/u
+        ok 6 - no reference to partition_callback
+        ok 7 - no reference to DB.call
+        ok 8 - no reference to WasmCallAdapter
+        ok 9 - no reference to debug-runtime
+        1..9
+    ok 17 - consumer import census and no legacy axis (F5/F6) # time=3.153ms
+    
+    not ok 18 - both exact split children remain current through the full exercise
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,4 +1,3 @@
+         Array [
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_a26961f3_right",
+        -  "tbl-422c2f07b585250cc157e557759e04f7_p_e6a71e42_left",
+        +  "tbl-422c2f07b585250cc157e557759e04f7_p_dfd4f5d0_merged",
+         ]
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 603
+        columnNumber: 5
+        typeName: Test
+      stack: |
+        Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:603:5)
+      source: |2
+            });
+      
+          t.same(currentPartitionIds(runtime.engine), partitionIds,
+        ----^
+            'both exact split children remain current through the full exercise');
+      ...
+    
+    # seam wall-clock ms: {"artifactBuilt":19795,"runtimeStarted":30180,"pgwireListening":35487,"tableCreated":36196,"rowsInserted":36218,"tableSplit":37861,"installed":41150,"deployed":42704,"callStart":42711,"firstCallServed":55687,"callsServed":56120}
+    1..18
+PG wire terminate received { sessionId: 'pgwire-483539bf-d88d-480d-91f4-60c1cd94d756' }
+LogsTableService shutdown
+# teardown: harness-stopped pgwire replicas=["sys-postgres-wire-r1"]; stop ms=315; rest accepting after stop=false; pgwire accepting after stop=false
+not ok 1 - public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input # time=56639.801ms
+  ---
+  at:
+    fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+    ^
+      'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
+    {timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..1
+# { total: 61, pass: 48, fail: 13 }
+# time=56646.397ms
+# test-files total=1 pass=0 fail=1 assertions=70

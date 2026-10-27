@@ -39,33 +39,13 @@ import {createMockCache} from '../rebalancer/test-helpers.js';
 import {
   createRemovalSourceHandler,
   durableLifecycleState,
+  nextTurns,
+  partitionServiceRow as serviceRow,
 } from './replica-removal-consensus-exit-fixture.js';
 
 const ELECTION_ROUNDS = 400;
 const EXIT_ROUNDS = 60;
 const QUIET_LOGGER = Object.freeze({debug() {}, info() {}, warn() {}});
-
-function nextTurns(turns = 20) {
-  let chain = Promise.resolve();
-  for (let turn = 0; turn < turns; turn += 1) {
-    chain = chain.then(() => new Promise((resolve) => setImmediate(resolve)));
-  }
-  return chain;
-}
-
-function serviceRow(partitionId, replicaId, status) {
-  const nodeId = `${replicaId}-node`;
-  return {
-    service_id: replicaId,
-    replica_id: replicaId,
-    partition_id: partitionId,
-    node_id: nodeId,
-    service_type: 'partition',
-    status,
-    raft_role: 'follower',
-    address: `${nodeId}/partition/${replicaId}`,
-  };
-}
 
 async function removeLeaderSource(t, voterCount) {
   ConfigurationManager.resetInstance();

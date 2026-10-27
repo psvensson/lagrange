@@ -13,7 +13,7 @@
 // script, one fixture file, one fixture directory) and the tests that observe
 // each of them, classified by the real generators inside the fixture.
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,6 +33,7 @@ import {
 import {
   SUBSYSTEM_MANIFEST_PATH,
 } from '../../scripts/checks/test-subsystem-classification-constants.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -68,7 +69,7 @@ function env() {
 }
 
 function git(args, cwd = repo) {
-  return execFileSync('git', args,
+  return execGit(args,
     {cwd, encoding: UTF8, stdio: 'pipe', env: gitProcessEnvironment()}).trim();
 }
 

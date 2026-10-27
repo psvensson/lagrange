@@ -1,5 +1,14 @@
 import {createMessageGroupForwardingOwnerTargetMethods} from
   './message-group-forwarding-owner-target-methods.js';
+import {captureCdcForwardOptions,
+  createMessageGroupForwardingOwnerNativeDeliveryMethods, requiresDurableCdcForwarding} from
+  './message-group-forwarding-owner-native-delivery-methods.js';
+import {copyCdcEventMetadata} from '../cdc/cdc-event-envelope.js';
+import {cdcRelaySendDepth} from './message-group-service-runtime-support.js';
+import {OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE} from '../transport/transport-error-codes.js';
+import {deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, deliveryReadingOf,
+  isDeferredTransportDeliveryOutcome, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
 
 function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
   const buildForwardTopologyRepairReadOptions =
@@ -36,6 +45,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
   return {
     ...createMessageGroupForwardingOwnerTargetMethods(options),
+    ...createMessageGroupForwardingOwnerNativeDeliveryMethods(),
 
     shouldRepairForwardTopology(errorMessage) {
       return typeof errorMessage === typeofToken.STRING &&
@@ -128,6 +138,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       const readOptions = buildForwardTopologyRepairReadOptions(
         service,
         workloadProfile,
+        context.remainingMs ?? null,
       );
       const [groupResult, serviceResult] = await Promise.all([
         gateway.executeRead(
@@ -191,7 +202,8 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               messageGroupForwardingOwnerLiteral
                 .MESSAGE_DASH_GROUP_DASH_SERVICE,
           },
-          readOptions,
+          buildForwardTopologyRepairReadOptions(
+            service, workloadProfile, context.remainingMs ?? null),
         );
         if (nodeResult?.success === true && Array.isArray(nodeResult.rows)) {
           nodeRows = nodeResult.rows;
@@ -199,12 +211,15 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
       }
 
       let repairedRowCount = num.ZERO;
+      context.remainingMs?.();
       repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
         tables.MESSAGE_GROUPS,
         groupRows,
       );
+      context.remainingMs?.();
       repairedRowCount +=
         await service.reconcileAuthoritativeForwardServiceRows(serviceRows);
+      context.remainingMs?.();
       repairedRowCount += await service.applyAuthoritativeForwardTopologyRows(
         tables.NODES,
         nodeRows,
@@ -338,10 +353,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
         typeof errorMessage === typeofToken.STRING ?
           errorMessage :
           '';
-      if (
-        deliveryResult?.errorCode ===
-        messageGroupForwardingOwnerLiteral.OUTBOUND_QUEUE_BACKPRESSURED
-      ) {
+      if (deliveryResult?.errorCode === OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE) {
         return true;
       }
       return normalizedErrorMessage.includes(
@@ -354,17 +366,25 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
     async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
       const service = this.service;
+      options = captureCdcForwardOptions(service, options);
+      const original = {tableName, operation, data, ...copyCdcEventMetadata(options)};
+      if (requiresDurableCdcForwarding([original], options)) {
+        return this.forwardDurableCdcPayload({
+          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION,
+          ...original, sourceNodeId: service.nodeId,
+        }, options);
+      }
       const eventTimestamp =
         typeof options.timestamp === typeofToken.STRING &&
         options.timestamp.length > num.ZERO ?
           options.timestamp :
           service.hlcClock.now().toString();
       const replayOnly = options.replayOnly === true;
-      const relayDepth =
+      const relayDepth = cdcRelaySendDepth(
         Number.isInteger(options.relayDepth) &&
         options.relayDepth >= num.ZERO ?
           options.relayDepth :
-          num.ZERO;
+          num.ZERO);
       const causeId = normalizeCauseId(options.causeId);
       const payload = {
         type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION,
@@ -388,12 +408,19 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
 
     async forwardCDCBatchToLeader(events, options = {}) {
       const service = this.service;
+      options = captureCdcForwardOptions(service, options);
+      if (requiresDurableCdcForwarding(events, options)) {
+        return this.forwardDurableCdcPayload({
+          type: messageGroupApplicationMessageType.LATENCY_CDC_PROPAGATION_BATCH,
+          events, sourceNodeId: service.nodeId,
+        }, options);
+      }
       const replayOnly = options.replayOnly === true;
-      const relayDepth =
+      const relayDepth = cdcRelaySendDepth(
         Number.isInteger(options.relayDepth) &&
         options.relayDepth >= num.ZERO ?
           options.relayDepth :
-          num.ZERO;
+          num.ZERO);
       const normalizedEvents = (Array.isArray(events) ? events : [])
         .filter((event) => event?.tableName && event?.operation && event?.data)
         .map((event) => {
@@ -501,6 +528,12 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
     },
 
     async forwardCDCPayloadToLeader(payload, logContext = {}) {
+      payload = captureCdcForwardOptions(this.service, payload);
+      logContext = captureCdcForwardOptions(this.service, logContext);
+      const events = Array.isArray(payload.events) ? payload.events : [payload];
+      if (requiresDurableCdcForwarding(events, logContext, payload)) {
+        return this.forwardDurableCdcPayload(payload, logContext);
+      }
       const service = this.service;
       const tableName = logContext.tableName || null;
       const operation = logContext.operation || null;
@@ -592,16 +625,19 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             payload,
             deliveryOptions,
           );
-          const deliveryAcked = deliveryResult?.acknowledged === true;
-          const deliverySucceeded = deliveryResult?.success !== false;
+          // Transport decides delivery; success and error are the leader's
+          // answer. A failure is read from exactly one of the two: the
+          // leader's answer when delivered, else the transport outcome.
+          const deliveryOutcome = deliveryTransportOf(deliveryResult);
+          const deliveryAcked = isDeliveredTransportDeliveryOutcome(deliveryOutcome);
+          const failure = deliveryReadingOf(deliveryResult);
+          const deliverySucceeded = deliveryAcked && failure.success !== false;
           const deliveryErrorMessage =
-            typeof deliveryResult?.error === typeofToken.STRING &&
-            deliveryResult.error.length > num.ZERO ?
-              deliveryResult.error :
+            typeof failure.error === typeofToken.STRING &&
+            failure.error.length > num.ZERO ?
+              failure.error :
               null;
-          const deliveryRejectedByHandler =
-            deliveryResult?.noHandler === true ||
-            deliveryErrorMessage !== null;
+          const deliveryRejectedByHandler = deliveryAcked && deliveryErrorMessage !== null;
           if (
             !deliveryAcked ||
             !deliverySucceeded ||
@@ -610,7 +646,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
             const shouldRepairTopology =
               service.shouldRepairForwardTopology(deliveryErrorMessage);
             if (service.shouldSuppressForwardTarget(
-              deliveryResult,
+              failure,
               deliveryErrorMessage,
             )) {
               service.suppressForwardTarget({
@@ -640,9 +676,10 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 causeId,
                 durationMs: service.now() - forwardStartMs,
                 deliveryRejectedByHandler,
-                acknowledged: deliveryAcked,
                 success: deliverySucceeded,
-                noHandler: deliveryResult?.noHandler === true,
+                deliveryState: deliveryOutcome.deliveryState,
+                noHandler: deliveryOutcome.reasonCode ===
+                  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER,
                 replayIsolationEngaged: replayOnly,
                 deliveryPriority,
                 deliverySource,
@@ -659,15 +696,15 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
               `${messageGroupCdcErrorMsg.FORWARD_DELIVERY_REJECTED}` +
               deliveryError;
             const forwardFailureState = this.resolveForwardFailureState(
-              deliveryResult,
+              failure,
               {
                 message: deliveryErrorMessage,
-                deferRetry: deliveryResult?.deferRetry === true,
+                deferRetry: isDeferredTransportDeliveryOutcome(deliveryOutcome),
               },
             );
             const resolvedRetryAfterMs = this.resolveForwardRetryAfterMs(
               strictForwardRetryAfterMs,
-              deliveryResult,
+              failure,
             );
             lastDeliveryError = strictForwarding ?
               this.buildStrictForwardError(
@@ -675,7 +712,7 @@ function createMessageGroupForwardingOwnerDeliveryMethods(options = {}) {
                 resolvedRetryAfterMs,
                 {
                   failureState: forwardFailureState,
-                  code: deliveryResult?.errorCode || null,
+                  code: deliveryOutcome.errorCode || null,
                 },
               ) :
               new Error(forwardErrorMessage);

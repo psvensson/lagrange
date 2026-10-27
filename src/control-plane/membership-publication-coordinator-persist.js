@@ -29,6 +29,38 @@ import {
   CONTROL_PLANE_CRITICAL_CONVERGENCE_OPERATION,
   buildCriticalControlPlaneConvergenceOptions,
 } from './membership-publication-control-plane-convergence.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+
+const PUBLICATION_WRITE_UNCONFIRMED_OUTCOME =
+  'unconfirmed_row_returned_as_persisted';
+const PUBLICATION_WRITE_CONFIRMATION_WAIT = Object.freeze({
+  wait: 'PUBLICATION_WRITE_MAX_ATTEMPTS',
+  awaited: 'durable publication row satisfying the desired state after ' +
+    'upsert + readback',
+});
+
+// Every publication write attempt is spent without a readback that
+// satisfies the desired row. The caller still gets the unconfirmed row
+// (unchanged behaviour; the owner finding is recorded in the quest log).
+function reportPublicationWriteUnconfirmed(coordinator, spent) {
+  reportWaitBoundSpent(coordinator.logger, {
+    ...PUBLICATION_WRITE_CONFIRMATION_WAIT,
+    boundMs: null,
+    lastObserved: () => ({
+      attempts: spent.maxAttempts,
+      outcome: PUBLICATION_WRITE_UNCONFIRMED_OUTCOME,
+      status: spent.row?.status ?? null,
+      publicationEpoch: spent.row?.publication_epoch ?? null,
+      acknowledgedCount: Array.isArray(spent.row?.acknowledged_node_ids) ?
+        spent.row.acknowledged_node_ids.length :
+        null,
+    }),
+    scope: {
+      nodeId: coordinator.nodeId ?? null,
+      publicationId: spent.publicationId,
+    },
+  });
+}
 
 // What a failed publication write leaves to do. A failed answer does not
 // prove the row is absent (a committed write can answer failed), so while
@@ -153,6 +185,11 @@ class MembershipPublicationCoordinatorPersist extends
           mergePublicationRows(durableRow, persistedRow),
         );
       }
+      reportPublicationWriteUnconfirmed(this, {
+        maxAttempts,
+        publicationId,
+        row: persistedRow,
+      });
     }
     return persistedRow;
   }

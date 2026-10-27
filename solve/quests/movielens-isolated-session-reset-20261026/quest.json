@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "movielens-isolated-session-reset-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Preserve MovieLens temporary-root custody when Cell stop or node shutdown fails during closeWorkloadSession or closeFailedOpening, remove the raw DELETE FROM wasm_operations reset path from movielens-public-request-workload-adapter.js, and replace it with isolated-session reset owned by the live workload session and verified by createMovielensLagrangeCapacityAdapter.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/movielens-isolated-session-reset-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "failed-shutdown-custody-preservation",
+        "no-journal-delete-api",
+        "isolated-session-reset-and-runtime-identity-verification",
+        "movielens-test-cone-and-independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "preserve-failed-shutdown-custody",
+      "statement": "closeWorkloadSession and closeFailedOpening must not remove temporaryRoot when Cell stop or node shutdown fails or remains unconfirmed."
+    },
+    {
+      "id": "no-wasm-operations-delete",
+      "statement": "Remove DELETE FROM wasm_operations and in-place journal deletion from movielens-public-request-workload-adapter.js with no fallback or journal-clear API."
+    },
+    {
+      "id": "isolated-session-reset-identity",
+      "statement": "Resetting Lagrange capacity state must drain and close the prior isolated session, open a fresh isolated session with verified empty durable results and invocation journal, and verify that the fresh session's runtime owner evidence and adapter identity match the sealed adapter identity."
+    }
+  ],
+  "sealedAt": "87a650b342893d22f62f3601cb233537d0d8632b"
+}

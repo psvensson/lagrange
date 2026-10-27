@@ -5,12 +5,13 @@
 // imports and literal mentions; everything else under scripts/ is counted.
 
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const PROBE = fileURLToPath(new URL(
   '../../scripts/checks/push-gate-unused-files.js', import.meta.url));
@@ -26,7 +27,7 @@ function write(root, relativePath, content) {
 // kind of root and a few nothing runs.
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'script-reachability-'));
-  execFileSync('git', ['init', '--quiet'], {cwd: root});
+  execGit(['init', '--quiet'], {cwd: root});
   write(root, 'package.json',
     '{"scripts":{"check":"node scripts/from-package.js"}}\n');
   write(root, 'scripts/from-package.js',
@@ -62,8 +63,8 @@ function fixture() {
   write(root, 'docs/guide.md', 'see scripts/only-in-docs.js\n');
   write(root, 'scripts/only-in-docs.js', '');
   write(root, 'scripts/untracked.js', '');
-  execFileSync('git', ['add', '-A'], {cwd: root});
-  execFileSync('git', ['rm', '--cached', '--quiet', 'scripts/untracked.js'], {cwd: root});
+  execGit(['add', '-A'], {cwd: root});
+  execGit(['rm', '--cached', '--quiet', 'scripts/untracked.js'], {cwd: root});
   return root;
 }
 
@@ -93,7 +94,7 @@ test('every runner surface reaches its script; closed records and prose reach no
 test('deleting the unreachable scripts brings the count to zero', () => {
   const root = fixture();
   for (const file of probe(root, LIST_FLAG).listed) {
-    execFileSync('git', ['rm', '--force', '--quiet', file], {cwd: root});
+    execGit(['rm', '--force', '--quiet', file], {cwd: root});
   }
   assert.equal(probe(root).count, 0);
 });

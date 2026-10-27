@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/index.js';
@@ -26,6 +27,7 @@ import {
   buildWorkflow,
   createAdmissionResult,
 } from './managed-split-workflow-test-helpers.js';
+import {tablesColumnOf} from './tables-row-defaults.js';
 
 // Deterministic witness for the MovieLens five-node live runs of
 // 2026-08-30 (HEAD 403a92853): the `ratings` user table is split while
@@ -107,7 +109,7 @@ function buildPlan(plan) {
 
 function matchesWhere(row, whereClause) {
   return Object.entries(whereClause || {}).every(([column, expected]) => {
-    const actual = row?.[column];
+    const actual = tablesColumnOf(row, column);
     if (expected === null || expected === undefined) {
       return actual === null || actual === undefined;
     }
@@ -403,7 +405,7 @@ async function driveCutoverWithDeniedRightLeader(options) {
     ]),
     deliverReplicaRemoval: async (request) => {
       removedReplicas.push(request.message);
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
     cdcIntegrationService: {
       async updateSystemTableRow(tableName, whereClause, data) {
@@ -425,9 +427,8 @@ async function driveCutoverWithDeniedRightLeader(options) {
   });
   const workflowId = options.workflowId;
   const record = buildBackfillingRecord(workflowId);
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
-  workflow.ensureCanonicalSplitParticipants(workflowId, record.metadata);
   const fenceToken = claim.workflow.fenceToken;
   const sourceAck = (status) => ({
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
@@ -553,7 +554,7 @@ async function driveHealthySplit() {
     ]),
     deliverReplicaRemoval: async (request) => {
       events.push({remove: request.message.partitionId});
-      return {status: 'initiated'};
+      return {status: 'completed'};
     },
     cdcIntegrationService: {
       async updateSystemTableRow(tableName, whereClause, data) {
@@ -589,7 +590,7 @@ async function driveHealthySplit() {
   // (the source's acks re-resolve it from the durable row); re-register
   // the durable snapshot the way the ack ingress does.
   const transition = parseTransitionFromRow(tableRow);
-  await workflow.workflowCoordinator.registerWorkflow({
+  await registerFromRecordAsRead(workflow, {
     workflowId,
     ownerKey: SOURCE_PARTITION_ID,
     tableId: TABLE_ID,
@@ -602,7 +603,6 @@ async function driveHealthySplit() {
     participants: new Map(),
   });
   const claim = await workflow.claimSplitWorkflowOwnership(workflowId);
-  workflow.ensureCanonicalSplitParticipants(workflowId, transition.metadata);
   const sourceAck = (status, checkpoint) => ({
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
       SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
@@ -640,7 +640,11 @@ const HEALTHY_SEQUENCE = Object.freeze([
   {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {insert: PLAN_ONE.leftPartitionId},
   {insert: PLAN_ONE.rightPartitionId},
+  // Each child's provisioning mark made durable 'dispatched' before its
+  // first create (target-provisioning-mark.js).
+  {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {provision: PLAN_ONE.leftPartitionId},
+  {state: PARTITION_TRANSITION_STATE.SPLIT_PREPARING},
   {provision: PLAN_ONE.rightPartitionId},
   {state: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING},
   {level: 'info', msg: 'Prepared managed partition split',
@@ -654,7 +658,13 @@ const HEALTHY_SEQUENCE = Object.freeze([
   {level: 'info', msg: 'Managed split cutover applied'},
   {ack: SPLIT_ACK_STATUS.CATCHUP_READY, cutover: true},
   {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+  // The group's member set frozen on the record, then its addresses
+  // (group-retirement-members.js), before any REMOVE.
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {remove: SOURCE_PARTITION_ID},
+  // The member's positive answer recorded before the row delete.
+  {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {delete: SOURCE_PARTITION_ID},
   {state: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE},
   {level: 'info', msg: 'Managed split source dissolution dispatched'},

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   READ_MODEL_SOURCE,
@@ -176,7 +177,7 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds fails closed when its ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {
@@ -241,7 +242,7 @@ test('emitReplicaStatusDivergence emits FIELD_MISMATCH when cache ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {
@@ -308,7 +309,7 @@ test('emitReplicaStatusDivergence emits CACHE_MISSING when cache ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {
@@ -371,7 +372,7 @@ test('emitReplicaStatusDivergence emits AUTHORITATIVE_MISSING when ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {
@@ -434,7 +435,7 @@ test('emitReplicaStatusDivergence does not emit when cache and ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {
@@ -492,7 +493,7 @@ test('emitReplicaStatusDivergence does not emit when replicaId ' +
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     sqlQueryEngine: {

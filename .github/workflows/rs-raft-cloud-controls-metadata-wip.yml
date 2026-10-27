@@ -1,0 +1,60 @@
+# Generated-source custody for the isolated rs-raft controls WIP only.
+# Runs the existing metadata producer, checks scope, and publishes a non-main
+# preservation commit by guarded fast-forward. Not a Quest/publisher receipt.
+name: rs-raft-controls-metadata-wip
+on:
+  push:
+    branches: [continue/rs-raft-cloud-controls-correction-20261014]
+    paths:
+      - .github/workflows/rs-raft-cloud-controls-metadata-wip.yml
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-controls-metadata-wip
+  cancel-in-progress: false
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Regenerate only producer-owned classifications and seal
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          npm run -s test:metadata:refresh
+          git diff --check
+          echo 'Canonical producer outputs:'
+          git diff --name-status
+          while IFS= read -r changed; do
+            test -z "$changed" && continue
+            case "$changed" in
+              test/shards/impact-graph-seal.json|test/shards/subsystem-classes.json) ;;
+              *) echo "Refused non-canonical producer modification: $changed"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          git add -- test/shards/impact-graph-seal.json test/shards/subsystem-classes.json
+          if git diff --cached --quiet; then
+            echo 'Producer metadata already current'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: refresh exact controls impact metadata from canonical producer'
+          git fetch --no-tags origin refs/heads/continue/rs-raft-cloud-controls-correction-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$GITHUB_SHA" || {
+            echo 'Concurrent WIP branch update; refused publication'
+            exit 1
+          }
+          git push origin HEAD:refs/heads/continue/rs-raft-cloud-controls-correction-20261014

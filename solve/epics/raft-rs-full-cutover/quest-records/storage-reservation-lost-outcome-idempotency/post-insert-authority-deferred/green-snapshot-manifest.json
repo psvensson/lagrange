@@ -1,0 +1,105 @@
+{
+  "schema": "storage-reservation-green-snapshot/1",
+  "parent": "c280049f783c77b23f5070f1a2c389383c18527f",
+  "productFingerprint": "ab8d6fccc735af0f1d2c5b532ce9359d9f6940c9e9dbc82d196f015b949ffc31",
+  "productPathCount": 17,
+  "productEntries": [
+    {
+      "path": "src/rebalancer/operation-reservation-attempt-outcome.js",
+      "sha256": "19b050e8468b7dd64d954a4380662755e7b69207b95c4fdc2185861480334e1d",
+      "bytes": 1318
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-dispatch-reservation-gate.js",
+      "sha256": "f2b4b46857ada5d7200f6297813f0a0e254388fcd7baaea3491eeae2d0a87aa1",
+      "bytes": 4691
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-owner-handoff-state.js",
+      "sha256": "b3f1e10768195784ae4ee03127575b27ee9e4b8d7c8f2bd601c4a95b4f4745f3",
+      "bytes": 26233
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-recovery-drain.js",
+      "sha256": "1eb9fe197aaeb9d0e5087ca85edf43cc9042d03feb611449a18901dbab855617",
+      "bytes": 25988
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-recovery-reconcile.js",
+      "sha256": "672b8f2e37629378746ffda120d60a800b779e097080eb4a80a32c8367b106e1",
+      "bytes": 22326
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-reservation-recovery.js",
+      "sha256": "943223fe923fc822c8b4fc34788406e37fbed9cf725b3d728f13843769634663",
+      "bytes": 1346
+    },
+    {
+      "path": "src/rebalancer/operation-workflow-transition-retry.js",
+      "sha256": "8e06a24c9e529485d87444312e7d5d6053b4977542adb1919d3e3edd454be9ba",
+      "bytes": 7412
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-lifecycle.js",
+      "sha256": "ba5ad981b04941c04799efc2fd26f722cce487ebb834b301ce8e799a2b7aa203",
+      "bytes": 27684
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-operation-creation.js",
+      "sha256": "79baf31d358c8e933f8f06c12192ae8b1b84ac2a85ef65a95577ec6445c03e00",
+      "bytes": 29979
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-owner-facade.js",
+      "sha256": "d9e51b69df55785d5d1077892d53121d537706f50e65cc2e4ccd0b2f55a3fa45",
+      "bytes": 13596
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-reservation-adoption.js",
+      "sha256": "055d769f237738c9c462bfed05ed65515a34501df3b34e5370fb5030bf69f36c",
+      "bytes": 5481
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+      "sha256": "20f32bb75a341d909e6480adbfec8f8515255a8d3dbcba958c752f094868980a",
+      "bytes": 24718
+    },
+    {
+      "path": "src/rebalancer/rebalance-coordinator-shared.js",
+      "sha256": "7038a581635f33f1963a2135899e1d84e3cfccbf3056a3ddb6cefbbc44d3ee17",
+      "bytes": 12511
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-mutation-gateway-methods.js",
+      "sha256": "26087843a74b22e1a75e02281977c31d764581f27100ce214401f5972c7f83c4",
+      "bytes": 28193
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository-read-methods.js",
+      "sha256": "c0d1a676f65493281dc25a78d0c19a5664251e17991949bfd03b067a9da53ee1",
+      "bytes": 23421
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository.js",
+      "sha256": "b9752bfa033b943950057112f4030ecf5994a9090596acf0c926723fc544ee4d",
+      "bytes": 33606
+    },
+    {
+      "path": "src/rebalancer/storage-reservation-authority.js",
+      "sha256": "70973e27a0744c9ba162ba29e4359122de4ef79d37704742112860c3d9e2632b",
+      "bytes": 4052
+    }
+  ],
+  "witness": {
+    "commit": "a6a21f3b35ee293f1e31585d900de37bda56056c",
+    "path": "test/rebalancer/formation-cure-reservation-progress-obligation.test.js",
+    "sha256": "c6fff256860ae6fe03eca7f3737d54e10d087987b8f40a2a3dd11ba026473229",
+    "currentResult": "11/11 exit 0",
+    "currentLogSha256": "c2b3199baf30ed06a8b9d5b0c22d45b599cb66c8893d028366ad99b7a8149487",
+    "carrier24dcResult": "9/11 exit 1",
+    "carrier24dcLogSha256": "acc1ce848ba0602c1401acbf43c7c12d909fe8193028a13ae82e9c525552c494",
+    "cleanC280Result": "12/12 exit 0",
+    "cleanC280LogSha256": "e20ab8794e2c6165672e4f3d170033ef20afdce3d61e50e3b903060dae58deb9"
+  },
+  "claimBoundary": "Immutable source snapshot for external integration. Not Quest landing, qualification, merge, or release proof."
+}

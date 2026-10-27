@@ -6,7 +6,6 @@ import {
 const {
   ADMIN_ERROR_MESSAGE,
   ADMIN_LOG_MSG,
-  DebugMetadataStore,
   ERRNO,
   resolvePreferredControlPlaneReadinessService,
   resolveSqlEngineControlPlaneReadinessService,
@@ -96,19 +95,6 @@ const ADMIN_WEBSOCKET_LIFECYCLE_METHODS = {
       this.liveQueryManager.initialize({
         sqlQueryEngine: engine,
       });
-    }
-    if (
-      this.debugMetadataStore &&
-      typeof this.debugMetadataStore.setSqlQueryEngine === 'function'
-    ) {
-      this.debugMetadataStore.setSqlQueryEngine(engine);
-      return;
-    }
-    if (!this.debugMetadataStore && engine) {
-      this.debugMetadataStore = new DebugMetadataStore({
-        sqlQueryEngine: engine,
-      });
-      this.debugHandlers.debugMetadataStore = this.debugMetadataStore;
     }
   },
 

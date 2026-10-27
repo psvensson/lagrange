@@ -7,7 +7,6 @@
 // safety spine alone and looks entirely healthy.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,13 +25,14 @@ import {
   RELEASE_SURFACE_PREFIXES,
   SELECTION_REFUSED,
   SOURCE_SUBSYSTEM_RULES,
+  WORKSPACE_INJECTION_ENV,
 } from '../../scripts/checks/change-selection-constants.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 const root = process.cwd();
 const UTF8 = 'utf8';
-const MAX_BUFFER = 64 * 1024 * 1024;
 
-const tracked = execFileSync('git', ['ls-files'],
-  {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER})
+const tracked = execGit(['ls-files'],
+  {cwd: root, encoding: UTF8})
   .split('\n').filter(Boolean);
 
 test('EXHAUSTIVE: the four categories partition the candidate universe', () => {
@@ -139,10 +139,10 @@ test('the current taxonomy census excludes tracked worktree deletions', () => {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'taxonomy-deletion-'));
   const deletedPath = 'test/deleted.test.js';
   try {
-    execFileSync('git', ['init', '--quiet'], {cwd: fixture});
+    execGit(['init', '--quiet'], {cwd: fixture});
     fs.mkdirSync(path.join(fixture, 'test'));
     fs.writeFileSync(path.join(fixture, deletedPath), 'export {};\n');
-    execFileSync('git', ['add', deletedPath], {cwd: fixture});
+    execGit(['add', deletedPath], {cwd: fixture});
     fs.rmSync(path.join(fixture, deletedPath));
     const census = candidatePaths(fixture);
     assert.ok(!census.tracked.includes(deletedPath));
@@ -150,4 +150,33 @@ test('the current taxonomy census excludes tracked worktree deletions', () => {
   } finally {
     fs.rmSync(fixture, {recursive: true, force: true});
   }
+});
+
+// A lab machine's placement checkout links the controller's fetched model
+// checkers into tools/. The ignore rule `tools/alloy-*/` matches only a
+// directory, and git sees a link to one as a file, so the link is untracked
+// and NOT ignored: undeclared it is repository content with no owner, and the
+// EXHAUSTIVE census above refused there. Declared, as the placement script
+// declares every link it makes, the universe is exhaustive again.
+test('a declared workspace link never enters the candidate universe', (t) => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'taxonomy-link-'));
+  const saved = process.env[WORKSPACE_INJECTION_ENV];
+  t.after(() => {
+    if (saved === undefined) delete process.env[WORKSPACE_INJECTION_ENV];
+    else process.env[WORKSPACE_INJECTION_ENV] = saved;
+    fs.rmSync(fixture, {recursive: true, force: true});
+  });
+  const link = 'tools/alloy-6.2.0';
+  execGit(['init', '--quiet', 'checkout'], {cwd: fixture});
+  const checkout = path.join(fixture, 'checkout');
+  fs.writeFileSync(path.join(checkout, '.gitignore'), 'tools/alloy-*/\n');
+  fs.mkdirSync(path.join(fixture, 'alloy-6.2.0'));
+  fs.mkdirSync(path.join(checkout, 'tools'));
+  fs.symlinkSync(path.join(fixture, 'alloy-6.2.0'), path.join(checkout, link));
+  delete process.env[WORKSPACE_INJECTION_ENV];
+  assert.ok(candidatePaths(checkout).candidates.includes(link),
+    'the mechanism: a directory ignore rule does not match a link to one');
+  process.env[WORKSPACE_INJECTION_ENV] = ['node_modules', link].join(',');
+  assert.ok(!candidatePaths(checkout).candidates.includes(link),
+    'a link the placement declared is not repository content');
 });

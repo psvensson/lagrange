@@ -1,5 +1,11 @@
 const LOCAL_STR_RPAREN = ')';
 
+// The schema descriptor is supplied by the catalog owner, never command SQL.
+// Used inside an existing read snapshot; missing schema remains an exception.
+function readSystemTableRowsIn(db, schema) {
+  return db.prepare(`SELECT * FROM ${schema.tableName}`).safeIntegers(true).all();
+}
+
 /**
  * Generate SQL CREATE TABLE statement from schema.
  * @param {Object} schema - Table schema definition.
@@ -53,6 +59,7 @@ function generateCreateIndexSQL(schema) {
 }
 
 export {
+  readSystemTableRowsIn,
   generateCreateIndexSQL,
   generateCreateTableSQL,
 };

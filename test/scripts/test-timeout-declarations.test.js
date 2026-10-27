@@ -11,6 +11,8 @@ import {
 const FILE = 'fixture.test.js';
 const RUNNER = 'scripts/run-test-files.js';
 const TAP_DEFAULT_SECONDS = 30;
+const MACHINE_FACTOR_IMPORT =
+  'import {scaleByMachineFactor as scale} from \'./scripts/test-machine-factor.js\';\n';
 
 function extract(source) {
   return extractTimeoutDeclarations(source, FILE);
@@ -47,6 +49,42 @@ test('arithmetic over resolvable operands folds', () => {
     'test(\'slow\', {timeout: BASE_MS * 2}, async () => {});');
   assert.deepEqual(problems, []);
   assert.equal(milliseconds, 240000);
+});
+
+test('only the canonical machine-factor operation scales a declaration', () => {
+  const source = MACHINE_FACTOR_IMPORT +
+    'const SEEDS = 3; const REFERENCE_MS = 10000;\n' +
+    'test(\'seed work\', {timeout: SEEDS * scale(REFERENCE_MS)}, () => {});';
+  for (const [factor, expected] of [['1', 30000], ['3', 90000], ['1.4', 42000]]) {
+    assert.deepEqual(extractTimeoutDeclarations(source, FILE, {
+      env: {LAGRANGE_TEST_MACHINE_FACTOR: factor},
+    }), {milliseconds: expected, problems: []});
+  }
+});
+
+test('same-named functions and shadowed imports cannot impersonate the scaler', () => {
+  const use = 'test(\'work\', {timeout: scale(10000)}, () => {});';
+  const sources = [
+    'function scale(value) {return value;}\n' + use,
+    'import {scaleByMachineFactor as scale} from \'./not-the-owner.js\';\n' + use,
+    MACHINE_FACTOR_IMPORT + 'function run(scale) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'function run({scale}) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'function run([scale]) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'function run(...scale) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'function run(scale = 0) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'function run() {function scale() {} ' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'try {} catch (scale) {' + use + '}',
+    MACHINE_FACTOR_IMPORT + 'scale = other;\n' + use,
+    MACHINE_FACTOR_IMPORT + '({scale} = other);\n' + use,
+    MACHINE_FACTOR_IMPORT + 'test(\'work\', {timeout: scale(10000, 3)}, () => {});',
+  ];
+  for (const source of sources) {
+    const result = extractTimeoutDeclarations(source, FILE, {
+      env: {LAGRANGE_TEST_MACHINE_FACTOR: '3'},
+    });
+    assert.equal(result.milliseconds, 0, source);
+    assert.equal(result.problems.length, 1, source);
+  }
 });
 
 test('the largest of several declarations wins', () => {
@@ -186,16 +224,20 @@ const FIXTURE_PARENT = 'test-output/tap-timeout-fixtures';
 // The fixture ASSERTS the cap it was given rather than printing it: the runner
 // summarises child TAP output, so a printed value would never reach stdout,
 // whereas a mismatch fails the child and makes execFileSync throw.
-function runFixture(declaredMs, expectedSeconds, env) {
+function runFixture(declaredMs, expectedSeconds, env, expectedCaseMs = null) {
   fs.mkdirSync(FIXTURE_PARENT, {recursive: true});
   const directory = fs.mkdtempSync(path.join(FIXTURE_PARENT, 'run-'));
   const fixture = path.join(directory, 'echo-timeout.test.js');
+  const factorOwner = path.relative(directory, 'scripts/test-machine-factor.js');
   fs.writeFileSync(fixture,
     'import t from \'tap\';\n' +
+    `import {scaleByMachineFactor} from ${JSON.stringify(factorOwner)};\n` +
     `const FIXTURE_TIMEOUT_MS = ${declaredMs};\n` +
-    't.test(\'observes the cap\', {timeout: FIXTURE_TIMEOUT_MS}, (tt) => {\n' +
+    `t.test('observes the cap', {timeout: ${declaredMs}}, (tt) => {\n` +
     '  tt.equal(process.env.TAP_TIMEOUT, ' +
     `${JSON.stringify(expectedSeconds)});\n` +
+    (expectedCaseMs === null ? '' :
+      `  tt.equal(FIXTURE_TIMEOUT_MS, ${expectedCaseMs});\n`) +
     '  tt.end();\n' +
     '});\n');
   // Strip any ambient lane-owned TAP_TIMEOUT / TAP_TIMEOUT_FLOOR before
@@ -227,6 +269,16 @@ test('the runner exports the derived cap and honours a lane-owned one', () => {
     'an explicit caller TAP_TIMEOUT must win over the derived value');
   assert.throws(() => runFixture(90000, '45', {}), /Command failed/u,
     'the fixture must genuinely observe the cap, not pass unconditionally');
+});
+
+test('case timer and file cap scale once while an explicit caller cap wins', () => {
+  const factor = {LAGRANGE_TEST_MACHINE_FACTOR: '3'};
+  assert.equal(runFixture('3 * scaleByMachineFactor(10000)', '90', factor, 90000), true);
+  assert.equal(runFixture('8 * scaleByMachineFactor(10000)', '240', factor, 240000), true);
+  assert.equal(runFixture('3 * scaleByMachineFactor(10000)', '120',
+    {...factor, TAP_TIMEOUT: '120'}, 90000), true);
+  assert.equal(runFixture(90000, '90', factor, 90000), true,
+    'an already numeric budget is not scaled again by the runner');
 });
 
 // The CI lanes export TAP_TIMEOUT_FLOOR (ci.yml, release.yml): a minimum for

@@ -1,0 +1,78 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-participant-release-failure-projection-alpha",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "When the existing fresh-seed participant-release workflow fails, its terminal typed answer preserves bounded diagnostic observations from the owners the caller actually crossed: the first canonical cohort member found not drained, the first same-build cutover attempt joined, and the failing service's position and spend in the one existing serialized seed budget. A later client-produced release_deadline remains the terminal answer without erasing those first observations. The change preserves authorization, service order, retry cadence, deadline arithmetic, the canonical drain predicate, admission, the exact stored cutover promise and starter-only cleanup, startup outcome, and shutdown. It adds no release or recovery policy, second drain predicate, retry, timeout, healthy-path logging, fallback success, nested-control inference, durable state, or startup repair.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-participant-release-failure-projection-alpha/evidence/receipt.json",
+      "requiredReceipts": [
+        "one-canonical-blocked-entry",
+        "first-observations-survive",
+        "typed-relative-time",
+        "accessor-free-bounded-trigger",
+        "exact-shared-promise",
+        "underlying-answer-identity",
+        "actual-workflow-client-retention",
+        "existing-interaction-registered",
+        "source-revert-engagement",
+        "healthy-path-and-policy-unchanged",
+        "static-and-review-gate"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "diagnostic-acceptance-only",
+      "statement": "This Quest accepts bounded failure projection at the current participant-release and seed-workflow owners. It does not require the existing claim-cache or three bootstrap startup reds to turn green and cannot claim startup repair, nested current_control_owner_fact recovery, native physical Raft certification, C2/recovery closure, corpus readiness, or epic completion. Those live failures remain hard system failures at their current bounds."
+    },
+    {
+      "id": "one-existing-policy-path",
+      "statement": "Preserve fresh-seed authorization, sorted serial service order, one shared deadline, client timeout shaping, retry cadence and sleep, canonical isReleaseDrained semantics, pause/census/resume admission, and current startup and shutdown outcomes. Add no timeout, retry, parallel release, fallback, release policy, recovery actuation, admission transition, durable record, or healthy-path log."
+    },
+    {
+      "id": "one-bounded-observation-owner",
+      "statement": "A single pure participant-release diagnostic-observation owner performs guarded NodeService-clock classification and strict-own-data trigger capture. It owns no deadline, timer, transport, answer, drain, retry, map, or cleanup. Invalid, hostile, throwing, fractional, unsafe, or backward observations are typed with affected scalars null and cannot replace or reinterpret the owner answer."
+    },
+    {
+      "id": "canonical-drain-and-exact-attempt-lifetime",
+      "statement": "One census.find using the imported canonical drain predicate both decides aggregate DRAIN_PENDING and supplies its one bounded blocked entry. Same-build callers await the exact stored attempt promise; starter-only identity-checked finally remains the sole map cleanup. Mixed-build and successful paths retain their existing behavior and carry no join diagnostic."
+    },
+    {
+      "id": "first-only-custody-and-answer-identity",
+      "statement": "The seed workflow retains at most its first blocked-drain and first joined-attempt observations across existing retries, plus bounded counters and relative spend. Later answers cannot overwrite or grow history. The terminal client answer, all settled cutover answer fields, service order, and authority remain exact; diagnostics are additive frozen data only."
+    },
+    {
+      "id": "test-first-engaged-red",
+      "statement": "Implement the focused witnesses before production. The protocol witness must engage a real pending proposal, canonical aggregate DRAIN_PENDING, and an older same-build joined attempt through the existing controllable PartitionService and registered ReplicaHandler. The seed witness must run the actual workflow method and participant-release client through one delivered refusal into the actual client release_deadline. Missing projections, not setup or a missing new export, are the sealed failures."
+    },
+    {
+      "id": "source-revert-and-harness-policy",
+      "statement": "Root-owned locked-lab measurement uses identical test and fixture bytes for candidate and source-only revert on the same host. Source-revert receipts require the named behavior to engage before the missing-projection failure. An exhausted bound is red; no rerun-only green, host substitution, test skip, expected-red conversion, timeout increase, prewarm, fixture-owned state, or startup-red waiver counts as evidence."
+    },
+    {
+      "id": "existing-interaction-registry",
+      "statement": "Register src/node/participant-release-diagnostic-observation.js, src/bootstrap/bootstrap-service-seed-workflow.js, and src/node/participant-release-client.js in both existing raft-rs-runtime-application-transaction registry forms. Add the named seed witness to both witness lists, retain every current owner and witness, retain exactly the current two coupled-pair endpoints, and create no parallel contract or diagnostic authority."
+    },
+    {
+      "id": "exact-change-scope-and-generators",
+      "statement": "Intended non-Quest paths are exactly src/node/participant-release-diagnostic-observation.js, src/node/replica-handler-participant-cutover.js, src/bootstrap/bootstrap-service-seed-workflow.js, test/partition/participant-release-protocol.test.js, test/bootstrap/seed-participant-release-failure-projection.test.js, test/shards/impact-contracts.json, and only actual deltas emitted by the ordinary npm run test:metadata:refresh generator: test/shards/primary-classes.json, test/shards/resource-classes.json, test/shards/subsystem-classes.json, solve/changes/global-owner-debt-inventory/inventory.json, and test/shards/impact-graph-seal.json. Reuse the existing test-receipt probe, test runners, locked-lab evidence, and metadata machinery; add no result classifier or per-Quest evidence producer. Do not edit generated outputs manually, and retain only outputs that the ordinary generators actually change."
+    },
+    {
+      "id": "independent-verification-and-static-ratchets",
+      "statement": "Production and test changes require category-complete independent review of the exact frozen bytes after the last attempt. Syntax, exact ESLint, size, complexity, duplication, dependency, guideline, adversarial-intrinsics, shard, impact, receipt, and source-revert checks must pass without weakening or raising a baseline. Inherited reds remain explicitly attributed and cannot satisfy a receipt."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "a3b5c63451c3cf968b3d7ec807a0381261d4b61f"
+}

@@ -294,3 +294,58 @@ test('call Cell handler refuses a route of another tenant as an ' +
   assert.equal(outcome.invoked, false);
   assert.equal(invocations.length, 0);
 });
+
+test('call Cell handler attributes data-local shard partition reads to the ' +
+  'issuing service', async () => {
+  const recordedAccesses = [];
+  const {handler, invocations} = createHandlerFixture();
+  handler.partitionServicesProvider = () => new Map([[
+    'tbl-ratings-p1',
+    {
+      isStopped: false,
+      status: 'active',
+      executeQuery: async () => ({
+        rows: [{movie_id: 50, rating_sum: 20, rating_count: 4}],
+        success: true,
+      }),
+    },
+  ]]);
+  handler.cdcIntegrationService = {
+    sqlQueryEngine: {
+      parse: () => ({type: 'SELECT', from: {name: 'ratings'}, where: null}),
+      queryExecutor: {
+        buildSelectSQL: () =>
+          'SELECT movie_id, rating_sum, rating_count FROM ratings',
+      },
+      recordServicePartitionAccess(options, partitionIds, accessKind) {
+        recordedAccesses.push({options, partitionIds, accessKind});
+      },
+    },
+  };
+  const payload = createCallPayload({
+    batch: undefined,
+    invocation: {
+      callCell: {batchRowBound: 4096},
+      deadlineMs: Date.now() + 30_000,
+      id: 'call-invocation-data-local',
+      intentDigest: 'intent-digest-data-local',
+    },
+    partitionId: 'tbl-ratings-p1',
+    route: createCallRoute({
+      statement:
+        'SELECT movie_id, SUM(rating) AS rating_sum, COUNT(*) AS rating_count ' +
+        'FROM ratings GROUP BY movie_id ORDER BY movie_id ASC',
+    }),
+  });
+  const response = await handleCallCellInvocation(
+    handler,
+    createCallEnvelope(payload),
+  );
+  assert.equal(response.processed, true);
+  assert.equal(invocations.length, 1);
+  assert.deepEqual(recordedAccesses, [{
+    options: {issuingServiceId: SERVICE_ID},
+    partitionIds: ['tbl-ratings-p1'],
+    accessKind: 'r',
+  }]);
+});

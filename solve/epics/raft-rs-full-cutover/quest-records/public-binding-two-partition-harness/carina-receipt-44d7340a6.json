@@ -1,0 +1,48 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "public-binding-two-partition-harness",
+  "status": "pass",
+  "testFileDigests": {
+    "test/integration/public-binding-cell-invocation-seam.integration.test.js": "e01eb8d722a55d8a695997bd7b0cf69b05f7206f581d92fbbc1e29586c890850",
+    "test/integration/helpers/public-binding-seam-harness.js": "a9718bd9c08f86c2d7a8f0dc358cca34b914441d0a20fb88356b164f0c597eef",
+    "solve/epics/raft-rs-full-cutover/quest-records/public-binding-two-partition-harness/red-control-live-metrics-durable.json": "02ace249fa1e10370c6d772740caf431c5d96ec5cba4333f9698959f317b96fd"
+  },
+  "generatedAt": "2026-10-06T16:37:51.216Z",
+  "receipts": [
+    {
+      "id": "canonical-table-policy-visible-before-split",
+      "passed": true,
+      "command": "node scripts/quest-evidence/public-binding-two-partition-harness.js --run-positive",
+      "detail": "TablePolicyService persists and reads back the exact 1/1 policy",
+      "testFile": "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+    },
+    {
+      "id": "live-child-pair-nonvacuous-and-merge-ineligible",
+      "passed": true,
+      "command": "node scripts/quest-evidence/public-binding-two-partition-harness.js --verify-positive live-child-pair-nonvacuous-and-merge-ineligible",
+      "detail": "the single positive run contains every named owner assertion",
+      "testFile": "test/integration/helpers/public-binding-seam-harness.js"
+    },
+    {
+      "id": "exact-two-child-identity-retained",
+      "passed": true,
+      "command": "node scripts/quest-evidence/public-binding-two-partition-harness.js --verify-positive exact-two-child-identity-retained",
+      "detail": "the single positive run contains every named owner assertion",
+      "testFile": "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+    },
+    {
+      "id": "literal-one-child-unbounded-two-child",
+      "passed": true,
+      "command": "node scripts/quest-evidence/public-binding-two-partition-harness.js --verify-positive literal-one-child-unbounded-two-child",
+      "detail": "the single positive run contains every named owner assertion",
+      "testFile": "test/integration/public-binding-cell-invocation-seam.integration.test.js"
+    },
+    {
+      "id": "policy-revert-control-red",
+      "passed": true,
+      "command": "node scripts/quest-evidence/public-binding-two-partition-harness.js --verify-negative",
+      "detail": "the restorable removal-only policy control is bound and red",
+      "testFile": "solve/epics/raft-rs-full-cutover/quest-records/public-binding-two-partition-harness/red-control-live-metrics-durable.json"
+    }
+  ]
+}

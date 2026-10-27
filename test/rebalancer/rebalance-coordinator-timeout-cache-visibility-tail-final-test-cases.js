@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 
@@ -202,7 +203,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -435,7 +436,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -681,7 +682,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -930,7 +931,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -1152,7 +1153,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
       messageRouter: {
         async deliver(target, request) {
           dispatchedMessages.push({target, request});
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -1382,7 +1383,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         tablePolicyService: {

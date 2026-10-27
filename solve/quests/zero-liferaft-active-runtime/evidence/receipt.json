@@ -1,0 +1,86 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "zero-liferaft-active-runtime",
+  "status": "fail",
+  "testFileDigests": {},
+  "generatedAt": "2026-10-02T04:40:00.000Z",
+  "receipts": [
+    {
+      "id": "active-reachability-census-classified",
+      "passed": true,
+      "command": "fixed-scope Quest census audit on branch 9cbb692db2e36ff7d11b6176ec575271606be0e0",
+      "detail": "All 185 surviving non-historical active files from the sealed Quest census were re-read at the current branch tip; zero retired implementation/provider tokens remain. Historical solve/** evidence is the only excluded category.",
+      "testFile": "solve/quests/zero-liferaft-active-runtime/evidence/census.json"
+    },
+    {
+      "id": "message-group-constructs-only-the-raft-rs-operation-port",
+      "passed": true,
+      "command": "structural production census",
+      "detail": "MessageGroupService opens consensus through message-group-consensus-port.js and the raft-rs operation port. The old runtime, provider abstraction, generic RaftGroup/RaftReplicaBase, native packet adapter and fallback constructors are absent.",
+      "testFile": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "message-group-proposal-commits-and-applies-through-raft-rs",
+      "passed": true,
+      "command": "structural owner audit; focused witness retained",
+      "detail": "Message-group proposals, Ready processing and committed-entry application route through the raft-rs semantic port and durable runtime owner; no alternate consensus apply path remains.",
+      "testFile": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "message-group-membership-comes-from-committed-conf-state",
+      "passed": true,
+      "command": "structural owner audit; focused witness retained",
+      "detail": "Message-group membership is projected from the raft-rs committed configuration/ConfState authority rather than SERVICES/cache membership inference.",
+      "testFile": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "message-group-role-and-leader-publication-comes-from-raft-rs",
+      "passed": true,
+      "command": "structural owner audit; focused witness retained",
+      "detail": "Role and leader publication consume the raft-rs port lifecycle/status surface; old runtime state/event publication is deleted.",
+      "testFile": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "message-group-restart-preserves-term-vote-and-configuration",
+      "passed": true,
+      "command": "durable message-group raft-rs restart witness retained",
+      "detail": "Message groups reopen raft-rs durable local consensus state and no longer have an in-memory or legacy-runtime persistence fallback.",
+      "testFile": "test/raft/raft-rs-backend/message-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "generic-worker-and-wasm-consensus-paths-are-migrated-or-deleted",
+      "passed": true,
+      "command": "production constructor/import census",
+      "detail": "Generic legacy replica/worker consensus abstractions were deleted. WASM service consensus opens the raft-rs semantic port over DataDirectoryManager-owned durable storage and fails closed without canonical replica-set/required dependencies.",
+      "testFile": "test/raft/raft-rs-backend/wasm-service-group-on-raft-rs.test.js"
+    },
+    {
+      "id": "process-and-harness-provider-selection-is-absent",
+      "passed": true,
+      "command": "zero-runtime structural witness and fixed-scope census",
+      "detail": "Process provider selection, RAFT_PROVIDER-style harness selection, spike/rollback provider machinery and provider defaults are absent. The transport classifier is now raft-rs-envelope-only.",
+      "testFile": "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js"
+    },
+    {
+      "id": "legacy-dependency-and-implementation-are-absent",
+      "passed": true,
+      "command": "zero-runtime structural witness and package/tree census",
+      "detail": "The retired dependency, implementation files, provider abstraction, native direct-delivery manager, virtual-tick/runtime helpers and legacy-only tests are absent from active product surfaces.",
+      "testFile": "test/raft/raft-rs-backend/zero-legacy-consensus-runtime.test.js"
+    },
+    {
+      "id": "zero-reference-ratchet-covers-fixed-active-surfaces",
+      "passed": true,
+      "command": "audit:no-legacy-consensus-references strict baseline",
+      "detail": "scripts/checks/no-legacy-consensus-reference-baseline.json is ratcheted to baselineCount=0; the sealed active-surface census was independently re-read at current tip and is zero.",
+      "testFile": "test/scripts/no-legacy-consensus-reference-audit.test.js"
+    },
+    {
+      "id": "focused-rs-raft-tests-and-static-ratchets-pass",
+      "passed": false,
+      "command": "pending current-tip change-gate / focused validation",
+      "detail": "Structural closure is complete, but the exact current tip still requires the generated metadata gate and focused/static proof to complete before this receipt can turn green.",
+      "testFile": null
+    }
+  ]
+}

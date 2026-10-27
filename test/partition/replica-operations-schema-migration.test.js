@@ -7,6 +7,10 @@ import {
   REPLICA_OPERATIONS_SCHEMA,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS,
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX,
+} from '../../src/bootstrap/replica-operation-message-group-membership-schema-constants.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -20,6 +24,17 @@ const PREVIOUS_REPLICA_OPERATIONS_SCHEMA = Object.freeze({
     ![
       'membership_publication_epoch',
       'target_claim_key',
+      'create_admission_state',
+      'create_admission_token',
+      'create_admission_replica_created_at',
+      'create_admission_attempt_token',
+      'create_admission_previous_attempt_token',
+      'create_admission_attempt_seq',
+      'create_admission_workflow_updated_at',
+      'create_admission_owner_incarnation',
+      ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map(
+        (column) => column.name,
+      ),
     ].includes(column.name),
   ),
 });
@@ -58,6 +73,16 @@ test('replica_operations restart migrates every current durable owner column',
 
     try {
       await previousPartition.initialize();
+      previousPartition.db.prepare(
+        `INSERT INTO ${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS} (` +
+        'operation_id, type, partition_id, entity_type, entity_id, ' +
+        'replica_id, source_node_id, target_node_id, status, workflow_step, ' +
+        'created_at, updated_at, steps_history) VALUES (?, ?, ?, ?, ?, ?, ?, ' +
+        '?, ?, ?, ?, ?, ?)',
+      ).run(
+        'legacy-operation', 'ADD', 'p1', 'partition', 'p1', 'r1',
+        'source', 'target', 'pending', 'PENDING', 1, 1, '[]',
+      );
       await previousPartition.shutdown();
 
       const currentPartition = new PartitionService(
@@ -78,6 +103,13 @@ test('replica_operations restart migrates every current durable owner column',
           .all()
           .find((index) =>
             index.name === 'idx_replica_ops_target_claim_key');
+        const membershipLaneIndex = currentPartition.db
+          .prepare(
+            `PRAGMA index_list(${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS})`,
+          )
+          .all()
+          .find((index) => index.name ===
+            REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_LANE_INDEX.name);
 
         t.ok(
           columns.includes('target_claim_key'),
@@ -87,10 +119,50 @@ test('replica_operations restart migrates every current durable owner column',
           columns.includes('membership_publication_epoch'),
           'restart adds the sole durable planning-epoch owner column',
         );
+        const admissionColumns = [
+          'create_admission_state',
+          'create_admission_token',
+          'create_admission_replica_created_at',
+          'create_admission_attempt_token',
+          'create_admission_previous_attempt_token',
+          'create_admission_attempt_seq',
+          'create_admission_workflow_updated_at',
+          'create_admission_owner_incarnation',
+        ];
+        t.ok(
+          admissionColumns.every((column) => columns.includes(column)),
+          'restart adds every handler-owned CREATE admission column',
+        );
+        const membershipColumns =
+          REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_COLUMNS.map(
+            (column) => column.name,
+          );
+        t.ok(
+          membershipColumns.every((column) => columns.includes(column)),
+          'restart adds every message-group membership owner column',
+        );
+        const legacy = currentPartition.db.prepare(
+          `SELECT * FROM ${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS} ` +
+          'WHERE operation_id = ?',
+        ).get('legacy-operation');
+        t.equal(legacy.status, 'pending', 'legacy operation facts survive reopen');
+        t.ok(
+          admissionColumns.every((column) => legacy[column] === null),
+          'legacy row gains nullable columns without synthetic admission',
+        );
+        t.ok(
+          membershipColumns.every((column) => legacy[column] === null),
+          'legacy row gains nullable membership fields without synthetic debt',
+        );
         t.equal(
           targetClaimIndex?.unique,
           1,
           'the target-claim column retains its single-winner constraint',
+        );
+        t.equal(
+          membershipLaneIndex?.unique,
+          1,
+          'restart creates the authoritative single-winner membership lane',
         );
       } finally {
         await currentPartition.shutdown();

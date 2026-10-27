@@ -12,21 +12,24 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  MessageGroupService,
-} from '../../src/message-group/message-group-service.js';
+import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ConfigurationManager,
 } from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {RAFT_EVENT} from '../../src/raft/constants.js';
 import {
   MESSAGE_GROUP_SERVICE_LOG_MSG,
 } from '../../src/message-group/constants.js';
 import {NUM} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
+import {
+  createControllableMessageGroupService,
+} from './message-group-service-test-support.js';
 
 // Test-local constants for fixture values.
 const TEST_PORT_BASE = 25200;
@@ -96,14 +99,15 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: TEST_GROUP_ID,
         replicaId,
         nodeId,
         peerAddresses: [`${nodeId}/message-group/${replicaId}`],
         leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -130,7 +134,7 @@ test(
       };
 
       // Simulate leadership loss: emit FOLLOWER event.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
+      port.setRole(RaftRole.FOLLOWER);
       t.equal(
         service.isLeader,
         false,
@@ -139,7 +143,7 @@ test(
 
       // Simulate leadership gain: emit LEADER event.
       // This triggers wireRaftEvents → onLeader → CDC re-subscription.
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.LEADER);
       t.equal(
         service.isLeader,
         true,
@@ -191,14 +195,15 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-idempotent-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: `${TEST_GROUP_ID}-idempotent`,
         replicaId,
         nodeId,
         peerAddresses: [`${nodeId}/message-group/${replicaId}`],
         leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -206,10 +211,10 @@ test(
       await service.subscribeToCDC(CDC_TABLE_NODES);
 
       // Trigger multiple leadership transitions.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       await waitForCondition(() => service.isLeader === true);
       await new Promise((resolve) => setTimeout(
@@ -243,14 +248,15 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-empty-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: `${TEST_GROUP_ID}-empty`,
         replicaId,
         nodeId,
         peerAddresses: [`${nodeId}/message-group/${replicaId}`],
         leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -271,8 +277,8 @@ test(
       };
 
       // Simulate failover with no prior subscriptions.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       await new Promise((resolve) => setTimeout(
         resolve,
@@ -299,14 +305,15 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-auto-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: `${TEST_GROUP_ID}-auto`,
         replicaId,
         nodeId,
         peerAddresses: [`${nodeId}/message-group/${replicaId}`],
         leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -323,8 +330,8 @@ test(
       };
 
       // Simulate full failover cycle: lose leadership, then regain.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       await waitForCondition(() => {
         return logMessages.some((entry) => {
@@ -383,14 +390,15 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-e2e-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: `${TEST_GROUP_ID}-e2e`,
         replicaId,
         nodeId,
         peerAddresses: [`${nodeId}/message-group/${replicaId}`],
         leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
-      });
+      }, port);
 
       await service.initialize();
 
@@ -406,8 +414,8 @@ test(
       t.ok(preFail, 'event before failover should be in cache');
 
       // Simulate failover.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       // Apply a CDC event after failover — this proves the new leader's
       // CDC pipeline is functional without manual intervention.

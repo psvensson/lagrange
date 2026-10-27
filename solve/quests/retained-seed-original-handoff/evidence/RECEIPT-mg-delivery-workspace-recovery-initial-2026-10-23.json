@@ -1,0 +1,73 @@
+{
+  "schema": "mg-delivery-workspace-recovery/v1",
+  "recorded_at": "2026-10-23T13:55:00Z",
+  "status": "partial-recovery-before-source-blobs",
+  "source_parent": "64c34a5daa60a73668421e8a585f239312066b97",
+  "original_environment": "unavailable",
+  "preserved_files": [
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-2026-10-23/recovered-ping-receipts.json",
+      "sha256": "f2926badc6ef6bb995c6cd308071552b670524bb38954368e00e73289b6f94cb",
+      "text_length": 1155,
+      "provenance": "exact GitHub comment bodies and URLs wrapped in a new recovery JSON file"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-2026-10-23/recovered-fleet-receipts.json",
+      "sha256": "cc800e408389290a7a1935da76a231055ac5858aee42711c36c493555856e0ea",
+      "text_length": 7164,
+      "provenance": "exact GitHub comment bodies and URLs wrapped in a new recovery JSON file"
+    },
+    {
+      "path": "solve/epics/raft-rs-full-cutover/HANDOVER-2026-10-23-resume-workspace-interruption.md",
+      "sha256": "756f71b2b261321b8e00b352e4e0dc73e6f331bb4ed943f63a96cbb0b6b7ce74",
+      "text_length": 13780,
+      "provenance": "new interruption record, not an exact copy of unavailable local notes"
+    }
+  ],
+  "unpreserved_at_this_record": [
+    {
+      "path": "src changes (five-file unified diff)",
+      "sha256": "9b17cad084ed1911046967cd4ff96dcc139d01a5a468dd6783695a046c7b1e71"
+    },
+    {
+      "path": "test/message-group/message-group-native-provisional-route.test.js",
+      "sha256": "865ea45eb53f1036be2a6701f6c5291adfc18c90e11332aaefdba0520711ed9e"
+    },
+    {
+      "path": "test/topology/cdc-group-propagation-foreground-boundary.test.js",
+      "sha256": "311b87acaa42a55e29e99f154bb2ef82f60b4ae9e3267481739fbb4ffa87c997"
+    },
+    {
+      "path": "test/message-group/message-group-cdc-receiver-admission.test.js",
+      "sha256": "7ebead6f8b5a6c728f7b8da8c6c373fe6189f301e471c1889ffd910606395f79"
+    },
+    {
+      "path": "test/transport/message-router-cdc-outcome-roundtrip.test.js",
+      "sha256": "3e201c0fd84f3e2b5d4c7843aa4c1f1fa349c2a98d9ce5facae1ea2d4699f8fb"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-delivery-composition-resume-r1-2026-10-23.md",
+      "sha256": "00d77bbade11e9bf76ff884ecec00f0b29ee11f9547ac7630724fe4881213cfb"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/MANIFEST-mg-delivery-composition-resume-r1-2026-10-23.json",
+      "sha256": "aa174ba759fab595e01ee654497e61cec95fe25078330692e65770bf86538d61"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/REVIEW-mg-foreground-boundary-resume-r1-2026-10-23.md",
+      "sha256": "ddc5b81dcb10f2f5c7a1d3b2672feecd95bdf5c416fb9042d93359521c1542c7"
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/evidence/mg-delivery-resume-static-r1-2026-10-23.json",
+      "sha256": null
+    },
+    {
+      "path": "solve/quests/retained-seed-original-handoff/log.ndjson (two appended findings)",
+      "sha256": null
+    }
+  ],
+  "runtime_executed": false,
+  "metadata_refreshed": false,
+  "source_tree_unchanged_from_parent": true,
+  "test_tree_unchanged_from_parent": true
+}

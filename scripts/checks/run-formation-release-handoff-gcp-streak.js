@@ -1,4 +1,6 @@
-// Bounded certification streak for the five-node GCP formation-release
+// Bounded PASS streak (NOT certification: it observes neither real
+// publication convergence nor one node per machine, see the streak report's
+// `certification` statement) for the five-node GCP formation-release
 // handoff runner (`--runs N`). The sealed doneWhen of the closure quest is a
 // scenario-harness probe over the most recent `consecutive` fixed-lane
 // reports; the operator used to drive those N runs with an ad-hoc shell loop.
@@ -12,15 +14,18 @@
 //
 // The live cloud execution is a dependency (`runOnce`) supplied by the runner
 // so deterministic tests drive the mode with a fake run and never touch the
-// cloud (TEST-0118/TEST-0160: a gate is certification, never the loop).
+// cloud (TEST-0118/TEST-0160: a gate decides, never the loop).
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {computeSourceFingerprint} from
   '../../src/diagnostics/source-fingerprint.js';
 import {readQuest} from '../solve/store.js';
+import {execGitAsync} from './git-invocation.js';
+import {
+  NOT_CERTIFICATION_EVIDENCE,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const arrayIsArray = Array.isArray;
 const dateToISOString = Function.call.bind(Date.prototype.toISOString);
@@ -54,7 +59,6 @@ const RUNS_FLAG = '--runs';
 const RUNS_FLAG_WITH_EQUALS = '--runs=';
 const FIXED_VARIANT = 'fixed';
 const FIRST_RUN_INDEX = 1;
-const GIT_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain', '--', 'src']);
 const SOURCE_SUBDIR = 'src';
 const NEWLINE_SEPARATOR = '\n';
@@ -67,7 +71,7 @@ const EMPTY_LIST = Object.freeze([]);
 // Terminal outcome of one bounded streak invocation (system-guidelines §4.5):
 // completed means every requested run executed; every other outcome names
 // the single reason the loop stopped early. None of these is a pass/fail
-// verdict over the certification — the probe owns that.
+// verdict over the streak — the probe owns that.
 const STREAK_OUTCOME = Object.freeze({
   COMPLETED: 'completed',
   ABORTED_DIRTY_SOURCE: 'aborted_dirty_source',
@@ -138,9 +142,9 @@ function readOwn(target, field) {
     undefined;
 }
 
-// Read the sealed `consecutive` count for the certification scenario from the
+// Read the sealed `consecutive` count for the streak scenario from the
 // closure quest's doneWhen. Refuses when the seal is unreadable or names a
-// different scenario than the runner's certification lane.
+// different scenario than the runner's streak lane.
 async function readSealedConsecutive({
   root = ROOT, questId = SEALED_QUEST_ID, scenario,
 }) {
@@ -160,7 +164,7 @@ async function readSealedConsecutive({
     throw new StreakRefusalError(
       STREAK_REFUSAL.SEAL_SCENARIO_MISMATCH,
       `${questId} seals ${stringConstructor(sealedScenario)}, ` +
-        `runner certifies ${scenario}`,
+        `runner streaks ${scenario}`,
     );
   }
   if (!numberIsSafeInteger(consecutive) || consecutive <= 0) {
@@ -173,18 +177,11 @@ async function readSealedConsecutive({
 }
 
 // Default `src/` dirtiness reader: porcelain git status scoped to src/.
-function readSourceDirtyPaths() {
-  return new Promise((resolvePromise, rejectPromise) => {
-    execFile(GIT_COMMAND, GIT_STATUS_ARGS, {cwd: ROOT}, (error, stdout) => {
-      if (error) {
-        rejectPromise(error);
-        return;
-      }
-      const lines = stringSplit(stringTrim(stringConstructor(stdout)),
-        NEWLINE_SEPARATOR);
-      resolvePromise(lines[0] === EMPTY_STRING ? [] : lines);
-    });
-  });
+async function readSourceDirtyPaths() {
+  const {stdout} = await execGitAsync(GIT_STATUS_ARGS, {cwd: ROOT});
+  const lines = stringSplit(stringTrim(stringConstructor(stdout)),
+    NEWLINE_SEPARATOR);
+  return lines[0] === EMPTY_STRING ? [] : lines;
 }
 
 function computeCandidateFingerprint() {
@@ -275,11 +272,11 @@ async function writeStreakReport(streak, reportRoot) {
 }
 
 /**
- * Run the bounded certification streak.
+ * Run the bounded pass streak (not certification evidence).
  * @param {Object} options
  * @param {number} options.runs requested run count (must equal the seal)
  * @param {string} options.variant runner variant (only `fixed` is admitted)
- * @param {string} options.scenario sealed certification scenario name
+ * @param {string} options.scenario sealed streak scenario name
  * @param {string} options.reportRoot directory receiving the streak report
  * @param {string} [options.questRoot] repository root holding the sealed quest
  * @param {Object} dependencies
@@ -336,6 +333,10 @@ async function runBoundedStreak(options, dependencies) {
     executedRunCount: state.entries.length,
     passedRunCount,
     runs: state.entries,
+    // A streak of the GCP handoff analyzer's verdicts: it observes neither
+    // real publication convergence nor a one-node-per-machine topology, so
+    // it is not certification under the 2026-10-05 rulings, and says so.
+    certification: NOT_CERTIFICATION_EVIDENCE,
   };
   const streakPath = await writeStreakReport(streak, options.reportRoot);
   return {streak, streakPath};

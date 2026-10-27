@@ -9,14 +9,27 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {after, before, describe, it} from 'node:test';
 
+import pg from 'pg';
+
 import {RUNTIME_KIND} from '../../src/constants/runtime.js';
 import {
   META_SERVICE_ID,
   META_SERVICE_RUNTIME_REF,
 } from '../../src/constants/wasm-meta.js';
+import {withExecutedStatementType} from
+  '../../src/query/application-database-result.js';
 import {isSqlRequest} from '../../src/query/sql-request.js';
 import {createRuntimeStartupWiring} from
   '../../src/runtime/runtime-startup-wiring.js';
+import {SERVICE_LIFECYCLE_COMMAND} from
+  '../../src/service/service-lifecycle-command-contract.js';
+import {
+  SERVICE_LIFECYCLE_COMMAND_ERROR_CODE,
+  SERVICE_LIFECYCLE_COMMAND_PATH,
+  SERVICE_LIFECYCLE_COMMAND_STAGE,
+  ServiceLifecycleCommandError,
+  failureResult,
+} from '../../src/service/service-lifecycle-command-failure.js';
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '../..');
 const ENTRYPOINT = path.join(PROJECT_ROOT, 'src/sea-entry.js');
@@ -32,6 +45,12 @@ const INSTALL_SQL = 'INSTALL SERVICE $1';
 const REMOVE_SQL = 'REMOVE SERVICE $1';
 const STATUS_SQL = 'SHOW SERVICE $1';
 const LIST_SQL = 'SHOW SERVICES';
+const REJECTED_SERVICE_NAME = 'rejected-service';
+const REJECTION_MESSAGE = 'typed service lifecycle rejection';
+// The wire's SQLSTATE for a lifecycle failure result: it carries none, so
+// the wire answers XX000 (a named SQLSTATE for lifecycle rejections is an
+// owner decision not taken here).
+const LIFECYCLE_REJECTION_SQLSTATE = 'XX000';
 const CHILD_TIMEOUT_MS = 15_000;
 const SUCCESS_EXIT_CODE = 0;
 const CONTAINER_MEDIA_TYPE =
@@ -113,7 +132,10 @@ function manifest() {
   };
 }
 
-function responseFor(request) {
+// The lifecycle command owner's answer for each statement; the SQL engine
+// stamps the executed command on it (withExecutedStatementType), exactly as
+// sql-query-engine-service-lifecycle-execution does for the real owner.
+function ownerAnswerFor(request) {
   if (request.statement === INSTALL_SQL) {
     return {columns: Object.keys(INSTALL_ROW), rows: [INSTALL_ROW], success: true};
   }
@@ -127,22 +149,34 @@ function responseFor(request) {
       success: true,
     };
   }
-  if (request.statement === STATUS_SQL) {
-    const payload = JSON.parse(request.parameters[0]);
-    if (payload.service_name === 'missing-service') {
-      return {columns: Object.keys(STATUS_ROW), rows: [], success: true};
-    }
-    if (payload.service_name === 'rejected-service') {
-      return {
-        detail: {code: 'service_lifecycle_service_not_found'},
-        error: 'typed service lifecycle rejection',
-        sqlState: 'P0001',
-        success: false,
-      };
-    }
-    return {columns: Object.keys(STATUS_ROW), rows: [STATUS_ROW], success: true};
+  const payload = JSON.parse(request.parameters[0]);
+  if (payload.service_name === 'missing-service') {
+    return {columns: Object.keys(STATUS_ROW), rows: [], success: true};
   }
-  return {error: 'unexpected SQL statement', success: false};
+  if (payload.service_name === REJECTED_SERVICE_NAME) {
+    return failureResult(new ServiceLifecycleCommandError(
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.SERVICE_NOT_FOUND,
+      SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
+      SERVICE_LIFECYCLE_COMMAND_PATH.SERVICE_NAME,
+      REJECTION_MESSAGE,
+    ), SERVICE_LIFECYCLE_COMMAND.SHOW_ONE);
+  }
+  return {columns: Object.keys(STATUS_ROW), rows: [STATUS_ROW], success: true};
+}
+
+const LIFECYCLE_COMMAND_BY_SQL = new Map([
+  [INSTALL_SQL, SERVICE_LIFECYCLE_COMMAND.INSTALL],
+  [REMOVE_SQL, SERVICE_LIFECYCLE_COMMAND.REMOVE],
+  [LIST_SQL, SERVICE_LIFECYCLE_COMMAND.SHOW_ALL],
+  [STATUS_SQL, SERVICE_LIFECYCLE_COMMAND.SHOW_ONE],
+]);
+
+function responseFor(request) {
+  const command = LIFECYCLE_COMMAND_BY_SQL.get(request.statement);
+  if (command === undefined) {
+    return {error: 'unexpected SQL statement', success: false};
+  }
+  return withExecutedStatementType(ownerAnswerFor(request), command);
 }
 
 function runCli(port, args, envOverrides = {}) {
@@ -307,12 +341,42 @@ describe('shipped service lifecycle CLI over production PG-wire', () => {
       const empty = await runCli(port, ['status', 'missing-service']);
       assert.notEqual(empty.exitCode, SUCCESS_EXIT_CODE);
       assert.equal(empty.stdout, '');
-      assert.match(empty.stderr, /not found|empty|status/iu);
+      assert.match(
+        empty.stderr,
+        /^lagrange service status failed: status returned no service\n$/u,
+      );
 
-      const rejected = await runCli(port, ['status', 'rejected-service']);
+      const rejected = await runCli(port, ['status', REJECTED_SERVICE_NAME]);
       assert.notEqual(rejected.exitCode, SUCCESS_EXIT_CODE);
       assert.equal(rejected.stdout, '');
-      assert.match(rejected.stderr, /query rejected|P0001/iu);
+      assert.equal(
+        rejected.stderr,
+        'lagrange service status failed: PostgreSQL lifecycle query ' +
+          `rejected (${LIFECYCLE_REJECTION_SQLSTATE})\n`,
+      );
+
+      // The CLI prints only the SQLSTATE; the wire carries the owner's
+      // typed message.
+      const client = new pg.Client({
+        database: DATABASE,
+        host: HOST,
+        password: PASSWORD,
+        port,
+        ssl: false,
+        user: USER,
+      });
+      await client.connect();
+      try {
+        await assert.rejects(
+          client.query({
+            text: STATUS_SQL,
+            values: [JSON.stringify({service_name: REJECTED_SERVICE_NAME})],
+          }),
+          {code: LIFECYCLE_REJECTION_SQLSTATE, message: REJECTION_MESSAGE},
+        );
+      } finally {
+        await client.end();
+      }
     });
 
   it('flushes a large authenticated list response before exiting', async () => {

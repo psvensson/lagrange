@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-startup-listener-failure",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/seed-startup-listener-failure.integration.test.js": "dc6a9224eb9621cd421cb5b7592e2e638966f08ab6e232677bfd6f3360c98fdc",
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "a9d96448ae31023e3dc7de5947dda22c8c5b70a2496058cbae796bb86de5d771"
+  },
+  "generatedAt": "2026-10-26T09:11:50.631Z",
+  "receipts": [
+    {
+      "id": "occupied-listener-refusal-and-custody",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-startup-listener-failure.integration.test.js",
+      "detail": "Actual bind refusal preserves EADDRINUSE, no runtime or ready HTTP publication, successful owner cleanup and real process-directory release.",
+      "testFile": "test/bootstrap/seed-startup-listener-failure.integration.test.js"
+    },
+    {
+      "id": "unoccupied-supported-start",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "Actual unoccupied public startup, native activation, durable handoff, public write/read and typed held restart remain discriminated.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    }
+  ]
+}

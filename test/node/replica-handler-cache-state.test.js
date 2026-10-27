@@ -421,6 +421,10 @@ test('ReplicaHandler cache-based state access', async (t) => {
     });
 
     handler.initialize();
+    // Its runtime still runs in this process: the create is in progress. (A
+    // SYNCING row with nothing running here is the ack-loss wedge and is
+    // re-driven - replica-handler-identity-entry-test-cases.js.)
+    handler.localServices.set('replica-1', {async shutdown() {}});
 
     const request = {
       operationId: 'op-1',

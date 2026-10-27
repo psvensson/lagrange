@@ -12,6 +12,8 @@ import {
 import {
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
 } from './unified-rebalancer-topology-drain-methods.js';
+import {UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS} from
+  './unified-rebalancer-failed-create-cleanup.js';
 import {readGlobalTopologyBlockingInFlightOperations} from './global-topology-blocking-operation-view.js';
 const {
   COLUMN,
@@ -615,41 +617,6 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
   }
 
   /**
-   * Failed REPLACE rows can still leave the target replica in raft placement.
-   * Surface those target replica IDs to the planner as cleanup removals so a
-   * failed create path cannot hold the partition above target indefinitely.
-   *
-   * @return {Set<string>}
-   * @private
-   */
-  getTerminalFailedReplaceTargetReplicaIds() {
-    const failedTargetReplicaIds = new Set();
-    const operations = this.systemTableCache.filter(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      (operation) => {
-        if (!this.isOperationForEntity(operation)) {
-          return false;
-        }
-        const normalizedOperation = normalizeReplicaOperationRecord(operation, {
-          nowMs: this.nowFn(),
-        });
-        return (
-          normalizedOperation.type === OperationType.REPLACE &&
-          (normalizedOperation.status === ReplicaStatus.FAILED ||
-            normalizedOperation.workflowStep === WORKFLOW_STEP.FAILED)
-        );
-      },
-    );
-    for (const operation of operations) {
-      const targetReplicaId = this.getReplicaIdFromOperationRow(operation);
-      if (targetReplicaId.length > 0) {
-        failedTargetReplicaIds.add(targetReplicaId);
-      }
-    }
-    return failedTargetReplicaIds;
-  }
-
-  /**
    * @param {Array<Object>} replicas
    * @return {Array<Object>}
    * @private
@@ -787,6 +754,7 @@ Object.assign(
   UnifiedRebalancerReplicaState.prototype,
   UNIFIED_REBALANCER_LOCAL_SERVE_READINESS_METHODS,
   UNIFIED_REBALANCER_TOPOLOGY_DRAIN_METHODS,
+  UNIFIED_REBALANCER_FAILED_CREATE_CLEANUP_METHODS,
 );
 
 export {UnifiedRebalancerReplicaState};

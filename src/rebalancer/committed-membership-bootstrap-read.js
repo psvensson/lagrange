@@ -28,10 +28,10 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
+  isCompletedReplicaOperationAnswer,
 } from './replica-operation-constants.js';
-import {
-  classifyTransportDeliveryOutcome,
+import {deliveryTransportOf, deliveryAnswerOf,
+  classifyThrownDeliveryError,
   isDeliveredTransportDeliveryOutcome,
 } from '../transport/transport-semantic-outcome.js';
 
@@ -78,35 +78,36 @@ function nodeIdOfLeaderAddress(leaderAddress) {
 
 // One node's answer; a delivery that fails or answers no membership is
 // unreadable.
-async function askNode(owner, nodeId, partitionId) {
+async function askNode(owner, nodeId, partitionId, options) {
+  const purpose = options?.purpose;
   const unreadable = {reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE};
   try {
-    const response = classifyTransportDeliveryOutcome(
-      await owner.messageRouter.deliver(
-        `${nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`,
-        {
-          [ReplicaOperationField.TYPE]:
+    const deliveryEnvelope = await owner.messageRouter.deliver(
+      `${nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`,
+      {
+        [ReplicaOperationField.TYPE]:
             ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP,
-          [ReplicaOperationField.PARTITION_ID]: partitionId,
-        },
-        {
-          targetNodeId: nodeId,
-          deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
-          timeoutMs: REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
-        },
-      ),
+        [ReplicaOperationField.PARTITION_ID]: partitionId,
+        ...(purpose ? {[ReplicaOperationField.READ_PURPOSE]: purpose} : {}),
+      },
+      {
+        targetNodeId: nodeId,
+        deliveryPriority: OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL,
+        timeoutMs: REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+      },
     );
-    if (!isDeliveredTransportDeliveryOutcome(response) ||
-        response.noHandler === true) {
+    const transport = deliveryTransportOf(deliveryEnvelope);
+    const answer = deliveryAnswerOf(deliveryEnvelope);
+    if (!isDeliveredTransportDeliveryOutcome(transport)) {
       return {...unreadable, deferRetry: true,
-        retryAfterMs: response.retryAfterMs};
+        retryAfterMs: transport.retryAfterMs};
     }
-    return response.status === ReplicaOperationResponseStatus.COMPLETED &&
-      response[ReplicaOperationField.MEMBERSHIP] ?
-      response[ReplicaOperationField.MEMBERSHIP] : unreadable;
+    return isCompletedReplicaOperationAnswer(answer) &&
+      answer[ReplicaOperationField.MEMBERSHIP] ?
+      answer[ReplicaOperationField.MEMBERSHIP] : unreadable;
   } catch (error) {
     // A delivery failure or timeout is the typed unreadable outcome.
-    const delivery = classifyTransportDeliveryOutcome(error);
+    const delivery = classifyThrownDeliveryError(error);
     return {...unreadable, deferRetry: delivery.deferRetry === true,
       retryAfterMs: delivery.retryAfterMs};
   }
@@ -119,10 +120,14 @@ async function askNode(owner, nodeId, partitionId) {
  * @param {Object} owner - The creation owner (systemTableCache,
  *   messageRouter).
  * @param {string} partitionId - The partition.
+ * @param {Object} [options]
+ * @param {string} [options.purpose] - COMMITTED_MEMBERSHIP_READ_PURPOSE
+ *   .RETIREMENT for a retiring group's frozen set; a bootstrap read when
+ *   omitted.
  * @return {Promise<Object>} The frozen COMMITTED stamp.
  * @throws {Error} Typed refusal (code = a COMMITTED_MEMBERSHIP_REFUSAL).
  */
-async function readCommittedMembershipStamp(owner, partitionId) {
+async function readCommittedMembershipStamp(owner, partitionId, options) {
   // Without a hint the coordinator's own node is asked first: a hint only
   // routes the question, and the answering port's leader role is the check.
   const hintedNodeId = leaderNodeHintOf(owner, partitionId) ?? owner.nodeId;
@@ -130,13 +135,13 @@ async function readCommittedMembershipStamp(owner, partitionId) {
     throw committedMembershipReadRefused(partitionId,
       COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE);
   }
-  let answer = await askNode(owner, hintedNodeId, partitionId);
+  let answer = await askNode(owner, hintedNodeId, partitionId, options);
   if (answer.reason === COMMITTED_MEMBERSHIP_REFUSAL.NOT_LEADER) {
     const redirectNodeId = typeof answer.leaderAddress === 'string' ?
       nodeIdOfLeaderAddress(answer.leaderAddress) : null;
     answer = redirectNodeId === null || redirectNodeId === hintedNodeId ?
       {reason: COMMITTED_MEMBERSHIP_REFUSAL.MEMBERSHIP_UNREADABLE} :
-      await askNode(owner, redirectNodeId, partitionId);
+      await askNode(owner, redirectNodeId, partitionId, options);
   }
   const stamp = committedStampOfAnswer(answer);
   if (stamp === null) {

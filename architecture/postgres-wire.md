@@ -90,6 +90,39 @@ PG Client (psql, pg driver, ORM)
 
 Scaling `sys-postgres-wire` follows the unified rebalancer model:
 
+Operators submit `POST /api/admin/services/sys-postgres-wire/scale` on the
+admin HTTP port, with JSON containing exactly `replicaCount` (a non-negative
+integer) and `runtimeConfig` (the PostgreSQL wire descriptor object):
+
+```json
+{
+  "replicaCount": 1,
+  "runtimeConfig": {
+    "host": "127.0.0.1",
+    "authMode": "password",
+    "tlsMode": "disable"
+  }
+}
+```
+
+`ServiceDefinitionsOwner` validates the configuration and conditionally updates
+only the active built-in PostgreSQL wire runtime. This operation has no arbitrary
+service identity or runtime override. Raw client SQL DML against
+`service_definitions` is refused. The admin ingress trust and external-binding
+requirements above still apply; credentials and TLS key material retain their
+existing owners and are not fields in this request.
+
+A successful response names `scaleState: "desired_state_persisted"` and returns
+the accepted `desiredState`. It proves the metadata write, not achieved replica
+count, listener readiness or a running listener's configuration. Observe healthy
+`service_endpoints` and connect with the intended authentication/TLS settings to
+establish those separately. Configuration is consumed on subsequent replica
+starts; this operation does not reconfigure or restart existing listeners.
+Repeated identical requests assign the same desired values. Invalid requests
+return HTTP 400, a missing or mismatched built-in runtime returns HTTP 409, and
+an unavailable owner or unconfirmed write effect returns HTTP 503 with a typed
+error. An uncertain answer does not prove that the desired-state write failed.
+
 1. `replica_count` in `service_definitions` is cluster-global.
    The rebalancer spreads replicas across available nodes.
 2. Scale-up: increase `replica_count` -> rebalancer plans `ADD`
@@ -188,20 +221,17 @@ All resolution decisions are audit-logged via `ModuleAuditLogger`.
   the single owner of query execution for user functions and service replicas.
 
 ### SQL Adapter Layer
-Three adapters normalize different entrypoints into canonical `SqlRequest`
+Two adapters normalize different entrypoints into canonical `SqlRequest`
 objects consumed by SqlCore:
 
 - **InternalSqlAdapter** (`src/query/internal-sql-adapter.js`) — in-process SQL
   calls from system components
 - **PostgresWireAdapter** (`src/query/pg/postgres-wire-adapter.js`) — external SQL
   protocol sessions with authentication and feature negotiation
-- **WasmCallAdapter** (`src/query/wasm-call-adapter.js`) — legacy
-  `DB.call(select, fn)` callback execution. This is not the current
-  Artifact / Binding / Cell service path.
 
 All adapters produce a frozen `SqlRequest` (defined in `src/query/sql-request.js`)
 with fields: tenantId, sessionId, statement, parameters, executionMode, budgets,
-hints, and optional callbackModuleRef/callbackExport for partition callbacks.
+and hints.
 `SqlCore.executeRequest(SqlRequest)` is the owning dispatch entrypoint for
 execution-mode behavior.
 
@@ -227,10 +257,10 @@ Active translations:
 - Function name mapping (PG -> SQLite equivalents via extensible registry)
 - Date/time functions (`NOW()`, `EXTRACT`, `DATE_TRUNC`) -> `strftime()`
 - `ILIKE` -> `LOWER() LIKE LOWER()`
-- Only explicitly verified `INSERT ON CONFLICT` forms may translate to
-  SQLite conflict handling. `DO UPDATE` currently violates `SET`/`WHERE`
-  semantics and must not be treated as supported; system-table status writes
-  must preserve partial-update semantics and never use `INSERT OR REPLACE`.
+- `ON CONFLICT`: `ON CONFLICT DO NOTHING` translates to `INSERT OR IGNORE`;
+  `ON CONFLICT DO UPDATE` is refused before execution with SQLSTATE `0A000`
+  (`UNSUPPORTED_SQL_FEATURE`); system-table lifecycle/status writes must keep
+  partial-update semantics and must not use `INSERT OR REPLACE`.
 - `RETURNING` clause pass-through (SQLite 3.35+)
 - Subqueries, CTEs, CASE WHEN, derived tables, set operations pass-through
 
@@ -250,16 +280,13 @@ transaction side effect**. A compatibility subset is legitimate; silent
 translation to a different operation is not. Internal fixtures do not certify
 the public request path.
 
-A verified current-source violation is
-[`translateOnConflict()`](../src/query/pg/pg-translate.js):
-PostgreSQL `ON CONFLICT DO UPDATE` currently sets SQLite `orReplace`.
-Replacement ignores the original `SET` and `WHERE` semantics. This is an
-**open implementation defect**, not approved behavior. The owning correction
-must implement the full accepted semantics or refuse `DO UPDATE` on the
-public path before mutation; it must not disguise replacement as an upsert.
-Likewise a dollar-quoted string or any unrecognized expression must preserve
-its literal value or fail explicitly, never fall back to an apparent `NULL`.
-Do not claim these outcomes are fixed until a public-path witness runs.
+In [`translateOnConflict()`](../src/query/pg/pg-translate.js), PostgreSQL
+`ON CONFLICT DO NOTHING` sets SQLite `orIgnore`, while `ON CONFLICT DO UPDATE`
+is refused before mutation with `UNSUPPORTED_SQL_FEATURE` (`0A000`) rather
+than disguising SQLite replacement as an upsert. Likewise a dollar-quoted
+string or any unrecognized expression must preserve its literal value or fail
+explicitly, never fall back to an apparent `NULL`. Do not claim unverified
+expression outcomes are fixed until a public-path witness runs.
 
 For multi-partition transactions, a timeout, lost acknowledgement or uncertain
 `COMMIT` remains an explicit unknown outcome with its durable obligations;
@@ -285,41 +312,52 @@ Distributed transactions are implemented with
 `PartitionService` as the participant owner.
 
 Implementation summary:
-1. `BEGIN` assigns a monotonic `transactionEpoch` and a timeout budget
-   deadline. The transaction kind is `EXPLICIT`; SQL-created statement
-   transactions are `AUTOCOMMIT`.
-2. Participant enlistment delivers `BEGIN` through `MessageRouter` with
-   the assigned epoch.
+1. `BEGIN` mints a random transaction ID, assigns a monotonic
+   `transactionEpoch` and timeout deadline, and inserts one
+   `sql_transactions` row before participant work. The row starts with the
+   exact empty participant manifest. The transaction kind is `EXPLICIT`;
+   SQL-created statement transactions are `AUTOCOMMIT`.
+2. Before a participant receives `BEGIN`, `QUERY`, or a write, the coordinator
+   appends its `[participantId, partitionId]` pair to that manifest with an
+   exact OPEN-row compare-and-swap. The durable manifest is the complete
+   admitted participant set; participant progress rows are recovery hints.
 3. SQL direct-autocommits an independent one-participant statement. A final
    post-mirror multi-participant statement is promoted to an owner-generated
    `AUTOCOMMIT` transaction. Active explicit transactions always enlist.
-4. `COMMIT` waits for the session FIFO lane, freezes the final participant
-   set, persists its exact count, and then selects the immutable commit mode.
-   One participant uses 1PC only when the participant exposes a durable typed
-   commit outcome; otherwise it safely falls back to 2PC. A rejected durable
-   transaction or participant mutation fails closed before protocol fanout.
-5. 2PC runs phase 1 prepare. Each participant executes
-   `prepareTransaction()`, validates write conflicts, and appends
-   `PREPARE_TRANSACTION` in its Raft log before prepare success.
-6. On all-prepare success, coordinator persists `COMMITTING` before any
-   participant commit message, then drives commit fanout with bounded
-   retry/backoff.
-7. On prepare failure or explicit rollback, coordinator persists
-   `ROLLING_BACK` before rollback fanout and drives all participants to
-   `ROLLED_BACK`.
-8. Recovery validates staged rows before installing coordinator state, then
-   validates the persisted transaction mode, participant-set state, commit
-   mode, and frozen participant count before any callback. 1PC replay
-   resolves `COMMITTED`, `NOT_COMMITTED`, or `UNKNOWN` from the participant's
-   SQLite-atomic outcome record keyed by session and exact transaction epoch;
-   `UNKNOWN` remains in `COMMITTING`. A periodic recovery sweep resolves
-   timed-out non-terminal transactions.
+4. `COMMIT` waits for the session FIFO lane and freezes the final manifest by
+   exact compare-and-swap. Every nonempty transaction uses two-phase commit,
+   including one participant. A rejected durable transaction or participant
+   mutation fails closed before protocol fanout.
+5. Phase 1 sends `PARTICIPANT_PREPARE`. A participant validates conflicts,
+   commits the prepared receipt through Raft, and returns its prepared digest,
+   index, and term. The coordinator retains that evidence before deciding.
+6. The coordinator records one immutable COMMIT or ROLLBACK decision, bound to
+   the exact participant manifest and prepared digests, before any decision
+   fanout. `COMMITTING` and other progress labels are projections of that
+   record and never decision authority.
+7. Phase 2 sends `PARTICIPANT_DECISION` with the complete canonical decision
+   bytes. A participant applies COMMIT only against its matching prepared
+   digest. A bound ROLLBACK also creates a durable tombstone for a participant
+   whose PREPARE never committed.
+8. Recovery rereads the authoritative transaction row before each stage,
+   restores missing participant hints from the manifest, and always follows an
+   exact recorded decision. An undecided OPEN row waits for its persisted
+   deadline before freeze and rollback. An undecided FROZEN row can choose
+   COMMIT only with complete retained positive prepare evidence; otherwise it
+   records ROLLBACK. A missing, NULL, or corrupt manifest remains held.
+9. Session reads synchronously replay the transaction's deterministic staged
+   operations inside a rolled-back SQLite transaction over current committed
+   state. They therefore see current committed state plus their own writes.
+   `BEGIN` captures the partition write generation; PREPARE refuses `conflict`
+   if a committed application write advanced that generation, and every
+   replica rechecks the generation at apply. This is partition-granular
+   first-committer-wins rather than epoch visibility or row MVCC.
 
-The W10 schema cutover is full-restart/minimum-version only. Drain every
-pre-W10 nonterminal transaction before upgrade. Mixed-version apply is not
-supported, and legacy `PREPARING`, `PREPARED`, or `COMMITTING` rows with
-`NOT_SELECTED` fail closed rather than inferring a mode.
-
-9. Snapshot model: participants enforce epoch-based snapshot isolation
-   (`commit_epoch < transaction_epoch` visibility), read-your-own-writes,
-   and first-committer-wins write-conflict detection via write sets.
+The transaction-schema cutover has a bounded full-restart compatibility
+envelope. Drain and account for retained legacy work before upgrade. A current
+complete canonical row is recovered through actual participant settlement; an
+exact empty predecessor schema can receive the fixed nullable additions.
+Nonempty predecessor rows and NULL or corrupt manifests are preserved and
+refuse activation with actionable transaction IDs and a schema digest. A
+terminal status by itself never proves disposition, and mixed-version apply is
+not a supported upgrade contract.

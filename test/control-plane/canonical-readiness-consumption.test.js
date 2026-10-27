@@ -8,6 +8,7 @@
  * service and falls back to a local heuristic.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -299,7 +300,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -359,7 +360,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
           },
           messageRouter: {
             getConnectionState: () => 'connected',
-            deliver: async () => ({acknowledged: true}),
+            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
             pingNode: async () => true,
             isOutboundQueueAvailable: () => true,
           },
@@ -415,7 +416,7 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       tablePolicyService: {
         getPolicyForPartition: () => ({}),
@@ -461,7 +462,7 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
           },
           messageRouter: {
             getConnectionState: () => 'connected',
-            deliver: async () => ({acknowledged: true}),
+            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
           },
           tablePolicyService: {
             getPolicyForPartition: () => ({}),
@@ -644,12 +645,11 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       systemCache: cache,
       controlPlaneReadinessService: readinessService,
       messageRouter: {
-        deliver: async () => ({
-          acknowledged: true,
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        }),
+        })),
       },
     });
 
@@ -733,7 +733,7 @@ test('UnifiedRebalancer.isNodeReady consumes canonical readiness',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -796,7 +796,7 @@ test('UnifiedRebalancer.isNodeReady consumes canonical readiness',
           },
           messageRouter: {
             getConnectionState: () => 'disconnected',
-            deliver: async () => ({acknowledged: true}),
+            deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
             isOutboundQueueAvailable: () => true,
           },
           rebalanceCoordinator: {
@@ -953,7 +953,7 @@ test('shared readiness contract: single service controls all workflows',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -1133,7 +1133,7 @@ test('regression: rebalancer cannot bypass canonical readiness',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         pingNode: async () => true,
         isOutboundQueueAvailable: () => true,
       },
@@ -1279,7 +1279,7 @@ test('regression: RebalanceCoordinator cannot bypass canonical readiness',
       },
       messageRouter: {
         getConnectionState: () => 'connected',
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       },
       tablePolicyService: {
         getPolicyForPartition: () => ({}),

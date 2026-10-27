@@ -1,14 +1,11 @@
-import {EventEmitter} from 'events';
-import WebSocket from 'ws';
+import {INPROC, InProcWebSocket, createInProcWebSocketPair} from './inproc-transport.js';
 import {
   CONNECTION_STATE,
   OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_MESSAGE_TYPE,
-  TRANSPORT_EVENT,
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS} from './transport-semantic-outcome.js';
 import {
   OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE,
   ROUTER_CONNECTION_CLOSED_ERROR_CODE,
@@ -27,23 +24,14 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
   STRING_INSERT: 'insert',
   STRING_UPDATE: 'update',
   STRING_DELETE: 'delete',
-  STRING_RAFT_APPEND_UNKNOWN: 'raft:append:unknown',
-  STRING_CDC: 'cdc',
   STRING_CDC_BATCH: 'cdc_batch',
-  STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN: 'raft:append:cdc_batch:unknown',
   STRING_MESSAGE: 'message',
   STRING_NODE_STATE_UPDATE: 'node_state_update',
-  STRING_ACK: 'ack',
-  STRING_RAFT_APPEND_ACK: 'raft:append:ack',
-  STRING_APPEND: 'append',
-  STRING_APPEND_FAIL: 'append fail',
-  STRING_RAFT_APPEND_HEARTBEAT: 'raft:append:heartbeat',
-  STRING_RAFT_APPEND_FAIL: 'raft:append:fail',
   STRING_LATE_AFTER_TIMEOUT: 'late_after_timeout',
   STRING_LATE_AFTER_NODE_FAILURE: 'late_after_node_failure',
   STRING_LATE_AFTER_DEFERRED_DELIVERY: 'late_after_deferred_delivery',
   STRING_LATE_AFTER_ACK_REJECTED: 'late_after_ack_rejected',
-  STRING_LATE_AFTER_INLINE_ACK: 'late_after_inline_ack',
+  STRING_LATE_AFTER_SUPERSEDED: 'late_after_superseded',
   STRING_LATE_AFTER_CANCELLED: 'late_after_cancelled',
   STRING_LATE_AFTER_RETIRED_WAITER: 'late_after_retired_waiter',
   STRING_RESULT: 'result',
@@ -63,10 +51,8 @@ const MESSAGE_ROUTER_LITERAL = Object.freeze({
     'Rejecting incoming connection while external admission is closed',
   STRING_EXISTING_CONNECTION_PREFERRED: 'existing_connection_preferred',
   STRING_ORPHANED: 'orphaned',
-  STRING_RESPONSETYPE: 'responseType',
   STRING_IGNORING_STALE_CONNECTION_CLOSE_EVENT:
     'Ignoring stale connection close event',
-  STRING_ROUTER_QUERY_TRANSPORT_NOT_READY: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
   STRING_OUTBOUND_QUEUE_SATURATED_FOR_NODE_DELIVERY:
     'Outbound queue saturated for node delivery',
   STRING_FAILED_TO_RESOLVE_NODE_CONNECTION_ADDRESS_FOR_DELIVERY_RECOVERY:
@@ -110,7 +96,7 @@ const RETIRED_PENDING_RESPONSE_REASON = Object.freeze({
   NODE_FAILURE: 'node_failure',
   DEFERRED_DELIVERY: 'deferred_delivery',
   ACK_REJECTED: 'ack_rejected',
-  INLINE_ACK: 'inline_ack_payload',
+  SUPERSEDED: 'superseded_pending',
   UNKNOWN: 'unknown',
 });
 
@@ -233,83 +219,7 @@ const QUERY_TRANSPORT_SELECTION = Object.freeze({
   SELECTION_SERVICE: 'selection_service',
 });
 
-const QUERY_TRANSPORT_DELIVERY_STATE = Object.freeze({
-  SUCCESS: 'success',
-  DEFER_RETRY: 'defer_retry',
-  HARD_FAILURE: 'hard_failure',
-});
-
-const INLINE_ACK_RESULT_FIELD = Object.freeze({
-  ACKNOWLEDGED: 'acknowledged',
-  CORRELATION_ID: 'correlationId',
-  MESSAGE_ID: 'messageId',
-});
-
-const INLINE_ACK_PASSTHROUGH_KEYS = /* @__PURE__ */ new Set([
-  INLINE_ACK_RESULT_FIELD.MESSAGE_ID,
-  INLINE_ACK_RESULT_FIELD.ACKNOWLEDGED,
-  INLINE_ACK_RESULT_FIELD.CORRELATION_ID,
-  ...TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
-]);
-
 const EMPTY_ROUTER_REASON = '';
-
-const INPROC = (globalThis.__DDB_INPROC_MESSAGE_ROUTER__ ||= {
-  serversByPort: /* @__PURE__ */ new Map(),
-  // port -> {router, nodeId}
-});
-
-class InProcWebSocket extends EventEmitter {
-  constructor() {
-    super();
-    this.readyState = WebSocket.CONNECTING;
-    this._peer = null;
-  }
-  _setPeer(peer) {
-    this._peer = peer;
-  }
-  _open() {
-    this.readyState = WebSocket.OPEN;
-    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.OPEN));
-  }
-  send(data) {
-    if (this.readyState !== WebSocket.OPEN || !this._peer) {
-      return;
-    }
-    queueMicrotaskFn(() => {
-      if (this._peer.readyState === WebSocket.OPEN) {
-        this._peer.emit(TRANSPORT_EVENT.MESSAGE, data);
-      }
-    });
-  }
-  close() {
-    this.terminate();
-  }
-  terminate() {
-    if (this.readyState === WebSocket.CLOSED) {
-      return;
-    }
-    this.readyState = WebSocket.CLOSED;
-    queueMicrotaskFn(() => this.emit(TRANSPORT_EVENT.CLOSE));
-    if (this._peer && this._peer.readyState !== WebSocket.CLOSED) {
-      this._peer.readyState = WebSocket.CLOSED;
-      queueMicrotaskFn(() => this._peer.emit(TRANSPORT_EVENT.CLOSE));
-    }
-  }
-}
-
-function createInProcWebSocketPair() {
-  const a = new InProcWebSocket();
-  const b = new InProcWebSocket();
-  a._setPeer(b);
-  b._setPeer(a);
-  a._open();
-  b._open();
-  return {
-    a,
-    b,
-  };
-}
 
 function normalizeIdentifier(value) {
   if (value === null || value === void LOCAL_NUM_ZERO) {
@@ -441,45 +351,6 @@ function extractSqlTableName(sql) {
   return null;
 }
 
-function summarizeRaftAppendCommand(command) {
-  const commandType = normalizeIdentifier(command?.type)?.toLowerCase();
-  if (!commandType) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_UNKNOWN;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC) {
-    const tableName = normalizeIdentifier(command?.tableName)?.toLowerCase();
-    return `raft:append:cdc:${tableName || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH) {
-    const events = Array.isArray(command?.events) ? command.events : [];
-    const eventCount = events.length;
-    const distinctTableNames = [
-      ...new Set(
-        events
-          .map((event) => normalizeIdentifier(event?.tableName)?.toLowerCase())
-          .filter(Boolean),
-      ),
-    ];
-    if (distinctTableNames.length === TRANSPORT_NUM.ONE) {
-      return `raft:append:cdc_batch:${distinctTableNames[TRANSPORT_NUM.ZERO]}:${eventCount}`;
-    }
-    if (distinctTableNames.length > TRANSPORT_NUM.ONE) {
-      return `raft:append:cdc_batch:mixed:${eventCount}`;
-    }
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_CDC_BATCH_UNKNOWN;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_MESSAGE) {
-    const payloadType = normalizeIdentifier(
-      command?.message?.payload?.type,
-    )?.toLowerCase();
-    return `raft:append:message:${payloadType || MESSAGE_ROUTER_LITERAL.STRING_UNKNOWN}`;
-  }
-  if (commandType === MESSAGE_ROUTER_LITERAL.STRING_ACK) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_ACK;
-  }
-  return `raft:append:${commandType}`;
-}
-
 function buildTypelessQueryDeliverySource(message) {
   const tableName = extractSqlTableName(message?.sql);
   const operationKind = extractSqlOperationKind(message?.sql);
@@ -515,21 +386,6 @@ function buildTypelessCdcDeliverySource(message) {
   return MESSAGE_ROUTER_LITERAL.STRING_CDC_BATCH;
 }
 
-function isSupersedableRaftHeartbeatAppend(message) {
-  const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
-    return false;
-  }
-  return (
-    !Array.isArray(message?.data) || message.data.length === TRANSPORT_NUM.ZERO
-  );
-}
-
-function isSupersedableRaftAppendFail(message) {
-  const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
-  return messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND_FAIL;
-}
-
 function isSupersedableHeartbeatNodeStateUpdate(message) {
   const messageType = normalizeIdentifier(message?.type)?.toLowerCase();
   if (messageType !== MESSAGE_ROUTER_LITERAL.STRING_NODE_STATE_UPDATE) {
@@ -562,19 +418,7 @@ function resolvePendingReplacementKey(targetAddress, message, options = {}) {
     }
     return `node_state_update:${normalizedTargetAddress}:${replacementNodeId}`;
   }
-  if (isSupersedableRaftAppendFail(message)) {
-    if (!normalizedTargetAddress) {
-      return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_FAIL;
-    }
-    return `raft:append:fail:${normalizedTargetAddress}`;
-  }
-  if (!isSupersedableRaftHeartbeatAppend(message)) {
-    return null;
-  }
-  if (!normalizedTargetAddress) {
-    return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
-  }
-  return `raft:append:heartbeat:${normalizedTargetAddress}`;
+  return null;
 }
 
 export {
@@ -583,8 +427,6 @@ export {
   DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT,
   EMPTY_DELIVERY_SOURCE,
   EMPTY_ROUTER_REASON,
-  INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
   INPROC,
   IPV6_ANY_HOST,
   IPV6_HOST_PREFIX,
@@ -603,7 +445,6 @@ export {
   OUTBOUND_QUEUE_TARGET_FALLBACK_PENDING_SOURCE_LIMIT_DIVISOR,
   OutboundDeliveryPriority,
   QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
   QUERY_TRANSPORT_SELECTION,
   QUEUE_WAIT_BUCKETS,
   QUEUE_WAIT_BUCKET_OVERFLOW,
@@ -627,8 +468,6 @@ export {
   extractSqlOperationKind,
   extractSqlTableName,
   isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
   normalizeIdentifier,
   queueMicrotaskFn,
   recordQueueWaitDuration,
@@ -637,5 +476,4 @@ export {
   resolvePendingReplacementKey,
   resolveQueueWaitBucket,
   resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
 };

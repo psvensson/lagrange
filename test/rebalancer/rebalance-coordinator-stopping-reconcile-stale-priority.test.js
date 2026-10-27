@@ -1,4 +1,5 @@
-import {OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_RECOVERY_COMPLETION_STATE, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, buildPriorityDrainSupersededReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {initiatedDeliveryRouter, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_STALE_TARGET_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, PRIORITY_RECOVERY_COMPLETION_STATE, RAFT_ROLE, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, WORKFLOW_STEP, buildPriorityDrainOwnerUnavailableReadinessService, buildPriorityDrainReadinessService, buildPriorityDrainSupersededReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 const PRIORITY_DRAIN_TEST_STALE_STEP_AGE_MS = 10 * 60 * 1000;
 
@@ -102,15 +103,7 @@ async (t) => {
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
@@ -258,10 +251,9 @@ function buildPriorityDrainPendingTargetAbsentCoordinator(options) {
     messageRouter: {
       async deliver(target, payload) {
         options.deliveries.push({target, payload});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService: options.controlPlaneReadinessService,
@@ -481,15 +473,7 @@ test('RebalanceCoordinator retires remote-owned stale priority ADD ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
@@ -582,15 +566,7 @@ test('RebalanceCoordinator fails remote-owned stale priority REPLACE ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainSupersededReadinessService(
         TEST_PARTITION_ID,
@@ -762,15 +738,7 @@ test('RebalanceCoordinator preserves pre-sync priority REPLACE progress ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_SOURCE_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainSupersededReadinessService(
         TEST_PARTITION_ID,

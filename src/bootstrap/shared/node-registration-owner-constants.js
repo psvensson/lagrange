@@ -34,7 +34,7 @@ const AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE =
   'defers until the authority can answer reads';
 const AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS = TIME_MS.SECOND;
 const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
-const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
+const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY; // ends-on: the join-admission system-table write is accepted
 const JOIN_ADMISSION_PUBLICATION = Object.freeze({
   META_SERVICE_ENDPOINT:
     'built-in meta service endpoint publication',

@@ -1,17 +1,16 @@
 /**
  * Raft Response Address Validation Test.
  *
- * BUG: When a Raft packet is received, the response is sent to payload.address.
- * If payload.address is just a node ID (not a unified address), the response fails
- * with "Invalid address format" error.
+ * BUG: a consensus delivery addressed to a bare node ID (not a unified
+ * address) fails with an "Invalid address format" error.
  *
- * ROOT CAUSE: The liferaft instance's address (packet.address) must be a unified
- * address in the format nodeId/message-group/replicaId. If a peer was joined with
- * a non-unified address, responses will fail.
+ * ROOT CAUSE: every consensus delivery between message-group replicas is
+ * addressed to the unified address (nodeId/message-group/replicaId) the
+ * replica resolves for a peer's replica identity; a peer resolved to a
+ * non-unified address would make every delivery to it fail.
  *
- * This test verifies that:
- * 1. Raft packets contain unified addresses in payload.address
- * 2. Responses can be sent back to the sender using payload.address
+ * This test verifies that two replicas on separate transports exchange
+ * consensus traffic over their unified addresses.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -30,6 +29,7 @@ function getUniquePort() {
 }
 import {ENTITY_TYPE} from '../../src/constants/index.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
 
 /**
  * Create a test transport (MessageRouter) for testing.
@@ -104,14 +104,14 @@ test('Raft response address validation', async (t) => {
       const seedReplicaId = 'mg-1-r0';
       const seedUnifiedAddress = `${seedNodeId}/${ENTITY_TYPE.MESSAGE_GROUP}/${seedReplicaId}`;
 
-      seedMessageGroup = new MessageGroupService({
+      seedMessageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: seedReplicaId,
         nodeId: seedNodeId,
         replicaIds: [seedReplicaId],
         transport: seedTransport.router,
         deferElection: true,
-      });
+      }));
 
       // Register seed message group with router
       seedTransport.router.register(seedUnifiedAddress, (envelope) => {
@@ -131,7 +131,7 @@ test('Raft response address validation', async (t) => {
         joiningUnifiedAddress,
       ];
 
-      joiningMessageGroup = new MessageGroupService({
+      joiningMessageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-1',
         replicaId: joiningReplicaId,
         nodeId: joiningNodeId,
@@ -139,7 +139,7 @@ test('Raft response address validation', async (t) => {
         peerAddresses: peerAddresses,
         transport: joiningTransport.router,
         deferElection: true,
-      });
+      }));
 
       // Register joining message group with router
       joiningTransport.router.register(joiningUnifiedAddress, (envelope) => {
@@ -182,76 +182,6 @@ test('Raft response address validation', async (t) => {
       }
       if (joiningTransport) {
         await joiningTransport.cleanup();
-      }
-    }
-  });
-
-  await t.test('non-unified address in payload.address causes error', async (t) => {
-    const nodeId = '550e8400-e29b-41d4-a716-446655440003';
-    const port = getUniquePort();
-
-    let transport;
-    let messageGroup;
-
-    try {
-      transport = await createTestTransport(nodeId, port);
-
-      const replicaId = 'mg-test-r0';
-      const unifiedAddress = `${nodeId}/${ENTITY_TYPE.MESSAGE_GROUP}/${replicaId}`;
-
-      messageGroup = new MessageGroupService({
-        groupId: 'mg-test',
-        replicaId: replicaId,
-        nodeId: nodeId,
-        replicaIds: [replicaId],
-        transport: transport.router,
-        deferElection: true,
-      });
-
-      transport.router.register(unifiedAddress, (envelope) => {
-        return messageGroup.receiveMessage(envelope);
-      });
-
-      await messageGroup.initialize();
-
-      // Simulate receiving a Raft packet with a non-unified address
-      // This is the bug scenario - payload.address is just a node ID
-      const badRaftPacket = {
-        type: 'vote',
-        term: 1,
-        address: nodeId, // BUG: This should be a unified address
-        candidate: nodeId,
-        last: {
-          index: 0,
-          term: 0,
-        },
-      };
-
-      // This should fail because the response will try to send to a non-unified address
-      // The error should be "Invalid address format"
-      try {
-        await messageGroup.receiveMessage({payload: badRaftPacket});
-        // Wait for async response to be sent
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (_error) {
-        // Error may or may not be thrown depending on implementation
-      }
-
-      // The bug is that the error is logged but not thrown
-      // So we check if the transport logged an error
-      // For now, we just verify the test setup is correct
-      t.ok(messageGroup.initialized, 'message group should be initialized');
-      t.equal(
-        messageGroup.getUnifiedAddress(),
-        unifiedAddress,
-        'message group should have unified address',
-      );
-    } finally {
-      if (messageGroup) {
-        await messageGroup.shutdown?.();
-      }
-      if (transport) {
-        await transport.cleanup();
       }
     }
   });

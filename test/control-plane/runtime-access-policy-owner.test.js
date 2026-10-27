@@ -278,12 +278,38 @@ describe('runtime access policy owner', () => {
           {operation: 'read', table: 'table:global.secret'},
         ],
       );
-      assert.equal(
-        statementAccesses(new SQLParser(
+      // INSERT ... SELECT never reaches the policy: the parser refuses it
+      // (its source query cannot be carried, so it is not executed).
+      assert.throws(
+        () => new SQLParser(
           'INSERT INTO orders (id) SELECT id FROM secret',
-        ).parse()).allowedStatement,
-        false,
+        ).parse(),
+        {code: 'UNSUPPORTED_SQL_FEATURE'},
       );
+    });
+
+  test('preserves exact-case parser identity in stored grants and matching',
+    async () => {
+      const {owner} = createOwner();
+      const configured = await owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        schema_version: 1,
+        tables: [{operations: ['read', 'write'], slot: 0,
+          table: 'table:global.Logs'}],
+      }, SECURITY_CONTEXT);
+      assert.equal(configured.tables[0].context, 'table:global.Logs');
+      for (const name of ['Logs', '"Logs"', '"global.Logs"']) {
+        const ast = new SQLParser(`UPDATE ${name} SET total = 1`).parse();
+        const result = await owner.authorizeStatement(configured.serviceId, ast);
+        assert.equal(result.decision, RUNTIME_ACCESS_POLICY_DECISION.ALLOWED);
+        assert.equal(result.accesses[0].table, 'table:global.Logs');
+      }
+      for (const name of ['logs', 'LOGS']) {
+        const result = await owner.authorizeStatement(configured.serviceId,
+          new SQLParser(`UPDATE ${name} SET total = 1`).parse());
+        assert.equal(result.decision, RUNTIME_ACCESS_POLICY_DECISION.DENIED);
+        assert.equal(result.reason, RUNTIME_ACCESS_POLICY_REASON.ACCESS_NOT_GRANTED);
+      }
     });
 
   test('rejects control-plane system tables as application grants',

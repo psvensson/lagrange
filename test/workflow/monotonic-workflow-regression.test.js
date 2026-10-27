@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
@@ -76,12 +77,20 @@ function createMinimalCoordinator(overrides = {}) {
   const sqlQueryEngine = {
     async executeQuery(sql, params = [], queryOptions = {}) {
       if (sql.includes(REPLICA_OPERATION_SELECT_BY_ID_QUERY)) {
-        const operationId = params[0] || null;
-        const operationRow = authoritativeReplicaOperations.get(operationId);
+        const operationRow = authoritativeReplicaOperations.get(params[0] || null);
+        const rows = operationRow ? [operationRow] : [];
         return {
           success: true,
-          rows: operationRow ? [operationRow] : [],
-          changes: operationRow ? 1 : 0,
+          rows,
+          changes: rows.length,
+        };
+      }
+      if (sql.trim().startsWith('SELECT * FROM replica_operations')) {
+        const rows = Array.from(authoritativeReplicaOperations.values());
+        return {
+          success: true,
+          rows,
+          changes: rows.length,
         };
       }
 
@@ -132,7 +141,7 @@ function createMinimalCoordinator(overrides = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine,

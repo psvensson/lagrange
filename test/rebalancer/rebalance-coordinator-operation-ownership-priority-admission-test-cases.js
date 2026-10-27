@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
   test,
   RebalanceCoordinator,
@@ -36,7 +37,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -130,7 +131,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -209,7 +210,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -294,7 +295,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -396,7 +397,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -524,7 +525,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -607,7 +608,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -714,7 +715,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
             };
           },
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -785,7 +786,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -849,7 +850,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {

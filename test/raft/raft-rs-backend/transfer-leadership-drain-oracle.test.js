@@ -42,6 +42,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {RAFT_RS_MESSAGE_TYPE} from
+  '../../../src/raft/raft-rs-ingress-constants.js';
 import {RAFT_LEADERSHIP_TRANSFER_REASON} from
   '../../../src/raft/raft-operation-port-constants.js';
 import {
@@ -163,6 +165,14 @@ function assertMoved(cell, processed) {
     return;
   }
   const sent = processed.processed.outbound.length > 0;
+  if (cell.ignored) {
+    assert.deepEqual(processed.processed.outbound.filter(([type]) =>
+      Number(type) === RAFT_RS_MESSAGE_TYPE.REQUEST_PRE_VOTE_RESPONSE), [],
+    `the ignored request was not answered (${cell.ignored})`);
+    assert.deepEqual(OBSERVED[INPUT.ROLE](after), OBSERVED[INPUT.ROLE](before),
+      `the ignored request moved no term or role (${cell.ignored})`);
+    return;
+  }
   if (cell.control !== null) {
     assert.ok(sent, `precondition: the control was answered (${cell.control})`);
     return;
@@ -232,12 +242,35 @@ function assertSettled(cell, pending, processed) {
     'the declared timeout-driven outcome, by class');
 }
 
+function pendingCellOf(cell) {
+  if (!cell.hold) {
+    return cell;
+  }
+  return {
+    ...cell,
+    request(driver) {
+      driver.clock.advance(0);
+      return {
+        then(onFulfilled, onRejected) {
+          return Promise.resolve(cell.request(driver))
+            .then(async (value) => {
+              await new Promise((resolve) => setImmediate(resolve));
+              await new Promise((resolve) => setImmediate(resolve));
+              return value;
+            })
+            .then(onFulfilled, onRejected);
+        },
+      };
+    },
+  };
+}
+
 for (const cell of CELLS) {
   test(`${cell.family}: ${cell.decision} with pending ` +
     `${cell.types.join(' then ')} (${cell.predicate}) [${cell.id}]`,
   async () => {
     const processed = await runCell(cell, MODE.PROCESSED);
-    const pending = await runCell(cell, MODE.PENDING);
+    const pending = await runCell(pendingCellOf(cell), MODE.PENDING);
     assertNotVacuous(cell, pending, processed);
     assert.deepEqual(pending.answer, processed.answer,
       'the answer equals the answer after the drain');

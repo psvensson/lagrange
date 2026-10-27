@@ -3,6 +3,7 @@
  */
 
 const CDC_GROUP_PROPAGATION_SUBSYSTEM = 'cdc-group-propagation';
+const CDC_MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 
 const CDC_GROUP_PROPAGATION_STATE = Object.freeze({
   CREATED: 'created',
@@ -13,29 +14,32 @@ const CDC_GROUP_PROPAGATION_STATE = Object.freeze({
 
 const CDC_GROUP_PROPAGATION_EVENT = Object.freeze({
   PROPAGATED: 'cdcGroupPropagated',
-  SAFE_FALLBACK: 'cdcGroupSafeFallback',
 });
 
 const CDC_GROUP_PROPAGATION_REASON = Object.freeze({
   CONFIG_GROUPED_MODE: 'config_grouped_mode',
   CONFIG_SAFE_MODE: 'config_safe_mode',
   MISSING_LOCAL_GROUP: 'missing_local_group',
+  SOURCE_GROUP_MISMATCH: 'source_group_mismatch',
   MISSING_ACTIVE_GROUPS: 'missing_active_groups',
   MISSING_COORDINATOR_NODE: 'missing_coordinator_node',
   MISSING_COORDINATOR_ADDRESS: 'missing_coordinator_address',
   MESSAGE_ROUTER_UNAVAILABLE: 'message_router_unavailable',
-  GROUPED_DELIVERY_FAILURE: 'grouped_delivery_failure',
-  GROUPED_DELIVERY_RECOVERED: 'grouped_delivery_recovered',
 });
 
-// The service's typed per-target delivery answers. PROPAGATION_STOPPED: the
-// service stopped, the target was not delivered to and no background retry
-// will follow.
+// PROPAGATION_STOPPED: the service stopped; nothing was applied or delivered
+// and the source owner keeps the debt.
 const CDC_GROUP_PROPAGATION_DELIVERY_ERROR = Object.freeze({
-  BACKGROUND_RETRY_PENDING: 'background_retry_pending',
   PROPAGATION_STOPPED: 'propagation_stopped',
 });
 
+// The durable wave's foreground attempt decisions.
+const CDC_GROUP_FOREGROUND_RETRY_STATE = Object.freeze({
+  ADVANCE: 'advance',
+  ATTEMPTS_EXHAUSTED: 'attempts_exhausted',
+  INSUFFICIENT_DURATION: 'insufficient_duration',
+  STOPPED: 'stopped',
+});
 const CDC_GROUP_PROPAGATION_STATUS = Object.freeze({
   GROUPED: 'grouped',
   SAFE: 'safe',
@@ -54,7 +58,6 @@ const CDC_GROUP_PROPAGATION_STRATEGY = Object.freeze({
 
 const CDC_GROUP_PROPAGATION_RETRY = Object.freeze({
   MAX_ATTEMPTS: 3,
-  BACKGROUND_MAX_ATTEMPTS: 5,
   INITIAL_DELAY_MS: 50,
   BACKOFF_MULTIPLIER: 2,
   MAX_DELAY_MS: 1000,
@@ -64,17 +67,7 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   INITIALIZED: 'CDCGroupPropagationService initialized',
   STARTED: 'CDCGroupPropagationService started',
   STOPPED: 'CDCGroupPropagationService stopped',
-  PROPAGATED_GROUPED:
-    'CDC event propagated through group-coordinator strategy',
-  PROPAGATED_SAFE:
-    'CDC event propagated through direct-fanout strategy',
-  SAFE_FALLBACK:
-    'Falling back to direct-fanout CDC propagation strategy',
-  GROUPED_DELIVERY_FAILED: 'Grouped propagation delivery failed',
   RETRYING_DELIVERY_FAILURES: 'Retrying CDC propagation delivery failures',
-  DELIVERY_RETRY_EXHAUSTED: 'CDC propagation delivery retries exhausted',
-  FANOUT_SKIPPING_KNOWN_GROUPS:
-    'CDC fan-out skipping known message groups not yet targetable',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
@@ -83,11 +76,15 @@ const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
   MISSING_TREE_SERVICE: 'CDCGroupPropagationService requires latencyTreeService',
   NOT_INITIALIZED: 'CDCGroupPropagationService must be initialized first',
   MISSING_MESSAGE_GROUP_SERVICE:
-    'CDC propagation requires sourceMessageGroupService',
+    'CDC propagation requires a durable sourceMessageGroupService ' +
+    '(groupId, raft, cdcCommitLifetime, resolveStrictCdcForwardRetryAfterMs, applyCDCBatch)',
   MISSING_CDC_PAYLOAD: 'CDC propagation requires tableName/operation/data',
+  MISSING_DURABLE_EVENT:
+    'CDC propagation requires a durable partition event (eventKey) and its delivery invocation',
 });
 
 export {
+  CDC_GROUP_FOREGROUND_RETRY_STATE,
   CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
@@ -99,4 +96,5 @@ export {
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
+  CDC_MESSAGE_GROUP_REPLICA_SUFFIX,
 };

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -5,6 +6,10 @@ import {
   TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {QUERY_ERROR_CODE, QUERY_OPERATION} from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {
@@ -17,6 +22,9 @@ const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
   config.initialize();
 }
+
+const prepareEvidence = Object.freeze({preparedDigest: 'property-prepared',
+  prepareIndex: 3, prepareTerm: 1});
 
 const sessionIdArb = fc.stringMatching(/^[a-z0-9-]{3,24}$/);
 const partitionIdArb = fc.stringMatching(/^p-[a-z0-9-]{1,12}$/);
@@ -97,15 +105,15 @@ test(
           const events = [];
           const coordinator = new DistributedTransactionCoordinator({
             beginParticipant: async () => {},
-            prepareParticipant: async () => {},
+            prepareParticipant: async () => prepareEvidence,
             commitParticipant: async (_sessionId, partitionId) => {
               events.push(`commit:${partitionId}`);
             },
             rollbackParticipant: async (_sessionId, partitionId) => {
               events.push(`rollback:${partitionId}`);
             },
-            persistTransaction: async (record) => {
-              events.push(`persist:${record.status}`);
+            persistTransactionDecision: async (record) => {
+              events.push(`decision:${record.decision}`);
             },
           });
 
@@ -118,7 +126,7 @@ test(
           }
 
           const commitDecisionIndex = events.indexOf(
-            `persist:${TRANSACTION_STATUS.COMMITTING}`,
+            'decision:COMMIT',
           );
           const firstCommitDeliveryIndex = events.findIndex((event) =>
             event.startsWith('commit:'),
@@ -138,7 +146,7 @@ test(
           }
 
           const rollbackDecisionIndex = events.indexOf(
-            `persist:${TRANSACTION_STATUS.ROLLING_BACK}`,
+            'decision:ROLLBACK',
           );
           const firstRollbackDeliveryIndex = events.findIndex((event) =>
             event.startsWith('rollback:'),
@@ -183,7 +191,7 @@ test(
               observedDelays.push(delayMs);
             },
             beginParticipant: async () => {},
-            prepareParticipant: async () => {},
+            prepareParticipant: async () => prepareEvidence,
             commitParticipant: async (_sessionId, partitionId) => {
               if (operationType !== QUERY_OPERATION.COMMIT ||
                 partitionId !== targetPartitionId) {
@@ -264,6 +272,7 @@ test(
               if (partitionId === failingPartitionId) {
                 throw new Error('prepare-failure');
               }
+              return prepareEvidence;
             },
             commitParticipant: async () => {},
             rollbackParticipant: async (_session, partitionId) => {
@@ -345,7 +354,11 @@ test(
             writeOperations: [],
           });
 
-          const recovered = recoveredCoordinator.getTransaction(sessionId);
+          if (recoveredCoordinator.getTransaction(sessionId) !== null) {
+            return false;
+          }
+          const recovered = recoveredCoordinator.getRecoveryObligation(
+            persisted.transactionId);
           if (!recovered) {
             return false;
           }
@@ -384,13 +397,16 @@ test(
             messageRouter: {
               deliver: async (_address, payload) => {
                 deliveredMessages.push(payload);
-                return {acknowledged: true, success: true};
+                return buildDeliveryEnvelope({acknowledged: true}, {success: true});
               },
             },
             transactionEpochSource: () => {
               nextEpoch += 1;
               return nextEpoch;
             },
+            // BEGIN persists transaction state first (TX1 seam S4b).
+            controlPlaneSystemTableGateway:
+              createTransactionPersistenceGateway(),
           });
 
           engine.queryExecutor.executeOnPartition = async (
@@ -402,8 +418,9 @@ test(
             _trackMetrics,
             executionOptions = {},
           ) => {
-            deliveredMessages.push(executionOptions.buildRequest());
-            return {success: true};
+            const request = executionOptions.buildRequest();
+            deliveredMessages.push(request);
+            return answerParticipantTransactionRequest(request);
           };
 
           const beginResult = await engine.transactionCoordinator.begin(sessionId);
@@ -427,7 +444,11 @@ test(
             return false;
           }
 
-          return beginMessage.transactionEpoch === beginResult.transactionEpoch;
+          // ... with the transaction identity it is pinned to (TX1 seam A).
+          return beginMessage.transactionEpoch === beginResult.transactionEpoch &&
+            beginMessage.transactionId === beginResult.transactionId &&
+            beginMessage.participantId ===
+              `${beginResult.transactionId}:${partitionId}`;
         },
       ),
       {numRuns: 10},
@@ -498,11 +519,14 @@ test(
           const transactionRows = [];
           const participantRows = [];
           for (const [txIndex, recovered] of recoveredTransactions.entries()) {
-            const transactionId = `tx-recovery-property-${txIndex}`;
+            const transactionId = (txIndex + 1).toString(16).padStart(32, '0');
             transactionRows.push({
               transaction_id: transactionId,
               session_id: recovered.sessionId,
-              status: recovered.status,
+              status: recovered.status, transaction_epoch: 7, timeout_deadline: 1,
+              participant_set_text: JSON.stringify(Array.from(
+                {length: recovered.participantCount}, (_unused, index) =>
+                  [`${transactionId}:p-${txIndex}-${index}`, `p-${txIndex}-${index}`])),
               ...recoveryDecision(
                 recovered.status,
                 recovered.participantCount,
@@ -524,7 +548,11 @@ test(
                 participant_id: `${transactionId}:${partitionId}`,
                 transaction_id: transactionId,
                 partition_id: partitionId,
-                status: TRANSACTION_STATUS.ACTIVE,
+                status: operationPrefix === 'commit' ?
+                  TRANSACTION_STATUS.PREPARED : TRANSACTION_STATUS.ACTIVE,
+                prepared_digest: operationPrefix === 'commit' ? prepareEvidence.preparedDigest : null,
+                prepare_index: operationPrefix === 'commit' ? prepareEvidence.prepareIndex : null,
+                prepare_term: operationPrefix === 'commit' ? prepareEvidence.prepareTerm : null,
                 created_at: 1,
                 updated_at: 1,
               });
@@ -534,6 +562,9 @@ test(
             }
           }
 
+          coordinator.readTransactionRecoveryState = async (id) => ({state: 'available',
+            transaction: transactionRows.find((row) => row.transaction_id === id),
+            participants: participantRows.filter((row) => row.transaction_id === id)});
           coordinator.recoverFromSystemTables({
             transactions: transactionRows,
             participants: participantRows,
@@ -547,6 +578,11 @@ test(
 
           for (const recovered of recoveredTransactions) {
             if (coordinator.getTransaction(recovered.sessionId) !== null) {
+              return false;
+            }
+          }
+          for (const row of transactionRows) {
+            if (coordinator.getRecoveryObligation(row.transaction_id) !== null) {
               return false;
             }
           }
@@ -599,7 +635,7 @@ test(
             now: () => nowMs,
             transactionBudgetMs,
             beginParticipant: async () => {},
-            prepareParticipant: async () => {},
+            prepareParticipant: async () => prepareEvidence,
             commitParticipant: async () => {},
             rollbackParticipant: async (_sessionId, partitionId) => {
               rollbackCalls.push(partitionId);
@@ -669,7 +705,9 @@ test(
         async (status, partitionIds) => {
           const nowMs = 10_000;
           const sessionId = 'property-16-session';
-          const transactionId = 'tx-property-16';
+          const transactionId = 'f'.repeat(32);
+          const isCommitLane = status === TRANSACTION_STATUS.PREPARED ||
+            status === TRANSACTION_STATUS.COMMITTING;
           const commitCalls = [];
           const rollbackCalls = [];
           const coordinator = new DistributedTransactionCoordinator({
@@ -679,7 +717,9 @@ test(
                 {
                   transaction_id: transactionId,
                   session_id: sessionId,
-                  status,
+                  status, transaction_epoch: 7,
+                  participant_set_text: JSON.stringify([...partitionIds].sort().map((partitionId) =>
+                    [`${transactionId}:${partitionId}`, partitionId])),
                   ...recoveryDecision(status, partitionIds.length),
                   timeout_deadline: nowMs - 1,
                   created_at: 1,
@@ -690,14 +730,17 @@ test(
                 participant_id: `${transactionId}:${partitionId}`,
                 transaction_id: transactionId,
                 partition_id: partitionId,
-                status: TRANSACTION_STATUS.ACTIVE,
+                status: isCommitLane ? TRANSACTION_STATUS.PREPARED : TRANSACTION_STATUS.ACTIVE,
+                prepared_digest: isCommitLane ? prepareEvidence.preparedDigest : null,
+                prepare_index: isCommitLane ? prepareEvidence.prepareIndex : null,
+                prepare_term: isCommitLane ? prepareEvidence.prepareTerm : null,
                 created_at: 1,
                 updated_at: 1,
               })),
               writeOperations: [],
             }),
             beginParticipant: async () => {},
-            prepareParticipant: async () => {},
+            prepareParticipant: async () => prepareEvidence,
             commitParticipant: async (_sessionId, partitionId) => {
               commitCalls.push(partitionId);
             },
@@ -706,16 +749,21 @@ test(
             },
           });
 
+          coordinator.readTransactionRecoveryState = async () => {
+            const rows = await coordinator.loadRecoveryStateForSweep();
+            return {state: 'available', transaction: rows.transactions[0],
+              participants: rows.participants};
+          };
+
           const sweep = await coordinator.runRecoverySweep();
           if (sweep.skipped || sweep.swept !== 1 || sweep.failed !== 0) {
             return false;
           }
-          if (coordinator.getTransaction(sessionId) !== null) {
+          if (coordinator.getTransaction(sessionId) !== null ||
+              coordinator.getRecoveryObligation(transactionId) !== null) {
             return false;
           }
 
-          const isCommitLane = status === TRANSACTION_STATUS.PREPARED ||
-            status === TRANSACTION_STATUS.COMMITTING;
           if (isCommitLane) {
             const commitCallSet = new Set(commitCalls);
             for (const partitionId of partitionIds) {
@@ -758,6 +806,9 @@ test(
         throw new Error('sweep boom');
       },
       logger: {
+        warn(message, data) {
+          loggedErrors.push({message, data});
+        },
         error(message, data) {
           loggedErrors.push({message, data});
         },

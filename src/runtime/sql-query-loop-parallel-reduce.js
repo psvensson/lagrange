@@ -9,6 +9,9 @@
  * and then runs the SQL assigned to that slot.
  */
 
+import {isSystemTableName} from
+  '../bootstrap/system-table-schema-shared-constants.js';
+
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const EMPTY_PARTIAL_JSON = '[]';
 const SQL_SINGLE_QUOTE_ESCAPE = '\'\'';
@@ -63,6 +66,8 @@ function hasValidResultSnapshotIdentifiers(config, resultTable) {
     resultTable,
     config?.resultSnapshotColumn,
   ].every(isValidIdentifier) &&
+    !isSystemTableName(config.coordinationTable) &&
+    !isSystemTableName(resultTable) &&
     !RESULT_SNAPSHOT_RESERVED_COLUMNS.has(config.resultSnapshotColumn);
 }
 

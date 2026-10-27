@@ -38,6 +38,7 @@ import {test} from 'node:test';
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -45,29 +46,45 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {
   PARTITION_COMMITTED_COMMAND_ERROR_CODE,
   PARTITION_COMMITTED_COMMAND_OUTCOME,
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
 } from '../../src/partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/addresses.js';
+import {isConsensusInitRefusal} from '../../src/raft/raft-operation-port.js';
 import * as partitionConstants from
   '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {RAFT_OPERATION_OUTCOME} from
   '../../src/raft/raft-operation-port-constants.js';
 import {RUNTIME_PHASE} from
   '../../src/raft/raft-rs-runtime-owner-constants.js';
-import {PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL} from
-  '../../src/partition/partition-committed-statement-outcome-constants.js';
+import {
+  PARTITION_COMMITTED_STATEMENT_OUTCOME_SQL,
+  PARTITION_SETTLED_REPLAY,
+} from '../../src/partition/partition-committed-statement-outcome-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {countCdcObligations} from
+  '../../src/partition/partition-cdc-obligation-ledger.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {
+  CDC_TABLE,
+  resumeFixtureParticipantAdmission,
+  resumeFixtureParticipantGroupAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
 
 const TEMP_PREFIX = 'committed-statement-outcome-';
 const DB_FILE = 'partition.sqlite';
-const TABLE_NAME = 'statement_outcome_rows';
+// A CDC-carrying table: the witnesses below also measure the committed
+// write's CDC obligation, which only a propagated table owes (decision D2).
+const TABLE_NAME = CDC_TABLE;
 const INSERT_SQL = `INSERT INTO ${TABLE_NAME} (id, value) VALUES (?, ?)`;
 const SELECT_ROW_SQL = `SELECT id, value FROM ${TABLE_NAME} WHERE id = ?`;
-const MISSING_TABLE_INSERT_SQL =
-  'INSERT INTO statement_outcome_missing_table (id) VALUES (?)';
+// A schema error on the partition's own table (a write to any other table is
+// refused by the statement-admission owner before SQLite reads it).
+const MISSING_COLUMN_INSERT_SQL =
+  `INSERT INTO ${TABLE_NAME} (missing_column) VALUES (?)`;
 const TEST_TIMEOUT_MS = 30000;
 // Inputs: the SQLite result codes an environmental failure carries (the
 // SQLite library's own names; better-sqlite3 reports extended codes).
@@ -102,6 +119,7 @@ function partitionOptions(partitionId, dbPath) {
     replicaId: `${partitionId}-r1`,
     replicaIds: [`${partitionId}-r1`],
     nodeId: 'statement-outcome-node',
+    systemTableCache: new SystemTableCache(),
     dbPath,
     schema: {columns: [
       {name: 'id', type: 'TEXT', primaryKey: true},
@@ -197,6 +215,7 @@ async function withPartition(partitionId, body) {
     const service = new PartitionService(withFoundingStamp(partitionOptions(partitionId, dbPath)));
     services.push(service);
     await service.initialize();
+    await resumeFixtureParticipantAdmission(service);
     return service;
   };
   try {
@@ -254,8 +273,9 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
       'entry-retried');
     assert.equal(retriedInProcess.success, true,
       'an in-process retry of the acknowledged entry is acknowledged');
-    assert.equal(retriedInProcess.idempotentReplay, true,
-      'an in-process retry is answered as an idempotent replay');
+    assert.equal(retriedInProcess.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+      'an in-process retry is answered as a replay of the applied statement');
     const recordedApplied = outcomeOf(dbPath, partition, 'entry-retried');
     assert.deepEqual(recordedApplied.map((row) => [row.outcome, row.log_index]),
       [[PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED, acknowledged.logIndex]],
@@ -274,10 +294,13 @@ test('B2: the same entry identity retried after its acknowledgement is an ' +
     assert.equal(retriedAfterRestart.success, true,
       'a retry after restart is acknowledged ' +
       `(${JSON.stringify(retriedAfterRestart)})`);
-    assert.equal(retriedAfterRestart.changes, 0,
-      'the replay changed nothing');
-    assert.equal(retriedAfterRestart.idempotentReplay, true,
-      'the retry after restart is answered as an idempotent replay');
+    assert.equal(retriedAfterRestart.changes, acknowledged.changes,
+      'the replay answers the applied statement\'s own row count (never ' +
+      'zero rows: superseded by the owner ruling on the replay answer)');
+    assert.equal(retriedAfterRestart.settledReplay,
+      PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
+      'the retry after restart is answered as a replay of the applied ' +
+      'statement');
     assert.equal(retriedAfterRestart.replayOfLogIndex, acknowledged.logIndex,
       'the replay names the index the write was applied at');
     assert.deepEqual(outcomeOf(dbPath, restarted, 'entry-retried'),
@@ -328,7 +351,7 @@ test('B2: a retry of a FAILED statement under the same entry identity ' +
       'and its original code');
     assert.equal(retriedInProcess.replayOfLogIndex, failed.logIndex,
       'naming the index the failure was recorded at');
-    assert.equal(retriedInProcess.idempotentReplay, undefined,
+    assert.equal(retriedInProcess.settledReplay, undefined,
       'a failure is never answered as a replayed success');
     assert.equal(rowCount(dbPath), 1, 'the retry wrote no row');
     assert.deepEqual(outcomeOf(dbPath, partition, 'entry-failed'), recorded,
@@ -378,6 +401,7 @@ test('B2: the replicas of a three-replica group hold identical outcome rows ' +
     serviceOptions: partitionOptions(partitionId, null),
     budgetMs: GROUP_BUDGET_MS,
   });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
   const {dbFileOf, waitFor} = group;
   const leader = group.services[0];
   try {
@@ -499,14 +523,14 @@ const B5_SHAPES = Object.freeze([
     viaTransport: true,
     command: {type: 'REPLICATE_ROWS', sql: INADMISSIBLE_SQL,
       entryId: 'e-poison'}},
-  {name: 'prepare-marker', code: 'MARKER_NOT_ADMISSIBLE',
-    command: {type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+  {name: 'retired-prepare-marker', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: 'PREPARE_TRANSACTION',
       sessionId: 'session-x', entryId: 'e-prepare'}},
-  {name: 'rollback-marker', code: 'MARKER_NOT_ADMISSIBLE',
+  {name: 'retired-rollback-marker', code: 'COMMAND_TYPE_UNKNOWN',
     command: {type: PARTITION_SERVICE_OPERATION.ROLLBACK,
       sessionId: 'session-x', entryId: 'e-rollback'}},
-  {name: 'transaction-commit-without-session', code: 'SESSION_MISSING',
-    command: {type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+  {name: 'retired-transaction-commit', code: 'COMMAND_TYPE_UNKNOWN',
+    command: {type: 'TRANSACTION_COMMIT',
       entryId: 'e-commit'}},
 ]);
 
@@ -603,65 +627,13 @@ test('F-ad: a present-but-invalid entryId is refused before consensus; a ' +
     assert.equal(outcomeOf(dbPath, partition, 'client-entry-7').length, 1,
       'its outcome row is keyed by it');
     const retry = await forwardWrite(partition, 'row-kept', 'client-entry-7');
-    assert.equal(retry.idempotentReplay, true,
+    assert.equal(retry.settledReplay, PARTITION_SETTLED_REPLAY.OUTCOME_RETAINED,
       `a retry with it is answered from its outcome row (${
         JSON.stringify(retry)})`);
     const minted = await forwardWrite(partition, 'row-minted', undefined);
     assert.equal(minted.success, true, 'an absent entryId is minted');
     assert.equal(rowOf(dbPath, 'row-minted')?.id, 'row-minted',
       'and the write applied');
-  });
-});
-
-// F-ai: a session write enters consensus inside its transaction's commit
-// marker, so the admission owner admits it where it is staged, exactly as it
-// admits a write on the write path.
-test('F-ai: a session write is admitted at staging - a present-but-invalid ' +
-  'entryId is refused typed before anything is staged, an absent one is ' +
-  'minted - so the commit marker carries only string entry ids',
-{timeout: TEST_TIMEOUT_MS}, async () => {
-  await withPartition('fai-session', async ({dbPath, open}) => {
-    const partition = await open();
-    assert.equal((await insert(partition, 'row-0', 'setup', 'e-setup'))
-      .success, true, 'setup: the partition serves a write');
-    const sessionId = 'fai-session-1';
-    await partition.beginTransaction(sessionId);
-    for (const [name, entryId] of INVALID_ENTRY_IDS) {
-      const staged = await partition.executeQuery(INSERT_SQL,
-        [`session-${name}`, 'v'], {sessionId, entryId});
-      assert.equal(staged?.success, false, 'a session write with an ' +
-        `invalid entryId (${name}) is refused (${JSON.stringify(staged)})`);
-      assert.equal(staged.failureCode,
-        PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_INVALID,
-        `with the admission owner's typed code (${name})`);
-    }
-    const minted = await partition.executeQuery(INSERT_SQL,
-      ['session-minted', 'v'], {sessionId});
-    assert.equal(minted?.success, true, 'a session write without an ' +
-      'entryId is staged');
-    assert.equal((await partition.commitTransaction(sessionId))?.success,
-      true, 'the session commits');
-    const independent = new Database(dbPath, {readonly: true});
-    let marker;
-    try {
-      marker = RaftRsDurableStore.readCommittedEntriesIn(independent,
-        'fai-session').map((record) => record.command).find((command) =>
-        command.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT &&
-        command.sessionId === sessionId);
-    } finally {
-      independent.close();
-    }
-    assert.ok(marker, 'the session\'s commit marker is in the durable log');
-    assert.deepEqual(marker.operations.map((operation) =>
-      typeof operation.entryId), ['string'], 'the marker carries exactly ' +
-      'the staged write, keyed by a string entry id ' +
-      `(${JSON.stringify(marker.operations.map((op) => op.entryId))})`);
-    assert.equal(rowOf(dbPath, 'session-minted')?.id, 'session-minted',
-      'the admitted session write applied');
-    for (const [name] of INVALID_ENTRY_IDS) {
-      assert.equal(rowOf(dbPath, `session-${name}`), null,
-        `nothing was staged for the refused write (${name})`);
-    }
   });
 });
 
@@ -707,8 +679,7 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
       } catch (error) {
         refusal = error;
       }
-      assert.equal(refusal?.code,
-        PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED,
+      assert.ok(isConsensusInitRefusal(refusal, ENTITY_TYPE.PARTITION),
         `the restart fails closed (${refusal?.message})`);
       assert.ok(String(refusal.message).includes(unknownReason) &&
         String(refusal.message).includes('BOGUS'),
@@ -719,13 +690,139 @@ test('B5: a committed entry with an unknown type (proposed straight through ' +
   });
 });
 
+const UNKEYED_ROW_ID = 'row-unkeyed';
+
+// A committed SQL command with no entryId, as only a bug or version skew
+// proposes one: straight through the port, past the write-entry builder.
+function unkeyedInsert() {
+  return {type: PARTITION_SERVICE_OPERATION.INSERT, sql: INSERT_SQL,
+    params: [UNKEYED_ROW_ID, 'unkeyed'], timestamp: String(Date.now()),
+    proposedBy: 'other-replica'};
+}
+
+// One replica's whole application-visible state around the unkeyed command.
+function unkeyedStateOf(service, dbFile, partitionId) {
+  return {
+    appliedIndex: durableRecord(dbFile, partitionId).appliedIndex,
+    row: rowOf(dbFile, UNKEYED_ROW_ID),
+    outcomeRows: outcomeRows(dbFile),
+    obligations: countCdcObligations(service.db),
+  };
+}
+
+// The group's typed host failure the gate names for the unkeyed command.
+function assertEntryIdMissingFailure(status, replica) {
+  assert.equal(status.outcome, RAFT_OPERATION_OUTCOME.HOST_FAILURE,
+    `${replica}: readStatus is the group's host failure (${
+      JSON.stringify(status)})`);
+  assert.equal(status.failure?.reason,
+    partitionConstants.PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON
+      ?.ENTRY_ID_MISSING, `${replica}: with the typed reason, not the ` +
+    `CDC recorder's untyped constraint text (${JSON.stringify(status.failure)})`);
+  assert.equal(status.failure.detail?.code,
+    PARTITION_COMMITTED_COMMAND_ERROR_CODE.ENTRY_ID_MISSING,
+    `${replica}: and the typed code`);
+  assert.equal(status.failure.detail.commandType,
+    PARTITION_SERVICE_OPERATION.INSERT, `${replica}: naming the type`);
+}
+
+test('U1: a committed SQL command without an entryId (proposed straight ' +
+  'through the port) fails the application closed, typed, before its ' +
+  'statement runs, on every replica: no row, no outcome row, no CDC ' +
+  'obligation, the applied index unchanged',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  quietEnvironment();
+  const partitionId = 'u1-unkeyed';
+  const members = [['u1-unkeyed-r1', 'node-1'], ['u1-unkeyed-r2', 'node-2'],
+    ['u1-unkeyed-r3', 'node-3']];
+  const group = await formAdmittedGroup({
+    partitionId,
+    members,
+    tempPrefix: TEMP_PREFIX,
+    serviceOptions: partitionOptions(partitionId, null),
+    budgetMs: GROUP_BUDGET_MS,
+  });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+  const {dbFileOf, waitFor, services} = group;
+  const stateOf = (index) =>
+    unkeyedStateOf(services[index], dbFileOf(members[index]), partitionId);
+  try {
+    assert.equal((await insert(services[0], 'row-0', 'setup', 'u1-setup'))
+      .success, true, 'setup: the group serves a keyed write');
+    const setupApplied = durableRecord(dbFileOf(members[0]), partitionId)
+      .appliedIndex;
+    assert.equal(await waitFor(() => members.every((member) =>
+      durableRecord(dbFileOf(member), partitionId).appliedIndex >=
+        setupApplied)), true, 'setup: every replica applied the setup write');
+    const before = services.map((service, index) => stateOf(index));
+
+    await services[0].raft.propose(unkeyedInsert());
+    const failed = await waitFor(() => services.every((service) =>
+      service.raft.readStatus().outcome ===
+        RAFT_OPERATION_OUTCOME.HOST_FAILURE));
+    assert.equal(failed, true, 'every replica fails the application closed (' +
+      `${JSON.stringify(services.map((service) =>
+        service.raft.readStatus().failure ?? null))})`);
+    services.forEach((service, index) => {
+      const replica = members[index][0];
+      assertEntryIdMissingFailure(service.raft.readStatus(), replica);
+      assert.deepEqual(stateOf(index), before[index],
+        `${replica}: no row, no outcome row, no CDC obligation, the ` +
+        'applied index unchanged');
+    });
+  } finally {
+    await group.dispose();
+    resetEnvironment();
+  }
+});
+
+test('U2: the unkeyed committed command refuses the restart with the same ' +
+  'typed reason, and a keyed write on a separate partition is unaffected',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  await withPartition('u2-keyed', async ({dbPath: keyedPath, open:
+    openKeyed}) => {
+    const keyed = await openKeyed();
+    await withPartition('u2-unkeyed', async ({dbPath, open}) => {
+      const partition = await open();
+      assert.equal((await insert(partition, 'row-0', 'setup', 'u2-setup'))
+        .success, true, 'setup: the partition serves a keyed write');
+      const before = unkeyedStateOf(partition, dbPath, 'u2-unkeyed');
+      await partition.raft.propose(unkeyedInsert());
+      assertEntryIdMissingFailure(partition.raft.readStatus(), 'u2-unkeyed');
+      assert.deepEqual(unkeyedStateOf(partition, dbPath, 'u2-unkeyed'), before,
+        'no row, no outcome row, no CDC obligation, the applied index ' +
+        'unchanged');
+      await partition.shutdown();
+      let refusal = null;
+      try {
+        await open();
+      } catch (error) {
+        refusal = error;
+      }
+      assert.ok(isConsensusInitRefusal(refusal, ENTITY_TYPE.PARTITION),
+        `the restart fails closed (${refusal?.message})`);
+      assert.ok(String(refusal.message).includes(partitionConstants
+        .PARTITION_COMMITTED_COMMAND_HOST_FAILURE_REASON?.ENTRY_ID_MISSING),
+      `initialize() names the typed reason (${refusal.message})`);
+    });
+    const applied = await insert(keyed, 'row-keyed', 'after', 'u2-keyed');
+    assert.equal(applied.success, true,
+      `a keyed write on a separate partition applies (${
+        JSON.stringify(applied)})`);
+    assert.equal(outcomeOf(keyedPath, keyed, 'u2-keyed').length, 1,
+      'its outcome row is keyed by its entryId');
+    assert.equal(countCdcObligations(keyed.db).owed, 1,
+      'it owes its one CDC obligation');
+  });
+});
+
 test('F-i: a schema error is a deterministic statement failure: consumed ' +
   'and reported', {timeout: TEST_TIMEOUT_MS}, async () => {
   await withPartition('fi-deterministic', async ({dbPath, open}) => {
     const partition = await open();
     const failed = await partition.applyWrite({
       type: PARTITION_SERVICE_OPERATION.INSERT,
-      sql: MISSING_TABLE_INSERT_SQL,
+      sql: MISSING_COLUMN_INSERT_SQL,
       params: ['z'],
       entryId: 'entry-missing-table',
     });
@@ -733,7 +830,7 @@ test('F-i: a schema error is a deterministic statement failure: consumed ' +
     const consumed = record.applied.find((entry) =>
       entry.entryId === 'entry-missing-table');
     assert.equal(failed.success, false, 'the schema error is reported');
-    assert.match(String(failed.error), /no such table/u,
+    assert.match(String(failed.error), /no column named missing_column/u,
       'the reported error is the statement\'s own');
     assert.ok(consumed !== undefined && consumed.index <= record.appliedIndex,
       'the entry is consumed');
@@ -766,16 +863,22 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
       `the write is not acknowledged (${JSON.stringify(busy)})`);
     assert.equal(busy.deferRetry === true, false,
       'an environmental failure is not a user-transaction deferral');
-    assert.ok(String(busy.error).startsWith(
+    // AD: the entry was proposed and may be in the log, so the write kernel
+    // answers its outcome unknown under its entryId; the environmental
+    // failure is the answer's cause.
+    assert.equal(busy.failureCode, PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      `AD: the answer is the unknown outcome (${JSON.stringify(busy)})`);
+    assert.equal(busy.entryId, 'entry-busy', 'AD: under the write\'s entryId');
+    assert.ok(String(busy.cause?.error).startsWith(
       PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED),
-    `the failure names the environmental statement outcome (${busy.error})`);
-    assert.ok(String(busy.error).includes(ENVIRONMENTAL_SQLITE_CODE),
-      'the failure carries the SQLite code the host raised');
-    // F-ae: the environmental answer carries its typed code and the port's
-    // consensus fields, as every other refused write does.
-    assert.equal(busy.failureCode,
+    `the cause names the environmental statement outcome (${busy.cause?.error})`);
+    assert.ok(String(busy.cause?.error).includes(ENVIRONMENTAL_SQLITE_CODE),
+      'the cause carries the SQLite code the host raised');
+    // F-ae: the cause carries the environmental failure's typed code, and the
+    // answer the port's consensus fields, as every other refused write does.
+    assert.equal(busy.cause?.failureCode,
       PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
-      `F-ae: the answer carries the environmental failure code (${
+      `F-ae: the cause carries the environmental failure code (${
         JSON.stringify(busy)})`);
     assert.deepEqual({phase: busy.consensus?.phase,
       retryable: busy.consensus?.retryable}, {
@@ -806,4 +909,84 @@ test('F-i: an environmental SQLite failure is never consumed as a failed ' +
       .map((row) => row.outcome), [PARTITION_COMMITTED_COMMAND_OUTCOME.APPLIED],
     'the recovered apply recorded its outcome once');
   });
+});
+
+// AD on a real three-replica group: the leader's own committed apply fails
+// environmentally after the quorum committed the entry. The pending write is
+// rejected by that apply (not by a proposal refusal), so the write kernel's
+// rejected-write builder answers it: an unknown outcome under the write's
+// entryId, its cause the environmental failure with the host's SQLite code.
+test('AD: on a three-replica group, the leader\'s own environmental apply ' +
+  'failure after the quorum commit answers the write as an unknown outcome ' +
+  'under its entryId, its cause the environmental failure',
+{timeout: TEST_TIMEOUT_MS}, async () => {
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+  ConfigurationManager.getInstance().initialize({
+    node: {id: 'statement-outcome-group'},
+    raft: {
+      heartbeatIntervalMs: 20,
+      electionTimeoutMinMs: 150,
+      electionTimeoutMaxMs: 300,
+    },
+  });
+  LoggingService.getInstance().initialize({level: 'error'});
+  const partitionId = 'ad-group';
+  const members = [['ad-group-r1', 'node-1'], ['ad-group-r2', 'node-2'],
+    ['ad-group-r3', 'node-3']];
+  const group = await formAdmittedGroup({
+    partitionId,
+    members,
+    tempPrefix: TEMP_PREFIX,
+    serviceOptions: partitionOptions(partitionId, null),
+    budgetMs: GROUP_BUDGET_MS,
+  });
+  await resumeFixtureParticipantGroupAdmission(group.services, group.waitFor);
+  const leader = group.services[0];
+  const prepare = leader.db.prepare.bind(leader.db);
+  try {
+    const setup = await insert(leader, 'row-0', 'setup', 'ad-setup');
+    assert.equal(setup.success, true, 'setup: the group serves a write');
+    assert.equal(await group.waitFor(() => members.every((member) =>
+      rowOf(group.dbFileOf(member), 'row-0') !== null)), true,
+    'setup: every replica of the group applied the write');
+    // Input: the leader's own database answers the statement with an
+    // environmental failure; the followers' databases do not.
+    leader.db.prepare = (sql) => {
+      if (sql === INSERT_SQL) {
+        throw new Database.SqliteError(
+          ENVIRONMENTAL_SQLITE_MESSAGE, ENVIRONMENTAL_SQLITE_CODE);
+      }
+      return prepare(sql);
+    };
+    const answer = await insert(leader, 'row-1', 'busy', 'ad-busy');
+    leader.db.prepare = prepare;
+    assert.deepEqual({
+      success: answer.success,
+      failureCode: answer.failureCode,
+      entryId: answer.entryId,
+      partitionId: answer.partitionId,
+      causeCode: answer.cause?.failureCode,
+    }, {
+      success: false,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.OUTCOME_UNKNOWN,
+      entryId: 'ad-busy',
+      partitionId,
+      causeCode:
+        PARTITION_COMMITTED_COMMAND_ERROR_CODE.STATEMENT_ENVIRONMENT_FAILED,
+    }, `the write's outcome is not known, under its entryId (${
+      JSON.stringify(answer)})`);
+    assert.ok(String(answer.cause?.error).startsWith(
+      PARTITION_SERVICE_ERROR_MSG.COMMITTED_STATEMENT_ENVIRONMENT_FAILED) &&
+      String(answer.cause?.error).includes(ENVIRONMENTAL_SQLITE_CODE),
+    `its cause is the environmental failure with the SQLite code (${
+      answer.cause?.error})`);
+    assert.equal(Object.hasOwn(answer, 'consensus'), false, 'it is the ' +
+      'rejected write\'s answer, not a proposal refusal: the proposal was ' +
+      'accepted and the quorum committed it');
+  } finally {
+    leader.db.prepare = prepare;
+    await group.dispose();
+    resetEnvironment();
+  }
 });

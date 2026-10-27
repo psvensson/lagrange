@@ -1,0 +1,75 @@
+# Candidate static/corpus gate evidence; never reset baselines, skip checks
+# Re-run against canonical 2373-test classification including real SQL control voters.
+# or count inherited strict reds as merge acceptance.
+name: rs-raft-control-single-census-static
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-single-census-static.yml
+      - test/shards/impact-graph-seal.json
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-control-single-census-static
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact locked runtime dependency install
+        run: npm ci
+      - name: Run all structural checks once, retaining each refusal unchanged
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-single-census-static
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          fail=0
+          for task in \
+            audit:shards \
+            audit:impact-contracts \
+            test:deps \
+            test:unused:ratchet \
+            audit:file-size:strict \
+            test:duplication:strict \
+            lint \
+            audit:no-legacy-consensus-references \
+            audit:owner-boundary-segments \
+            audit:guideline:silent-catch; do
+            slug="${task//:/-}"
+            npm run -s "$task" > "$OUT/$slug.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$slug.status"
+            echo "$task status=$rc"
+            if test "$rc" -ne 0; then
+              fail=1
+              tail -n 29 "$OUT/$slug.log" | cut -c 1-360
+            fi
+          done
+          git diff --check > "$OUT/diff-check.log" 2>&1
+          diff_rc=$?
+          printf '%s\n' "$diff_rc" > "$OUT/diff-check.status"
+          if test "$diff_rc" -ne 0; then fail=1; fi
+          exit "$fail"
+      - name: Archive every strict red, no ratchet or baseline mutation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-single-census-static-${{ github.sha }}
+          path: test-output/rs-raft-single-census-static/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,8 +1,20 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningPublicationActivation} from './node-joining-publication-activation.js';
 import {
   buildStartupRuntimeHandoffSnapshot,
 } from './shared/startup-sql-runtime-handoff.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../logging/wait-bound-spent.js';
+
+const JOIN_HTTP_POST_WAIT = Object.freeze({
+  wait: 'httpTimeoutMs',
+  awaited: 'HTTP POST response from the seed/control-plane endpoint',
+  PHASE_AWAITING_HEADERS: 'awaiting_response_headers',
+  PHASE_AWAITING_BODY: 'awaiting_response_body',
+});
 
 const {
   BootstrapTopologySnapshotOwner,
@@ -25,7 +37,6 @@ const {
   TABLES,
   TIME_MS,
   canonicalizeSystemTableRow,
-  classifyTransportDeliveryOutcome,
   compareJoinSchemaVersions,
   extractJoinSchemaVersionFromRecord,
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -209,13 +220,13 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const nextSeenAddresses = new Set(seenAddresses);
     nextSeenAddresses.add(address);
     try {
-      const response = classifyTransportDeliveryOutcome(
-        await messageRouter.deliver(
-          address,
-          {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
-          {deliveryPriority: options.deliveryPriority},
-        ),
+      const deliveryEnvelope = await messageRouter.deliver(
+        address,
+        {type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE, sql, params: []},
+        {deliveryPriority: options.deliveryPriority},
       );
+      const transport = deliveryTransportOf(deliveryEnvelope);
+      const response = deliveryAnswerOf(deliveryEnvelope);
       if (
         response?.redirect ===
           JOIN_BACKFILL_QUERY.RESPONSE_TYPE.LEADER_REDIRECT &&
@@ -229,7 +240,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
           nextSeenAddresses,
         );
       }
-      if (isDeliveredTransportDeliveryOutcome(response) && response?.success) {
+      if (isDeliveredTransportDeliveryOutcome(transport) && response?.success) {
         return {
           success: true,
           rows: Array.isArray(response.rows) ? response.rows : [],
@@ -238,7 +249,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       return {
         success: false,
         rows: [],
-        error: response?.error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
+        error: (response ?? transport).error || NODE_JOINING_SERVICE_LITERAL.QUERY_FAILED,
       };
     } catch (error) {
       return {success: false, rows: [], error: error.message};
@@ -299,6 +310,23 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     return JSON.stringify(candidate).length > JSON.stringify(existing).length;
   }
   /**
+   * Report a spent HTTP POST timeout (abort branch only).
+   * @param {number} timeoutMs
+   * @param {number} startedAtMs - Site clock at request start.
+   * @param {Object} observed - {url, phase, status?}.
+   * @private
+   */
+  reportHttpPostSpent(timeoutMs, startedAtMs, observed) {
+    reportWaitBoundSpent(this.logger, {
+      wait: JOIN_HTTP_POST_WAIT.wait,
+      awaited: JOIN_HTTP_POST_WAIT.awaited,
+      boundMs: timeoutMs,
+      elapsedMs: this.now() - startedAtMs,
+      lastObserved: {...observed},
+      scope: {nodeId: this.nodeId},
+    });
+  }
+  /**
    * Make an HTTP POST request.
    * @param {string} url - URL to post to.
    * @param {Object} body - Request body.
@@ -312,6 +340,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       this.config.httpTimeoutMs;
     // AbortController is a global in Node.js 22+
     const controller = new globalThis.AbortController();
+    const httpPostStartedAtMs = readWaitClock(this);
+    const observed = {url, phase: JOIN_HTTP_POST_WAIT.PHASE_AWAITING_HEADERS};
     const timeoutId = setTimeout(
       () => controller.abort(),
       timeoutMs,
@@ -326,6 +356,8 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
         body: JSON.stringify(body),
         signal: controller.signal,
       });
+      observed.phase = JOIN_HTTP_POST_WAIT.PHASE_AWAITING_BODY;
+      observed.status = response.status;
       if (!response.ok) {
         const retryAfterHeader = response.headers.get(
           JOINING_HTTP.HEADER_RETRY_AFTER,
@@ -363,6 +395,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === JOINING_ERROR_NAME.ABORT) {
+        this.reportHttpPostSpent(timeoutMs, httpPostStartedAtMs, observed);
         const httpTimeoutError = JOINING_ERROR_MSG.httpTimeout;
         const timeoutError = new Error(httpTimeoutError(timeoutMs));
         // A request timeout is transient by nature. Mark it so the

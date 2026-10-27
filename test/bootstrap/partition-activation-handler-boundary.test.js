@@ -122,7 +122,7 @@ function createWorld(initialRow = registeredRow()) {
     controlPlaneSystemTableGateway: {}, now: () => 150});
   const service = {partitionId: 'p1', replicaId: REPLICA_ID,
     unifiedAddress: ADDRESS, initialized: true,
-    transportHandler: () => ({acknowledged: true})};
+    transportHandler: () => (null)};
   const durable = createDurable(initialRow, {
     atCas: () => router.getRegisteredHandler(ADDRESS) ===
       service.transportHandler,
@@ -252,7 +252,7 @@ test('N2 (4b): retirement does not wait for unrelated lifecycle work in the ' +
 test('N2 (5): a different generation handler under the same replica id ' +
   'does not satisfy activation', async (t) => {
   const world = createWorld();
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
   await t.rejects(world.activate(), /replica handler registration/u,
     'presence at the address is not this generation\'s handler');
   t.equal(world.durable.casCalls.length, 0);
@@ -262,7 +262,7 @@ test('N2 (5): a different generation handler under the same replica id ' +
 test('N2 (6): a delayed G1 activation after G2 registered cannot activate ' +
   'G1 or mutate G2', async (t) => {
   const world = createWorld(registeredRow(2));
-  const g2Handler = () => ({acknowledged: true});
+  const g2Handler = () => (null);
   world.router.register(ADDRESS, g2Handler);
   // The G1 service object is still around with its own (retired) handler.
   await t.rejects(world.activate(), /replica handler registration/u,
@@ -314,8 +314,11 @@ async (t) => {
     'the shared retirement waits on the owner\'s activation effect section');
   t.match(helper, /transport\.unregisterExact\(address, handler\)/u,
     'the shared retirement is exact-identity');
-  const shutdown = source.slice(source.indexOf('  async shutdown() {'));
-  t.ok(shutdown.indexOf('await retirePartitionTransportHandler(this);') <
-    shutdown.indexOf('closePartitionPersistenceResources(this);'),
+  const shutdownStart = source.indexOf('\n  shutdown() {');
+  t.ok(shutdownStart >= 0, 'the partition shutdown is located');
+  const shutdown = source.slice(shutdownStart);
+  const retireAt = shutdown.indexOf('await retirePartitionTransportHandler(this);');
+  t.ok(retireAt >= 0 &&
+    retireAt < shutdown.indexOf('closePartitionPersistenceResources(this);'),
   'shutdown retires the handler in the lane before closing the store');
 });

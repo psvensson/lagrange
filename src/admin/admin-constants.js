@@ -53,14 +53,13 @@ const ADMIN_LIMIT = Object.freeze({
 
 const ADMIN_CONFIG_KEY = Object.freeze({
   QUERY_TIMEOUT_MS: CONFIG_KEY.ADMIN_QUERY_TIMEOUT_MS,
-  CACHE_DUMP_TIMEOUT_MS: CONFIG_KEY.ADMIN_CACHE_DUMP_TIMEOUT_MS,
 });
 
 const ADMIN_DEFAULT = Object.freeze({
   NODE_ID: 'admin-api',
   WEBSOCKET_PORT: LISTENER_PORT_DEFAULT.ADMIN_WEBSOCKET,
+  // ends-on: the SQL engine answers the admin query
   QUERY_TIMEOUT_MS: 30000,
-  CACHE_DUMP_TIMEOUT_MS: 5000,
   HOST: '127.0.0.1',
   ENFORCEMENT_MODE: 'enforce',
 });
@@ -173,7 +172,6 @@ const ADMIN_MESSAGE_TYPE = Object.freeze({
   ERROR: 'error',
   // Incoming
   QUERY: 'query',
-  PARTITION_CALLBACK: 'partition_callback',
   REFRESH: 'refresh',
   LIVE_QUERY_SUBSCRIBE: 'live_query_subscribe',
   LIVE_QUERY_UNSUBSCRIBE: 'live_query_unsubscribe',
@@ -192,14 +190,6 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
   MISSING_TYPE: 'Message must have a "type" field',
   MISSING_QUERY_ID: 'Query message must include queryId',
   MISSING_SQL: 'Query message must include sql string',
-  MISSING_CALLBACK_STATEMENT:
-    'Partition callback message must include statement string',
-  MISSING_CALLBACK_MODULE_REF:
-    'Partition callback message must include callbackModuleRef',
-  MISSING_CALLBACK_EXPORT:
-    'Partition callback message must include callbackExport',
-  MISSING_CALLBACK_RUNTIME_KIND:
-    'Partition callback message must include runtimeKind',
   QUERY_ENGINE_UNAVAILABLE: 'SQL query engine not available',
   SERVICE_DIAGNOSTICS_UNAVAILABLE:
     'Service lifecycle diagnostics provider is not available',
@@ -239,10 +229,6 @@ const ADMIN_ERROR_HINT = Object.freeze({
   MISSING_TYPE: 'Include type field in message',
   MISSING_QUERY_ID: 'Include queryId field',
   MISSING_SQL: 'Include sql field',
-  MISSING_CALLBACK_STATEMENT: 'Include statement field',
-  MISSING_CALLBACK_MODULE_REF: 'Include callbackModuleRef field',
-  MISSING_CALLBACK_EXPORT: 'Include callbackExport field',
-  MISSING_CALLBACK_RUNTIME_KIND: 'Include runtimeKind field',
   LIVE_QUERY_MISSING_SUBSCRIPTION_ID: 'Include subscriptionId field',
   LIVE_QUERY_MISSING_SQL: 'Include sql field with LIVE SELECT statement',
 });

@@ -1,8 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {
-  DistributedTransactionCoordinator,
-} from '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {createTestTransactionCoordinator} from
+  '../test-helpers/transaction-coordinator-unit-fixture.js';
 import {
   COMMIT_MODE,
   PARTICIPANT_SET_STATE,
@@ -14,6 +13,10 @@ import {
   QUERY_OPERATION,
 } from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
+import {answerParticipantTransactionRequest} from
+  '../test-helpers/participant-protocol-double.js';
 import {
   createMockMessageRouter,
   createMockSystemCache,
@@ -23,7 +26,7 @@ ConfigurationManager.getInstance().initialize();
 
 function buildEngineHarness(partitionIds) {
   const participantCalls = [];
-  const transactionCoordinator = new DistributedTransactionCoordinator({
+  const transactionCoordinator = createTestTransactionCoordinator({
     beginParticipant: async (sessionId, partitionId) => {
       participantCalls.push(`begin:${sessionId}:${partitionId}`);
     },
@@ -97,7 +100,10 @@ test('transaction-owned mode - one participant autocommits without begin',
       'caller mode is ignored and direct autocommit opens no participant');
   });
 
-test('transaction-owned mode - active explicit write always enlists and uses 1PC',
+// Superseded (TX1 owner decision 2026-10-10, design 11.2 and derivation 4,
+// seam F): a single-participant explicit transaction is prepare-first; the
+// ONE_PHASE_COMMIT fast path is retired.
+test('transaction-owned mode - active explicit write enlists and prepares',
   async (t) => {
     const {
       engine,
@@ -113,10 +119,10 @@ test('transaction-owned mode - active explicit write always enlists and uses 1PC
     const commitResult = await transactionCoordinator.commit('explicit-one');
 
     t.equal(writeResult.success, true);
-    t.equal(commitResult.commitMode, COMMIT_MODE.ONE_PHASE_COMMIT);
-    t.equal(participantCalls.some((call) => call.startsWith('prepare:')), false);
+    t.equal(commitResult.commitMode, COMMIT_MODE.TWO_PHASE_COMMIT);
     t.same(participantCalls, [
       'begin:explicit-one:p1',
+      'prepare:explicit-one:p1',
       'commit:explicit-one:p1',
     ]);
   });
@@ -140,18 +146,18 @@ test('transaction-owned mode - post-plan multi participant autocommit uses 2PC',
 test('transaction-owned mode - failed freeze persistence blocks participant commit',
   async (t) => {
     let participantCommitCount = 0;
-    const gateway = {
-      supportsMutationSubmission: () => true,
-      async submitMutation(mutation) {
+    // The frozen decision is an UPDATE of the transaction row inserted once
+    // at BEGIN (TX1 design 2.1: every later write of the row is an update).
+    const gateway = createTransactionPersistenceGateway({
+      beforeMutation(mutation) {
         if (
-          mutation?.row?.participant_set_state ===
+          (mutation?.row ?? mutation?.data)?.participant_set_state ===
             PARTICIPANT_SET_STATE.FROZEN
         ) {
-          return {success: false, error: 'freeze persistence rejected'};
+          throw new Error('freeze persistence rejected');
         }
-        return {success: true};
       },
-    };
+    });
     const engine = new SQLQueryEngine({
       controlPlaneSystemTableGateway: gateway,
     });
@@ -176,10 +182,15 @@ test('transaction-owned mode - failed freeze persistence blocks participant comm
     );
   });
 
-test('transaction-owned mode - ambiguous 1PC outcome lookup carries exact epoch',
+// Superseded (TX1 design 9.2 row sql-query-engine-transaction-owned-commit-
+// mode :180-200, seams A and D): a commit miss is resolved by an outcome read
+// keyed by the transaction identity (transactionId, participantId), not by
+// session and epoch; the single participant is prepared first (seam F).
+test('transaction-owned mode - ambiguous commit outcome read carries identity',
   async (t) => {
     const engine = new SQLQueryEngine({
       autoStartDistributedTransactionRecovery: false,
+      controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
     });
     const outcomeRequests = [];
     engine.deliverTransactionOperation = async (
@@ -195,9 +206,16 @@ test('transaction-owned mode - ambiguous 1PC outcome lookup carries exact epoch'
       }
       if (operation === QUERY_OPERATION.TRANSACTION_OUTCOME) {
         outcomeRequests.push({sessionId, partitionId, ...options});
-        return {outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED};
+        return {
+          ...answerParticipantTransactionRequest({operation, ...options},
+            partitionId),
+          durable: true,
+          state: 'COMMITTED',
+          outcome: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
+        };
       }
-      return {success: true};
+      return answerParticipantTransactionRequest({operation, ...options},
+        partitionId);
     };
 
     const begin = await engine.transactionCoordinator.begin('epoch-outcome');
@@ -211,6 +229,9 @@ test('transaction-owned mode - ambiguous 1PC outcome lookup carries exact epoch'
     t.same(outcomeRequests, [{
       sessionId: 'epoch-outcome',
       partitionId: 'p1',
+      transactionId: begin.transactionId,
+      participantId: `${begin.transactionId}:p1`,
+      commitMode: COMMIT_MODE.TWO_PHASE_COMMIT,
       transactionEpoch: begin.transactionEpoch,
     }]);
   });

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -10,6 +11,7 @@ import {applyCommittedEntryTransaction} from
 import {RAFT_RS_ENTRY_TYPE} from
   '../../../src/raft/raft-rs-ready-loop-constants.js';
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 
 const HOST_FAILURE = 'HOST_FAILURE';
 const CORE_FATAL = 'CORE_FATAL';
@@ -128,7 +130,7 @@ test('every Ready delivery failure is a per-peer outcome and never reconstructs 
         if (transportFault.armed && transportFault.phase ===
             'send-no-handler') {
           transportFault.armed = false;
-          return {acknowledged: false, noHandler: true};
+          return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
         }
         return undefined;
       },
@@ -248,6 +250,26 @@ test('application effects and durable applied progress commit atomically',
     }
   });
 
+test('an async committed membership applier cannot advance durable progress',
+  () => {
+    const db = new Database(':memory:');
+    try {
+      const store = new RaftRsDurableStore(db);
+      assert.throws(() => applyCommittedEntryTransaction({store,
+        groupId: 'async-membership-applier', entry: {index: '1', term: '1',
+          entryType: RAFT_RS_ENTRY_TYPE.CONF_CHANGE, data: ''},
+        confState: {voters: ['1'], learners: [], votersOutgoing: [],
+          learnersNext: [], autoLeave: false}, membershipGenerationIndex: '1',
+        committedMembershipContext: {replicaIdentity: 'learner', peerId: '2'},
+        applyCommittedMembershipContext: async () => undefined,
+      }), /must complete inside its SQLite transaction/u);
+      assert.equal(store.readDurableRecord('async-membership-applier')
+        .appliedIndex, '0');
+    } finally {
+      db.close();
+    }
+  });
+
 test('runtime replacement cannot re-enter a Ready generation suspended in host delivery',
   async () => {
     let releaseDelivery = null;
@@ -286,19 +308,13 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       let fatal;
       try {
         console.error = () => undefined;
-        const accepted = await cluster.node(victim).step({
+        const accepted = await cluster.node(victim).step(coreTrappingAppend({
+          dbFile: cluster.replica(victim).dbFile,
           groupId: cluster.partitionId,
-          to: victimStatus.peerId,
-          message: {
-            from: leaderPeerId,
-            to: victimStatus.peerId,
-            msgType: 8,
-            term: String(victimStatus.term),
-            logTerm: '0',
-            index: '0',
-            commit: '999999',
-          },
-        });
+          status: victimStatus,
+          from: leaderPeerId,
+          term: String(victimStatus.term),
+        }));
         assert.equal(accepted.reason, 'inbound-enqueued');
         fatal = await cluster.node(victim).tick();
       } finally {
@@ -307,7 +323,7 @@ test('runtime replacement cannot re-enter a Ready generation suspended in host d
       assert.equal(fatal.outcome, CORE_FATAL);
       const replaced = await cluster.node(victim).readStatus();
       const entriesAfterReplacement = cluster.coreEntryCount();
-      releaseDelivery({acknowledged: true});
+      releaseDelivery(buildDeliveryEnvelope({acknowledged: true}));
       const staleContinuation = await pendingReady;
       assert.equal(staleContinuation.outcome, HOST_FAILURE);
       assert.equal(staleContinuation.phase, 'runtime-generation-changed');
@@ -359,19 +375,14 @@ test('runtime traps and temporary host unavailability preserve logical identity'
       let trapped;
       try {
         console.error = () => undefined;
-        const accepted = await trappedCluster.node(victim).step({
-          groupId: trappedCluster.partitionId,
-          to: before.peerId,
-          message: {
+        const accepted = await trappedCluster.node(victim).step(
+          coreTrappingAppend({
+            dbFile: trappedCluster.replica(victim).dbFile,
+            groupId: trappedCluster.partitionId,
+            status: before,
             from: trappedCluster.raftPeerIdOf(leader),
-            to: before.peerId,
-            msgType: 8,
             term: String(before.term),
-            logTerm: '0',
-            index: '0',
-            commit: '999999',
-          },
-        });
+          }));
         assert.equal(accepted.reason, 'inbound-enqueued');
         trapped = await trappedCluster.node(victim).tick();
       } finally {

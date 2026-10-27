@@ -51,6 +51,8 @@
  * see testing-guidelines/harness.md).
  */
 
+import {isSystemTableName} from
+  '../bootstrap/system-table-schema-shared-constants.js';
 import {
   PREPARE_STATUS,
   START_STATUS,
@@ -169,7 +171,9 @@ function validateReduceConfig(parsed) {
   const reduce = parsed[SQL_QUERY_LOOP_CONFIG_FIELD.REDUCE];
   const resultTable = parsed[SQL_QUERY_LOOP_CONFIG_FIELD.RESULT_TABLE];
   if (resultTable !== undefined &&
-      (!isNonEmptyString(resultTable) || reduce === undefined)) {
+      (!isNonEmptyString(resultTable) ||
+        isSystemTableName(resultTable) ||
+        reduce === undefined)) {
     return SQL_QUERY_LOOP_ERROR.RESULT_TABLE_INVALID;
   }
   if (reduce !== undefined && !isValidReduceShape(reduce)) {

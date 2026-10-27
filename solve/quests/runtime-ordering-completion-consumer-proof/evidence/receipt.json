@@ -1,0 +1,36 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "ordering-vectors-and-references",
+      "passed": true,
+      "reason": "Second checkpoint5a3cdc7 exact-ID companion3/3; independently controlled references/passive vectors retained. This does not supersede F1."
+    },
+    {
+      "id": "transfer-completion-consumers",
+      "passed": false,
+      "reason": "Three exercised consumer controls pass5a3cdc7, but full durable REPLACE removal and historical servedLegacy reopenCohort authority remain unexercised."
+    },
+    {
+      "id": "partition-outcome-custody",
+      "passed": true,
+      "reason": "First checkpoint6cddf137 native2/2: pending after acceptance, same-entry UNKNOWN, survivor commit and one-effect replay; limited to exercised route."
+    },
+    {
+      "id": "wasm-identical-source-pair",
+      "passed": true,
+      "reason": "Identical test pair retained: each1pass1fail named STRONG_WRITE_SUCCESS_BEFORE_COMMIT. Evidence collection receipt, not a product-green verdict."
+    },
+    {
+      "id": "message-group-custody",
+      "passed": false,
+      "reason": "First checkpoint5a3cdc7 run0/1 fixture/input-boundary failure before recipient proposal. Owed source retained; ACK/discharge/loss/replay unmeasured."
+    },
+    {
+      "id": "independent-review-and-preservation",
+      "passed": true,
+      "reason": "Final exact-content cross-review accepted evidence with gaps; archive uploaded/downloaded/hash-verified by existing evidence owner. Non-main branch delivery tracked separately; no product or landing approval."
+    }
+  ]
+}

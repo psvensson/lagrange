@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -32,6 +33,8 @@ const SOURCE_REPLICA_ID = 'ratings-p1-r1';
 const TARGET_REPLICA_ID = 'ratings-p1-r2';
 const RUNTIME_SERVICE_ID = 'svc-movielens-topn';
 const RUNTIME_REPLICA_ID = `${RUNTIME_SERVICE_ID}-r1`;
+const RUNTIME_TARGET_CLAIM_KEY = `${RUNTIME_SERVICE_ID}:${TARGET_NODE_ID}`;
+const RUNTIME_MEMBERSHIP_PUBLICATION_EPOCH = 7;
 const REMOTE_HANDOFF_DELIVERY_SOURCE =
   'coordinator_created_remote_handoff';
 const RETRY_AFTER_MS = 25;
@@ -74,6 +77,7 @@ function operationToRow(operation) {
     entity_type: operation.entityType,
     entity_id: operation.entityId,
     replica_id: operation.replicaId,
+    target_claim_key: operation.targetClaimKey ?? null,
     source_node_id: operation.sourceNodeId,
     target_node_id: operation.targetNodeId,
     status: operation.status,
@@ -83,6 +87,8 @@ function operationToRow(operation) {
     completed_at: operation.completedAt,
     error_message: operation.errorMessage,
     steps_history: JSON.stringify(operation.stepsHistory),
+    membership_publication_epoch:
+      operation.membershipPublicationEpoch ?? null,
   };
 }
 
@@ -143,7 +149,7 @@ function createTargetOutcomeHarness(operation, options = {}) {
         if (typeof options.deliveryResult === 'function') {
           return options.deliveryResult(target, payload, deliveryOptions);
         }
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
       getConnectionHandoffDiagnostics(nodeId) {
         connectionDiagnosticNodeIds.push(nodeId);
@@ -307,6 +313,8 @@ test(
       entityType: 'runtime_service',
       entityId: RUNTIME_SERVICE_ID,
       replicaId: RUNTIME_REPLICA_ID,
+      targetClaimKey: RUNTIME_TARGET_CLAIM_KEY,
+      membershipPublicationEpoch: RUNTIME_MEMBERSHIP_PUBLICATION_EPOCH,
       status: ReplicaStatus.CREATING,
       workflowStep: WORKFLOW_STEP.CREATING,
     });
@@ -339,6 +347,18 @@ test(
         harness.deliveries[0]?.payload?.[ControlPlaneField.HANDOFF_MODE],
         COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.TARGET_EXECUTOR_OUTCOME,
         'runtime completion should mark the wake as target progress',
+      );
+      t.equal(
+        harness.deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+          ?.target_claim_key,
+        RUNTIME_TARGET_CLAIM_KEY,
+        'runtime target-progress wake should carry the exact claim key',
+      );
+      t.equal(
+        harness.deliveries[0]?.payload?.[ControlPlaneField.OPERATION_ROW]
+          ?.membership_publication_epoch,
+        RUNTIME_MEMBERSHIP_PUBLICATION_EPOCH,
+        'runtime target-progress wake should carry the planning epoch',
       );
       t.equal(
         operation.workflowStep,
@@ -401,14 +421,14 @@ test(
       deliveryResult() {
         deliveryAttempt += 1;
         if (deliveryAttempt === 1) {
-          return {
+          return buildDeliveryEnvelope({
             acknowledged: false,
             error: RETRYABLE_DELIVERY_ERROR,
             deferRetry: true,
             retryAfterMs: RETRY_AFTER_MS,
-          };
+          });
         }
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     });
     try {
@@ -569,12 +589,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     try {
@@ -619,12 +639,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     try {
@@ -685,12 +705,12 @@ test(
     const operation = buildUserPartitionReplaceOperation();
     const harness = createTargetOutcomeHarness(operation, {
       deliveryResult() {
-        return {
+        return buildDeliveryEnvelope({
           acknowledged: false,
           error: RETRYABLE_DELIVERY_ERROR,
           deferRetry: true,
           retryAfterMs: RETRY_AFTER_MS,
-        };
+        });
       },
     });
     const syncingTimeoutMs = harness.coordinator.getTimeoutForStep(

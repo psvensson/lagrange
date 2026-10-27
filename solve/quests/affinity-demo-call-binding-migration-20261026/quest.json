@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "affinity-demo-call-binding-migration-20261026",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Replace the raw-SQL deployQueryLoopService scaffolding in examples/service-data-affinity/run-affinity-demo.js with a genuine public WASI call-Binding deployment over call_cell_reduce_slots and call_cell_reduce_results, and attribute data-local Call Cell shard reads to service_partition_access.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/affinity-demo-call-binding-migration-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "no-raw-sql-service-scaffolding-in-affinity-demo",
+        "public-wasi-call-binding-deployment-and-invocation",
+        "call-cell-shard-partition-access-attribution",
+        "affinity-demo-test-cone-and-independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-raw-sql-service-scaffolding",
+      "statement": "Remove deployQueryLoopService, raw INSERT INTO config, raw INSERT INTO service_definitions, and user-created movielens_top10 / movielens_top10_reduce_slots tables from examples/service-data-affinity/run-affinity-demo.js with no fallback."
+    },
+    {
+      "id": "public-wasi-call-binding",
+      "statement": "Deploy the MovieLens Top-N ranking service through the public WASI Binding.call pipeline (runGenerate, runBuild, runDeploy) and invoke it via CALL BINDING over call_cell_reduce_slots and call_cell_reduce_results."
+    },
+    {
+      "id": "call-cell-partition-access-attribution",
+      "statement": "Attribute data-local Call Cell shard partition reads to service_partition_access on the local SQL engine and wake runtime-service rebalancers on call_activation_leases and service_partition_access updates."
+    }
+  ],
+  "sealedAt": "d38b9ec4549ac1eb830f7e8acf6a98e9a20cbb79"
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-release-once-per-partition-cohort",
+  "status": "fail",
+  "base": "f2d14fe2b5a0a64ba20afb6b4bac14944321bf4c",
+  "receipts": [
+    {
+      "id": "observed-repeated-seed-cohort-intents",
+      "passed": false,
+      "detail": "Initial red; no source acceptance. Existing original trace is observational; candidate/negative/seed proof and independent approvals not yet available."
+    },
+    {
+      "id": "engaged-same-host-old-source-negative",
+      "passed": false,
+      "detail": "Initial red; no source acceptance. Existing original trace is observational; candidate/negative/seed proof and independent approvals not yet available."
+    },
+    {
+      "id": "candidate-one-intent-current-membership-proof",
+      "passed": false,
+      "detail": "Initial red; no source acceptance. Existing original trace is observational; candidate/negative/seed proof and independent approvals not yet available."
+    },
+    {
+      "id": "fresh-seed-original-1000-5000-ms-and-interaction",
+      "passed": false,
+      "detail": "Initial red; no source acceptance. Existing original trace is observational; candidate/negative/seed proof and independent approvals not yet available."
+    },
+    {
+      "id": "independent-review-and-composed-static-gates",
+      "passed": false,
+      "detail": "Initial red; no source acceptance. Existing original trace is observational; candidate/negative/seed proof and independent approvals not yet available."
+    }
+  ],
+  "evidenceLimit": "No startup fix certified, source untouched at seal. All original budgets and release ownership unchanged."
+}

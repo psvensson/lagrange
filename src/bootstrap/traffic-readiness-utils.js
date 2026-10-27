@@ -7,6 +7,7 @@ import {
 import {
   PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE,
 } from './owners/bootstrap-control-plane-recovery-health.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_FUNCTION = 'function';
@@ -33,6 +34,41 @@ const TRAFFIC_READINESS_WAIT_DEFAULT = Object.freeze({
   MAX_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
   BACKOFF_MULTIPLIER: 2,
 });
+
+const LIFECYCLE_READINESS_SPENT_WAIT = Object.freeze({
+  TRAFFIC: Object.freeze({
+    wait: 'TRAFFIC_READINESS_WAIT_DEFAULT.MAX_ATTEMPTS',
+    awaited: 'lifecycle phase TRAFFIC_READY',
+  }),
+  METADATA_PUBLICATION: Object.freeze({
+    wait: 'TRAFFIC_READINESS_WAIT_DEFAULT.MAX_ATTEMPTS',
+    awaited: 'lifecycle metadata-publication readiness',
+  }),
+});
+
+/**
+ * Report exhausted lifecycle-readiness attempts.
+ * @param {Object} options - The wait options (spentWait, logger, scope,
+ *   spentSubject).
+ * @param {Object} spent - {snapshot, attempt, startedAtMs, now}.
+ */
+function reportLifecycleReadinessSpent(options, spent) {
+  const snapshot = spent.snapshot || {};
+  reportWaitBoundSpent(options.logger || null, {
+    ...(options.spentWait || LIFECYCLE_READINESS_SPENT_WAIT.TRAFFIC),
+    boundMs: null,
+    elapsedMs: spent.now() - spent.startedAtMs,
+    lastObserved: {
+      attempts: spent.attempt,
+      phase: snapshot.phase ?? null,
+      ready: snapshot.ready ?? null,
+      reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
+      retryAfterMs: snapshot.retryAfterMs ?? null,
+    },
+    scope: options.scope,
+    subject: options.spentSubject,
+  });
+}
 
 function normalizePositiveInteger(value, fallback) {
   return Number.isFinite(value) && value > 0 ?
@@ -211,6 +247,7 @@ function resolveTrafficReadinessDelayMs(snapshot, delayMs, maxDelayMs) {
 async function waitForTrafficReadiness(options = {}) {
   return waitForLifecycleReadiness({
     ...options,
+    spentWait: LIFECYCLE_READINESS_SPENT_WAIT.TRAFFIC,
     isSatisfied: isTrafficReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
       label: LOCAL_STR_LIFECYCLE_TRAFFIC_READINESS,
@@ -222,6 +259,7 @@ async function waitForTrafficReadiness(options = {}) {
 async function waitForMetadataPublicationReadiness(options = {}) {
   return waitForLifecycleReadiness({
     ...options,
+    spentWait: LIFECYCLE_READINESS_SPENT_WAIT.METADATA_PUBLICATION,
     isSatisfied: isMetadataPublicationReadySnapshot,
     buildError: (snapshot) => buildLifecycleReadinessNotReadyError(snapshot, {
       label: LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS,
@@ -248,6 +286,8 @@ async function waitForLifecycleReadiness(options = {}) {
   if (isSatisfied(initialSnapshot)) {
     return initialSnapshot;
   }
+  const now = typeof options.now === 'function' ? options.now : Date.now;
+  const startedAtMs = now();
 
   const maxAttempts = normalizePositiveInteger(
     options.maxAttempts,
@@ -284,6 +324,12 @@ async function waitForLifecycleReadiness(options = {}) {
       maxDelayMs,
     );
     if (attempt >= maxAttempts) {
+      reportLifecycleReadinessSpent(options, {
+        snapshot: lastSnapshot,
+        attempt,
+        startedAtMs,
+        now,
+      });
       throw buildError({
         ...lastSnapshot,
         retryAfterMs: effectiveDelayMs,

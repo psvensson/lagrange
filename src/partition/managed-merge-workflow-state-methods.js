@@ -15,6 +15,10 @@ import {
   MERGE_PARTICIPANT_PREFIX,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
+import {durableOwnershipClaimOf} from './managed-workflow-ownership-core.js';
+import {storedTransitionOf} from './managed-workflow-record-store.js';
+import {registrationInputsRefusalOf} from
+  './managed-workflow-registration-inputs.js';
 
 /**
  * Build the durable ownership identity for a merge coordinator process:
@@ -93,6 +97,8 @@ class ManagedMergeWorkflowStateMethods {
         [...(options.siblingPartitionIds || [])],
       [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]:
         [options.targetPartitionId],
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PROVISIONING]:
+        {...(options.targetProvisioning || {})},
       [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
         JSON.parse(JSON.stringify({
           ...options.topologySnapshot,
@@ -138,6 +144,24 @@ class ManagedMergeWorkflowStateMethods {
     }
     return sourcePartitionIds.map((partitionId) =>
       String(partitionId || '')).filter((partitionId) => partitionId);
+  }
+
+  /**
+   * The registration's partitions-row inputs re-validated at its change's
+   * turn against the compared record (managed-workflow-registration-inputs).
+   * @param {Object} registration
+   * @param {Object|null} storedRow - The compared `tables` row.
+   * @return {string|null} The input that moved, or null.
+   * @private
+   */
+  registrationInputsRefusal(registration, storedRow) {
+    const metadata = registration.metadata || {};
+    const sourcePartitionIds = this.resolveMergeSourcePartitionIds(metadata);
+    return registrationInputsRefusalOf(this, {registration, storedRow,
+      sourceIds: sourcePartitionIds,
+      deriveSiblings: (tableInfo) => this.resolveMergeSiblingPartitionIds({
+        tableId: registration.tableId, tableInfo, sourcePartitionIds,
+        mergedPartitionId: this.resolveMergeTargetPartitionId(metadata)})});
   }
 
   /**
@@ -195,50 +219,6 @@ class ManagedMergeWorkflowStateMethods {
   }
 
   /**
-   * Re-sync the LIVE in-memory workflow from the durable transition row
-   * after a same-owner fenced transition is CAS-rejected. A participant
-   * acknowledgement flush can rewrite the row while an earlier durable
-   * write is still in flight (the R1 held-cutover shape); the in-flight
-   * write then lands on a stale witness, and the durable row — not the
-   * in-memory record — is the post-race truth every later CAS witnesses
-   * against. Only a durable row still owned by THIS owner at the same
-   * fence is synced; a foreign claim is real contention, never a race,
-   * and stays a hard stale fence.
-   * @param {string} workflowId
-   * @return {Object|null} The synced in-memory workflow, or null when the
-   *   durable row is unavailable or belongs to another owner.
-   * @private
-   */
-  syncLiveMergeWorkflowFromDurable(workflowId) {
-    const existingWorkflow = this.workflowCoordinator.getWorkflowById(
-      workflowId,
-    );
-    if (!existingWorkflow) {
-      return null;
-    }
-    const durableTransition = this.findDurableMergeTransition(workflowId);
-    if (!durableTransition) {
-      return null;
-    }
-    const durableMetadata = durableTransition.transition.metadata;
-    if (String(
-      durableMetadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID] ||
-      '',
-    ) !== this.workflowOwnerId) {
-      return null;
-    }
-    const rebuiltWorkflow = this.rebuildWorkflowFromDurableTransition(
-      workflowId,
-      durableTransition,
-    );
-    if (this.isMergeWorkflowStateUnavailable(rebuiltWorkflow) ||
-        rebuiltWorkflow.fenceToken !== existingWorkflow.fenceToken) {
-      return null;
-    }
-    return rebuiltWorkflow;
-  }
-
-  /**
    * Locate the durable tables transition row carrying one workflow id.
    * @param {string} workflowId
    * @return {{tableInfo: Object, transition: Object}|null}
@@ -263,23 +243,53 @@ class ManagedMergeWorkflowStateMethods {
   }
 
   /**
-   * Rebuild an in-memory workflow record from one durable transition row.
+   * Rebuild an in-memory workflow record from one durable transition row (a
+   * projection of the record as read).
    * @param {string} workflowId
    * @param {{tableInfo: Object, transition: Object}} durableTransition
    * @return {Object|symbol}
    * @private
    */
   rebuildWorkflowFromDurableTransition(workflowId, durableTransition) {
-    const {tableInfo, transition} = durableTransition;
+    const decoded = this.decodeWorkflowRecord(workflowId,
+      durableTransition.tableInfo);
+    if (!decoded) {
+      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+    }
+    const workflow = this.workflowCoordinator.adoptWorkflowProjection(decoded);
+    if (workflow.step) {
+      this.workflowCoordinator.markTransitionCommitted(
+        workflow.workflowId,
+        workflow.step,
+      );
+    }
+    return workflow;
+  }
+
+  /**
+   * Decode one `tables` row into the merge workflow it holds (state,
+   * metadata, participants with the canonical ones materialized, ownership
+   * claim triple), or null when it holds no merge of `workflowId`. Pure: the
+   * record store's decoder (managed-workflow-record-store.js).
+   * @param {string} workflowId
+   * @param {Object} tableInfo
+   * @return {Object|null}
+   * @private
+   */
+  decodeWorkflowRecord(workflowId, tableInfo) {
+    const transition = storedTransitionOf(tableInfo);
+    if (!transition?.metadata || String(transition.metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || '') !==
+        String(workflowId)) {
+      return null;
+    }
     const sourcePartitionIds = this.resolveMergeSourcePartitionIds(
       transition.metadata,
     );
     if (sourcePartitionIds.length !== MERGE_SOURCE_PARTITION_COUNT) {
-      return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
+      return null;
     }
-
-    const durableMetadata = transition.metadata || {};
-    const workflow = this.workflowCoordinator.createWorkflowRecord({
+    return this.withCanonicalMergeParticipants({
       workflowId,
       ownerKey: this.buildMergeOwnerKey(sourcePartitionIds),
       tableId: resolveFirstDefinedValue(
@@ -296,27 +306,8 @@ class ManagedMergeWorkflowStateMethods {
         workflowId,
         transition.metadata,
       ),
-      // Restore the durable ownership claim triple: the fenced-transition
-      // CAS witnesses against it, and a recovered/resynced record that
-      // dropped it would diverge from the durable row on the next renew.
-      fenceToken: Number.isInteger(
-        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
-      ) ?
-        durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
-        ] :
-        undefined,
-      workflowOwnerId:
-        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID],
-      leaseExpiresAt: Number.isFinite(
-        durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-        ],
-      ) ?
-        Number(durableMetadata[
-          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-        ]) :
-        undefined,
+      // The durable ownership claim triple.
+      ...durableOwnershipClaimOf(transition.metadata),
       createdAt: Number(resolveFirstDefinedValue(
         tableInfo, DURABLE_ROW_CREATED_AT_KEYS, this.now(),
       )),
@@ -324,18 +315,6 @@ class ManagedMergeWorkflowStateMethods {
         tableInfo, DURABLE_ROW_UPDATED_AT_KEYS, this.now(),
       )),
     });
-    this.workflowCoordinator.setWorkflowState(workflow);
-    if (workflow.step) {
-      this.workflowCoordinator.markTransitionCommitted(
-        workflow.workflowId,
-        workflow.step,
-      );
-    }
-    this.ensureCanonicalMergeParticipants(
-      workflow.workflowId,
-      workflow.metadata,
-    );
-    return workflow;
   }
 
   /**
@@ -349,36 +328,22 @@ class ManagedMergeWorkflowStateMethods {
   }
 
   /**
-   * Ensure the canonical merge participants (two sources plus the merged
-   * target) exist on the workflow snapshot.
-   * @param {string} workflowId
-   * @param {Object} transitionMetadata
-   * @return {Object|null}
+   * The workflow with its canonical merge participants (two sources plus
+   * the merged target its metadata names) materialized when missing; the
+   * others untouched. Pure.
+   * @param {Object} workflow
+   * @return {Object} A new workflow object.
    * @private
    */
-  ensureCanonicalMergeParticipants(workflowId, transitionMetadata = {}) {
-    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
-    if (!workflow) {
-      return null;
-    }
-    if (!(workflow.participants instanceof Map)) {
-      workflow.participants = new Map();
-    }
-
-    const createdAt = Number.isFinite(workflow.createdAt) ?
-      workflow.createdAt :
-      this.now();
-    const updatedAt = Number.isFinite(workflow.updatedAt) ?
-      workflow.updatedAt :
-      this.now();
-    const sourcePartitionIds = this.resolveMergeSourcePartitionIds(
-      transitionMetadata,
-    );
+  withCanonicalMergeParticipants(workflow) {
+    const transitionMetadata = workflow.metadata || {};
+    const participants = workflow.participants instanceof Map ?
+      new Map(workflow.participants) : new Map();
     const targetPartitionId = this.resolveMergeTargetPartitionId(
       transitionMetadata,
     );
-
-    const participantSpecs = sourcePartitionIds.map((partitionId) => ({
+    const participantSpecs = this.resolveMergeSourcePartitionIds(
+      transitionMetadata).map((partitionId) => ({
       participantKey: buildMergeSourceParticipantKey(partitionId),
       partitionId,
     }));
@@ -388,28 +353,15 @@ class ManagedMergeWorkflowStateMethods {
         partitionId: targetPartitionId,
       });
     }
-
-    for (const participantSpec of participantSpecs) {
-      if (workflow.participants.has(participantSpec.participantKey)) {
-        continue;
+    for (const spec of participantSpecs) {
+      if (!participants.has(spec.participantKey)) {
+        // The split owner's canonical participant (fence seeded from the
+        // claim epoch).
+        participants.set(spec.participantKey,
+          this.canonicalParticipantOf(workflow, spec));
       }
-      workflow.participants.set(participantSpec.participantKey, {
-        workflowId,
-        participantId: participantSpec.participantKey,
-        participantKey: participantSpec.participantKey,
-        partitionId: participantSpec.partitionId,
-        status: null,
-        // Seed the participant fence from the workflow claim epoch so a
-        // source ack stamped with an older fence is rejected as
-        // STALE_FENCE (mirrors the split owner).
-        fenceToken: Number.isInteger(workflow.fenceToken) ?
-          workflow.fenceToken :
-          null,
-        createdAt,
-        updatedAt,
-      });
     }
-    return workflow;
+    return {...workflow, participants};
   }
 
   /**

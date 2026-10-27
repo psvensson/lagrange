@@ -1,4 +1,5 @@
 import {buildPublicationRecoveryGateSnapshot} from './publication-recovery-gate.js';
+import {isPriorityRecoveryClosureWitnessPending} from './publication-recovery-priority-spread.js';
 import {LOCAL_EMPTY_LIST, LOCAL_STR_EMPTY, PRIORITY_RECOVERY_ACTIVE_GATE_PROGRESS_FIELD, PRIORITY_RECOVERY_OBSERVATION_GATE_FIELD, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE, PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE, isRecord, normalizeDistinctStringArray, normalizeNonNegativeInteger, normalizePriorityPartitionSummary} from './priority-recovery-observation-normalization.js';
 
 function resolveProjectionDiagnostics(publicationConvergence = null) {
@@ -74,12 +75,6 @@ function resolvePriorityRecoveryReasonCodes(
     ),
   ];
   return Object.freeze(normalizeDistinctStringArray(reasonCodes));
-}
-
-function shouldApplyObservationClosureWitness(
-  priorityRecoveryClosureWitness = null,
-) {
-  return priorityRecoveryClosureWitness?.prioritySpreadPending === false;
 }
 
 function resolveObservationPublicationConvergenceGate(
@@ -180,55 +175,40 @@ function resolveObservationPriorityRecoveryClosureWitness(
           null;
 }
 
+// The census summary the observation reports: the publication's durable
+// summary, else the gate's (built from it). A closure witness never supplies
+// or selects a summary (owner decision 2026-10-04).
 function resolveObservationPriorityPartitionSummary(
   publicationConvergence = null,
   publicationConvergenceGate = null,
-  priorityRecoveryClosureWitness = null,
 ) {
-  const publicationSummary = normalizePriorityPartitionSummary(
+  return normalizePriorityPartitionSummary(
     publicationConvergence?.priorityPartitionSummary,
-  );
-  const gateSummary = normalizePriorityPartitionSummary(
+  ) || normalizePriorityPartitionSummary(
     publicationConvergenceGate?.priorityPartitionSummary,
   );
-  const closureWitnessSummary = normalizePriorityPartitionSummary(
-    priorityRecoveryClosureWitness?.refreshedPriorityPartitionSummary,
-  );
-  return shouldApplyObservationClosureWitness(priorityRecoveryClosureWitness) ?
-    gateSummary || closureWitnessSummary || publicationSummary :
-    publicationSummary || gateSummary || closureWitnessSummary;
 }
 
-function resolveObservationPriorityRecoveryReasonCodes(
-  publicationConvergence = null,
-  publicationConvergenceGate = null,
-  priorityRecoveryClosureWitness = null,
-) {
-  if (shouldApplyObservationClosureWitness(priorityRecoveryClosureWitness)) {
-    return Object.freeze(
-      normalizeDistinctStringArray(
-        publicationConvergenceGate?.reasonCodes ||
-          publicationConvergenceGate?.reasons,
-      ),
-    );
-  }
-  return resolvePriorityRecoveryReasonCodes(
-    publicationConvergence,
-    publicationConvergenceGate,
-  );
-}
-
+// The partitions the observation reports blocked: the decision snapshots'
+// unresolved set, else the census gap. A PENDING closure witness may only add
+// a blocker (owner decision 2026-10-04), so its blocked partitions are always
+// counted - the observation never says pending with nothing blocked.
 function resolveObservationPriorityRecoveryBlockedPartitionIds(
   priorityPartitionSummary = null,
   decisionSnapshotSummary = null,
+  priorityRecoveryClosureWitness = null,
 ) {
+  const witnessBlockedPartitionIds =
+    isPriorityRecoveryClosureWitnessPending(priorityRecoveryClosureWitness) ?
+      normalizeDistinctStringArray(
+        priorityRecoveryClosureWitness.blockedPartitionIds,
+      ) :
+      LOCAL_EMPTY_LIST;
   const decisionBlockedPartitionIds = normalizeDistinctStringArray(
     decisionSnapshotSummary?.blockedPartitionIds,
   );
-  if (decisionBlockedPartitionIds.length > 0) {
-    return decisionBlockedPartitionIds;
-  }
-  const convergenceBlockedPartitionIds = Object.freeze(
+  const ownBlockedPartitionIds = decisionBlockedPartitionIds.length > 0 ?
+    decisionBlockedPartitionIds :
     normalizeDistinctStringArray([
       ...normalizeDistinctStringArray(priorityPartitionSummary?.missingPartitionIds),
       ...(Array.isArray(priorityPartitionSummary?.blockedPartitions) ?
@@ -236,11 +216,11 @@ function resolveObservationPriorityRecoveryBlockedPartitionIds(
           (entry) => entry?.partitionId,
         ) :
         []),
-    ]),
-  );
-  return convergenceBlockedPartitionIds.length > 0 ?
-    convergenceBlockedPartitionIds :
-    decisionBlockedPartitionIds;
+    ]);
+  return Object.freeze(normalizeDistinctStringArray([
+    ...ownBlockedPartitionIds,
+    ...witnessBlockedPartitionIds,
+  ]));
 }
 
 function resolveObservationActiveGateContext(options = {}) {
@@ -324,16 +304,17 @@ function hasSelectedMissingPublishedEvidence(evidence) {
     PRIORITY_RECOVERY_SELECTED_MISSING_EVIDENCE_STATE.UNAVAILABLE;
 }
 
+// The closure record fields name a classification an active-gate observer
+// (the distributed harness) recorded on its own progress records; the runtime
+// closure witness carries none since the owner decision of 2026-10-04.
 function resolveObservationClosureField(
   options = {},
   fieldName = LOCAL_STR_EMPTY,
-  priorityRecoveryClosureWitness = null,
   activeGateContext = {},
 ) {
   return typeof options[fieldName] === 'string' ?
     options[fieldName] :
-    priorityRecoveryClosureWitness?.[fieldName] ||
-      activeGateContext.activeGateProgress?.[fieldName] ||
+    activeGateContext.activeGateProgress?.[fieldName] ||
       activeGateContext.activeGateBestProgress?.[fieldName] ||
       activeGateContext.activeGateNoProgress?.[fieldName] ||
       null;
@@ -347,10 +328,8 @@ export {
   resolveObservationPriorityPartitionSummary,
   resolveObservationPriorityRecoveryBlockedPartitionIds,
   resolveObservationPriorityRecoveryClosureWitness,
-  resolveObservationPriorityRecoveryReasonCodes,
   resolveObservationPublicationConvergenceGate,
   resolvePriorityRecoveryReasonCodes,
   resolveProjectionDiagnostics,
   resolveSelectedMissingPublishedEvidence,
-  shouldApplyObservationClosureWitness,
 };

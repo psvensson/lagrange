@@ -15,6 +15,7 @@
  * not-invocable; sessions lacking BINDING_CALL are denied before dispatch.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -588,14 +589,13 @@ function executePartitionQuery(partitionStores, address, message) {
   const partitionId = address.split('/')[2];
   const database = partitionStores.databases.get(partitionId);
   if (!database) {
-    return {acknowledged: true, success: false,
+    return {success: false,
       error: `unknown partition: ${partitionId}`};
   }
   const sql = message.sql || message.payload?.sql;
   const params = message.params || message.payload?.params || [];
   const rows = database.prepare(sql).all(...params);
   return {
-    acknowledged: true,
     success: true,
     rows,
     count: rows.length,
@@ -609,15 +609,24 @@ function createLiveMessageRouter(partitionStores) {
     register(address, handler) {
       handlers.set(address, handler);
     },
+    getRegisteredHandler(address) {
+      return handlers.get(address) ?? null;
+    },
+    unregisterExact(address, handler) {
+      if (handlers.get(address) !== handler) return false;
+      handlers.delete(address);
+      return true;
+    },
     async deliver(address, message) {
       const handler = handlers.get(address);
       if (handler) {
-        return handler(message);
+        return buildDeliveryEnvelope({acknowledged: true}, await handler(message));
       }
       if (isPartitionQueryMessage(message)) {
-        return executePartitionQuery(partitionStores, address, message);
+        return buildDeliveryEnvelope({acknowledged: true},
+          executePartitionQuery(partitionStores, address, message));
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
     send: async () => ({success: true}),
   };

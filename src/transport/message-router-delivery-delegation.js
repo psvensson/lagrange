@@ -47,13 +47,14 @@ import {
  * reconnect behavior modules, binding `this` as the router instance.
  */
 class MessageRouterDeliveryDelegation {
-  async deliverLocal(targetAddress, messageId, payload, correlationId) {
+  async deliverLocal(targetAddress, messageId, payload, correlationId, options = {}) {
     return deliverLocal(
       this,
       targetAddress,
       messageId,
       payload,
       correlationId,
+      options,
     );
   }
 
@@ -66,13 +67,14 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  tryDeliverRaftDirect(targetAddress, messageId, payload, targetNodeId) {
+  tryDeliverRaftDirect(targetAddress, messageId, payload, targetNodeId, options = {}) {
     return tryDeliverRaftDirect(
       this,
       targetAddress,
       messageId,
       payload,
       targetNodeId,
+      options,
     );
   }
 
@@ -136,6 +138,7 @@ class MessageRouterDeliveryDelegation {
     payload,
     correlationId,
     deliveryTimeoutMs = null,
+    options = {},
   }) {
     return resolveRecoverableDeliveryError(this, {
       error,
@@ -145,6 +148,7 @@ class MessageRouterDeliveryDelegation {
       payload,
       correlationId,
       deliveryTimeoutMs,
+      options,
     });
   }
 
@@ -200,8 +204,8 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  shouldDeferColdReconnectForDeliveryBudget(timeoutMs) {
-    return shouldDeferColdReconnectForDeliveryBudget(this, timeoutMs);
+  shouldDeferColdReconnectForDeliveryBudget(remainingMs) {
+    return shouldDeferColdReconnectForDeliveryBudget(this, remainingMs);
   }
 
   buildColdReconnectBudgetFailure(
@@ -219,8 +223,8 @@ class MessageRouterDeliveryDelegation {
     );
   }
 
-  async ensureNodeConnection(targetNodeId, address) {
-    return ensureNodeConnection(this, targetNodeId, address);
+  async ensureNodeConnection(targetNodeId, address, connectBudgetMs) {
+    return ensureNodeConnection(this, targetNodeId, address, connectBudgetMs);
   }
 
   async tryDeliverAfterReconnect(
@@ -231,6 +235,7 @@ class MessageRouterDeliveryDelegation {
     targetNodeId,
     correlationId,
     timeoutMs = null,
+    options = {},
   ) {
     return tryDeliverAfterReconnect(
       this,
@@ -241,6 +246,7 @@ class MessageRouterDeliveryDelegation {
       targetNodeId,
       correlationId,
       timeoutMs,
+      options,
     );
   }
 
@@ -281,6 +287,7 @@ class MessageRouterDeliveryDelegation {
     targetNodeId,
     correlationId,
     timeoutMs = null,
+    options = {},
   ) {
     return sendMessage(
       this,
@@ -291,6 +298,7 @@ class MessageRouterDeliveryDelegation {
       targetNodeId,
       correlationId,
       timeoutMs,
+      options,
     );
   }
 

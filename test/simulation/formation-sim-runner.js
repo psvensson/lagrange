@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Deterministic five-node cold-formation simulator (formation-sim quest):
-// five nodes on the virtual network, one staged real-LifeRaft cohort per
-// priority control-plane table with the seed leading alone until joiners
-// arrive on the scenario's schedule, the real control-plane owners of every
+// five nodes on the virtual network, one staged raft-rs cohort per priority
+// control-plane table with the seed leading alone until joiners are admitted
+// on the scenario's schedule, the real control-plane owners of every
 // node on the node's network clock (readiness, publication, policy,
 // admission, rebalance coordinator; a real planning owner per priority
 // partition on the seed), per-node virtual time charged per owner segment
@@ -22,8 +22,10 @@
 // covers the synchronous prefix of each dispatch (up to its first await);
 // an ambient read in a later continuation is not caught here, and a read
 // caught inside an async handler surfaces as a rejected promise.
-// Math.random (LifeRaft's timer-name uuid) and process.hrtime are outside
-// the guard; neither reached the report bytes.
+// process.hrtime and the raft-rs core's election randomness (an unseeded
+// getrandom) are outside the guard; neither reached the report bytes while
+// no replica's election timeout elapses, and a scenario that starved one
+// past it would not be byte-reproducible.
 
 import path from 'node:path';
 import process from 'node:process';
@@ -59,7 +61,7 @@ import {
 import {REQUIRED_OWNERS, loadCalibration} from './formation-sim-coefficients.js';
 import {ChargeAccumulator} from './formation-sim-charge.js';
 import {GapObserver} from './formation-sim-gap-observer.js';
-import {createStagedCohort} from './formation-sim-raft-cohort.js';
+import {createStagedCohort} from './formation-sim-consensus-cohort.js';
 import {
   createPriorityPartitionRebalancer, createSimulatedNodeHosts, seedNodeRows,
 } from './formation-sim-node-hosts.js';
@@ -100,7 +102,6 @@ const SCENARIO = Object.freeze({
 const SIMULATION_GENERATION_PREFIX = 'formation-sim/';
 const DEFAULT_GENERATION = 'scenario';
 const HEARTBEAT_STATS = Object.freeze({cpuPercent: 0, memoryPercent: 0, diskPercent: 0});
-const MS_SUFFIX = ' ms';
 const QUORUM_NODE_COUNT = 3;
 const WINDOW_END_REASON = Object.freeze({FORMED: 'formed', DEADLINE: 'deadline'});
 const PERCENT = 100;
@@ -140,19 +141,11 @@ function nodeIndex(nodeId) {
   return Number(nodeId.slice(NODE_ID_PREFIX.length));
 }
 
-function raftOptionsFor(seed) {
-  return (nodeId) => ({
-    'election min': `${SCENARIO.electionMinMs}${MS_SUFFIX}`,
-    'election max': `${SCENARIO.electionMaxMs}${MS_SUFFIX}`,
-    'heartbeat': `${SCENARIO.heartbeatMs}${MS_SUFFIX}`,
-    'write': (_packet, callback) => {
-      if (typeof callback === 'function') callback(null);
-    },
-    'randomSource': new SeededRandomSource({
-      seed: seed * SEED_STREAM_STRIDE + nodeIndex(nodeId),
-    }),
-  });
-}
+const RAFT_TIMING = Object.freeze({
+  electionMinMs: SCENARIO.electionMinMs,
+  electionMaxMs: SCENARIO.electionMaxMs,
+  heartbeatMs: SCENARIO.heartbeatMs,
+});
 
 // The cold boot as data: every priority table has one partition whose only
 // replica is the seed's leader replica, the shape the seed is in when the
@@ -213,18 +206,15 @@ function publishCohortLeadership({hosts, cohorts, leadership, rebalancers, seedI
 // The owners actually hosted in this scenario that expose a current-work
 // completion contract. The harness consumes those contracts; it does not
 // reproduce their logic and does not read their internals.
-function ownerIdleContracts(hosts, cohorts, rebalancers) {
+// A raft-rs port's work is its own turns on the node's clock (its ticks and
+// inbound drains are timers the scheduler sees), so it has no contract here.
+function ownerIdleContracts(hosts, rebalancers) {
   const contracts = [];
   for (const node of hosts.values()) {
     contracts.push(() => node.controlPlaneSystemTableGateway.awaitCurrentWorkIdle());
   }
-  for (const cohort of cohorts.values()) {
-    for (const raft of cohort.rafts.values()) {
-      contracts.push(() => raft.awaitCurrentProtocolIdle());
-    }
-  }
-  // The planner is an owner of accepted work exactly as the gateway and the
-  // Raft node are. Its rebalance-check reconcile chain need not create a
+  // The planner is an owner of accepted work exactly as the gateway is. Its
+  // rebalance-check reconcile chain need not create a
   // timer or a virtual event, so nothing the scheduler can see reports it;
   // without its contract a scenario could return while a check it had
   // admitted was still running, and the continuation then executed inside
@@ -233,6 +223,17 @@ function ownerIdleContracts(hosts, cohorts, rebalancers) {
     contracts.push(() => rebalancer.awaitCurrentWorkIdle());
   }
   return contracts;
+}
+
+// What the closure authority awaits each round: every owner contract, then
+// one real host turn (the observer's checkpoint, the production seed host's
+// hostTurn). The heartbeat's reconcile tick and its lease attempt are
+// dispatched and never awaited, and no owner contract covers them; only a
+// host turn after the owners lets such a pure continuation run to its next
+// virtual event or to its end before the round is judged. It decides nothing:
+// a round whose turn enqueues nothing still ends the fixpoint.
+function closureContracts(hosts, rebalancers, observer) {
+  return [...ownerIdleContracts(hosts, rebalancers), () => observer.checkpoint()];
 }
 
 // Close the instant the scheduler is standing on. The horizon is a stopping
@@ -356,10 +357,10 @@ async function runSimulationGeneration(seed, options = {}) {
     });
   }
   const groupIds = [...PRIORITY_CONTROL_PLANE_TABLE_IDS].sort();
-  const raftOptions = raftOptionsFor(seed);
   for (const groupId of groupIds) {
     cohorts.set(groupId, createStagedCohort({
-      network, groupId, seedId, linkDelayMs: SCENARIO.linkDelayMs, raftOptions, charges,
+      network, groupId, seedId, linkDelayMs: SCENARIO.linkDelayMs, timing: RAFT_TIMING,
+      charges,
     }));
   }
   // Hosts are constructed outside any guarded dispatch (construction is
@@ -404,13 +405,13 @@ async function runSimulationGeneration(seed, options = {}) {
   const observer = options.observer || new ScenarioHostObserver().enable();
   const ownsObserver = !options.observer;
   observer.begin(options.generation || DEFAULT_GENERATION);
+  const owners = closureContracts(hosts, rebalancers, observer);
   try {
   // Instant by instant, never "run everything through virtual time X". Each
   // iteration closes the instant the scheduler stands on, then advances to
   // the next causal instant. Joins are scenario inputs applied at the instant
   // they are due, which is why the horizon is consulted before stepping.
     let instantMs = SCENARIO.startEpochMs;
-    const owners = ownerIdleContracts(hosts, cohorts, rebalancers);
     await closeCurrentInstant({network, observer, owners});
     for (let guard = 0; guard < SCENARIO.maxInstants; guard += 1) {
       for (const join of joins) {
@@ -456,10 +457,13 @@ async function runSimulationGeneration(seed, options = {}) {
   // counters. Flushing is unconditional here rather than until-quiet: a
   // pure promise chain queues nothing, so there is no event to observe.
   const boundaryMs = network.now();
-  await settle(network, boundaryMs, observer,
-    ownerIdleContracts(hosts, cohorts, rebalancers));
+  await settle(network, boundaryMs, observer, owners);
   // Runnable at the boundary, which future-due timers are not.
   const strandedEvents = network.run({untilMs: boundaryMs}).steps;
+  const groups = groupIds.map((groupId) => ({groupId, leaderId: cohorts.get(groupId).leaderId()}));
+  // Every replica is closed through its port's own lifecycle before the
+  // generation seals, so no runtime this scenario opened outlives it.
+  for (const cohort of cohorts.values()) cohort.end();
   meter.stop();
   // Owners stopped, scheduler quiescent, meter closed: only now is the
   // generation sealed, so a later callback rooted in it is an escape.
@@ -503,7 +507,7 @@ async function runSimulationGeneration(seed, options = {}) {
     seedGaps: gapObserver.gapsFor(seedId),
     strandedEvents,
     nodes,
-    groups: groupIds.map((groupId) => ({groupId, leaderId: cohorts.get(groupId).leaderId()})),
+    groups,
     readinessObservations: observations.readiness,
     spreadObservations: observations.spread,
     admissionTransitions: [],

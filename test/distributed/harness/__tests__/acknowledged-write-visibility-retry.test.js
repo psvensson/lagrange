@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
 } from '../../scenarios/rolling-restart.js';
+import {
+  assertAcknowledgedWritesVisibleOnSurvivors,
+} from '../../scenarios/node-failure-rebalance.js';
 
 const arrayMap = Function.call.bind(Array.prototype.map);
 
@@ -27,15 +30,15 @@ const arrayMap = Function.call.bind(Array.prototype.map);
 const ACK_IDS = ['w1', 'w2'];
 const ACK = {
   ids: ACK_IDS,
-  tableName: 'logs',
+  tableName: 'user_load_logs',
   idColumn: 'log_id',
   receipts: arrayMap(ACK_IDS, (id, index) => {
     const operationId = `operation-${id}`;
     const idempotencyKey = `idempotency-${id}`;
     const durableCommitWitness = {
-      partitionId: 'logs-p1',
+      partitionId: 'user_load_logs-p1',
       leaderNodeId: 'writer-node',
-      leaderReplicaId: 'logs-p1-writer-node',
+      leaderReplicaId: 'user_load_logs-p1-writer-node',
       term: 1,
       logIndex: index + 1,
       entryId: `entry-${id}`,
@@ -52,7 +55,7 @@ const ACK = {
       missingCommitWitnessPartitions: [],
       durableCommitWitnesses: [durableCommitWitness],
       participantReceipts: [{
-        partitionId: 'logs-p1',
+        partitionId: 'user_load_logs-p1',
         acceptingNodeId: 'writer-node',
         acknowledgedAtMs: 1,
         durableCommitWitness,
@@ -68,9 +71,9 @@ function okResult(ids, nodeId) {
     rows: arrayMap(ids, (id) => ({ack_id: id})),
     readAuthorityWitnesses: [{
       state: 'observed',
-      partitionId: 'logs-p1',
+      partitionId: 'user_load_logs-p1',
       servingNodeId: nodeId,
-      servingReplicaId: `logs-p1-${nodeId}`,
+      servingReplicaId: `user_load_logs-p1-${nodeId}`,
       term: 1,
       role: 'follower',
       observedAtMs: Date.now(),
@@ -131,4 +134,44 @@ describe('acknowledged-write visibility probe — thrown-query retry', () => {
       'a participant down for the whole deadline must still fail (not masked)',
     );
   });
+
+  it('rejects logs or missing table identity on both acknowledged-write visibility probes',
+    async () => {
+      const node = {
+        id: 'node-D',
+        isReachable: async () => true,
+        query: async () => okResult(ACK.ids, 'node-D'),
+      };
+      await assert.rejects(
+        () => assertAcknowledgedWritesVisibleOnReachableNodes(
+          {...ACK, tableName: 'logs'},
+          [node],
+          FAST,
+        ),
+        /Acknowledged-write visibility requires an explicit non-logs tableName/,
+      );
+      await assert.rejects(
+        () => assertAcknowledgedWritesVisibleOnReachableNodes(
+          {...ACK, tableName: ''},
+          [node],
+          FAST,
+        ),
+        /Acknowledged-write visibility requires an explicit non-logs tableName/,
+      );
+      await assert.rejects(
+        () => assertAcknowledgedWritesVisibleOnSurvivors(
+          {ids: ACK.ids, tableName: 'logs', idColumn: 'log_id'},
+          [node],
+        ),
+        /Acknowledged write durability requires an explicit non-logs user load tableName/,
+      );
+      const survivorVisibility = await assertAcknowledgedWritesVisibleOnSurvivors(
+        {ids: ACK.ids, tableName: 'user_load_logs', idColumn: 'log_id'},
+        [node],
+      );
+      assert.deepEqual(survivorVisibility, {
+        acknowledgedWriteCount: 2,
+        survivingNodeCount: 1,
+      });
+    });
 });

@@ -1,0 +1,11 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "lineage-evidence-relocation--changes-global-owner-debt-inventory-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "bb3854176bf3f95b8227ea65128597fe1bf22d46d2f001d8b4dce6aefb1e7b22",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/lineage-evidence-relocation--changes-global-owner-debt-inventory-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/changes/global-owner-debt-inventory/",
+  "files": [
+    ["attempt-6.diff.gz","b8ff12639820c3ec60e40f5cf1d015a4a7b5ecb63b77fe272149d398005c7e60",11787]
+  ]
+}

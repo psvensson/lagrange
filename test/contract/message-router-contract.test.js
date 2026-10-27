@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Stub/real contract suite for the messageRouter seam.
  *
@@ -55,15 +56,15 @@ test('contract stub factory honors the same delivery contract', async (t) => {
 });
 
 test('contract stub can reproduce the ACK-swallowed noHandler drop ' +
-  '(DELIVERED at the transport is NOT owner-processed)', async (t) => {
+  '(ACK alone never means DELIVERED)', async (t) => {
   const droppedAddress = 'stub-node/service/mid-startup-target';
   const stub = createContractMessageRouterStub({
     simulateNoHandlerAckAddresses: [droppedAddress],
   });
   const response = await stub.deliver(droppedAddress, {type: 'WAKE'}, {});
-  t.equal(response.acknowledged, true, 'the transport ACKs the delivery');
+  t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(response)), false, 'no-handler prevents delivery despite the earlier ACK');
   t.equal(
-    response.noHandler,
+    response.transport.noHandler,
     true,
     'the ACK carries noHandler=true — consumers that only check ' +
       'acknowledged treat a dropped message as success (the run-26 wake ' +

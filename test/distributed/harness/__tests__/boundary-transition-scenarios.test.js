@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
 import {RebalanceCoordinator} from '../../../../src/rebalancer/rebalance-coordinator.js';
@@ -268,6 +269,26 @@ test('boundary-transition scenario preserves authority-establishment ' +
   };
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy() {
+      applyAttemptCount += 1;
+      if (applyAttemptCount === 1) {
+        const error = new Error('Message timeout');
+        error.code = 'QUERY_TIMEOUT';
+        error.retryAfterMs = 1;
+        error.outcome = 'deferred';
+        error.reasonCode = 'publication_epoch_pending';
+        error.reasonCodes = ['publication_epoch_pending'];
+        error.failedDimensions = ['publishedConvergencePending'];
+        error.runtimeAuthority = {
+          state: 'establishing',
+          visibility: {
+            state: 'pending_publication',
+          },
+        };
+        throw error;
+      }
+      return {success: true, outcome: 'applied'};
+    },
     async queryWithTimeout(sql) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         return {rows: []};
@@ -293,26 +314,6 @@ test('boundary-transition scenario preserves authority-establishment ' +
             status: 'active',
           }],
         };
-      }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        applyAttemptCount += 1;
-        if (applyAttemptCount === 1) {
-          const error = new Error('Message timeout');
-          error.code = 'QUERY_TIMEOUT';
-          error.retryAfterMs = 1;
-          error.outcome = 'deferred';
-          error.reasonCode = 'publication_epoch_pending';
-          error.reasonCodes = ['publication_epoch_pending'];
-          error.failedDimensions = ['publishedConvergencePending'];
-          error.runtimeAuthority = {
-            state: 'establishing',
-            visibility: {
-              state: 'pending_publication',
-            },
-          };
-          throw error;
-        }
-        return {changes: 1};
       }
       if (sql.includes('control_snapshot_local(true)')) {
         repairCount += 1;
@@ -364,7 +365,7 @@ test('boundary-transition scenario defers critical partition create admission ' 
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'completed'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
       },
     },
     sqlQueryEngine: {

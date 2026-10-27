@@ -1,0 +1,79 @@
+# Exact old and new source with identical instrumented *real* release test
+# bytes on one hosted runner; neither fixture nor budget is changed.
+name: rs-raft-control-single-census-pair
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths: [.github/workflows/rs-raft-control-single-census-pair.yml]
+permissions:
+  contents: read
+jobs:
+  causal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 19
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Identical engaged test on old and candidate source, no retries
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=47ceb42e4a36757007f0d8006d2014fa1400d9c8
+          CASE='already-clean control release consumes one post-pause census at original recipient'
+          TEST=test/partition/participant-release-protocol.test.js
+          OUT="$GITHUB_WORKSPACE/test-output/control-single-census-pair"
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/candidate-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$OLD^{tree}" > "$OUT/old-tree.txt"
+          git diff --name-only "$OLD" HEAD -- src > "$OUT/changed-production-paths.txt"
+          test "$(wc -l < "$OUT/changed-production-paths.txt")" -eq 1 || exit 1
+          grep -Fx src/node/replica-handler-participant-cutover.js "$OUT/changed-production-paths.txt" || exit 1
+          PREVIOUS="$RUNNER_TEMP/rs-raft-single-census-previous"
+          git worktree add --detach "$PREVIOUS" "$OLD" \
+            > "$OUT/old-worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$PREVIOUS/$TEST" || exit 1
+          cmp "$TEST" "$PREVIOUS/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test.sha256"
+          (cd "$PREVIOUS" && sha256sum "$TEST") > "$OUT/old-test.sha256"
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          candidate_install=$?
+          (cd "$PREVIOUS" && npm ci) > "$OUT/old-install.log" 2>&1
+          old_install=$?
+          test "$candidate_install" = 0 && test "$old_install" = 0 || exit 1
+          (cd "$PREVIOUS" && node --test --test-name-pattern="$CASE" "$TEST") \
+            > "$OUT/old.tap" 2>&1
+          old_rc=$?
+          node --test --test-name-pattern="$CASE" "$TEST" > "$OUT/candidate.tap" 2>&1
+          cand_rc=$?
+          printf '%s\n' "$old_rc" > "$OUT/old.status"
+          printf '%s\n' "$cand_rc" > "$OUT/candidate.status"
+          echo "old $OLD status=$old_rc candidate $GITHUB_SHA status=$cand_rc"
+          tail -n 44 "$OUT/old.tap"
+          tail -n 40 "$OUT/candidate.tap"
+          test "$old_rc" -ne 0 || exit 1
+          grep -F 'a real current-control cohort already has a complete post-PAUSE member census' "$OUT/old.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/old.tap" || exit 1
+          grep -F 'actual: 2' "$OUT/old.tap" || exit 1
+          grep -F 'expected: 1' "$OUT/old.tap" || exit 1
+          test "$cand_rc" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE" "$OUT/candidate.tap" || exit 1
+          echo 'Specific old-source duplicate eliminated on same real host; no merge acceptance.'
+      - name: Preserve raw negative, candidate and identical test provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-single-census-source-pair-${{ github.sha }}
+          path: test-output/control-single-census-pair/
+          retention-days: 14
+          if-no-files-found: warn

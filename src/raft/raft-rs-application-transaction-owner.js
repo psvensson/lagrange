@@ -2,6 +2,11 @@ import {RAFT_RS_ENTRY_TYPE} from './raft-rs-ready-loop-constants.js';
 
 const ASYNC_APPLICATION_CALLBACK_ERROR =
   'a committed-entry callback must complete inside its SQLite transaction';
+const MEMBERSHIP_CONTEXT_APPLIER_REQUIRED =
+  'committed membership context requires a registry applier';
+const ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR =
+  'a committed membership context applier must complete inside its SQLite ' +
+  'transaction';
 
 // Only a NORMAL entry that carries a payload is a proposed command. A
 // configuration change stays with the runtime, and the empty entry a new
@@ -32,33 +37,57 @@ function runIsolatedEffects(effects) {
  * SQLite transaction. The application receives the entry's bytes and its
  * position `{index, term, effects}`; `effects.afterCommit` runs after the
  * transaction commits and `effects.afterRollback` runs when it rolls back,
- * before the failure is rethrown.
+ * before the failure is rethrown. The whole transaction (begin, application,
+ * applied-state write, commit) runs inside `runApplySlice` when one is
+ * supplied (the host's apply-slice charge, injected so this owner imports
+ * no diagnostics); the deferred effects run outside it.
  * @param {Object} options - The store, group, entry, configuration, the
- *   application callback, and whether the entry admits this replica (its
- *   participation gate's admission index is written with it).
+ *   application callback, whether the entry admits this replica (its
+ *   participation gate's admission index is written with it), and the
+ *   optional `runApplySlice(work)`.
  * @return {{escapedEffectFailures: number}} How many post-commit effects
  *   threw past the application's own reporting.
  */
 function applyCommittedEntryTransaction({store, groupId, entry, confState,
-  applyCommittedEntry, admitted = false}) {
+  membershipGenerationIndex, applyCommittedEntry, admitted = false,
+  committedMembershipContext = null, applyCommittedMembershipContext = null,
+  runApplySlice = null}) {
+  if (committedMembershipContext !== null &&
+      typeof applyCommittedMembershipContext !== 'function') {
+    throw new Error(MEMBERSHIP_CONTEXT_APPLIER_REQUIRED);
+  }
   const effects = {afterCommit: [], afterRollback: []};
+  const transact = () => store.transaction(() => {
+    if (carriesProposedCommand(entry) &&
+        typeof applyCommittedEntry === 'function') {
+      const applied = applyCommittedEntry(Buffer.from(entry.data, 'base64'),
+        {index: entry.index, term: entry.term, effects});
+      if (applied && typeof applied.then === 'function') {
+        throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
+      }
+    }
+    if (committedMembershipContext !== null) {
+      const appliedMembership =
+        applyCommittedMembershipContext(committedMembershipContext,
+          Object.freeze({index: entry.index, term: entry.term}));
+      if (appliedMembership && typeof appliedMembership.then === 'function') {
+        throw new TypeError(ASYNC_MEMBERSHIP_CONTEXT_APPLIER_ERROR);
+      }
+    }
+    store.putAppliedState(groupId, entry.index, confState, undefined,
+      membershipGenerationIndex);
+    // The entry that admitted this replica as a voter: its index is the
+    // participation gate's admission index, durable with the entry itself.
+    if (admitted) {
+      store.putAdmissionIndex(groupId, entry.index);
+    }
+  });
   try {
-    store.transaction(() => {
-      if (carriesProposedCommand(entry) &&
-          typeof applyCommittedEntry === 'function') {
-        const applied = applyCommittedEntry(Buffer.from(entry.data, 'base64'),
-          {index: entry.index, term: entry.term, effects});
-        if (applied && typeof applied.then === 'function') {
-          throw new TypeError(ASYNC_APPLICATION_CALLBACK_ERROR);
-        }
-      }
-      store.putAppliedState(groupId, entry.index, confState);
-      // The entry that admitted this replica as a voter: its index is the
-      // participation gate's admission index, durable with the entry itself.
-      if (admitted) {
-        store.putAdmissionIndex(groupId, entry.index);
-      }
-    });
+    if (typeof runApplySlice === 'function') {
+      runApplySlice(transact);
+    } else {
+      transact();
+    }
   } catch (error) {
     runIsolatedEffects(effects.afterRollback);
     throw error;

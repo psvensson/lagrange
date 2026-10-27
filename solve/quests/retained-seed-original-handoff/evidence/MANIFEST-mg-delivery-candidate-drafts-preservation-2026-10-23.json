@@ -1,0 +1,629 @@
+{
+  "purpose": "Immutable preservation of original and revised draft bytes, reviews remain independently scoped; no runtime or package acceptance claim",
+  "base": "21cfd917d8ceb2f0c1435cade117c0c44a91a03a",
+  "priorManifestSha256": "507d050f82a757e9dbc803d645d644d8004b76d34ec32c12b2697ef87ec51270",
+  "pendingAtPreservation": [
+    "whole-vector witness R2 independent review",
+    "foreground-boundary test authoring",
+    "complete candidate composition and runtime"
+  ],
+  "members": [
+    {
+      "path": "measurement-and-static/mg-delivery-candidate-lab-request.py",
+      "bytes": 8588,
+      "sha256": "4d07e125ebb1bf5db596933fdabc565023a7205fdcb5524c8fa65ea84a330b47"
+    },
+    {
+      "path": "measurement-and-static/mg-delivery-final-source-eslint-2026-10-23.json",
+      "bytes": 10866,
+      "sha256": "70b393e98f06d27b6b84db942a1dde38b64782f995c695a8aac05fc81c7f7bb0"
+    },
+    {
+      "path": "measurement-and-static/mg-delivery-final-source-static-head-delta-2026-10-23.json",
+      "bytes": 45798,
+      "sha256": "cf1760f6540d28c887176d8712e67e2659cd6d74d88322cf8c4b95d149fa13bf"
+    },
+    {
+      "path": "measurement-and-static/mg-delivery-source-syntax-r2-2026-10-23.json",
+      "bytes": 14326,
+      "sha256": "3972db2a86653b417fdc46b3e040fbaf96db5b2041936bfb20fc195620dc0054"
+    },
+    {
+      "path": "measurement-and-static/mg-vector-owner-guard-witnesses-root-static-2026-10-23.json",
+      "bytes": 574,
+      "sha256": "aa8be230259dfb93436fd34809c8d20be55c619d96029ce76b50677e831df922"
+    },
+    {
+      "path": "measurement-and-static/retained-effects-canonical-tests-with-tap-r2.py",
+      "bytes": 4087,
+      "sha256": "ae248b12797118ec5bbfdb671262337cec22f6599cb92208c93208911f1c1aa1"
+    },
+    {
+      "path": "measurement-and-static/retained-effects-canonical-tests-with-tap.py",
+      "bytes": 2421,
+      "sha256": "e8b2d752c25e34104e231f1b712a5264553b960a5177ee49ca3d13f19a6421f2"
+    },
+    {
+      "path": "measurement-and-static/retained-effects-lab-request.py",
+      "bytes": 8004,
+      "sha256": "69641b89ba0d4ca33bc4d45a2c0af87c47653c81ab4efc7f3ec538e559d62df6"
+    },
+    {
+      "path": "previous-archives/MANIFEST-mg-delivery-reviewed-drafts-2026-10-23.json",
+      "bytes": 46309,
+      "sha256": "507d050f82a757e9dbc803d645d644d8004b76d34ec32c12b2697ef87ec51270"
+    },
+    {
+      "path": "previous-archives/mg-complete-vector-r4-20261023.tar.gz",
+      "bytes": 37779,
+      "sha256": "2cd9423ed53a7a1710de9d6717bf218beee262a0b39d92e97c69684bc151af67"
+    },
+    {
+      "path": "previous-archives/mg-currentness-witnesses-r1-20261023.tar.gz",
+      "bytes": 5272,
+      "sha256": "26cbae6465ac20563a9a84f5d171529ab6bfbbcecc5c69dd52637f9d8f785843"
+    },
+    {
+      "path": "previous-archives/mg-currentness-witnesses-r2-20261023.tar.gz",
+      "bytes": 7798,
+      "sha256": "b1d5ba6ecc0ecf571fbe39954ac025723dfcabbe5925d9deb99af4a23d49d617"
+    },
+    {
+      "path": "previous-archives/mg-delivery-root-source-r1-20261023.tar.gz",
+      "bytes": 102672,
+      "sha256": "c9aebc1fe4a7143aa7510578930d701f1abe5d6c255fa63f5449feb6c58f388a"
+    },
+    {
+      "path": "previous-archives/mg-delivery-transport-r2-20261023.tar.gz",
+      "bytes": 88833,
+      "sha256": "a2ee17023ba8e22b96084ab45c7d9a277876a0d18c26348cdcd4ae087d18afc9"
+    },
+    {
+      "path": "previous-archives/mg-f3-forwarding-frozen-r3-20261023.tar.gz",
+      "bytes": 64760,
+      "sha256": "41ab076455fdce4e6e8ecd6bdc7e81aa73b4f335bef531727e8a7f8d037b97c3"
+    },
+    {
+      "path": "previous-archives/mg-invocation-notification-witness-r2-20261023.tar.gz",
+      "bytes": 5575,
+      "sha256": "ecba893ed6b7923bc9c142075acaa98a3d342d89353a5efd90c10e9482012d2a"
+    },
+    {
+      "path": "previous-archives/mg-native-custody-r1-r6-20261023.tar.gz",
+      "bytes": 15559,
+      "sha256": "01a0232f712a149e1db06cb67690a0b75786ead015925cc8e8d06cb22f96e808"
+    },
+    {
+      "path": "previous-archives/mg-native-fixture-candidate-r3-20261023.tar.gz",
+      "bytes": 35742,
+      "sha256": "f1d1cbee48e381bdd24bf5fe14bcb573ff95abdc12d73b8bdb6c3b4d92935d9d"
+    },
+    {
+      "path": "previous-archives/mg-native-fixture-candidate-r4-20261023.tar.gz",
+      "bytes": 10472,
+      "sha256": "b380b8631b72878ace854e24f90705375807a798523b6779d5fc5edca7c82ad1"
+    },
+    {
+      "path": "previous-archives/mg-native-mixed-vector-r2-20261023.tar.gz",
+      "bytes": 2925,
+      "sha256": "92d0fc6f9eec8302d0e3aabb8b6705b1096ba674190eb24efb2b95bd00a25ec9"
+    },
+    {
+      "path": "previous-archives/mg-root-selection-topology-r2-20261023.tar.gz",
+      "bytes": 95214,
+      "sha256": "dd7d7362e4da2ef811ce8ae160f5c7fa79bd84337882538d678ae928b6010455"
+    },
+    {
+      "path": "previous-archives/mg-transport-owner-static-r3-20261023.tar.gz",
+      "bytes": 36790,
+      "sha256": "8f07d65e616d8ef13929c39d486d1de8603c178d026529f0877aa62b6a2d3855"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/NOTES.md",
+      "bytes": 1263,
+      "sha256": "e8575595323fb25d83fe15ee4a2dfff6187ee830ee31ba5298b3b45a37502b65"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/after.js",
+      "bytes": 10124,
+      "sha256": "c7f6647b6829824ae16b2a460807111955248238a891bb8b3a7d09ce6d262915"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/before.js",
+      "bytes": 6596,
+      "sha256": "47fdbebc0b924a478ca47c5ea6d6fb8d0b03c583f0f12a7f601fd7d3ce85f2ee"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/before.json",
+      "bytes": 222,
+      "sha256": "eee20cd130824754fb4de1239a00a2adce2f1256b48e927567301b5b7049619e"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/delta.patch",
+      "bytes": 5267,
+      "sha256": "176ad2b4d1e023be3cc9ca25dfd4eb8234afa7458969edd90c83c0627ce953ba"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/manifest.json",
+      "bytes": 933,
+      "sha256": "482afebf1ee4d482b4757e4fda3a29ac0e34908f471b081d52f1b54719d57bf7"
+    },
+    {
+      "path": "supplemental/mg-complete-vector-witnesses-r2-20261023/static.json",
+      "bytes": 349,
+      "sha256": "e8a556fcbc4418841a0c24da5688d59cc6f71342365818e7d24f5be864b492ed"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/NOTES.md",
+      "bytes": 10208,
+      "sha256": "0b3853357415bf63de334562edb2c8464dc26d85519ffc3a47d982d1a9bed354"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/files/test/test-helpers/message-router-cdc-fixture.js",
+      "bytes": 7496,
+      "sha256": "daac517dbbd3dbc393c6817556f4cf4180d37ccb79c7b3bc861571989813fd79"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/files/test/transport/message-router-cdc-custody.test.js",
+      "bytes": 10939,
+      "sha256": "48dd9a604bf5711d2777856b927b45f494759e967daf34d71ae9c94459c363e0"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/files/test/transport/message-router-cdc-encoding.test.js",
+      "bytes": 10957,
+      "sha256": "237a94258f2a7636ac37be3c7c60300197d64cd4fb319fa206efc2f3bd01f957"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/files/test/transport/message-router-cdc-response-boundary.test.js",
+      "bytes": 4369,
+      "sha256": "1314312ea0e774bb63052c903352083508f8768f136783abe3995159305923a2"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/import-checks.json",
+      "bytes": 8182,
+      "sha256": "0eb5884b49b9944e523adfd2fabfad83a59f66283bb2addafc19ba9aa1a4605d"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/manifest.json",
+      "bytes": 3659,
+      "sha256": "995e2d7ccc4d2bc86fa2ff53e0c79dfac2fe8392275e9dafa32a31f767bf165d"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/source-inputs.json",
+      "bytes": 2474,
+      "sha256": "b5c9258fae2ce2a1df41fbb5a8f321d68241eb18998c74c9fa9ecfb2998bf498"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/static-checks-final.json",
+      "bytes": 2208,
+      "sha256": "2398220a7e3c765502be98fa6695906c62762e2e035de0906591607005e17e0a"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/static-checks-frozen.json",
+      "bytes": 2208,
+      "sha256": "2398220a7e3c765502be98fa6695906c62762e2e035de0906591607005e17e0a"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/static-checks-initial.json",
+      "bytes": 5645,
+      "sha256": "08f31c4d138824de7c623bc9bc038c1792eeb7376baffec8ee35d52e5341dcb8"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/static-checks-r2.json",
+      "bytes": 1882,
+      "sha256": "f74a9afaa0bbf031db608df0ca17271173d0c27f2ebe2c6cb6e07e868caac96c"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/static-checks-r3.json",
+      "bytes": 2902,
+      "sha256": "e02121433604b039dd1db92fbe42ac406e60cfa6d6ef7beac237e901c1e36f2a"
+    },
+    {
+      "path": "supplemental/mg-f1-transport-witnesses-r1-20261023/witnesses.patch",
+      "bytes": 34831,
+      "sha256": "4b4a4fd62038853e6d42b14ba66ac68cc3977426cf8a36364f8050a2669aaad1"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/NOTES.md",
+      "bytes": 7757,
+      "sha256": "8c95cc8807065588523ec4169661f36a762ef898f026964dfdaa728163f47584"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+      "bytes": 13791,
+      "sha256": "533d3baef282be4f8afa51c850e1ece1bafb95c4de79133dba122a94c88efde9"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "bytes": 23374,
+      "sha256": "80c3b8db820295f6f791645e250ad83ed576e8b5a7a4f7ae82610ddeb5e58edb"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/message-group/message-group-forwarding-owner.js",
+      "bytes": 23986,
+      "sha256": "3d210ea4fd8639a76dfb307a2217e7716d8517923c81102d58ea1193a47bcf9d"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+      "bytes": 13026,
+      "sha256": "35d0dd7f0df64009fdd8050aa068f70d991e4dce0b06a5fd11ce575da20cf2f7"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/topology/cdc-group-propagation-constants.js",
+      "bytes": 4023,
+      "sha256": "9a7630faf7b6a9cf88ac9b40435ecf17d55d4814507ea7a0d28a6fad34a5bbad"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 28249,
+      "sha256": "9eafb630d19dc3cfd6658b88d38e703a006e8b53f4b384221e5000b54f3cd727"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/after/src/topology/cdc-group-propagation-durable-delivery.js",
+      "bytes": 9094,
+      "sha256": "b503875473fe10b57fd4d758363b482279ca3bc04a3b5f032c119c57cb19744a"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before-manifest.json",
+      "bytes": 1305,
+      "sha256": "d688e2a01319257427db1fd58a03eb1336d79cc15e4a9bf99cda9a199dab5935"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+      "bytes": 13278,
+      "sha256": "a27dc32303b06d2b44ef724e873cd1efc2bd9e3020bcd5dd13f75c86c0dbdb53"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "bytes": 23129,
+      "sha256": "2d761655e4f517f2cf5cee3ef4e01a7216edf9bdbe86d9ed02463814c8e4de33"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/message-group/message-group-forwarding-owner.js",
+      "bytes": 23853,
+      "sha256": "a8d724ec76ccbe33cb85cf5e79d584a6c81a674631bebde53a100ee9db08d167"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+      "bytes": 12994,
+      "sha256": "ad397356fcbbd1058943a0e4fc4e874559b2426a2be3d692579a2c9a29e3baea"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/topology/cdc-group-propagation-constants.js",
+      "bytes": 3571,
+      "sha256": "884a109c07f44158ad07d6b0fb578c66f4cf9c344e7a3a3a1d1a7034a39a8e09"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 27093,
+      "sha256": "5f6df5b6b939c88debaa8934d58db09dd6491c00610e401028c0e45229391391"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/before/src/topology/cdc-group-propagation-durable-delivery.js",
+      "bytes": 7345,
+      "sha256": "7e2b1d0bfd40e3de7eb996ad13b970d3cfa1594c1d3e8d78340199b5f7d5bdfd"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/complexity-before-after.json",
+      "bytes": 10716,
+      "sha256": "5bfd15fabe04c04e87bb3a30692c380a1901708f5d2fe6e984365e8dc52bb69a"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/delta.patch",
+      "bytes": 21634,
+      "sha256": "c2b3b5c27a7840780752322113fc32b22d48ac0e47e92821a820fec0eea5fc84"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/manifest.json",
+      "bytes": 4117,
+      "sha256": "fc9b8a418a18d59e3b5cb16f1ff0a7e6e22ab3fd4ba56298c41a416d9c45f405"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/static-checks.json",
+      "bytes": 1876,
+      "sha256": "f387fcd4b56e5aa8b1104d345b41694a91ac98878f448b2cbdb6cdb930ce6b0b"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-20261023/static-owner-findings.json",
+      "bytes": 10084,
+      "sha256": "58e1cc4ace2563708b52cf10b131d5d4518a286c8870ada7296f1f9b7ce12387"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/NOTES.md",
+      "bytes": 6189,
+      "sha256": "6b3c2e04bc66dac600fcce356956bec8bfcdc442bbecd6df797f5704103d0f45"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+      "bytes": 13791,
+      "sha256": "533d3baef282be4f8afa51c850e1ece1bafb95c4de79133dba122a94c88efde9"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "bytes": 23374,
+      "sha256": "80c3b8db820295f6f791645e250ad83ed576e8b5a7a4f7ae82610ddeb5e58edb"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/message-group/message-group-forwarding-owner.js",
+      "bytes": 23986,
+      "sha256": "3d210ea4fd8639a76dfb307a2217e7716d8517923c81102d58ea1193a47bcf9d"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+      "bytes": 13026,
+      "sha256": "35d0dd7f0df64009fdd8050aa068f70d991e4dce0b06a5fd11ce575da20cf2f7"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/topology/cdc-group-propagation-constants.js",
+      "bytes": 4270,
+      "sha256": "13804a6528f9380f786b7e3aed894088fd998d8b19e2b5291793d720c7a9332c"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 29068,
+      "sha256": "4ada1cb1d7b3f21f8b41235720ff4277380ac128bada807253b86008d7a9a87f"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/topology/cdc-group-propagation-durable-delivery.js",
+      "bytes": 9450,
+      "sha256": "43aa42c2242fb6aad42c47835326ca6c7bf25432a6a730485a50a22dfc3dd212"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/after/src/topology/cdc-group-propagation-retry-wait-report.js",
+      "bytes": 3903,
+      "sha256": "adc81bca8437c9485e26c53b5a6fac256687d8a6da610ba172d3465900273258"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before-manifest.json",
+      "bytes": 1485,
+      "sha256": "fd2ff17b978c0d353c429d000cebea6ee0590b31e3a743a91218c08445bd776b"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/message-group/message-group-forwarding-owner-native-delivery-methods.js",
+      "bytes": 13791,
+      "sha256": "533d3baef282be4f8afa51c850e1ece1bafb95c4de79133dba122a94c88efde9"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/message-group/message-group-forwarding-owner-routing-methods.js",
+      "bytes": 23374,
+      "sha256": "80c3b8db820295f6f791645e250ad83ed576e8b5a7a4f7ae82610ddeb5e58edb"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/message-group/message-group-forwarding-owner.js",
+      "bytes": 23986,
+      "sha256": "3d210ea4fd8639a76dfb307a2217e7716d8517923c81102d58ea1193a47bcf9d"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/message-group/message-group-service-cdc-propagation-runtime-methods.js",
+      "bytes": 13026,
+      "sha256": "35d0dd7f0df64009fdd8050aa068f70d991e4dce0b06a5fd11ce575da20cf2f7"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/topology/cdc-group-propagation-constants.js",
+      "bytes": 4023,
+      "sha256": "9a7630faf7b6a9cf88ac9b40435ecf17d55d4814507ea7a0d28a6fad34a5bbad"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/topology/cdc-group-propagation-delivery-methods.js",
+      "bytes": 28249,
+      "sha256": "9eafb630d19dc3cfd6658b88d38e703a006e8b53f4b384221e5000b54f3cd727"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/topology/cdc-group-propagation-durable-delivery.js",
+      "bytes": 9094,
+      "sha256": "b503875473fe10b57fd4d758363b482279ca3bc04a3b5f032c119c57cb19744a"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/before/src/topology/cdc-group-propagation-retry-wait-report.js",
+      "bytes": 2216,
+      "sha256": "f13195f44a1f292a1d2fb00b63f01712c9fd364d448b21acc310d16086f4a6cf"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/complexity-before-after.json",
+      "bytes": 10550,
+      "sha256": "dec038f06ef390de55700542bbc6c0a95b6e18060471c1f3bf53298a683d332a"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/delta.patch",
+      "bytes": 10546,
+      "sha256": "4718a4288258b5566188c5630a56a3b728f2e7abfa5e1ab99e960e7ca6482a33"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/manifest.json",
+      "bytes": 4670,
+      "sha256": "e9ae837d69adc38459ceaa7dc4c1692f5375dfc05f0979a2551b7134ef66c028"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/static-checks.json",
+      "bytes": 2814,
+      "sha256": "13ebbd0cc5ca51731cd120a7c6597ff37923312dbbee670062801a4387f8f426"
+    },
+    {
+      "path": "supplemental/mg-owner-static-repair-r2-20261023/static-owner-findings.json",
+      "bytes": 5545,
+      "sha256": "7ed51c66f2fb111252e57d60ebd5a6365283b7e938ee27e39fd1800d24d8b0f4"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/NOTES.md",
+      "bytes": 3906,
+      "sha256": "a9257efc2a7d8028d76c538c394d1d179af8af7b8c92a25af74a4363839a55b9"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/STATIC.txt",
+      "bytes": 861,
+      "sha256": "e5a29dcc467ab8b16844c8a423dd6711335d1f0adadb918a85aee0a51b67584d"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/after/test/message-group/message-group-cdc-input-guard.test.js",
+      "bytes": 13653,
+      "sha256": "40adc3e235fd82f10f79a166c61a5b5eacffd3803395c81208fc2b56eeffb25c"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/after/test/message-group/message-group-native-application-membership.test.js",
+      "bytes": 7222,
+      "sha256": "aa64c7978594077cb5f0c07170fdc7fcdf2c7d3c706f7b312122cb5b8e750e77"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/delta.patch",
+      "bytes": 21486,
+      "sha256": "0f9714df7780dfe8cf68439e6ee4e6e2b66990d4abba946d0337d4549b3489c3"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guard-witnesses-r1-20261023/manifest.json",
+      "bytes": 1544,
+      "sha256": "11b2081ce7de091f36d85aef1f2c4f4b0446223a9ba313922ed75782111e7789"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/NOTES.md",
+      "bytes": 11443,
+      "sha256": "c62278789d59da194f7d6459f3097c1dfff67da3343bf8c9496f30ffd362851b"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/SCOPE.md",
+      "bytes": 2007,
+      "sha256": "711e6c50f5084b88871367e7e4780d371897b4ccabc628fcdcc478d2885e83c1"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/after/src/cdc/cdc-delivery-outcome.js",
+      "bytes": 15999,
+      "sha256": "1a90b9799e839c0aeda6a18170d9fcbf70849482e3e5202397c23de89666f0a3"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/after/src/cdc/cdc-source-scope-evidence.js",
+      "bytes": 3657,
+      "sha256": "0f5a3b488e07becb7fc34edf120f0112fff1158b4ae66181670550c0e48a0230"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/after/src/message-group/message-group-service-raft-timing.js",
+      "bytes": 8400,
+      "sha256": "7e120945c65ea7ef7ad4aaab1c2d119437144ab7ba068ee8c2f66b8a9c84abb3"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/after/src/partition/cdc-event-buffer.js",
+      "bytes": 8264,
+      "sha256": "e6da185a0c0968c7fc13c72f6b76b2a02f81f9ac83e8e7e9f57be43d9d48e305"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/after/src/utils/canonical-json-data.js",
+      "bytes": 10994,
+      "sha256": "3a850f1c2ce950367fc5918d54d7fa7a406344a941d573dfa1f9d8cb250dafb7"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before-extension-manifest.json",
+      "bytes": 334,
+      "sha256": "6ee1844348917702edfa71a8573c5bb17505488ce01bde40a468d894e4a1f1a3"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before-manifest.json",
+      "bytes": 821,
+      "sha256": "3e0fdaa16fbd46b8baa69153d5c8e7351f034cb4c59f9a4c662c0d84db91234f"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before/src/cdc/cdc-delivery-outcome.js",
+      "bytes": 15678,
+      "sha256": "cc8c406bc09059ee12f8819f2b3aee0fe2e65e8807a6ce1117f393c39b22260c"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before/src/cdc/cdc-source-scope-evidence.js",
+      "bytes": 3480,
+      "sha256": "596d5851d9f5cd8e7e42d10a49d572daa4afbc46737ec2c0076dc3ad35efe5b1"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before/src/message-group/message-group-service-raft-timing.js",
+      "bytes": 8160,
+      "sha256": "02454ed3e4f4a8b1d7d0d16015b950538b9782a659387ca906ecbea01192dda7"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before/src/partition/cdc-event-buffer.js",
+      "bytes": 7983,
+      "sha256": "73cb6facf886a2b5e77d9933bd30509f8fc04a0fbb64f064665ad08ea095d4e6"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/before/src/utils/canonical-json-data.js",
+      "bytes": 10663,
+      "sha256": "6108d474b4337e3e840068aa69bf73d934b1f575cf72108ce5b4d41b25483caa"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/complexity-comparison-final.json",
+      "bytes": 1164,
+      "sha256": "fa91111554ce1dad53c87e01ad950d25db684bff2af6d056963810801abe18d7"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/complexity-comparison.json",
+      "bytes": 1074,
+      "sha256": "3a843cc0413415d40f00ed70b70a5283275d78a7fabaf4c7300a1ec92dce52d1"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/correction.patch",
+      "bytes": 8094,
+      "sha256": "c1c3bd28f69e3d2949a37241a9caa860fd4e326db5e6b83e905b592daa31f508"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/manifest.json",
+      "bytes": 6086,
+      "sha256": "f6d1d1b1c9d8ec53accdcd926bf91f82029f7d9452c7a46de78e02db2d942b8d"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/static-checks-discriminator.json",
+      "bytes": 1152,
+      "sha256": "61a275031ce71d009e83303110eb82af9b2ac71dc525b3ba1532eba736a7bd1f"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/static-checks-initial.json",
+      "bytes": 2325,
+      "sha256": "fc4598d2ba2693d945dd4d1053fce8b8c28ac70903d24611fcba6fe76d576d03"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/static-checks.json",
+      "bytes": 2273,
+      "sha256": "504f70a8c5efbdac3043cd4c325c89de269dd46d273f36a494440012d9553c1a"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r1-20261023/static-import-checks.json",
+      "bytes": 8607,
+      "sha256": "5748fa026000d9cb5391ac3b47567bfe5373580ab99d86e6d2af97dc95efb0cf"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/NOTES.md",
+      "bytes": 6326,
+      "sha256": "4013a287a5f2ecec10a5e05e9c7c19dbe5eef47b975d0fb66587bd7f05b87b1f"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/after/src/cdc/cdc-source-scope-evidence.js",
+      "bytes": 4566,
+      "sha256": "288cd0e273b9294c1bb51e4d13cf6bfde5e13791e56c67552eeb6e6a4be8ecc6"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/before-manifest.json",
+      "bytes": 431,
+      "sha256": "7263f518477c7a1a6b05d09d0348e9bac05f23c70039b22364e07d1032c0ff55"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/before/src/cdc/cdc-source-scope-evidence.js",
+      "bytes": 3657,
+      "sha256": "0f5a3b488e07becb7fc34edf120f0112fff1158b4ae66181670550c0e48a0230"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/correction.patch",
+      "bytes": 2285,
+      "sha256": "989b0c01f5b3a1df0199474c3de8375247d2ecbcbd093e6d819b80ab7d1ee46a"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/manifest.json",
+      "bytes": 3210,
+      "sha256": "e9d07652374091f70181e5e8600ba7c33200cedbd847ca5c2beed993ef9cff2d"
+    },
+    {
+      "path": "supplemental/mg-vector-owner-guards-r2-20261023/static-checks.json",
+      "bytes": 1226,
+      "sha256": "21dd632b01852d0c6f290fd8ea2ce0a55e311ba668366c0ba599bf3d3ee3db49"
+    }
+  ],
+  "verifiedRemoteArchive": {
+    "sha256": "c0eb799e1651a8feb0a3f4d349ed5d25d88ca83432ebe38348115167ee0656c6",
+    "bytes": 732117,
+    "asset": "retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz",
+    "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/retained-seed-original-handoff--mg-delivery-candidate-drafts-preservation-20261023-1304.tar.gz"
+  },
+  "verification": "Canonical solve evidence add downloaded and re-hashed the asset before appending its Quest finding. Untracked local tar copies are not intended Git content."
+}

@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {workflowAttemptOf} from './partition-constants.js';
 import {
   loadDurableDeltasBehindWatermark,
   normalizeReplayCursor,
@@ -102,6 +103,9 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
     // source acknowledgement is stamped with it so the owner rejects
     // acks from a superseded owner epoch as STALE_FENCE.
     workflowFenceToken: Number.isInteger(fenceToken) ? fenceToken : null,
+    // The workflow attempt it was started under: every acknowledgement
+    // carries it (an ack of another attempt is stale).
+    workflowAttempt: workflowAttemptOf(metadata),
     // The durable replay cursor persisted with the transition (null
     // when the pre-restart source never recorded one): a resumed worker
     // replays deltas from the Raft log behind the watermark instead of
@@ -150,24 +154,6 @@ function assertSplitRoutingDescriptorEpochForService(service, metadata) {
         PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
     evidenceGapDefers: Boolean(service.splitReplication),
   });
-}
-
-function isSameSplitReplicationMetadata(left, right) {
-  if (!left || !right) {
-    return false;
-  }
-  return (
-    left.primaryKeyColumn === right.primaryKeyColumn &&
-    left.sourcePartitionId === right.sourcePartitionId &&
-    left.splitKey === right.splitKey &&
-    left.targetPartitionVersion === right.targetPartitionVersion &&
-    Array.isArray(left.targetPartitionIds) &&
-    Array.isArray(right.targetPartitionIds) &&
-    left.targetPartitionIds.length === right.targetPartitionIds.length &&
-    left.targetPartitionIds.every(
-      (partitionId, index) => partitionId === right.targetPartitionIds[index],
-    )
-  );
 }
 
 function reconstructSplitExecutionStateForService(service, durableState) {
@@ -220,7 +206,6 @@ function reconstructSplitExecutionStateForService(service, durableState) {
 
 export {
   assertSplitRoutingDescriptorEpochForService,
-  isSameSplitReplicationMetadata,
   normalizeSplitTransitionMetadataForService,
   reconstructSplitExecutionStateForService,
   resolveSplitDescriptorEpochEvidenceForService,

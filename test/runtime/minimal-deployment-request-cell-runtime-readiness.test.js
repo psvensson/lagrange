@@ -316,6 +316,24 @@ function createProductionPlacementFixture() {
   };
 }
 
+// Public CREATE installs the execution owner and schedules its actual worker.
+// Await that captured work, not a direct call with no admitted execution and
+// not an arbitrary number of timer turns.
+async function admitAndJoinPlacement(fixture, request) {
+  const scheduled = [];
+  const create = fixture.handler.createReplicaAsync.bind(fixture.handler);
+  fixture.handler.createReplicaAsync = (params, entry) => {
+    const running = create(params, entry);
+    scheduled.push(running);
+    return running;
+  };
+  const admission = await fixture.handler.handleCreateReplica(request);
+  assert.equal(admission.status, 'initiated', 'PUBLIC_CREATE_ADMISSION_WAS_REFUSED');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(scheduled.length, 1, 'PUBLIC_CREATE_DID_NOT_SCHEDULE_ONE_OWNED_TASK');
+  await scheduled[0];
+}
+
 async function assertNotReady(fixture) {
   const health = await fixture.lifecycle.health(fixture.replica);
   assert.equal(health.status, HEALTH_STATUS.UNHEALTHY);
@@ -692,7 +710,7 @@ describe('minimal deployment request Cell runtime readiness', () => {
         operationId: 'place-request-cell',
         replicaId: placed.replicaId,
       };
-      await placed.handler.createReplicaAsync(request);
+      await admitAndJoinPlacement(placed, request);
       assert.equal(
         placed.handler.localReplicas.get(placed.replicaId).status,
         ReplicaStatus.ACTIVE,
@@ -705,7 +723,7 @@ describe('minimal deployment request Cell runtime readiness', () => {
       await placed.cellRuntime.stop(placed.replicaId);
 
       const restarted = createProductionPlacementFixture();
-      await restarted.handler.createReplicaAsync(request);
+      await admitAndJoinPlacement(restarted, request);
       assert.equal(restarted.cellRuntime.instanceCount, 1);
       assert.equal(
         restarted.manager.getReplicaState({

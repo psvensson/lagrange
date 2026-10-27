@@ -1,3 +1,5 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {SERVICE_PARTITION_ACCESS_KIND} from '../constants/index.js';
 import {HEALTH_STATUS} from '../runtime/runtime-driver.js';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
@@ -57,6 +59,40 @@ const CALL_CELL_INVOCATION_EXPORT_NAME = Object.freeze({
 });
 const CALL_CELL_INVOCATION_EXPORT_DEFAULT = CALL_CELL_INVOCATION_EXPORT_NAME.RUN;
 
+const CALL_CELL_DEADLINE_WAIT = Object.freeze({
+  wait: 'Call Cell invocation deadlineMs',
+  awaited: 'Call Cell invocation reached its local actual before its deadline',
+});
+
+/**
+ * A Call Cell invocation arrived (or was re-checked) after its deadline:
+ * one wait_bound_spent ERROR with how far past the deadline it was and the
+ * route it was bound to. An invocation without a finite deadline is a
+ * malformed request, not a spent wait, and is not reported.
+ * @param {Object} handler - The runtime service handler (its logger).
+ * @param {Object} route - The selected route.
+ * @param {Object} invocation - The invocation (id, deadlineMs).
+ * @return {void}
+ */
+function reportCallCellDeadlineSpent(handler, route, invocation) {
+  if (!Number.isFinite(invocation?.deadlineMs)) {
+    return;
+  }
+  reportWaitBoundSpent(handler?.logger ?? null, {
+    ...CALL_CELL_DEADLINE_WAIT,
+    boundMs: null,
+    elapsedMs: null,
+    lastObserved: {
+      overdueMs: Date.now() - invocation.deadlineMs,
+      hostNodeId: route?.hostNodeId ?? null,
+      serviceId: route?.serviceId ?? null,
+    },
+    scope: {
+      nodeId: handler?.nodeId ?? null,
+      invocationId: invocation.id ?? null,
+    },
+  });
+}
 function valueOrFallback(value, fallback) {
   return value === undefined ? fallback : value;
 }
@@ -273,12 +309,6 @@ function parseLocalShardStatement(engine, statement) {
   return ast;
 }
 
-function renderLocalShardSql(handler, route) {
-  const engine = resolveLocalRenderEngine(handler);
-  const ast = parseLocalShardStatement(engine, route.statement);
-  return engine.queryExecutor.buildSelectSQL(ast);
-}
-
 function localShardReadFailure(error) {
   if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED ||
       error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED) {
@@ -332,7 +362,10 @@ async function executeBoundedShardRead(
 async function buildLocalShardBatch(handler, payload, route, invocation) {
   const partitionService =
     resolveUsableLocalPartitionService(handler, payload.partitionId);
-  const sql = renderLocalShardSql(handler, route);
+  const engine = resolveLocalRenderEngine(handler);
+  const sql = engine.queryExecutor.buildSelectSQL(
+    parseLocalShardStatement(engine, route.statement),
+  );
   const batchRowBound = invocation?.callCell?.batchRowBound;
   if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
     throw new CallCellRoutingError(
@@ -342,6 +375,13 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
   }
   const rows = await executeBoundedShardRead(
     partitionService, sql, invocation, batchRowBound, payload.partitionId);
+  if (typeof engine.recordServicePartitionAccess === 'function') {
+    engine.recordServicePartitionAccess(
+      {issuingServiceId: route.serviceId},
+      [payload.partitionId],
+      SERVICE_PARTITION_ACCESS_KIND.READ,
+    );
+  }
   try {
     return toCellBatch(rows, batchRowBound);
   } catch (error) {
@@ -382,6 +422,7 @@ function assertCurrentCallCellTarget(handler, call, route, invocation) {
     !Number.isFinite(invocation?.deadlineMs) ||
     Date.now() >= invocation.deadlineMs
   ) {
+    reportCallCellDeadlineSpent(handler, route, invocation);
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
       CALL_CELL_RUNTIME_MESSAGE.DEADLINE_EXPIRED,

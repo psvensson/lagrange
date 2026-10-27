@@ -11,11 +11,14 @@
  * src/scripts target (test duplication stays ratchet-governed only).
  */
 
+import path from 'node:path';
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import fs from 'node:fs';
 import {createRequire} from 'node:module';
 
 import {
-  getRepoPath,
   printRatchetTighteningHint,
 } from './metric-check-helpers.js';
 
@@ -30,7 +33,6 @@ const LOCAL_STR_1Q3KT = 'scripts/check-duplication.js';
 const MINIMUM_LINE_COUNT = 20;
 const MINIMUM_TOKEN_COUNT = 100;
 const STRICT_FLAG = '--strict';
-const REPORT_FILE_NAME = 'jscpd-report.json';
 const TOP_OFFENDER_COUNT = 10;
 
 const RATCHET_TARGETS = [
@@ -40,8 +42,8 @@ const RATCHET_TARGETS = [
     // to 75/2283). Ratcheted DOWN 2026-07-05 after extracting the shared
     // count-based baseline machinery + getEnclosingFunctionName into
     // guideline-check-shared.js. Ratchet DOWN only from here.
-    name: 'src+scripts',
-    directories: ['src', 'scripts'],
+    name: METRIC_REPORTS.duplicationSource.targetName,
+    metricId: 'duplicationSource',
     // 2026-07-25: tightened 73/2239 -> 66/2095 (measured; one-way-baseline rule).
     // 2026-07-28: tightened 66/2095 -> 66/2088 (complexity-checker violation
     // mapping hoisted into metric-check-helpers; measured in a clean worktree).
@@ -69,11 +71,31 @@ const RATCHET_TARGETS = [
     // distributed UPDATE/DELETE mutation-result owner (checker hint).
     // 2026-09-29: tightened 55/1760 -> 54/1731 after the seed and joiner
     // runtime-service handler setup converged on one guarded initializer.
-    // 2026-10-03: tightened 54/1731 -> 52/1666 on the
-    // failed-gate-keeps-evidence tree (checker hint).
-    baselineCloneGroupCount: 52,
-    baselineDuplicatedLineCount: 1666,
-    reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
+    // 2026-10-01: tightened 54/1731 -> 52/1652 after the WASM replica moved
+    // onto its operation port and the legacy replica base was deleted.
+    // 2026-10-01: tightened 52/1652 -> 51/1624 after the spike, provider
+    // selection and migration tooling were deleted (checker hint).
+    // 2026-10-03: tightened 51/1624 -> 49/1559 on the checker's hint after
+    // the origin/main ec63fbb00 merge and the native-append inference
+    // deletion.
+    // origin/main 2026-10-03 tightened 54/1731 -> 52/1666 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
+    // 2026-10-04: tightened 49/1559 -> 48/1512 on the checker's hint
+    // (spent-waits wiring replaced duplicated expiry log blocks).
+    // 2026-10-05: tightened 48/1512 -> 48/1510 on the checker's hint (the
+    // write paths open their transaction in one two-line call).
+    // Replay's routed-write helper tightened the combined result further.
+    // 2026-10-13: tightened 47/1473 -> 47/1462 on the checker's measured
+    // hint during the TX1 deletion audit. The exact e6 predecessor also
+    // measures 47/1462, so this quest claims no clone reduction.
+    // 2026-10-24: tightened 47/1462 -> 46/1439 on the checker's hint; the
+    // base 8c51246e2 already measured 46/1439 (no reduction claimed here).
+    // Alpha API removal: tightened 46/1439 -> 44/1383 (WebSocketTransport
+    // family, RouterMessageHandler and ReplicaLifecycleManager deleted).
+    // Callback axis retirement: tightened 44/1383 -> 43/1358 on the checker's
+    // hint after deleting the legacy partition_callback axis.
+    baselineCloneGroupCount: 43,
+    baselineDuplicatedLineCount: 1358,
     strictEligible: true,
   },
   {
@@ -85,8 +107,8 @@ const RATCHET_TARGETS = [
     // this gate locally — the drift the test:static wiring now prevents).
     // Re-anchored at the executable no-skip test corpus after the
     // proof-integrity cutover. Ratchet DOWN only from here.
-    name: 'test',
-    directories: ['test'],
+    name: METRIC_REPORTS.duplicationTest.targetName,
+    metricId: 'duplicationTest',
     // 2026-07-19: tightened 845/32308 -> 842/32209 (measured; one-way-baseline rule).
     // 2026-07-25: re-measured 842/32140 after extracting the shared
     // binding-compilation test harness; line baseline tightened, group
@@ -184,10 +206,55 @@ const RATCHET_TARGETS = [
     // tree (Track A boot incarnation + Track B handler identity).
     // 2026-09-30: tightened duplicated lines 29402 -> 29388 after the
     // rejoin-hints recovered-peer decision match became one constant.
-    // 2026-10-03: tightened duplicated lines 29388 -> 29385 on the
-    // failed-gate-keeps-evidence tree (checker hint).
-    baselineCloneGroupCount: 765,
-    baselineDuplicatedLineCount: 29385,
+    // 2026-10-01: tightened 765/29388 -> 728/27645 after the legacy replica
+    // base, its packet-routing and backpressure tests, and the census-delete
+    // group tests were deleted.
+    // 2026-10-01: tightened 728/27645 -> 726/27594 after the dt6 publication
+    // network tests moved onto the raft-rs network host.
+    // 2026-10-03: tightened 726/27594 -> 718/27311 on the checker's hint
+    // after the origin/main ec63fbb00 merge, the native-append test removal
+    // and the single VirtualNetwork async drive.
+    // 2026-10-03: tightened 718/27311 -> 717/27288 on the checker's hint
+    // after the SQLite callback-facade round-trip property was retired.
+    // origin/main 2026-10-03 tightened 765/29388 -> 765/29385 (failed-gate-
+    // keeps-evidence, checker hint); the lower value here supersedes it.
+    // 2026-10-04: tightened 717/27288 -> 713/27072 on the checker's hint
+    // after the message-group MOVE_REPLICA tests were deleted.
+    // 2026-10-04: tightened 713/27072 -> 713/27050 on the checker's hint
+    // after the handler's CREATE acceptance cases became refusal cases (C3).
+    // 2026-10-04: tightened 713/27072 -> 708/26760 on the checker's hint
+    // (shared convergence stub policy targets in assertions-test-helpers).
+    // 2026-10-04 (quest/one-spread-authority): tightened 717/27288 ->
+    // 715/27221 on the checker's hint after the one-spread-authority deletion
+    // (shared replay assertion, the three-case admin spread-authority fixture).
+    // 2026-10-05: merge of quest/scenario-gates-ground-truth keeps the lower
+    // of both sides' tightened values, then tightened 708/26760 -> 708/26738
+    // on the checker's hint for the merged tree.
+    // 2026-10-05: merge of quest/one-spread-authority keeps the lower values,
+    // then tightened 708/26738 -> 706/26671 on the checker's hint.
+    // Identity's shared routed-CREATE fixtures tighten the combined test
+    // surface to the measured 697 groups / 26385 lines.
+    // Reservation's shared dispatch/restart witnesses tighten the line count
+    // to the measured 26369 without changing the exact 697 groups.
+    // 2026-10-24: the rs-raft lineage's test copies import their shared
+    // helpers (trace, native startup fixture, contender, schedules, stamp
+    // oracle); tightened 697/26369 -> 692/26237 -> 689/26148 on the checker's hint.
+    // D1e: tightened 689/26148 -> 679/25717 (volatile propagation tests deleted).
+    // Alpha API removal: tightened 679/25717 -> 658/24752 (WebSocketTransport
+    // family and ReplicaLifecycleManager tests deleted).
+    // Q6 stages 1-2: tightened 658/24752 -> 656/24700 (no-handler property
+    // tests read the transport owner).
+    // Q6/seed-harness composition measured 654 groups and 24609 lines.
+    // Callback axis retirement: tightened 24609 -> 24561 on the checker's hint.
+    // Admin admission chain composition: tightened 654/24561 -> 651/24435 on
+    // the checker's hint after deleting NodeLifecycleService tests and
+    // obsolete harness partition repair stubs.
+    // D4 window deletion: tightened 651/24435 -> 650/24386 on the checker's
+    // hint (the window-pinning tests deleted).
+    // Cloud metric runner composition: tightened 24386 -> 24374 on the
+    // checker's hint.
+    baselineCloneGroupCount: 650,
+    baselineDuplicatedLineCount: 24374,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
@@ -203,13 +270,15 @@ const strict = process.argv.includes(STRICT_FLAG);
  * @return {Promise<{totals: object, sourceStats: object[]}>}
  */
 async function measureTargetDuplication(target) {
+  const descriptor = METRIC_REPORTS[target.metricId];
+  const measurement = beginMetricMeasurement(target.metricId);
   await detectClones({
-    path: target.directories,
+    path: descriptor.targets,
     minLines: MINIMUM_LINE_COUNT,
     minTokens: MINIMUM_TOKEN_COUNT,
     format: ['javascript'],
     reporters: ['json'],
-    output: target.reportOutputDirectory,
+    output: path.dirname(descriptor.reportPath),
     silent: true,
     // The publish gate runs inside a worktree whose node_modules is a
     // symlink into the main tree; jscpd's default cache lives under
@@ -219,13 +288,13 @@ async function measureTargetDuplication(target) {
     // function of the checked-out source.
     cache: false,
   });
-  const reportRelativePath =
-    `${target.reportOutputDirectory}/${REPORT_FILE_NAME}`;
-  const reportPath = getRepoPath(reportRelativePath);
+  const reportRelativePath = descriptor.reportPath;
+  const reportPath = path.join(measurement.root, reportRelativePath);
   if (!fs.existsSync(reportPath)) {
     throw new Error(`jscpd did not produce ${reportRelativePath}.`);
   }
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  finishMetricMeasurement(measurement, report);
   const sourceStats =
     Object.entries(report.statistics.formats.javascript.sources)
       .map(([filePath, stats]) => ({
@@ -258,7 +327,14 @@ function printTopOffenders(sourceStats) {
 
 let failed = false;
 
+const UNKNOWN_TARGET_ERROR = 'Unknown duplication target';
+const selectedTarget = process.argv.indexOf('--target');
+const targetName = selectedTarget < 0 ? null : process.argv[selectedTarget + 1];
+if (selectedTarget >= 0 && !RATCHET_TARGETS.some((target) => target.name === targetName)) {
+  throw new Error(UNKNOWN_TARGET_ERROR);
+}
 for (const target of RATCHET_TARGETS) {
+  if (targetName && target.name !== targetName) continue;
   if (strict && target.strictEligible !== true) {
     continue;
   }

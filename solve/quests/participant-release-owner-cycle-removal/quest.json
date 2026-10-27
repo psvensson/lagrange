@@ -1,0 +1,46 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-owner-cycle-removal",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Remove the two participant-release dependency cycles by consolidating current facts observation with the existing lexical admission/resume owner and moving the sole pure drain predicate into the existing release contract. Delete the redundant facts module without introducing another OPEN mutation path, changing behavior, weakening fences, duplicating logic, or raising a baseline.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-owner-cycle-removal/evidence/receipt.json",
+      "requiredReceipts": [
+        "single-owner-equivalence-and-independent-review",
+        "existing-owner-regressions-on-locked-lab",
+        "zero-cycles-and-changed-path-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "lexical-admission-owner",
+      "statement": "Keep ADMISSIONS, its sole monotonic generation, CLOSED creation, proof invalidation and the final guarded OPEN mutation in the same existing transaction-pause module. Never export an unchecked OPEN setter, introduce a capability or callback to hide that mutation, copy state, or add compatibility reexports. The initially proposed state extraction is rejected because it would split this lexical boundary."
+    },
+    {
+      "id": "mechanical-consolidation-only",
+      "statement": "Move the existing facts reader, replicaGenerationOf and private observation helpers unchanged into transaction-pause; move the only isReleaseDrained definition unchanged into release-contract; delete the facts file and rewire all direct imports and existing impact ownership metadata. Preserve canonical shape, precedence, generations, current reads, lifecycle and no-await-before-OPEN guarantees. No release wait, runtime event, query, seed, timeout, backoff or recovery behavior change."
+    },
+    {
+      "id": "existing-proof-and-producers",
+      "statement": "Use existing real release-admission, protocol and recovery witnesses, including stale lifecycle races; add no implementation-mirror test. Update the existing interaction registry and regenerate metadata through normal producers. Root owns immutable input and locked lab placement; no prewarm, retry-only green, skipped test or raised baseline. Compare surprising failures with the same-host predecessor."
+    },
+    {
+      "id": "bounded-independent-work",
+      "statement": "Assigned GPT-5.6 worker implements in this isolated worktree. Root owns Quest/evidence, integration, lab and preservation. Independent exact-byte source review is required. Do not absorb other static or startup repairs; integration with the applied-position barrier and orphan deletion needs fresh composition proof."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e"
+}

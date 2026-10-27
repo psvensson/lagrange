@@ -6,9 +6,15 @@
  * Validates: Requirements 21.3
  */
 
+import {createMockMessageRouter, createMockSystemCache} from './transaction-routing-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+// Engines persist transaction state (TX1 seam S4b: an explicit BEGIN or a
+// multi-partition statement on an engine that cannot is refused, typed) and
+// their partitions answer the participant transaction protocol.
+import {createTransactionPersistenceGateway} from
+  '../test-helpers/transaction-persistence-gateway.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -21,75 +27,6 @@ const mockPartitionData = new Map();
 /**
  * Create a mock message router that routes queries to mock partition data.
  */
-function createMockMessageRouter() {
-  return {
-    deliver: async function(address, message) {
-      const parts = address.split('/');
-      const partitionId = parts[2];
-
-      if (message.type === 'QUERY') {
-        const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
-          success: true,
-          rows: data,
-          changes: 1,
-        };
-      }
-      if (message.type === 'TRANSACTION') {
-        return {acknowledged: true, success: true};
-      }
-      return {acknowledged: true, success: true, changes: 1};
-    },
-  };
-}
-
-/**
- * Create a mock system cache with services for routing.
- */
-function createMockSystemCache(tables, partitions) {
-  const normalizedPartitions = partitions.map((partition) => ({
-    ...partition,
-    leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
-  }));
-  const services = normalizedPartitions.map((p) => ({
-    service_id: p.partition_id,
-    service_type: 'partition',
-    partition_id: p.partition_id,
-    node_id: 'test-node',
-    address: `test-node/partition/${p.partition_id}`,
-    status: 'active',
-    raft_role: 'leader',
-  }));
-
-  return {
-    tables,
-    partitions: normalizedPartitions,
-    services,
-    get: function(type, key) {
-      if (type === 'tables') {
-        return this.tables.find((t) => t.table_name === key);
-      }
-      return null;
-    },
-    filter: function(type, predicate) {
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      return [];
-    },
-    getAll: function(type) {
-      if (type === 'partitions') return this.partitions;
-      if (type === 'tables') return this.tables;
-      if (type === 'services') return this.services;
-      return [];
-    },
-  };
-}
-
 /**
  * Generate keys that span multiple partitions.
  */
@@ -140,7 +77,8 @@ test('Property 47: Cross-partition INSERT enlists all touched partitions', async
         );
 
         const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(),
+          messageRouter: createMockMessageRouter(mockPartitionData),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -195,7 +133,8 @@ test('Property 47: Cross-partition UPDATE enlists all touched partitions', async
         );
 
         const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(),
+          messageRouter: createMockMessageRouter(mockPartitionData),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -256,7 +195,8 @@ test('Property 47: Cross-partition DELETE enlists all touched partitions', async
         );
 
         const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(),
+          messageRouter: createMockMessageRouter(mockPartitionData),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 
@@ -317,7 +257,8 @@ test('Property 47: Cross-partition writes keep transaction active', async (t) =>
         );
 
         const engine = new SQLQueryEngine({
-          messageRouter: createMockMessageRouter(),
+          messageRouter: createMockMessageRouter(mockPartitionData),
+          controlPlaneSystemTableGateway: createTransactionPersistenceGateway(),
           systemCache: cache,
         });
 

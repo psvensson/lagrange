@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pending",
+  "receipts": [
+    {"id": "mutation-time-incarnation-and-status-fences", "passed": false},
+    {"id": "exact-delete-repeated-and-stale-retry", "passed": false},
+    {"id": "gateway-outcome-and-retry-identity", "passed": false},
+    {"id": "http-cli-original-observation", "passed": false},
+    {"id": "independent-review-and-applicable-checks", "passed": false}
+  ]
+}

@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+import {runQuestEvidenceHarness} from './harness-runtime.js';
+
+const QUEST_ID = 'partition-replication-restart-attempt-handoff';
+const TEST_FILE =
+  'test/partition/partition-replication-restart-attempt-handoff.test.js';
+
+runQuestEvidenceHarness({
+  questId: QUEST_ID,
+  outputFile: `solve/quests/${QUEST_ID}/evidence/receipt.json`,
+  receipts: Object.freeze([
+    Object.freeze({
+      id: 'restart-attempt-owner-contract',
+      testFile: TEST_FILE,
+      command: `npm run test:file -- ${TEST_FILE} 1>&2`,
+      detail: 'the real split and merge worker paths prove durable START ' +
+        'authorization, answer-loss continuation, stale-request inertness, ' +
+        'crash recovery, and concurrent exact-redelivery single-flight',
+    }),
+  ]),
+});

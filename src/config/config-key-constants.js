@@ -75,6 +75,8 @@ const CONFIG_KEY = Object.freeze({
   PARTITION_MERGE_THRESHOLD_BYTES: 'partition.mergeThresholdBytes',
   PARTITION_MERGE_THRESHOLD_QPM: 'partition.mergeThresholdQpm',
   PARTITION_EVALUATION_INTERVAL_MS: 'partition.evaluationIntervalMs',
+  PARTITION_TRAFFIC_WINDOW_MS: 'partition.trafficWindowMs',
+  PARTITION_MERGE_MINIMUM_AGE_MS: 'partition.mergeMinimumAgeMs',
 
   LOGGING_LEVEL: 'logging.level',
   LOGGING_RETENTION_DAYS: 'logging.retentionDays',

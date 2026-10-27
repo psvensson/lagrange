@@ -19,22 +19,14 @@
  *      whose replicas land on different node subsets. Distributed
  *      grouped SQL emits one AVG/COUNT row per movie and establishes the
  *      confidence-adjusted top-10 reference result.
- *   3. A REAL runtime service is started on the internal placement
- *      substrate: the harness writes a service_definitions row directly
- *      for the SQL-engine runtime with read_locality='any' (routing choice,
- *      not an affinity switch). This direct write is demo scaffolding
- *      against a migration-input table, not the user deployment surface;
- *      user deployment is declared through Bindings
- *      (architecture/minimal-deployment-surface.md), where replica
- *      capacity is system-policy output. The internal query-loop module
- *      has no component export, so it is not expressible as a Binding;
- *      the demo pins its replica shape
- *      only to make the shard/merge arithmetic reproducible.
- *      Stable leased slot 1 reduces
- *      movie ids <= 1000 and slot 2 reduces ids > 1000. Because group
- *      keys are disjoint, the slot-1 replica can exactly merge the two
- *      atomic partial top-10 snapshots while exchanging at most 20
- *      candidates. Slot ownership survives replica REPLACE generations.
+ *   3. A REAL WASI call-Binding service (`movielens--call--topn`) is built
+ *      and deployed through the public code-first service pipeline
+ *      (`runGenerate` -> `runBuild` -> `runDeploy`), where replica capacity
+ *      is system-policy output. Each `CALL BINDING` invocation fans out the
+ *      Binding-declared grouped SQL across partition-local shards, records
+ *      leased partial snapshots in `call_cell_reduce_slots`, and atomically
+ *      publishes the merged top-10 result and provenance witness in
+ *      `call_cell_reduce_results`.
  *   4. Every statement is attributed into service_partition_access; the
  *      runtime-service rebalancer always lifts fresh per-node weights
  *      into DATA_AFFINITY placement. The planner converges service
@@ -57,7 +49,12 @@ import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
-import {SQL_ENGINE_RUNTIME_KIND} from '../../src/constants/runtime.js';
+import {
+  DEMO_PGWIRE_AUTH,
+  MOVIELENS_CALL_SERVICE_ID,
+  deployMovieLensCallBinding,
+  invokeMovieLensCallBinding,
+} from './affinity-demo-binding-service.js';
 import {
   createRatingsTableWithRetry,
   loadRatingsIntoLagrange,
@@ -94,7 +91,6 @@ import {
   RESULT_SNAPSHOT_STATE,
 } from '../../src/runtime/sql-query-loop-parallel-reduce.js';
 import {
-  QUALITY_RANKING,
   RATINGS_AGGREGATE_SQL,
   rankMovieQuality,
 } from './movie-ranking.js';
@@ -143,18 +139,6 @@ const DEMO_CONSTANTS = Object.freeze({
   ADMIN_WAIT_LABEL: 'seed admin endpoint',
   ADMIN_HEALTH_QUERY: 'SELECT 1',
   SQL_ESCAPED_SINGLE_QUOTE: '\'\'',
-  CONFIG_INSERT_PREFIX:
-    'INSERT INTO config (config_key, config_value, value_type, ' +
-    'requires_restart, description, default_value, updated_by, ' +
-    'updated_at, created_at) VALUES (',
-  CONFIG_VALUE_TYPE: 'json',
-  SQL_FALSE: '0',
-  ACCESS_POLICY_DESCRIPTION: 'Runtime service data access policy',
-  EMPTY_JSON_OBJECT: '{}',
-  ACCESS_POLICY_UPDATED_BY: 'affinity-demo',
-  SQL_LIST_SEPARATOR: ', ',
-  SQL_CLOSE_PAREN: ')',
-  SERVICE_INSERT_PREFIX: 'INSERT INTO service_definitions (',
   PARTITION_SERVICE_TYPE: 'partition',
   REDUCE_SLOT_QUERY:
     'SELECT slot_id, replica_id, lease_expires_at, partial_json, ',
@@ -193,13 +177,9 @@ const DEMO_CONSTANTS = Object.freeze({
   DISTRIBUTED_SQL_MESSAGE:
     '[3/5] Running Lagrange distributed grouped SQL...',
   SERVICE_START_SUFFIX:
-    'harness, intrinsic data affinity): disjoint movie-id shards compute a ' +
-    'confidence-adjusted Bayesian ranking, publish 10 candidates each, and ' +
-    'slot 1 merges them)...',
-  COORDINATION_INSERT_COLUMNS:
-    '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ',
-  COORDINATION_INSERT_VALUES:
-    'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
+    'intrinsic data affinity): partition-local call shards compute a ' +
+    'confidence-adjusted Bayesian ranking, publish at most 10 candidates ' +
+    'each, and reduce merges them)...',
   AFFINITY_WAIT_MESSAGE:
     '[5/5] Waiting for access attribution to teach placement where the ' +
     'service data is (no affinity switch)...',
@@ -219,30 +199,16 @@ const DEMO_CONSTANTS = Object.freeze({
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
 const PARTITION_EVAL_INTERVAL_MS = 60000;
 
-const SERVICE_ID = 'svc-movielens-topn';
-const SERVICE_REPLICA_COUNT = 2;
-// The distributed-SQL reference groups the table to one row per movie.
-// The deployed service runs the richer confidence-adjusted ranking on
-// two disjoint movie-id shards and exchanges only their top-N candidates.
-const SCAN_SQL = 'SELECT movie_id, rating FROM ratings';
-const MOVIE_ID_SHARD_BOUNDARY = 1000;
+const SERVICE_ID = MOVIELENS_CALL_SERVICE_ID;
+const SERVICE_REPLICA_COUNT = 3;
 const SHARD_SQL_BY_SLOT = Object.freeze({
-  1: `${SCAN_SQL} WHERE movie_id <= ${MOVIE_ID_SHARD_BOUNDARY}`,
-  2: `${SCAN_SQL} WHERE movie_id > ${MOVIE_ID_SHARD_BOUNDARY}`,
+  1: 'call-cell-shard-1',
+  2: 'call-cell-shard-2',
 });
-const RESULT_TABLE = 'movielens_top10';
-const COORDINATION_TABLE = 'movielens_top10_reduce_slots';
+const RESULT_TABLE = 'call_cell_reduce_results';
+const COORDINATION_TABLE = 'call_cell_reduce_slots';
 const RESULT_ID = 'global-top10';
 const RESULT_SNAPSHOT_COLUMN = 'source_snapshot_json';
-const CREATE_RESULT_TABLE_SQL =
-  `CREATE TABLE IF NOT EXISTS ${RESULT_TABLE} (` +
-  'result_id TEXT PRIMARY KEY, result_json TEXT, computed_at INTEGER, ' +
-  `${RESULT_SNAPSHOT_COLUMN} TEXT NOT NULL DEFAULT '{}')`;
-const CREATE_COORDINATION_TABLE_SQL =
-  `CREATE TABLE IF NOT EXISTS ${COORDINATION_TABLE} (` +
-  'slot_id INTEGER PRIMARY KEY, replica_id TEXT, ' +
-  'lease_expires_at INTEGER, partial_json TEXT, computed_at INTEGER)';
-const QUERY_INTERVAL_MS = 5000;
 const TOP_N = 10;
 const REDUCE_SLOT_LEASE_MS = 30000;
 const PARALLEL_REDUCE_CONFIG = Object.freeze({
@@ -252,6 +218,7 @@ const PARALLEL_REDUCE_CONFIG = Object.freeze({
   coordinatorSlot: 1,
   resultId: RESULT_ID,
   resultSnapshotColumn: RESULT_SNAPSHOT_COLUMN,
+  allowReplicaSubset: true,
 });
 
 function formationAttributionEnabled() {
@@ -286,6 +253,9 @@ async function startNode(index, dataRoot) {
     DATA_DIR: dataDir,
     LOG_LEVEL: 'info',
     PARTITION_EVALUATION_INTERVAL_MS: String(PARTITION_EVAL_INTERVAL_MS),
+    PGWIRE_AUTH_DATABASE: DEMO_PGWIRE_AUTH.DATABASE,
+    PGWIRE_AUTH_PASSWORD: DEMO_PGWIRE_AUTH.PASSWORD,
+    PGWIRE_AUTH_USER: DEMO_PGWIRE_AUTH.USER,
   };
   const args = ['src/index.js', '--data-dir', dataDir];
   if (index > 0) {
@@ -327,68 +297,6 @@ async function queryAdmin(
 async function queryRows(sql, target = TARGET) {
   const result = await queryAdmin(sql, target);
   return result?.results || result?.rows || [];
-}
-
-// Bootstrap DDL on a lone forming seed is retryable BY CONTRACT: the schema
-// job owner answers with explicit pending/retry outcomes when its prologue
-// or a replica-operation visibility read is still converging (the round-7
-// race closures), and the admin client's response cap can also fire while
-// the seed's schema_operations partition is still routing. Poll through the
-// demo's canonical waitFor primitive - semantic failures escape on the
-// first attempt; only the two contract-retryable shapes keep polling.
-const BOOTSTRAP_DDL_TIMEOUT_MS = 90_000;
-const BOOTSTRAP_DDL_WAIT_LABEL = 'bootstrap DDL admission';
-const ADMIN_RESPONSE_TIMEOUT_FRAGMENT = 'Timed out waiting for admin response';
-const PENDING_CONTRACT_STATE = 'pending';
-const REPLICA_BACKFILL_PENDING_REASON = 'schema_replica_convergence_pending';
-
-// A pending outcome whose ONLY reason is replica-count backfill is the
-// quorum-minimum completion shape: the table is durable and routable at
-// the minimum replica count, and filling the remaining replicas is the
-// rebalancer's obligation once more nodes join (round-14). On a lone seed
-// the full-count READY bar is arithmetically unreachable, so retrying on
-// this shape waits forever; every other pending shape (prologue,
-// visibility, deadline) keeps polling.
-function isQuorumMetBackfillPendingOutcome(result) {
-  if (result?.contractState !== PENDING_CONTRACT_STATE) {
-    return false;
-  }
-  const reasonCodes = Array.isArray(result?.reasonCodes) ?
-    result.reasonCodes :
-    [];
-  return reasonCodes.length > 0 && reasonCodes.every(
-    (code) => code === REPLICA_BACKFILL_PENDING_REASON,
-  );
-}
-
-function isRetryableBootstrapDdlOutcome(result) {
-  if (isQuorumMetBackfillPendingOutcome(result)) {
-    return false;
-  }
-  return result?.provisioningDeadlineExpired === true ||
-    result?.deferRetry === true ||
-    result?.contractState === PENDING_CONTRACT_STATE;
-}
-
-async function runBootstrapDdl(sql, target = TARGET) {
-  let semanticError = null;
-  const outcome = await waitFor(BOOTSTRAP_DDL_WAIT_LABEL, async () => {
-    try {
-      const result = await queryAdmin(sql, target);
-      return isRetryableBootstrapDdlOutcome(result) ? null : {result};
-    } catch (error) {
-      const message = String(error?.message || '');
-      if (!message.includes(ADMIN_RESPONSE_TIMEOUT_FRAGMENT)) {
-        semanticError = error;
-        return {failed: true};
-      }
-      return null;
-    }
-  }, BOOTSTRAP_DDL_TIMEOUT_MS);
-  if (semanticError) {
-    throw semanticError;
-  }
-  return outcome.result;
 }
 
 async function waitFor(label, predicate, timeoutMs) {
@@ -462,90 +370,6 @@ async function waitForActiveNodes(expectedCount, nodes, dataRoot) {
   }, CLUSTER_FORM_TIMEOUT_MS);
 }
 
-function sqlQuote(value) {
-  return `'${String(value).replace(
-    /'/g,
-    DEMO_CONSTANTS.SQL_ESCAPED_SINGLE_QUOTE,
-  )}'`;
-}
-
-async function deployQueryLoopService() {
-  const now = Date.now();
-  // The runtime access policy gate is fail-closed (authority cutover
-  // 1ea2eab98): every statement carrying issuingServiceId is DENIED unless a
-  // runtime.access.service.<id> policy row grants its table accesses.
-  // Production services get that row from the Bindings deployment surface;
-  // this demo scaffolds service_definitions directly, so it must scaffold the
-  // matching policy row the same way - without it the query loop's attributed
-  // shard SELECT is silently denied and the learned-affinity lane stalls
-  // (attributionRows=0, partial snapshots never computed).
-  const accessPolicy = JSON.stringify({
-    binding_version_id: 'demo-scaffold-movielens-topn',
-    schema_version: 1,
-    service_id: SERVICE_ID,
-    tables: [
-      {operations: ['read'], slot: 0, table: 'table:global.ratings'},
-      {
-        operations: ['read', 'write'],
-        slot: 1,
-        table: `table:global.${RESULT_TABLE}`,
-      },
-      {
-        operations: ['read', 'write'],
-        slot: 2,
-        table: `table:global.${COORDINATION_TABLE}`,
-      },
-    ],
-    tenant_id: 'demo',
-  });
-  await queryRows(
-    DEMO_CONSTANTS.CONFIG_INSERT_PREFIX + [
-      sqlQuote(`runtime.access.service.${SERVICE_ID}`),
-      sqlQuote(accessPolicy),
-      sqlQuote(DEMO_CONSTANTS.CONFIG_VALUE_TYPE),
-      DEMO_CONSTANTS.SQL_FALSE,
-      sqlQuote(DEMO_CONSTANTS.ACCESS_POLICY_DESCRIPTION),
-      sqlQuote(DEMO_CONSTANTS.EMPTY_JSON_OBJECT),
-      sqlQuote(DEMO_CONSTANTS.ACCESS_POLICY_UPDATED_BY),
-      String(now),
-      String(now),
-    ].join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR) + DEMO_CONSTANTS.SQL_CLOSE_PAREN,
-  );
-  const runtimeConfig = JSON.stringify({
-    sql: SCAN_SQL,
-    intervalMs: QUERY_INTERVAL_MS,
-    reduce: {
-      groupBy: 'movie_id',
-      aggregate: 'confidence_adjusted_avg',
-      valueColumn: 'rating',
-      limit: TOP_N,
-      ...QUALITY_RANKING,
-    },
-    resultTable: RESULT_TABLE,
-    parallelReduce: PARALLEL_REDUCE_CONFIG,
-  });
-  const columns = [
-    'service_id', 'service_name', 'service_profile',
-    'handler_function_id', 'read_consistency', 'write_consistency',
-    'read_locality', 'replica_count', 'protocol', 'resource_budget',
-    'safety_interval_ms', 'runtime_kind', 'runtime_ref',
-    'runtime_config', 'status', 'created_at', 'updated_at',
-  ];
-  const values = [
-    sqlQuote(SERVICE_ID), sqlQuote('movielens-topn'), sqlQuote('default'),
-    sqlQuote('sql-query-loop'), sqlQuote('strong'), sqlQuote('strong'),
-    sqlQuote('any'), String(SERVICE_REPLICA_COUNT),
-    sqlQuote('websocket'), sqlQuote('{}'),
-    '500', sqlQuote(SQL_ENGINE_RUNTIME_KIND), sqlQuote('sql-query-loop-runtime'),
-    sqlQuote(runtimeConfig), sqlQuote('active'), String(now), String(now),
-  ];
-  await queryRows(
-    DEMO_CONSTANTS.SERVICE_INSERT_PREFIX +
-    `${columns.join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR)}) VALUES (` +
-    `${values.join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR)})`,
-  );
-}
-
 // The nodes that hold an ACTIVE replica of the partitions "near the
 // data" means for this demo: the partitions the service actually
 // accessed (from its attribution rows) when known, else every ratings
@@ -599,31 +423,53 @@ async function describeAttribution() {
   return rows.filter((r) => r.service_id === SERVICE_ID);
 }
 
-async function describeReduceSlots() {
+async function describeLatestCompletedInvocation() {
+  try {
+    const rows = await queryRows(
+      `SELECT result_id, result_json, computed_at, ${RESULT_SNAPSHOT_COLUMN} ` +
+      `FROM ${RESULT_TABLE} ` +
+      'WHERE result_json != \'\' ' +
+      'ORDER BY computed_at DESC LIMIT 1',
+    );
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function describeReduceSlots(invocationId) {
+  if (!invocationId) {
+    return [];
+  }
+  const escapedInvocationId = String(invocationId).replace(
+    /'/g,
+    DEMO_CONSTANTS.SQL_ESCAPED_SINGLE_QUOTE,
+  );
   try {
     return await queryRows(
       DEMO_CONSTANTS.REDUCE_SLOT_QUERY +
-      `computed_at FROM ${COORDINATION_TABLE}`,
+      `computed_at FROM ${COORDINATION_TABLE} ` +
+      `WHERE invocation_id = '${escapedInvocationId}' ` +
+      'AND partial_json != \'[]\' ' +
+      'ORDER BY slot_id ASC',
     );
   } catch {
     return [];
   }
 }
 
-async function describeTopN() {
+function mapInvocationResultToTopN(latestRow) {
+  if (!latestRow) {
+    return [];
+  }
   try {
-    const rows = await queryRows(
-      `SELECT result_json, computed_at, ${RESULT_SNAPSHOT_COLUMN} ` +
-      `FROM ${RESULT_TABLE} ` +
-      `WHERE result_id = ${sqlQuote(RESULT_ID)}`,
-    );
-    const parsed = JSON.parse(rows[0]?.result_json || '[]');
+    const parsed = JSON.parse(latestRow.result_json || '[]');
     return parsed.map((row, index) => ({
       rank: index + 1,
-      group_key: row.groupKey,
-      agg_value: row.aggValue,
-      computed_at: rows[0]?.computed_at,
-      [RESULT_SNAPSHOT_COLUMN]: rows[0]?.[RESULT_SNAPSHOT_COLUMN],
+      group_key: row.movie_id ?? row.groupKey,
+      agg_value: row.score ?? row.aggValue,
+      computed_at: latestRow.computed_at,
+      [RESULT_SNAPSHOT_COLUMN]: latestRow[RESULT_SNAPSHOT_COLUMN],
     }));
   } catch {
     return [];
@@ -648,16 +494,36 @@ async function describeWeightedLocality(placements, attributionRows) {
 }
 
 async function describeDemoState(referenceTopN, phaseStartedAt) {
-  const [placements, attributionRows, serviceTopN, reduceSlots] =
+  try {
+    await invokeMovieLensCallBinding({target: TARGET, queryRows});
+  } catch {
+    // Transient call-cell errors during activation or replica movement do not
+    // abort observation; completion evaluates the latest durable snapshot.
+  }
+  const latestInvocation = await describeLatestCompletedInvocation();
+  const [placements, attributionRows, reduceSlots] =
     await Promise.all([
       describeServicePlacement(),
       describeAttribution(),
-      describeTopN(),
-      describeReduceSlots(),
+      describeReduceSlots(latestInvocation?.result_id),
     ]);
+  const serviceTopN = mapInvocationResultToTopN(latestInvocation);
+  const shardSqlBySlot = reduceSlots.length > 0 ?
+    Object.fromEntries(
+      reduceSlots.map((slot) => [
+        Number(slot.slot_id),
+        `call-cell-shard-${Number(slot.slot_id)}`,
+      ]),
+    ) :
+    SHARD_SQL_BY_SLOT;
+  const parallelReduceConfig = {
+    ...PARALLEL_REDUCE_CONFIG,
+    shardSqlBySlot,
+  };
   const weightedLocality = await describeWeightedLocality(
     placements, attributionRows,
   );
+  const shardCount = Object.keys(shardSqlBySlot).length;
   const assessment = assessAffinityDemoCompletion({
     expectedReplicaCount: SERVICE_REPLICA_COUNT,
     placements,
@@ -665,9 +531,9 @@ async function describeDemoState(referenceTopN, phaseStartedAt) {
     referenceTopN,
     serviceTopN,
     reduceSlots,
-    expectedMergeCandidateCount: SERVICE_REPLICA_COUNT * TOP_N,
+    expectedMergeCandidateCount: shardCount * TOP_N,
     phaseStartedAt,
-    parallelReduceConfig: PARALLEL_REDUCE_CONFIG,
+    parallelReduceConfig,
     partialLimit: TOP_N,
   });
   return {
@@ -677,6 +543,7 @@ async function describeDemoState(referenceTopN, phaseStartedAt) {
     reduceSlots,
     weightedLocality,
     assessment,
+    parallelReduceConfig,
   };
 }
 
@@ -767,7 +634,7 @@ function summarizePhase(state) {
     state.serviceTopN[0]?.[RESULT_SNAPSHOT_COLUMN];
   const resultSnapshot = parseResultSnapshotWitness(
     encodedResultSnapshot,
-    PARALLEL_REDUCE_CONFIG,
+    state.parallelReduceConfig || PARALLEL_REDUCE_CONFIG,
     TOP_N,
   );
   return {
@@ -935,11 +802,6 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
     }
     await waitForAdmin();
-    // Bootstrap the two small coordination tables on the seed too. Their
-    // schemas then scale out with the cluster instead of exercising unrelated
-    // cold multi-node DDL while the example is teaching service affinity.
-    await runBootstrapDdl(CREATE_RESULT_TABLE_SQL);
-    await runBootstrapDdl(CREATE_COORDINATION_TABLE_SQL);
 
     console.log(
       `[2/5] Expanding to ${NODE_COUNT} nodes (single zone) and spreading ` +
@@ -1007,7 +869,10 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       'ratings partitions on at least two nodes',
       async () => {
         const state = await describeDataNodes();
-        return state.partitionCount >= 2 && state.holderNodeIds.size >= 2 ?
+        const distinctLeaders = new Set(state.leaderNodeIds).size;
+        return state.partitionCount >= 2 &&
+          state.holderNodeIds.size >= 2 &&
+          distinctLeaders === state.partitionCount ?
           state : null;
       },
       CONVERGE_TIMEOUT_MS,
@@ -1029,23 +894,19 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       `in ${distributedSqlElapsedMs}ms (rather than ${totalRows} ratings).`);
 
     console.log(
-      `[4/5] Starting the ${SERVICE_ID} runtime service on the internal ` +
-      `substrate (${SERVICE_REPLICA_COUNT} replicas pinned by the demo ` +
+      `[4/5] Deploying the ${SERVICE_ID} WASI call Binding (` +
+      `${SERVICE_REPLICA_COUNT} replicas, ` +
       DEMO_CONSTANTS.SERVICE_START_SUFFIX);
-    await runBootstrapDdl(CREATE_RESULT_TABLE_SQL);
-    await runBootstrapDdl(CREATE_COORDINATION_TABLE_SQL);
-    await queryRows(
-      `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at, ` +
-      `${RESULT_SNAPSHOT_COLUMN}) VALUES (` +
-      `${sqlQuote(RESULT_ID)}, '[]', 0, '{}')`,
-    );
-    await queryRows(
-      `INSERT INTO ${COORDINATION_TABLE} ` +
-      DEMO_CONSTANTS.COORDINATION_INSERT_COLUMNS +
-      DEMO_CONSTANTS.COORDINATION_INSERT_VALUES,
-    );
     const learnedPhaseStartedAt = Date.now();
-    await deployQueryLoopService();
+    await deployMovieLensCallBinding({
+      target: TARGET,
+      queryRows,
+      replicaCount: NODE_COUNT,
+      artifactsBaseDir:
+        mode === DEMO_CONSTANTS.GCP_MODE ?
+          undefined :
+          resolve(CLUSTER_DATA_ROOT, 'artifacts'),
+    });
     const initial = await observeInitialPlacement();
 
     console.log(

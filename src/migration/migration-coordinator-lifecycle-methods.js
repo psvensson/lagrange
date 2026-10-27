@@ -1,4 +1,21 @@
+import {
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+} from '../query/query-constants.js';
+import {isSystemTableName} from
+  '../bootstrap/system-table-schema-shared-constants.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
+
+function assertWritableMigrationTable(tableId, tableMetadata = null) {
+  if (isSystemTableName(tableId) ||
+      isSystemTableName(tableMetadata?.table_name) ||
+      isSystemTableName(tableMetadata?.table_id)) {
+    const error = new Error(QUERY_ERROR_MSG.SYSTEM_TABLE_WRITE_REFUSED);
+    error.code = QUERY_ERROR_CODE.SYSTEM_TABLE_WRITE_REFUSED;
+    throw error;
+  }
+}
 
 function createMigrationCoordinatorLifecycleMethods(deps = {}) {
   const {
@@ -21,6 +38,7 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
       if (!normalizedTableId) {
         throw new Error('Migration tableId is required');
       }
+      assertWritableMigrationTable(normalizedTableId);
 
       const activeMigration = await this.findActiveMigrationByTableId(
         normalizedTableId,
@@ -36,6 +54,7 @@ function createMigrationCoordinatorLifecycleMethods(deps = {}) {
       if (!tableMetadata) {
         throw new Error(`Table not found for migration: ${normalizedTableId}`);
       }
+      assertWritableMigrationTable(normalizedTableId, tableMetadata);
 
       const sourceSchema = String(tableMetadata.schema_definition || '{}');
       const targetPayload = this.buildTargetSchema(sourceSchema, alterSpec);

@@ -1,4 +1,5 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
+import {copyCdcEvent} from '../cdc/cdc-event-envelope.js';
 import {replicaConsensusEventsOf} from '../node/replica-handler-membership-relay.js';
 import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscription-and-backfill.js';
 import {
@@ -7,8 +8,8 @@ import {
 import {
   attachSnapshotCatchupDispatcher,
 } from './shared/snapshot-catchup-wiring.js';
-import {PARTITION_CONSENSUS_STARTUP_OUTCOME} from
-  '../partition/partition-service-constants.js';
+import {ENTITY_TYPE} from '../constants/addresses.js';
+import {isConsensusInitRefusal} from '../raft/raft-operation-port.js';
 import {COMMITTED_MEMBERSHIP_REFUSAL} from
   '../raft/raft-committed-membership-constants.js';
 import {assertDurableRejoinStorageAdmission} from
@@ -25,9 +26,8 @@ import {initializeGuardedRuntimeServiceHandler} from
 const DURABLE_REJOIN_RECORD_MISSING_MSG =
   'Durable rejoin replica refused: no durable consensus record (O4)';
 function isDurableRecordMissingRefusal(error) {
-  return error?.code ===
-      PARTITION_CONSENSUS_STARTUP_OUTCOME.CONSENSUS_INIT_REFUSED &&
-    error?.consensus?.reason ===
+  return isConsensusInitRefusal(error, ENTITY_TYPE.PARTITION) &&
+    error.consensus?.reason ===
       COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING;
 }
 
@@ -319,8 +319,8 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
               ),
           buildMessageGroupOwnerNotReadyError: (selection, errorOptions) =>
             this.buildMessageGroupOwnerNotReadyError(selection, errorOptions),
-          propagatePartitionCDCEvent: (messageGroupService, cdcEvent) =>
-            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent),
+          propagatePartitionCDCEvent: (messageGroupService, cdcEvent, deliveryContext) =>
+            this.propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext),
         });
         const handshake = await partition.subscribeToCDCWithHandshake(
           cdcSubscriber,
@@ -332,8 +332,6 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
           replicaId: options.replicaId,
           subscriberId: handshake.subscriberId,
           subscriptionEpoch: handshake.subscriptionEpoch,
-          catchupMode: handshake.catchup.mode,
-          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
         });
       };
       if (options.deferCdcPropagationHandshake === true) {
@@ -715,16 +713,15 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
    * @return {Promise<Object>}
    * @private
    */
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
     const topologyOwners = assertCritical(
       this.latencyTopology,
       JOINING_ERROR_MSG.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      data: cdcEvent.data,
+      ...copyCdcEvent(cdcEvent),
       sourceMessageGroupService: messageGroupService,
+      deliveryContext,
     });
   }
 }

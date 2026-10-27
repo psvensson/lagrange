@@ -37,6 +37,7 @@ import {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
+  doesPriorityRecoveryOperationHoldAddBudget,
 } from '../control-plane/priority-recovery-snapshot.js';
 import {StartupRecoveryCoordinator} from '../bootstrap/startup-recovery-coordinator.js';
 import {
@@ -139,8 +140,18 @@ const SQL = Object.freeze({
     operation_id, type, partition_id, replica_id, target_claim_key,
     source_node_id, target_node_id,
     status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
-    entity_type, entity_id, membership_publication_epoch
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    entity_type, entity_id, membership_publication_epoch,
+    source_replica_id, message_group_membership_lane_key,
+    message_group_membership_phase, message_group_membership_obligation_state,
+    message_group_membership_identity, message_group_learner_stamp,
+    message_group_voter_stamp, message_group_removal_stamp,
+    message_group_source_lifecycle_claim,
+    create_admission_state, create_admission_token,
+    create_admission_replica_created_at, create_admission_attempt_token,
+    create_admission_previous_attempt_token, create_admission_attempt_seq,
+    create_admission_workflow_updated_at, create_admission_owner_incarnation
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+    ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_OPERATION: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -158,7 +169,7 @@ const SQL = Object.freeze({
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
-  INSERT_RESERVATION: `INSERT INTO storage_reservations (
+  INSERT_RESERVATION: `INSERT OR IGNORE INTO storage_reservations (
     reservation_id, operation_id, entity_type, entity_id,
     partition_id, target_node_id, estimated_bytes,
     amplification_factor, status, reason_code,
@@ -322,5 +333,6 @@ export const REBALANCE_COORDINATOR_SHARED = {
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,
+  doesPriorityRecoveryOperationHoldAddBudget,
   uuidv4,
 };

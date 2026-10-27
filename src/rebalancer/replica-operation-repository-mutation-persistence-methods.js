@@ -3,15 +3,124 @@ import {
 } from './replica-operation-insert-disposition.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {
+  REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+} from './replica-operation-message-group-membership-fields.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const ABSENT_VISIBILITY_VALUE = null;
+const SQLITE_CONSTRAINT_PRIMARY_KEY = 'SQLITE_CONSTRAINT_PRIMARYKEY';
+const REPLICA_OPERATION_VISIBILITY_WAIT = Object.freeze({
+  wait: 'REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS',
+  awaited: 'persisted replica operation authoritatively visible',
+});
+const REPLICA_OPERATION_OWNED_UNIQUE_CONSTRAINTS = Object.freeze([
+  'UNIQUE constraint failed: replica_operations.operation_id',
+  'UNIQUE constraint failed: replica_operations.target_claim_key',
+  'UNIQUE constraint failed: ' +
+    'replica_operations.message_group_membership_lane_key',
+]);
+
+/**
+ * The post-persist visibility confirmation spent its deadline (the result
+ * is DEFERRED or MISSING, unchanged): one wait_bound_spent ERROR naming
+ * what the two reads last saw.
+ * @param {Object} repository
+ * @param {Object} operation - The expected projection.
+ * @param {Object} spent - {startedAtMs, polls, sawVisibilityMismatch,
+ *   deferredOutcome}
+ * @return {void}
+ */
+function reportReplicaOperationVisibilitySpent(repository, operation, spent) {
+  reportWaitBoundSpent(repository.logger, {
+    ...REPLICA_OPERATION_VISIBILITY_WAIT,
+    boundMs: repository.replicaOperationAuthoritativeVisibilityTimeoutMs,
+    elapsedMs: repository.timeSource.now() - spent.startedAtMs,
+    lastObserved: {
+      expectedWorkflowStep: operation?.workflowStep || null,
+      expectedStatus: operation?.status || null,
+      polls: spent.polls,
+      sawVisibilityMismatch: spent.sawVisibilityMismatch,
+      deferredOutcome: Boolean(spent.deferredOutcome),
+    },
+    scope: {
+      nodeId: repository.nodeId || null,
+      partitionId: operation?.partitionId || null,
+      operationId: operation?.operationId || null,
+    },
+  });
+}
 
 function buildNewOperationPersistResult(options, disposition, operation) {
   if (options?.returnDisposition !== true) {
     return true;
   }
   return Object.freeze({persisted: true, disposition, operation});
+}
+
+function nullableOperationValue(value) {
+  return value ?? null;
+}
+
+function membershipVisibilitySatisfied(expectedOperation, observedOperation) {
+  const membershipFields = [
+    'sourceReplicaId',
+    ...REPLICA_OPERATION_MESSAGE_GROUP_MEMBERSHIP_FIELDS,
+  ];
+  const carriesMembership = membershipFields.some((field) =>
+    expectedOperation[field] !== null &&
+      expectedOperation[field] !== undefined);
+  return !carriesMembership || membershipFields.every((field) =>
+    nullableOperationValue(observedOperation[field]) ===
+      nullableOperationValue(expectedOperation[field]));
+}
+
+function isReplicaOperationUniqueConstraintFailure(result) {
+  const code = String(result?.code || result?.errorCode || '');
+  const message = String(result?.error || result?.message || '');
+  return code === SQLITE_CONSTRAINT_PRIMARY_KEY ||
+    REPLICA_OPERATION_OWNED_UNIQUE_CONSTRAINTS.some((ownedConstraint) =>
+      message.includes(ownedConstraint));
+}
+
+function buildReplicaOperationInsertParams(operation) {
+  return [
+    operation.operationId,
+    operation.type,
+    operation.partitionId,
+    operation.replicaId,
+    nullableOperationValue(operation.targetClaimKey),
+    operation.sourceNodeId,
+    operation.targetNodeId,
+    operation.status,
+    operation.workflowStep,
+    operation.createdAt,
+    operation.updatedAt,
+    operation.completedAt,
+    operation.errorMessage,
+    JSON.stringify(operation.stepsHistory),
+    operation.entityType,
+    operation.entityId,
+    nullableOperationValue(operation.membershipPublicationEpoch),
+    nullableOperationValue(operation.sourceReplicaId),
+    nullableOperationValue(operation.messageGroupMembershipLaneKey),
+    nullableOperationValue(operation.messageGroupMembershipPhase),
+    nullableOperationValue(operation.messageGroupMembershipObligationState),
+    nullableOperationValue(operation.messageGroupMembershipIdentity),
+    nullableOperationValue(operation.messageGroupLearnerStamp),
+    nullableOperationValue(operation.messageGroupVoterStamp),
+    nullableOperationValue(operation.messageGroupRemovalStamp),
+    nullableOperationValue(operation.messageGroupSourceLifecycleClaim),
+    nullableOperationValue(operation.createAdmissionState),
+    nullableOperationValue(operation.createAdmissionToken),
+    nullableOperationValue(operation.createAdmissionReplicaCreatedAt),
+    nullableOperationValue(operation.createAdmissionAttemptToken),
+    nullableOperationValue(operation.createAdmissionPreviousAttemptToken),
+    nullableOperationValue(operation.createAdmissionAttemptSeq),
+    nullableOperationValue(operation.createAdmissionWorkflowUpdatedAt),
+    nullableOperationValue(operation.createAdmissionOwnerIncarnation),
+  ];
 }
 
 function assignReplicaOperationRepositoryMutationPersistenceMethods(
@@ -68,6 +177,20 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         leaderMode: CONTROL_PLANE_READ_LEADER_MODE.PREFERRED,
       });
     if (!existingOperation) {
+      const conflictingMembershipOperation =
+        await repository.queryAuthoritativeOperationByMessageGroupMembershipLane(
+          operation.messageGroupMembershipLaneKey,
+        );
+      if (conflictingMembershipOperation) {
+        repository.emitReplicaOperationPersistenceDivergence(
+          conflictingMembershipOperation,
+        );
+        return buildNewOperationPersistResult(
+          resultOptions,
+          REPLICA_OPERATION_INSERT_DISPOSITION.MEMBERSHIP_LANE_CONFLICT,
+          conflictingMembershipOperation,
+        );
+      }
       const conflictingTargetOperation =
         await repository.queryAuthoritativeOperationByTargetClaimKey(
           operation.targetClaimKey,
@@ -106,6 +229,38 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
       resultOptions,
       REPLICA_OPERATION_INSERT_DISPOSITION.EXISTING,
       existingOperation,
+    );
+  }
+
+  async function recoverNewOperationInsertFailure(
+    repository,
+    operation,
+    options,
+    result,
+  ) {
+    const recovered =
+      await repository.recoverPersistedReplicaOperationMutation(
+        operation,
+        result,
+      );
+    if (!recovered && options?.returnDisposition === true &&
+        isReplicaOperationUniqueConstraintFailure(result)) {
+      return resolveNewOperationInsertCollision(
+        repository, operation, options);
+    }
+    if (!recovered) {
+      const persistError = repository.buildOperationPersistError(result);
+      repository.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+        operationId: operation.operationId,
+        ...buildControlPlaneFailurePayload(repository.nodeId, result),
+      });
+      throw persistError;
+    }
+    repository.syncIncompleteOperationObservation(operation);
+    return buildNewOperationPersistResult(
+      options,
+      REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
+      operation,
     );
   }
 
@@ -160,47 +315,12 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               },
               {
                 sql: SQL.INSERT_OPERATION,
-                params: [
-                  operation.operationId,
-                  operation.type,
-                  operation.partitionId,
-                  operation.replicaId,
-                  operation.targetClaimKey || null,
-                  operation.sourceNodeId,
-                  operation.targetNodeId,
-                  operation.status,
-                  operation.workflowStep,
-                  operation.createdAt,
-                  operation.updatedAt,
-                  operation.completedAt,
-                  operation.errorMessage,
-                  JSON.stringify(operation.stepsHistory),
-                  operation.entityType,
-                  operation.entityId,
-                  operation.membershipPublicationEpoch ?? null,
-                ],
+                params: buildReplicaOperationInsertParams(operation),
               },
             );
       if (!result.success) {
-        const recoveredPersistedMutation =
-              await this.recoverPersistedReplicaOperationMutation(
-                operation,
-                result,
-              );
-        if (!recoveredPersistedMutation) {
-          const persistError = this.buildOperationPersistError(result);
-          this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
-            operationId: operation.operationId,
-            ...buildControlPlaneFailurePayload(this.nodeId, result),
-          });
-          throw persistError;
-        }
-        this.syncIncompleteOperationObservation(operation);
-        return buildNewOperationPersistResult(
-          options,
-          REPLICA_OPERATION_INSERT_DISPOSITION.UNKNOWN,
-          operation,
-        );
+        return recoverNewOperationInsertFailure(
+          this, operation, options, result);
       }
       if (result.recoveredAfterRetryableFailure === true) {
         this.syncIncompleteOperationObservation(operation);
@@ -349,11 +469,14 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
 
     async confirmReplicaOperationVisibility(operation) {
       this.clearAuthoritativeOperationVisibilityOutcome();
+      const startedAtMs = this.timeSource.now();
       const deadlineMs =
-        this.timeSource.now() + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
+        startedAtMs + this.replicaOperationAuthoritativeVisibilityTimeoutMs;
       let deferredOutcome = ABSENT_VISIBILITY_VALUE;
       let sawVisibilityMismatch = false;
+      let polls = 0;
       while (true) {
+        polls += 1;
         const localObservation =
           await this.queryAuthoritativeOperationVisibilityObservation(
             operation.operationId,
@@ -419,6 +542,9 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
           deferredOutcome = authorityObservation.deferredOutcome;
         }
         if (this.timeSource.now() >= deadlineMs) {
+          reportReplicaOperationVisibilitySpent(this, operation, {
+            startedAtMs, polls, sawVisibilityMismatch, deferredOutcome,
+          });
           if (deferredOutcome && sawVisibilityMismatch !== true) {
             this.lastAuthoritativeOperationVisibilityOutcome = {
               ...deferredOutcome,
@@ -484,6 +610,25 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         Number.isFinite(expectedOperation.completedAt) &&
         Number(observedOperation.completedAt) < expectedOperation.completedAt
       ) {
+        return false;
+      }
+      if (expectedOperation.createAdmissionState !== null &&
+          expectedOperation.createAdmissionState !== undefined) {
+        const admissionFields = [
+          'createAdmissionState',
+          'createAdmissionToken',
+          'createAdmissionReplicaCreatedAt',
+          'createAdmissionAttemptToken',
+          'createAdmissionPreviousAttemptToken',
+          'createAdmissionAttemptSeq',
+          'createAdmissionWorkflowUpdatedAt',
+          'createAdmissionOwnerIncarnation',
+        ];
+        if (admissionFields.some((field) =>
+          observedOperation[field] !== expectedOperation[field])) return false;
+      }
+      if (!membershipVisibilitySatisfied(expectedOperation,
+        observedOperation)) {
         return false;
       }
       return true;

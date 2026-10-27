@@ -53,4 +53,20 @@ function recoveryRetryWindowMsOf(timing = {}) {
   return tuningOf(timing).electionTick * tickMsOf(timing);
 }
 
-export {recoveryRetryWindowMsOf, tuningOf};
+/**
+ * Capture the native timing inputs of an original opening before its final
+ * admission check. Coercion belongs here, not at a later native effect. No
+ * input callback or mutable reference survives into tuning/reconstruction.
+ * Ordinary port construction keeps its existing timing representation.
+ * @param {Object} timing Original opening's millisecond timing inputs.
+ * @return {Object} Frozen numeric inputs consumed by this same tuning owner.
+ */
+function captureOriginalRaftRsTiming(timing) {
+  return Object.freeze({
+    heartbeatMs: Number(timing.heartbeatMs),
+    tickIntervalMs: Number(timing.tickIntervalMs),
+    electionMinMs: Number(timing.electionMinMs),
+  });
+}
+
+export {captureOriginalRaftRsTiming, recoveryRetryWindowMsOf, tuningOf};

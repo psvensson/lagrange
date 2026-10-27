@@ -1,4 +1,6 @@
 import {NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
+import {OPERATION_RESERVATION_RECOVERY_OUTCOME} from
+  './operation-reservation-attempt-outcome.js';
 import {OperationWorkflowRecoveryDrain} from './operation-workflow-recovery-drain.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -9,6 +11,9 @@ import {
   shutdownReplaceOwnerWake,
   wakeReplaceOwnersForReplicaRow,
 } from './operation-workflow-replace-owner-wake.js';
+import {DEBT_CENSUS, reconcileMessageGroupMembershipDebt,
+  wakeMessageGroupMembershipDebtForRow} from
+  './operation-workflow-message-group-membership-recovery.js';
 import {
   REPLACE_WAIT_REASON,
   clearAllReplaceOwnerState,
@@ -89,8 +94,34 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
     if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
       wakeReplaceOwnersForReplicaRow(this, record);
     }
+    // A row still owing a membership obligation, or a hosted witness for its
+    // group, re-enters the one debt algorithm; a failure here is logged and
+    // the debt waits for its next trigger.
+    wakeMessageGroupMembershipDebtForRow(this, tableName, cacheOperation, record)
+      .catch((error) => this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_DEBT_RETAINED,
+        {nodeId: this.nodeId, error: error?.message || String(error)}));
     return super.handleObservedReplicaStateChange(
       tableName, cacheOperation, record);
+  }
+
+  /** Census every operation still owing a membership obligation and recover
+   * the exact learner outcome through the existing recorder; nothing else. */
+  reconcileMessageGroupMembershipDebt(census = DEBT_CENSUS.CACHE_HINT) {
+    return reconcileMessageGroupMembershipDebt(this, census);
+  }
+
+  /** The restart scan reads the authoritative census (a restart must not
+   * trust the cache); a failure there is reported and the scan still finishes. */
+  async reconcileMembershipDebtOnRecovery() {
+    try {
+      return await this.reconcileMessageGroupMembershipDebt(DEBT_CENSUS.AUTHORITATIVE);
+    } catch (error) {
+      const failure = {available: false, error: error?.message || String(error)};
+      this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE,
+        {nodeId: this.nodeId, error: failure.error});
+      return failure;
+    }
   }
 
   /**
@@ -331,8 +362,9 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         op.operationId,
       );
 
+      let recoveryOutcome;
       try {
-        await this.operationWorkflowRunExclusive(
+        recoveryOutcome = await this.operationWorkflowRunExclusive(
           singleFlightKey,
           () => this.reconcileRecoveryOperation(op),
         );
@@ -362,12 +394,21 @@ class OperationWorkflowRecoveryReconcile extends OperationWorkflowRecoveryDrain 
         continue;
       }
 
-      if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
+      if (
+        recoveryOutcome === OPERATION_RESERVATION_RECOVERY_OUTCOME
+          .RESERVATION_BACKED_PENDING_REDRIVEN
+      ) {
+        result.reconciled++;
+      } else if (NODE_RECOVERY_MARK_FAILED_WORKFLOW_STEPS.has(originalStep)) {
         result.markedFailed++;
       } else if (originalStep === WORKFLOW_STEP.SYNCING) {
         result.reconciled++;
       }
     }
+
+    // Membership debt outlives ordinary settlement, so the incomplete census
+    // above cannot see it; the restart scan is one of its named triggers.
+    result.membershipDebt = await this.reconcileMembershipDebtOnRecovery();
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED, {
       nodeId: this.nodeId,

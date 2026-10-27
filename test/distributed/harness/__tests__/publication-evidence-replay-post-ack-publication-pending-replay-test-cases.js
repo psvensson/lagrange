@@ -1,3 +1,7 @@
+import {
+  assertReplayedBlockedPartitionsMatch,
+} from './publication-evidence-replay-blocked-partition-assert.js';
+
 export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(context) {
   const {
     ADMIN_CONTROL_SNAPSHOT_OBSERVATION_MODE,
@@ -272,7 +276,8 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
       replaySummary.comparison.replayedBlockedPartitionIds,
       REPLAY_TEST_132033Z_PRIORITY_PARTITION_IDS,
     );
-    assert.deepEqual(
+    assertReplayedBlockedPartitionsMatch(
+      assert,
       replaySummary.replayedPublication.summary.blockedPartitions,
       build132033ZBlockedPartitions(),
     );
@@ -664,7 +669,8 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
       replaySummary.comparison.replayedBlockedPartitionIds,
       REPLAY_TEST_140646Z_PRIORITY_PARTITION_IDS,
     );
-    assert.deepEqual(
+    assertReplayedBlockedPartitionsMatch(
+      assert,
       replaySummary.replayedPublication.summary.blockedPartitions,
       build140646ZBlockedPartitions(),
     );
@@ -675,6 +681,11 @@ export function registerPublicationEvidenceReplayPostAckPublicationPendingTests(
     assert.equal(
       replaySummary.replayedPublication.closureWitness.state,
       REPLAY_TEST_140646Z_CLOSURE_PENDING,
+    );
+    assert.equal(
+      replaySummary.replayedPublication.closureWitness.prioritySpreadPending,
+      true,
+      'a current PENDING witness (no field of its own) still reads as pending',
     );
     assert.deepEqual(
       replaySummary.replayedPublication.closureWitness.blockedPartitionIds,

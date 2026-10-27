@@ -1,0 +1,34 @@
+--- a/src/rebalancer/move-planner-move-calculation-methods.js
++++ b/src/rebalancer/move-planner-move-calculation-methods.js
+@@ -301,14 +301,6 @@
+         status === ReplicaStatus.FAILED ||
+         terminalFailedReplaceTargetReplicaIds.has(replicaId)
+       ) {
+-        const ownerProtectedFailedCreate =
+-          terminalFailedCreateTargetReplicaIds.has(replicaId) ||
+-          isFailedCreateCleanupToken(replica.cleanup_token) ||
+-          FAILED_CREATE_SOURCE_STATES.has(replica.previous_state);
+-        if (ownerProtectedFailedCreate &&
+-            !terminalFailedReplaceTargetReplicaIds.has(replicaId)) {
+-          continue;
+-        }
+         if (scheduledRemoveReplicaIds.has(replicaId)) {
+           continue;
+         }
+--- a/src/rebalancer/operation-workflow-transition-persistence.js
++++ b/src/rebalancer/operation-workflow-transition-persistence.js
+@@ -512,13 +512,7 @@
+     const admission = await admitCreateTerminalFailure(
+       this, operation, options);
+     if (admission.admitted) {
+-      const terminalAdmission = admission.stepMetadata ?
+-        () => revalidateCreateTerminalFailure(
+-          this,
+-          operation,
+-          admission,
+-          options,
+-        ) : undefined;
++      const terminalAdmission = undefined;
+       return admission.expectedWorkflowStep === null ?
+         Object.freeze({
+           ...UNBOUNDED_FAILURE_ADMISSION,

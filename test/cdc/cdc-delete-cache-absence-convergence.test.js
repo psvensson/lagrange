@@ -141,7 +141,7 @@ test(
 );
 
 test(
-  'cleanup-marker release - zero-row removal still repairs stale cache ' +
+  'primary-key deletion - zero-row removal still repairs stale cache ' +
     'through the gateway and a witnessed leader owner read',
   async (t) => {
     const serviceId = 'services-p1-stale-replica';
@@ -212,15 +212,7 @@ test(
     }).controlPlaneSystemTableGateway;
     await gateway.deleteSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
-      {
-        service_id: serviceId,
-        service_type: 'partition_cleanup',
-        partition_id: SERVICES_PARTITION_ID,
-        node_id: SOURCE_NODE_ID,
-        status: 'cleanup_owned',
-        cleanup_token: 'cleanup-token',
-        updated_at: 200,
-      },
+      {service_id: serviceId},
       {allowCoalescing: false, skipCacheWait: true},
     );
 

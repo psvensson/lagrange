@@ -6,6 +6,9 @@
  * --strict mode: fails if any function exceeds the target threshold.
  */
 
+import {METRIC_REPORTS} from './metric-report-constants.js';
+import {beginMetricMeasurement, finishMetricMeasurement} from './metric-report-provenance.js';
+
 import * as sonarjsNamespace from 'eslint-plugin-sonarjs';
 
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
@@ -13,7 +16,6 @@ import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 import {
   collectRuleViolations,
   printRatchetTighteningHint,
-  writeJsonReport,
 } from './metric-check-helpers.js';
 
 const LOCAL_STR_SCRIPTS_CHECK_COGNITIVE_COMPLEXITY_JS = 'scripts/check-cognitive-complexity.js';
@@ -36,15 +38,23 @@ const TARGET_THRESHOLD = 20;
 // 2026-09-27: tightened 159 -> 157 after durable lifecycle owner extraction
 // 2026-09-28: tightened 157 -> 155 after the node lifecycle publication owner
 // replaced the dispatch node-state write path (measured with the hint).
-const BASELINE_COUNT = 155;
+// 2026-10-03: tightened 155 -> 153 on the checker's hint after the
+// origin/main ec63fbb00 merge and the native-append inference deletion.
+// 2026-10-04: tightened 153 -> 152 on the checker's hint (the scenario
+// result summary's status label split out of the table printer).
+// 2026-10-25: measured 150 after the CDC admission dispatch simplification;
+// matches the already-tightened integration policy.
+// 2026-10-26 (D4 window deletion): tightened 150 -> 149 on the checker's hint
+// after deleting the sliding-window replay and handshake catch-up in
+// partition-cdc-delivery.js.
+const BASELINE_COUNT = 149;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';
 const SONAR_RULE_ID = 'sonarjs/cognitive-complexity';
 const SONAR_PLUGIN_NAME = 'sonarjs';
-const SOURCE_DIRECTORIES = ['src/', 'scripts/'];
-const REPORT_RELATIVE_PATH =
-  'test-output/analysis/cognitive-complexity-src-scripts.json';
+const SOURCE_DIRECTORIES = METRIC_REPORTS.cognitive.targets;
+const REPORT_RELATIVE_PATH = METRIC_REPORTS.cognitive.reportPath;
 const SCOPED_REPORT_RELATIVE_PATH =
   'test-output/analysis/cognitive-complexity-scoped.json';
 const PRINT_LIMIT = 40;
@@ -95,11 +105,14 @@ const eslint = new LegacyESLint({
   },
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
+const measurement = beginMetricMeasurement('cognitive', {
+  targets: lintTargets, reportPath: reportRelativePath,
+});
 const results = await eslint.lintFiles(lintTargets);
 const violations = collectRuleViolations(results, SONAR_RULE_ID);
 const count = violations.length;
 
-writeJsonReport(reportRelativePath, {
+finishMetricMeasurement(measurement, {
   targetThreshold: TARGET_THRESHOLD,
   baselineCount: BASELINE_COUNT,
   scoped,

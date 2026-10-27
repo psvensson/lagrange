@@ -13,6 +13,7 @@
  * aggregate bug shipped green behind exactly that mock).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import Database from 'better-sqlite3';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {AST_TYPE, EXPR_TYPE} from '../../src/query/parser-constants.js';
@@ -107,14 +108,13 @@ export function createMockMessageRouter() {
           message.params,
           data,
         );
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows,
           changes: rows.length || 1,
-        };
+        });
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 }

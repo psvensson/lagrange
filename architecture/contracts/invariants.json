@@ -233,7 +233,7 @@
       "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-041.md",
       "liveEvidence": {
         "tier": 2,
-        "holdsWhen": "the CL-041 deterministic repro asserts grantedTo.length == 1 (a follower with a log grants at most one vote in a term) and exits 0",
+        "holdsWhen": "the CL-041 repro, on real raft-rs operation ports, observes two candidates standing for the same term, asserts no term ever has two leaders and the race resolves to one leader, and exits 0",
         "evidence": {
           "kind": "repro",
           "ref": "npm run repro -- CL-041",
@@ -410,12 +410,12 @@
       "owner": "message_group_raft_owner",
       "boundary": "leader_election",
       "kind": "safety",
-      "statement": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "statement": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the consensus core never masquerades an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
       "formalPredicate": "\\A n: LogEmpty(n) => LastLogTerm(n) = 0",
       "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md",
       "liveEvidence": {
         "tier": 2,
-        "holdsWhen": "the CL-042 deterministic repro asserts a voter holding a committed entry DENIES an empty-log higher-term candidate and exits 0",
+        "holdsWhen": "the CL-042 repro, on real raft-rs operation ports under the production group tuning, reaches an empty-log candidate whose failed elections raised its term above the leader's, asserts after the heal that it never leads, that every leader holds the committed entry and that no committed entry diverges, and exits 0",
         "evidence": {
           "kind": "repro",
           "ref": "npm run repro -- CL-042",

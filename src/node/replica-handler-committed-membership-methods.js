@@ -98,12 +98,17 @@ function assignReplicaHandlerCommittedMembershipMethods(ReplicaHandler) {
             nodeId: this.nodeId},
         );
       }
+      // A bootstrap read, or the retirement read that also refuses a
+      // pending configuration change; never any other purpose remotely.
+      const purpose = request?.[ReplicaOperationField.READ_PURPOSE] ===
+        COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT ?
+        COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT :
+        COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP;
       const answers = [];
       for (const service of this.localServices.values()) {
         if (service?.partitionId === partitionId &&
             typeof service.raft?.[READ] === FUNCTION_TYPE) {
-          answers.push(await service.raft[READ]({
-            purpose: COMMITTED_MEMBERSHIP_READ_PURPOSE.BOOTSTRAP}));
+          answers.push(await service.raft[READ]({purpose}));
         }
       }
       const answer = answers.length === 0 ?

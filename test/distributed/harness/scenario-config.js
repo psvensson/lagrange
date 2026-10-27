@@ -7,9 +7,11 @@ import {
 } from '../scenarios/public-seam-durability-constants.js';
 
 const ZERO = 0;
-const DEFAULT_LOG_TABLE_NAME = 'logs';
+const DEFAULT_USER_LOAD_TABLE_NAME = 'user_load_logs';
+const DEFAULT_BENCHMARK_TABLE_NAME = 'benchmark_events';
 const WORKLOAD_PROFILE_DEFAULT = 'default';
 const WORKLOAD_PROFILE_BENCHMARK_EVENTS = 'benchmark_events_mixed';
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const DEFAULT_MIXED_LOAD_OPERATIONS = Object.freeze([
   'INSERT',
@@ -32,6 +34,16 @@ function normalizeFiniteNumber(value, fallback) {
 
 function normalizeNonEmptyString(value, fallback) {
   return typeof value === 'string' && value.length > ZERO ? value : fallback;
+}
+
+function normalizeScenarioTableName(value, fallback) {
+  const tableName = stringTrim(normalizeNonEmptyString(value, fallback));
+  if (tableName === 'logs') {
+    throw new Error(
+      'Scenario config cannot target protected system table logs',
+    );
+  }
+  return tableName;
 }
 
 function normalizeNonEmptyArray(value, fallback) {
@@ -95,7 +107,10 @@ function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
     loadDuration: normalizeNonEmptyString(options.loadDuration, '120s'),
     workloadProfile: loadWorkload.workloadProfile,
     loadOperations: loadWorkload.loadOperations,
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
@@ -146,7 +161,10 @@ function resolveSevenNodeTablePartitionDistributionScenarioConfig(options = {}) 
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 7),
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 120),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '120s'),
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
@@ -179,7 +197,10 @@ function resolveSevenNodeLoadDuringPartitioningScenarioConfig(options = {}) {
     loadDuration: normalizeNonEmptyString(options.loadDuration, '240s'),
     workloadProfile: loadWorkload.workloadProfile,
     loadOperations: loadWorkload.loadOperations,
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 1),
     minDistinctReplicaNodes:
@@ -209,6 +230,10 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_USER_LOAD_TABLE_NAME,
+    ),
     preRestartDelayMs: normalizeFiniteNumber(
       options.preRestartDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -234,7 +259,7 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
 
 function resolveSnapshotLiveRebuildScenarioConfig(options = {}) {
   return Object.freeze({
-    // Preload targeting: the default 'logs' table starts as a single data
+    // Preload targeting: the default benchmark table starts as a single data
     // partition, so preloading it to the declared floor lands all the bytes in
     // that one partition (whole-table == target-partition bytes at this scale).
     // Keys use a single contiguous zero-padded prefix so they stay inside one
@@ -242,7 +267,10 @@ function resolveSnapshotLiveRebuildScenarioConfig(options = {}) {
     // production snapshot default so a rebuild transfers real multi-chunk bytes
     // without an unreasonable preload wall-time; Phase C calibrates the exact
     // floor. preloadRows * preloadPayloadBytes approximates floorBytes.
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
     floorBytes: normalizeFiniteNumber(options.floorBytes, 25165824),
     preloadRows: normalizeFiniteNumber(options.preloadRows, 3072),
     preloadPayloadBytes: normalizeFiniteNumber(options.preloadPayloadBytes, 8192),
@@ -305,6 +333,10 @@ function resolvePartitionKillHealUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_USER_LOAD_TABLE_NAME,
+    ),
     preFaultDelayMs: normalizeFiniteNumber(
       options.preFaultDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -321,6 +353,10 @@ function resolveDiskFullUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_USER_LOAD_TABLE_NAME,
+    ),
     preFaultDelayMs: normalizeFiniteNumber(
       options.preFaultDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -342,6 +378,10 @@ function resolveSlowFollowerUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
     loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_USER_LOAD_TABLE_NAME,
+    ),
     preFaultDelayMs: normalizeFiniteNumber(
       options.preFaultDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -403,7 +443,10 @@ function resolveThreeNodeSeedRebalanceScenarioConfig(options = {}) {
 
 function resolveTableDistributionQueryConfig(options = {}) {
   return Object.freeze({
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
   });
 }
 
@@ -454,7 +497,7 @@ function resolvePartitionMergeUnderLoadScenarioConfig(options = {}) {
   ) || PARTITION_MERGE_MERGE_PHASE_TABLE_POLICIES;
   return Object.freeze({
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 5),
-    tableName: normalizeNonEmptyString(
+    tableName: normalizeScenarioTableName(
       options.tableName,
       PARTITION_MERGE_DEFAULT_TABLE_NAME,
     ),
@@ -529,7 +572,10 @@ function resolvePartitionMergeUnderLoadScenarioConfig(options = {}) {
 
 function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
   return Object.freeze({
-    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    tableName: normalizeScenarioTableName(
+      options.tableName,
+      DEFAULT_BENCHMARK_TABLE_NAME,
+    ),
     timeoutMs: normalizeFiniteNumber(options.timeoutMs, 90000),
     pollIntervalMs: normalizeFiniteNumber(options.pollIntervalMs, 250),
     minAdditionalPartitions:
@@ -540,6 +586,8 @@ function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
 }
 
 export {
+  DEFAULT_BENCHMARK_TABLE_NAME,
+  DEFAULT_USER_LOAD_TABLE_NAME,
   PARTITION_MERGE_SCENARIO_VARIANT,
   resolveDiskFullUnderLoadScenarioConfig,
   resolvePartitionKillHealUnderLoadScenarioConfig,

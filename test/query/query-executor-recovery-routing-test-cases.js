@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {ERRORS} from '../../src/constants/index.js';
@@ -84,21 +85,20 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       deliver: async (address, _message, options) => {
         deliveries.push({address, timeoutMs: options?.timeoutMs});
         if (address === disconnectedAddress) {
-          return {
-            acknowledged: false,
-            success: false,
-            error: `Connection to node ${disconnectedNodeId} closed`,
-            errorCode: 'ROUTER_CONNECTION_CLOSED',
-            retryAfterMs: 50,
-            deferRetry: true,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: `Connection to node ${disconnectedNodeId} closed`,
+              errorCode: 'ROUTER_CONNECTION_CLOSED',
+              retryAfterMs: 50,
+              deferRetry: true,
+            });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       },
     };
     const executor = new QueryExecutor({
@@ -318,20 +318,19 @@ export function registerQueryExecutorRecoveryRoutingTests() {
         async deliver(address, _message, options) {
           deliveries.push({address, timeoutMs: options?.timeoutMs});
           if (address === seedAddress) {
-            return {
-              acknowledged: false,
-              success: false,
-              error: `Connection to node ${seedNodeId} closed`,
-              errorCode: 'ROUTER_CONNECTION_CLOSED',
-              retryAfterMs: 50,
-              deferRetry: true,
-            };
+            return buildDeliveryEnvelope(
+              {
+                acknowledged: false,
+                error: `Connection to node ${seedNodeId} closed`,
+                errorCode: 'ROUTER_CONNECTION_CLOSED',
+                retryAfterMs: 50,
+                deferRetry: true,
+              });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: [{operation_id: 'operation-1'}],
-          };
+          });
         },
       },
       systemCache,
@@ -597,18 +596,14 @@ export function registerQueryExecutorRecoveryRoutingTests() {
       deliver: async (address, message) => {
         deliveries.push({address, sql: message.sql});
         if (address === inactiveParticipantAddress) {
-          return {
-            acknowledged: false,
-            success: false,
-            error: connectionClosedError,
-            errorCode: routerConnectionClosedCode,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: connectionClosedError,
+              errorCode: routerConnectionClosedCode,
+            });
         }
-        return {
-          acknowledged: true,
-          success: true,
-          rows: liveRows,
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: liveRows});
       },
     };
     const executor = new QueryExecutor({
@@ -697,11 +692,10 @@ export function registerQueryExecutorRecoveryRoutingTests() {
 
     const messageRouter = {
       deliver: async (_address, _message) => {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'Message timeout',
-        };
+        });
       },
     };
 
@@ -1364,12 +1358,11 @@ export function registerQueryExecutorRecoveryRoutingTests() {
     const messageRouter = {
       deliver: async (address) => {
         deliveries.push(address);
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       },
     };
     const executor = new QueryExecutor({

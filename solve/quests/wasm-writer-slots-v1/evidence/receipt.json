@@ -1,0 +1,46 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "contract-reviewed",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "native-v1-completion",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "semantic-source-negative",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "sequence-replay-recycle",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "lifecycle-rollback-resources",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "current-format-recovery",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "affected-cone",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    },
+    {
+      "id": "independent-final-review",
+      "passed": false,
+      "reason": "Selected v1 protocol not implemented or verified; known original strong-write semantic RED preserved at accepted evidence head."
+    }
+  ]
+}

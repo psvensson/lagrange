@@ -382,7 +382,7 @@ t.test(
     const router = fixture.coordinator.messageRouter;
     const baseDeliver = router.deliver.bind(router);
     router.deliver = async (target, payload, options) =>
-      witness.answer(payload) ?? baseDeliver(target, payload, options);
+      witness.deliveryFor(payload) ?? baseDeliver(target, payload, options);
     // The priority surplus REMOVE placement fence only admits the drain when
     // the strict owner-RPC services lane proves current placement, so the
     // authoritative owner answers from the live formation cache.

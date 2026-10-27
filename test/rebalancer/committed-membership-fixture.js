@@ -9,11 +9,13 @@
 // contract itself uses the real chain
 // (test/raft/raft-rs-backend/committed-membership-harness.js) instead.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   COMMITTED_MEMBERSHIP_ANSWER_KIND,
 } from '../../src/raft/raft-committed-membership-constants.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
 import {
   ReplicaOperationField,
@@ -57,12 +59,14 @@ function fixtureCommittedMembershipAnswer(cache, partitionId) {
     identities[deriveRaftRsPeerId(unnamed)] = unnamed;
   }
   const voters = Object.keys(identities);
+  const confState = {voters, votersOutgoing: [], learners: [],
+    learnersNext: []};
   return {
     kind: COMMITTED_MEMBERSHIP_ANSWER_KIND.COMMITTED,
-    voters,
-    votersOutgoing: [],
-    learners: [],
+    ...confState,
     appliedIndex: FIXTURE_COMMITTED_INDEX,
+    configurationKey: raftRsConfStateKey(confState),
+    membershipGenerationIndex: FIXTURE_COMMITTED_INDEX,
     commitIndex: FIXTURE_COMMITTED_INDEX,
     term: FIXTURE_TERM,
     leaderId: Object.values(identities)[0],
@@ -83,17 +87,11 @@ function answerFixtureCommittedMembership(cache, payload) {
       ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
     return undefined;
   }
-  return {
-    acknowledged: true,
-    noHandler: false,
-    deliveryState: 'delivered',
-    deferRetry: false,
-    errorCode: null,
-    retryAfterMs: null,
+  return buildDeliveryEnvelope({acknowledged: true}, {
     status: ReplicaOperationResponseStatus.COMPLETED,
     [ReplicaOperationField.MEMBERSHIP]: fixtureCommittedMembershipAnswer(
       cache, payload[ReplicaOperationField.PARTITION_ID]),
-  };
+  });
 }
 
 const FIXTURE_WRAPPED = Symbol('fixture committed-membership router');

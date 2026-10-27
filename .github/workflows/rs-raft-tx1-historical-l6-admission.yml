@@ -1,0 +1,110 @@
+name: rs-raft-tx1-historical-l6-admission
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-tx1-historical-l6-admission.yml
+      - scripts/quest-evidence/tx1-historical-before-l6-witness.mjs
+permissions:
+  contents: read
+jobs:
+  pinned-public-admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      OUT: test-output/tx1-historical-admission
+      SOURCE: '2a21e39cec4bbba941dafc2034b1bc038d9e31db'
+      WITNESS: scripts/quest-evidence/tx1-historical-before-l6-witness.mjs
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Preserve exact checkout and dependency installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse HEAD > "$OUT/input-head.txt"
+          git cat-file -t "$SOURCE" > "$OUT/historical-object-type.txt"
+          test "$(cat "$OUT/historical-object-type.txt")" = commit
+          npm ci > "$OUT/install.log" 2>&1
+          OLD="$RUNNER_TEMP/tx1-historical-pinned"
+          git worktree add --detach "$OLD" "$SOURCE"
+          test "$(git -C "$OLD" rev-parse HEAD)" = "$SOURCE"
+          install -D -m 644 "$WITNESS" "$OLD/$WITNESS"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$OLD/node_modules"
+          sha256sum "$WITNESS" "$OLD/$WITNESS" > "$OUT/witness-source-digests.txt"
+          git -C "$OLD" rev-parse HEAD > "$OUT/historical-source-sha.txt"
+          git diff --exit-code -- src
+      - name: Execute actual historical public BEGIN and PREPARE
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD="$RUNNER_TEMP/tx1-historical-pinned"
+          (cd "$OLD" && node "$WITNESS") > "$OUT/probe.log" 2>&1
+          printf '%s\n' "$?" > "$OUT/probe-exit.txt"
+          cat "$OUT/probe.log"
+      - name: Derive admission disposition from actual receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=Path(os.environ['OUT'])
+          lines=(e/'probe.log').read_text(errors='replace').splitlines()
+          data=next((json.loads(s.split('TX1_HISTORICAL_BEFORE_L6 ',1)[1])
+            for s in lines if s.startswith('TX1_HISTORICAL_BEFORE_L6 ')),{})
+          checks={
+            'exact-history':data.get('sourceSha')==os.environ['SOURCE'] and
+              (e/'historical-source-sha.txt').read_text().strip()==os.environ['SOURCE'],
+            'public-admitted':data.get('admitted') is True,
+            'public-prepared':data.get('prepared') is True,
+            'source-owned-session':data.get('sessionObserved') is True,
+            'ran-successfully':(e/'probe-exit.txt').read_text().strip()=='0',
+          }
+          result={'head':(e/'input-head.txt').read_text().strip(),
+            'historicSource':os.environ['SOURCE'],'checks':checks,
+            'receipt':data,'historicalPublicAdmissionProved':all(checks.values()),
+            'nativeQuorumProved':False,'historicalCrossVersionMigrationProved':False,
+            'independentApproval':False,'mergeReady':False,
+            'scope':'actual old source public API with controllable Raft fixture, not RF3 native replication or durable cross-version migration'}
+          (e/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2))
+          PY
+      - name: Preserve all output even when historical admission is refused
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$OUT"
+          git status --porcelain > "$OUT/status.txt"
+          find "$OUT" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$OUT/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-tx1-historical-l6-${{ github.run_id }}
+          path: test-output/tx1-historical-admission/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep uncertified migration visible
+        if: always()
+        shell: bash
+        run: |
+          test -f "$OUT/summary.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          a=json.loads((Path(os.environ['OUT'])/'summary.json').read_text())
+          assert a['historicalPublicAdmissionProved']
+          assert not a['historicalCrossVersionMigrationProved']
+          assert not a['mergeReady']
+          PY

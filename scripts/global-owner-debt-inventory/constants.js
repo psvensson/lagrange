@@ -1,3 +1,5 @@
+import {METRIC_REPORTS} from '../metric-report-constants.js';
+
 export const OWNER_DEBT = Object.freeze({
   output: 'solve/changes/global-owner-debt-inventory/inventory.json',
   schemaVersion: 'global-owner-debt-inventory-v1',
@@ -28,8 +30,6 @@ export const OWNER_DEBT = Object.freeze({
   reconciliationError: 'owner-debt inventory reconciliation failed',
   staleImportGraphError:
     'owner-debt import graph report is stale; rerun with --refresh',
-  ratchetExceededNoticeSuffix:
-    '; report refreshed, elevated debt will be recorded\n',
   childProof:
     'focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count',
   expansionRule:
@@ -53,20 +53,10 @@ export const OWNER_DEBT_GLOB = Object.freeze({
 });
 
 export const OWNER_DEBT_REPORTS = Object.freeze({
-  complexity: 'test-output/analysis/complexity-src-test.json',
-  cognitive: 'test-output/analysis/cognitive-complexity-src-scripts.json',
-  cycles: 'test-output/analysis/madge-circular-src-scripts-test.json',
+  ...Object.fromEntries(Object.entries(METRIC_REPORTS)
+    .map(([id, descriptor]) => [id, descriptor.reportPath])),
   importGraph: 'test-output/analysis/global-owner-debt-import-graph.json',
-  duplicationSource: 'test-output/analysis/jscpd-src-scripts/jscpd-report.json',
-  duplicationTest: 'test-output/analysis/jscpd-test/jscpd-report.json',
 });
-
-export const OWNER_DEBT_REFRESH_COMMANDS = Object.freeze([
-  ['scripts/check-complexity.js'],
-  ['scripts/check-cognitive-complexity.js'],
-  ['scripts/check-circular-dependencies.js'],
-  ['scripts/check-duplication.js'],
-]);
 
 export const OWNER_DEBT_CHILD_LIMITS = Object.freeze({
   m2: 6,

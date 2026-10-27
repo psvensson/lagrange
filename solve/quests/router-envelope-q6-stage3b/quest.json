@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "router-envelope-q6-stage3b",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Complete the approved Q6 router-delivery interaction atomically: one owner-built {transport, answer} envelope with router-only hop identity and transport state, no public acknowledged alias, fail-closed owner accessors, preserved domain refusals and lost-answer obligations, and one exact-handler registration/dispatch/retirement policy. All affected producers, forwarding boundaries and consumers migrate together; no compatibility path, release acceptance or retained-seed seal change.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/router-envelope-q6-stage3b/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-envelope-and-no-public-ack",
+        "transport-answer-isolation-local-remote-forwarded",
+        "lost-answer-and-domain-refusal-preservation",
+        "atomic-consumer-migration-and-handler-identity",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only router-envelope production/consumer/fixture migration, exact-handler identity, their named impact interactions and proof metadata. Preserve unrelated source and dirty original tree."
+    },
+    {
+      "id": "authority",
+      "statement": "Owner review decision 6 and integration decisions D1-D5 in retained-seed-original-handoff log entry147 apply; stage1-2 approval at entry178 does not approve this candidate."
+    }
+  ],
+  "sealedAt": "f0060ff36ee16b8eee479ef927d81978b8daabb1"
+}

@@ -1,0 +1,11 @@
+{
+  "solve/changes/global-owner-debt-inventory/inventory.json": "c7fce2b2185e801042109752f079c2d4f262f2645258bbf7a2ebd837c30d0b7c",
+  "test/cdc/cdc-delivery-outcome.test.js": "87375a2e9993b5ad0cbe7d2477b35d525e2eef725ca04a74e76c455fe2a0947f",
+  "test/message-group/message-group-native-custody-fixture.js": "2806d3980b7b4b0392c79e2924984fb23e26147c5c27a3ed2e5d7a9409ff3012",
+  "test/message-group/message-group-native-custody-handoff.test.js": "cc50118621a0d150bf9726e7e01b72ef493f74042b48f92c32f0666c027286a4",
+  "test/shards/impact-contracts.json": "27cd6dd34504e6fa4bcac545c91234e284c889decde95d0224cbe33b9849d358",
+  "test/shards/impact-graph-seal.json": "15f4ef485a9aec9a0d1999fdfecca8588eb0da1d2ae25bc6c09ef9bfc4cc232c",
+  "test/shards/primary-classes.json": "0a6485aa8a166ecca08ef0daa78ba18b42dde35a81cf78dd665fe7c06d3dc04c",
+  "test/shards/resource-classes.json": "70c821826096554c8345777197b82d5f07b749cdece2a492e46f35aa0082f4e8",
+  "test/shards/subsystem-classes.json": "d8f78da81e26cd8aebc0317b5302af193e151e6e86ad11a2ba271303b8e21794"
+}

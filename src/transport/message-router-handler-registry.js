@@ -12,7 +12,7 @@ const {
 
 /**
  * Handler registry and unified-address grammar for the message router:
- * register/unregister service (and worker-alias) handlers, parse the
+ * register/unregister service handlers, parse the
  * ${nodeId}/${entityType}/${entityId} address form, and validate it against the
  * allowed entity types.
  */
@@ -37,15 +37,6 @@ class MessageRouterHandlerRegistry {
       routerId: this.routerId,
       totalHandlers: this.handlers.size,
     });
-  }
-  /**
-   * Register a worker delivery handler.
-   * Alias for register() used by ReplicaWorkerManager.
-   * @param {string} address - Worker unified address.
-   * @param {Function} deliverFn - Worker delivery function.
-   */
-  registerWorkerHandler(address, deliverFn) {
-    this.register(address, deliverFn);
   }
   /**
    * Parse a unified address into its components.
@@ -80,7 +71,8 @@ class MessageRouterHandlerRegistry {
   /**
    * Validate that an address follows the unified format.
    * Format: ${nodeId}/${entityType}/${entityId}
-   * Valid entityTypes: message-group, partition, lifecycle, service
+   * Valid entityTypes: message-group, partition, lifecycle, service,
+   * bootstrap, wasm_service
    * Requirements: 1.1, 1.3
    * @param {string} address - Address to validate.
    * @return {boolean} True if address is valid.
@@ -100,34 +92,6 @@ class MessageRouterHandlerRegistry {
     return ROUTER_VALID_ENTITY_TYPES.includes(entityType);
   }
   /**
-   * Unregister a service handler.
-   * @param {string} address - Service address.
-   */
-  unregister(address) {
-    this.handlers.delete(address);
-    this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
-      address,
-      routerId: this.routerId,
-      totalHandlers: this.handlers.size,
-    });
-  }
-  /**
-   * Unregister a worker delivery handler.
-   * Alias for unregister() used by ReplicaWorkerManager.
-   * @param {string} address - Worker unified address.
-   */
-  unregisterWorkerHandler(address) {
-    this.unregister(address);
-  }
-  /**
-   * Check whether a worker handler is registered.
-   * @param {string} address - Worker unified address.
-   * @return {boolean} True if registered.
-   */
-  hasWorkerHandler(address) {
-    return this.handlers.has(address);
-  }
-  /**
    * The exact handler registered at an address (identity, not presence), so
    * an owner can prove its own handler is the one registered.
    * @param {string} address - Service address.
@@ -139,14 +103,19 @@ class MessageRouterHandlerRegistry {
   /**
    * Remove the handler at an address only when it is exactly `handler`: a
    * retiring owner never removes a successor's handler under the same
-   * address.
+   * address. This is the router's only removal (one identity policy).
    * @param {string} address - Service address.
    * @param {Function} handler - The handler the caller registered.
    * @return {boolean} True when that exact handler was removed.
    */
   unregisterExact(address, handler) {
     if (this.handlers.get(address) !== handler) return false;
-    this.unregister(address);
+    this.handlers.delete(address);
+    this.logger.debug(ROUTER_LOG_MSG.HANDLER_UNREGISTERED, {
+      address,
+      routerId: this.routerId,
+      totalHandlers: this.handlers.size,
+    });
     return true;
   }
 }

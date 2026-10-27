@@ -4,12 +4,12 @@
  * partition leadership wait, epoch manager initialization,
  * and partition replica progress reporting.
  *
- * Extracted from BootstrapService to keep the orchestrator thin.
- * The class receives required dependencies via constructor injection.
  */
 
 import {PartitionService} from '../../partition/partition-service.js';
-import {genesisStamp} from '../../raft/raft-committed-membership-stamp.js';
+import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../raft/raft-rs-original-allocation-constants.js';
 import {assertCritical} from '../../utils/assert.js';
 import {AssignmentEpochManager} from '../../rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../rebalancer/assignment-epoch.js';
@@ -39,9 +39,7 @@ import {
 import {assignSeedPartitionReplicaProgressMethods} from
   './seed-partition-replica-progress.js';
 import {
-  ADDRESS,
   COLUMN,
-  ENTITY_TYPE,
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_TYPE,
@@ -52,7 +50,13 @@ import {
 import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
   '../shared/hosted-replica-authorities.js';
 
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
 const LOCAL_STR_STRING = 'string';
+const SEED_PARTITION_LEADERSHIP_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'a live leader for every seed system-table partition',
+});
 const CLEANUP_IN_PROGRESS_CODE = 'CLEANUP_IN_PROGRESS';
 const CREATE_OWNER_DEFERRED_CODE = 'CREATE_OWNER_DEFERRED';
 const RESTORABLE_SEED_PARTITION_STATUSES = new Set([
@@ -74,8 +78,17 @@ function isRestorableSeedPartitionRow(row, options, nodeId) {
     RESTORABLE_SEED_PARTITION_STATUSES.has(row.status.toLowerCase());
 }
 
+function isColdRecoveryPartitionAdmission(options, admission) {
+  return options?.identityExisted === true &&
+    Array.isArray(admission?.rows) &&
+    admission.rows.length === 0;
+}
+
 function assertBootstrapPartitionStorageAdmission(options, admission, nodeId) {
-  if (admission?.empty === true) return;
+  if (admission?.empty === true ||
+      isColdRecoveryPartitionAdmission(options, admission)) {
+    return;
+  }
   const row = admission?.rows?.find?.(
     (candidate) => candidate?.service_id === options.replicaId,
   );
@@ -90,9 +103,6 @@ function assertBootstrapPartitionStorageAdmission(options, admission, nodeId) {
   }
 }
 
-/**
- * Handles the partitions phase of seed bootstrap.
- */
 class SeedPartitionsPhase {
   /**
    * @param {Object} options
@@ -133,10 +143,8 @@ class SeedPartitionsPhase {
       });
 
       const nodeId = d.getNodeId();
-      const peerAddresses = replicaIds.map((replicaId) =>
-        `${nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}${replicaId}`,
-      );
+      const peerAddresses = originalSeedPeerAddresses(nodeId,
+        UNIFIED_SERVICE_TYPE.PARTITION, replicaIds);
       for (let index = 0; index < replicaIds.length; index++) {
         const replicaId = replicaIds[index];
         const dbPath = d.resolvePartitionDbPath(
@@ -210,22 +218,28 @@ class SeedPartitionsPhase {
     const definition = context?.definition || {};
     const serviceId =
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = d.resolveBootstrapReplicaOptions(
+    let options = d.admitOriginalSeedReplica(d.resolveBootstrapReplicaOptions(
       serviceId,
       UNIFIED_SERVICE_TYPE.PARTITION,
-    );
+    ));
+    const startupAdmission = d.getStartupServicesAdmission?.();
     assertBootstrapPartitionStorageAdmission(
       options,
-      d.getStartupServicesAdmission?.(),
+      startupAdmission,
       d.getNodeId(),
     );
 
-    if (d.getPartitionServices().has(options.replicaId)) {
-      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-    }
-
-    if (options.createDelayMs > 0) {
+    const partitionServices = d.getPartitionServices();
+    if (!partitionServices.has(options.replicaId) && options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
+    }
+    options = d.admitOriginalSeedReplica(options);
+    const existing = partitionServices.get(options.replicaId);
+    if (existing) {
+      if (existing.initialized !== true || existing.isShutdown === true) {
+        throw originalAllocationError(ORIGINAL_ALLOCATION_REASON.RESOURCE, options.replicaId);
+      }
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
     const progress = this.startPartitionReplicaProgress({
@@ -238,6 +252,7 @@ class SeedPartitionsPhase {
     });
 
     try {
+      const cdcIntegrationService = d.getCdcIntegrationService();
       const partition = new PartitionService({
         partitionId: options.partitionId,
         tableId: options.tableName,
@@ -249,11 +264,9 @@ class SeedPartitionsPhase {
         // Handler retirement goes through the replica lifecycle owner (N2).
         resolveHandlerRetirementLane: () =>
           d.getReplicaStateMachine?.() || null,
-        // The seed founds each system partition from an explicit GENESIS
-        // stamp of its founding list, validated by the port like every stamp
-        // (verification V1a); a seed that holds a durable record restores
-        // from it instead.
-        bootstrapMembership: genesisStamp(options.replicaIds),
+        bootstrapMembership: options.bootstrapMembership,
+        identityExisted: options.identityExisted,
+        originalAllocationOpening: options.originalAllocationOpening,
         peerAddresses: options.peerAddresses,
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
@@ -261,8 +274,13 @@ class SeedPartitionsPhase {
         messageGroupService: d.getBootstrapMessageGroupService(),
         messageRouter: d.getMessageRouter(),
         rebalanceCoordinator: d.getRebalanceCoordinator(),
-        cdcIntegrationService: d.getCdcIntegrationService(),
-        sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
+        // Release and transaction admission read the node's actual topology
+        // owner even before cache hydration. The fresh seed cache is the
+        // stable empty/known bootstrap view at this point; a missing owner
+        // must remain unavailable rather than be treated as no transition.
+        systemTableCache: d.getSystemTableCache(),
+        cdcIntegrationService,
+        sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine,
         deferElection: Boolean(options.deferElection),
         // The replica is hosted by this node: this node's clock, and this
         // node's runtime for its node-local cache.
@@ -278,8 +296,10 @@ class SeedPartitionsPhase {
           ),
       });
 
+      // Retain this exact resource before initialize can yield or fail.
+      partitionServices.set(options.replicaId, partition);
       await partition.initialize();
-      d.getPartitionServices().set(options.replicaId, partition);
+      d.assertOriginalSeedAttempt();
       d.pushPartitionReplica(partition);
       d.incrementServicesCreated();
       this.finishPartitionReplicaProgress(progress);
@@ -307,6 +327,7 @@ class SeedPartitionsPhase {
    */
   async startBootstrapPartitionReplica(replicaHandle, _context) {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     const serviceId =
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
@@ -323,6 +344,7 @@ class SeedPartitionsPhase {
     );
 
     if (!options.deferElection) {
+      d.assertOriginalSeedContinuation(options.replicaId);
       partition.startElection();
     }
 
@@ -372,6 +394,7 @@ class SeedPartitionsPhase {
    */
   async startDeferredBootstrapReplicaElections() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     const logger = d.getLogger();
     const messageGroupReplicas = d.getMessageGroupReplicas();
 
@@ -383,6 +406,7 @@ class SeedPartitionsPhase {
       });
 
       for (const messageGroup of messageGroupReplicas) {
+        d.assertOriginalSeedContinuation(messageGroup.replicaId);
         messageGroup.startElection();
       }
 
@@ -390,6 +414,13 @@ class SeedPartitionsPhase {
         INITIAL_MESSAGE_GROUP_ID,
         [...INITIAL_MESSAGE_GROUP_REPLICA_IDS],
       );
+
+      // Shutdown may begin while message-group leadership is pending. Cleanup
+      // then owns every unstarted replica; do not begin either partition
+      // cohort after that lifecycle boundary.
+      if (d.isShuttingDown()) {
+        return;
+      }
 
       logger.debug(
         BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_LEADERSHIP_READY, {
@@ -405,8 +436,48 @@ class SeedPartitionsPhase {
       nodeId: d.getNodeId(),
     });
 
+    const registrationRequiredPartitionIds = new Set(
+      d.getRegistrationRequiredLeaderPartitionIds(),
+    );
+    const registrationRequiredReplicas = [];
+    const remainingReplicas = [];
     for (const partition of partitionReplicas) {
+      const cohort = registrationRequiredPartitionIds.has(
+        partition.partitionId,
+      ) ? registrationRequiredReplicas : remainingReplicas;
+      cohort.push(partition);
+    }
+
+    const campaignedPartitions = new Set();
+    for (const partition of registrationRequiredReplicas) {
+      d.assertOriginalSeedContinuation(partition.replicaId);
       partition.startElection();
+      if (!campaignedPartitions.has(partition.partitionId) &&
+          typeof partition.raft?.campaign === 'function') {
+        campaignedPartitions.add(partition.partitionId);
+        void partition.raft.campaign();
+      }
+    }
+
+    try {
+      await d.waitForPartitionLeadership({
+        partitionIds: [...registrationRequiredPartitionIds],
+      });
+    } finally {
+      // A failed dependency gate must not strand otherwise independent
+      // partition groups. During shutdown, cleanup owns every unstarted
+      // replica and this scheduler must not restart them.
+      if (!d.isShuttingDown()) {
+        for (const partition of remainingReplicas) {
+          d.assertOriginalSeedContinuation(partition.replicaId);
+          partition.startElection();
+          if (!campaignedPartitions.has(partition.partitionId) &&
+              typeof partition.raft?.campaign === 'function') {
+            campaignedPartitions.add(partition.partitionId);
+            void partition.raft.campaign();
+          }
+        }
+      }
     }
   }
 
@@ -497,12 +568,17 @@ class SeedPartitionsPhase {
     const missing = [...partitionIds].filter(
       (id) => !leaders.has(id),
     );
-    logger.error(BOOTSTRAP_LOG_MSG.PARTITION_LEADERS_PENDING, {
-      totalPartitions: partitionIds.size,
-      leadersFound: leaders.size,
-      missingLeaders: missing,
+    reportWaitBoundSpent(logger, {
+      ...SEED_PARTITION_LEADERSHIP_WAIT,
+      boundMs: timeoutMs,
       elapsedMs: now() - startTime,
-      nodeId: d.getNodeId(),
+      lastObserved: {
+        totalPartitions: partitionIds.size,
+        leadersFound: leaders.size,
+        missingLeaders: missing,
+        lastDelayMs: delay,
+      },
+      scope: () => ({nodeId: d.getNodeId()}),
     });
 
     const error = new Error(

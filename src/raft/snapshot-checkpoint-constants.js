@@ -20,18 +20,42 @@ const RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES = Object.freeze(['-wal', '-shm'])
 
 // Payload-kind compatibility matrix (S1 authoring bar): every kind and its
 // state-machine include/exclude rule. One raft group == one SQLite file, so
-// the rule is table-name-based. `_transaction_outcomes` is applied
-// state-machine state (2PC outcome memoization) and MUST survive the scrub;
-// an exclude built as `_%` would silently break exactly-once after install.
+// the rule is table-name-based; an exclude built as `_%` would silently
+// discard application state after install.
 // Adapters with no durable state-machine/consensus separation (the in-memory
 // log adapter, and SQLiteLogAdapter over a `:memory:` database as used by the
 // message-group worker) are typed UNSUPPORTED_ADAPTER at creation.
 const RAFT_CHECKPOINT_PAYLOAD_KIND = Object.freeze({
   SQLITE_STATE_MACHINE_IMAGE: 'sqlite_state_machine_image',
+  RAFT_RS_REPLICA_IMAGE: 'raft_rs_replica_image',
 });
 
 const RAFT_CHECKPOINT_PAYLOAD_VERSION = Object.freeze({
   [RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE]: 1,
+  [RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE]: 2,
+});
+
+const RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
+  'groupId', 'appliedIndex', 'appliedTerm', 'membershipGenerationIndex',
+  'confState', 'peerReservations',
+]);
+const RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS = Object.freeze([
+  'voters', 'learners', 'votersOutgoing', 'learnersNext', 'autoLeave',
+]);
+const RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS = Object.freeze([
+  'replicaIdentity', 'peerId',
+]);
+const RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS = Object.freeze([
+  ...RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS, 'learnerAdmission',
+]);
+const RAFT_RS_CHECKPOINT_REASON = Object.freeze({
+  DESCRIPTOR: 'raftRs',
+  BOUNDARY: 'raft_rs_boundary',
+  PAYLOAD_KIND_REQUIRED: 'raft_rs_payload_kind_required',
+  PEER_RESERVATIONS: 'peer_reservations',
+  PAYLOAD_TABLES: 'raft_rs_payload_tables',
+  PREPARED_TRANSACTIONS: 'prepared_participant_transactions',
+  LOCAL_TRANSACTION_OPEN: 'local_transaction_open',
 });
 
 // Follower-local consensus tables that never cross replicas inside a payload.
@@ -97,6 +121,9 @@ const RAFT_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
   'payloadByteLength',
   'payloadDigest',
 ]);
+const RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS = Object.freeze([
+  ...RAFT_CHECKPOINT_DESCRIPTOR_FIELDS, 'raftRs',
+]);
 
 const RAFT_CHECKPOINT_ENTITY_FIELDS = Object.freeze(['kind', 'id']);
 
@@ -115,4 +142,10 @@ export {
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+  RAFT_RS_CHECKPOINT_ADMITTED_PEER_FIELDS,
+  RAFT_RS_CHECKPOINT_CONF_STATE_FIELDS,
+  RAFT_RS_CHECKPOINT_DESCRIPTOR_FIELDS,
+  RAFT_RS_CHECKPOINT_ENVELOPE_FIELDS,
+  RAFT_RS_CHECKPOINT_PEER_RESERVATION_FIELDS,
+  RAFT_RS_CHECKPOINT_REASON,
 };

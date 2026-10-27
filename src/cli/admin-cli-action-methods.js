@@ -1,4 +1,5 @@
 import {CLI_VIEW} from './cli-constants.js';
+import {validateConfigValue} from './views/config-value-helpers.js';
 
 const LOCAL_STR_BOLD_CYAN_FG_STATE_TRANSITION_HISTORY_CY = '{bold}{cyan-fg}State Transition History{/cyan-fg}{/bold}\n';
 
@@ -337,161 +338,111 @@ const ADMIN_CLI_ACTION_METHODS = {
   },
 
   /**
-   * Execute config update via SQL.
+   * Set one configuration value through its owner (the admin config
+   * operation); the typed value is parsed by the view's one value helper.
    * @param {string} key
    * @param {string} value
    * @param {string} type
    */
   executeConfigUpdate(key, value, type) {
-    let sqlValue;
-    if (type === 'string' || type === 'json') {
-      const escaped = String(value).replace(/'/g, '\'\'');
-      sqlValue = `'${escaped}'`;
-    } else {
-      sqlValue = `'${value}'`;
+    const parsed = validateConfigValue(value, type);
+    if (!parsed.valid) {
+      this.showError(`Invalid value: ${parsed.error}`);
+      return;
     }
-
-    const sql = `UPDATE config SET config_value = ${sqlValue}, ` +
-      `updated_at = ${Date.now()} WHERE config_key = '${key}'`;
-
+    if (!this.connectionManager) {
+      this.showError('Not connected to server');
+      return;
+    }
     this.updateStatus(`Updating ${key}...`, 'yellow');
-
-    const queryId = `config_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-    const resultHandler = (result) => {
-      if (result.queryId !== queryId) return;
-      this.eventBus.off('query:result', resultHandler);
-
-      if (result.error) {
-        this.showError(`Failed to update: ${result.error}`);
-      } else {
-        this.updateStatus(`Updated ${key}`, 'green');
-        this.connectionManager.requestCacheDump?.();
-      }
-    };
-
-    const timeoutId = setTimeout(() => {
-      this.eventBus.off('query:result', resultHandler);
-      this.showError('Update timeout');
-    }, 10000);
-
-    const wrappedHandler = (result) => {
-      clearTimeout(timeoutId);
-      resultHandler(result);
-    };
-
-    this.eventBus.on('query:result', wrappedHandler);
-
-    if (this.connectionManager) {
-      const sent = this.connectionManager.sendQuery(queryId, sql);
-      if (!sent) {
-        clearTimeout(timeoutId);
-        this.eventBus.off('query:result', wrappedHandler);
-        this.showError('Not connected to server');
-      }
-    }
+    return this.runAdminOwnerOperation(
+      () => this.connectionManager.setConfigValue(key, parsed.parsedValue),
+      {
+        failurePrefix: 'Failed to update',
+        onApplied: () => {
+          this.updateStatus(`Updated ${key}`, 'green');
+          this.connectionManager.requestCacheDump?.();
+        },
+      },
+    );
   },
 
   /**
-   * Execute a node-management SQL mutation over the admin query channel.
+   * Invoke one admin owner operation and report its named outcome.
+   * @param {Function} invoke - Returns the operation's answer.
    * @param {Object} options
+   * @param {string} options.failurePrefix
+   * @param {Function} options.onApplied
+   * @return {Promise<void>}
    */
-  executeNodeManagementQuery(options) {
+  async runAdminOwnerOperation(invoke, options) {
+    let result;
+    try {
+      result = await invoke();
+    } catch (error) {
+      this.showError(`${options.failurePrefix}: ${error.message}`);
+      return;
+    }
+    if (result?.success !== true) {
+      const code = result?.errorCode ? ` (${result.errorCode})` : '';
+      this.showError(`${options.failurePrefix}: ${result?.error}${code}`);
+      return;
+    }
+    options.onApplied(result);
+  },
+
+  /**
+   * Run a node-management owner operation from a CLI command.
+   * @param {Object} options
+   * @param {Function} options.invoke
+   * @param {string} options.pendingMessage
+   * @param {string} options.successMessage
+   * @param {string} options.failurePrefix
+   * @return {Promise<void>}
+   */
+  executeNodeManagementOperation(options) {
     if (this.readOnlyMode) {
       this.showError('Node management commands are unavailable in read-only mode');
       return;
     }
-
-    if (!this.connectionManager || !this.eventBus) {
+    if (!this.connectionManager) {
       this.showError('Not connected to server');
       return;
     }
-
-    const queryId = `node_mgmt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const timeoutMs = 10000;
-
     this.updateStatus(options.pendingMessage, 'yellow');
-
-    let timeoutId = null;
-    const cleanup = () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      this.eventBus.off('query:result', wrappedHandler);
-    };
-
-    const resultHandler = (result) => {
-      if (result.queryId !== queryId) {
-        return;
-      }
-      cleanup();
-
-      if (result.error) {
-        this.showError(`${options.failurePrefix}: ${result.error}`);
-        return;
-      }
-
-      const affectedRows = Number(result.affectedRows || 0);
-      if (affectedRows < 1) {
-        this.showError(options.notFoundMessage);
-        return;
-      }
-
-      this.updateStatus(options.successMessage, 'green');
-      this.forceRefresh();
-    };
-
-    function wrappedHandler(result) {
-      resultHandler(result);
-    }
-
-    timeoutId = setTimeout(() => {
-      cleanup();
-      this.showError(`${options.failurePrefix}: query timeout`);
-    }, timeoutMs);
-
-    this.eventBus.on('query:result', wrappedHandler);
-
-    const sent = this.connectionManager.sendQuery(
-      queryId,
-      options.sql,
-      options.params,
-    );
-    if (!sent) {
-      cleanup();
-      this.showError('Not connected to server');
-    }
-  },
-
-  /**
-   * Mark a node as active or draining through the admin query channel.
-   * @param {string} nodeId
-   * @param {string} status
-   */
-  updateNodeStatus(nodeId, status) {
-    const verb = status === 'draining' ? 'drain' : 'activate';
-    this.executeNodeManagementQuery({
-      sql: 'UPDATE nodes SET status = ?1 WHERE node_id = ?2',
-      params: [status, nodeId],
-      pendingMessage: `${verb}ing node ${nodeId}...`,
-      successMessage: `Node ${nodeId} marked ${status}`,
-      failurePrefix: `Failed to mark node ${nodeId} as ${status}`,
-      notFoundMessage: `Node ${nodeId} not found`,
+    return this.runAdminOwnerOperation(options.invoke, {
+      failurePrefix: options.failurePrefix,
+      onApplied: () => {
+        this.updateStatus(options.successMessage, 'green');
+        this.forceRefresh();
+      },
     });
   },
 
   /**
-   * Remove a node from cluster metadata through the admin query channel.
+   * Drain the connected node through its one-way lifecycle owner.
    * @param {string} nodeId
    */
-  removeNode(nodeId) {
-    this.executeNodeManagementQuery({
-      sql: 'DELETE FROM nodes WHERE node_id = ?1',
-      params: [nodeId],
+  drainNode(nodeId) {
+    return this.executeNodeManagementOperation({
+      invoke: () => this.connectionManager.drainNode(nodeId),
+      pendingMessage: `draining node ${nodeId}...`,
+      successMessage: `Node ${nodeId} draining`,
+      failurePrefix: `Failed to drain node ${nodeId}`,
+    });
+  },
+
+  /**
+   * Remove a stopped or failed node from cluster metadata.
+   * @param {string} nodeId
+   * @param {{bootIncarnation: number, status: string}} observation
+   */
+  removeNode(nodeId, observation) {
+    return this.executeNodeManagementOperation({
+      invoke: () => this.connectionManager.removeNode(nodeId, observation),
       pendingMessage: `Removing node ${nodeId}...`,
       successMessage: `Node ${nodeId} removed`,
       failurePrefix: `Failed to remove node ${nodeId}`,
-      notFoundMessage: `Node ${nodeId} not found`,
     });
   },
 

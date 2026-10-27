@@ -20,6 +20,7 @@
  * suppresses the only rearm.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -57,7 +58,7 @@ function createCoordinatorFixture(t, {deliveries}) {
     messageRouter: {
       async deliver(address, message) {
         deliveries.push({address, message});
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {
@@ -393,7 +394,7 @@ test('part 2: a wake whose transport ACK carries noHandler routes into the ' +
   // registered handler (mid-startup drop).
   coordinator.messageRouter.deliver = async (address, message) => {
     deliveries.push({address, message});
-    return {acknowledged: true, noHandler: true};
+    return buildDeliveryEnvelope({acknowledged: true, noHandler: true});
   };
   owner.repository.queryAuthoritativeOperationById = async () => null;
   owner.repository.getOperationByIdVisibilityObservation = async () => null;

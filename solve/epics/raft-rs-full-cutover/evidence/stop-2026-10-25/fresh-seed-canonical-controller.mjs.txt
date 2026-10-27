@@ -1,0 +1,126 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import {pathToFileURL} from 'node:url';
+import {execFileSync, spawn} from 'node:child_process';
+import {setTimeout as delay} from 'node:timers/promises';
+const [root, expectedSha, outputDirectory] = process.argv.slice(2);
+if (!root || !/^[a-f0-9]{40}$/.test(expectedSha ?? '') || !outputDirectory) throw new Error('Require exact root, SHA and new evidence directory');
+const git = (...args) => execFileSync('git', ['-C', root, ...args], {encoding: 'utf8'}).trim();
+if (git('rev-parse', 'HEAD') !== expectedSha || git('status', '--porcelain')) throw new Error('Candidate must match exact clean reviewed SHA');
+fs.mkdirSync(outputDirectory, {recursive: false});
+const stdout = fs.openSync(path.join(outputDirectory, 'stdout.log'), 'wx');
+const stderr = fs.openSync(path.join(outputDirectory, 'stderr.log'), 'wx');
+const log = record => {
+  const line = JSON.stringify({at: new Date().toISOString(), ...record});
+  fs.appendFileSync(path.join(outputDirectory, 'controller.ndjson'), line + '\n');
+  process.stdout.write(line + '\n');
+};
+const {holdLabMachine, LAB_HOLD, PLACEMENT_ENV, PLACEMENT_LOCAL} = await import(pathToFileURL(path.join(root, 'scripts/lab/probe.js')));
+const {killGroup} = await import(pathToFileURL(path.join(root, 'scripts/lab/process.js')));
+const env = {...process.env, LAGRANGE_LAB_AGENT: 'codex-fresh-seed-activation-canonical', LAGRANGE_RETRY_FAILED_ONCE: '0', [PLACEMENT_ENV]: PLACEMENT_LOCAL};
+let activeChild;
+let stopRequested;
+const evidenceErrors = [];
+function custodyLog(record) {
+  try { log(record); }
+  catch (error) { evidenceErrors.push(error.message); process.exitCode = 1; }
+}
+function onStop(signal) {
+  stopRequested = signal;
+  custodyLog({event: 'stop-requested', signal, pgid: activeChild?.pid ?? null});
+  if (activeChild?.pid) {
+    try { killGroup(activeChild); }
+    catch (error) { custodyLog({event: 'custody-retained-stop-failed', pgid: activeChild.pid, error: error.message}); }
+  }
+}
+const onInt = () => onStop('SIGINT');
+const onTerm = () => onStop('SIGTERM');
+const onHup = () => onStop('SIGHUP');
+process.on('SIGINT', onInt);
+process.on('SIGTERM', onTerm);
+process.on('SIGHUP', onHup);
+function groupExists(pid) {
+  try { process.kill(-pid, 0); return true; }
+  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+}
+// Only this controller's two known commands enter these groups. Local placement
+// keeps the sealed writer's descendants inside the inherited writer group.
+async function drainOwnedGroup(child) {
+  if (!child.pid) return;
+  let observationReported = false;
+  let terminationSent = false;
+  for (;;) {
+    try {
+      if (!groupExists(child.pid)) {
+        custodyLog({event: 'group-absent', pgid: child.pid, terminationSent});
+        return;
+      }
+      if (!terminationSent) {
+        custodyLog({event: 'terminate-owned-group', pgid: child.pid});
+        killGroup(child);
+        terminationSent = true;
+      }
+    } catch (error) {
+      if (!observationReported) {
+        custodyLog({event: 'custody-retained-observation-failed', pgid: child.pid, error: error.message});
+        observationReported = true;
+      }
+    }
+    // No deadline is allowed to turn uncertain cleanup into released custody.
+    await delay(100);
+  }
+}
+async function runHeldCommand(label, args) {
+  if (stopRequested) throw new Error(`Controller stopped: ${stopRequested}`);
+  const child = spawn(process.execPath, args, {cwd: root, env, detached: true, stdio: ['ignore', stdout, stderr]});
+  activeChild = child;
+  let spawnError;
+  child.once('error', error => { spawnError = error; custodyLog({event: 'child-error', label, error: error.message}); });
+  child.once('exit', (code, signal) => custodyLog({event: 'child-exit', label, pgid: child.pid ?? null, code, signal}));
+  const closed = new Promise(resolve => child.once('close', (code, signal) => resolve({code, signal})));
+  let outcome;
+  try {
+    log({event: 'child-started', label, pgid: child.pid ?? null, args});
+    outcome = await closed;
+  }
+  finally {
+    await drainOwnedGroup(child);
+    await closed;
+    activeChild = undefined;
+  }
+  if (spawnError) throw spawnError;
+  if (evidenceErrors.length) throw new Error(`Evidence logging failed: ${evidenceErrors.join('; ')}`);
+  if (stopRequested || outcome.code !== 0) {
+    const error = new Error(`${label} failed: exit=${outcome.code} signal=${outcome.signal} controllerStop=${stopRequested ?? 'none'}`);
+    error.exitCode = outcome.code;
+    throw error;
+  }
+}
+log({event: 'requested', sha: expectedSha, root, node: process.version, kernel: os.release(), host: os.hostname(), platform: process.platform, arch: process.arch, labAgent: env.LAGRANGE_LAB_AGENT, retries: 0, placement: env[PLACEMENT_ENV], waitMs: 60000, expectedMs: 900000});
+const hold = holdLabMachine({name: '(controller)', sshTarget: null}, {root, env, waitMs: 60000, expectedMs: 900000, purpose: 'fresh-seed activation sealed writer single-controller receipt'});
+try {
+  const outcome = await hold.outcome;
+  log({event: 'lock-outcome', outcome});
+  if (outcome.state !== LAB_HOLD.HELD) throw new Error('Controller custody not acquired');
+  if (git('rev-parse', 'HEAD') !== expectedSha || git('status', '--porcelain')) throw new Error('Source changed while acquiring custody');
+  await runHeldCommand('thermal-gate', ['scripts/checks/wait-for-thermal-headroom.js']);
+  log({event: 'writer-start'});
+  await runHeldCommand('sealed-writer', ['scripts/quest-evidence/fresh-seed-activation.js', '--output', path.join(outputDirectory, 'receipt.json')]);
+  const finalSha = git('rev-parse', 'HEAD');
+  const dirty = git('status', '--porcelain');
+  log({event: 'writer-completed', sha: finalSha, dirty});
+  if (finalSha !== expectedSha || dirty) throw new Error('Candidate changed during canonical proof');
+} catch (error) {
+  log({event: 'refused-or-failed', error: error.message, exitCode: error.exitCode ?? null});
+  process.exitCode = 1;
+} finally {
+  // runHeldCommand cannot finish before direct closure and PGID absence.
+  await hold.release();
+  process.removeListener('SIGINT', onInt);
+  process.removeListener('SIGTERM', onTerm);
+  process.removeListener('SIGHUP', onHup);
+  fs.closeSync(stdout);
+  fs.closeSync(stderr);
+  log({event: 'released'});
+}

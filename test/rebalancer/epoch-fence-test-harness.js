@@ -8,6 +8,7 @@
  * durable suite may supply a real engine (e.g. SQLite-backed) instead.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NUM, WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
@@ -45,11 +46,37 @@ function initializeConfig() {
 }
 
 function createNoopSqlQueryEngine(onInsert) {
+  const operations = new Map();
   return {
-    async executeQuery(sql) {
+    async executeQuery(sql, params = []) {
       if (typeof sql === 'string' &&
           sql.includes(INSERT_OPERATION_SQL_FRAGMENT)) {
         onInsert();
+        operations.set(params[0], {
+          operation_id: params[0],
+          type: params[1],
+          partition_id: params[2],
+          replica_id: params[3],
+          target_claim_key: params[4],
+          source_node_id: params[5],
+          target_node_id: params[6],
+          status: params[7],
+          workflow_step: params[8],
+          created_at: params[9],
+          updated_at: params[10],
+          completed_at: params[11],
+          error_message: params[12],
+          steps_history: params[13],
+          entity_type: params[14],
+          entity_id: params[15],
+          membership_publication_epoch: params[16],
+        });
+      }
+      if (typeof sql === 'string' &&
+          sql.includes('FROM replica_operations') &&
+          sql.includes('operation_id = ?')) {
+        const operation = operations.get(params[0]);
+        return {success: true, rows: operation ? [operation] : [], changes: 0};
       }
       return {success: true, rows: [], changes: 1};
     },
@@ -183,7 +210,7 @@ function wireEpochDispatchProbe(coordinator) {
     const baseDeliver = owner.deliverReplicaOperationRequest.bind(owner);
     owner.deliverReplicaOperationRequest = async (_op, _target, request) => {
       requestCapture.captured = request;
-      return {acknowledged: true, status: DELIVERY_STATUS_COMPLETED};
+      return buildDeliveryEnvelope({acknowledged: true}, {status: DELIVERY_STATUS_COMPLETED});
     };
     const result = await baseExecuteOperationInternal(dispatchedOperation);
     owner.deliverReplicaOperationRequest = baseDeliver;

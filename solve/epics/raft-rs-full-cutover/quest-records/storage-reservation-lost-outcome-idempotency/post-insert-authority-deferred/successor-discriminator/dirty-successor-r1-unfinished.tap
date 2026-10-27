@@ -1,0 +1,80 @@
+TAP version 14
+# Subtest: successor discriminator: runtime-service ingress retains exactly one progress owner after a durable reservation INSERT
+    ok 1 - the real UnifiedRebalancer ingress submits one coordinator request
+    ok 2 - runtime ingress does not fabricate an explicit operation identity
+    ok 3 - runtime ingress carries the canonical replicaId without a fixture intent
+    ok 4 - runtime ingress preserves the canonical runtime-service replica identity
+    ok 5 - the owned SQL boundary observes one reservation INSERT independent of spelling
+    ok 6 - the durable reservation names the generated production operation identity
+    ok 7 - the exact durable reservation remains ACTIVE
+    ok 8 - the exact durable operation remains PENDING
+    ok 9 - exactly one canonical progress owner is retained
+    ok 10 - the unavailable post-INSERT owner read stays fail closed to the caller
+    ok 11 - ordinary arm does not run before owner authority recovers
+    ok 12 - physical progression does not run before owner authority recovers
+    ok 13 - authority restoration wakes the retained canonical retry
+    ok 14 - the restored retry enters the existing dispatch owner exactly once
+    ok 15 - progress recovery does not duplicate operation creation accounting
+    ok 16 - progress recovery does not duplicate reservation creation accounting
+    ok 17 - progress recovery does not duplicate OPERATION_CREATED publication
+    ok 18 - one exact capacity hold exists after authority restoration
+    ok 19 - the unavailable path is tied to an actual post-INSERT owner read
+    1..19
+ok 1 - successor discriminator: runtime-service ingress retains exactly one progress owner after a durable reservation INSERT # time=36.861ms
+
+# Subtest: successor discriminator: terminal settlement wins before retained reservation rearm
+    ok 1 - the exact durable operation is recoverable for settlement
+{"level":50,"time":"2026-10-07T05:47:15.686Z","nodeId":"successor-owner-node","pid":2450548,"subsystem":"rebalance-coordinator","operationId":"successor-terminal-op","type":"ADD","partitionId":"successor-terminal-p1","targetNodeId":"successor-target-node","errorMessage":"successor terminal owner won","nodeId":"successor-owner-node","msg":"Operation failed"}
+    ok 2 - the deferred creation was fail closed
+    ok 3 - terminal settlement prevents later physical progression
+    ok 4 - terminal settlement releases the exact ACTIVE hold
+    1..4
+ok 2 - successor discriminator: terminal settlement wins before retained reservation rearm # time=20.058ms
+
+# Subtest: successor discriminator: a continuation older than the shutdown fence cannot register retry after reinitialize
+    not ok 1 - test unfinished
+      ---
+      at:
+        fileName: test/rebalancer/formation-cure-reservation-progress-successor.test.js
+        lineNumber: 202
+        columnNumber: 1
+        isToplevel: true
+      stack: |
+        test/rebalancer/formation-cure-reservation-progress-successor.test.js:202:1
+      test: "successor discriminator: a continuation older than the shutdown fence
+        cannot register retry after reinitialize"
+      source: >
+        });
+      
+      
+        test('successor discriminator: a continuation older than the shutdown fence '
+        +
+      
+        ^
+          'cannot register retry after reinitialize', async (t) => {
+          initializeTestEnvironment();
+      ...
+    
+    1..1
+not ok 3 - successor discriminator: a continuation older than the shutdown fence cannot register retry after reinitialize # time=22.519ms
+  ---
+  at:
+    fileName: test/rebalancer/formation-cure-reservation-progress-successor.test.js
+    lineNumber: 202
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('successor discriminator: a continuation older than the shutdown fence '
+    +
+  
+    ^
+      'cannot register retry after reinitialize', async (t) => {
+      initializeTestEnvironment();
+  ...
+
+1..3
+# { total: 24, pass: 23, fail: 1 }
+# time=83.605ms

@@ -418,7 +418,7 @@ describe('ServiceLifecycleManager recovery', () => {
       writes.push({sql, params});
     });
     manager.setRecoveryReader(async (_sql, params) => {
-      if (params[0] === SERVICE_OPERATION_STATE.PENDING) {
+      if (params.includes(SERVICE_OPERATION_STATE.PENDING)) {
         return [{
           operation_id: 'op-recover-start',
           command: 'start:svc-recover-start',
@@ -459,7 +459,7 @@ describe('ServiceLifecycleManager recovery', () => {
       writes.push({sql, params});
     });
     manager.setRecoveryReader(async (_sql, params) => {
-      if (params[0] === SERVICE_OPERATION_STATE.IN_PROGRESS) {
+      if (params.includes(SERVICE_OPERATION_STATE.IN_PROGRESS)) {
         return [{
           operation_id: 'op-recover-stop',
           command: 'stop:svc-recover-stop',
@@ -497,7 +497,7 @@ describe('ServiceLifecycleManager recovery', () => {
       writes.push({sql, params});
     });
     manager.setRecoveryReader(async (_sql, params) => {
-      if (params[0] === SERVICE_OPERATION_STATE.PENDING) {
+      if (params.includes(SERVICE_OPERATION_STATE.PENDING)) {
         return [{
           operation_id: 'op-recover-failure',
           command: 'start:svc-recover-failure',

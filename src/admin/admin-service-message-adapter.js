@@ -15,7 +15,6 @@ const LOCAL_STR_STRING = 'string';
 
 const ADMIN_SERVICE_OPERATION = Object.freeze({
   EXECUTE_QUERY: 'admin.execute_query',
-  EXECUTE_PARTITION_CALLBACK: 'admin.execute_partition_callback',
   GET_CACHE_DUMP: 'admin.get_cache_dump',
 });
 
@@ -51,16 +50,12 @@ function resolveOptionalLane(value) {
 
 function isAdminMessageDispatchable(type) {
   return type === ADMIN_MESSAGE_TYPE.QUERY ||
-    type === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK ||
     type === ADMIN_MESSAGE_TYPE.REFRESH;
 }
 
 function mapAdminMessageToOperation(messageType) {
   if (messageType === ADMIN_MESSAGE_TYPE.QUERY) {
     return ADMIN_SERVICE_OPERATION.EXECUTE_QUERY;
-  }
-  if (messageType === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK) {
-    return ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK;
   }
   if (messageType === ADMIN_MESSAGE_TYPE.REFRESH) {
     return ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP;
@@ -75,21 +70,6 @@ function mapAdminMessageToPayload(message) {
       sql: message.sql,
       params: message.params || [],
       ignorePreRestart: message.ignorePreRestart === true,
-    };
-    const timeoutMs = resolveOptionalTimeoutMs(message.timeoutMs);
-    if (timeoutMs !== null) {
-      payload.timeoutMs = timeoutMs;
-    }
-    return payload;
-  }
-  if (message.type === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK) {
-    const payload = {
-      queryId: message.queryId || null,
-      statement: message.statement || message.sql,
-      parameters: message.parameters || message.params || [],
-      callbackModuleRef: message.callbackModuleRef,
-      callbackExport: message.callbackExport,
-      runtimeKind: message.runtimeKind,
     };
     const timeoutMs = resolveOptionalTimeoutMs(message.timeoutMs);
     if (timeoutMs !== null) {

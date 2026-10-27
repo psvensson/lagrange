@@ -13,11 +13,24 @@ const STARTUP_RECONCILER_REQUIRED =
 class StartupServiceLifecycleOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.initializationSettlement = null;
     this.reconcilerRequiredError =
       options.reconcilerRequiredError || STARTUP_RECONCILER_REQUIRED;
   }
 
-  async ensureOwners() {
+  ensureOwners() {
+    if (this.initializationSettlement) return this.initializationSettlement;
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.initializationSettlement = promise;
+    const release = () => {
+      if (this.initializationSettlement === promise) this.initializationSettlement = null;
+    };
+    promise.then(release, release);
+    this.#initializeOwners().then(resolve, reject);
+    return promise;
+  }
+
+  async #initializeOwners() {
     const delegates = this.delegates;
     if (delegates.getServiceLifecycleManager?.() &&
         delegates.getServiceReconciler?.()) {
@@ -70,8 +83,8 @@ class StartupServiceLifecycleOwner {
       // has always used.
       timeSource: delegates.getSuppliedTimeSource?.(),
     });
-    await serviceReconciler.start();
     delegates.setServiceReconciler?.(serviceReconciler);
+    await serviceReconciler.start();
   }
 
   async triggerReconciler(reason, context = {}) {

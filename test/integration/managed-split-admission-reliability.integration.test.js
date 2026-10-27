@@ -2,6 +2,8 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI} from '../../src/admin/admin-websocket-api.js';
 import {SeedPartitionsPhase} from
   '../../src/bootstrap/phases/seed-partitions-phase.js';
+import {createBootstrapServiceSeedDelegateMethods} from
+  '../../src/bootstrap/bootstrap-service-seed-delegates.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
@@ -16,6 +18,8 @@ import {
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {reconcileRaftPeersFromCacheForService} from
+  '../../src/partition/partition-service-raft-peer-cache-reconciliation.js';
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_REASON,
@@ -235,6 +239,33 @@ async function shutdownManagedSplitFixture(fixture) {
   await cleanupTestEnvironment();
 }
 
+// The synthetic follower is topology only: a SERVICES row the split's
+// source-quorum gate counts as a second routable source host, with no raft
+// replica behind it. The source group must therefore never admit it as a
+// voter - admitted, the fixture's one-node group becomes a two-voter group
+// whose second voter never answers, and under native check_quorum its leader
+// correctly steps down (the fixture then loses the source leadership the
+// split needs). The source replica's row-driven peer reconciliation keeps
+// running for every other row of its partition.
+function keepSyntheticFollowerOutOfRaft(bootstrapService, sourceReplicaId,
+  syntheticServiceId) {
+  const sourceService =
+    bootstrapService.replicaHandler?.localServices?.get(sourceReplicaId);
+  if (!sourceService) {
+    throw new Error(
+      'Managed split admission fixture has no local source partition service');
+  }
+  sourceService.reconcileRaftPeersFromCache = () => {
+    const replicaIds = sourceService.systemTableCache.filter(
+      TABLES.SERVICES,
+      (row) => row.partition_id === sourceService.partitionId,
+    ).map((row) => row.service_id || row.replica_id)
+      .filter((replicaId) => replicaId !== syntheticServiceId);
+    reconcileRaftPeersFromCacheForService(sourceService,
+      {onlyReplicaIds: new Set(replicaIds)});
+  };
+}
+
 async function seedProvisioningAdmissionFixture(fixture, tableName) {
   const {bootstrapService, systemTableCache} = fixture;
   const cdcIntegrationService = bootstrapService.cdcIntegrationService;
@@ -311,6 +342,8 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
 
   const syntheticServiceId =
     `${partitionRow.partition_id}-synthetic-follower`;
+  keepSyntheticFollowerOutOfRaft(
+    bootstrapService, sourceServiceRow.service_id, syntheticServiceId);
   const syntheticReplicaId =
     `${partitionRow.partition_id}-r-synthetic`;
   const syntheticUnifiedAddress =
@@ -408,11 +441,23 @@ test('managed split seed fixture refuses cleanup-owned and conflicting ' +
   ];
   for (const refusalCase of refusalCases) {
     let storageOpened = false;
+    let originalAdmissionChecks = 0;
+    const replicaOptions = Object.freeze({replicaId, partitionId});
+    // Substitute only the prior admission decision through its real adapter.
+    // These identity-only options grant no original opening capability; this
+    // component negative must still stop at the durable-storage refusal.
+    const {admitOriginalSeedReplica} = createBootstrapServiceSeedDelegateMethods()
+      ._buildPhaseExecutionDelegates.call({admitOriginalSeedReplica(options) {
+        originalAdmissionChecks += 1;
+        t.equal(options, replicaOptions, 'the adapter preserves the exact requested options');
+        return options;
+      }});
     const phase = new SeedPartitionsPhase({delegates: {
+      admitOriginalSeedReplica,
       getLogger: () => ({debug() {}}),
       getNodeId: () => FIXTURE_NODE_ID,
       getStartupServicesAdmission: () => refusalCase.admission,
-      resolveBootstrapReplicaOptions: () => ({replicaId, partitionId}),
+      resolveBootstrapReplicaOptions: () => replicaOptions,
       getPartitionServices: () => {
         storageOpened = true;
         return new Map();
@@ -425,6 +470,8 @@ test('managed split seed fixture refuses cleanup-owned and conflicting ' +
     );
     t.equal(rejection.code, refusalCase.code,
       `${refusalCase.label} preserves its typed refusal`);
+    t.equal(originalAdmissionChecks, 1,
+      `${refusalCase.label} consults the prior owner before durable-storage admission`);
     t.equal(storageOpened, false,
       `${refusalCase.label} refuses before partition storage access`);
   }
@@ -530,12 +577,12 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
         readinessService?.cdcGroupPropagationService || null;
     const degradedPublicationMode = Object.freeze({
       currentMode: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-      reasonCode: CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+      reasonCode: CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
       enteredAt: new Date().toISOString(),
       recentTransitions: Object.freeze([{
         from: CDC_GROUP_PUBLICATION_MODE.GROUPED,
         to: CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
-        reasonCode: CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+        reasonCode: CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
         changedAt: new Date().toISOString(),
       }]),
     });
@@ -662,7 +709,7 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
       );
       t.equal(
         diagnostics.publicationMode?.reasonCode,
-        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+        CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
         'diagnostics should preserve the publication degradation reason',
       );
       t.equal(

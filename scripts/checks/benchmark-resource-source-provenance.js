@@ -1,13 +1,11 @@
-import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
-import {promisify} from 'node:util';
 
-const execFileAsync = promisify(execFile);
+import {execGitAsync} from './git-invocation.js';
+
 const jsonStringify = JSON.stringify;
 const stringTrim = Function.call.bind(String.prototype.trim);
 const localText = Object.freeze({
-  GIT: 'git',
   REV_PARSE: 'rev-parse',
   HEAD: 'HEAD',
   DIFF: 'diff',
@@ -52,14 +50,12 @@ const C4_SOURCE_PATHS = Object.freeze([
 export async function collectBenchmarkResourceSourceProvenance(
   sourcePaths = C4_SOURCE_PATHS,
 ) {
-  const {stdout: revisionText} = await execFileAsync(
-    localText.GIT,
+  const {stdout: revisionText} = await execGitAsync(
     [localText.REV_PARSE, localText.HEAD],
     {encoding: localText.UTF8},
   );
   const baseCommit = stringTrim(revisionText);
-  const {stdout: trackedDelta} = await execFileAsync(
-    localText.GIT,
+  const {stdout: trackedDelta} = await execGitAsync(
     [
       localText.DIFF,
       localText.BINARY,
@@ -75,8 +71,7 @@ export async function collectBenchmarkResourceSourceProvenance(
   for (let index = 0; index < sourcePaths.length; index += 1) {
     const sourcePath = sourcePaths[index];
     try {
-      await execFileAsync(
-        localText.GIT,
+      await execGitAsync(
         [
           localText.LS_FILES,
           localText.ERROR_UNMATCH,

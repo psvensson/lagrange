@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-constructor-injection-audit",
+  "class": "fix",
+  "statement": "The decision-boundary audit recognizes the seed partition constructor's proven dependency injection without suppressing actual or unclassified cache/SQL reads and decisions.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-constructor-injection-audit/evidence/receipt.json",
+      "requiredReceipts": [
+        "exact-constructor-injection-and-adversarial-reads"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-audit-owner",
+      "statement": "Extend only the existing passiveConstructionOccurrences policy at the decision-boundary checker. No product rearrangement, whole-function exemption, baseline increase or gate bypass."
+    },
+    {
+      "id": "provenance-and-occurrences",
+      "statement": "Any semantic injection allowance binds exact verified owner accessors and constructor positions. Actual reads, computed getters, mutations, unknown calls and unproved provenance remain conservative evidence."
+    },
+    {
+      "id": "scope-and-review",
+      "statement": "This is the audit-owner repair routed by the integration owner from the fresh-seed activation normal-hook failure. It makes no activation, startup listener or release acceptance claim and requires independent delta review."
+    }
+  ],
+  "sealedAt": "af8a0381be10bebbb3daf78bd331f7aa3fcacbbf"
+}

@@ -182,6 +182,7 @@ function createCluster(options = {}) {
     return {
       id: nodeId,
       role,
+      updateTablePolicy: async () => ({success: true, outcome: 'applied'}),
       query: async (sql) => {
         const statement = String(sql);
         if (statement === 'SELECT 1') {
@@ -206,13 +207,16 @@ function createCluster(options = {}) {
         if (statement.startsWith('CREATE TABLE IF NOT EXISTS')) {
           return {rows: []};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions WHERE table_name') ||
             statement.includes('FROM partitions WHERE table_id') ||
             statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: PARTITION_ID}]};
+          return {
+            rows: [{
+              partition_id: PARTITION_ID,
+              table_id: TABLE_ID,
+              table_name: TABLE_NAME,
+            }],
+          };
         }
         return {rows: []};
       },

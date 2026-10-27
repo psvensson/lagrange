@@ -79,8 +79,8 @@ function checkForFeatureFlags(filePath) {
   // Patterns that indicate feature flags for core functionality
   const coreFeatureFlagPatterns = [
     /FEATURE_FLAG/gi,
-    /ENABLE_\w+(?!_LOG|_DEBUG|_TRACE)/gi, // Exclude observability
-    /DISABLE_\w+(?!_LOG|_DEBUG|_TRACE)/gi,
+    /\bENABLE_(?!REFUSED\b|FAILED\b)\w+(?!_LOG|_DEBUG|_TRACE)/gi, // Exclude observability and enable-action refusal/failure outcomes
+    /\bDISABLE_\w+(?!_LOG|_DEBUG|_TRACE)/gi,
     /process\.env\.\w+_ENABLED(?!.*debug|.*log|.*trace)/gi,
     /USE_LEGACY/gi,
     /USE_V\d+/gi,
@@ -184,11 +184,8 @@ test('Property 14: Code Path Uniqueness', async (t) => {
   t.test('each class has exactly one implementation', async (t) => {
     // Classes that are intentionally duplicated for different contexts
     // CLI has its own LiveQueryManager that wraps the core one
-    // RaftNode is defined in both message-group-service.js and partition-service.js
-    // as inner classes extending LifeRaft for their specific use cases
     const allowedDuplicates = new Set([
       'LiveQueryManager', // CLI wrapper vs core implementation
-      'RaftNode', // Inner class in message-group-service.js and partition-service.js
       // Shared utility/error names used in separate bounded contexts
       'InvalidTransitionError',
       'InProcWebSocket',
@@ -341,7 +338,6 @@ test('Property 14: Code Path Uniqueness', async (t) => {
 
     // Required core transport entry points
     const requiredTransports = [
-      'websocket-transport.js', // For inter-node communication
       'message-router.js', // For routing messages between transports
       'rpc-client.js', // For request-response pattern over message groups
     ];

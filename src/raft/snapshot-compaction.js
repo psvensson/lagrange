@@ -31,6 +31,7 @@ import {readCheckpoint} from './snapshot-checkpoint-store.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
 } from './snapshot-install-constants.js';
+import {RaftRsDurableStore} from './raft-rs-durable-store.js';
 
 const OUTCOME = RAFT_COMPACTION_OUTCOME;
 const COMPACTION_TYPEOF = Object.freeze({
@@ -244,6 +245,95 @@ const snapshotCompactionMethods = {
   },
 };
 
+function raftRsProofTermConflicts(db, groupId, descriptor) {
+  if (descriptor.raftRs && descriptor.raftRs.groupId !== groupId) {
+    return true;
+  }
+  const record = RaftRsDurableStore.readDurableRecordIn(db, groupId);
+  const entry = record.entries.find(
+    ({index}) => Number(index) === descriptor.lastIncludedIndex);
+  if (entry) {
+    return Number(entry.term) !== descriptor.lastIncludedTerm;
+  }
+  if (record.snapshot &&
+      Number(record.snapshot.metadata.index) === descriptor.lastIncludedIndex) {
+    return Number(record.snapshot.metadata.term) !==
+      descriptor.lastIncludedTerm;
+  }
+  return false;
+}
+
+function validateRaftRsCompactionProof(db, groupId, toIndex, proof) {
+  const proofRead = readCompactionProof(proof);
+  if (!proofRead.valid) {
+    return {refusal: compactionRefusal(OUTCOME.SNAPSHOT_PROOF_MISSING)};
+  }
+  const {descriptor} = proofRead;
+  if (descriptor.lastIncludedIndex < toIndex) {
+    return {refusal: compactionRefusal(OUTCOME.SNAPSHOT_PROOF_STALE)};
+  }
+  if (raftRsProofTermConflicts(db, groupId, descriptor)) {
+    return {refusal: compactionRefusal(OUTCOME.SNAPSHOT_PROOF_TERM_CONFLICT)};
+  }
+  return {descriptor};
+}
+
+function buildRaftRsCompactionSpec(descriptor, toIndex, retentionFloorIndex) {
+  const exactBoundaryMatch = descriptor.lastIncludedIndex === toIndex;
+  return {
+    toIndex,
+    boundaryTerm: exactBoundaryMatch ?
+      descriptor.lastIncludedTerm :
+      undefined,
+    confState: exactBoundaryMatch ?
+      descriptor.raftRs?.confState :
+      undefined,
+    membershipGenerationIndex: exactBoundaryMatch ?
+      descriptor.raftRs?.membershipGenerationIndex :
+      undefined,
+    maxCommittedHlc: descriptor.maxCommittedHlc,
+    retentionFloorIndex,
+  };
+}
+
+/**
+ * Proof-gated committed-prefix compaction for `RaftRsDurableStore` (SN1 / F5).
+ * Mirrors the S5 decision table (`SNAPSHOT_PROTOCOL_UNAVAILABLE`,
+ * `INVALID_COMPACTION_INDEX`, `ALREADY_COMPACTED`, `SNAPSHOT_PROOF_MISSING`,
+ * `SNAPSHOT_PROOF_STALE`, `SNAPSHOT_PROOF_TERM_CONFLICT`,
+ * `BEYOND_COMMITTED_REFUSAL`, `BOUNDARY_TERM_UNRESOLVABLE`, `COMPACTED`).
+ * @param {Object} db - Open better-sqlite3 database.
+ * @param {string} groupId - Raft group identifier.
+ * @param {Object} [request] - `{toIndex, proof: {checkpointDir}, retentionFloorIndex?}`.
+ * @return {Object} Frozen typed compaction outcome.
+ */
+function compactRaftRsCommittedEntries(db, groupId, request) {
+  if (!isCompactionProtocolRequest(request) ||
+      !db?.open || db.memory ||
+      !RaftRsDurableStore.hasDurableRecordIn(db, groupId)) {
+    return unsupportedRaftCompactionResult();
+  }
+  const {toIndex, proof} = request;
+  if (!isValidRaftLogIndex(toIndex) || toIndex === VIRGIN_LOG_INDEX) {
+    return compactionRefusal(OUTCOME.INVALID_COMPACTION_INDEX);
+  }
+  const currentBoundary = Number(
+    RaftRsDurableStore.readSnapshotIndexIn(db, groupId));
+  if (toIndex <= currentBoundary) {
+    return compactionRefusal(OUTCOME.ALREADY_COMPACTED);
+  }
+  const validated = validateRaftRsCompactionProof(db, groupId, toIndex, proof);
+  if (validated.refusal) {
+    return validated.refusal;
+  }
+  const store = new RaftRsDurableStore(db);
+  return store.compactCommittedPrefix(
+    groupId,
+    buildRaftRsCompactionSpec(
+      validated.descriptor, toIndex, request.retentionFloorIndex),
+  );
+}
+
 /**
  * Install the compaction and boundary-refresh methods with class-method
  * descriptors (the callback-api precedent).
@@ -263,4 +353,7 @@ function installSnapshotCompactionApi(AdapterClass) {
   Object.defineProperties(AdapterClass.prototype, descriptors);
 }
 
-export {installSnapshotCompactionApi};
+export {
+  compactRaftRsCommittedEntries,
+  installSnapshotCompactionApi,
+};

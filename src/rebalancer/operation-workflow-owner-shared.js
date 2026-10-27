@@ -31,11 +31,8 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
-import {
-  classifyTransportDeliveryOutcome,
-  isDeliveredTransportDeliveryOutcome,
-  ROUTER_MESSAGE_TIMEOUT_ERROR_CODE,
-} from '../transport/transport-semantic-outcome.js';
+import {isDeliveredTransportDeliveryOutcome} from '../transport/transport-semantic-outcome.js';
+import {ROUTER_MESSAGE_TIMEOUT_ERROR_CODE} from '../transport/transport-error-codes.js';
 import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 import {resolvePriorityRecoveryActiveNodeCohort} from '../control-plane/active-node-projection.js';
 import {
@@ -80,6 +77,7 @@ import {
   ReplicaStatus,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
+  getOperationMetadataObject,
   getWorkflowSteps,
   isCoordinatorOwnedOperationType,
 } from './replica-status.js';
@@ -88,6 +86,7 @@ import {
   ReplicaOperationReason,
   ReplicaOperationField,
   ReplicaOperationResponseStatus,
+  isCompletedReplicaOperationAnswer,
 } from './replica-operation-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
@@ -173,7 +172,6 @@ const OPERATION_WORKFLOW_OWNER_LITERAL = Object.freeze({
     'Priority recovery drain settled stale operation without ' +
     'source-retirement evidence',
   PRIORITY_SPREAD: 'priority spread',
-  PRIORITY_SPREAD_HAS_NOT_CONVERGED: ' priority spread has not converged',
   PROGRESS: 'progress',
   PROJECTED_VOTER_DASH_READY_SPREAD: 'projected voter-ready spread',
   PROJECTED_VOTER_DASH_READY_SPREAD_WOULD_FALL_BELOW_THE_PUBLISHED:
@@ -255,6 +253,7 @@ const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
 const OPERATION_OWNER_ACTION = Object.freeze({
   DISPATCH: 'dispatch',
   EXECUTE: 'execute',
+  FAIL: 'fail',
 });
 
 const EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS = Object.freeze({
@@ -347,8 +346,8 @@ const DISPATCH_RETRY_BACKOFF_MULTIPLIER = 2;
 const DISPATCH_RETRY_JITTER_RATIO = 1 / NUM.FIVE;
 const COORDINATOR_CREATED_REMOTE_HANDOFF_MAX_ACTIVE_RETRIES_PER_TARGET =
   NUM.FOUR;
-const REPLICA_OPERATION_DISPATCH_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
-const REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS = TIME_MS.SECOND;
+const REPLICA_OPERATION_DISPATCH_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE; // ends-on: the target node returns the dispatch response
+const REPLICA_OPERATION_DISPATCH_TIMEOUT_RETRY_AFTER_MS = TIME_MS.SECOND; // ends-on: n/a delay
 const COORDINATOR_CREATED_REMOTE_HANDOFF_VERIFICATION_DELAY_MS = TIME_MS.SECOND;
 const TRANSITION_RETRY_DELAY_MS = TIME_MS.SECOND / 4;
 
@@ -358,7 +357,7 @@ const TRANSITION_STEP_OPTIONS = Object.freeze({
   }),
 });
 
-const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE;
+const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE; // ends-on: n/a clamp
 
 const PRIORITY_REMOVE_SAFETY_MEMBERSHIP_SOURCE = Object.freeze({
   PUBLISHED_MEMBERSHIP: 'published membership',
@@ -574,6 +573,7 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   TOPOLOGY_OPERATOR_WITNESS_STEP_FIELD,
   OPERATION_WORKFLOW_OWNER_REASON,
   OperationType,
+  getOperationMetadataObject,
   PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS,
   PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE,
   PRIORITY_PUBLICATION_LEADER_REMOVE_SAFETY_STATE,
@@ -629,13 +629,13 @@ export const OPERATION_WORKFLOW_OWNER_SHARED = {
   buildSelectRowsByTransactionIdsSql,
   buildTimeoutClassification,
   buildTopologyOperatorWitnessFromWorkflowProgress,
-  classifyTransportDeliveryOutcome,
   classifySystemPartition,
   createChildTimeoutBudget,
   createTopLevelOperationBudget,
   getControlPlaneRetryAfterMs,
   getWorkflowSteps,
   hasPriorityRecoverySpreadGap,
+  isCompletedReplicaOperationAnswer,
   isCoordinatorOwnedOperationType,
   isDeliveredTransportDeliveryOutcome,
   isRetryableControlPlaneError,

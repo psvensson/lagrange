@@ -1,0 +1,33 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "full-cohort-negative-and-positive-readback",
+      "passed": true
+    },
+    {
+      "id": "existing-benchmark-readiness-callers",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": true
+    }
+  ],
+  "evidence": [
+    {
+      "path": "/tmp/codex-admin-partition-readback-20261025/green-r2.log",
+      "sha256": "7537462f8ceb67029329af03282a100c55a44f4789b465693df9630286fba9f6"
+    },
+    {
+      "path": "/tmp/codex-admin-partition-readback-20261025/green-fixture-cone.log",
+      "sha256": "c9ebf287d4524287efc59289d9a93aefe0931537bc21f188d421b36ba6deef50"
+    },
+    {
+      "path": "/tmp/codex-admin-partition-readback-20261025/green-post-load-final.log",
+      "sha256": "b353ca4d1a37fd2537749822c90835be1f8a3ebd6294f277c69b6f8776638b2f"
+    }
+  ],
+  "applicability": "23 distinct canonical files covered with TEST_SHARD_RETRIES=0: focused readback proof (35 assertions), 16 existing postgres-baseline-comparison-* suite files (139 assertions), plus the 6 additional benchmark readiness caller tests (postgres-baseline-partition-table-name-readback.test.js and 5 test/integration/*.integration.test.js files, 56 assertions). Ambient-intrinsic violations in admin-partition-cohort-readback.test.js were also repaired (0 violations)."
+}

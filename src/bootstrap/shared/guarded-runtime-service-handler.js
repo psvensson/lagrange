@@ -28,6 +28,9 @@ function initializeGuardedRuntimeServiceHandler(service, systemTableCache) {
     serviceEndpointsOwner:
       service.systemMetadataOwners?.serviceEndpointsOwner,
     rpcClient: service.rpcClient,
+    // The dispatch owner can be wired after seed/join lifecycle construction.
+    legacyRemovalAuthority: (identity) =>
+      service.dispatchService?.authorizeLegacyRuntimeRemoval?.(identity),
     executorOutcomeEmitter:
       service.rebalanceCoordinator?.executorOutcomeEmitter,
   }));

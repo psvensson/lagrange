@@ -96,6 +96,26 @@ test('scenario-harness: a streak of passing reports; non-measuring samples skip'
   assert.match(unsupported.reason, /sealed-bar/u);
 });
 
+test('scenario-harness: a refused latest report names the refusal, never ' +
+  '"no report"', (t) => {
+  const dir = root(t);
+  const args = {scenario: SCENARIO, consecutive: 2};
+  write(dir, `${REPORTS}/a.report.json`, report(true, {}, '2026-01-01T00:00:00Z'));
+  write(dir, `${REPORTS}/b.report.json`, {timestamp: '2026-01-02T00:00:00Z',
+    summary: {failed: 1, passed: 0, refused: 1},
+    scenarios: [{scenario: SCENARIO, passed: false, outcome: 'refused',
+      verdict: 'REFUSED_NOT_RUN',
+      verdictReason: 'refused_insufficient_host_topology',
+      refusal: {reason: 'refused_insufficient_host_topology', required: 2,
+        available: 1}}]});
+  const latest = measure(dir, {probe: PROBE.SCENARIO_HARNESS, args});
+  assert.equal(latest.measuring, false);
+  assert.equal(latest.done, false);
+  assert.notEqual(latest.reason, PROBE_REASON.NO_REPORTS);
+  assert.equal(latest.reason,
+    `${PROBE_REASON.REFUSED_NOT_RUN}: refused_insufficient_host_topology`);
+});
+
 test('script: only scripts/checks; exit code and the last numeric line', (t) => {
   const dir = root(t);
   const outside = measure(dir, {probe: PROBE.SCRIPT, args: {command: `node ${OUTSIDE_SCRIPT}`}});

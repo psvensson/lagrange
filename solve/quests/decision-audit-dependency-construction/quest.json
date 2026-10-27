@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "decision-audit-dependency-construction",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The mixed-cache-and-SQL decision audit distinguishes dependency construction and publication from actual data access. The existing SeedRuntimeBridgeOwner acquisition function and equivalent renamed wiring are not mixed authority decisions; actual cache and SQL operations remain detected inside constructor arguments, publication calls, computed expressions and callbacks. Other decision kinds and baseline limits remain unchanged.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/decision-audit-dependency-construction/evidence/receipt.json",
+      "requiredReceipts": [
+        "engaged-classifier-red",
+        "construction-positive-and-adversarial-mixed-reads",
+        "reviewed-census-delta-without-baseline-growth",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-audit-owner",
+      "statement": "Repair only the existing mixed-cache-and-SQL classifier and its witnesses. No runtime changes, parallel audit, filename/function allowlist, blanket constructor/setter subtree exemption, or baseline increase."
+    },
+    {
+      "id": "operation-evidence",
+      "statement": "Class names, object property labels, dependency handles and publication targets are not by themselves evidence of a truth read. Inspect evaluated expressions and operations, including computed keys and nested argument expressions; dependency-shaped wiring cannot hide cache and SQL reads."
+    },
+    {
+      "id": "bounded-proof",
+      "statement": "Preserve existing mixed-read and all other-kind negatives. Measure unchanged revised tests against the old and repaired classifier using the authorized runner. Capture and independently inspect the full before/after finding identity delta so unrelated real findings are not silently waived. No whole-program or dynamic-JavaScript soundness claim."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "2016726f66bdb910e8b4de04bdedb89d2689bb0d"
+}

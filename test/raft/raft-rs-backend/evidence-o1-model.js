@@ -14,15 +14,19 @@
 // Histories (challenger B, section C): a genesis founder set and a script of
 // single voter changes committed through the canonical port; D = the founders
 // removed by j (the D1 silent-skew set), P = joiners added by j. A target
-// bootstrapped from C_j replays the whole log over C_j + self; below j its
-// view is `true(i) minus D plus (P not yet added)` - never the committed
-// configuration when D is non-empty.
+// bootstrapped from C_j opens as a learner of C_j and folds only the log
+// above j over it (the configuration entries at or below j are already in
+// C_j): below j its view is C_j itself - the silent-skew view
+// `true(i) minus D plus (P not yet added)` of a whole-log replay no longer
+// exists.
 
 import assert from 'node:assert/strict';
 
-import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {DELIVERED_TO_PEER, PartitionNodeCluster} from './partition-node-cluster.js';
+import {coreTrappingAppend} from './core-trap-envelope.js';
 import {
   bindingWireNumbers,
+  bootstrapFold,
   durableAppliedState,
   durableHardState,
   durableLog,
@@ -37,10 +41,12 @@ import {
 } from '../../../src/raft/raft-operation-port-constants.js';
 import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
   '../../../src/raft/raft-committed-membership-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RaftRsPeerIdentityRegistry} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 
 const WIRE = bindingWireNumbers();
 const LEADER_ROLE = 'leader';
@@ -107,7 +113,7 @@ function createModelCluster({partitionId, founders, target, filter,
       if (message !== null) {
         cluster.replica(target).inbox.push({...packet, message});
       }
-      return null;
+      return DELIVERED_TO_PEER;
     },
   });
   return cluster;
@@ -234,7 +240,11 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
     voters: at.voters,
     votersOutgoing: [],
     learners: at.learners,
+    learnersNext: [],
     appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters: at.voters,
+      learners: at.learners}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
     commitIndex: Number(hard.commit),
     term: Number(hard.term),
     leaderId: leader,
@@ -255,7 +265,7 @@ function oracleStamp(cluster, leader, genesisPeerIds) {
 function joinFromStamp(cluster, replicaId, stamp) {
   return cluster.addReplica(replicaId,
     [...Object.values(stamp.identities), replicaId],
-    {[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
+    {[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]: stamp});
 }
 
 /**
@@ -343,18 +353,21 @@ function admissionIndexOf(cluster, holder, peerId, afterIndex) {
 }
 
 /**
- * The view a replica bootstrapped from B holds after replaying a log to
- * `index` (the crate's replay law: remove of an absent id is a no-op, add of
- * a present id is idempotent), folded from a member's durable log.
+ * The view a joiner opened from `stamp` holds at applied `index`: C_j with
+ * itself a learner, folded with the member's durable log above j only (the
+ * crate's law for each folded entry: remove of an absent id is a no-op, add
+ * of a present id is idempotent).
  * @param {Object} cluster - The cluster.
  * @param {string} holder - The member whose log is folded.
- * @param {Array<string>} bootstrapVoters - B.
+ * @param {Object} stamp - The joiner's COMMITTED stamp (C_j, j).
+ * @param {string} selfPeerId - The joiner's raft peer id.
  * @param {number} index - The applied index.
  * @return {Object} {voters, learners}.
  */
-function replayedView(cluster, holder, bootstrapVoters, index) {
-  return foldAt(logFold(cluster.replica(holder).dbFile, cluster.partitionId,
-    bootstrapVoters), index);
+function replayedView(cluster, holder, stamp, selfPeerId, index) {
+  return foldAt(bootstrapFold(cluster.replica(holder).dbFile,
+    cluster.partitionId, {voters: stamp.voters, learners: stamp.learners,
+      bootstrapIndex: stamp.appliedIndex, selfPeerId}), index);
 }
 
 /**
@@ -493,8 +506,8 @@ function recordGateOpenings(cluster, replicaId) {
 }
 
 /**
- * Trap the shared core through one port: a heartbeat whose commit index lies
- * beyond any log, then a tick. Every group is then reconstructed from its
+ * Trap the shared core through one port (core-trap-envelope.js), then a
+ * tick. Every group is then reconstructed from its
  * durable record on its next operation (the runtime-reconstruction restart
  * class).
  * @param {Object} cluster - The cluster.
@@ -503,19 +516,13 @@ function recordGateOpenings(cluster, replicaId) {
  */
 function trapSharedCore(cluster, replicaId) {
   const status = cluster.node(replicaId).readStatus();
-  cluster.node(replicaId).step({
+  cluster.node(replicaId).step(coreTrappingAppend({
+    dbFile: cluster.replica(replicaId).dbFile,
     groupId: cluster.partitionId,
-    to: status.peerId,
-    message: {
-      from: String(Number(status.peerId) + 1000),
-      to: status.peerId,
-      msgType: WIRE.messageType.MsgHeartbeat,
-      term: String(Number(status.term) + 1),
-      logTerm: '0',
-      index: '0',
-      commit: '999999',
-    },
-  });
+    status,
+    from: String(Number(status.peerId) + 1000),
+    term: String(Number(status.term) + 1),
+  }));
   const consoleError = console.error;
   try {
     console.error = () => undefined;
@@ -536,7 +543,7 @@ function trapSharedCore(cluster, replicaId) {
  */
 function restartWith(cluster, replicaId, extraRequest) {
   const replica = cluster.replica(replicaId);
-  const hints = replica.request[RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS];
+  const hints = replica.request[RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS];
   replica.node.close();
   replica.db.close();
   try {

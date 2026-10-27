@@ -8,7 +8,6 @@
  * The class receives required dependencies via constructor injection.
  */
 
-import {SQLQueryEngine} from '../../query/sql-query-engine.js';
 import {wireMigrationWorkflowOwners} from '../../migration/migration-composition.js';
 import {RPCClient} from '../../transport/rpc-client.js';
 import {TablePolicyService} from '../../policy/table-policy-service.js';
@@ -24,6 +23,8 @@ import {
 import {
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
 } from '../../constants/cdc-lifecycle-constants.js';
+import {PARTITION_HYDRATION_IMAGE_STATE} from
+  '../../partition/partition-service-hydration-image-methods.js';
 import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
 import {
   CACHE_HYDRATION_TABLES,
@@ -43,9 +44,6 @@ import {
   CDC_OPERATION,
 } from '../../constants/index.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from '../../control-plane/control-plane-readiness-constants.js';
-import {
   SeedRuntimeBridgeOwner,
 } from '../owners/seed-runtime-bridge-owner.js';
 import {
@@ -63,11 +61,14 @@ const HYDRATION_STEP = Object.freeze({
   VERIFY: 'verifyCacheHydration',
   WAIT_LEADERS: 'waitForSystemServiceLeadersInCache',
   LATENCY_OWNERS: 'ensureLatencyTopologyOwners',
-  SUBSCRIBE_CDC: 'subscribeToInitialSystemTableCDC',
   CDC_READINESS: 'cdcReadinessGate.waitForReady',
   CDC_NORMAL_MODE: 'configureCdcIntegrationForNormalMode',
   WIRE_PARTITIONS: 'wirePartitionServicesForNormalMode',
   WIRE_MESSAGE_GROUPS: 'wireMessageGroupServicesForNormalMode',
+});
+const SEED_SYSTEM_LEADERS_IN_CACHE_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'seed system-table write leaders visible in the system table cache',
 });
 const SEED_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODES,
@@ -85,9 +86,9 @@ const HYDRATION_ERROR_MSG = Object.freeze({
   NO_PARTITION_ID_PREFIX: 'No partition ID for table: ',
   NO_LEADER_PARTITION_PREFIX:
     'No leader partition found for: ',
-  QUERY_FAILED: 'Query failed',
   NO_PARTITION_ID: 'No partition ID',
   NO_LEADER_PARTITION: 'No leader partition',
+  IMAGE_NOT_READ_PREFIX: 'Hydration image not read: ',
 });
 
 const CDC_APPLY_OPTIONS = Object.freeze({
@@ -123,8 +124,17 @@ class SeedCacheHydrationPhase {
 
   /**
    * Phase 5: Cache hydration.
-   * Read system table data from local partitions, populate cache,
-   * subscribe to CDC, and switch to normal routing mode.
+   * Hand each system table off from hydration to live CDC (subscribe, then
+   * read the image at its applied index, then apply it), verify the cache,
+   * and switch to normal routing mode.
+   *
+   * The leader wait and the latency owners follow every table's handoff:
+   * the wait evaluates the hydrated cache, not live CDC (it ran with no CDC
+   * subscriber before decision D4 and still holds through the local live
+   * partition leaders, isSeedLocalSystemTableWriteReady), and propagation
+   * needs the latency owners, so a delivery attempted before them is
+   * refused and stays owed in the ledger until the lane's retry delivers it
+   * to an already hydrated cache.
    * @return {Promise<void>}
    */
   async phaseCacheHydration() {
@@ -155,6 +165,8 @@ class SeedCacheHydrationPhase {
     const result = await this.hydrateFromLocalPartitions(
       systemTableCache,
       leaderMessageGroup,
+      {registerSubscribers: (tableName) =>
+        this.subscribeToInitialSystemTableCDC(tableName)},
     );
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
@@ -186,14 +198,6 @@ class SeedCacheHydrationPhase {
       durationMs: resolveHostedNodeClock(this.delegates)() - latencyOwnersStartedAt,
     });
 
-    const subscribeStartedAt = resolveHostedNodeClock(this.delegates)();
-    await this.subscribeToInitialSystemTableCDC();
-    logger.info(LOG_HYDRATION_STEP_COMPLETE, {
-      nodeId: d.getNodeId(),
-      step: HYDRATION_STEP.SUBSCRIBE_CDC,
-      durationMs: resolveHostedNodeClock(this.delegates)() - subscribeStartedAt,
-    });
-
     const cdcReadinessGate =
       d.createCdcPipelineReadinessGate(systemTableCache);
     const cdcReadinessTimeoutMs =
@@ -213,21 +217,9 @@ class SeedCacheHydrationPhase {
       durationMs: resolveHostedNodeClock(this.delegates)() - readinessStartedAt,
     });
 
-    const cdcQueryEngine = new SQLQueryEngine({
-      // The engine stamps and times for THIS node.
-      nowFn: resolveHostedNodeClock(d),
-      systemCache: systemTableCache,
-      messageRouter: d.getMessageRouter(),
-      nodeId: d.getNodeId(),
-      rebalanceCoordinator: d.getRebalanceCoordinator(),
-      controlPlaneReadinessService:
-        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
-      defaultRoutingReadinessDimension:
-        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      migrationAutoWire: false,
-      autoStartDistributedTransactionRecovery: false,
-      unrefRetryDelayTimers: true,
-    });
+    // The same query/coordinator owner acquired before release/registration
+    // is handed to normal CDC routing after cache hydration.
+    const cdcQueryEngine = this.runtimeBridgeOwner.acquireSqlQueryEngine();
     wireMigrationWorkflowOwners({
       sqlCore: cdcQueryEngine,
       systemTableCache,
@@ -268,6 +260,9 @@ class SeedCacheHydrationPhase {
         owner: CDC_INTEGRATION_OWNER,
       });
     }
+    // Both branches: the engine's gateway resolves this service, so its
+    // transactions (the migration cutover among them) persist their state.
+    cdcQueryEngine.setCDCIntegrationService(cdcIntegrationService);
     logger.info(LOG_HYDRATION_STEP_COMPLETE, {
       nodeId: d.getNodeId(),
       step: HYDRATION_STEP.CDC_NORMAL_MODE,
@@ -343,98 +338,39 @@ class SeedCacheHydrationPhase {
   }
 
   /**
-   * Hydrate cache by reading directly from local partition services.
+   * Hydrate the cache from the local leader replica of each table's
+   * partition, through the partition's hydration image owner
+   * (readHydrationImage): the rows and the applied index P they are the
+   * state after, recorded per table. With `registerSubscribers` the
+   * table's CDC subscribers are registered first (the seed's handoff):
+   * every ledger event above P then reaches them through the obligation
+   * lane, and the events at or below P that still arrive are absorbed by
+   * the cache's row-version merge. The repair re-read passes none: its
+   * subscribers already exist.
    * @param {Object} systemTableCache
    * @param {Object} leaderMessageGroup
+   * @param {Object} [options]
+   * @param {Function} [options.registerSubscribers] - async (tableName).
    * @return {Promise<Object>}
    */
   async hydrateFromLocalPartitions(
-    systemTableCache, leaderMessageGroup,
+    systemTableCache, leaderMessageGroup, options = {},
   ) {
-    const d = this.delegates;
-    const logger = d.getLogger();
+    const logger = this.delegates.getLogger();
     const result = {
       success: true,
       tables: {},
       errors: [],
     };
 
-    const systemTables = CACHE_HYDRATION_TABLES;
-
-    for (const tableName of systemTables) {
+    for (const tableName of CACHE_HYDRATION_TABLES) {
       try {
-        const partitionId = INITIAL_PARTITION_IDS[tableName];
-        if (!partitionId) {
-          result.tables[tableName] = {
-            success: false,
-            error:
-              HYDRATION_ERROR_MSG.NO_PARTITION_ID_PREFIX +
-              tableName,
-          };
-          result.errors.push({
-            tableName,
-            error: HYDRATION_ERROR_MSG.NO_PARTITION_ID,
-          });
-          continue;
+        const hydrated = await this.hydrateTableFromLocalPartition(
+          tableName, leaderMessageGroup, options);
+        result.tables[tableName] = hydrated.table;
+        if (hydrated.error) {
+          result.errors.push({tableName, error: hydrated.error});
         }
-
-        let leaderPartition = null;
-        for (const partition of
-          d.getPartitionServices().values()) {
-          if (partition.partitionId === partitionId &&
-              partition.isLeader) {
-            leaderPartition = partition;
-            break;
-          }
-        }
-
-        if (!leaderPartition) {
-          result.tables[tableName] = {
-            success: false,
-            error:
-              HYDRATION_ERROR_MSG.NO_LEADER_PARTITION_PREFIX +
-              tableName,
-          };
-          result.errors.push({
-            tableName,
-            error: HYDRATION_ERROR_MSG.NO_LEADER_PARTITION,
-          });
-          continue;
-        }
-
-        const sql = SQL_SELECT_ALL_FROM_TABLE(tableName);
-        const queryResult =
-          await leaderPartition.executeQuery(sql);
-
-        if (!queryResult.success) {
-          result.tables[tableName] = {
-            success: false,
-            error: queryResult.error ||
-              HYDRATION_ERROR_MSG.QUERY_FAILED,
-          };
-          result.errors.push({
-            tableName, error: queryResult.error,
-          });
-          continue;
-        }
-
-        const rows = queryResult.rows || [];
-
-        for (const row of rows) {
-          await leaderMessageGroup.applyCDCEvent(
-            tableName, CDC_OPERATION.INSERT, row,
-            CDC_APPLY_OPTIONS);
-        }
-
-        result.tables[tableName] = {
-          success: true,
-          rowCount: rows.length,
-        };
-
-        logger.debug(BOOTSTRAP_LOG_MSG.TABLE_HYDRATED, {
-          tableName,
-          rowCount: rows.length,
-        });
       } catch (error) {
         result.tables[tableName] = {
           success: false,
@@ -454,6 +390,66 @@ class SeedCacheHydrationPhase {
     }
 
     return result;
+  }
+
+  /**
+   * One table's handoff: register its subscribers (when asked), read its
+   * image and P on the local leader replica, apply the image.
+   * @param {string} tableName
+   * @param {Object} leaderMessageGroup
+   * @param {Object} options - hydrateFromLocalPartitions options.
+   * @return {Promise<Object>} {table: the table's result, error: the
+   *   error recorded for it or null}.
+   */
+  async hydrateTableFromLocalPartition(tableName, leaderMessageGroup, options) {
+    const d = this.delegates;
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    if (!partitionId) {
+      return {
+        table: {success: false,
+          error: HYDRATION_ERROR_MSG.NO_PARTITION_ID_PREFIX + tableName},
+        error: HYDRATION_ERROR_MSG.NO_PARTITION_ID,
+      };
+    }
+
+    if (typeof options.registerSubscribers === LOCAL_STR_FUNCTION) {
+      await options.registerSubscribers(tableName);
+    }
+
+    const leaderPartition = [...d.getPartitionServices().values()].find(
+      (partition) => partition.partitionId === partitionId && partition.isLeader) || null;
+    if (!leaderPartition) {
+      return {
+        table: {success: false,
+          error: HYDRATION_ERROR_MSG.NO_LEADER_PARTITION_PREFIX + tableName},
+        error: HYDRATION_ERROR_MSG.NO_LEADER_PARTITION,
+      };
+    }
+
+    const image = leaderPartition.readHydrationImage(
+      SQL_SELECT_ALL_FROM_TABLE(tableName));
+    if (image.state !== PARTITION_HYDRATION_IMAGE_STATE.READ) {
+      const error = HYDRATION_ERROR_MSG.IMAGE_NOT_READ_PREFIX +
+        (image.reason || image.state);
+      return {table: {success: false, error}, error};
+    }
+
+    for (const row of image.rows) {
+      await leaderMessageGroup.applyCDCEvent(
+        tableName, CDC_OPERATION.INSERT, row,
+        CDC_APPLY_OPTIONS);
+    }
+
+    d.getLogger().debug(BOOTSTRAP_LOG_MSG.TABLE_HYDRATED, {
+      tableName,
+      rowCount: image.rows.length,
+      appliedIndex: image.appliedIndex,
+    });
+    return {
+      table: {success: true, rowCount: image.rows.length,
+        appliedIndex: image.appliedIndex},
+      error: null,
+    };
   }
 
   /**
@@ -535,22 +531,22 @@ class SeedCacheHydrationPhase {
   }
 
   /**
-   * Subscribe to CDC for all initial system tables.
+   * Register the CDC subscribers of one initial system table on every local
+   * replica of its partition (before that table's hydration image is read).
+   * @param {string} tableName
    * @return {Promise<void>}
    */
-  async subscribeToInitialSystemTableCDC() {
-    for (const tableName of CACHE_HYDRATION_TABLES) {
-      const partitionId = INITIAL_PARTITION_IDS[tableName];
-      const replicaIds = getInitialReplicaIds(tableName) || [];
-      if (!partitionId ||
-          replicaIds.length === 0) {
-        continue;
-      }
-
-      await this.subscribeToCDC(
-        tableName, partitionId, replicaIds,
-      );
+  async subscribeToInitialSystemTableCDC(tableName) {
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    const replicaIds = getInitialReplicaIds(tableName) || [];
+    if (!partitionId ||
+        replicaIds.length === 0) {
+      return;
     }
+
+    await this.subscribeToCDC(
+      tableName, partitionId, replicaIds,
+    );
   }
 
   /**
@@ -592,6 +588,15 @@ class SeedCacheHydrationPhase {
       timeoutMs,
       // A wait this node takes, on this node's clock.
       now: resolveHostedNodeClock(d),
+      logger: d.getLogger?.() ?? null,
+      spentWait: SEED_SYSTEM_LEADERS_IN_CACHE_WAIT,
+      scope: {nodeId: d.getNodeId?.() ?? null},
+      describeLastObserved: (readiness, context) => ({
+        timeoutKind: context.timeoutKind,
+        attempts: context.attempt,
+        missingCount: readiness?.missingCount ?? null,
+        missingLeaders: readiness?.missingLeaders || null,
+      }),
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(cache, notify),
       ],
@@ -723,11 +728,12 @@ class SeedCacheHydrationPhase {
    * @return {Promise<Object>}
    */
   async propagatePartitionCDCEvent(
-    messageGroupService, cdcEvent,
+    messageGroupService, cdcEvent, deliveryContext = null,
   ) {
     return this.runtimeBridgeOwner.propagatePartitionCDCEvent(
       messageGroupService,
       cdcEvent,
+      deliveryContext,
     );
   }
 

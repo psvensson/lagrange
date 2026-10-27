@@ -917,7 +917,7 @@ test('NodeJoiningService - durable rejoin restore queues local partition replica
       for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
         service.partitionServices.set(replicaId, {
           initialized: true,
-          transportHandler: () => ({acknowledged: true}),
+          transportHandler: () => (null),
           partitionId: 'nodes-p1',
           startElection() {
             calls.push(`start:${replicaId}`);
@@ -1078,7 +1078,7 @@ test('NodeJoiningService - durable rejoin restore recreates stale local ' +
     calls.push(`create:${options.replicaId}`);
     service.partitionServices.set(options.replicaId, {
       initialized: true,
-      transportHandler: () => ({acknowledged: true}),
+      transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);
@@ -1248,7 +1248,7 @@ test('NodeJoiningService - durable rejoin restore repairs stale runtime when ' +
     calls.push(`create:${options.replicaId}`);
     service.partitionServices.set(options.replicaId, {
       initialized: true,
-      transportHandler: () => ({acknowledged: true}),
+      transportHandler: () => (null),
       partitionId: options.partitionId,
       startElection() {
         calls.push(`start:${options.replicaId}`);

@@ -1,3 +1,7 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {test} from '../../src/test-helpers/tap.js';
 import {CreateMessageGroupPhase} from '../../src/bootstrap/phases/create-message-group-phase.js';
 import {
@@ -238,11 +242,12 @@ test(
   'a newly routable replica',
   async (t) => {
     const replicaId = 'mg-attach-r1';
+    const dataDir = mkdtempSync(join(tmpdir(), 'create-mg-phase-attach-'));
     const messageGroupServices = new Map();
     const joinReplicas = [];
     const attachmentObservations = [];
     const messageRouter = {
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       initialize() {},
       off() {},
       on() {},
@@ -262,6 +267,10 @@ test(
           });
         },
         getBootstrapReadinessState: () => null,
+        // The joiner's data directory (NodeJoiningService delegates it):
+        // message-group consensus is durable, so the replica opens its
+        // database there.
+        getDataDir: () => dataDir,
         getLogger: () => silentLogger,
         getMessageGroupServices: () => messageGroupServices,
         getMessageRouter: () => messageRouter,
@@ -286,6 +295,7 @@ test(
     });
     t.teardown(async () => {
       await joinReplicas[0]?.shutdown();
+      rmSync(dataDir, {recursive: true, force: true});
     });
 
     t.equal(attachmentObservations.length, 1,

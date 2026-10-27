@@ -2,6 +2,7 @@ import {mkdir, rm, writeFile} from 'node:fs/promises';
 import {join, resolve} from 'node:path';
 import {FAILURE_BUNDLE_FORMATTING} from './failure-bundle-formatting.js';
 import {classifyScenarioVerdict} from './validation-matrix.js';
+import {SCENARIO_OUTCOME, scenarioOutcomeOf} from './scenario-outcome.js';
 const {
   FAILURE_BUNDLE_SCHEMA_VERSION,
   FAILURE_BUNDLE_RUN_DIRNAME,
@@ -572,6 +573,13 @@ async function writeFailureBundlesForReport({
     }
     const scenarioName = sanitizePathSegment(entry.scenario, 'scenario');
     const scenarioDir = join(absoluteOutputDir, scenarioName);
+    // A refused scenario never ran: no cluster, no logs, nothing to triage
+    // as a failure - no bundle, and its directory (an earlier run's
+    // evidence) is left untouched. The report entry names the refusal.
+    if (scenarioOutcomeOf(entry) === SCENARIO_OUTCOME.REFUSED) {
+      delete entry.failureBundle;
+      continue;
+    }
     if (entry.passed === true) {
       await removeScenarioFailureArtifacts(scenarioDir);
       delete entry.failureBundle;

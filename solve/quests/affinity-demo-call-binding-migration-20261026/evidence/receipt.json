@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "no-raw-sql-service-scaffolding-in-affinity-demo",
+      "passed": true
+    },
+    {
+      "id": "public-wasi-call-binding-deployment-and-invocation",
+      "passed": true
+    },
+    {
+      "id": "call-cell-shard-partition-access-attribution",
+      "passed": true
+    },
+    {
+      "id": "affinity-demo-test-cone-and-independent-verification",
+      "passed": true
+    }
+  ]
+}

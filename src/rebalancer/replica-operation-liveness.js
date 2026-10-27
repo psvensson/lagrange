@@ -36,6 +36,10 @@ const LOCAL_STR_SOURCE_REPLICA_ID = 'source_replica_id';
 const LOCAL_STR_SOURCEREPLICAID = 'sourceReplicaId';
 const LOCAL_STR_TARGET_NODE_ID = 'target_node_id';
 const LOCAL_STR_TARGETNODEID = 'targetNodeId';
+const LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN =
+  'create_admission_attempt_token';
+const LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN =
+  'createAdmissionAttemptToken';
 const LOCAL_STR_STEP = 'step';
 const LOCAL_STR_TIMESTAMP = 'timestamp';
 const LOCAL_STR_TIMESTAMPMS = 'timestampMs';
@@ -54,11 +58,11 @@ const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const MINUTES_PER_HOUR = NUM.THIRTY * 2;
 const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
-const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
+const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS = // ends-on: n/a lookback
   TIME_MS.MINUTE *
   HOURS_PER_DAY *
   MINUTES_PER_HOUR;
-const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE;
+const PRIORITY_CONTROL_PLANE_SYNCING_TIMEOUT_CAP_MS = TIME_MS.MINUTE; // ends-on: n/a clamp
 
 const REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
   REPLICA_OPERATION_STATUS_REMOVED,
@@ -381,6 +385,11 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       LOCAL_STR_TARGET_NODE_ID,
       LOCAL_STR_TARGETNODEID,
     ) || inferredTargetNodeId || ''),
+    createAdmissionAttemptToken: firstStringField(
+      row,
+      LOCAL_STR_CREATE_ADMISSION_ATTEMPT_TOKEN,
+      LOCAL_STR_CREATEADMISSIONATTEMPTTOKEN,
+    ),
     createdAt,
     updatedAt,
     completedAt,

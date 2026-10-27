@@ -17,6 +17,15 @@ import {
 import {
   resolvePartitionExecutionBuilders,
 } from './query-executor-partition-request-builders.js';
+import {
+  UNKNOWN_OUTCOME_DECISION,
+  createUnknownOutcomeRedelivery,
+  withWriteEntryIdentity,
+} from './query-executor-unknown-outcome.js';
+import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
+import {deliveryAnswerOf, deliveryTransportOf, TRANSPORT_DELIVERY_OUTCOME_REASON_CODE, classifyThrownDeliveryError,
+  deliveryReadingOf} from
+  '../transport/transport-semantic-outcome.js';
 
 const {
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
@@ -40,8 +49,16 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     forRead,
     preferLeader,
     preferSameLatencyGroup,
-    executionOptions = {},
+    deliveryOptions = {},
   ) {
+    // One entryId for every delivery of a write (the caller's, or minted
+    // once): a re-delivery is never a fresh entry.
+    const executionOptions = withWriteEntryIdentity(deliveryOptions, forRead);
+    const unknownOutcome = createUnknownOutcomeRedelivery({
+      entryId: executionOptions?.entryId ?? null,
+      forRead,
+      now: () => (typeof this.nowFn === 'function' ? this.nowFn() : Date.now()),
+    });
     const cancellationToken = executionOptions?.cancellationToken || null;
     const failedTable = normalizeParticipantFailureString(
       executionOptions?.tableName,
@@ -68,13 +85,15 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       waitForRetryBudget,
     } = attemptBudget;
     this.throwIfCancelled(cancellationToken);
+    // Every failure a delivery ends with: an unresolved write's is its typed
+    // unknown outcome (createUnknownOutcomeRedelivery).
     const buildFailureResult = (errorMessage, details = {}) =>
-      buildPartitionExecutionFailureResult({
+      unknownOutcome.finish(buildPartitionExecutionFailureResult({
         partitionId,
         failedTable,
         errorMessage,
         details,
-      });
+      }), this.logger);
     let candidateDeliveryAttempted = false;
     const buildPreSubmissionRouteFailureResult = (
       errorMessage,
@@ -121,6 +140,14 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
     const runtimeRoutingRepairState = {
       awaited: false,
     };
+    let lastAttempt = 0;
+    attemptBudget.observeSpent(() => ({
+      attempts: lastAttempt,
+      lastError,
+      lastErrorCode: lastFailureDetails?.errorCode ?? null,
+      lastParticipantNodeId: lastFailureDetails?.participantNodeId ?? null,
+      awaitedRoutingRepair,
+    }));
     const {
       buildRequest,
       buildSuccessResult,
@@ -137,13 +164,21 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         lastFailureDetails,
       ),
     });
+    // An unresolved write's re-deliveries back off (the redelivery owner).
     const waitForLeaderRetryBudget = async () => waitForRetryBudget(
-      resolvePartitionRetryDelayMs(this.leaderRetryDelayMs, lastFailureDetails),
+      unknownOutcome.nextDeliveryDelayMs(resolvePartitionRetryDelayMs(
+        this.leaderRetryDelayMs, lastFailureDetails)),
     );
+    const returnReadAttemptsSpent = () => {
+      attemptBudget.reportReadAttemptsSpent(maxAttempts);
+      return buildLastFailureResult();
+    };
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      lastAttempt = attempt;
       this.throwIfCancelled(cancellationToken);
       const attemptBudgetMs = getRemainingExecutionBudgetMs();
       if (attemptBudgetMs !== null && attemptBudgetMs <= 0) {
+        attemptBudget.reportDeadlineSpentBeforeAttempt();
         return {
           ...buildFailureResult(
             lastError || ERRORS.QUERY_FAILED,
@@ -297,6 +332,21 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       ) {
         const serviceInfo = candidateQueue[candidateIndex];
         const {address} = serviceInfo;
+        // Follow a routed write's retry decision: true when the candidate
+        // loop stops for this attempt (retry here, or defer the partition),
+        // false when it widens to the next recovery candidate.
+        const followRetryDecision = (decision) => {
+          if (decision.state ===
+            CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY) {
+            candidateState.requestDeferredPartitionRetry();
+            return true;
+          }
+          candidateState.queueLeaderRecoveryCandidates(
+            candidateIndex,
+            serviceInfo?.nodeId || null,
+          );
+          return false;
+        };
         if (candidateState.shouldSkipCandidateDelivery(serviceInfo, address)) {
           continue;
         }
@@ -313,6 +363,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           partitionId,
           address,
         });
+        let deliverySubmitted = false;
         try {
           this.throwIfCancelled(cancellationToken);
           const request = buildRequest({
@@ -335,13 +386,20 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               ),
             };
           }
-          const response = await this.messageRouter.deliver(
+          deliverySubmitted = true;
+          unknownOutcome.recordDelivery();
+          const delivery = await this.messageRouter.deliver(
             address,
             request,
             attemptRouterDeliveryOptions,
           );
+          unknownOutcome.observeTransport(deliveryTransportOf(delivery));
+          deliverySubmitted = false;
           this.throwIfCancelled(cancellationToken);
-          if (isSuccessfulResponse(response)) {
+          // Every later read takes exactly one namespace: the partition's
+          // answer when delivered, else the transport outcome.
+          const response = deliveryReadingOf(delivery);
+          if (isSuccessfulResponse(delivery)) {
             this.clearTemporarilyUnroutableAddress(partitionId, address);
             if (
               executionOptions.clearSessionPartitionAffinityOnSuccess === true
@@ -357,7 +415,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 address,
               );
             }
-            return buildSuccessResult(response, {
+            return buildSuccessResult(deliveryAnswerOf(delivery), {
               partitionId,
               address,
               request,
@@ -394,7 +452,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 ),
               };
             }
-            const redirectResponse = await this.messageRouter.deliver(
+            deliverySubmitted = true;
+            unknownOutcome.recordDelivery();
+            const redirectDelivery = await this.messageRouter.deliver(
               response.leaderAddress,
               buildRequest({
                 partitionId,
@@ -407,7 +467,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               }),
               redirectRouterDeliveryOptions,
             );
-            if (isSuccessfulResponse(redirectResponse)) {
+            unknownOutcome.observeTransport(deliveryTransportOf(redirectDelivery));
+            deliverySubmitted = false;
+            const redirectResponse = deliveryReadingOf(redirectDelivery);
+            if (isSuccessfulResponse(redirectDelivery)) {
               this.clearTemporarilyUnroutableAddress(
                 partitionId,
                 response.leaderAddress,
@@ -426,7 +489,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                   response.leaderAddress,
                 );
               }
-              return buildSuccessResult(redirectResponse, {
+              return buildSuccessResult(deliveryAnswerOf(redirectDelivery), {
                 partitionId,
                 address: response.leaderAddress,
                 redirectedFromAddress: address,
@@ -437,10 +500,27 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             // Redirect target also failed - continue to next candidate
             const redirectFailureMessage =
               redirectResponse.error || ERRORS.QUERY_FAILED;
+            const redirectUnknownDecision =
+              unknownOutcome.observeAnswer(redirectResponse);
+            if (redirectUnknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
+              recordCandidateFailure(
+                redirectFailureMessage,
+                redirectResponse,
+                serviceInfo?.nodeId,
+                response.leaderAddress,
+              );
+              if (
+                redirectUnknownDecision ===
+                UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE
+              ) {
+                return buildLastFailureResult();
+              }
+              candidateState.requestRetryCurrentAddress();
+              break;
+            }
             const redirectRetryDecision =
               this.resolveControlPlaneWriteRetryDecision(
                 partitionId,
-                executionOptions,
                 redirectResponse,
                 forRead,
               );
@@ -450,13 +530,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               response.leaderAddress,
             );
-            if (
-              redirectRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
-              break;
-            }
             if (
               redirectRetryDecision.state ===
               CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
@@ -475,7 +548,25 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             }
             continue;
           }
-          if (response.noHandler) {
+          // An answer whose outcome is not known: re-delivered under the same
+          // entryId until it is settled (the one re-delivery owner), never
+          // routed again without that identity.
+          const unknownDecision = unknownOutcome.observeAnswer(response);
+          if (unknownDecision !== UNKNOWN_OUTCOME_DECISION.NONE) {
+            recordCandidateFailure(
+              response.error || ERRORS.QUERY_FAILED,
+              response,
+              serviceInfo?.nodeId,
+              address,
+            );
+            if (unknownDecision === UNKNOWN_OUTCOME_DECISION.UNRESOLVABLE) {
+              return buildLastFailureResult();
+            }
+            candidateState.requestRetryCurrentAddress();
+            break;
+          }
+          if (deliveryTransportOf(delivery).reasonCode ===
+              TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
             const errorMessage =
               response.error || `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`;
             await candidateState.handleNoHandlerCandidate(
@@ -504,10 +595,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const controlPlaneWriteRetryDecision =
             this.resolveControlPlaneWriteRetryDecision(
               partitionId,
-              executionOptions,
               {
                 error: errorMessage,
                 errorCode: response?.errorCode,
+                failureCode: response?.failureCode,
                 retryAfterMs: response?.retryAfterMs,
                 deferRetry: response?.deferRetry,
               },
@@ -523,24 +614,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
+            if (followRetryDecision(controlPlaneWriteRetryDecision)) {
               break;
             }
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-            ) {
-              candidateState.requestDeferredPartitionRetry();
-              break;
-            }
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
             continue;
           }
           if (
@@ -588,6 +664,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           return {
             ...buildFailureResult(errorMessage, {
+              ...pickTypedWriteAnswer(response),
               errorCode: response?.errorCode,
               retryAfterMs: response?.retryAfterMs,
               deferRetry: response?.deferRetry,
@@ -602,6 +679,10 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             error.message.length > 0 ?
               error.message :
               ERRORS.QUERY_FAILED;
+          if (deliverySubmitted && !this.isNoHandlerFailure(errorMessage)) {
+            // Sent, and its answer never arrived: the write may have applied.
+            unknownOutcome.observeLostAnswer(error);
+          }
           if (this.isNoHandlerFailure(errorMessage)) {
             await candidateState.handleNoHandlerCandidate(
               serviceInfo,
@@ -640,13 +721,12 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             !forRead &&
             this.isLeaderUnavailable(
               errorMessage,
-              error?.code || error?.errorCode,
+              classifyThrownDeliveryError(error).errorCode,
             )
           ) {
             const controlPlaneWriteRetryDecision =
               this.resolveControlPlaneWriteRetryDecision(
                 partitionId,
-                executionOptions,
                 error,
                 forRead,
               );
@@ -660,24 +740,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
                 serviceInfo?.nodeId,
                 address,
               );
-              if (
-                controlPlaneWriteRetryDecision.state ===
-                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-              ) {
-                candidateState.requestRetryCurrentAddress();
+              if (followRetryDecision(controlPlaneWriteRetryDecision)) {
                 break;
               }
-              if (
-                controlPlaneWriteRetryDecision.state ===
-                CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-              ) {
-                candidateState.requestDeferredPartitionRetry();
-                break;
-              }
-              candidateState.queueLeaderRecoveryCandidates(
-                candidateIndex,
-                serviceInfo?.nodeId || null,
-              );
               continue;
             }
             recordCandidateFailure(
@@ -706,7 +771,6 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           const controlPlaneWriteRetryDecision =
             this.resolveControlPlaneWriteRetryDecision(
               partitionId,
-              executionOptions,
               error,
               forRead,
             );
@@ -720,24 +784,9 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
               serviceInfo?.nodeId,
               address,
             );
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.RETRY_SAME_ADDRESS
-            ) {
-              candidateState.requestRetryCurrentAddress();
+            if (followRetryDecision(controlPlaneWriteRetryDecision)) {
               break;
             }
-            if (
-              controlPlaneWriteRetryDecision.state ===
-              CONTROL_PLANE_WRITE_RETRY_DECISION_STATE.DEFER_PARTITION_RETRY
-            ) {
-              candidateState.requestDeferredPartitionRetry();
-              break;
-            }
-            candidateState.queueLeaderRecoveryCandidates(
-              candidateIndex,
-              serviceInfo?.nodeId || null,
-            );
             continue;
           }
 
@@ -762,6 +811,13 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             address,
             error: errorMessage,
           });
+          if (unknownOutcome.isUnresolved()) {
+            // A write whose outcome is unknown ends typed, never thrown.
+            return buildFailureResult(errorMessage, {
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+            });
+          }
           throw error;
         }
       }
@@ -772,7 +828,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           continue;
         }
-        return buildLastFailureResult();
+        return returnReadAttemptsSpent();
       }
       if (candidateState.shouldDeferPartitionRetry()) {
         if (attempt < maxAttempts) {
@@ -781,7 +837,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           }
           continue;
         }
-        return buildLastFailureResult();
+        return returnReadAttemptsSpent();
       }
       if (attempt < maxAttempts) {
         if (!(await waitForLeaderRetryBudget())) {
@@ -789,12 +845,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
         }
       }
     }
-    return {
-      ...buildFailureResult(
-        lastError || ERRORS.QUERY_FAILED,
-        lastFailureDetails,
-      ),
-    };
+    return returnReadAttemptsSpent();
   }
 
   /**

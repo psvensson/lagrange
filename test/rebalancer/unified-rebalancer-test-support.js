@@ -12,6 +12,7 @@
  * local to the suite; only byte-identical duplicates are sourced here.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
@@ -136,7 +137,7 @@ export function createMockMessageRouter(
   return {
     getConnectionState: () => connectionState,
     getConnectedNodes: () => [...connectedNodes],
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };

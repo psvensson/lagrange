@@ -11,6 +11,7 @@
  * rebalancer SHALL proceed with normal stabilization-based planning.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -87,7 +88,7 @@ function createMockPolicyService() {
 function createMockMessageRouter() {
   return {
     getConnectionState: () => 'connected',
-    deliver: async () => ({acknowledged: true, status: 'completed'}),
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
   };

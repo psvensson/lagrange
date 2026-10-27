@@ -1,8 +1,10 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Integration test for CREATE_REPLICA ACK delivery via WebSocket.
  *
  * This test uses REAL WebSocket connections through MessageRouter to verify
- * that async handlers (like handleCreateReplica) properly return ACK data.
+ * that async handler results reach the caller as the verbatim SERVICE_RESPONSE
+ * answer, and that a slow handler times out after the transport ACK.
  *
  * CRITICAL: This test does NOT use InMemoryTransport - it uses actual WebSocket
  * connections to catch bugs like async handlers returning Promise objects.
@@ -11,20 +13,9 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {EventEmitter} from 'events';
-import {mkdtempSync} from 'fs';
-import {tmpdir} from 'os';
-import {join as joinPath} from 'path';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
-import {createLifecycleCdcServiceForCache} from
-  '../test-helpers/lifecycle-state-store.js';
-import {committedStampFor} from
-  '../node/replica-handler-bootstrap-stamps.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 /**
@@ -56,23 +47,6 @@ async function cleanupTestEnvironment() {
 }
 
 /**
- * Create a mock schema for test partitions.
- */
-function createTestSchema(tableName) {
-  return {
-    tableName,
-    columns: [
-      {name: 'id', type: 'TEXT', primaryKey: true},
-      {name: 'data', type: 'TEXT'},
-    ],
-  };
-}
-
-function createMockCDCIntegrationService(systemTableCache) {
-  return createLifecycleCdcServiceForCache(systemTableCache);
-}
-
-/**
  * Wait for a condition with timeout.
  */
 async function waitFor(condition, timeoutMs = 2000, intervalMs = 25) {
@@ -93,180 +67,6 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
 
   t.afterEach(async () => {
     await cleanupTestEnvironment();
-  });
-
-  t.test('async lifecycle handler returns ACK via WebSocket', async (t) => {
-    // This test verifies that async handlers return resolved values, not Promises
-    const seedNodeId = 'seed-node-ws-test';
-    const joiningNodeId = 'joining-node-ws-test';
-    const seedPort = 19876;
-    const joiningPort = 19877;
-
-    // Create MessageRouter for seed node (sends CREATE_REPLICA)
-    const seedRouter = new MessageRouter({
-      bootIncarnation: TEST_BOOT_INCARNATION,
-      nodeId: seedNodeId,
-      nodeAddress: `ws://127.0.0.1:${seedPort}`,
-      wsPort: seedPort,
-    });
-
-    // Create MessageRouter for joining node (receives CREATE_REPLICA)
-    const joiningRouter = new MessageRouter({
-      bootIncarnation: TEST_BOOT_INCARNATION,
-      nodeId: joiningNodeId,
-      nodeAddress: `ws://127.0.0.1:${joiningPort}`,
-      wsPort: joiningPort,
-    });
-
-    try {
-      // Start both routers with WebSocket servers
-      await seedRouter.initialize({startServer: true});
-      await joiningRouter.initialize({startServer: true});
-
-      // Small delay to ensure servers are fully listening
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // Create lifecycle manager on joining node
-      const systemTableCache = new SystemTableCache();
-      const now = Date.now();
-      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-        table_id: 'test_table',
-        table_name: 'test_table',
-        schema_definition: JSON.stringify(createTestSchema('test_table')),
-      });
-      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-        partition_id: 'ws-test-partition',
-        table_id: 'test_table',
-        partition_key_start: null,
-        partition_key_end: null,
-        leader_node_id: seedNodeId,
-      });
-      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-        service_id: 'ws-test-partition-r1',
-        service_type: 'partition',
-        partition_id: 'ws-test-partition',
-        node_id: seedNodeId,
-        raft_role: 'leader',
-        status: 'active',
-        address: `${seedNodeId}/partition/ws-test-partition-r1`,
-        created_at: now,
-        updated_at: now,
-      });
-      const cdcIntegrationService =
-        createMockCDCIntegrationService(systemTableCache);
-      const createdReplicas = [];
-      const lifecycleManager = new ReplicaLifecycleManager({
-        nodeId: joiningNodeId,
-        systemTableCache,
-        cdcIntegrationService,
-        createPartitionService: async (options) => {
-          // Simulate async partition creation
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          createdReplicas.push({
-            partitionId: options.partitionId,
-            replicaId: options.replicaId,
-          });
-          const mock = new EventEmitter();
-          mock.initialize = async () => {};
-          mock.shutdown = async () => {};
-          return mock;
-        },
-        dataDir: mkdtempSync(joinPath(tmpdir(), 'lagrange-itest-data-')),
-      });
-      lifecycleManager.initialize();
-
-      // Register lifecycle handler on joining node's router
-      // This is an ASYNC handler - with flat structure, ACK fields are spread directly
-      joiningRouter.register(`${joiningNodeId}/lifecycle/manager`, async (envelope) => {
-        let message = envelope.payload || envelope;
-        while (message.payload) {
-          message = message.payload;
-        }
-
-        if (message.type === 'CREATE_REPLICA') {
-          // This is async - handleCreateReplica returns a Promise
-          const ack = await lifecycleManager.handleCreateReplica(message);
-          return {
-            acknowledged: true,
-            ...ack,
-          };
-        }
-        return {acknowledged: true};
-      });
-
-      // Connect seed node to joining node via WebSocket
-      await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
-
-      // Wait for connection to be established
-      await waitFor(() => {
-        return seedRouter.getConnectionState(joiningNodeId) === 'connected';
-      }, 2000);
-
-      t.equal(
-        seedRouter.getConnectionState(joiningNodeId),
-        'connected',
-        'seed should be connected to joining node',
-      );
-
-      // Send CREATE_REPLICA message from seed to joining node
-      const requestId = 'ws-test-request-001';
-      const createReplicaMessage = {
-        type: 'CREATE_REPLICA',
-        request_id: requestId,
-        partition_id: 'ws-test-partition',
-        table_name: 'test_table',
-        table_id: 'test_table',
-        replica_id: 'ws-test-replica-001',
-        leader_address: seedNodeId,
-        leader_replica_id: 'ws-test-partition-r1',
-        key_range: {start: null, end: null},
-        schema: createTestSchema('test_table'),
-        bootstrap_membership: committedStampFor(['ws-test-partition-r1']),
-        timestamp: Date.now(),
-      };
-
-      // Deliver via WebSocket - this is the critical path being tested
-      const result = await seedRouter.deliver(
-        `${joiningNodeId}/lifecycle/manager`,
-        createReplicaMessage,
-        {targetNodeId: joiningNodeId},
-      );
-
-      // Verify the result - with flat structure, ACK fields are directly on result
-      t.ok(result.acknowledged, 'message should be acknowledged');
-
-      // CRITICAL: result should NOT be a Promise
-      t.notOk(
-        result instanceof Promise,
-        'result should NOT be a Promise object',
-      );
-      t.notOk(
-        result?.then,
-        'result should NOT have .then method (not a Promise)',
-      );
-
-      // Verify ACK contents - with flat structure, ACK fields are directly on result
-      t.equal(result.request_id, requestId, 'ACK should have correct request_id');
-      t.equal(result.status, 'initiated', 'ACK should have status initiated');
-      t.equal(result.replica_id, 'ws-test-replica-001', 'ACK should have correct replica_id');
-
-      // Wait for async replica creation to complete
-      const replicaCreated = await waitFor(() => createdReplicas.length > 0, 2000);
-      t.ok(replicaCreated, 'replica should be created asynchronously');
-
-      // Verify replica was created
-      t.equal(createdReplicas.length, 1, 'should create one replica');
-      t.equal(
-        createdReplicas[0].replicaId,
-        'ws-test-replica-001',
-        'correct replica created',
-      );
-
-      lifecycleManager.shutdown();
-    } finally {
-      await seedRouter.shutdown();
-      await joiningRouter.shutdown();
-    }
   });
 
   t.test('flat ACK structure is preserved through WebSocket', async (t) => {
@@ -303,9 +103,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         // Simulate async processing
         await new Promise((resolve) => setTimeout(resolve, 5));
 
-        // Return flat structure - ACK fields spread directly
+        // Return the domain answer verbatim
         return {
-          acknowledged: true,
           type: 'CREATE_REPLICA_ACK',
           request_id: message.request_id,
           status: 'initiated',
@@ -330,13 +129,12 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.ok(result.acknowledged, 'should be acknowledged');
+      t.ok(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)), 'should be acknowledged');
 
-      // With flat structure, ACK fields are directly on result
-      // Handler's type is preserved as responseType
-      t.equal(result.request_id, requestId, 'ACK should have correct request_id');
-      t.equal(result.status, 'initiated', 'ACK should have status');
-      t.equal(result.responseType, 'CREATE_REPLICA_ACK', 'ACK should have correct responseType');
+      // The handler type is preserved verbatim inside the answer.
+      t.equal(result.answer.request_id, requestId, 'ACK should have correct request_id');
+      t.equal(result.answer.status, 'initiated', 'ACK should have status');
+      t.equal(result.answer.type, 'CREATE_REPLICA_ACK', 'answer retains its domain type');
     } finally {
       await seedRouter.shutdown();
       await joiningRouter.shutdown();
@@ -376,7 +174,7 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
       joiningRouter.register(`${joiningNodeId}/lifecycle/manager`, async (_envelope) => {
         // Simulate slow processing that exceeds timeout
         await new Promise((resolve) => setTimeout(resolve, 500));
-        return {acknowledged: true};
+        return null;
       });
 
       await seedRouter.connectToNode(joiningNodeId, `ws://127.0.0.1:${joiningPort}`);
@@ -390,10 +188,10 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.ok(result.acknowledged,
-        'transport ACK should remain true even when response times out');
-      t.ok(result.error, 'should have error');
-      t.match(result.error, /timeout/i, 'error should mention timeout');
+      t.notOk(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)),
+        'an ACK cannot settle a delivery whose handler answer is lost');
+      t.ok(result.transport.error, 'should have error');
+      t.match(result.transport.error, /timeout/i, 'error should mention timeout');
     } finally {
       await seedRouter.shutdown();
       await joiningRouter.shutdown();

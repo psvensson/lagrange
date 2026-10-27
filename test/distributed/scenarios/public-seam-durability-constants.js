@@ -137,7 +137,7 @@ const PUBLIC_SEAM_SQL = Object.freeze({
 // replica_count 0 bound to loopback in trust mode
 // (src/wasm-service/meta-service-factory.js), so a docker cluster has no
 // public client endpoint until an operator scales it. The documented scale
-// path is raising service_definitions.replica_count
+// path is POST /api/admin/services/sys-postgres-wire/scale through the owner
 // (architecture/postgres-wire.md "PostgreSQL Wire Scale Operations");
 // external binding requires password mode, whose credentials the harness
 // already injects as PGWIRE_AUTH_* on every node.

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
   registerCase,
   dependencies,
@@ -345,10 +346,9 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         },
         messageRouter: {
           async deliver() {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: TEST_DELIVERY_STATUS_INITIATED,
-            };
+            });
           },
         },
         setTimeoutFn(fn, delayMs) {
@@ -491,10 +491,9 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       },
       messageRouter: {
         async deliver() {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: TEST_DELIVERY_STATUS_INITIATED,
-          };
+          });
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -684,14 +683,15 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
           deliveries.push({target, payload});
           deliveryAttempt += 1;
           if (deliveryAttempt === 1) {
-            return {
-              acknowledged: false,
-              error: TEST_RETRYABLE_HANDOFF_ERROR,
-              deferRetry: true,
-              retryAfterMs: TEST_RETRY_AFTER_MS,
-            };
+            return buildDeliveryEnvelope(
+              {
+                acknowledged: false,
+                error: TEST_RETRYABLE_HANDOFF_ERROR,
+                deferRetry: true,
+                retryAfterMs: TEST_RETRY_AFTER_MS,
+              });
           }
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {
@@ -942,7 +942,9 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
         messageRouter: {
           async deliver(target, payload) {
             deliveries.push({target, payload});
-            return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+            return buildDeliveryEnvelope({acknowledged: true}, {
+              status: TEST_DELIVERY_STATUS_INITIATED,
+            });
           },
         },
         tablePolicyService: {
@@ -1136,7 +1138,7 @@ export function registerPriorityRecoveryTopologyTimeoutOwnerReentryTestCases({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       tablePolicyService: {

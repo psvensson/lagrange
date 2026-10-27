@@ -7,11 +7,12 @@
  * The class receives required dependencies via constructor injection.
  */
 
-import {
-  DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
-  DECLARED_REPLICA_COUNT_DEFAULT,
-} from '../replication-target-authority.js';
-import {randomUUID} from 'node:crypto';
+import {seedMessageGroupRow, seedTableRow, seedPartitionRow} from
+  '../seed-foundation-rows.js';
+import {ORIGINAL_ALLOCATION_REASON, originalAllocationError} from
+  '../../raft/raft-rs-original-allocation-constants.js';
+import {originalSeedServiceRegistration, publishOriginalSeedClusterIdentity} from
+  '../seed-original-registration.js';
 import {DynamicConfigService} from '../../config/dynamic-config-service.js';
 import {
   CONFIG_SEED_SOURCE,
@@ -38,7 +39,6 @@ import {
 import {
   BOOTSTRAP_EPOCH,
   BOOTSTRAP_LOG_MSG,
-  BOOTSTRAP_MESSAGE_GROUP,
   BOOTSTRAP_SQL,
 } from '../bootstrap-constants.js';
 import {
@@ -47,7 +47,6 @@ import {
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
-import {PARTITION_STATE} from '../../partition/partition-constants.js';
 import {
   COLUMN,
   SERVICE_STATUS,
@@ -65,7 +64,6 @@ const LOCAL_STR_INSERT = 'INSERT';
 const LOCAL_STR_DIRECT_BOOTSTRAP_SEED = 'direct_bootstrap_seed';
 
 const EPOCH_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
-const CLUSTER_ID_EXISTS_SQL = BOOTSTRAP_SQL.EPOCH_EXISTS;
 const CLUSTER_ID_CONFIG_DESCRIPTION =
   'Authoritative durable cluster identity (minted once at first seed bootstrap)';
 import {resolveHostedNodeClock} from
@@ -106,12 +104,16 @@ class SeedRegistrationPhase {
    */
   async phaseRegistration() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     const logger = d.getLogger();
-    const timestamp = resolveHostedNodeClock(this.delegates)();
+    const originalTimestamp = d.getOriginalSeedFoundationTimestamp;
+    const timestamp = originalTimestamp === undefined ?
+      resolveHostedNodeClock(this.delegates)() : originalTimestamp();
+    if (originalTimestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
+      throw originalAllocationError(ORIGINAL_ALLOCATION_REASON.IDENTITY);
+    }
 
-    await d.waitForPartitionLeadership({
-      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
-    });
+    await this.waitForRequiredPartitionLeadership();
     const systemTableWriter = this.ensureSystemTableWriter();
 
     logger.debug(BOOTSTRAP_LOG_MSG.BOOTSTRAP_MODE_ENABLED, {
@@ -136,6 +138,29 @@ class SeedRegistrationPhase {
   }
 
   /**
+   * Return the exact partition leaders required by direct registration writes.
+   * SeedRegistrationPhase owns this dependency cut; election scheduling may
+   * read it but must not restate it.
+   * @return {string[]}
+   */
+  getRequiredLeaderPartitionIds() {
+    return [...REGISTRATION_REQUIRED_LEADER_PARTITION_IDS];
+  }
+
+  /**
+   * Consume the partition leadership owner's existing one-time gate for the
+   * registration dependency cut. The partition scheduler moves this same gate
+   * earlier so the required cohort can form before unrelated FULL-persistence
+   * work; SeedPartitionsPhase owns reuse of the satisfied result.
+   * @return {Promise<void>}
+   */
+  async waitForRequiredPartitionLeadership() {
+    await this.delegates.waitForPartitionLeadership({
+      partitionIds: REGISTRATION_REQUIRED_LEADER_PARTITION_IDS,
+    });
+  }
+
+  /**
    * Register the initial message group.
    * @param {number} now - Current timestamp.
    * @return {Promise<void>}
@@ -148,19 +173,7 @@ class SeedRegistrationPhase {
     const leaderService = d.getLeaderMessageGroupService();
     const leaderNodeId = leaderService?.nodeId || d.getNodeId();
 
-    const groupData = {
-      group_id: INITIAL_MESSAGE_GROUP_ID,
-      group_name: BOOTSTRAP_MESSAGE_GROUP.NAME,
-      // The OWNING table's declaration. This was a restated literal 3 in
-      // BOOTSTRAP_MESSAGE_GROUP that agreed with MESSAGE_GROUPS_SCHEMA only
-      // by coincidence, so a change to the schema default would have left
-      // this seeded row behind.
-      replica_count: DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
-      [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-      policy: JSON.stringify(BOOTSTRAP_MESSAGE_GROUP.POLICY),
-      created_at: now,
-      updated_at: now,
-    };
+    const groupData = seedMessageGroupRow(leaderNodeId, now);
 
     try {
       await systemTableWriter.upsertSystemTableRow(
@@ -232,6 +245,8 @@ class SeedRegistrationPhase {
             service,
             timestamp: now,
             status: SERVICE_STATUS.STOPPED,
+            originalRegistration: originalSeedServiceRegistration(
+              d.getOriginalSeedPreparation(), replicaId, systemTableWriter),
           });
         this.messageGroupRegistrationEvidenceByReplicaId.set(
           replicaId,
@@ -258,6 +273,8 @@ class SeedRegistrationPhase {
             service,
             timestamp: now,
             status: SERVICE_STATUS.STOPPED,
+            originalRegistration: originalSeedServiceRegistration(
+              d.getOriginalSeedPreparation(), replicaId, systemTableWriter),
           });
         partitionRegistrationEvidenceByReplicaId.set(
           replicaId,
@@ -385,20 +402,7 @@ class SeedRegistrationPhase {
       const tableName = schema.tableName;
       const partitionId = INITIAL_PARTITION_IDS[tableName];
 
-      const tableData = {
-        table_id: tableName,
-        table_name: tableName,
-        schema_definition: JSON.stringify(schema),
-        partition_key: schema.columns[0].name,
-        table_policies: JSON.stringify({}),
-        partition_count: 1,
-        active_partition_version: 1,
-        pending_partition_version: null,
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-        created_at: now,
-        updated_at: now,
-      };
+      const tableData = seedTableRow(schema, now);
 
       try {
         await systemTableWriter.upsertSystemTableRow(
@@ -413,20 +417,7 @@ class SeedRegistrationPhase {
         throw error;
       }
 
-      const partitionData = {
-        partition_id: partitionId,
-        table_id: tableName,
-        table_name: tableName,
-        partition_key_start: null,
-        partition_key_end: null,
-        partition_version: 1,
-        replica_count: DECLARED_REPLICA_COUNT_DEFAULT,
-        size_bytes: 0,
-        leader_node_id: d.getNodeId(),
-        state: PARTITION_STATE.NORMAL,
-        created_at: now,
-        updated_at: now,
-      };
+      const partitionData = seedPartitionRow(schema, d.getNodeId(), now);
 
       try {
         await systemTableWriter.upsertSystemTableRow(
@@ -616,45 +607,27 @@ class SeedRegistrationPhase {
   }
 
   /**
-   * Mint the durable cluster identity exactly once: the first seed bootstrap
-   * persists a randomUUID as the replicated CONFIG-row singleton. A later
-   * boot that finds the row already present leaves it untouched (the
-   * identity never changes for the life of the cluster).
+   * Transfer the already reserved cluster identity. Missing answers retain
+   * the submitted right; no later call may mint or insert another identity.
    * @return {Promise<void>}
    */
   async persistClusterIdIfMissing() {
     const d = this.delegates;
-    const configPartition =
-      this.runtimeOwner.findLeaderPartition(SYSTEM_TABLE_NAME.CONFIG);
-    if (configPartition?.isLeader) {
-      const result = await configPartition.executeQuery(
-        CLUSTER_ID_EXISTS_SQL,
-        [CLUSTER_ID_CONFIG_KEY],
-      );
-      const hasClusterId = result?.success &&
-        Array.isArray(result.rows) &&
-        result.rows.length > 0;
-      if (hasClusterId) {
-        return;
-      }
-    }
-
-    const clusterId = randomUUID();
-    const now = resolveHostedNodeClock(this.delegates)();
+    const preparation = d.getOriginalSeedPreparation();
+    const {clusterId, timestamp: now} = preparation.clusterIdentity();
     const systemTableWriter = this.ensureSystemTableWriter();
 
-    await systemTableWriter.upsertSystemTableRow(
-      SYSTEM_TABLE_NAME.CONFIG, {
-        [COLUMN.CONFIG_KEY]: CLUSTER_ID_CONFIG_KEY,
-        [COLUMN.CONFIG_VALUE]: clusterId,
-        [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.STRING,
-        [COLUMN.REQUIRES_RESTART]: 0,
-        [COLUMN.DESCRIPTION]: CLUSTER_ID_CONFIG_DESCRIPTION,
-        [COLUMN.DEFAULT_VALUE]: clusterId,
-        [COLUMN.UPDATED_BY]: d.getNodeId(),
-        [COLUMN.UPDATED_AT]: now,
-        [COLUMN.CREATED_AT]: now,
-      });
+    await publishOriginalSeedClusterIdentity(preparation, systemTableWriter, {
+      [COLUMN.CONFIG_KEY]: CLUSTER_ID_CONFIG_KEY,
+      [COLUMN.CONFIG_VALUE]: clusterId,
+      [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.STRING,
+      [COLUMN.REQUIRES_RESTART]: 0,
+      [COLUMN.DESCRIPTION]: CLUSTER_ID_CONFIG_DESCRIPTION,
+      [COLUMN.DEFAULT_VALUE]: clusterId,
+      [COLUMN.UPDATED_BY]: d.getNodeId(),
+      [COLUMN.UPDATED_AT]: now,
+      [COLUMN.CREATED_AT]: now,
+    });
   }
 
   /**
@@ -663,6 +636,7 @@ class SeedRegistrationPhase {
    */
   ensureSystemTableWriter() {
     const d = this.delegates;
+    d.assertOriginalSeedContinuation();
     let systemTableWriter = d.getSystemTableWriter();
     if (!systemTableWriter) {
       const cdcIntegrationService =

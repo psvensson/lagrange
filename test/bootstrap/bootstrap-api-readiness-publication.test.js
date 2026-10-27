@@ -1,3 +1,5 @@
+// Component readiness/health observations use the narrow startup adapter.
+// Real original-seed authority is exercised by fresh-seed-activation.integration.
 /**
  * Tests for Bootstrap API.
  * Requirements: 1.2, 7.2, 7.3, 7.4
@@ -129,7 +131,7 @@ test('BootstrapAPI - readyz still blocks missing partition leader metadata', asy
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: createEmptySystemTableCache(),
-    bootstrapService: {
+    bootstrapStartupAdapter: {
       phase: BOOTSTRAP_PHASE.COMPLETE,
       messageRouter: {},
     },
@@ -208,7 +210,7 @@ test('BootstrapAPI - readyz blocks non-traffic control-plane lag while recovery 
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -380,7 +382,7 @@ test('BootstrapAPI - readyz blocks priority control-plane recovery while bootstr
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -520,7 +522,7 @@ test('BootstrapAPI - bootstrap join readiness uses bootstrap-service control-pla
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         controlPlaneReadinessService: createSatisfiedControlPlaneReadinessService(),
       },
@@ -568,7 +570,7 @@ test('BootstrapAPI - bootstrap join readiness uses bootstrap-service rebalance-c
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
       readinessState,
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         rebalanceCoordinator: {
           controlPlaneReadinessService:
@@ -735,7 +737,7 @@ test('BootstrapAPI - readyz fails closed when published membership excludes the 
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -808,7 +810,7 @@ test('BootstrapAPI - readiness fails closed when control-plane diagnostics are u
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -890,7 +892,7 @@ test('BootstrapAPI - readiness fails closed when membership publication diagnost
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -977,7 +979,7 @@ test('BootstrapAPI - readiness response publication fields use synchronous diagn
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -1047,7 +1049,7 @@ test('BootstrapAPI - readiness probes bound async diagnostics and fall back to s
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -1126,7 +1128,7 @@ test('BootstrapAPI - readiness uses the canonical control-plane publication stor
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },
@@ -1204,7 +1206,7 @@ test('BootstrapAPI - readiness fails closed when control-plane readiness service
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },

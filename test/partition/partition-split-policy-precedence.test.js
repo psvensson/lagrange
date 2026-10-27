@@ -63,7 +63,7 @@ function createPolicyMutationCapture() {
     updates,
     async updateSystemTableRow(tableName, whereClause, data) {
       updates.push({tableName, whereClause, data});
-      return {success: true};
+      return {success: true, partitionResult: {affectedRows: 1}};
     },
   };
 }

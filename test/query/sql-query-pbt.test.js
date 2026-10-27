@@ -5,6 +5,7 @@
  * Requirements: 6.1, 6.2, 6.4, 6.5, 15.1, 15.2, 15.3, 15.4, 20.6, 20.7
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -28,14 +29,13 @@ function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: data.length || 1,
-        };
+        });
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 }

@@ -1,6 +1,6 @@
+import {PARTITION_DRAIN_CAPACITIES} from './partition-cdc-owed-admission.js';
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {createLearnerPromotionWakeState} from './partition-service-learner-promotion-wake-methods.js';
-import {trackLeaderActivation} from '../diagnostics/raft-churn-sync-sections.js';
 import {
   createLeaderNodeMutationHelper,
   createRoleMutationHelper,
@@ -9,13 +9,12 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-import {RaftRsWasmProvider} from '../raft/raft-rs-provider.js';
-import {
-  PARTITION_CONSENSUS_STARTUP_OUTCOME,
-} from './partition-service-constants.js';
+import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 import {isLivePartitionServiceRow} from '../constants/service.js';
+import {PartitionWriteTraffic} from './partition-write-traffic.js';
 const {
   AddressManager,
   CDCEventBuffer,
@@ -30,7 +29,6 @@ const {
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
-  PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_TYPE,
@@ -46,36 +44,10 @@ const {
   TIMEOUT_BUDGET_DEFAULT,
   attachTrafficReadinessListener,
   createControlPlaneRuntimeBundle,
-  getTrafficReadinessSnapshot,
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
-// The one consensus backend a partition runs on. Stateless and frozen, so
-// one instance serves every partition in the process.
-const RAFT_RS_PROVIDER = Object.freeze(new RaftRsWasmProvider());
-// Construction options that once selected or injected a consensus backend.
-// Naming either is refused: there is no selection and no alternate backend.
-const RETIRED_BACKEND_SELECTION_OPTIONS = Object.freeze([
-  'raftBackend', 'raftProvider',
-]);
-
-function refuseBackendSelection(options) {
-  const option = RETIRED_BACKEND_SELECTION_OPTIONS.find((name) =>
-    options[name] !== undefined);
-  if (option === undefined) {
-    return;
-  }
-  const requested = options[option];
-  const error = new Error(PARTITION_SERVICE_ERROR_MSG.backendSelectionRefused(
-    option,
-    typeof requested === 'string' ? requested :
-      requested?.constructor?.name ?? String(requested),
-  ));
-  error.code = PARTITION_CONSENSUS_STARTUP_OUTCOME.BACKEND_SELECTION_REFUSED;
-  throw error;
-}
-
 // COPY, never the caller's array: this list is mutated in place by raft peer
 // reconciliation, and callers hand in the shared system-table declaration.
 // Taking it by reference made a minted replacement replica append to the
@@ -96,24 +68,19 @@ class PartitionServiceCoreBase extends EventEmitter {
     if (!options.replicaId) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.REQUIRE_REPLICA_ID);
     }
-    refuseBackendSelection(options);
     // One clock for this replica, on the node hosting it. Held in two parts
     // for the reason resolveOwnedTimeSource states: stamps read the resolved
     // source, and only a clock that was actually GIVEN may take over a
     // collaborator that would otherwise schedule for itself.
     const clocks = resolveOwnedTimeSource(options);
     this.providedTimeSource = clocks.providedTimeSource;
-    // The node's randomness, when it owns one. Election timing is drawn from
-    // it; unsupplied, liferaft keeps Math.random.
+    // The node's randomness, when it owns one, handed to the consensus port;
+    // unsupplied, the port resolves its own.
     this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
-    this.externalCdcAllowed =
-      typeof options.externalCdcAllowed === PARTITION_SERVICE_LITERAL.BOOLEAN ?
-        options.externalCdcAllowed :
-        null;
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
@@ -193,31 +160,24 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.cdcReplayRetryDepth = 0;
     this.cdcPipelineMetrics =
       options.cdcPipelineMetrics || new CDCPipelineMetrics();
+    // Committed write traffic, the managed split/merge QPM signal (not CDC).
+    this.writeTraffic = new PartitionWriteTraffic();
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
     this.pendingCDCEventDeliveries = /* @__PURE__ */ new Set();
-    this.proposalQueue = new ProposalQueue({timeSource: this.timeSource});
+    this.proposalQueue = new ProposalQueue({timeSource: this.timeSource,
+      reservedCapacities: PARTITION_DRAIN_CAPACITIES});
     this.pendingWriteOutcomes = /* @__PURE__ */ new Map();
     this.cdcDelivery = new PartitionCDCDelivery(this);
     this.migrationColumnDefaultsByTable = /* @__PURE__ */ new Map();
     this.hlcClock = new HLCClockService(this.replicaId, {
       timeSource: this.timeSource,
     });
-    this.activeTransactions = /* @__PURE__ */ new Map();
-    this.preparedTransactions = /* @__PURE__ */ new Map();
     // Replica removal owns one irreversible serving fence: once raised,
-    // already-open transactions may finish but no new query, write, or
-    // transaction may enter. The node removal owner waits for both admitted
-    // requests and transaction maps to drain before teardown.
+    // already-open current participant work may finish but no new query,
+    // write, or transaction may enter. The node removal owner waits for both
+    // admitted requests and participant custody to drain before teardown.
     this.removalServingAdmissionFenced = false;
     this.activeServingRequestCount = 0;
-    this.preparedStateLostSessions = /* @__PURE__ */ new Set();
-    this.committedWriteLog = [];
-    this.rowCommitEpoch = /* @__PURE__ */ new Map();
-    this.maxCommittedWriteLogEntries =
-      Number.isFinite(options.maxCommittedWriteLogEntries) &&
-      options.maxCommittedWriteLogEntries > 0 ?
-        Math.floor(options.maxCommittedWriteLogEntries) :
-        PARTITION_SERVICE_DEFAULT.MAX_COMMITTED_WRITE_LOG_ENTRIES;
     this.preparedStateHoldTimeoutMs =
       Number.isFinite(options.preparedStateHoldTimeoutMs) &&
       options.preparedStateHoldTimeoutMs > 0 ?
@@ -229,8 +189,6 @@ class PartitionServiceCoreBase extends EventEmitter {
         Math.floor(options.preparedStateHoldSweepIntervalMs) :
         PARTITION_SERVICE_DEFAULT.PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS;
     this.preparedStateHoldTimer = null;
-    this.activeTransaction = null;
-    this.transactionOperations = [];
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(PARTITION_SUBSYSTEM.PARTITION) :
@@ -257,7 +215,14 @@ class PartitionServiceCoreBase extends EventEmitter {
         null;
     this.initialized = false;
     this.isShutdown = false;
+    this.startupFailure = null;
+    this.initializationSettlement = null;
+    this.initializationOwnsCleanup = false;
+    this.shutdownSettlement = null;
     this.isLeader = false;
+    // Minted and ended only at the leadership edge
+    // (src/raft/replica-leadership-state.js).
+    this.leadershipTenure = null;
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
       activationScheduler: options.leaderActivationScheduler || null,
@@ -268,7 +233,6 @@ class PartitionServiceCoreBase extends EventEmitter {
       },
       timeSource: this.providedTimeSource || undefined,
     });
-    this.lastPreparedStateReconstructionTerm = null;
     this.pendingRequestTracker = new PendingRequestTracker({
       defaultTimeoutMs: PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS,
     });
@@ -290,6 +254,18 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
     // The O1 committed-membership stamp (absent: the replicas are founders).
     this.bootstrapMembership = options.bootstrapMembership ?? null;
+    // The opening host's authoritative row proves this replica identity
+    // existed before (the open-time rule): opened without its durable record
+    // it is refused reseed-required.
+    this.identityExisted = options.identityExisted === true;
+    Object.defineProperty(this, RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING, {
+      value: options.originalAllocationOpening,
+    });
+    // The acknowledgement that this opening's prior-existence fact (its
+    // SYNCING services row, written after the port opens) is durable: until
+    // it resolves the port steps nothing (verifier N3). Absent: no such
+    // pending fact.
+    this.identityRecorded = options.identityRecorded ?? null;
     this.roleMutationHelper = this.createRoleMutationHelper();
     this.pendingRoleUpdate = this.role;
     this.persistedRole = null;
@@ -466,11 +442,15 @@ class PartitionServiceCoreBase extends EventEmitter {
    * Build this replica's consensus operation port. The partition states its
    * own requirements in the request and the rs-raft backend builds the port;
    * there is no selection and no injected provider.
-   * @param {Object} request - The partition's RAFT_PARTITION_NODE_REQUEST.
+   * @param {Object} request - The partition's RAFT_OPERATION_PORT_REQUEST.
    * @return {Object} The frozen operation port.
    */
   createOperationPort(request) {
-    return RAFT_RS_PROVIDER.createPartitionPort(request);
+    if (this.originalAllocationOpening === undefined) return createRaftRsOperationPort(request);
+    return createRaftRsOperationPort({
+      ...request,
+      [RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING]: this.originalAllocationOpening,
+    });
   }
   isMetadataPublicationReady() {
     if (!this.metadataPublicationReadinessState) {
@@ -511,127 +491,6 @@ class PartitionServiceCoreBase extends EventEmitter {
         },
       );
     });
-  }
-  /**
-   * Resolve whether this partition's rebalancer should hold leadership.
-   *
-   * Policy: background-work readiness gates rebalancer-leadership
-   * ACQUISITION; raft leadership gates RETENTION. Once a rebalancer has
-   * acquired leadership while the node was ready, a transient node-wide
-   * readiness dip (e.g. the shared metadata-publication readiness state
-   * re-entering a degraded phase during control-plane recovery) must NOT
-   * demote it while this partition still holds raft leadership. Without
-   * this hysteresis every partition's rebalancer flaps in lockstep with
-   * the single shared readiness object each time it oscillates, which
-   * resets the post-restart quiescence window and stalls convergence. A
-   * draining/shutting-down node still demotes (drain is terminal).
-   *
-   * @return {boolean} Desired rebalancer leadership state.
-   * @private
-   */
-  resolveRebalancerLeadership() {
-    if (!this.isLeader) {
-      return false;
-    }
-    if (this.isBackgroundWorkReady()) {
-      return true;
-    }
-    const rebalancer = this.rebalancer;
-    if (
-      !rebalancer ||
-      rebalancer.isLeader !== true ||
-      rebalancer.isShuttingDown === true
-    ) {
-      return false;
-    }
-    const snapshot = getTrafficReadinessSnapshot(
-      this.metadataPublicationReadinessState,
-    );
-    if (snapshot && snapshot.draining === true) {
-      return false;
-    }
-    return true;
-  }
-  /**
-   * Attach a secondary leadership sink driven in lockstep with this partition's
-   * own rebalancer leadership. Used to gate a non-partition reconciler (e.g. the
-   * RUNTIME_SERVICE rebalancer owner bound to `service_definitions-p1`) on this
-   * partition's raft leadership, so it starts/quiesces with the partition leader
-   * and inherits the same drain hysteresis. Pass `null` to detach. A no-op for
-   * every partition that has no sink attached.
-   * @param {?{setLeader: function(boolean): void}} sink
-   */
-  setRebalancerLeadershipSink(sink) {
-    this.rebalancerLeadershipSink =
-      sink && typeof sink.setLeader === PARTITION_SERVICE_TYPE.FUNCTION ?
-        sink :
-        null;
-    this.driveRebalancerLeadershipSink();
-  }
-  /** @private */
-  driveRebalancerLeadershipSink() {
-    if (this.rebalancerLeadershipSink) {
-      this.rebalancerLeadershipSink.setLeader(this.resolveRebalancerLeadership());
-    }
-  }
-  updateRebalancerLeadership() {
-    if (!this.rebalancer) {
-      this.maybeInitializeRebalancer();
-      this.driveRebalancerLeadershipSink();
-      return;
-    }
-    if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.rebalancer.setLeader(this.resolveRebalancerLeadership());
-    }
-    this.driveRebalancerLeadershipSink();
-  }
-  cancelLeaderOwnedActivation() {
-    this.leaderActivationGate.cancel({clearActivatedTerm: true});
-  }
-  scheduleLeaderOwnedActivation(term) {
-    this.leaderActivationGate.schedule(
-      term,
-      // Sync-section attribution only (see raft-churn-sync-sections.js).
-      () => trackLeaderActivation(() => {
-        if (this.isShutdown || !this.isLeader) {
-          return;
-        }
-        this.reassertDurableLeaderNodeId();
-        if (!this.isJoiningExistingGroup) {
-          this.updateRebalancerLeadership();
-        }
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
-          term,
-          replicaId: this.replicaId,
-          partitionId: this.partitionId,
-          rebalancerActive:
-            !this.isJoiningExistingGroup && this.isBackgroundWorkReady(),
-        });
-        if (this.lastPreparedStateReconstructionTerm !== term) {
-          const reconstruction = this.reconstructPreparedState();
-          this.lastPreparedStateReconstructionTerm = term;
-          this.logger.info(
-            PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_RECONSTRUCTED,
-            {
-              partitionId: this.partitionId,
-              preparedTransactionCount: reconstruction.preparedTransactionCount,
-              prepareLostCount: reconstruction.prepareLostCount,
-            },
-          );
-          // Reconstruction without resumption is NOT recovery.
-          this.resumeDurableMirrorReplicationWorkers();
-        }
-        this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
-          leaderId: this.replicaId,
-          term,
-          partitionId: this.partitionId,
-        });
-      }),
-      {
-        immediate: this.replicaIds.length === 1,
-        shouldActivate: () => !this.isShutdown && this.isLeader,
-      },
-    );
   }
   /**
    * Re-read one metadata row from the authoritative partition and repair the
@@ -770,8 +629,8 @@ class PartitionServiceCoreBase extends EventEmitter {
   }
   /**
    * Normalize one raw leader identifier into the canonical replica ID.
-   * Liferaft leader-change notifications use peer addresses, while partition
-   * runtime state should track replica IDs.
+   * Leader identities can arrive as peer addresses, while partition runtime
+   * state should track replica IDs.
    * @param {*} candidate
    * @return {string|null}
    * @private

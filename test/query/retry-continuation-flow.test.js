@@ -29,9 +29,6 @@ import {DedupeRegistry} from
 import {ExchangeManager} from
   '../../src/query/distributed/exchange-manager.js';
 import {
-  CallbackStageExecutor,
-} from '../../src/query/callback/callback-stage-executor.js';
-import {
   executeReduceByKey,
   buildGroupedBatches,
 } from '../../src/query/call-plan.js';
@@ -42,10 +39,6 @@ import {
   DEFAULT_SNAPSHOT_MODE,
   PLAN_KIND,
 } from '../../src/query/runtime-constants.js';
-import {
-  STAGE_STATE,
-  STAGE_RESULT_FIELD as SF,
-} from '../../src/query/callback/callback-stage-constants.js';
 
 /**
  * Build a minimal ExecutionContext for testing.
@@ -116,100 +109,6 @@ describe('emit dedupe on retry via dedupeKey', () => {
 
       const buf = mgr.getLocalBuffer();
       assert.equal(buf.length, 2);
-    });
-});
-
-// ─── Stage retry with CallbackStageExecutor dedupe ───────────
-
-describe('stage retry with dedupe registry', () => {
-  it('retried batch skips callback and returns cached result',
-    async () => {
-      const registry = new DedupeRegistry();
-      const tracker = new LineageTracker('retry-stage-1');
-
-      let callCount = 0;
-      const cb = async (_ctx, batch) => {
-        callCount++;
-        return batch.rows.map((r) => ({...r, processed: true}));
-      };
-
-      const batches = [
-        {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-        {partitionId: 'p2', rows: [{v: 2}], rowCount: 1},
-      ];
-
-      // First execution
-      const exec1 = new CallbackStageExecutor({
-        callback: cb,
-        lineageTracker: tracker,
-        stageIndex: 0,
-        dedupeRegistry: registry,
-      });
-      const r1 = await exec1.execute(batches);
-      assert.equal(callCount, 2);
-      assert.equal(r1[SF.STATE], STAGE_STATE.COMPLETED);
-
-      // Retry: both batches deduped
-      callCount = 0;
-      const exec2 = new CallbackStageExecutor({
-        callback: cb,
-        lineageTracker: tracker,
-        stageIndex: 0,
-        dedupeRegistry: registry,
-      });
-      const r2 = await exec2.execute(batches);
-      assert.equal(callCount, 0, 'no callbacks on retry');
-      assert.equal(r2[SF.STATE], STAGE_STATE.COMPLETED);
-
-      // Cached results match
-      for (let i = 0; i < 2; i++) {
-        assert.deepEqual(
-          r2.partitionResults[i][SF.ROWS],
-          r1.partitionResults[i][SF.ROWS],
-        );
-      }
-    });
-
-  it('failed batch re-executes on retry, success deduped',
-    async () => {
-      const registry = new DedupeRegistry();
-      const tracker = new LineageTracker('retry-stage-2');
-
-      let attempt = 0;
-      const cb = async (_ctx, batch) => {
-        attempt++;
-        if (batch.partitionId === 'p2' && attempt <= 2) {
-          throw new Error('transient');
-        }
-        return batch.rows;
-      };
-
-      const batches = [
-        {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-        {partitionId: 'p2', rows: [{v: 2}], rowCount: 1},
-      ];
-
-      // First attempt: p1 succeeds, p2 fails
-      const exec1 = new CallbackStageExecutor({
-        callback: cb,
-        lineageTracker: tracker,
-        stageIndex: 0,
-        dedupeRegistry: registry,
-      });
-      const r1 = await exec1.execute(batches);
-      assert.equal(r1[SF.STATE], STAGE_STATE.FAILED);
-      assert.equal(registry.size(), 1, 'only p1 registered');
-
-      // Retry: p1 deduped, p2 re-executes and succeeds
-      const exec2 = new CallbackStageExecutor({
-        callback: cb,
-        lineageTracker: tracker,
-        stageIndex: 0,
-        dedupeRegistry: registry,
-      });
-      const r2 = await exec2.execute(batches);
-      assert.equal(r2[SF.STATE], STAGE_STATE.COMPLETED);
-      assert.equal(registry.size(), 2, 'both registered');
     });
 });
 
@@ -378,60 +277,4 @@ describe('stage emit then reduceByKey retry pipeline', () => {
       assert.equal(buf[1].value, 'order-2',
         'original value preserved');
     });
-});
-
-// ─── Cancellation during stage batch with retry ──────────────
-
-describe('cancellation during stage with retry context', () => {
-  it('cancelled stage does not register in dedupe', async () => {
-    const registry = new DedupeRegistry();
-    const tracker = new LineageTracker('cancel-retry-q');
-    const token = new CancellationToken();
-
-    let callCount = 0;
-    const cb = async (_ctx, batch) => {
-      callCount++;
-      if (batch.partitionId === 'p1') {
-        token.cancel('abort');
-      }
-      return batch.rows;
-    };
-
-    const batches = [
-      {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-      {partitionId: 'p2', rows: [{v: 2}], rowCount: 1},
-    ];
-
-    const executor = new CallbackStageExecutor({
-      callback: cb,
-      lineageTracker: tracker,
-      stageIndex: 0,
-      dedupeRegistry: registry,
-      cancellationToken: token,
-    });
-
-    const result = await executor.execute(batches);
-    assert.equal(result[SF.STATE], STAGE_STATE.CANCELLED);
-    assert.equal(registry.size(), 0,
-      'cancelled batches not registered');
-
-    // Retry with fresh token: both batches execute
-    callCount = 0;
-    const token2 = new CancellationToken();
-    const exec2 = new CallbackStageExecutor({
-      callback: async (_ctx, batch) => {
-        callCount++;
-        return batch.rows;
-      },
-      lineageTracker: tracker,
-      stageIndex: 0,
-      dedupeRegistry: registry,
-      cancellationToken: token2,
-    });
-
-    const r2 = await exec2.execute(batches);
-    assert.equal(r2[SF.STATE], STAGE_STATE.COMPLETED);
-    assert.equal(callCount, 2, 'both batches re-executed');
-    assert.equal(registry.size(), 2, 'both now registered');
-  });
 });

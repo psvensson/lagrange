@@ -12,6 +12,8 @@ import {
 } from '../test-helpers/lifecycle-state-store.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {registerReplicaHandlerRouterAdmissionTests} from
+  './replica-handler-router-admission-test-cases.js';
 
 export async function registerReplicaHandlerTailMoreTests({
   t,
@@ -278,6 +280,7 @@ export async function registerReplicaHandlerTailMoreTests({
   t.test('status update does not overwrite raft role owned by partition service',
     async (t) => {
       const cache = createMetadataOnlyCache({partitionId: 'partition-1'});
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica-1',
         service_type: 'partition',
@@ -287,10 +290,12 @@ export async function registerReplicaHandlerTailMoreTests({
         group_id: null,
         raft_role: null,
         status: ReplicaStatus.SYNCING,
+        cleanup_token: null,
+        create_attempt_token: null,
         address: 'test-node/partition/replica-1',
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
 
@@ -300,6 +305,21 @@ export async function registerReplicaHandlerTailMoreTests({
         systemTableCache: cache,
         createPartitionService: createMockPartitionServiceFactory(),
         dataDir: tempDir,
+      });
+      handler.replicaStateMachine.registerReplicaSnapshot('replica-1', {
+        partitionId: 'partition-1',
+        nodeId: 'test-node',
+        state: ReplicaStatus.SYNCING,
+        serviceId: 'replica-1',
+        serviceType: 'partition',
+        serviceAddress: 'test-node/partition/replica-1',
+        replicaIdentity: 'replica-1',
+        cleanupToken: null,
+        createAttemptToken: null,
+        createdAt: replicaCreatedAt,
+        durableVersionColumn: 'state_entered_at',
+        durableVersion: replicaCreatedAt,
+        authoritativeSnapshot: true,
       });
 
       const activationService = bindRegisteredReplicaHandler({
@@ -480,6 +500,7 @@ export async function registerReplicaHandlerTailMoreTests({
   t.test('async removal updates status via CDC', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
+    const replicaCreatedAt = Date.now();
     cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
@@ -489,10 +510,12 @@ export async function registerReplicaHandlerTailMoreTests({
       group_id: null,
       raft_role: RAFT_ROLE.FOLLOWER,
       status: ReplicaStatus.ACTIVE,
+      cleanup_token: null,
+      create_attempt_token: null,
       address: 'test-node/partition/replica-1',
-      created_at: Date.now(),
-      state_entered_at: Date.now(),
-      updated_at: Date.now(),
+      created_at: replicaCreatedAt,
+      state_entered_at: replicaCreatedAt,
+      updated_at: replicaCreatedAt,
     });
     const mockCDC = createMockCDCService(cache);
 
@@ -505,6 +528,21 @@ export async function registerReplicaHandlerTailMoreTests({
     });
 
     handler.initialize();
+    handler.replicaStateMachine.registerReplicaSnapshot('replica-1', {
+      partitionId: 'partition-1',
+      nodeId: 'test-node',
+      state: ReplicaStatus.ACTIVE,
+      serviceId: 'replica-1',
+      serviceType: 'partition',
+      serviceAddress: 'test-node/partition/replica-1',
+      replicaIdentity: 'replica-1',
+      cleanupToken: null,
+      createAttemptToken: null,
+      createdAt: replicaCreatedAt,
+      durableVersionColumn: 'state_entered_at',
+      durableVersion: replicaCreatedAt,
+      authoritativeSnapshot: true,
+    });
 
     const removed = waitForReplicaEvent(
       handler,
@@ -566,10 +604,14 @@ export async function registerReplicaHandlerTailMoreTests({
       const TEST_FAILED_REMOVE_REPLICA_ID = 'replica-failed-remove-1';
       const TEST_FAILED_REMOVE_ADDRESS =
         `test-node/partition/${TEST_FAILED_REMOVE_REPLICA_ID}`;
-      const cache = createSeededCache();
+      const cache = createSeededCache({
+        partitionId: TEST_FAILED_REMOVE_PARTITION_ID,
+        leaderNodeId: 'other-node',
+      });
       seedReplicaOperation(cache, TEST_FAILED_REMOVE_OPERATION_ID, {
         type: 'REMOVE',
       });
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: TEST_FAILED_REMOVE_REPLICA_ID,
         service_type: 'partition',
@@ -579,10 +621,12 @@ export async function registerReplicaHandlerTailMoreTests({
         group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.FAILED,
+        cleanup_token: null,
+        create_attempt_token: null,
         address: TEST_FAILED_REMOVE_ADDRESS,
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
 
@@ -595,6 +639,24 @@ export async function registerReplicaHandlerTailMoreTests({
       });
 
       handler.initialize();
+      handler.replicaStateMachine.registerReplicaSnapshot(
+        TEST_FAILED_REMOVE_REPLICA_ID,
+        {
+          partitionId: TEST_FAILED_REMOVE_PARTITION_ID,
+          nodeId: 'test-node',
+          state: ReplicaStatus.FAILED,
+          serviceId: TEST_FAILED_REMOVE_REPLICA_ID,
+          serviceType: 'partition',
+          serviceAddress: TEST_FAILED_REMOVE_ADDRESS,
+          replicaIdentity: TEST_FAILED_REMOVE_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: replicaCreatedAt,
+          durableVersionColumn: 'state_entered_at',
+          durableVersion: replicaCreatedAt,
+          authoritativeSnapshot: true,
+        },
+      );
       let shutdownCalls = 0;
       const trackedService = {
         async shutdown() {
@@ -669,10 +731,14 @@ export async function registerReplicaHandlerTailMoreTests({
         'replica-late-failed-remove-1';
       const TEST_LATE_FAILED_REMOVE_ADDRESS =
         `test-node/partition/${TEST_LATE_FAILED_REMOVE_REPLICA_ID}`;
-      const cache = createSeededCache();
+      const cache = createSeededCache({
+        partitionId: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
+        leaderNodeId: 'other-node',
+      });
       seedReplicaOperation(cache, TEST_LATE_FAILED_REMOVE_OPERATION_ID, {
         type: 'REMOVE',
       });
+      const replicaCreatedAt = Date.now();
       cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
         service_type: 'partition',
@@ -682,10 +748,12 @@ export async function registerReplicaHandlerTailMoreTests({
         group_id: null,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: ReplicaStatus.ACTIVE,
+        cleanup_token: null,
+        create_attempt_token: null,
         address: TEST_LATE_FAILED_REMOVE_ADDRESS,
-        created_at: Date.now(),
-        state_entered_at: Date.now(),
-        updated_at: Date.now(),
+        created_at: replicaCreatedAt,
+        state_entered_at: replicaCreatedAt,
+        updated_at: replicaCreatedAt,
       });
       const mockCDC = createMockCDCService(cache);
       let removingAttempts = 0;
@@ -735,6 +803,24 @@ export async function registerReplicaHandlerTailMoreTests({
       });
 
       handler.initialize();
+      raceReplicaStateMachine.registerReplicaSnapshot(
+        TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+        {
+          partitionId: TEST_LATE_FAILED_REMOVE_PARTITION_ID,
+          nodeId: 'test-node',
+          state: ReplicaStatus.ACTIVE,
+          serviceId: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+          serviceType: 'partition',
+          serviceAddress: TEST_LATE_FAILED_REMOVE_ADDRESS,
+          replicaIdentity: TEST_LATE_FAILED_REMOVE_REPLICA_ID,
+          cleanupToken: null,
+          createAttemptToken: null,
+          createdAt: replicaCreatedAt,
+          durableVersionColumn: 'state_entered_at',
+          durableVersion: replicaCreatedAt,
+          authoritativeSnapshot: true,
+        },
+      );
       let shutdownCalls = 0;
       const trackedService = {
         async shutdown() {
@@ -929,173 +1015,19 @@ export async function registerReplicaHandlerTailMoreTests({
       handler.shutdown();
     });
 
-  t.test('registerWithRouter registers handler at correct address', async (t) => {
-    const cache = createSeededCache();
-    seedReplicaOperation(cache, 'op-1');
-    const mockCDC = createMockCDCService(cache);
-
-    const handler = new ReplicaHandler({
-      nodeId: 'test-node',
-      dataDir: tempDir,
-      systemTableCache: cache,
-      cdcIntegrationService: mockCDC,
-      createPartitionService: createMockPartitionServiceFactory(),
-    });
-
-    handler.initialize();
-
-    const created = waitForReplicaEvent(
-      handler,
-      'replicaCreated',
-      'replicaCreationFailed',
-    );
-
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
-
-    handler.registerWithRouter(mockRouter);
-
-    // Check handler was registered at correct address
-    t.ok(
-      registeredHandlers.has('test-node/service/replica-handler'),
-      'handler registered at correct address',
-    );
-
-    // Test the registered handler works
-    const registeredHandler = registeredHandlers.get('test-node/service/replica-handler');
-    const envelope = {
-      correlationId: 'corr-1',
-      payload: {
-        type: ReplicaOperationMessageType.CREATE_REPLICA,
-        operationId: 'op-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-      },
-    };
-
-    const response = await registeredHandler(envelope);
-    t.equal(response.acknowledged, true, 'response acknowledged');
-    t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
-      'create initiated');
-    t.equal(response.correlationId, 'corr-1', 'correlationId preserved');
-
-    await created;
-
-    handler.shutdown();
-  });
-
-  t.test('unregisterFromRouter removes handler', async (t) => {
-    const cache = createSeededCache();
-    const mockCDC = createMockCDCService(cache);
-
-    const handler = new ReplicaHandler({
-      nodeId: 'test-node',
-      dataDir: tempDir,
-      systemTableCache: cache,
-      cdcIntegrationService: mockCDC,
-      createPartitionService: createMockPartitionServiceFactory(),
-    });
-
-    handler.initialize();
-
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
-
-    handler.registerWithRouter(mockRouter);
-    t.ok(
-      registeredHandlers.has('test-node/service/replica-handler'),
-      'handler registered',
-    );
-
-    handler.unregisterFromRouter(mockRouter);
-    t.notOk(
-      registeredHandlers.has('test-node/service/replica-handler'),
-      'handler unregistered',
-    );
-
-    handler.shutdown();
-  });
-
-  t.test('registerWithRouter with RPC client notifies on response', async (t) => {
-    const cache = createSeededCache();
-    seedReplicaOperation(cache, 'op-1');
-    const mockCDC = createMockCDCService(cache);
-
-    const handler = new ReplicaHandler({
-      nodeId: 'test-node',
-      dataDir: tempDir,
-      systemTableCache: cache,
-      cdcIntegrationService: mockCDC,
-      createPartitionService: createMockPartitionServiceFactory(),
-    });
-
-    handler.initialize();
-
-    const created = waitForReplicaEvent(
-      handler,
-      'replicaCreated',
-      'replicaCreationFailed',
-    );
-
-    // Create mock RPC client
-    const rpcResponses = [];
-    const mockRpcClient = {
-      handleResponse(correlationId, response) {
-        rpcResponses.push({correlationId, response});
-      },
-    };
-
-    // Create mock message router
-    const registeredHandlers = new Map();
-    const mockRouter = {
-      register(address, handlerFn) {
-        registeredHandlers.set(address, handlerFn);
-      },
-      unregister(address) {
-        registeredHandlers.delete(address);
-      },
-    };
-
-    handler.registerWithRouter(mockRouter, {rpcClient: mockRpcClient});
-
-    // Test the registered handler notifies RPC client
-    const registeredHandler = registeredHandlers.get('test-node/service/replica-handler');
-    const envelope = {
-      correlationId: 'corr-1',
-      payload: {
-        type: ReplicaOperationMessageType.CREATE_REPLICA,
-        operationId: 'op-1',
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-      },
-    };
-
-    await registeredHandler(envelope);
-    await created;
-
-    // Check RPC client was notified
-    t.equal(rpcResponses.length, 1, 'RPC client notified');
-    t.equal(rpcResponses[0].correlationId, 'corr-1', 'correct correlationId');
-    t.equal(rpcResponses[0].response.status,
-      ReplicaOperationResponseStatus.INITIATED, 'correct status');
-
-    handler.shutdown();
+  await registerReplicaHandlerRouterAdmissionTests({
+    t,
+    createSeededCache,
+    seedReplicaOperation,
+    createMockCDCService,
+    ReplicaHandler,
+    tempDir,
+    createMockPartitionServiceFactory,
+    waitForReplicaEvent,
+    SYSTEM_TABLE_NAME,
+    OperationType,
+    ReplicaOperationMessageType,
+    ReplicaOperationResponseStatus,
   });
 
   t.test('shouldGateActivationOnVoterReadiness - critical joins gate with paired remove-like operations when metadata is missing',

@@ -1,0 +1,59 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "mutation-time-incarnation-and-status-fences",
+      "passed": true
+    },
+    {
+      "id": "exact-delete-repeated-and-stale-retry",
+      "passed": true
+    },
+    {
+      "id": "gateway-outcome-and-retry-identity",
+      "passed": true
+    },
+    {
+      "id": "conditional-delete-visibility-and-successor-preservation",
+      "passed": true
+    },
+    {
+      "id": "http-cli-original-observation",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": true
+    }
+  ],
+  "source": {
+    "base": "8fee98abecb29133815f9ffab9c096019692f24b",
+    "state": "checkpoint-awaiting-independent-review",
+    "sha256": {
+      "src/admin/admin-owner-operations.js": "da1f1cfd26232bbe3740424fda65c1e6f5c50ed1d35b9ed590bd863e7ef62903",
+      "src/cdc/cdc-cache-deletion-visibility.js": "54a7203eee4aeb689dc60e8a5716f88a0ccd04c884e60c3e64bc272980fb1a2a",
+      "src/cdc/cdc-integration-service-cache-visibility-wait.js": "8145f6cac81498dce4de3ffa63b502b2982ebe73ae1042fd6074b17102ac22f4",
+      "src/cdc/cdc-integration-service-mutations.js": "82f6ce2b0fb8550ad09764d264d130aac65f8286220fb9b9979f880d9a0d154b",
+      "src/cli/admin-cli-action-methods.js": "a6b4315577843e48d106c4ba402f0029325dcecbe0f46c4bfd986f4883c193a4",
+      "src/cli/admin-cli-navigation-methods.js": "0a5000192316062a7487c285234c80d3eb43ab24b7ed4ae617714dc4ec0259dd",
+      "src/cli/cli-constants.js": "d4c09c1868265c5b1a85a8de865f756db3aaf5f47cac1203656d9ee5d449c97e",
+      "src/cli/core/connection-manager.js": "0aa3a4de9f243acb06be80b549a634ca741e548eb438aefa7575a747a38fbd63",
+      "src/control-plane/owners/nodes-owner.js": "6011d690f4590181644a79f9a7b295af1c2649f868e2b04af260226af58ee535"
+    }
+  },
+  "focusedProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 7,
+    "assertions": 476,
+    "output": "/tmp/codex-admin-node-cas-20261025/green-post-hook-fix.log",
+    "outputSha256": "d3630669b03b7d2d04eda35c1fded1acd5046aedc384722f8d9acd7b0f7531d0"
+  },
+  "limitations": [
+    "SQLite engine/owner-RPC transport fixture is local; no cross-host or full corpus proof.",
+    "Whole-tree lint has the same 73 errors on base and candidate; changed-file lint passes.",
+    "Whole-tree complexity is 1767 violations on base and candidate against inherited 1755 baseline; no baseline was raised.",
+    "Independent review and final applicable gates remain outstanding."
+  ]
+}

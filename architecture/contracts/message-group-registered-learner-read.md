@@ -1,0 +1,361 @@
+---
+audience: development
+documentClass: current
+---
+
+# Registered learner read and workflow recording
+
+<!-- system-contract
+{
+  "schema": "system-contract-v1",
+  "contractId": "message-group-registered-learner-read",
+  "status": "active",
+  "owners": [
+    {
+      "owner": "operation_workflow_owner",
+      "boundary": "registered_learner_read"
+    }
+  ],
+  "failureClasses": [
+    "unauthenticated or retired message-group receivers can return fabricated or stale committed-membership evidence",
+    "uncommitted learner attempts that were fenced by a newer leader term can remain permanently stuck without an ordered successor",
+    "concurrent discovery triggers can race on the same operation lane or select the uncreated target replica as a witness"
+  ],
+  "stateVariables": [
+    "operationLaneTurn",
+    "membershipClaim",
+    "selectedWitness",
+    "recipientDeliveryContext",
+    "permitSequence"
+  ],
+  "safetyInvariants": [
+    {
+      "id": "registered-learner-read-requires-live-recipient-and-vouched-fence",
+      "statement": "Registered learner-action reads require a live handler, service, native port, and delivery context, and an ordered successor is issued only when a strictly newer applied leader term vouches for the prior attempt's noncommitment."
+    }
+  ],
+  "livenessExpectations": [
+    {
+      "id": "registered-learner-read-discovery-converges",
+      "statement": "Restart scans, periodic sweeps, and replicated-row wakes converge on the operation lane to record committed learner outcomes or issue ordered successor permits."
+    }
+  ],
+  "knownResiduals": [
+    "Invalid rows keep their UNKNOWN obligation and are surfaced for owned repair without automated mutation."
+  ],
+  "runtimeBindings": [
+    {
+      "path": "src/node/message-group-service-handler.js",
+      "owner": "message_group_service_handler_owner",
+      "boundary": "registered_learner_read",
+      "transition": "forwards host-only router delivery context and executes queued learner-action reads on the resolved local service"
+    },
+    {
+      "path": "src/rebalancer/replica-operation-repository.js",
+      "owner": "replica_operation_repository_owner",
+      "boundary": "registered_learner_read",
+      "transition": "reconstructs recording queries by operation ID, classifies NONCOMMITTED vouches, and issues ordered successor permits via row CAS"
+    }
+  ],
+  "modelBindings": [
+    {
+      "kind": "property-test",
+      "artifact": "test/raft/raft-rs-backend/committed-membership-census.test.js",
+      "properties": "verifies registered learner-action reads, witness selection, and noncommitted successor fencing"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "registered learner read and census suite",
+      "probe": "npm run test:file -- test/raft/raft-rs-backend/committed-membership-census.test.js"
+    }
+  ],
+  "questRefs": [
+    "solve/quests/message-group-fresh-identity-membership/quest.json"
+  ],
+  "theoryLedgerRefs": [
+    "theory-20260522-experiment-theory-memory"
+  ],
+  "failureAnalysis": {
+    "fmea": [
+      {
+        "failureMode": "absence of origin without registry vouch is treated as noncommitment and issues a duplicate attempt",
+        "severity": "high - can issue a competing learner attempt while the prior attempt committed",
+        "detectability": "high - census and successor-ordering tests verify unvouched absence stays UNKNOWN",
+        "mitigation": "require newer applied leader term plus complete peer-registry vouch before classifying NONCOMMITTED",
+        "probe": "npm run test:file -- test/raft/raft-rs-backend/committed-membership-census.test.js"
+      }
+    ],
+    "stpa": [
+      {
+        "controller": "operation_workflow_owner",
+        "unsafeAction": "accepts committed-membership evidence from a retired receiver or issues a successor without a vouched newer-term fence",
+        "feedbackSignal": "host delivery context, recipient registration state, currentTermApplied, and originRegistryComplete",
+        "ownerBoundary": "operation_workflow_owner / registered_learner_read"
+      }
+    ]
+  }
+}
+-->
+
+Existing Quest: `message-group-fresh-identity-membership`.
+Product base: `bcbf5e762ba2df9ea1e5bd12a78ecd1c728f0532` (PR113).
+User-approved continuation after actual process-loss and holder recovery.
+This is a bounded contract, not source approval, activation or completed proof.
+
+## Trigger, authorities and result
+
+An existing OperationWorkflowOwner is explicitly asked to recover an issued
+learner action for its operation. It calls the existing repository recorder;
+that recorder constructs the immutable original group/action query. The owner
+supplies the transport capability itself, addressed to an existing local or
+remote message-group handler and a discovered replica. Route fields are hints,
+not committed evidence or membership authority.
+
+The existing READ_COMMITTED_MEMBERSHIP message gains only the learner-action
+purpose at MessageGroupServiceHandler. Its registered callback must forward the
+router's actual host-only delivery argument; a payload field cannot substitute
+for that context. The recipient resolves the actual local message-group service
+and native port through its existing resolver. It checks the group/replica/node
+binding, and uses the existing queued historical native read. The exact handler
+registration, service/port and delivery lifetime must still be valid before the
+result is returned. Invalid or retired receivers grant no evidence.
+
+The workflow owner consumes the completed response through its existing router
+and transport-outcome classifier. The responding node must be the addressed
+recipient. It must not consume after its own shutdown. The repository remains
+the sole decoder/validator and conditional writer of the learner phase/permit/
+stamp. The durable commit point remains that existing operation-row CAS; this
+increment adds no new authoritative write, proposal, coordinator or retry loop.
+
+Ordinary workflow status, terminal history, membership debt/lane, reservation
+and CREATE authority remain unchanged. Exact already-recorded replay must not
+send another native read. Unresolved history remains UNKNOWN. Missing or retired
+transport/recipient is UNAVAILABLE; contradictory responses remain CONFLICT.
+A legitimate joint witness is temporarily unrecordable, not permanently corrupt;
+use the existing stamp validator's JOINT defect and retain older-term recovery.
+
+## Interruption and scope limits
+
+A lost response may be retried through the same existing read/recording path.
+A registration, socket/router lifetime or native port replacement while the
+read is pending must invalidate the old invocation. A later fresh invocation
+can recover the unchanged issued action. No delivery failure cancels that action.
+
+The historical-recording interpretation of PR113 finding 4231684822 is narrowly
+superseded by the operator-authorized
+[safety-first ruling](../../solve/quests/message-group-fresh-identity-membership/safety-first-ruling-20261009.md).
+An already-submitted exact receipt may commit after expiry/boot/lifetime change
+when the full row-CAS basis is unchanged. It must alter only the three receipt
+columns; it neither refreshes execution permission nor permits a next effect.
+Competing claim or terminal/phase changes remain ordered by the existing row CAS.
+This is not atomic revocation across different Raft groups. The original failed
+strict-refusal evidence is retained under its original requirement.
+
+Before EVERY new submission, including retries, the existing repository samples
+canonical boot authority; immediately before the gateway call it checks local
+invocation lifetime and claim expiry without another asynchronous wait. These
+host checks do not purport to retract a previously submitted command. Their
+callbacks are local-only and are never serialized into the write options.
+
+The workflow now also has recoverMessageGroupLearnerOutcomeFromRecipient: supply
+only an operation ID and an explicitly selected witness. In its retained owner
+lane, the repository reconstructs recording inputs from the authoritative row.
+A COMMITTED permit is accepted only for exact readback of a coherent recorded
+phase, never reconstituted as IN_FLIGHT. The proposal authorizer stays unchanged
+and rejects that committed input. Unavailable rows cannot be replaced by caches.
+
+Since 6.C slice C2 the workflow has two more explicit entries of the same shape
+(an operation ID and an explicitly selected witness, the retained lane, the
+same recipient read): recoverMessageGroupVoterOutcomeFromRecipient records an
+issued promotion's exact outcome as the voter stamp, and
+issueMessageGroupSuccessorFromRecipient has the repository issue the ordered
+successor of the row's fenced, noncommitted in-flight attempt (below). Discovery
+does not own promotion debt: the hint filter, the wakes and the periodic sweep
+pass over it, so it adds no periodic work; the restart scan reports it
+PHASE_NOT_OWNED. See the [promotion contract](message-group-learner-promotion.md).
+
+## Owned discovery and reentry
+
+Three existing triggers converge on one algorithm, owned by OperationWorkflowOwner
+(operation-workflow-message-group-membership-recovery): the restart scan
+(handleRecovery), the periodic timeout/orphan sweep, and the replicated-row
+observer (a replica_operations row still owing its obligation, or an ACTIVE
+message-group services row for a group whose lane holder owes one). Each turn:
+
+1. Censuses debt: the restart scan reads the repository's authoritative census
+   of every message-group operation whose obligation state is UNKNOWN, whatever
+   its ordinary status (ordinary failure does not hide debt); the periodic sweep
+   reads the replicated cache as a hint, so a cache listing no debt costs no
+   round trip. The periodic sweep and both replicated-row wakes share one hint
+   filter: a row owing a learner turn (in-flight phase and permit of the
+   transition's learner action, at any permit sequence).
+   A services row reads its group's lane only when the cache lists such an
+   operation on that lane; a recorded, invalid or later-phase row costs no read.
+   When the repository has no replicated-operation cache observation boundary,
+   a services row falls back to the authoritative lane read.
+   Every candidate is re-read authoritatively before any decision.
+2. Holds the operation lane for one turn (coalesced wakeups do not inherit a
+   turn; the debt waits for the next trigger).
+3. Recovers only the learner action (ADD_LEARNER of the transition: its initial
+   attempt, sequence 1, or an ordered successor attempt; phase in-flight or
+   committed); promotion and removal debt belong to later owners
+   and are reported, not touched. A phase/permit pair other than in-flight/
+   in-flight or committed/committed is INVALID_ROW (field: permit) before any
+   claim work. A learner action whose exact outcome is already durable is
+   settled for this owner: no claim is touched and no witness is asked. The
+   recorder owns the one pure validity predicate of that recorded fact (row
+   identity, a committed ADD_LEARNER permit of the transition at any permit
+   sequence, no voter/removal stamp, canonical permit and stamp encodings,
+   coherent learner stamp); discovery and the recorder's
+   readback both consume it. It carries no claim, lease or boot gate, so a
+   settled fact stays settled after its lease expires. A new promotion or
+   pre-promotion abandonment selection consumes the same predicate first (a
+   failing row is CONFLICT and no CAS is attempted). It then requires the next
+   permit to follow that learner's configuration, generation and term (else
+   INVALID) and keeps settlement, the exact prior permit, the UNKNOWN
+   obligation, the live holder, boot and the operation-row CAS; the idempotent
+   readback of an already-selected branch is a later phase and separate.
+4. Keeps a live local membership claim, waits on a live foreign one, and adopts
+   an expired one through the existing claim CAS. Adoption is holder
+   replacement, never a grant for a successor action.
+5. Selects an explicitly hosted witness from the service census: ACTIVE rows
+   of other replicas of the group, the source first, never the target the
+   operation has not created; a witness that did not answer rotates out for the
+   next turn. The census is a route hint; the native answer at the witness is
+   the evidence. No hosted witness is a typed retained outcome whose wake is the
+   services row of a hosted replica.
+6. Calls the recorder's inline entry with the lane turn the operation lane
+   handed it; the entry refuses a missing turn, a turn for another key, or a
+   lane nobody holds. The retained-lane public entry stays for explicit callers.
+7. When the recorder's exact read answers NONCOMMITTED (below), the same turn
+   asks the repository to issue the ordered successor attempt at the same
+   witness, through the same lane turn and transport capability.
+
+RECORDED (new or settled), RETAINED (UNKNOWN/UNAVAILABLE/STALE_OWNER),
+SUCCESSOR_ISSUED, NO_HOSTED_WITNESS, HELD_ELSEWHERE, CLAIM_REFUSED,
+PHASE_NOT_OWNED, LANE_BUSY, NOT_CURRENT, INVALID_ROW, INVALID_INPUT and
+CONFLICT are named states owned by the permit module. Only RECORDED means the
+exact outcome is durable; INVALID_ROW, INVALID_INPUT and CONFLICT are surfaced
+for owned repair. An INVALID_ROW keeps
+its UNKNOWN obligation untouched and is re-diagnosed (warn) by its reentry
+owner, the restart scan's authoritative census in OperationWorkflowOwner;
+no repair is automated here. None of them dispatches CREATE, promotion,
+removal, cleanup or a lane release. SUCCESSOR_ISSUED is a durable permit for
+the next attempt, not a proposal; the debt stays UNKNOWN.
+The membership owner claim is bound to the process's issued boot incarnation,
+the one the router carries and the nodes row publishes.
+
+The full ordinary driver still needs initial learner action execution, followed
+by current CREATE through the existing leader descriptor/generation/sole-worker
+checks. These cannot be replaced by fixture-driven SENDING or a historical ADD
+receipt. J1 forward recovery remains unchanged.
+
+## Ordered successor of the learner action (runbook 6.C, slice C1)
+
+Absence of origin alone never establishes noncommitment. The native owner
+attaches to a NOT_RECORDED answer the same queued observation it was read in:
+the answering replica, its role and term, `currentTermApplied` (it leads and
+its core has applied past its pending configuration index, so an entry of its
+own term is committed; a status missing either index answers false),
+`originRegistryComplete` (computed from the peer-identity registry owner: the
+registry holds no reservation of the target at all), its applied boundary and
+its configuration, lifecycle and runtime fences. The recorder classifies it
+with one pure predicate: NONCOMMITTED only when the replica leads a term
+strictly newer than the attempt's leader term, `currentTermApplied` holds and
+`originRegistryComplete` holds. The attempt can only be appended at its own
+term's leader, log terms never decrease and the committed log is one
+sequence, so it could commit only inside that leader's applied prefix. The
+premise is that the target's reservation is present wherever that prefix
+contains the attempt: applying it reserves the target and records the origin
+in one transaction, a stamp or image that folds it names the target while it
+is configured, and reservations are never removed (the transition's own
+branches are the only removers of its fresh target, after its learner fact is
+recorded). A reservation without an origin (a migrated schema, a stamp or
+image bootstrap, a local proposal or address hint) therefore vouches for
+nothing, and the absence stays UNKNOWN: fail closed, the committed fact stays
+recordable at another witness, and the debt waits for a leader whose registry
+vouches. A missing observation, a missing or false vouch, a follower, the
+attempt's own term or an unapplied newer term is UNKNOWN; a malformed
+observation (a vouch that is not a boolean included) is CONFLICT. NONCOMMITTED
+records nothing.
+
+The repository then issues the successor itself: it re-reads the row, repeats
+the exact read and classification at the routed destination replica, reads
+the destination's canonical boot and its own, and applies one exact
+operation-row CAS (the full observed row as basis) changing only the permit
+column. The successor keeps the transition and target, takes the next permit
+sequence, the observation's leader term, configuration stamp, lifecycle and
+runtime fences, the current holder's fences and the destination node. It is
+issued only over an in-flight attempt of an open ordinary operation; an
+ordinarily settled operation keeps its debt for its own settlement owner. A
+lost answer is resolved by exact readback; a concurrent or late duplicate CAS
+matches nothing. The old permit is never refreshed and no sequence is reused.
+
+Since 6.C slice C2 the same fence and issuance also order a promotion attempt,
+through the explicit successor entry. The native answer to the transition's
+PROMOTE action sets `originRegistryComplete` when the replica's applied
+configuration holds the target as a learner (a committed promotion would make
+it a voter, and only the transition's later branches, which wait for the
+promotion's recorded outcome, change that); an absent target vouches for
+nothing. The vouch only ever proves a fenced attempt noncommitted; it is never
+a promotion prerequisite.
+
+The native turn proposes the successor only at its leader term and exact
+configuration with no configuration change pending; raft-rs drops any second
+pending change itself. A successor bound to the observation in which the
+predecessor was absent therefore cannot commit beside it. The existing runtime
+consumer proposes it; the next discovery turn records its exact outcome with
+the unchanged three receipt columns. CREATE, promotion, removal, cleanup and
+lane release keep their owners; the shared promotion predicate is not used.
+
+## Required bounded proof
+
+Use actual MessageRouter IDENTIFY and SERVICE_MESSAGE/SERVICE_RESPONSE transport,
+actual registered MessageGroupServiceHandler, real native operation ports and
+file-backed ReplicaOperationRepository. A supplied host service descriptor and
+local operation-SQL fixture must remain explicit; in-process sockets are not a
+physical network or replicated-SQL failover claim.
+
+Prove ordinary remote success and no-effect replay; uncommitted UNKNOWN;
+payload-forged context refusal; wrong group/action/replica refusal; replacement
+of the actual handler registration or native port during a held real read;
+workflow shutdown; and continued CREATE/bootstrap-purpose refusal. For discovery,
+prove recovery by operation ID alone from the restart scan, duplicate and stale
+wakeups on the real lane, no witness followed by a hosted witness, the target and
+a stopped replica never selected, ordinary-failed debt, holder replacement, lost
+SQL answer resolved by readback, later-phase debt untouched, the services-row
+wake, and the inline entry refusing outside the lane. Preserve
+exact row/debt and no proposal/physical-worker effects. Include permanent joint
+classification controls and preserve all existing process-loss/regression tests.
+Run new tests on the original source, then exact-source positive and named
+assertion mutation controls with normal dependencies and unchanged budgets.
+
+Independent review, full changed-path/static gates, original full-lab FAIL,
+timing debt, physical replacement/seed-loss and exact-main/A1-v13 gates remain.
+
+## Failure Classes
+
+Retired recipients, forged payload contexts, or unvouched absence observations
+can misreport learner commitment or race on the operation recovery lane.
+
+## Invariants
+
+Registered learner reads require live recipient and delivery contexts, run one
+turn at a time per operation lane, and issue ordered successors only under a
+vouched newer-term leader fence.
+
+## Runtime Bindings
+
+`message-group-service-handler.js` and `replica-operation-repository.js` own the
+registered learner-action read route, recovery discovery, and successor CAS.
+
+## Model Bindings
+
+Integration and unit tests in `committed-membership-census.test.js` verify
+registered learner reads, witness rotation, and fenced successor issuance.
+
+## Operational Analysis
+
+FMEA and STPA bind workflow discovery and recipient read handling so unvouched
+absence remains UNKNOWN and only verified noncommitment authorizes a successor.

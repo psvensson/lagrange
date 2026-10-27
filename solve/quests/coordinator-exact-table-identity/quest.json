@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "coordinator-exact-table-identity",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The TX1 coordinator schema owner identifies its logical sql_transactions table using the shared exact-case logical-name resolver. A distinct uppercase user table SQL_TRANSACTIONS can pass ordinary source admission, committed application and remote ALTER without acquiring coordinator ledger triggers, while lowercase coordinator writes and schema protection retain their existing strict enforcement.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/coordinator-exact-table-identity/evidence/receipt.json",
+      "requiredReceipts": [
+        "source-commit-and-alter-exact-table-identity",
+        "lowercase-ledger-enforcement-preserved",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "supersession",
+      "statement": "Explicitly supersede the uppercase SQL_TRANSACTIONS alias expectation in transaction-schema-enforcement.test.js and the prior case unit finding that left this duplicate table classification outside scope. Preserve frozen case checkpoint a97f79c35b7e1f6428032493918e16e623339688 and use a separate isolated follow-up."
+    },
+    {
+      "id": "owner",
+      "statement": "Replace isCoordinatorTable lowercasing with shared resolveLogicalTableName plus existing TABLES.SQL_TRANSACTIONS only. No new name classifier, compatibility alias, trigger rewrite, row migration or column normalization changes. Preserve TX1 source/committed-apply pairing, release-origin and recovery obligations."
+    },
+    {
+      "id": "proof",
+      "statement": "Pre-edit red through real partition source admission, committed apply and remote ALTER; lowercase coordinator enforcement remains strict. Canonical retries0/thermal/controller coordination. Independent review before composition; no baseline/timeout changes, hook bypass, main merge or publish."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "a97f79c35b7e1f6428032493918e16e623339688"
+}

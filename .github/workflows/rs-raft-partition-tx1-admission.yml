@@ -1,0 +1,156 @@
+name: rs-raft-partition-tx1-admission
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-partition-tx1-admission.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-partition-tx1-admission-20261012
+  cancel-in-progress: false
+jobs:
+  exact-native-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      PROOF_BASE: 64b85decf37d58d9c52cabbd95b207ae027bd050
+      LOCAL_CANDIDATE: bcb299c777258ac680b2fa686d06b503a6647387
+      EVIDENCE: test-output/partition-tx1-admission
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Recover checksum-bound commits and keep production byte-identical
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD:src)" = 34af50ee2245c8bd99b0f87e484beb6871d11c3c
+          test "$(git rev-parse HEAD:test)" = 8672c9e4fb158200c69e6b2beec6bc47bab40f32
+          test -z "$(git status --porcelain)"
+          mkdir -p "$EVIDENCE"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, time, urllib.request
+          from pathlib import Path
+          e = Path(os.environ['EVIDENCE'])
+          specs = [('c868906df1bd743ef0362a2531e3a2123cf692fe',6500),
+                   ('a634363421408b585dac5c7cdc4d904dbef97845',6500),
+                   ('bca122153da7323073021569232fd7bc3004562d',5157)]
+          parts = []
+          for sha, size in specs:
+              request = urllib.request.Request(
+                  f'https://api.github.com/repos/psvensson/lagrange/git/blobs/{sha}',
+                  headers={'Accept':'application/vnd.github+json',
+                           'Authorization':'Bearer '+os.environ['GH_TOKEN'],
+                           'User-Agent':'lagrange-exact-native-admission-proof'})
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(request,timeout=30) as response:
+                          result = json.load(response)
+                      break
+                  except Exception:
+                      if attempt == 2: raise
+                      time.sleep(attempt+1)
+              data = base64.b64decode(result['content'])
+              assert len(data) == size
+              assert hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest() == sha
+              parts.append(data)
+          bundle = b''.join(parts)
+          assert len(bundle) == 18157
+          digest = hashlib.sha256(bundle).hexdigest()
+          assert digest == 'c8116ce8447190e7edfcdd9c2e16212e7b68d2f2a85c6d80c285c02c883c9cab'
+          (e/'native-admission.bundle').write_bytes(bundle)
+          (e/'bundle-custody.json').write_text(json.dumps({'chunks':specs,'sha256':digest,
+              'localCandidate':os.environ['LOCAL_CANDIDATE'],'sourceChanged':False},indent=2)+'\n')
+          PY
+          git bundle verify "$EVIDENCE/native-admission.bundle" > "$EVIDENCE/bundle-verify.log" 2>&1
+          git fetch "$EVIDENCE/native-admission.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$LOCAL_CANDIDATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git merge --no-ff FETCH_HEAD -m 'WIP TX1: preserve native admission fixture candidate on existing review branch'
+          test "$(git rev-parse HEAD:src)" = 34af50ee2245c8bd99b0f87e484beb6871d11c3c
+          test "$(git rev-parse HEAD:test)" = 759638a94e5ed9a0dcac89eba03ae9c68403361d
+          git diff --exit-code "$PROOF_BASE" HEAD -- src
+          git rev-parse HEAD > "$EVIDENCE/hosted-candidate-sha.txt"
+          git diff --binary "$PROOF_BASE" HEAD -- test scripts/quest-evidence/measure-partition-tx1-admission-20261012.py solve/quests/replicated-transaction-decision-and-apply | gzip -n > "$EVIDENCE/candidate-delta.patch.gz"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          node --version > "$EVIDENCE/node-version.txt"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/quest-evidence/measure-partition-tx1-admission-20261012.py')
+          compile(p.read_text(),str(p),'exec')
+          PY
+          test -z "$(git status --porcelain)"
+      - name: Measure actual admission storage faults decision recovery and the retained wider failures
+        id: measure
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/quest-evidence/measure-partition-tx1-admission-20261012.py > "$EVIDENCE/driver.log" 2>&1
+          STATUS=$?
+          printf '%s\n' "$STATUS" > "$EVIDENCE/driver-exit.txt"
+          tail -100 "$EVIDENCE/driver.log"
+          exit "$STATUS"
+      - name: Preserve exact candidate and all results without main integration
+        if: steps.measure.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          git diff --exit-code "$PROOF_BASE" HEAD -- src
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/native-admission-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp "$EVIDENCE/measurement/summary.json" "$DEST/summary.json"
+          tar -C "$EVIDENCE" -czf "$DEST/raw-evidence.tar.gz" .
+          (cd "$DEST" && sha256sum raw-evidence.tar.gz summary.json > SHA256SUMS)
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP TX1: retain native admission proof and unwaived wider regression failures'
+          REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-head.txt"
+      - name: Preserve incomplete attempts and exact working state too
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          git rev-parse HEAD > "$EVIDENCE/final-head.txt"
+          git diff --binary -- src test | gzip -n > "$EVIDENCE/uncommitted-source-test.patch.gz"
+          (cd "$EVIDENCE" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-partition-tx1-admission-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/partition-tx1-admission/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unresolved wider and static gates RED
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['EVIDENCE'])/'measurement/summary.json'
+          assert p.is_file(), 'no complete measurement'
+          s=json.loads(p.read_text())
+          assert s['allRunGatesPassed'], 'focused fixture proof is not independent acceptance or merge readiness; unresolved gates remain RED'
+          PY

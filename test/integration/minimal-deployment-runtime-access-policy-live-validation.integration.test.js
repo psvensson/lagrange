@@ -294,10 +294,19 @@ describe('minimal deployment runtime access production path', () => {
   it('observes exact grant and revocation through one setup-created owner path',
     async (testContext) => {
       const systemTableCache = new SystemTableCache();
+      const handlers = new Map();
       const messageRouter = {
         deliver: async () => ({success: true}),
-        register() {},
+        getRegisteredHandler: (address) => handlers.get(address) ?? null,
+        register(address, handler) {
+          handlers.set(address, handler);
+        },
         send: async () => ({success: true}),
+        unregisterExact(address, handler) {
+          if (handlers.get(address) !== handler) return false;
+          handlers.delete(address);
+          return true;
+        },
       };
       const engine = new SQLQueryEngine({
         autoStartDistributedTransactionRecovery: false,

@@ -375,7 +375,7 @@ class WasmExecutor {
     const source = pickFirstNonEmptyString(
       optionScope.source,
       contextScope.source,
-    ) || (lineageId ? DEBUG_TRACE_SOURCE.PARTITION_CALLBACK :
+    ) || (lineageId ? DEBUG_TRACE_SOURCE.LINEAGE :
       DEBUG_TRACE_SOURCE.SERVICE);
 
     return {

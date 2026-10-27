@@ -18,10 +18,12 @@ const TIMEOUT_BUDGET_DEFAULT = Object.freeze({
   SPLIT_OPERATION_BUDGET_MS: 300000,
   DISPATCH_OPERATION_BUDGET_MS: 60000,
   TRANSACTION_BUDGET_MS: 60000,
+  // ends-on: the held transaction commits or rolls back
   PREPARED_HOLD_TIMEOUT_MS: 60000,
 });
 
 const CONTROL_PLANE_TIMEOUT_DEFAULT = Object.freeze({
+  // ends-on: the partition returns the control-plane query result
   SQL_QUERY_TIMEOUT_MS: 5000,
 });
 

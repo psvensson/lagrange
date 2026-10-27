@@ -1,23 +1,34 @@
+import {assertWorkflowRecordHeld} from './managed-workflow-ownership-core.js';
+import {
+  abortChange,
+  refusedStepAs,
+} from './managed-workflow-record-changes.js';
 import {SERVICE_TYPE} from '../constants/index.js';
 import {
   ReplicaOperationField,
   ReplicaOperationMessageType,
-  ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {OperationType} from '../rebalancer/replica-operation-progress.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
-  MANAGED_MERGE_ERROR_MSG,
+  PARTICIPANT_ACK_FIELD,
+  PARTICIPANT_ACK_RESULT,
+} from '../workflow/workflow-constants.js';
+import {
+  GROUP_RETIREMENT_KIND,
+  buildGroupRetirementEvidence,
+  groupRetirementOperationIdOf,
+} from './group-retirement-evidence.js';
+import {retireFrozenGroupMembers} from './group-retirement-members.js';
+import {
   MANAGED_MERGE_LOG_MSG,
   MERGE_ABORT_OUTCOME,
-  PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   PRE_CUTOVER_MERGE_STATES,
 } from './partition-constants.js';
 import {
-  MERGE_ACK_CHECKPOINT_FIELD,
   MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
   MERGE_ACK_STATUS,
+  MERGE_PARTICIPANT_PREFIX,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
 
@@ -25,34 +36,10 @@ const LOCAL_STR_MERGE_SOURCE_DISSOLUTION = 'merge_source_dissolution';
 const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
   'merge_source_execution_failure';
-const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
-const LOCAL_STR_REPLICA_ID_SNAKE = 'replica_id';
-const LOCAL_STR_REPLICA_ID_CAMEL = 'replicaId';
-const LOCAL_STR_NODE_ID_SNAKE = 'node_id';
-const LOCAL_STR_NODE_ID_CAMEL = 'nodeId';
-
-const ACCEPTED_REPLICA_REMOVAL_STATUSES = Object.freeze(new Set([
-  ReplicaOperationResponseStatus.INITIATED,
-  ReplicaOperationResponseStatus.IN_PROGRESS,
-  ReplicaOperationResponseStatus.COMPLETED,
-  ReplicaOperationResponseStatus.NOT_FOUND,
-]));
 
 const MERGE_SOURCES_DISSOLVED_STATUSES = Object.freeze(new Set([
   MERGE_ACK_STATUS.SOURCE_DISSOLVED,
 ]));
-
-/**
- * Resolve one snake/camel service-row field as a string.
- * @param {Object|null} serviceRow
- * @param {string} snakeKey
- * @param {string} camelKey
- * @return {string}
- */
-function resolveServiceRowField(serviceRow, snakeKey, camelKey) {
-  const record = serviceRow || {};
-  return String(record[snakeKey] ?? record[camelKey] ?? '');
-}
 
 /**
  * Resolve one merge source participant's current status.
@@ -74,6 +61,15 @@ function resolveMergeSourceParticipantStatus(workflow, partitionId) {
  * source raft-group removal (reusing the rebalancer REMOVE_REPLICA node
  * handler), aborted-target teardown, and the terminal transition clear.
  */
+// The record states in which a retired group's partitions row may be
+// deleted: a merge source after its cutover; an aborted target.
+const MERGE_SOURCE_RETIRING_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+]));
+const ABORTED_RECORD_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.FAILED,
+]));
+
 class ManagedMergeWorkflowDissolutionMethods {
   /**
    * Dissolve both retired source partitions once every source participant
@@ -86,7 +82,20 @@ class ManagedMergeWorkflowDissolutionMethods {
    * @return {Promise<boolean>} True when the merge reached its terminal.
    * @private
    */
-  async finalizeMergeDissolutionIfReady(workflowId) {
+  finalizeMergeDissolutionIfReady(workflowId) {
+    // One run per workflow at a time; a trigger arriving during a run
+    // (ack, node-ready, fallback) runs it once more after it.
+    return this.groupRetirementRedrive.exclusive(workflowId,
+      () => this.finalizeMergeDissolutionStep(workflowId));
+  }
+
+  /**
+   * One run of the dissolution step (finalizeMergeDissolutionIfReady).
+   * @param {string} workflowId
+   * @return {Promise<boolean>} True when the merge reached its terminal.
+   * @private
+   */
+  async finalizeMergeDissolutionStep(workflowId) {
     const workflow = this.resolveWorkflowState(workflowId);
     if (this.isMergeWorkflowStateUnavailable(workflow)) {
       return false;
@@ -173,23 +182,31 @@ class ManagedMergeWorkflowDissolutionMethods {
       const dissolvedReplicaIds = await this.dispatchSourceReplicaRemovals(
         workflowId,
         sourcePartitionId,
+        buildMergeSourceParticipantKey(sourcePartitionId),
+        buildGroupRetirementEvidence({
+          kind: GROUP_RETIREMENT_KIND.MERGE_SOURCE,
+          workflow,
+        }),
       );
+      // The row delete is irreversible: this owner proves, at apply time,
+      // that it still holds the record (a renewal compare-and-swap).
+      await assertWorkflowRecordHeld(this, workflowId,
+        MERGE_SOURCE_RETIRING_STATES);
       const deleteWitness =
         await this.deleteSourcePartitionMetadata(sourcePartitionId);
       if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
         throw new Error(MANAGED_MERGE_LOG_MSG.DISSOLUTION_WITNESS_MISSING);
       }
-      await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
+      await this.workflowCoordinator.acknowledgeOwnerOutcome(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           buildMergeSourceParticipantKey(sourcePartitionId),
         [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
+        // The frozen and answered sets are already durable on the
+        // participant checkpoint (group-retirement-members.js), kept as is.
         [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.SOURCE_DISSOLVED,
-        [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
-          [MERGE_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
-            dissolvedReplicaIds,
-        },
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });
+      this.groupRetirementRedrive.settle(workflowId, sourcePartitionId);
       this.logger.info(MANAGED_MERGE_LOG_MSG.DISSOLUTION_DISPATCHED, {
         workflowId,
         sourcePartitionId,
@@ -201,14 +218,69 @@ class ManagedMergeWorkflowDissolutionMethods {
         sourcePartitionId,
         error: error?.message || error,
       });
-      await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
-        [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-          buildMergeSourceParticipantKey(sourcePartitionId),
-        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
-        [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
-        [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
-      });
+      // The progress so far is durable on the participant checkpoint (each
+      // positive answer as it arrived), so a resumed dissolution re-sends
+      // only to the frozen members that have not answered.
+      // A superseded owner records nothing (the record is another owner's):
+      // its re-drive is told so and stops.
+      if (error?.superseded !== true) {
+        await this.workflowCoordinator.acknowledgeOwnerOutcome(workflowId, {
+          [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
+            buildMergeSourceParticipantKey(sourcePartitionId),
+          [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
+          [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
+          [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
+        }).catch((ackError) => {
+          // Not recorded (typed and logged by the coordinator, or the
+          // workflow is gone): the re-drive below still runs.
+          this.logger.error(MANAGED_MERGE_LOG_MSG.DISSOLUTION_FAILED, {workflowId,
+            sourcePartitionId, failureUnrecorded: true,
+            error: ackError?.message || ackError});
+        });
+      }
+      this.reportIncompleteMergeRetirement(workflowId, sourcePartitionId,
+        error, () => this.finalizeMergeDissolutionIfReady(workflowId));
     }
+  }
+
+  /**
+   * The durable resume of an unfinished dissolution: the finished source
+   * re-delivers SOURCE_MIRROR_REMOVED on leader activation (owner restart,
+   * ownership change). A duplicate of the persisted status still resumes the
+   * step - its fence already passed, and the step is idempotent and
+   * exclusive per workflow.
+   * @param {string} workflowId
+   * @param {Object} ackResult - The coordinator's answer.
+   * @param {Object} ack - The acknowledgement.
+   * @return {Promise<void>}
+   * @private
+   */
+  async resumeMergeDissolutionOnRedelivery(workflowId, ackResult, ack) {
+    if (ackResult?.result === PARTICIPANT_ACK_RESULT.DUPLICATE &&
+        ack?.[PARTICIPANT_ACK_FIELD.STATUS] ===
+          MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED) {
+      await this.finalizeMergeDissolutionIfReady(workflowId);
+    }
+  }
+
+  /**
+   * Hand an incomplete group retirement (members did not acknowledge) to
+   * the workflow owner's re-drive (group-retirement-redrive.js).
+   * @param {string} workflowId
+   * @param {string} partitionId - The retiring group.
+   * @param {Error} error - The step's failure.
+   * @param {Function} redrive - Re-runs the step.
+   * @return {void}
+   * @private
+   */
+  reportIncompleteMergeRetirement(workflowId, partitionId, error, redrive) {
+    if (!Array.isArray(error?.unacknowledged)) {
+      return;
+    }
+    this.groupRetirementRedrive.report({workflowId, partitionId,
+      unacknowledged: error.unacknowledged,
+      superseded: error.superseded === true,
+      membershipUnavailable: error.membershipUnavailable === true, redrive});
   }
 
   /**
@@ -217,13 +289,9 @@ class ManagedMergeWorkflowDissolutionMethods {
    * tear down the never-authoritative target and restore any promoted
    * sibling descriptors.
    *
-   * The abort is fail-safe: when the fenced transition is CAS-rejected by
-   * the same-owner durable-write race even after the durable-row re-sync,
-   * the FAILED mutation is retried with a CAS witness taken from the
-   * durable row itself (still gated on this owner's persisted ownerId at
-   * the same fence — a foreign claim is never retried). A merge that
-   * received a source failure must never be left running pre-cutover
-   * because its own ack flush raced its own in-flight write.
+   * The FAILED write is a change of the record at its turn (owner decision
+   * 2026-10-05): one owner's changes run in order, so its own in-flight
+   * writes can never race it.
    * @param {string} workflowId
    * @param {string} ownerKey
    * @param {string} ackStatus - The failure MERGE_ACK_STATUS received.
@@ -232,30 +300,20 @@ class ManagedMergeWorkflowDissolutionMethods {
    * @private
    */
   async runMergeAbortStep(workflowId, ownerKey, ackStatus, ownerStepLaneSuffix) {
-    let abortOutcome = MERGE_ABORT_OUTCOME.UNRESOLVED;
-    try {
-      abortOutcome = await this.runMergeOwnerLaneStepWithSameOwnerResync({
-        workflowId,
-        ownerKey: ownerKey + ownerStepLaneSuffix,
-        stepName: PARTITION_TRANSITION_STATE.FAILED,
-        execute: async ({workflow: currentWorkflow}) =>
-          this.buildMergeAbortStepResult(
-            workflowId,
-            ackStatus,
-            currentWorkflow,
-          ),
-      });
-    } catch (error) {
-      if (!this.isMergeStaleFenceTransitionError(error)) {
-        throw error;
-      }
-      abortOutcome = await this.persistOwnedMergeAbortFallback(
-        workflowId,
-        ackStatus,
-        MERGE_ABORT_OUTCOME,
-        PRE_CUTOVER_MERGE_STATES,
-      );
-    }
+    // The abort is a change of the record at its turn (owner decision
+    // 2026-10-05): a FAILED record is unchanged, a cutover that landed first
+    // refuses it; no same-owner race exists to re-sync from.
+    const abortOutcome = await this.workflowStepRunner.runStep({
+      workflowId,
+      ownerKey: ownerKey + ownerStepLaneSuffix,
+      stepName: PARTITION_TRANSITION_STATE.FAILED,
+      execute: async ({workflow: currentWorkflow}) =>
+        this.buildMergeAbortStepResult(
+          workflowId,
+          ackStatus,
+          currentWorkflow,
+        ),
+    }).catch(refusedStepAs(MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER));
 
     if (abortOutcome !== MERGE_ABORT_OUTCOME.ABORTED) {
       return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
@@ -292,18 +350,12 @@ class ManagedMergeWorkflowDissolutionMethods {
       return {result: MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
     }
     return {
-      updates: {
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(currentWorkflow.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
-            message: ackStatus,
-            failedAt: new Date(this.now()).toISOString(),
-            retryable: true,
-          },
-        },
-      },
+      change: abortChange(PRE_CUTOVER_MERGE_STATES, {
+        classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
+        message: ackStatus,
+        failedAt: new Date(this.now()).toISOString(),
+        retryable: true,
+      }),
       result: MERGE_ABORT_OUTCOME.ABORTED,
     };
   }
@@ -325,16 +377,30 @@ class ManagedMergeWorkflowDissolutionMethods {
     if (!targetPartitionId) {
       return;
     }
-    try {
-      await this.dispatchSourceReplicaRemovals(workflowId, targetPartitionId);
-      await this.deleteSourcePartitionMetadata(targetPartitionId);
-    } catch (error) {
-      this.logger.warn(MANAGED_MERGE_LOG_MSG.TARGET_TEARDOWN_FAILED, {
-        workflowId,
-        targetPartitionId,
-        error: error?.message || error,
+    await this.groupRetirementRedrive.exclusive(
+      `${workflowId}:${targetPartitionId}`, async () => {
+        try {
+          await this.dispatchSourceReplicaRemovals(workflowId,
+            targetPartitionId, MERGE_PARTICIPANT_PREFIX.MERGED_TARGET,
+            buildGroupRetirementEvidence({
+              kind: GROUP_RETIREMENT_KIND.MERGE_ABORTED_TARGET,
+              workflow,
+            }));
+          await assertWorkflowRecordHeld(this, workflowId,
+            ABORTED_RECORD_STATES);
+          await this.deleteSourcePartitionMetadata(targetPartitionId);
+          this.groupRetirementRedrive.settle(workflowId, targetPartitionId);
+        } catch (error) {
+          this.logger.warn(MANAGED_MERGE_LOG_MSG.TARGET_TEARDOWN_FAILED, {
+            workflowId,
+            targetPartitionId,
+            error: error?.message || error,
+          });
+          this.reportIncompleteMergeRetirement(workflowId, targetPartitionId,
+            error, () => this.teardownAbortedMergeTarget(workflowId,
+              workflow));
+        }
       });
-    }
   }
 
   /**
@@ -373,66 +439,37 @@ class ManagedMergeWorkflowDissolutionMethods {
   }
 
   /**
-   * Dispatch REMOVE_REPLICA for every authoritative replica of one retired
-   * partition (a dissolved source or an aborted merge target).
+   * Dispatch REMOVE_REPLICA to every frozen member of one retired group (a
+   * dissolved source or an aborted merge target): the group's committed
+   * configuration frozen on its participant at the first dispatch
+   * (group-retirement-members.js). The group ends as a unit (owner decision
+   * 2026-10-04): every REMOVE carries the workflow's group-retirement
+   * evidence.
    * @param {string} workflowId
    * @param {string} sourcePartitionId
-   * @return {Promise<string[]>} Replica ids with accepted removal dispatch.
+   * @param {string} participantKey - The group's participant.
+   * @param {Object} groupRetirement - buildGroupRetirementEvidence's
+   *   evidence for this retired group.
+   * @return {Promise<string[]>} Every positively answered replica id;
+   *   throws (unacknowledged members) until every frozen member answered.
    * @private
    */
-  async dispatchSourceReplicaRemovals(workflowId, sourcePartitionId) {
-    const serviceRows = this.listPartitionServiceRows(sourcePartitionId);
-    const dissolvedReplicaIds = [];
-    for (const serviceRow of serviceRows) {
-      const dispatchedReplicaId = await this.dispatchOneSourceReplicaRemoval(
-        workflowId,
-        sourcePartitionId,
-        serviceRow,
-      );
-      if (dispatchedReplicaId) {
-        dissolvedReplicaIds.push(dispatchedReplicaId);
-      }
-    }
-    return dissolvedReplicaIds;
-  }
-
-  /**
-   * Dispatch REMOVE_REPLICA for one authoritative source replica row.
-   * @param {string} workflowId
-   * @param {string} sourcePartitionId
-   * @param {Object} serviceRow
-   * @return {Promise<string|null>} Replica id when dispatch was accepted.
-   * @private
-   */
-  async dispatchOneSourceReplicaRemoval(
-    workflowId,
-    sourcePartitionId,
-    serviceRow,
-  ) {
-    const replicaId = resolveServiceRowField(
-      serviceRow, LOCAL_STR_REPLICA_ID_SNAKE, LOCAL_STR_REPLICA_ID_CAMEL,
-    );
-    const nodeId = resolveServiceRowField(
-      serviceRow, LOCAL_STR_NODE_ID_SNAKE, LOCAL_STR_NODE_ID_CAMEL,
-    );
-    if (!replicaId || !nodeId) {
-      return null;
-    }
-    const response = await this.deliverReplicaRemoval({
-      nodeId,
-      message: this.buildReplicaRemovalMessage({
-        workflowId,
-        partitionId: sourcePartitionId,
-        replicaId,
+  dispatchSourceReplicaRemovals(workflowId, sourcePartitionId,
+    participantKey, groupRetirement) {
+    return retireFrozenGroupMembers(this, {
+      workflowId,
+      participantKey,
+      partitionId: sourcePartitionId,
+      deliver: ({replicaId, nodeId}) => this.deliverReplicaRemoval({
+        nodeId,
+        message: this.buildReplicaRemovalMessage({
+          workflowId,
+          partitionId: sourcePartitionId,
+          replicaId,
+          groupRetirement,
+        }),
       }),
     });
-    const responseStatus = String(response?.status || '');
-    if (!ACCEPTED_REPLICA_REMOVAL_STATUSES.has(responseStatus)) {
-      throw new Error(
-        response?.error || MANAGED_MERGE_ERROR_MSG.START_FAILED,
-      );
-    }
-    return replicaId;
   }
 
   /**
@@ -445,14 +482,15 @@ class ManagedMergeWorkflowDissolutionMethods {
     return {
       [ReplicaOperationField.TYPE]:
         ReplicaOperationMessageType.REMOVE_REPLICA,
-      [ReplicaOperationField.OPERATION_ID]:
-        options.workflowId + LOCAL_STR_DISSOLVE_SEGMENT + options.replicaId,
+      [ReplicaOperationField.OPERATION_ID]: groupRetirementOperationIdOf(
+        options.groupRetirement, options.replicaId),
       [ReplicaOperationField.OPERATION_TYPE]: OperationType.REMOVE,
       [ReplicaOperationField.PARTITION_ID]: options.partitionId,
       [ReplicaOperationField.REPLICA_ID]: options.replicaId,
       [ReplicaOperationField.ENTITY_TYPE]: SERVICE_TYPE.PARTITION,
       [ReplicaOperationField.ENTITY_ID]: options.partitionId,
       [ReplicaOperationField.REASON]: LOCAL_STR_MERGE_SOURCE_DISSOLUTION,
+      [ReplicaOperationField.GROUP_RETIREMENT]: options.groupRetirement,
     };
   }
 }

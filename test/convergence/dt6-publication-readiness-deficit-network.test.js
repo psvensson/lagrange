@@ -1,6 +1,8 @@
 import t from 'tap';
-import {createVirtualNetwork} from '../distributed/harness/virtual-network.js';
-import {driveNetwork} from '../distributed/harness/raft-network-host.js';
+import {
+  createVirtualNetwork,
+  driveNetwork,
+} from '../distributed/harness/virtual-network.js';
 import {hasFreshReadyLeaseOrHeartbeat} from
   '../../src/control-plane/active-node-projection.js';
 import {buildPublicationActiveGateHandoffContract} from

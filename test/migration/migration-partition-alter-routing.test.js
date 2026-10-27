@@ -12,7 +12,10 @@ import {
   PARTITION_SERVICE_ROLE,
 } from '../../src/partition/partition-service-constants.js';
 import {RaftRsDurableStore} from '../../src/raft/raft-rs-durable-store.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 const PARTITION_ID = 'test-partition';
 
@@ -44,6 +47,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       nodeId: 'node-1',
+      systemTableCache: new SystemTableCache(),
       dbPath,
     }));
 
@@ -51,6 +55,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
       await partition.initialize();
       partition.role = PARTITION_SERVICE_ROLE.LEADER;
       partition.db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
+      await resumeFixtureParticipantAdmission(partition);
 
       const alterResult = await partition.handleRemoteQuery({
         sql: 'ALTER TABLE users ADD COLUMN age INTEGER DEFAULT 5',
@@ -58,7 +63,7 @@ test('migration ALTER is routed through dedicated partition Raft operation',
         migrationOperation: PARTITION_SERVICE_MIGRATION_OPERATION.ALTER_TABLE,
         migrationId: 'migration-42',
       });
-      t.equal(alterResult.acknowledged, true);
+      t.equal(Object.hasOwn(alterResult, 'acknowledged'), false, 'answer has no transport ACK alias');
       t.equal(alterResult.success, true);
 
       const latestAppliedCommand = readLastAppliedCommandIndependently(dbPath);

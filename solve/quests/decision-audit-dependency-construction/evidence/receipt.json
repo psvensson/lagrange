@@ -1,0 +1,10 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {"id": "engaged-classifier-red", "passed": true},
+    {"id": "construction-positive-and-adversarial-mixed-reads", "passed": true},
+    {"id": "reviewed-census-delta-without-baseline-growth", "passed": true},
+    {"id": "independent-review-and-applicable-gates", "passed": true}
+  ]
+}

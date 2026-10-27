@@ -448,7 +448,7 @@ test(
     let queryTransportResolver = null;
     const leaderService = {
       initialized: false,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
 
     const router = {
@@ -579,7 +579,7 @@ test(
     let queryTransportResolver = null;
     const relayService = {
       initialized: true,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
     let currentSelection = {
       service: null,

@@ -9,6 +9,9 @@
  */
 
 import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {attemptDiagnosticMarker, MARKER_WRITE_STATUS as WRITE_STATUS} from
+  './network-partition-marker.js';
 import {
   CONVERGENCE_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
@@ -23,12 +26,8 @@ const LOCAL_ADMIN_QUERY_ID = 'split-brain-local-query';
 const LOCAL_ADMIN_STREAM_URL =
   'ws://localhost:8081/api/admin/stream?lane=default';
 const QUERY_RESULT_MESSAGE_TYPE = 'query_result';
-const LOG_TABLE = 'logs';
-const LOG_LEVEL = 'info';
-const LOG_MESSAGE_PREFIX = 'split-brain-';
 const MAJORITY_WRITE_ID_PREFIX = 'write-majority-';
 const MINORITY_WRITE_ID_PREFIX = 'write-minority-';
-const LOG_ID_PARAMETER_INDEX = 0;
 const QUERY_WS_TIMEOUT_MS = 5000;
 const ZERO = 0;
 const ONE = 1;
@@ -40,10 +39,6 @@ const FIELD_PARTITION_ID = 'partition_id';
 const FIELD_NODE_ID = 'node_id';
 const FIELD_ADDRESS = 'address';
 const VALUE_UNKNOWN = 'unknown';
-const WRITE_STATUS = Object.freeze({
-  ACKED: 'acked',
-  REJECTED: 'rejected',
-});
 const PARTITION_SAFETY_STATUS = Object.freeze({
   PASS: 'pass',
   FAIL: 'fail',
@@ -58,11 +53,6 @@ const PARTITION_SAFETY_REASON = Object.freeze({
 const SERVICES_QUERY =
   'SELECT service_id, service_type, node_id, partition_id, raft_role, ' +
   'status, address FROM services WHERE service_type = ?';
-const INSERT_LOG_QUERY_PREFIX = 'INSERT INTO logs';
-const INSERT_LOG_QUERY =
-  INSERT_LOG_QUERY_PREFIX + ' ' +
-  '(log_id, timestamp, level, node_id, message, created_at) ' +
-  'VALUES (?, ?, ?, ?, ?, ?)';
 const SELECT_LOG_BY_ID_QUERY = 'SELECT log_id FROM logs WHERE log_id = ?';
 
 /**
@@ -74,17 +64,6 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
-}
-
-function buildLogInsertParams(logId, now, writerId) {
-  return [
-    logId,
-    now,
-    LOG_LEVEL,
-    writerId,
-    LOG_MESSAGE_PREFIX + logId,
-    now,
-  ];
 }
 
 function normalizeQueryRows(result) {
@@ -123,36 +102,10 @@ function parseLocalQueryResponse(stdout) {
   throw new Error('No admin query_result envelope found in local query output');
 }
 
-function buildMockServicesRows(node) {
-  const nodeId = String(node?.id || VALUE_UNKNOWN);
-  return [
-    {
-      service_id: 'logs-p1-' + nodeId,
-      service_type: SERVICE_TYPE_PARTITION,
-      node_id: nodeId,
-      partition_id: 'logs-p1',
-      raft_role: nodeId === 'seed-1' ? RAFT_ROLE_LEADER : 'follower',
-      status: STATUS_ACTIVE,
-      address: nodeId + ':8080',
-    },
-  ];
-}
-
 async function queryNodeLocally(node, sql, params = []) {
   if (!node._dockerProvider) {
-    if (typeof node.query === 'function') {
-      return normalizeQueryRows(await node.query(sql, params));
-    }
-    if (sql.includes('FROM services')) {
-      return buildMockServicesRows(node);
-    }
-    if (sql.includes(INSERT_LOG_QUERY_PREFIX)) {
-      if (node.id === 'joiner-2') {
-        throw new Error('Write failed on minority partition');
-      }
-      return [];
-    }
-    return [];
+    if (typeof node.query !== 'function') throw new Error('Local admin query capability unavailable');
+    return normalizeQueryRows(await node.query(sql, params));
   }
 
   const code = `
@@ -217,17 +170,8 @@ async function queryNodeLocally(node, sql, params = []) {
 }
 
 async function queryNode(node, sql, params = []) {
-  if (typeof node.query === 'function') {
-    return normalizeQueryRows(await node.query(sql, params));
-  }
-  if (sql.includes(LOG_TABLE)) {
-    const logId = String(params[LOG_ID_PARAMETER_INDEX] || '');
-    if (logId.startsWith(MAJORITY_WRITE_ID_PREFIX)) {
-      return [{log_id: logId}];
-    }
-    return [];
-  }
-  return [];
+  if (typeof node.query !== 'function') throw new Error('Admin query capability unavailable');
+  return normalizeQueryRows(await node.query(sql, params));
 }
 
 function isActivePartitionLeader(row) {
@@ -394,38 +338,13 @@ function assertPartitionSafety(snapshot) {
   );
 }
 
-async function attemptLogWrite(node, logId, writerId) {
-  const now = Date.now();
-  try {
-    await queryNodeLocally(
-      node,
-      INSERT_LOG_QUERY,
-      buildLogInsertParams(logId, now, writerId),
-    );
-    return Object.freeze({
-      status: WRITE_STATUS.ACKED,
-      logId,
-      nodeId: String(node.id),
-      message: '',
-    });
-  } catch (err) {
-    return Object.freeze({
-      status: WRITE_STATUS.REJECTED,
-      logId,
-      nodeId: String(node.id),
-      message: err.message,
-    });
-  }
-}
-
 async function assertMinorityWritesRejected(nodesById, groupB) {
   const attempts = [];
   for (const nodeId of groupB) {
     const minorityNode = getNodeById(nodesById, nodeId);
-    attempts.push(await attemptLogWrite(
+    attempts.push(await attemptDiagnosticMarker(
       minorityNode,
-      MINORITY_WRITE_ID_PREFIX + nodeId + '-' + Date.now(),
-      nodeId,
+      MINORITY_WRITE_ID_PREFIX + nodeId + '-' + randomUUID(),
     ));
   }
 
@@ -441,11 +360,10 @@ async function assertMinorityWritesRejected(nodesById, groupB) {
 }
 
 async function assertMajorityWriteAccepted(majorityLeaderNode) {
-  const majorityLogId = MAJORITY_WRITE_ID_PREFIX + Date.now();
-  const attempt = await attemptLogWrite(
+  const majorityMarkerId = MAJORITY_WRITE_ID_PREFIX + randomUUID();
+  const attempt = await attemptDiagnosticMarker(
     majorityLeaderNode,
-    majorityLogId,
-    majorityLeaderNode.id,
+    majorityMarkerId,
   );
   assert.equal(
     attempt.status,
@@ -453,7 +371,7 @@ async function assertMajorityWriteAccepted(majorityLeaderNode) {
     'Write directed to majority partition leader must be acknowledged: ' +
       JSON.stringify(attempt),
   );
-  return majorityLogId;
+  return attempt.logId;
 }
 
 async function assertLogPresenceOnAllNodes(nodes, logId, expectedCount, message) {
@@ -514,29 +432,33 @@ async function run(cluster, options = {}) {
   // 2. Partition the network into two isolated groups.
   await cluster.partitionNetwork(groupA, groupB);
 
-  // 3. Hold the partition to allow Raft leader elections.
-  await sleep(partitionHoldMs);
+  let minorityWriteAttempts;
+  let majorityLogId;
+  try {
+    // 3. Hold the partition to allow Raft leader elections.
+    await sleep(partitionHoldMs);
 
-  const nodesById = buildNodeMap(nodes);
-  const partitionSafetySnapshot = buildPartitionSafetySnapshot(
-    await collectPartitionLeaderEvidence(nodes, groupA, groupB),
-    groupA,
-    groupB,
-  );
-  assertPartitionSafety(partitionSafetySnapshot);
+    const nodesById = buildNodeMap(nodes);
+    const partitionSafetySnapshot = buildPartitionSafetySnapshot(
+      await collectPartitionLeaderEvidence(nodes, groupA, groupB),
+      groupA,
+      groupB,
+    );
+    assertPartitionSafety(partitionSafetySnapshot);
 
-  const minorityWriteAttempts = await assertMinorityWritesRejected(
-    nodesById,
-    groupB,
-  );
-  const majorityLeaderNode = getNodeById(
-    nodesById,
-    partitionSafetySnapshot.majorityLeaderNodeId,
-  );
-  const majorityLogId = await assertMajorityWriteAccepted(majorityLeaderNode);
-
-  // 4. Heal the partition to restore full connectivity.
-  await cluster.healPartition();
+    minorityWriteAttempts = await assertMinorityWritesRejected(
+      nodesById,
+      groupB,
+    );
+    const majorityLeaderNode = getNodeById(
+      nodesById,
+      partitionSafetySnapshot.majorityLeaderNodeId,
+    );
+    majorityLogId = await assertMajorityWriteAccepted(majorityLeaderNode);
+  } finally {
+    // Retire the harness-owned fault even when a cut-phase assertion fails.
+    await cluster.healPartition();
+  }
 
   // 5. Wait for the cluster to converge after healing.
   const convergence = await cluster.waitForConvergence({
@@ -565,16 +487,41 @@ async function run(cluster, options = {}) {
     'Acknowledged majority write must persist and be visible post-heal',
   );
 
-  for (const attempt of minorityWriteAttempts) {
+  for (const attempt of minorityWriteAttempts.filter((entry) =>
+    entry.status === WRITE_STATUS.REFUSED)) {
     await assertLogPresenceOnAllNodes(
       nodes,
       attempt.logId,
       ZERO,
-      'Rejected minority write must not be present post-heal',
+      'Never-admitted minority marker must not be present post-heal',
     );
   }
 
+  const unknown = minorityWriteAttempts.filter((entry) => entry.status === WRITE_STATUS.UNKNOWN);
+  const postHealUnknownObservations = [];
+  for (const attempt of unknown) {
+    const observations = [];
+    for (const node of nodes) {
+      const rows = await queryNode(node, SELECT_LOG_BY_ID_QUERY, [attempt.logId]);
+      observations.push({nodeId: node.id, count: rows.length});
+    }
+    assert.ok(observations.every((entry) => entry.count === observations[0].count),
+      'Unknown marker must converge after heal: ' + JSON.stringify(observations));
+    postHealUnknownObservations.push({attempt, observations});
+  }
+  if (unknown.length > 0) {
+    const error = new Error('No minority ACK was observed; no-commit during the cut remains ' +
+      'inconclusive for UNKNOWN marker outcomes. Post-heal presence alone does not date a commit.');
+    error.code = 'SPLIT_BRAIN_NO_COMMIT_INCONCLUSIVE';
+    error.classification = error.code;
+    // The existing runner retains diagnostics.partialResult on failure.
+    error.diagnostics = {partialResult: {minorityWriteAttempts,
+      postHealUnknownObservations, convergenceTiming: convergence,
+      noCommitDuringCut: 'inconclusive'}};
+    throw error;
+  }
   return {
+    minorityWriteAttempts,
     convergenceTiming: convergence,
     groupA,
     groupB,

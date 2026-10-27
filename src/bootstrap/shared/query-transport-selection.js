@@ -1,6 +1,6 @@
 import {
   buildQueryTransportSemanticOutcome,
-} from '../../transport/transport-semantic-outcome.js';
+} from '../../transport/transport-query-semantic-outcome.js';
 
 function resolveQueryTransportSelection(getSelection) {
   if (typeof getSelection !== 'function') {
@@ -33,7 +33,7 @@ function resolveQueryTransportSelection(getSelection) {
       selection.reason.length > 0 ?
         selection.reason :
         null,
-    errorCode: selection.errorCode || selection.code || null,
+    errorCode: selection.errorCode || null,
     retryAfterMs:
       Number.isFinite(selection.retryAfterMs) &&
       selection.retryAfterMs > 0 ?

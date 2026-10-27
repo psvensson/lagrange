@@ -1,3 +1,5 @@
+// Component readiness/health observations use the narrow startup adapter.
+// Real original-seed authority is exercised by fresh-seed-activation.integration.
 /**
  * Tests for Bootstrap API.
  * Requirements: 1.2, 7.2, 7.3, 7.4
@@ -286,7 +288,7 @@ export function registerBootstrapApiReadinessTests() {
         seedNodeId: 'seed-node-1',
         seedNodeAddress: 'ws://localhost:8080',
         systemTableCache: createEmptySystemTableCache(),
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService,
       });
 
       await api.initialize(0, {listen: false});
@@ -340,7 +342,7 @@ export function registerBootstrapApiReadinessTests() {
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.INFRASTRUCTURE,
       },
       readinessState,
@@ -917,7 +919,7 @@ export function registerBootstrapApiReadinessTests() {
       seedNodeId: 'seed-node-1',
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: createEmptySystemTableCache(),
-      bootstrapService: {
+      bootstrapStartupAdapter: {
         phase: BOOTSTRAP_PHASE.COMPLETE,
         messageRouter: {},
       },

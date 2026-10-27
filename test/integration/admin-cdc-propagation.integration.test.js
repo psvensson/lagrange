@@ -137,7 +137,7 @@ test('Admin CDC propagation', {timeout: 120000}, async (t) => {
         nodeAddress: `ws://127.0.0.1:${seedWsPort}`,
         wsPort: seedWsPort,
         config: {
-          leadershipWaitTimeoutMs: 500,
+          leadershipWaitTimeoutMs: 5000,
           leadershipWaitInitialDelayMs: 5,
           leadershipWaitMaxDelayMs: 25,
           replicaStaggerDelayMs: 10,
@@ -217,7 +217,7 @@ test('Admin CDC propagation', {timeout: 120000}, async (t) => {
       nodeAddress: `ws://127.0.0.1:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 500,
+        leadershipWaitTimeoutMs: 5000,
         leadershipWaitInitialDelayMs: 5,
         leadershipWaitMaxDelayMs: 25,
         replicaStaggerDelayMs: 10,

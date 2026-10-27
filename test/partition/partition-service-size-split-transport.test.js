@@ -4,6 +4,7 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,14 +27,23 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
 } from '../../src/raft/constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../src/raft/raft-provider-contract-constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from '../../src/raft/raft-rs-ingress-constants.js';
+import {OUTBOUND_DELIVERY_PRIORITY} from '../../src/constants/transport.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../src/raft/raft-operation-port-request.js';
 import {RAFT_MEMBERSHIP_OPERATION} from
   '../../src/raft/raft-operation-port-constants.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {CDC_TABLE, resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
+import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
+  '../test-helpers/acknowledging-cdc-subscriber.js';
 import {
   COLUMN,
   SERVICE_TYPE,
@@ -58,6 +68,8 @@ import {
 import {
 } from '../../src/control-plane/pressure-governor.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {createIdentityTransport} from
+  '../test-helpers/replica-handler-identity-fixture.js';
 
 
 beforeEach(() => {
@@ -75,19 +87,19 @@ afterEach(() => {
 });
 
 
-class RecordingOutboundPartitionRaftProvider
-  extends ControllablePartitionRaftProvider {
+class RecordingOutboundConsensusPort
+  extends ControllableConsensusPort {
   sendToPeer(peerAddress, packet) {
     return this.request[
-      RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER
+      RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER
     ](peerAddress, packet);
   }
 }
 
-class MissingCampaignPartitionRaftProvider
-  extends ControllablePartitionRaftProvider {
-  createPartitionPort(request) {
-    const port = super.createPartitionPort(request);
+class MissingCampaignConsensusPort
+  extends ControllableConsensusPort {
+  createOperationPort(request) {
+    const port = super.createOperationPort(request);
     const incomplete = Object.create(null);
     for (const key of Reflect.ownKeys(port)) {
       if (key === 'campaign') {
@@ -116,22 +128,28 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-leader-committed-cdc-failure',
-      tableId: 'cdc_test',
-      tableName: 'cdc_test',
+      tableId: CDC_TABLE,
+      tableName: CDC_TABLE,
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
+      systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
     }));
 
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     partition.isLeader = true;
     partition.role = RaftRole.LEADER;
-    partition.generateCDCEvent = async () => {
+    // Replaced: the generateCDCEvent override hooked the retired volatile emitter; the CDC failure is now the durable lane's subscriber throwing.
+    let failedDeliveries = 0;
+    await partition.subscribeToCDCWithHandshake(acknowledgingCdcSubscriber({onEvent: () => {
+      failedDeliveries += 1;
       throw new Error('forced-cdc-failure');
-    };
+    }}));
+    await settlePendingCdcDeliveries(partition);
 
     let unhandledReason = null;
     const onUnhandledRejection = (reason) => {
@@ -139,19 +157,17 @@ test('PartitionService - leader applyCommittedEntry must not raise unhandled rej
     };
     process.once('unhandledRejection', onUnhandledRejection);
 
-    // Committed through the partition's own port: the lone rs-raft leader
-    // applies it and emits its CDC from the post-commit effects.
-    await partition.raft.propose({
-      type: 'INSERT',
-      sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
-      params: ['leader-failure-1', 7],
-      timestamp: String(Date.now()),
-      proposedBy: 'other-replica',
-    });
+    // Committed through the partition's write owner: the lone rs-raft leader
+    // applies it and records its CDC obligation, which the lane delivers.
+    // (Was: a hand-built raw propose without an entryId, which the durable
+    // recorder now refuses as an application failure.)
+    await partition.insertData(CDC_TABLE, {id: 'leader-failure-1', value: 7});
 
+    await settlePendingCdcDeliveries(partition);
     await new Promise((resolve) => setTimeout(resolve, 0));
     process.removeListener('unhandledRejection', onUnhandledRejection);
 
+    t.ok(failedDeliveries > 0, 'the committed entry\'s CDC delivery reached the failing subscriber');
     t.equal(
       unhandledReason,
       null,
@@ -172,37 +188,39 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
 
     const partition = new PartitionService(withFoundingStamp({
       partitionId: 'test-cdc-retry-buffer',
-      tableId: 'cdc_test',
-      tableName: 'cdc_test',
+      tableId: CDC_TABLE,
+      tableName: CDC_TABLE,
       replicaId: 'replica-1',
       replicaIds: ['replica-1'],
       schema,
+      systemTableCache: new SystemTableCache(),
       dbPath: ':memory:',
     }));
 
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     let shouldFailDelivery = true;
-    const delivered = [];
-    const subscriber = async (event) => {
+    // The failure refuses the delivery; once recovered the subscriber answers
+    // the owner's committed receipt, so the redelivered event is accepted.
+    const subscriber = acknowledgingCdcSubscriber({onEvent: () => {
       if (shouldFailDelivery) {
         throw new Error('forced-subscriber-failure');
       }
-      delivered.push(event);
-    };
+    }});
+    const delivered = subscriber.events;
 
     await partition.subscribeToCDCWithHandshake(subscriber, {
       subscriberId: 'cdc-retry-subscriber',
     });
 
-    await partition.insertData('cdc_test', {id: 'retry-1', value: 1});
+    await partition.insertData(CDC_TABLE, {id: 'retry-1', value: 1});
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     t.equal(delivered.length, 0,
       'event should not be delivered while subscriber is failing');
-    t.equal(partition.cdcEventBuffer.size(), 1,
-      'failed delivery should be preserved in retry buffer');
+    // Deleted: cdcEventBuffer.size() === 1 asserted the retired volatile retry buffer; the durable ledger now holds the refused event.
 
     shouldFailDelivery = false;
 
@@ -211,7 +229,8 @@ test('PartitionService - buffers CDC event on subscriber failure and replays aft
       const pollMs = 25;
       const startedAt = Date.now();
       while (Date.now() - startedAt < timeoutMs) {
-        if (delivered.length >= 1 && partition.cdcEventBuffer.size() === 0) {
+        // Retired volatile-buffer drain check removed; the redelivery is the property.
+        if (delivered.length >= 1) {
           return true;
         }
         await new Promise((resolve) => setTimeout(resolve, pollMs));
@@ -245,10 +264,12 @@ test('PartitionService - calculates partition size', async (t) => {
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -488,6 +509,10 @@ test('PartitionService - queues source writes during split backfill and suppress
       flushPromise: null,
       startedAt: Date.now(),
       lastError: null,
+      authorized: true,
+      quiescing: false,
+      quiesced: false,
+      activities: new Set(),
     };
     partition.replaySplitEntry = async (entry) => {
       mirroredWrites.push(entry.sql);
@@ -583,7 +608,7 @@ test('PartitionService - starts split replication workflow and marks cutover act
 
     await partition.splitReplicationRun;
 
-    t.same(response, {acknowledged: true, success: true});
+    t.same(response, {success: true});
     t.equal(
       partition.splitReplication.phase,
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
@@ -777,88 +802,55 @@ test('PartitionService - unsubscribe from CDC', async (t) => {
 
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-14',
-    tableId: 'unsub_test',
-    tableName: 'unsub_test',
+    tableId: CDC_TABLE,
+    tableName: CDC_TABLE,
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica should become leader immediately
   await Promise.resolve();
 
-  const cdcEvents = [];
-  const subscriber = (event) => cdcEvents.push(event);
+  // Durable delivery is asynchronous and accepted only on the owner's
+  // committed receipt, so each write's delivery is awaited before counting.
+  const subscriber = acknowledgingCdcSubscriber();
+  const cdcEvents = subscriber.events;
 
   partition.subscribeToCDC(subscriber);
-  await partition.insertData('unsub_test', {id: 'item-1'});
+  // The subscription's own drive settles first: a write committed while a
+  // drive is in flight joins it and is delivered on the owner's retry timer.
+  await settlePendingCdcDeliveries(partition);
+  await partition.insertData(CDC_TABLE, {id: 'item-1'});
+  await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1);
 
   partition.unsubscribeFromCDC(subscriber);
-  await partition.insertData('unsub_test', {id: 'item-2'});
+  await partition.insertData(CDC_TABLE, {id: 'item-2'});
+  await settlePendingCdcDeliveries(partition);
   t.equal(cdcEvents.length, 1); // No new events after unsubscribe
 
   await partition.shutdown();
 });
 
-// Tests for liferaft-based architecture (Requirements 14.1, 14.2, 14.3, 14.4)
-
-test('PartitionService - handleTransportMessage routes Raft packets to the semantic port',
-  async (t) => {
-    const mockTransport = {
-      register: () => {},
-      unregister: () => {},
-      deliver: () => Promise.resolve({acknowledged: true}),
-    };
-
-    const partition = createControllablePartitionService({
-      partitionId: 'test-partition-15',
-      tableId: 'raft_test',
-      replicaId: 'replica-1',
-      replicaIds: ['replica-1'],
-      transport: mockTransport,
-      dbPath: ':memory:',
-    }, new ControllablePartitionRaftProvider());
-
-    await partition.initialize();
-
-    // Send a Raft packet (vote request)
-    const raftPacket = {
-      type: 'vote',
-      term: 1,
-      address: 'node2/partition/replica-2',
-      state: 1,
-      leader: '',
-      last: {term: 0, index: 0},
-    };
-
-    const result = await partition.handleTransportMessage({payload: raftPacket});
-
-    t.equal(result.acknowledged, true, 'Raft packet should be acknowledged');
-    t.equal(partition.controllableProvider.steps.length, 1,
-      'one semantic step should cross the port');
-    const [stepEnvelope] = partition.controllableProvider.steps;
-    t.equal(stepEnvelope.payload.type, 'vote', 'Packet type should be preserved');
-    t.equal(stepEnvelope.payload.term, 1, 'Packet term should be preserved');
-
-    await partition.shutdown();
-  });
+// Tests for the consensus-port architecture (Requirements 14.1, 14.2, 14.3, 14.4)
 
 test('PartitionService - non-critical Raft peer writes use background delivery',
   async (t) => {
     const deliveries = [];
     const mockTransport = {
-      register: () => {},
-      unregister: () => {},
+      ...createIdentityTransport(),
       deliver: async (_address, _payload, options) => {
         deliveries.push(options);
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     };
 
-    const raftProvider = new RecordingOutboundPartitionRaftProvider();
+    const consensusPort = new RecordingOutboundConsensusPort();
     const partition = createControllablePartitionService({
       partitionId: 'sql_transaction_participants-p1',
       tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
@@ -870,21 +862,22 @@ test('PartitionService - non-critical Raft peer writes use background delivery',
       peerAddresses: ['node-2/partition/sql_transaction_participants-p1-r4'],
       transport: mockTransport,
       dbPath: ':memory:',
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
 
     try {
-      await raftProvider.sendToPeer(
+      await consensusPort.sendToPeer(
         'node-2/partition/sql_transaction_participants-p1-r4',
         {
-          type: 'append',
-          term: 1,
-          address: 'node-1/partition/sql_transaction_participants-p1-r1',
-          leader: 'node-1/partition/sql_transaction_participants-p1-r1',
-          state: 1,
-          last: {term: 1, index: 1},
-          data: [{index: 2, term: 1, command: 'noop'}],
+          protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+          groupId: 'sql_transaction_participants-p1',
+          from: 'sql_transaction_participants-p1-r1',
+          to: 'sql_transaction_participants-p1-r4',
+          message: {
+            msgType: RAFT_RS_MESSAGE_TYPE.APPEND,
+            entries: [{index: 2, term: 1}],
+          },
         },
       );
 
@@ -906,15 +899,14 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
   'sender address', async (t) => {
   const deliveries = [];
   const mockTransport = {
-    register: () => {},
-    unregister: () => {},
+    ...createIdentityTransport(),
     deliver: async (_address, _payload, options) => {
       deliveries.push(options);
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     },
   };
 
-  const raftProvider = new RecordingOutboundPartitionRaftProvider();
+  const consensusPort = new RecordingOutboundConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: 'tbl-bench-p1',
     tableId: 'tbl-bench',
@@ -923,97 +915,51 @@ test('PartitionService - append-fail peer writes prefer target priority over ' +
     peerAddresses: ['node-2/partition/tbl-bench-p1-r2'],
     transport: mockTransport,
     dbPath: ':memory:',
-  }, raftProvider);
+  }, consensusPort);
 
   await partition.initialize();
 
   try {
-    await raftProvider.sendToPeer(
-      'node-2/partition/tbl-bench-p1-r2',
-      {
-        type: 'append fail',
-        term: 1,
-        address: 'node-1/partition/control_plane_publications-p1-r1',
-        leader: 'node-1/partition/control_plane_publications-p1-r1',
-        state: 1,
-        last: {term: 1, index: 1},
-        data: {index: 2, term: 1},
+    // A rejected append response whose sender is a priority control-plane
+    // replica: the lane is decided by the target partition alone.
+    const rejectFrom = (from) => ({
+      protocol: RAFT_RS_TRANSPORT_PROTOCOL,
+      groupId: 'tbl-bench-p1',
+      from,
+      to: 'tbl-bench-p1-r2',
+      address: from,
+      message: {
+        msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+        reject: true,
+        entries: [],
       },
+    });
+    await consensusPort.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      rejectFrom('node-1/partition/control_plane_publications-p1-r1'),
+    );
+    await consensusPort.sendToPeer(
+      'node-2/partition/tbl-bench-p1-r2',
+      rejectFrom('node-1/partition/tbl-bench-p1-r1'),
     );
 
+    t.equal(deliveries.length, 2, 'both rejections were sent');
     t.same(
-      deliveries,
-      [RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS],
-      'append-fail replication should follow the target partition lane',
+      deliveries[0],
+      deliveries[1],
+      'a rejected append response follows the target partition lane, not ' +
+        'the sender partition lane',
+    );
+    t.not(
+      deliveries[0].deliveryPriority,
+      OUTBOUND_DELIVERY_PRIORITY.READINESS,
+      'a control-plane sender does not lift user-partition traffic onto ' +
+        'the readiness lane',
     );
   } finally {
     await partition.shutdown();
   }
 });
-
-test('PartitionService - non-critical Raft responses use background delivery',
-  async (t) => {
-    const deliveries = [];
-    const mockTransport = {
-      register: () => {},
-      unregister: () => {},
-      deliver: async (_address, _payload, options) => {
-        deliveries.push(options);
-        return {acknowledged: true};
-      },
-    };
-
-    const raftProvider = new ControllablePartitionRaftProvider();
-    const partition = createControllablePartitionService({
-      partitionId: 'sql_transaction_participants-p1',
-      tableId: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
-      replicaId: 'sql_transaction_participants-p1-r1',
-      replicaIds: ['sql_transaction_participants-p1-r1'],
-      transport: mockTransport,
-      dbPath: ':memory:',
-    }, raftProvider);
-
-    await partition.initialize();
-
-    try {
-      raftProvider.setStepHandler((envelope) => {
-        if (typeof envelope.reply === 'function') {
-          envelope.reply({
-            type: 'append',
-            term: 1,
-            address: 'node-1/partition/sql_transaction_participants-p1-r1',
-            leader: 'node-1/partition/sql_transaction_participants-p1-r1',
-            state: 1,
-            last: {term: 1, index: 1},
-            data: [{index: 2, term: 1, command: 'noop'}],
-          });
-        }
-      });
-
-      await partition.handleTransportMessage({
-        payload: {
-          type: 'vote',
-          term: 1,
-          address: 'node-2/partition/sql_transaction_participants-p1-r4',
-          state: 1,
-          leader: '',
-          last: {term: 0, index: 0},
-        },
-      });
-
-      t.same(
-        deliveries,
-        [{
-          ...RAFT_TRANSPORT_BACKGROUND_DELIVERY_OPTIONS,
-          deliverySource:
-            'raft:append:entries:node-2/partition/sql_transaction_participants-p1-r4',
-        }],
-        'non-critical transaction-state responses should also avoid the critical lane',
-      );
-    } finally {
-      await partition.shutdown();
-    }
-  });
 
 test('PartitionService - handleTransportMessage handles application messages', async (t) => {
   const schema = {
@@ -1030,10 +976,12 @@ test('PartitionService - handleTransportMessage handles application messages', a
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     schema,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
   }));
 
   await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
   // Single replica becomes leader immediately
   await Promise.resolve();
 
@@ -1096,7 +1044,7 @@ test('PartitionService - handleTransportMessage unwraps message-group query enve
 
   const result = await partition.handleTransportMessage(wrappedQueryMessage);
 
-  t.equal(result.acknowledged, true, 'wrapped query should be acknowledged');
+  t.equal(Object.hasOwn(result, 'acknowledged'), false, 'answer has no transport ACK alias');
   t.equal(result.success, true, 'wrapped query should execute successfully');
   t.equal(result.rows?.[0]?.value, 42, 'wrapped query should return expected row');
 
@@ -1124,17 +1072,17 @@ test('PartitionService - handleTransportMessage rejects unknown message types', 
 
   const result = await partition.handleTransportMessage(unknownMsg);
 
-  t.equal(result.acknowledged, false, 'Unknown message should not be acknowledged');
+  t.equal(result.success, false, 'Unknown message is a domain refusal');
   t.ok(result.error, 'Error message should be present');
   t.match(result.error, /Unknown message type/, 'Error should mention unknown type');
 
   await partition.shutdown();
 });
 
-test('PartitionService - liferaft instance is created with correct configuration', async (t) => {
+test('PartitionService - the consensus port is created with its configuration', async (t) => {
   const partition = new PartitionService(withFoundingStamp({
     partitionId: 'test-partition-18',
-    tableId: 'liferaft_config_test',
+    tableId: 'consensus_port_config_test',
     replicaId: 'replica-1',
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
@@ -1143,8 +1091,9 @@ test('PartitionService - liferaft instance is created with correct configuration
 
   await partition.initialize();
 
-  // Verify liferaft instance exists
-  t.ok(partition.raft, 'Liferaft instance should exist');
+  t.ok(Object.isFrozen(partition.raft), 'the frozen operation port should exist');
+  t.equal(typeof partition.raft.readStatus, 'function',
+    'the port answers its semantic status read');
 
   // Verify unified address format is used
   t.equal(partition.getUnifiedAddress(), 'node-1/partition/replica-1');
@@ -1209,7 +1158,7 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       raft_role: RaftRole.FOLLOWER,
     });
 
-    const raftProvider = new ControllablePartitionRaftProvider({
+    const consensusPort = new ControllableConsensusPort({
       peers: [{
         address: 'node-old/partition/replica-2',
         replicaIdentity: 'replica-2',
@@ -1224,21 +1173,21 @@ test('PartitionService - cache reconciliation refreshes moved peers and joins ne
       peerAddresses: ['node-old/partition/replica-2'],
       dbPath: ':memory:',
       deferElection: true,
-    }, raftProvider);
+    }, consensusPort);
 
     await partition.initialize();
     try {
-      raftProvider.confChanges.length = 0;
+      consensusPort.confChanges.length = 0;
       partition.systemTableCache = systemTableCache;
 
       const refreshedAddress = partition.buildPeerAddress('replica-2');
       await new Promise((resolve) => setImmediate(resolve));
 
-      const removedAddresses = raftProvider.confChanges
+      const removedAddresses = consensusPort.confChanges
         .filter((change) =>
           change.type === RAFT_MEMBERSHIP_OPERATION.REMOVE_PEER)
         .map((change) => change.peerAddress);
-      const joinedAddresses = raftProvider.confChanges
+      const joinedAddresses = consensusPort.confChanges
         .filter((change) =>
           change.type === RAFT_MEMBERSHIP_OPERATION.ADD_PEER)
         .map((change) => change.peerAddress);
@@ -1304,7 +1253,7 @@ test('PartitionService - single-replica initialization fails closed without raft
     replicaIds: ['replica-1'],
     nodeId: 'node-1',
     dbPath: ':memory:',
-  }, new MissingCampaignPartitionRaftProvider());
+  }, new MissingCampaignConsensusPort());
 
   try {
     await t.rejects(

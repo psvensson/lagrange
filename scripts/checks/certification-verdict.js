@@ -27,6 +27,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {
+  SEALED_BAR_CERTIFICATION_STATEMENT,
+} from '../../test/distributed/harness/certification-evidence-statement.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SEALED_BARS = 'test/distributed/config/convergence-sealed-bars.json';
@@ -36,6 +39,8 @@ const AGGREGATE_SUFFIX = '.json';
 const RUN_REPORT_MARKER = '.report.json';
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
+// What the metric stream certifies, said on stderr (stdout is the metric).
+const METRIC_STATEMENT_PREFIX = 'certification-verdict: ';
 const ABOVE_BAR = 'ABOVE_BAR';
 const SCENARIO_FLAG = '--scenario';
 const REPORTS_FLAG = '--reports';
@@ -185,10 +190,16 @@ function main(argv) {
   const reports = argumentAfter(argv, REPORTS_FLAG) || REPORT_DIRECTORY;
   const shortfalls = certificationShortfalls({scenario, reports});
   if (arrayIncludes(argv, METRIC_FLAG)) {
+    // The metric line stays the only stdout line; what it certifies goes
+    // to stderr.
+    process.stderr.write(`${METRIC_STATEMENT_PREFIX}` +
+      `${SEALED_BAR_CERTIFICATION_STATEMENT.certifies}; ` +
+      `${SEALED_BAR_CERTIFICATION_STATEMENT.statement}${LINE_SEPARATOR}`);
     process.stdout.write(`${shortfalls.length}${LINE_SEPARATOR}`);
   } else {
-    process.stdout.write(`${JSON.stringify({scenario, shortfalls},
-      null, JSON_INDENT)}${LINE_SEPARATOR}`);
+    process.stdout.write(`${JSON.stringify({scenario, shortfalls,
+      ...SEALED_BAR_CERTIFICATION_STATEMENT}, null, JSON_INDENT)}` +
+      LINE_SEPARATOR);
   }
   return shortfalls.length === 0 ? EXIT_OK : EXIT_UNMET;
 }

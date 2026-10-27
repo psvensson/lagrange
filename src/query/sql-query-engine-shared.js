@@ -70,9 +70,6 @@ import {
   WRITE_TRACKING_EXCLUDED_TABLES,
 } from './query-constants.js';
 import {isSqlRequest} from './sql-request.js';
-import {PartitionCallbackDispatcher} from './callback/partition-callback-dispatcher.js';
-import {CallbackExecutionHost} from './callback/callback-execution-host.js';
-import {createCallbackDriverRegistry} from './callback/callback-runtime-driver-registry.js';
 import {executeStage} from './call-stage.js';
 import {executePlan} from './call-plan.js';
 import {ExecutionContext} from './execution-context.js';
@@ -85,9 +82,7 @@ import {
   EXECUTION_MODE,
   ADAPTER_ERROR_MSG,
   ADAPTER_LOG_MSG,
-  CALLBACK_RUNTIME_KIND,
 } from './sql-adapter-constants.js';
-import {parseCallbackModuleArtifact} from './callback/callback-module-artifact.js';
 import {reorderParams} from './pg/pg-translate.js';
 import {SqlParseCache} from './sql-parse-cache.js';
 import {AddressManager} from '../address/address-manager.js';
@@ -150,16 +145,6 @@ import {MigrationPipeline} from '../migration/migration-pipeline.js';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_STRING = 'string';
 
-const CODE_LOOKUP_BY_FUNCTION_ID_SQL = `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
-const CODE_LOOKUP_BY_FUNCTION_NAME_SQL = `SELECT * FROM ${TABLES.CODE} WHERE function_name = ?`;
-const MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL =
-  `SELECT * FROM ${TABLES.MODULE_MANIFESTS} ` +
-  'WHERE artifact_pointer = ? ORDER BY created_at DESC LIMIT 1';
-const NATIVE_CALLBACK_EXPORTS_ARG = 'exports';
-const NATIVE_CALLBACK_MODULE_ARG = 'module';
-const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
-const DEFAULT_CODE_VERSION = '1';
-const ZERO_SHA256_DIGEST = 'sha256:' + '0'.repeat(64);
 const BACKGROUND_SYSTEM_TABLE_DELIVERY_PRIORITY_TABLES = new Set([
   TABLES.SQL_TRANSACTIONS,
   TABLES.SQL_TRANSACTION_PARTICIPANTS,
@@ -326,9 +311,6 @@ export const SQL_QUERY_ENGINE_SHARED = {
   BOOTSTRAP_ROUTING_OVERLAY_RETENTION_MODE,
   BOOTSTRAP_ROUTING_OVERLAY_REUSE_STATE,
   BudgetEnforcer,
-  CALLBACK_RUNTIME_KIND,
-  CODE_LOOKUP_BY_FUNCTION_ID_SQL,
-  CODE_LOOKUP_BY_FUNCTION_NAME_SQL,
   COLUMN,
   CONNECTION_STATE_CONNECTED,
   CONNECTION_STATE_READY,
@@ -336,10 +318,8 @@ export const SQL_QUERY_ENGINE_SHARED = {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_WORK_CLASS,
   CONTROL_PLANE_READINESS_DIMENSION,
-  CallbackExecutionHost,
   CancellationToken,
   ConfigurationManager,
-  DEFAULT_CODE_VERSION,
   DEFAULT_PARTITION_VERSION,
   DEFAULT_SNAPSHOT_MODE,
   DUAL_WRITE_ACTIVE_STATUSES,
@@ -355,14 +335,10 @@ export const SQL_QUERY_ENGINE_SHARED = {
   LoggingService,
   METRICS_LOG_TAG,
   MIGRATION_STATUS,
-  MODULE_MANIFEST_LOOKUP_BY_ARTIFACT_POINTER_SQL,
   ManagedSplitTopologyAdapter,
   ManagedSplitWorkflow,
   MigrationCoordinator,
   MigrationPipeline,
-  NATIVE_CALLBACK_EXPORTS_ARG,
-  NATIVE_CALLBACK_MODULE_ARG,
-  NATIVE_CALLBACK_RETURN_LINE,
   NUM,
   OPERATION_METADATA_KEY,
   OWNER_CONTRACT_NEXT_ACTION,
@@ -377,7 +353,6 @@ export const SQL_QUERY_ENGINE_SHARED = {
   PROVISIONING_REJECTION_DETAIL_LIMIT,
   PROVISIONING_REJECTION_REASON_UNKNOWN,
   PROVISIONING_REJECTION_SUMMARY_NONE,
-  PartitionCallbackDispatcher,
   PartitionResolver,
   PressureGovernor,
   QUERY_AST_TYPE,
@@ -414,14 +389,12 @@ export const SQL_QUERY_ENGINE_SHARED = {
   WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS,
   WRITE_OPERATION_STATUS,
   WRITE_TRACKING_EXCLUDED_TABLES,
-  ZERO_SHA256_DIGEST,
   buildBootstrapRoutingOverlayEntry,
   buildBootstrapRoutingOverlayEntryState,
   buildLocalControlPlaneMutationReadinessFailure,
   buildOwnerContractOutcome,
   buildPressureAdmissionFailure,
   buildSystemTableMutationRoutingGapFailure,
-  createCallbackDriverRegistry,
   createControlPlaneRuntimeBundle,
   createEmptyTransactionRecoveryReplaySummary,
   createHash,
@@ -440,7 +413,6 @@ export const SQL_QUERY_ENGINE_SHARED = {
   isRetryableManagedSplitTransition,
   isSqlRequest,
   normalizeControlPlaneMutationWorkClass,
-  parseCallbackModuleArtifact,
   reorderParams,
   resolveBootstrapLeaderSelection,
   resolveRetryableControlPlaneMutationDeferState,

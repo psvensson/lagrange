@@ -1,0 +1,136 @@
+{
+  "observedAtUTC": "2026-10-16T06:26:26.193038+00:00",
+  "sourceHead": "c968fc6ec5c88424342e306ae66b619c06e564eb",
+  "worktree": "/mnt/data/peter/projects/.worktrees/wasm-writer-slots-v1-20261016",
+  "branch": "review/wasm-writer-slots-v1-20261016",
+  "sourceFiles": [
+    {
+      "path": "src/service/service-lifecycle-command-owner.js",
+      "sha256": "a61fca7db651a4736198afe67f7721c3414b67097d253fc08defe501df2645c9",
+      "gitBlob": "293471fe924b0544976cd7e53ab78b5c27950506"
+    },
+    {
+      "path": "src/control-plane/owners/service-install-catalog-owner.js",
+      "sha256": "87d62f2a89a6d526a4015dda1a44c8c5b3e7b4efc8b55b5e894903c61808f59a",
+      "gitBlob": "2fa1bcd76f4b88c8659f71dada430af214506852"
+    },
+    {
+      "path": "src/control-plane/owners/service-definitions-owner.js",
+      "sha256": "1847b9b94f5bffa06def3f9913b93521535a3ce9356038b3022c3eb0a7c1ed83",
+      "gitBlob": "8505cdd535b8a868200f75c383d07ae8f47072e3"
+    },
+    {
+      "path": "src/service/service-installation-reconciler.js",
+      "sha256": "bd97369696b6f3357f82a0a28227b1c000013028c8ae805f228843c40a5de14c",
+      "gitBlob": "2b0266711416316f28f25ac005c95f285571d464"
+    },
+    {
+      "path": "src/node/runtime-service-handler.js",
+      "sha256": "6b8657efdd8381267944803a9f190e6784c0e1c8d2602c6c570680e79218d6b7",
+      "gitBlob": "bc6061449803a04b613437ab1b316eca3711c285"
+    },
+    {
+      "path": "src/service/service-lifecycle-manager.js",
+      "sha256": "79cb0043a86c4385f4e8a36459be10877dfbaff8653e6b0cb421bb1e2ed767b1",
+      "gitBlob": "a874f37e4f9b7bf7cfd13cd086e7ca45cf94d4d8"
+    },
+    {
+      "path": "src/service/service-lifecycle-operations.js",
+      "sha256": "8bc1d6b22774ddf56a620b6086ac057e12c349ceb786a98a7823f7acffa8c910",
+      "gitBlob": "493f8c43ebf96731c509cab5376e4ff8adfb0c46"
+    },
+    {
+      "path": "src/service/service-lifecycle-recovery.js",
+      "sha256": "dc30590cd640f9fb2b6432a4b1f1d967423380dd6beb9a20e78f16014fa676bd",
+      "gitBlob": "bb34516d66f8963ea81514516994ff80964be8cc"
+    },
+    {
+      "path": "src/service/adapters/runtime-service-adapter.js",
+      "sha256": "14fb8ff92377e212b17a3347d36997366c30899c9d26910b1fc186cab46c921e",
+      "gitBlob": "379c953e2b2f080698e975ead78e9b9e93dc8641"
+    },
+    {
+      "path": "src/runtime/service-runtime-lifecycle-operation-methods.js",
+      "sha256": "5a94bb9ba308dbd72a903c7359b7262001e5cda655c36e008cb774a8d33061fe",
+      "gitBlob": "6ceec5f4868056c7c4800d1c5441c569f0c534f0"
+    },
+    {
+      "path": "src/runtime/wasm-component-driver.js",
+      "sha256": "918c2f46a5cce65c55aedb4a4fe112beef1b3289b25c7004866bbb4a1fb01efc",
+      "gitBlob": "954532fc66dd90732d9ea16d1a0fc94bedb0d213"
+    },
+    {
+      "path": "src/runtime/runtime-startup-wiring.js",
+      "sha256": "2e8bd47359edbec61dc66ba63e6f484f5ae46dc45282e1af1ce67482dd53ed29",
+      "gitBlob": "8c5187b2ad64f3d44ac021af17bf17f222a5377e"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-lifecycle.js",
+      "sha256": "d9a8e7cfcb5d2797aca3f7442b881203f7e695d5851cd3e2bec096f36f474b68",
+      "gitBlob": "1b89f7039b8b0d41e9e4dce79d915f95f617c0fc"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-consensus-port.js",
+      "sha256": "d20fd29372ad753f86ee88c7bb660d551cb16344543592bad27e91b313f7eebc",
+      "gitBlob": "ff887721560f3d8de4b37b2bb64f0fbfa685e7da"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-replica-lifecycle.js",
+      "sha256": "16b196da186bfd104bcdd5ccbe53281ef98b18eda59e838df98e563c9b559e85",
+      "gitBlob": "c0885c624fb879def9eadee80ff7685a801c0937"
+    },
+    {
+      "path": "src/wasm-service/wasm-writer-state.js",
+      "sha256": "658057f441894ffff065ec74a778104c813e6dd2d71185dcece21122a404bdb6",
+      "gitBlob": "1407f5a22924ee6784b33bdeb980cfd63e03f5b2"
+    },
+    {
+      "path": "src/wasm-service/wasm-service-models.js",
+      "sha256": "9ab8568dda49e8296e2445e9f9e2c7f4393fb4223a003b815ca22675ea04410a",
+      "gitBlob": "3deae3aad6036a288251c5d5edee75fdf05c3273"
+    },
+    {
+      "path": "src/storage/data-directory-manager.js",
+      "sha256": "99d94b7a2c9e3bf54985eb478a278791580a307e1afae529dcab7fc1a612617d",
+      "gitBlob": "2373cc01f7433bf35850d652dd0196ff3f2578a3"
+    },
+    {
+      "path": "src/raft/raft-rs-ingress.js",
+      "sha256": "5268f7a817c41f3d1d6d3ba7ef404b7628f4553d5e2c05fa59b01c1b86fe1a0b",
+      "gitBlob": "2280e2a73d7950e701c81750b8cb5a02a78dc58d"
+    },
+    {
+      "path": "src/raft/raft-rs-peer-identity.js",
+      "sha256": "a2668dcec8d4d25bc5b099a7125df73134ea34443d29f3fbded2019f00520a04",
+      "gitBlob": "f73ecc6469df3af19c9ca066b1864d2344f11718"
+    },
+    {
+      "path": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
+      "sha256": "012fdb1e73da0425d9cd8dd238a1c325ac0f3ce7c7da62af35e198b175e84220",
+      "gitBlob": "98d7010d1ee3ca3501eac6d9f0a4d73738f72d06"
+    }
+  ],
+  "sharedHead": "0996d7576516af24f5f4d3e1e9aee37c775aabae",
+  "sharedStagedPaths": [
+    "lagrange-handoff-20260930T162452Z.txt",
+    "solve/changes/global-owner-debt-inventory/inventory.json",
+    "src/diagnostics/formation-turn-attribution.js",
+    "src/diagnostics/raft-formation-attribution.js",
+    "src/node/replica-state-machine-serialization.js",
+    "src/node/replica-transport-handler-identity.js",
+    "src/raft/liferaft-timing-api.js",
+    "src/raft/liferaft.js",
+    "src/raft/raft-replica-base-runtime-helpers.js",
+    "src/rebalancer/operation-workflow-owner-handoff-state.js",
+    "src/rebalancer/operation-workflow-recovery-reconcile.js",
+    "src/rebalancer/operation-workflow-replace-owner-recovery.js",
+    "test/admin/admin-control-snapshot-publication-convergence-membership-observation-test-cases.js",
+    "test/admin/admin-control-snapshot-tail-test-cases.js",
+    "test/integration/replica-handler-metadata-propagation.integration.test.js",
+    "test/shards/impact-graph-seal.json",
+    "test/shards/subsystem-classes.json",
+    "test/simulation/formation-sim-raft-cohort.js"
+  ],
+  "sharedStagedDiffSHA256": "0b2ea79142a13f4dcada523f01108fbd8a4809492838e23f7a0246a7159953fc",
+  "execution": "Read-only source audit. No new test execution or lab reservation. Lab list is inventory, not a lease."
+}

@@ -83,9 +83,13 @@ const REBALANCER_CONFIG_KEY = Object.freeze({
 
 const REBALANCER_DEFAULT = Object.freeze({
   COORDINATOR: Object.freeze({
+    // ends-on: the operation advances past its PENDING/SENDING step
     PENDING_TIMEOUT_MS: 30000,
+    // ends-on: the operation advances past its CREATING step
     CREATING_TIMEOUT_MS: 60000,
+    // ends-on: the replica catches up and the operation leaves SYNCING
     SYNCING_TIMEOUT_MS: 300000,
+    // ends-on: the replica reports REMOVED and the operation leaves STOPPING
     REMOVING_TIMEOUT_MS: 60000,
     MAX_CONCURRENT_ADDS: NUM.FIVE,
     // One plain-ADD slot is held in fair-share reserve for runtime-service
@@ -94,6 +98,7 @@ const REBALANCER_DEFAULT = Object.freeze({
     RESERVED_RUNTIME_SERVICE_PLACEMENT_SLOTS: NUM.ONE,
     MAX_CONCURRENT_REMOVES: NUM.FIVE,
     PERIODIC_CHECK_INTERVAL_MS: 60000,
+    // ends-on: n/a period
     TIMEOUT_CHECK_INTERVAL_MS: 1000,
   }),
   UNIFIED: Object.freeze({
@@ -101,7 +106,6 @@ const REBALANCER_DEFAULT = Object.freeze({
     PERIODIC_CHECK_JITTER_MS: 10000,
     CRITICAL_CHECK_DELAY_MS: 5000,
     MAX_CONCURRENT_MOVES: NUM.FIVE,
-    MOVE_TIMEOUT_MS: 300000,
     MOVE_BATCH_SIZE: 2,
     INTER_BATCH_DELAY_MS: 100,
     REBALANCE_BUDGET: 10,
@@ -110,6 +114,7 @@ const REBALANCER_DEFAULT = Object.freeze({
     NODE_MEMORY_THRESHOLD: 0.8,
     NODE_DISK_THRESHOLD: 0.9,
     READINESS_PING_ENABLED: false,
+    // ends-on: the target node answers the ping
     READINESS_PING_TIMEOUT_MS: 1000,
     MIN_STABILIZATION_MS: 1000,
     MAX_STABILIZATION_MS: 10000,
@@ -184,6 +189,8 @@ const REBALANCER_LOG_MSG = Object.freeze({
   NOT_LEADER_SKIP: 'Not leader, skipping rebalance',
   NO_AVAILABLE_NODES: 'Skipping rebalance - no available nodes in cache',
   NO_REBALANCE_NEEDED: 'No rebalancing needed',
+  MESSAGE_GROUP_MEMBERSHIP_CHANGE_PARKED:
+    'Message-group replica planning parked: membership change unsupported until the fresh-identity ADD path exists',
   START_REBALANCE: 'Starting rebalancing',
   PRE_EXECUTION_HANDOFF: 'Rebalancer pre-execution handoff',
   SCHEDULE_NEXT: 'Scheduled next rebalance check',
@@ -245,7 +252,7 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   OPERATION_COMPLETED: 'Operation completed',
   OPERATION_FAILED: 'Operation failed',
   OPERATION_FAILURE_REFUSED_AFTER_INTENT:
-    'REPLACE failure refused after durable source-removal intent',
+    'Create failure refused after its intent (REPLACE durable source-removal intent; ADD target live)',
   REPLACE_SOURCE_REMOVAL_WAITING: 'REPLACE source removal waiting',
   OPERATION_BLOCKED_BY_SAFETY_POLICY: 'Operation blocked by safety policy',
   OPERATION_DEFERRED_BY_SAFETY_POLICY: 'Operation deferred by safety policy',
@@ -278,6 +285,17 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   RECOVERY_MARK_REMOVE_FAILED: 'Marked incomplete removal operation as failed during recovery',
   RECOVERY_PROCESS_ERROR: 'Error processing operation during recovery',
   RECOVERY_COMPLETED: 'Recovery process completed',
+  MEMBERSHIP_DEBT_SWEEP_UNAVAILABLE:
+    'Message-group membership debt census unavailable; debt retained until the next trigger',
+  MEMBERSHIP_DEBT_RECORDED: 'Message-group learner outcome recorded from durable debt',
+  MEMBERSHIP_DEBT_SUCCESSOR_ISSUED:
+    'Message-group learner attempt definitively noncommitted; ordered successor attempt issued',
+  MEMBERSHIP_DEBT_RETAINED:
+    'Message-group membership debt retained; recovery waits for its named prerequisite',
+  MEMBERSHIP_DEBT_REFUSED:
+    'Message-group membership debt recovery refused; owned repair required',
+  MEMBERSHIP_WRITE_UNCERTAIN:
+    'Message-group membership write answered with an error; its outcome is resolved by exact readback, not assumed',
   RECOVERY_FAILED: 'Recovery process failed',
   RECONCILE_SYNCING: 'Reconciling SYNCING operation',
   RECONCILE_ACTIVE: 'Reconciled SYNCING operation to ACTIVE',
@@ -301,6 +319,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'and repair armed',
   TERMINAL_TRANSITION_REPAIR_SUCCEEDED:
     'Terminal transition repair confirmed authoritative visibility',
+  FAILED_CREATE_CLEANUP_RELEASE_SUCCEEDED:
+    'Failed-create cleanup release confirmed by the target lifecycle owner',
   TERMINAL_TRANSITION_REPAIR_UNCONFIRMED:
     'Terminal transition repair attempt still unconfirmed; rescheduling',
   TERMINAL_TRANSITION_REPAIR_ABANDONED:
@@ -449,6 +469,16 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   DEFERRED_RETRY_PENDING: 'deferred_retry_pending',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
   NODE_NOT_READY: 'node_not_ready',
+  // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
+  // replica membership does not change - no ADD, REPLACE, MOVE or
+  // CREATE_REPLICA - until the fresh-identity ADD/promote path for message
+  // groups exists. A replica opened under a reissued name would reuse a raft
+  // id whose history the group holds elsewhere (the 2026-10 defect).
+  MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED:
+    'message_group_membership_change_unsupported',
+  // The partition's group is being retired as a unit by its durable
+  // workflow record: its member set is frozen, no membership change.
+  GROUP_RETIRING: 'group_retiring',
 });
 
 /**

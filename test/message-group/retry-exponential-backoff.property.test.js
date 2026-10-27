@@ -165,7 +165,7 @@ test('Property 24: Successful first attempt has no retries', async (t) => {
         let callCount = 0;
         const deliveryFn = async () => {
           callCount++;
-          return {acknowledged: true};
+          return {success: true};
         };
 
         const result = await retryHandler.executeWithRetry(deliveryFn, {
@@ -220,7 +220,7 @@ test('Property 24: Failed attempts trigger retries with backoff', async (t) => {
           if (callCount <= actualFailures) {
             throw new Error('Simulated failure');
           }
-          return {acknowledged: true};
+          return {success: true};
         };
 
         const result = await retryHandler.executeWithRetry(deliveryFn, {
@@ -280,7 +280,7 @@ test('Property 24: Alternative replicas are tried on failure', async (t) => {
           if (callCount <= alternatives.length) {
             throw new Error('Simulated failure');
           }
-          return {acknowledged: true};
+          return {success: true};
         };
 
         await retryHandler.executeWithRetry(deliveryFn, {
@@ -340,7 +340,7 @@ test('Property 24: Attempt history is accurate', async (t) => {
           if (callCount <= numFailures) {
             throw new Error(`Failure ${callCount}`);
           }
-          return {acknowledged: true};
+          return {success: true};
         };
 
         const result = await retryHandler.executeWithRetry(deliveryFn, {

@@ -50,11 +50,8 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -259,11 +256,8 @@ describe('postgres-baseline-comparison scenario', () => {
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -409,11 +403,8 @@ describe('postgres-baseline-comparison scenario', () => {
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -567,15 +558,11 @@ describe('postgres-baseline-comparison scenario', () => {
               }],
             };
           }
-          if (statement.startsWith(
-            'UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
             return {
               rows: [
-                {partition_id: 'p1'},
-                {partition_id: 'p2'},
+                {partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
+                {partition_id: 'p2', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
               ],
             };
           }
@@ -625,15 +612,11 @@ describe('postgres-baseline-comparison scenario', () => {
               }],
             };
           }
-          if (statement.startsWith(
-            'UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
             return {
               rows: [
-                {partition_id: 'p1'},
-                {partition_id: 'p2'},
+                {partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
+                {partition_id: 'p2', table_id: 'tbl-benchmark', table_name: 'benchmark_events'},
               ],
             };
           }
@@ -822,14 +805,11 @@ describe('postgres-baseline-comparison scenario', () => {
             }],
           };
         }
-        if (statement.startsWith(
-          'UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
           return {
             rows: sharedPartitions.map(
-              (partitionId) => ({partition_id: partitionId}),
+              (partitionId) => ({partition_id: partitionId,
+                table_id: 'tbl-benchmark', table_name: 'benchmark_events'}),
             ),
           };
         }
@@ -880,14 +860,11 @@ describe('postgres-baseline-comparison scenario', () => {
             }],
           };
         }
-        if (statement.startsWith(
-          'UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
           return {
             rows: sharedPartitions.map(
-              (partitionId) => ({partition_id: partitionId}),
+              (partitionId) => ({partition_id: partitionId,
+                table_id: 'tbl-benchmark', table_name: 'benchmark_events'}),
             ),
           };
         }

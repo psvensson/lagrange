@@ -253,8 +253,32 @@ function incrementHistogramEntry(histogram, key, oneValue) {
   histogram[key] += oneValue;
 }
 
+// The endpoint row this boot already published (the join-time endpoint
+// write, at this exact incarnation) with the same routing content and an
+// updated_at inside the refresh interval is current: the first heartbeat
+// after boot adopts it instead of rewriting it as background work that a
+// pending published convergence would only defer (V3a).
+function isObservedEndpointRowCurrent(signature, now, options) {
+  const observed = options.observedEndpointRow;
+  if (!observed || typeof observed !== 'object' ||
+      Number(observed[COLUMN.BOOT_INCARNATION]) !==
+        Number(options.bootIncarnation) ||
+      options.buildEndpointUpsertSignature(observed) !== signature) {
+    return false;
+  }
+  const updatedAt = Number(observed[COLUMN.UPDATED_AT]);
+  return Number.isFinite(updatedAt) &&
+    now - updatedAt < options.endpointRefreshIntervalMs;
+}
+
 function shouldUpsertEndpointRow(endpointRow, now, options = {}) {
   const signature = options.buildEndpointUpsertSignature(endpointRow);
+  if (
+    typeof options.lastEndpointUpsertSignature !== 'string' &&
+    isObservedEndpointRowCurrent(signature, now, options)
+  ) {
+    return false;
+  }
   if (options.lastEndpointUpsertSignature !== signature) {
     return true;
   }

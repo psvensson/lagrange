@@ -82,10 +82,10 @@ class OperationWorkflowOwnerRetryRegistry extends
       options.disengageOperationLedgerSelfMoveHold;
     this.releaseOperationLedgerSelfMoveHoldOnLocalTerminal =
       options.releaseOperationLedgerSelfMoveHoldOnLocalTerminal;
-    this.setTimeoutFn =
-      typeof options.setTimeoutFn === 'function' ?
-        options.setTimeoutFn :
-        setTimeout;
+    this.setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.usesNativeRetryTimers = this.setTimeoutFn === setTimeout;
     this.clearTimeoutFn =
       typeof options.clearTimeoutFn === 'function' ?
         options.clearTimeoutFn :
@@ -197,7 +197,7 @@ class OperationWorkflowOwnerRetryRegistry extends
     return joinInFlightOperationOwnerLanes({
       inFlightExecutionsByOwnerKey:
         this.operationWorkflowCoordinator?.inFlightExecutionsByOwnerKey,
-      timeoutMs: options.timeoutMs,
+      timeoutMs: options.timeoutMs, logger: this.logger, scope: {nodeId: this.nodeId},
       nowFn:
         this.timeSource && typeof this.timeSource.now === 'function' ?
           () => this.timeSource.now() :

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerQuorumConditionedRemoveSafetyTailFinalTests({
   test,
   ConfigurationManager,
@@ -23,7 +24,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -174,7 +175,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,
@@ -303,7 +304,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
         deliver: async () => {
           deliveryCount++;
           await new Promise((resolve) => setTimeout(resolve, 10));
-          return {acknowledged: true, status: 'in_progress'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'in_progress'});
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -351,7 +352,7 @@ export function registerQuorumConditionedRemoveSafetyTailFinalTests({
         messageRouter: {
           deliver: async () => {
             deliveries.push('deliver');
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getConnectionState: () => 'connected',
           pingNode: async () => true,

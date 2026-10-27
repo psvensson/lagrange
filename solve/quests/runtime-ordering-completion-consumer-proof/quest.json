@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-ordering-completion-consumer-proof",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Test-only evidence for the proposed finite-capture operation-acceptance contract: preserve complete native D1-D3 vectors against independently ordered pre/post-capture references and exercise actual completion/custody consumers, attributing reachable WASM strong-write behavior through identical predecessor/candidate tests. This evidence unit does not supersede F1, change frozen runtime source or seal the complete release successor.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runtime-ordering-completion-consumer-proof/evidence/receipt.json",
+      "requiredReceipts": [
+        "ordering-vectors-and-references",
+        "transfer-completion-consumers",
+        "partition-outcome-custody",
+        "wasm-identical-source-pair",
+        "message-group-custody",
+        "independent-review-and-preservation"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "source-frozen",
+      "statement": "No production source change; runtime4aa8780cf source and original F1/W07 witnesses byte-identical. Isolated comparison may restore exact predecessor runtime only for identical-test attribution."
+    },
+    {
+      "id": "native-owned-evidence",
+      "statement": "Reuse native runtime/transport/application seams; exact test bytes independently reviewed before first locked lab execution. Separate passive measured interval, setup and post-measurement convergence. No fabricated success, new framework, timeout increase or retry-until-green."
+    },
+    {
+      "id": "bounded-test-only",
+      "statement": "No full cone rerun, timer callback production claim without real wiring, multi-owner repair, merge or F1 supersession. Preserve96failed/7incomplete wider-cone classifications, historical witnesses and shared18stagedpaths. Report exact unavailable seams instead of inventing authority."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity",
+    "owner-interaction",
+    "concurrency-serialization",
+    "transport-delivery",
+    "recovery-replay",
+    "admission-gating",
+    "retry-loops"
+  ],
+  "sealedAt": "96985eb2ba0720b7f5e3b36c63ce10e3a2ff71b3"
+}

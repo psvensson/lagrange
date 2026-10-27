@@ -22,6 +22,7 @@ import {
 } from './endpoint-sync-source-query.js';
 import {selectCurrentEndpointRows} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 const LOCAL_STR_ENDPOINTSYNCSOURCECLIENT = 'EndpointSyncSourceClient';
 const LOCAL_STR_QUERY = 'query';
@@ -29,6 +30,19 @@ const LOCAL_STR_OPEN = 'open';
 const LOCAL_STR_MESSAGE = 'message';
 const LOCAL_STR_ERROR = 'error';
 const LOCAL_STR_CLOSE = 'close';
+
+const SOURCE_QUERY_WAIT = Object.freeze({
+  wait: 'ENDPOINT_SYNC_DEFAULT.SOURCE_QUERY_TIMEOUT_MS',
+  awaited: 'admin stream query_result for an endpoint source query',
+});
+const SOURCE_QUERY_RETRY_WAIT = Object.freeze({
+  wait: 'ENDPOINT_SYNC_DEFAULT.SOURCE_QUERY_MAX_RETRIES',
+  awaited: 'one successful endpoint source query',
+});
+const SOURCE_QUERY_PHASE = Object.freeze({
+  CONNECTING: 'connecting',
+  QUERY_SENT: 'query_sent',
+});
 
 const ADMIN_AUTH_HEADER = 'authorization';
 const BEARER_PREFIX = 'Bearer ';
@@ -166,6 +180,7 @@ class EndpointSyncSourceClient {
    */
   constructor(options = {}) {
     this._WebSocketImpl = options.WebSocketImpl || WebSocket;
+    this._logger = options.logger || null;
   }
 
   /**
@@ -197,6 +212,7 @@ class EndpointSyncSourceClient {
     });
 
     let lastError = null;
+    const retryStartedAtMs = Date.now();
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const read = (sql, params) => this._executeQueryOnce({
@@ -220,6 +236,17 @@ class EndpointSyncSourceClient {
       }
     }
 
+    reportWaitBoundSpent(this._logger, {
+      ...SOURCE_QUERY_RETRY_WAIT,
+      boundMs: null,
+      startedAtMs: retryStartedAtMs,
+      lastObserved: {
+        attempts: maxRetries + 1,
+        lastError: lastError?.message || null,
+        lastErrorCode: lastError?.code || null,
+      },
+      scope: {adminStreamUrl: options.adminStreamUrl},
+    });
     throw new EndpointSyncSourceQueryError(
       ENDPOINT_SYNC_ERROR.SOURCE_QUERY_FAILED,
       {
@@ -245,8 +272,10 @@ class EndpointSyncSourceClient {
   _executeQueryOnce(options) {
     const queryId = nextQueryId();
 
+    const startedAtMs = Date.now();
     return new Promise((resolve, reject) => {
       let settled = false;
+      let phase = SOURCE_QUERY_PHASE.CONNECTING;
       const headers = buildAuthHeaders(options.adminAuthToken);
       const socket = new this._WebSocketImpl(options.adminStreamUrl, {
         headers,
@@ -257,6 +286,13 @@ class EndpointSyncSourceClient {
           return;
         }
         settled = true;
+        reportWaitBoundSpent(this._logger, {
+          ...SOURCE_QUERY_WAIT,
+          boundMs: options.timeoutMs,
+          startedAtMs,
+          lastObserved: {phase},
+          scope: {queryId, adminStreamUrl: options.adminStreamUrl},
+        });
         try {
           socket.close();
         } catch (_error) {
@@ -287,6 +323,7 @@ class EndpointSyncSourceClient {
       };
 
       socket.on(LOCAL_STR_OPEN, () => {
+        phase = SOURCE_QUERY_PHASE.QUERY_SENT;
         const message = {
           type: ADMIN_MESSAGE_TYPE.QUERY,
           queryId,

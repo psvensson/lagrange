@@ -33,6 +33,7 @@ import {isDeepStrictEqual} from 'node:util';
 import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
+import {spawnGit} from './checks/git-invocation.js';
 import {
   appendArrayValue,
   copyOwnDataArray,
@@ -117,6 +118,12 @@ const UNIQUE_TESTS_SUFFIX = ' unique test(s)';
 const USAGE =
   'usage: node scripts/select-change-tests.js [--base <sha>] [--head <sha>] ' +
   '[--explain] [--list]\n';
+const RELEASE_PROOF_ID = 'release-full-v1';
+const PROOF_AUTHORITY_SCRIPT = 'scripts/proof-authority.js';
+const PROOF_CHECK_COMMAND = 'check';
+const JSON_FLAG = '--json';
+const RELEASE_PROOF_REUSED_PREFIX = 'RELEASE PROOF REUSED';
+const FULL_GIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -269,7 +276,7 @@ function hasPotentiallyLossyJsonNumber(text) {
 }
 
 function jsonFromRevision(relativePath, revision, gitRoot) {
-  const result = spawnSync('git', ['show', `${revision}:${relativePath}`],
+  const result = spawnGit(['show', `${revision}:${relativePath}`],
     {cwd: gitRoot, encoding: UTF8});
   return result.status === 0 ? parseJson(result.stdout) : null;
 }
@@ -587,6 +594,37 @@ function parseInvocation(argv) {
   };
 }
 
+function defaultReleaseProofCheck(sha, proofRoot = root) {
+  if (typeof sha !== 'string' || sha.length === 0) return false;
+  const checked = spawnSync(process.execPath, [
+    path.join(proofRoot, PROOF_AUTHORITY_SCRIPT),
+    PROOF_CHECK_COMMAND,
+    RELEASE_PROOF_ID,
+    sha,
+    JSON_FLAG,
+  ], {
+    cwd: proofRoot,
+    encoding: UTF8,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return checked.status === 0;
+}
+
+export function releaseProofSatisfiesRefusal(
+  plan,
+  {
+    sha = null,
+    check = defaultReleaseProofCheck,
+  } = {},
+) {
+  return plan?.kind === SELECTION_REFUSED &&
+    plan?.refusalCode === REFUSAL_RELEASE_PROOF_REQUIRED &&
+    typeof sha === 'string' &&
+    FULL_GIT_SHA_PATTERN.test(sha) &&
+    typeof check === 'function' &&
+    check(sha) === true;
+}
+
 function main() {
   const invocation = parseInvocation(arraySlice(process.argv, 2));
   if (!invocation.valid) {
@@ -608,6 +646,13 @@ function main() {
     return;
   }
   if (plan.kind === SELECTION_REFUSED) {
+    const sha = headSha();
+    if (releaseProofSatisfiesRefusal(plan, {sha})) {
+      process.stdout.write(
+        `${RELEASE_PROOF_REUSED_PREFIX}: ${RELEASE_PROOF_ID} ${sha}${NEWLINE}`,
+      );
+      return;
+    }
     process.stderr.write(renderRefusal(plan));
     process.exitCode = 1;
     return;
@@ -660,11 +705,10 @@ export function writeProofScope({head, fullCorpus, plan, scopeRoot = root}) {
 }
 
 const stringTrimValue = Function.call.bind(String.prototype.trim);
-const GIT_BINARY = 'git';
 const HEAD_REVISION_ARGUMENTS = Object.freeze(['rev-parse', 'HEAD']);
 
 function headSha(gitRoot = root) {
-  const result = spawnSync(GIT_BINARY, [...HEAD_REVISION_ARGUMENTS],
+  const result = spawnGit([...HEAD_REVISION_ARGUMENTS],
     {cwd: gitRoot, encoding: UTF8});
   const sha = stringTrimValue(String(result.stdout || ''));
   return sha.length > 0 ? sha : null;

@@ -86,7 +86,11 @@ for (const reentry of [true, false]) {
     `re-entry ${reentry ? 'on' : 'off'})`, async () => {
     const run = await formed(`anchor-d7-${reentry}`, {reentry});
     try {
-      await run.act(() => run.driver.port(B).campaign());
+      // B's transfer election: the one a leader in its check-quorum lease
+      // does not ignore; its vote request to A stays pending.
+      await run.act(() =>
+        run.driver.port(A).transferLeadership(namedSuccessor(B)));
+      await run.deliverOnly([B]);
       await run.deliverOnly([C]);
       await run.deliverOnly([B]);
       assert.ok(run.driver.stepUndrained(A) >= 2,

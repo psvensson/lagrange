@@ -72,7 +72,7 @@ function createWorld(options = {}) {
     createMessageGroupReplica: async () => {
       const service = runtime(options.register !== false);
       if (options.register === false) {
-        service.transportHandler = () => ({acknowledged: true});
+        service.transportHandler = () => (null);
         service.resolveHandlerRetirementLane = () => stateMachine;
       }
       services.set(REPLICA_ID, service);
@@ -181,7 +181,7 @@ test('MG executor N2 (3): the handler is removed during the activation -> ' +
 test('MG executor N2 (4): another generation\'s handler at the same address ' +
   'is not activation authority', async (t) => {
   const world = createWorld({register: false});
-  world.router.register(ADDRESS, () => ({acknowledged: true}));
+  world.router.register(ADDRESS, () => (null));
   await world.create();
   assertRefused(t, world);
 });

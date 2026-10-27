@@ -17,6 +17,7 @@ import {
 } from '../../src/query/pg/pg-translate.js';
 import {EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {PG_EXPR_TYPE} from '../../src/query/pg/pg-compat-constants.js';
+import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
 
 /**
  * Feature: pg-sql-compat-layer
@@ -95,11 +96,11 @@ describe('Property 4: Boolean Literal Normalization', () => {
  * Property 10: ON CONFLICT Translation
  * **Validates: Requirements 4.1, 4.2**
  *
- * For any INSERT with ON CONFLICT variants, correct flags are set:
- * 'nothing' → orIgnore=true, 'update'/'replace' → orReplace=true.
+ * For any INSERT with ON CONFLICT variants:
+ * 'nothing' → orIgnore=true, 'update'/'replace' → throws UNSUPPORTED_SQL_FEATURE.
  */
 describe('Property 10: ON CONFLICT Translation', () => {
-  it('sets correct flags for any ON CONFLICT action', () => {
+  it('sets correct flags for DO NOTHING and throws for DO UPDATE/replace', () => {
     const actionArb = fc.constantFrom('nothing', 'update', 'replace');
 
     fc.assert(
@@ -109,14 +110,16 @@ describe('Property 10: ON CONFLICT Translation', () => {
           keyword: 'on',
           action: {keyword: 'do', expr: {type: action, value: action}},
         };
-        translateOnConflict(insertAst, onConflict);
 
         if (action === 'nothing') {
+          translateOnConflict(insertAst, onConflict);
           assert.equal(insertAst.orIgnore, true);
           assert.equal(insertAst.orReplace, false);
         } else {
-          assert.equal(insertAst.orReplace, true);
-          assert.equal(insertAst.orIgnore, false);
+          assert.throws(
+            () => translateOnConflict(insertAst, onConflict),
+            (err) => err.code === QUERY_ERROR_CODE.UNSUPPORTED_SQL_FEATURE,
+          );
         }
       }),
       {numRuns: 10},

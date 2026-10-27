@@ -21,12 +21,12 @@
  * here rather than restated.
  */
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {alwaysLoadClosure, declaredRules} from './check-steering-diet.js';
+import {execGit, isGitOutputTooLarge} from './git-invocation.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const MANIFEST = 'docs/steering/rule-set.json';
@@ -67,10 +67,8 @@ const EXIT_OK = 0;
 const EXIT_VIOLATION = 1;
 const ARGV_OFFSET = 2;
 const METRIC_FLAG = '--metric';
-const GIT = 'git';
 const GIT_ROOT_FLAG = '-C';
 const HEAD_REV = 'HEAD';
-const MAX_BUFFER = 8 * 1024 * 1024;
 const FIRST_REVISION = 1;
 const SHOW_COMMAND = 'show';
 const STDIO_IGNORE = 'ignore';
@@ -167,10 +165,11 @@ function structureOffences(manifest) {
 // to compare against.
 function committedManifest(root) {
   try {
-    return JSON.parse(execFileSync(GIT,
+    return JSON.parse(execGit(
       [GIT_ROOT_FLAG, root, SHOW_COMMAND, `${HEAD_REV}:${MANIFEST}`],
-      {encoding: TEXT_ENCODING, maxBuffer: MAX_BUFFER, stdio: [...SILENT_STDIO]}));
-  } catch {
+      {encoding: TEXT_ENCODING, stdio: [...SILENT_STDIO]}));
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
     return null;
   }
 }

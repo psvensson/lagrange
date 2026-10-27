@@ -1,0 +1,101 @@
+name: rs-raft-ownership-audit
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-ownership-audit.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-ownership-audit-20261012
+  cancel-in-progress: false
+jobs:
+  exact-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      EVIDENCE: test-output/ownership-audit-hosted
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      TAP_JOBS: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Bind exact input and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p "$EVIDENCE"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node --version > "$EVIDENCE/node-version.txt"
+      - name: Measure snapshot correction, native history red, regressions and source-only controls
+        id: measure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/quest-evidence/run-ownership-audit-20261012.py > "$EVIDENCE/execution.log" 2>&1
+          cat "$EVIDENCE/summary.json"
+      - name: Preserve exact source and every outcome on existing work branch only
+        if: steps.measure.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$BRANCH" = resume/rs-raft-runtime-recovery-20261012
+          git diff --exit-code -- src
+          DEST="solve/quests/replicated-transaction-decision-and-apply/evidence/ownership-audit-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$EVIDENCE/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: retain snapshot proof and unresolved WASM history safety red'
+          TARGET=$(git rev-parse HEAD)
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          for ATTEMPT in 1 2 3; do
+            REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+            if test "$REMOTE" = "$TARGET"; then break; fi
+            test "$REMOTE" = "$GITHUB_SHA"
+            if git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"; then break; fi
+          done
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$TARGET"
+          printf '%s\n' "$TARGET" > "$EVIDENCE/published-sha.txt"
+      - name: Retain diagnostics and source even when setup or proof fails
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          git diff -- src > "$EVIDENCE/working-source.patch"
+          git rev-parse HEAD > "$EVIDENCE/final-head.txt"
+          find "$EVIDENCE" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-ownership-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/ownership-audit-hosted/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unresolved safety and static failures visible
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['EVIDENCE'])/'summary.json'
+          assert p.exists(), 'Measurement incomplete; see retained artifacts'
+          result=json.loads(p.read_text())
+          assert result['wasmHistoryFixed'] and result['allRunGatesPassed'], 'WASM lost-history, transaction migration, cleanup review and static gates remain unresolved; not merge-ready'
+          PY

@@ -1,0 +1,57 @@
+{
+  "schema": "solve-quest/2",
+  "id": "failed-create-cleanup-settlement-separation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "OperationWorkflowOwner separately decides ordinary partition ADD/REPLACE terminal settlement and an optional failed-create cleanup claim. Existing pre-intent, positive-ACTIVE completion, and D2 target-dead/source-retained settlement semantics remain authoritative and never manufacture lifecycle evidence. Cleanup requires a fresh exact operation-bound tokenized FAILED generation carried through and revalidated by REMOVE, while the canonical durable admission boundary fences late CREATE delivery after terminal settlement and across retry or restart.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/failed-create-cleanup-settlement-separation/evidence/receipt.json",
+      "requiredReceipts": [
+        "ordinary-settlement-independent-of-cleanup",
+        "failed-create-cleanup-exact-generation",
+        "d2-source-retention-and-generic-repair",
+        "late-create-durable-admission-linearization",
+        "stale-retry-and-restart-reconstruction",
+        "cleanup-release-delivery-and-retry-lifetime",
+        "owner-censuses-and-widened-regression"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-owner-two-typed-decisions",
+      "statement": "OperationWorkflowOwner owns separate typed ordinary-settlement and optional cleanup-claim decisions under the same per-operation lane. Missing cleanup authority never blocks or implies legitimate settlement, and settlement never authorizes deletion."
+    },
+    {
+      "id": "ordinary-settlement-preservation",
+      "statement": "Preserve existing never-materialized and pre-intent ADD/REPLACE failure settlement, positive-ACTIVE ADD completion, and the sole post-intent D2 target-dead-or-REMOVED failure with its source retained. Do not fabricate a FAILED lifecycle generation, broaden post-intent failure, weaken source retention, or suppress the independent generic lifecycle-failure repair owner."
+    },
+    {
+      "id": "exact-generation-cleanup-only",
+      "statement": "Failed-create cleanup requires a durable terminal FAILED partition ADD/REPLACE naming the exact target and operation plus a fresh authoritative lifecycle row carrying failed-create:<operationId> and the full current generation. Absent, unavailable, cached, projected, tokenless, stale, mismatched, success-terminal, and non-create evidence cannot authorize cleanup."
+    },
+    {
+      "id": "handler-order-and-revalidation",
+      "statement": "ReplicaHandler durably publishes the exact tokenized FAILED generation before emitting a cleanup-claiming failure outcome. Cleanup REMOVE carries the full fresh precondition and revalidates it before FAILED-to-REMOVING, physical deletion, durable completion, and release. ACTIVE and FAILED-to-CREATING successor generations remain protected at every boundary."
+    },
+    {
+      "id": "late-create-durable-admission-fence",
+      "statement": "Identify and use the canonical durable CREATE admission linearization point; a preflight read followed by an awaited write is not an atomic fence. Prove both orderings: terminal-first prevents new admission, while admission-first gives already-admitted work a defined owned outcome through pause, late answer, retry, and restart without borrowing deletion authority or falsely promising that terminal settlement cancels an already-linearized physical effect. Cache state, elapsed time, and stale generations are not admission authority. If this exposes a separate defect, repair it at that canonical admission boundary without recoupling settlement and deletion."
+    },
+    {
+      "id": "one-retained-retry-and-release-owner",
+      "statement": "Unresolved FAILED publication and cleanup release remain level-triggered under their named durable owners. Startup reconstruction and an in-memory arm converge to one retained per-operation retry; transport acknowledgement without handler-processed completion cannot release debt. Native recovery-scan timers may be unrefed, while injected backoff, eventual retry, shutdown cancellation, and no-rearm semantics remain unchanged."
+    },
+    {
+      "id": "structural-owner-censuses",
+      "statement": "Register and prove exactly one canonical ordinary operation dispatch edge plus one REMOVE_REPLICA-only cleanup-release edge carrying the exact precondition. External failure routes pass through RebalanceCoordinatorOwnerFacade OPERATION_OWNER_ACTION.FAIL and OperationWorkflowTransitionPersistence.failOperation remains the sole internal terminal sink."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "Every source attempt requires independent verification newer than the attempt and recorded with verifier subagent:<id> before landing."
+    }
+  ],
+  "sealedAt": "79d16909296d88397fb277da95138a23c37f3dd9"
+}

@@ -2,6 +2,7 @@
  * Unit tests for ReplicaDispatchService NODE_STATE_UPDATE handling.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   createService,
@@ -740,7 +741,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     cdcIntegrationService: {
@@ -802,6 +803,8 @@ async (t) => {
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: READY_RETRY_PARTITION_ID,
+          target_claim_key: null,
+          membership_publication_epoch: null,
         },
       },
     }],
@@ -1100,7 +1103,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     rebalanceCoordinator: {
@@ -1173,6 +1176,8 @@ async (t) => {
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: 'sql_write_operations-p1',
+          target_claim_key: null,
+          membership_publication_epoch: null,
         },
       },
     }],
@@ -1197,7 +1202,7 @@ async (t) => {
     messageRouter: {
       async deliver(address, payload) {
         deliveries.push({address, payload});
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     rebalanceCoordinator: {
@@ -1269,6 +1274,8 @@ async (t) => {
           steps_history: '[]',
           entity_type: 'partition',
           entity_id: 'sql_write_operations-p1',
+          target_claim_key: null,
+          membership_publication_epoch: null,
         },
       },
     }],

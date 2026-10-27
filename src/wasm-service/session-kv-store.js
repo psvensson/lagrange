@@ -1,19 +1,15 @@
 /**
  * SessionKVStore — SQLite-backed key-value store for WASM service
- * session context. Each replica maintains its own SQLite database;
+ * session context, over the replica's own durable connection;
  * writes are applied only after Raft commit.
  *
  * Requirements: 3.2, 3.3
  * @module wasm-service/session-kv-store
  */
 
-import Database from 'better-sqlite3';
 import {
   WASM_SERVICE_ERROR_MSG,
 } from './wasm-service-constants.js';
-
-const LOCAL_STR_JOURNAL_MODE_WAL = 'journal_mode = WAL';
-const LOCAL_STR_SYNCHRONOUS_NORMAL = 'synchronous = NORMAL';
 
 /**
  * Internal table name for the KV store.
@@ -86,13 +82,13 @@ const KV_SQL = Object.freeze({
  */
 class SessionKVStore {
   /**
-   * @param {string} dbPath - Path to the SQLite database file,
-   *   or ':memory:' for in-memory storage.
+   * @param {Object} db - The replica's open better-sqlite3 connection. The
+   *   store borrows it: its writes join the transaction the consensus port
+   *   applies a committed entry in, and its owner sets the pragmas and
+   *   closes it.
    */
-  constructor(dbPath) {
-    this.db = new Database(dbPath);
-    this.db.pragma(LOCAL_STR_JOURNAL_MODE_WAL);
-    this.db.pragma(LOCAL_STR_SYNCHRONOUS_NORMAL);
+  constructor(db) {
+    this.db = db;
     this._sessionSizeLimitBytes = null;
     this._serviceSizeLimitBytes = null;
     this._createSchema();
@@ -154,8 +150,8 @@ class SessionKVStore {
    * @param {Buffer|Uint8Array} value - Opaque byte value.
    * @return {{accepted: boolean, error: string|null}} Result.
    */
-  applySet(sessionId, key, value) {
-    const limitError = this._checkLimits(sessionId, key, value);
+  applySet(sessionId, key, value, limits = null) {
+    const limitError = this._checkLimits(sessionId, key, value, limits);
     if (limitError) {
       return {accepted: false, error: limitError};
     }
@@ -202,13 +198,10 @@ class SessionKVStore {
   }
 
   /**
-   * Close the database connection.
+   * Release the borrowed connection; its owner closes it.
    */
   close() {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
+    this.db = null;
   }
 
   /**
@@ -221,11 +214,13 @@ class SessionKVStore {
    * @return {string|null} Error message or null.
    * @private
    */
-  _checkLimits(sessionId, key, value) {
+  _checkLimits(sessionId, key, value, limits = null) {
+    const sessionLimit = limits ? limits.sessionBytes : this._sessionSizeLimitBytes;
+    const serviceLimit = limits ? limits.serviceBytes : this._serviceSizeLimitBytes;
     const hasSessionLimit =
-      this._sessionSizeLimitBytes !== null;
+      sessionLimit !== null;
     const hasServiceLimit =
-      this._serviceSizeLimitBytes !== null;
+      serviceLimit !== null;
     if (!hasSessionLimit && !hasServiceLimit) {
       return null;
     }
@@ -235,14 +230,14 @@ class SessionKVStore {
     if (hasSessionLimit) {
       const currentSessionSize = this.getSessionSize(sessionId);
       const projectedSessionSize = currentSessionSize + delta;
-      if (projectedSessionSize > this._sessionSizeLimitBytes) {
+      if (projectedSessionSize > sessionLimit) {
         return WASM_SERVICE_ERROR_MSG.SESSION_SIZE_LIMIT_EXCEEDED;
       }
     }
     if (hasServiceLimit) {
       const currentTotalSize = this.getTotalSize();
       const projectedTotalSize = currentTotalSize + delta;
-      if (projectedTotalSize > this._serviceSizeLimitBytes) {
+      if (projectedTotalSize > serviceLimit) {
         return WASM_SERVICE_ERROR_MSG.SERVICE_SIZE_LIMIT_EXCEEDED;
       }
     }

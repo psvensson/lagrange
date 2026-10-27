@@ -17,6 +17,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
   createStorageOwners,
   createTransactionCoordinator,
   createCoordinator,
+  seedStorageIncreasingOperation,
   disablePersistenceConfirmation,
 }) {
   registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionTests({
@@ -58,6 +59,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailTests({
     createStorageOwners,
     createTransactionCoordinator,
     createCoordinator,
+    seedStorageIncreasingOperation,
     disablePersistenceConfirmation,
   });
 }

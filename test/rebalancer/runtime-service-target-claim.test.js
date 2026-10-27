@@ -110,6 +110,7 @@ test('distinct-intent target conflict reallocates through the canonical ' +
     nodeId: SOURCE_NODE_ID,
   });
   const persistedReplicaIds = [];
+  const persistNewOperation = coordinator.persistNewOperation.bind(coordinator);
   coordinator.persistNewOperation = async (operation) => {
     persistedReplicaIds.push(operation.replicaId);
     if (persistedReplicaIds.length === 1) {
@@ -122,11 +123,7 @@ test('distinct-intent target conflict reallocates through the canonical ' +
         },
       };
     }
-    return {
-      persisted: true,
-      disposition: REPLICA_OPERATION_INSERT_DISPOSITION.INSERTED,
-      operation,
-    };
+    return persistNewOperation(operation);
   };
 
   try {

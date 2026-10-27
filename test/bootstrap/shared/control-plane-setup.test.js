@@ -31,6 +31,17 @@ const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   peerProofState: 'recovered',
 });
 
+async function shutdownControlPlaneResult(result) {
+  const shutdownCoordinator = result.rebalanceCoordinator.shutdown;
+  if (typeof shutdownCoordinator === 'function') {
+    await shutdownCoordinator.call(result.rebalanceCoordinator);
+  }
+  result.leaseService.stop();
+  result.heartbeatService.stop();
+  result.endpointService.stop();
+  result.dispatchService.stop();
+}
+
 describe('ControlPlaneSetup', () => {
   let mockMessageRouter;
   let mockCdcIntegrationService;
@@ -51,8 +62,20 @@ describe('ControlPlaneSetup', () => {
       persistWriteOperation: async () => {},
     });
 
+    const registeredHandlers = new Map();
     mockMessageRouter = {
-      register: () => {},
+      register: (address, handler) => {
+        registeredHandlers.set(address, handler);
+      },
+      getRegisteredHandler: (address) =>
+        registeredHandlers.get(address) || null,
+      unregisterExact: (address, handler) => {
+        if (registeredHandlers.get(address) !== handler) {
+          return false;
+        }
+        registeredHandlers.delete(address);
+        return true;
+      },
       send: async () => {},
     };
 
@@ -85,20 +108,9 @@ describe('ControlPlaneSetup', () => {
     mockMessageGroupServices = new Map();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     for (const result of createdServices) {
-      if (result?.leaseService) {
-        result.leaseService.stop();
-      }
-      if (result?.heartbeatService) {
-        result.heartbeatService.stop();
-      }
-      if (result?.endpointService) {
-        result.endpointService.stop();
-      }
-      if (result?.dispatchService) {
-        result.dispatchService.stop();
-      }
+      await shutdownControlPlaneResult(result);
     }
     createdServices = [];
   });

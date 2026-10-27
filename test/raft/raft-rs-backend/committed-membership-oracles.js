@@ -22,8 +22,12 @@ import {fileURLToPath} from 'node:url';
 
 import Database from 'better-sqlite3';
 
+import {COMMITTED_MEMBERSHIP_STAMP_KIND} from
+  '../../../src/raft/raft-committed-membership-constants.js';
 import {RAFT_RS_TABLE} from
   '../../../src/raft/raft-rs-durable-store-constants.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {instantiateRaftRsCore} from './raw-raft-rs-test-core.js';
 
 const REPOSITORY_ROOT = path.resolve(
@@ -77,7 +81,7 @@ function readOnly(dbFile, read) {
  * @param {string} dbFile - The replica's database file.
  * @param {string} groupId - The group.
  * @return {Object|null} {appliedIndex, voters, learners, votersOutgoing,
- *   bootstrapIndex, admissionIndex} (indices as numbers or null).
+ *   bootstrapIndex, admissionIndex, membershipGenerationIndex}.
  */
 function durableAppliedState(dbFile, groupId) {
   return readOnly(dbFile, (db) => {
@@ -96,6 +100,7 @@ function durableAppliedState(dbFile, groupId) {
       votersOutgoing: JSON.parse(row.voters_outgoing).map(String).sort(),
       bootstrapIndex: nullable(row.bootstrap_index),
       admissionIndex: nullable(row.admission_index),
+      membershipGenerationIndex: Number(row.membership_generation_index),
     };
   });
 }
@@ -164,14 +169,38 @@ function decoder() {
  *   (index 0 = genesis), voters and learners sorted.
  */
 function logFold(dbFile, groupId, genesisPeerIds) {
+  return foldFrom(dbFile, groupId, {voters: genesisPeerIds, learners: [],
+    bootstrapIndex: 0});
+}
+
+/**
+ * O-a for a COMMITTED joiner: it opens from C_j with itself a learner, and
+ * the configuration entries at or below j are already folded into C_j (not
+ * applied again); only the entries above j are folded over it, an AddNode of
+ * itself moving it to the voters.
+ * @param {string} dbFile - The replica whose log is folded.
+ * @param {string} groupId - The group.
+ * @param {Object} bootstrap - {voters, learners, bootstrapIndex, selfPeerId}:
+ *   C_j as the stamp names it, j, and the joiner's own raft peer id.
+ * @return {Array<Object>} [{index, voters, learners}] as logFold.
+ */
+function bootstrapFold(dbFile, groupId, {voters, learners = [],
+  bootstrapIndex, selfPeerId}) {
+  return foldFrom(dbFile, groupId, {voters,
+    learners: [...learners, selfPeerId], bootstrapIndex});
+}
+
+function foldFrom(dbFile, groupId, start) {
   const wire = bindingWireNumbers();
   const confChangeEntryTypes = new Set([wire.entryType.EntryConfChange,
     wire.entryType.EntryConfChangeV2]);
-  const voters = new Set(genesisPeerIds.map(String));
-  const learners = new Set();
-  const snapshots = [{index: 0, voters: [...voters].sort(), learners: []}];
+  const voters = new Set(start.voters.map(String));
+  const learners = new Set(start.learners.map(String));
+  const snapshots = [{index: 0, voters: [...voters].sort(),
+    learners: [...learners].sort()}];
   for (const entry of durableLog(dbFile, groupId)) {
-    if (confChangeEntryTypes.has(entry.entryType)) {
+    if (confChangeEntryTypes.has(entry.entryType) &&
+        Number(entry.index) > Number(start.bootstrapIndex)) {
       const decoded = decoder().decode_conf_change_entry(
         entry.entryType, entry.data ?? undefined);
       for (const change of decoded.changes) {
@@ -207,12 +236,47 @@ function foldAt(fold, index) {
   return {voters: at.voters, learners: at.learners};
 }
 
+/**
+ * The COMMITTED stamp a correct leader answers, built only from the oracles:
+ * the fold of its durable log at its durable applied index, and its durable
+ * identity reservations.
+ * @param {string} dbFile - The leader's database file.
+ * @param {string} groupId - The group.
+ * @param {Array<string>} genesisPeerIds - The test's genesis founders.
+ * @param {string} leaderId - The leader's replica identity.
+ * @return {Object} The committed membership stamp.
+ */
+function oracleCommittedStamp(dbFile, groupId, genesisPeerIds, leaderId) {
+  const applied = durableAppliedState(dbFile, groupId);
+  const voters = foldAt(logFold(dbFile, groupId, genesisPeerIds),
+    applied.appliedIndex).voters;
+  const reserved = reservedIdentities(dbFile);
+  return {
+    kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
+    voters,
+    votersOutgoing: [],
+    learners: [],
+    learnersNext: [],
+    appliedIndex: applied.appliedIndex,
+    configurationKey: raftRsConfStateKey({voters}),
+    membershipGenerationIndex: applied.membershipGenerationIndex,
+    commitIndex: applied.appliedIndex,
+    term: 1,
+    leaderId,
+    gateOpen: true,
+    identities: Object.fromEntries(voters.map((peerId) =>
+      [peerId, reserved.get(peerId)])),
+  };
+}
+
 export {
   bindingWireNumbers,
+  bootstrapFold,
   durableAppliedState,
   durableHardState,
   durableLog,
   foldAt,
   logFold,
+  oracleCommittedStamp,
   reservedIdentities,
 };

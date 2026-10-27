@@ -33,11 +33,7 @@ import {
 import {
   STATE,
 } from '../../constants/index.js';
-import {
-  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
-  classifyTransportDeliveryOutcome,
-  isDeliveredTransportDeliveryOutcome,
-} from '../../transport/transport-semantic-outcome.js';
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from '../../transport/transport-semantic-outcome.js';
 import {
   NODE_STATE_PUBLICATION_OWNER_LITERAL,
   NODE_STATE_UPDATE_PUBLICATION_DEFER_REASON,
@@ -57,6 +53,9 @@ import {
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
 import {requireIssuedBootIncarnation} from '../boot-incarnation-contract.js';
+
+import {reportNodeStateUpdateDeliverySpent} from
+  './node-state-update-wait-report.js';
 
 const NODE_STATE_PUBLICATION_OWNER_SUBJECT = 'NodeStatePublicationOwner';
 
@@ -443,6 +442,7 @@ class NodeStatePublicationOwner {
         null;
     let lastError = null;
     let sameTargetRetryCount = 0;
+    const deliveryStartedAtMs = this.now();
 
     for (let attempt = 0; attempt < targetCandidates.length; attempt++) {
       const targetAddress = targetCandidates[attempt];
@@ -475,7 +475,7 @@ class NodeStatePublicationOwner {
             ),
           ) :
           deliveryTimeoutBudgetMs;
-        const rawDeliveryResult = await this.messageRouter().deliver(
+        const deliveryEnvelope = await this.messageRouter().deliver(
           targetAddress,
           message,
           {
@@ -483,21 +483,15 @@ class NodeStatePublicationOwner {
             timeoutMs: deliveryTimeoutMs,
           },
         );
-        const deliveryResult = classifyTransportDeliveryOutcome(
-          rawDeliveryResult,
-        );
-        if (!isDeliveredTransportDeliveryOutcome(deliveryResult) ||
-            deliveryResult?.reasonCode ===
-              TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER) {
-          throw buildNodeStateUpdateDeliveryError(
-            deliveryResult,
-            targetAddress,
-          );
+        const transport = deliveryTransportOf(deliveryEnvelope);
+        const answer = deliveryAnswerOf(deliveryEnvelope);
+        if (!isDeliveredTransportDeliveryOutcome(transport)) {
+          throw buildNodeStateUpdateDeliveryError(transport, targetAddress);
         }
         const durableCompletion =
-          rawDeliveryResult?.completionKind ===
+          answer?.completionKind ===
             CONTROL_PLANE_MESSAGE_COMPLETION_KIND.DURABLE_STATE_PUBLICATION &&
-          rawDeliveryResult?.completionCompleted === true;
+          answer?.completionCompleted === true;
         if (options.requireDurableCompletion === true && !durableCompletion) {
           const completionError = new Error(
             NODE_STATE_PUBLICATION_OWNER_LITERAL.DURABLE_COMPLETION_MISSING,
@@ -520,16 +514,16 @@ class NodeStatePublicationOwner {
         return buildNodeStateUpdatePublicationOutcome({
           publicationMode,
           publicationDiagnostics,
-          completionKind: rawDeliveryResult?.completionKind ||
+          completionKind: answer?.completionKind ||
             CONTROL_PLANE_MESSAGE_COMPLETION_KIND.NOT_OBSERVED,
           completionCompleted: durableCompletion,
           [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW]:
-            rawDeliveryResult?.[
+            answer?.[
               CONTROL_PLANE_MESSAGE_COMPLETION_FIELD.AUTHORITATIVE_ROW
             ] || null,
           [CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
             .AUTHORITATIVE_OBSERVED_AT_MS]:
-              rawDeliveryResult?.[
+              answer?.[
                 CONTROL_PLANE_MESSAGE_COMPLETION_FIELD
                   .AUTHORITATIVE_OBSERVED_AT_MS
               ] ?? null,
@@ -679,12 +673,15 @@ class NodeStatePublicationOwner {
           continue;
         }
 
-        this.logger().error(JOINING_LOG_MSG.NODE_STATE_UPDATE_FAILED, {
-          nodeId: this.nodeId,
+        this.logNodeStateUpdateFailed(error, {
+          retryableTargetFailure,
           targetAddress,
           state,
           publicationMode,
-          error: error.message,
+          attempts: attempt + 1,
+          sameTargetRetryCount,
+          deliveryTimeoutBudgetMs,
+          elapsedMs: this.now() - deliveryStartedAtMs,
         });
         throw buildNodeStateUpdatePublicationFailureError(
           error,
@@ -695,6 +692,28 @@ class NodeStatePublicationOwner {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Log a terminal node-state update failure. A retryable failure that ran
+   * out of targets and same-target retries is a spent retry bound and is
+   * reported as wait_bound_spent (subject: the node state, since heartbeats
+   * re-fire it); any other failure keeps the plain error line.
+   * @param {Error} error
+   * @param {Object} failure
+   */
+  logNodeStateUpdateFailed(error, failure) {
+    if (failure.retryableTargetFailure !== true) {
+      this.logger().error(JOINING_LOG_MSG.NODE_STATE_UPDATE_FAILED, {
+        nodeId: this.nodeId,
+        targetAddress: failure.targetAddress,
+        state: failure.state,
+        publicationMode: failure.publicationMode,
+        error: error.message,
+      });
+      return;
+    }
+    reportNodeStateUpdateDeliverySpent(this.logger(), this.nodeId, error, failure);
   }
 
   triggerBackgroundClusterMeshReconciliation(state) {

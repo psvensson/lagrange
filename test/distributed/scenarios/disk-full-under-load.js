@@ -8,6 +8,10 @@
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {resolveDiskFullUnderLoadScenarioConfig} from '../harness/scenario-config.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 
 const ZERO = 0;
 
@@ -33,6 +37,7 @@ async function run(cluster, options = {}) {
   const {
     loadOpsPerSec,
     loadDuration,
+    tableName,
     preFaultDelayMs,
     faultHoldMs,
     postReleaseDelayMs,
@@ -54,9 +59,14 @@ async function run(cluster, options = {}) {
     'Scenario requires one non-seed node for disk pressure',
   );
 
+  const provisionedTable = await provisionUserLoadTable(cluster, {
+    tableName,
+  });
+
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   await sleep(preFaultDelayMs);
@@ -108,8 +118,14 @@ async function run(cluster, options = {}) {
 
   await cluster.waitForConsistencyConvergence();
 
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'disk-full-under-load-post-release',
+  });
+
   return {
     victimNodeId,
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
     diskPressure: {
       sizeMb: diskFillSizeMb,
       filePath: diskPressurePath,

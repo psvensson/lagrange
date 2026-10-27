@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -421,13 +422,20 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       }],
       'timeout should retain in-flight replica operation details',
     );
+    // The spent readiness bound is reported once as wait_bound_spent; the
+    // former timeout diagnostics ride in lastObserved.
+    const spentEvents = errorEvents.filter(
+      (event) => event.context?.event === 'wait_bound_spent');
+    t.equal(spentEvents.length, 1, 'timeout logs exactly one wait_bound_spent');
+    t.equal(spentEvents[0]?.context?.wait, 'joinReadinessTimeoutMs',
+      'timeout log names the spent join-readiness bound');
     t.same(
-      errorEvents.at(-1)?.context?.missingNodeEndpointNodeIds,
+      spentEvents[0]?.context?.lastObserved?.missingNodeEndpointNodeIds,
       ['joining-node-join-gate-3'],
       'timeout log should include missing websocket endpoint diagnostics',
     );
     t.equal(
-      errorEvents.at(-1)?.context?.timeoutKind,
+      spentEvents[0]?.context?.lastObserved?.timeoutKind,
       'no_progress',
       'timeout log should classify stagnant readiness explicitly',
     );
@@ -903,18 +911,16 @@ test('NodeJoiningService - authoritative backfill merges divergent replica snaps
             'replica fanout should query the propagated table directly',
           );
           if (address === 'seed/partition/service_endpoints-p1-r1') {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               rows: replicaRowsA,
-            };
+            });
           }
           if (address === 'seed/partition/service_endpoints-p1-r2') {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               success: true,
               rows: replicaRowsB,
-            };
+            });
           }
           throw new Error(`unexpected address ${address}`);
         },
@@ -1189,11 +1195,7 @@ test(
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {

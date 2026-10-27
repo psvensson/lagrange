@@ -61,13 +61,37 @@ const ReplicaOperationField = Object.freeze({
   ENTITY_ID: FIELD.ENTITY_ID,
   REASON: FIELD.REASON,
   SOURCE_REPLICA_ID: 'sourceReplicaId',
+  // Exact authoritative FAILED lifecycle generation which authorized a
+  // failed-create target cleanup. It is a precondition carried to the
+  // lifecycle owner; the value never authorizes a mutation by itself.
+  FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION:
+    'failedCreateTargetLifecyclePrecondition',
+  // Durable late-CREATE admission binding carried by the workflow owner to
+  // the partition handler. The handler CASes the same replica_operations row
+  // before any lifecycle or physical CREATE effect.
+  CREATE_ADMISSION_TOKEN: 'createAdmissionToken',
+  CREATE_ADMISSION_WORKFLOW_UPDATED_AT:
+    'createAdmissionWorkflowUpdatedAt',
+  CREATE_ADMISSION_ATTEMPT_TOKEN: 'createAdmissionAttemptToken',
+  CREATE_ADMISSION_ATTEMPT_SEQ: 'createAdmissionAttemptSeq',
+  // A message-group CREATE's join route (kind, group, target, peer). The
+  // handler binds it to the recorded learner identity; it is never evidence.
+  MESSAGE_GROUP_JOIN_PACKAGE: 'messageGroupJoinPackage',
   // A REPLACE handoff attempt's sequence, echoed by the handler so a late
   // answer of an earlier attempt is dropped.
   ATTEMPT_SEQ: 'attemptSeq',
   MEMBERSHIP: 'membership',
+  // Exact historical learner query; never a proposal or CREATE capability.
+  MEMBERSHIP_QUERY: 'membershipQuery',
   // In-memory only (never persisted): ReplicaOperationVisibilityClass.
   VISIBILITY_CLASS: 'visibilityClass',
   PROPOSAL: 'proposal',
+  // A REMOVE that retires its replica's whole group as a unit carries the
+  // workflow's evidence (partition/group-retirement-evidence.js).
+  GROUP_RETIREMENT: 'groupRetirement',
+  // A committed-membership read's purpose when it is not a bootstrap read
+  // (COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT only).
+  READ_PURPOSE: 'readPurpose',
 });
 
 const ReplicaOperationResponseStatus = Object.freeze({
@@ -79,7 +103,16 @@ const ReplicaOperationResponseStatus = Object.freeze({
   ERROR: 'error',
 });
 
+// A replica-operation answer that completed: COMPLETED without an error text.
+// A completed status carrying an error is not a completion; this is the
+// answer's own rule, never a transport decision (design finding F-C).
+function isCompletedReplicaOperationAnswer(answer) {
+  return answer?.status === ReplicaOperationResponseStatus.COMPLETED &&
+    !(typeof answer.error === 'string' && answer.error.length > 0);
+}
+
 export {
+  isCompletedReplicaOperationAnswer,
   ReplicaOperationMessageType,
   ReplicaOperationReason,
   ReplaceWitnessDeliveryOutcome,

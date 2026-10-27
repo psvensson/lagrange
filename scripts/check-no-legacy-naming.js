@@ -14,9 +14,9 @@
 //
 // Run via `npm run audit:no-legacy-naming` (wired into test:static).
 
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {execGit} from './checks/git-invocation.js';
 import {isQuestLogPath} from './solve/store.js';
 
 const LEGACY_TOKENS = Object.freeze([
@@ -66,11 +66,7 @@ const PATTERN = new RegExp(LEGACY_TOKENS.join('|'), 'u');
 function trackedHits(tokens) {
   let out = '';
   try {
-    out = execFileSync(
-      'git',
-      ['grep', '-nI', '-E', '--', tokens.join('|')],
-      {encoding: 'utf8', maxBuffer: 64 * 1024 * 1024},
-    );
+    out = execGit(['grep', '-nI', '-E', '--', tokens.join('|')], {encoding: 'utf8'});
   } catch (err) {
     // git grep exits 1 when there are no matches — that is the success path.
     if (err.status === 1 && !err.stdout) return [];

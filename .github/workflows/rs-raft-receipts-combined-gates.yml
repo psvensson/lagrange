@@ -1,0 +1,132 @@
+# WIP composition source: focused cross-owner gates and original native V10.
+# This is NOT independent verification or merge certification.
+name: rs-raft-receipts-combined-gates
+on:
+  push:
+    branches: [integrate/rs-raft-receipts-wip-20261014]
+    paths:
+      - .github/workflows/rs-raft-receipts-combined-gates.yml
+      - src/raft/raft-rs-runtime-owner.js
+      - src/raft/raft-rs-inbound-timer-custody.js
+      - src/node/replica-handler-participant-release.js
+      - src/partition/partition-participant-transaction-pause.js
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+      - test/partition/participant-release-native-application-order.test.js
+      - test/node/replica-handler-release-recovery.test.js
+      - test/partition/participant-release-applied-position.test.js
+      - test/shards/impact-graph-seal.json
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-receipts-combined-gates
+  cancel-in-progress: false
+jobs:
+  composed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install exact lock
+        run: npm ci
+      - name: Measure actual composed runtime/recipient/transaction controls
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-receipts-combined
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          for task in audit:shards audit:impact-contracts test:deps \
+            audit:no-legacy-consensus-references audit:guideline:ambient-intrinsics \
+            audit:owner-boundary-segments; do
+            slug="${task//:/-}"
+            npm run -s "$task" > "$OUT/$slug.log" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$slug.status"
+            echo "$task status=$result"
+            if test "$result" -ne 0; then
+              failed=1
+              tail -n 32 "$OUT/$slug.log"
+            fi
+          done
+          npx eslint \
+            src/raft/raft-rs-runtime-owner.js \
+            src/raft/raft-rs-runtime-owner-constants.js \
+            src/raft/raft-rs-inbound-timer-custody.js \
+            src/node/replica-handler-participant-release.js \
+            src/node/replica-handler-release-recovery.js \
+            src/partition/partition-participant-transaction-pause.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/partition/participant-release-native-exit-diagnostic.js \
+            test/test-helpers/participant-release-observer-resource-fixture.js \
+            test/test-helpers/participant-release-recovery-harness.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/scoped-lint.status"
+          if test "$lint" -ne 0; then failed=1; tail -n 80 "$OUT/scoped-lint.log"; fi
+          for f in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js \
+            test/raft/raft-rs-backend/operation-port-ready-recovery.test.js \
+            test/partition/participant-release-native-application-order.test.js \
+            test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js \
+            test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js; do
+            name="${f##*/}"
+            npm run -s test:file -- "$f" > "$OUT/$name.log" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$name.status"
+            echo "$f status=$result"
+            tail -n 12 "$OUT/$name.log"
+            if test "$result" -ne 0; then
+              failed=1
+              grep -E 'not ok|fail|cancel|error|timeout' "$OUT/$name.log" | tail -n 40 || true
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          # Original V10 test bytes, no V11-V14 diagnostics, under this exact
+          # composed production code; never write the modified test to Git.
+          ORIGINAL=c12840725e12c87855b2942566313ecee37bc487
+          TEST=test/partition/participant-release-native-application-order.test.js
+          git rev-parse "$ORIGINAL:$TEST" > "$OUT/original-test-blob.txt"
+          git show "$ORIGINAL:$TEST" > "$TEST"
+          if grep -Eq 'installBeforeExitDiagnostic|setActualCoreEntryObserver|setNativeInboundStageObserver' "$TEST"; then
+            echo 'Unexpected original V10 observer, refusing test' > "$OUT/original-v10-preflight.txt"
+            failed=1
+          else
+            npm run -s test:file -- "$TEST" > "$OUT/original-v10.log" 2>&1
+            orig=$?
+            printf '%s\n' "$orig" > "$OUT/original-v10.status"
+            echo "original V10 on candidate $GITHUB_SHA status=$orig"
+            tail -n 24 "$OUT/original-v10.log"
+            if test "$orig" -ne 0; then failed=1; fi
+          fi
+          exit "$failed"
+      - name: Archive exact composed control results, including every red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-receipts-combined-${{ github.sha }}
+          path: test-output/rs-raft-receipts-combined/
+          retention-days: 14
+          if-no-files-found: warn

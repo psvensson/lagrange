@@ -1,0 +1,79 @@
+# Read-only merge rehearsal, no push and no main mutation. Source conflicts stop.
+name: rs-raft-receipts-compose-dry-run
+on:
+  push:
+    branches: [integrate/rs-raft-receipts-wip-20261014]
+    paths: [.github/workflows/rs-raft-receipts-compose-dry-run.yml]
+permissions:
+  contents: read
+jobs:
+  compose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Preserve exact WIP merge outcomes without promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTROLS=08a4e95ee147762069bd047af1fe770964800793
+          NATIVE=d7570ecc449d8827d0187e6ee8a24fee1a4ab603
+          OUT=test-output/rs-raft-compose-dry
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/starting-ref.txt"
+          printf '%s\n' "$CONTROLS" > "$OUT/controls-ref.txt"
+          printf '%s\n' "$NATIVE" > "$OUT/native-ref.txt"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          for c in "$CONTROLS" "$NATIVE"; do git cat-file -e "$c^{commit}"; done
+          git config user.name 'rs-raft-receipts-dryrun'
+          git config user.email 'rs-raft-dryrun@example.invalid'
+          for name in controls native; do
+            if [ "$name" = controls ]; then target="$CONTROLS"; else target="$NATIVE"; fi
+            set +e
+            git merge --no-commit --no-ff "$target" > "$OUT/$name-merge.log" 2>&1
+            status=$?
+            set -e
+            git status --short > "$OUT/$name-status.txt"
+            git diff --name-only --diff-filter=U > "$OUT/$name-conflicts.txt"
+            printf '%s\n' "$status" > "$OUT/$name-merge.status"
+            if [ -s "$OUT/$name-conflicts.txt" ]; then
+              echo "$name conflicts:"
+              cat "$OUT/$name-conflicts.txt"
+              while IFS= read -r file; do
+                case "$file" in
+                  test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json|test/shards/impact-graph-seal.json)
+                    git checkout --ours -- "$file"
+                    git add -- "$file" ;;
+                  *)
+                    echo "Non-generated conflict in $file — REFUSED"
+                    exit 1 ;;
+                esac
+              done < "$OUT/$name-conflicts.txt"
+            elif [ "$status" -ne 0 ]; then
+              echo "$name merge failed without a resolvable generated conflict"
+              exit 1
+            fi
+            if git ls-files -u | grep .; then echo 'Unmerged paths remain'; exit 1; fi
+            git diff --check
+            git -c core.hooksPath=/dev/null commit -m "WIP local-only merge rehearsal of $name exact pinned candidate" > "$OUT/$name-commit.log"
+            git rev-parse HEAD > "$OUT/$name-local-commit.txt"
+            git rev-parse HEAD^{tree} > "$OUT/$name-local-tree.txt"
+            echo "$name integration tree $(cat "$OUT/$name-local-tree.txt")"
+          done
+          git diff-tree -r --name-status "$GITHUB_SHA" HEAD > "$OUT/composed-paths.txt"
+          test -z "$(git ls-files -u)"
+          git status --short > "$OUT/final-status.txt"
+          echo 'Composition completed as local-only WIP; no resulting commit pushed'
+          echo 'Generated metadata remains unverified and requires canonical refresh'
+      - name: Preserve all source conflicts and local-only tree provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-compose-dry-${{ github.sha }}
+          path: test-output/rs-raft-compose-dry/
+          retention-days: 10
+          if-no-files-found: warn

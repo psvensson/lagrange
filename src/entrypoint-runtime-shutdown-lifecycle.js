@@ -9,6 +9,7 @@ import {
   startLogsTablePersistenceOnReadiness,
 } from './logging/logs-persistence-startup.js';
 import {LogsTableService} from './logging/logs-table-service.js';
+import {submitLocalNodeDrainIntent} from './node/local-node-drain.js';
 import {
   ENTRYPOINT_DEFAULT,
   ENTRYPOINT_LOG_MSG,
@@ -29,6 +30,7 @@ const LOCAL_STR_SHUTDOWN_STEP_TIMEBOX =
 // graceful drain race the docker SIGKILL grace. NOTE: the sibling slow step
 // publishNodeShutdownStatus is deliberately NOT boxed here — it is cluster-facing
 // and already internally bounded by reporterTimeoutMs (see its call site).
+// ends-on: n/a timebox (the step routinely blocks 5-7 s; exit continues at 3 s)
 const SHUTDOWN_BEST_EFFORT_STEP_TIMEOUT_MS = 3000;
 const LOCAL_STR_SIGINT = 'SIGINT';
 const LOCAL_STR_SIGTERM = 'SIGTERM';
@@ -296,16 +298,11 @@ function createRuntimeShutdown(options) {
         Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
       const drainingSnapshot = await timeShutdownStep(
         options.logger, signal, 'submitDrainIntent', () =>
-          typeof options.membershipLifecycleController?.submitDrainIntent ===
-            'function' ?
-            options.membershipLifecycleController.submitDrainIntent({
-              drainDeadlineMs,
-              reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
-              signal,
-            }) :
-            options.bootstrapAPI.markDraining({
-              drainDeadlineMs,
-            }),
+          submitLocalNodeDrainIntent(options, {
+            drainDeadlineMs,
+            reasonCode: LIFECYCLE_REASON.NODE_DRAINING,
+            signal,
+          }),
       );
       options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
         nodeId: options.nodeId,

@@ -134,6 +134,11 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     if (!IDENTIFIER_PATTERN.test(candidate)) {
       return fallback;
     }
+    if (candidate === 'logs') {
+      throw new Error(
+        'LoadGenerator cannot target protected system table logs',
+      );
+    }
     return candidate;
   }
 

@@ -15,7 +15,6 @@
 //              owners must be proved
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -34,11 +33,12 @@ import {
 } from '../../scripts/checks/changed-paths.js';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
 
 function git(repo, args) {
-  execFileSync('git', args, {
+  execGit(args, {
     cwd: repo,
     encoding: UTF8,
     stdio: 'pipe',
@@ -129,7 +129,7 @@ test('semantic paths include vanished sides; existing paths do not', () => {
 });
 
 test('the derivation does not modify the repository it inspects', () => {
-  const fingerprint = () => execFileSync('git',
+  const fingerprint = () => execGit(
     ['status', '--porcelain'],
     {cwd: repo, encoding: UTF8, env: gitProcessEnvironment()});
   const before = fingerprint();

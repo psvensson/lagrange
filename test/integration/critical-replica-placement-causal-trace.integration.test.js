@@ -343,7 +343,10 @@ test('critical placement causal trace', {timeout: TEST_TIMEOUT_MS},
         systemTableCache,
         messageRouter: bootstrapResult.messageRouter,
         epochManager: bootstrapResult.epochManager,
-        bootstrapService,
+        bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
+        runtimeOwner: bootstrapService.runtimeDependencyOwner,
+        assertOriginalSeedPublicAdmission: () =>
+          bootstrapService.assertOriginalSeedPublicAdmission(),
       });
       await seedApi.initialize(0, {listen: false});
       seedApi.setSqlQueryEngine(queryEngine);

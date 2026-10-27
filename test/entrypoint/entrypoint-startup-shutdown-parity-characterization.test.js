@@ -196,12 +196,13 @@ function createMockLogsPersistence(tracker) {
 // ---------------------------------------------------------------------------
 
 test('Seed startup - composition steps execute in correct order', async (t) => {
-  // This test locks the seed startup ordering as observed in src/index.js:
+  // This test locks the seed startup ordering as observed in
+  // src/lagrange-runtime-startup.js startSeedNode():
   // 1. Readiness event wiring (TRANSITION + BLOCKED_DURATION)
-  // 2. BootstrapAPI.initialize()
-  // 3. bootstrapService.bootstrap()
-  // 4. Runtime hydration (systemTableCache, services on bootstrapAPI)
-  // 5. bootstrapService.startWebSocketServer()
+  // 2. bootstrapService.bootstrap()
+  // 3. Runtime hydration (systemTableCache, services on bootstrapAPI)
+  // 4. bootstrapService.startWebSocketServer()
+  // 5. BootstrapAPI.initialize() (only after transport listen succeeds)
   // 6. SQL engine creation
   // 7. PartitionSplitMergeManager creation + migration wiring
   // 8. Dynamic config wiring
@@ -211,26 +212,26 @@ test('Seed startup - composition steps execute in correct order', async (t) => {
 
   const tracker = createStepTracker();
 
-  // Simulate the seed startup composition in the same order as main()
+  // Simulate the seed startup composition in the same order as startSeedNode()
   const readinessState = createMockReadinessState(tracker);
+  const bootstrapAPI = createMockBootstrapAPI(tracker);
 
   // Step 1: Readiness event wiring
   readinessState.on(READINESS_EVENT.TRANSITION, noop);
   readinessState.on(READINESS_EVENT.BLOCKED_DURATION, noop);
 
-  // Step 2: BootstrapAPI init
-  const bootstrapAPI = createMockBootstrapAPI(tracker);
-  await bootstrapAPI.initialize();
-
-  // Step 3: Seed bootstrap
+  // Step 2: Seed bootstrap
   tracker.record(STEP.SEED_BOOTSTRAP);
 
-  // Step 4: Runtime hydration
+  // Step 3: Runtime hydration
   tracker.record(STEP.RUNTIME_HYDRATE_CACHE);
   tracker.record(STEP.RUNTIME_HYDRATE_SERVICES);
 
-  // Step 5: WebSocket server start (seed-only)
+  // Step 4: WebSocket server start (seed-only)
   tracker.record(STEP.SEED_WS_SERVER_START);
+
+  // Step 5: BootstrapAPI init (after transport listen succeeds)
+  await bootstrapAPI.initialize();
 
   // Step 6: SQL engine
   tracker.record(STEP.SQL_ENGINE_CREATE);
@@ -257,8 +258,6 @@ test('Seed startup - composition steps execute in correct order', async (t) => {
     // Readiness wiring (2 listeners)
     STEP.READINESS_WIRING,
     STEP.READINESS_WIRING,
-    // BootstrapAPI init
-    STEP.BOOTSTRAP_API_INIT,
     // Seed bootstrap
     STEP.SEED_BOOTSTRAP,
     // Runtime hydration
@@ -266,6 +265,8 @@ test('Seed startup - composition steps execute in correct order', async (t) => {
     STEP.RUNTIME_HYDRATE_SERVICES,
     // WebSocket server (seed-only)
     STEP.SEED_WS_SERVER_START,
+    // BootstrapAPI init (follows transport listen)
+    STEP.BOOTSTRAP_API_INIT,
     // SQL engine assembly
     STEP.SQL_ENGINE_CREATE,
     STEP.SPLIT_MERGE_MANAGER_CREATE,
@@ -689,27 +690,6 @@ test('Branch-specific - seed shutdown calls bootstrapService.shutdown(), ' +
     'join shutdown calls nodeJoiningService.cleanup()');
 });
 
-test('Branch-specific - seed creates BootstrapAPI with bootstrapService ' +
-  'reference, join creates it without', async (t) => {
-  // Seed path: new BootstrapAPI({...bootstrapService: bootstrapService...})
-  // Join path: new BootstrapAPI({...bootstrapService: null...})
-  // This affects isStartupComplete() and other bootstrapService-dependent
-  // readiness checks in BootstrapAPI.
-
-  const seedBootstrapAPIOptions = {
-    bootstrapService: {phase: 'COMPLETE'},
-  };
-
-  const joinBootstrapAPIOptions = {
-    bootstrapService: null,
-  };
-
-  t.ok(seedBootstrapAPIOptions.bootstrapService !== null,
-    'seed BootstrapAPI receives bootstrapService reference');
-  t.equal(joinBootstrapAPIOptions.bootstrapService, null,
-    'join BootstrapAPI receives null bootstrapService');
-});
-
 test('Branch-specific - both paths wire controlPlaneWriteHealthProvider ' +
   'from their respective owner', async (t) => {
   // Seed: createControlPlaneWriteHealthProvider(bootstrapService)
@@ -734,22 +714,33 @@ test('Branch-specific - both paths wire controlPlaneWriteHealthProvider ' +
 // 6. Composition ordering invariants
 // ---------------------------------------------------------------------------
 
-test('Composition invariant - BootstrapAPI.initialize() happens before ' +
-  'bootstrap/join execution', async (t) => {
-  // BootstrapAPI is initialized early so /health reports liveness during
-  // bootstrap/join phases. This is a critical ordering invariant.
+test('Composition invariant - seed initializes BootstrapAPI after transport ' +
+  'listen while join initializes before join execution', async (t) => {
+  // Seed acquires its HTTP listener only after bootstrap, runtime hydration,
+  // and transport WebSocket listen succeed so a failed transport bind never
+  // publishes HTTP readiness. Join initializes BootstrapAPI before join
+  // execution so /health reports liveness during join phases.
 
-  const tracker = createStepTracker();
-  const bootstrapAPI = createMockBootstrapAPI(tracker);
+  const seedTracker = createStepTracker();
+  const seedBootstrapAPI = createMockBootstrapAPI(seedTracker);
+  seedTracker.record(STEP.SEED_BOOTSTRAP);
+  seedTracker.record(STEP.SEED_WS_SERVER_START);
+  await seedBootstrapAPI.initialize();
 
-  await bootstrapAPI.initialize();
-  tracker.record(STEP.SEED_BOOTSTRAP);
+  const seedWsIndex = seedTracker.steps.indexOf(STEP.SEED_WS_SERVER_START);
+  const seedInitIndex = seedTracker.steps.indexOf(STEP.BOOTSTRAP_API_INIT);
+  t.ok(seedWsIndex < seedInitIndex,
+    'seed startWebSocketServer() precedes BootstrapAPI.initialize()');
 
-  const initIndex = tracker.steps.indexOf(STEP.BOOTSTRAP_API_INIT);
-  const bootstrapIndex = tracker.steps.indexOf(STEP.SEED_BOOTSTRAP);
+  const joinTracker = createStepTracker();
+  const joinBootstrapAPI = createMockBootstrapAPI(joinTracker);
+  await joinBootstrapAPI.initialize();
+  joinTracker.record(STEP.JOIN_EXECUTE);
 
-  t.ok(initIndex < bootstrapIndex,
-    'BootstrapAPI.initialize() precedes bootstrap execution');
+  const joinInitIndex = joinTracker.steps.indexOf(STEP.BOOTSTRAP_API_INIT);
+  const joinExecuteIndex = joinTracker.steps.indexOf(STEP.JOIN_EXECUTE);
+  t.ok(joinInitIndex < joinExecuteIndex,
+    'join BootstrapAPI.initialize() precedes join execution');
 });
 
 test('Composition invariant - logs persistence starts after admin API ' +

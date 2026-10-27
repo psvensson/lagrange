@@ -1,0 +1,47 @@
+{
+  "schema": "solve-quest/2",
+  "id": "log-owner-diagnostic-marker",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A narrow diagnostic marker intent on the existing admin ingress delegates to LogsOwner and writes a fixed schema record to the existing logs system partition through its authoritative gateway. Server node identity and original marker content/time stay fixed across asynchronous work and gateway retries. Identical recorded markers settle retries; conflicting identities refuse without overwrite; unknown or failed observations never prove noncommit. Admin smoke and split-brain probes migrate from raw SQL while retaining logs-p1, local minority ingress, no minority ACK during the fault and post-heal durable marker checks.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/log-owner-diagnostic-marker/evidence/receipt.json",
+      "requiredReceipts": [
+        "fixed-owner-intent-and-retry-outcomes",
+        "http-owner-gateway-durable-marker",
+        "local-minority-and-postheal-probe-fidelity",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "owner",
+      "statement": "Extend LogsOwner only; fixed marker namespace, fixed level and metadata, body only markerId/message and server-owned node identity. No arbitrary log fields, upsert/overwrite, generic SQL exemption, new state store or competing admin authorization scheme. Retain existing admin ingress trust/auth behavior and trace its actual path."
+    },
+    {
+      "id": "retry",
+      "statement": "Capture and freeze request and row before the first await. Existing gateway retry retains write identity and bytes. Read reconciliation uses explicit-success authoritative row observations and exact marker semantic identity; uniqueness at insertion is the mutation-time fence. Different ingress node is a different marker intent and conflicts. Missing/unavailable/read-failed or ambiguous mutation outcomes do not mean not committed."
+    },
+    {
+      "id": "caller",
+      "statement": "Migrate smoke and network-partition-split-brain only plus narrow node-handle transport. Keep marker on logs-p1 and originate the fault probe inside the actual isolated node where required. Preserve useful typed refusal/unknown outcomes; a client timeout cannot count as rejected/not committed. Retain post-heal majority presence/minority absence assertions. No synthetic success fallback when a real capability is absent."
+    },
+    {
+      "id": "scope",
+      "statement": "Node e701, scale6a228 and the separately prepared case unit remain frozen. No capability retirement, affinity migration or MovieLens journal reset here; those have separate decisions/units. Do not change scheduler, native transaction semantics, production retry/timeouts, baselines or hooks. Independent source review before composition; no main merge/publication."
+    },
+    {
+      "id": "proof",
+      "statement": "Seal before production changes; preserve missing-route/raw-admission red. Prove real HTTP -> owner -> gateway -> CDC -> SQLite with exact row, malformed/collision/retry/read-failure outcomes and both actual caller transports. Canonical retries0, thermal and root controller coordination; local boundary proof is not a native cluster partition acceptance claim."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "retry-loops",
+    "harness-fidelity"
+  ],
+  "sealedAt": "6a228ced9439af07216b492bb8fdbba5540c3671"
+}

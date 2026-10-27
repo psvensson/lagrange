@@ -1,9 +1,26 @@
-import {QUERY_AST_TYPE, QUERY_OPERATION} from '../query/query-constants.js';
+import {
+  QUERY_AST_TYPE,
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+  QUERY_OPERATION,
+} from '../query/query-constants.js';
+import {isSystemTableName} from
+  '../bootstrap/system-table-schema-shared-constants.js';
 import {
   MIGRATION_ERROR_MSG,
   MIGRATION_STATUS,
   MIGRATION_TYPE,
 } from './migration-constants.js';
+
+function assertWritableMigrationTarget(tableRef, tableMetadata = null) {
+  if (isSystemTableName(tableRef) ||
+      isSystemTableName(tableMetadata?.table_name) ||
+      isSystemTableName(tableMetadata?.table_id)) {
+    const error = new Error(QUERY_ERROR_MSG.SYSTEM_TABLE_WRITE_REFUSED);
+    error.code = QUERY_ERROR_CODE.SYSTEM_TABLE_WRITE_REFUSED;
+    throw error;
+  }
+}
 
 const LOCAL_STR_COLUMN = 'column';
 
@@ -137,12 +154,14 @@ class MigrationPipeline {
   async handleAlterTable(ast, sessionId = null) {
     const alterSpec = this.buildAlterSpec(ast);
     const tableRef = String(ast.table || '').trim();
+    assertWritableMigrationTarget(tableRef);
     const tableMetadata = await this.migrationCoordinator.resolveTableMetadata(
       tableRef,
     );
     if (!tableMetadata) {
       throw new Error(`${MIGRATION_PIPELINE_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableRef}`);
     }
+    assertWritableMigrationTarget(tableRef, tableMetadata);
 
     const activeMigration =
       await this.migrationCoordinator.findActiveMigrationByTableId(

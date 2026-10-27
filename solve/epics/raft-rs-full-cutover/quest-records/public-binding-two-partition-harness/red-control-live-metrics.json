@@ -1,0 +1,43 @@
+{
+  "schema": "quest-red-control/1",
+  "quest": "public-binding-two-partition-harness",
+  "baseSha": "125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+  "reproducedAt": "2026-10-06T16:08:19.420Z",
+  "command": "npm run test:file -- test/integration/public-binding-cell-invocation-seam.integration.test.js",
+  "exitCode": 1,
+  "candidate": {
+    "patch": "candidate-live-metrics.patch",
+    "patchSha256": "f185db8a99f419981476abd032a4a29604d33d50b059e86d1d8ec07b3c32c65a",
+    "files": {
+      "test/integration/helpers/public-binding-seam-harness.js": "a9718bd9c08f86c2d7a8f0dc358cca34b914441d0a20fb88356b164f0c597eef",
+      "test/integration/public-binding-cell-invocation-seam.integration.test.js": "e01eb8d722a55d8a695997bd7b0cf69b05f7206f581d92fbbc1e29586c890850"
+    }
+  },
+  "negative": {
+    "patch": "policy-revert-live-metrics.patch",
+    "patchSha256": "8fa9af4102b248a7ab90935aec0382a2182b6007c82aaaaa785cdff0b64d4903",
+    "description": "live-metrics candidate bytes with only the canonical TablePolicyService update removed",
+    "files": {
+      "test/integration/helpers/public-binding-seam-harness.js": "6b18bf6275f9d9d4030538840dbd9c2604701c65ae5fca636d85ccbbe6e37ce3",
+      "test/integration/public-binding-cell-invocation-seam.integration.test.js": "e01eb8d722a55d8a695997bd7b0cf69b05f7206f581d92fbbc1e29586c890850"
+    }
+  },
+  "output": {
+    "file": "policy-revert-live-metrics-red.log",
+    "sha256": "9b70f8c0bf6c854857d321876d232791d6416e0db88496608fa664bd713cfbe7",
+    "assertions": 70,
+    "requiredSignals": [
+      "ok 3 - harness: the production manager consumes both live leader sizes",
+      "ok 4 - harness: the live child pair contains more than one byte",
+      "not ok 5 - harness: the production manager keeps the live children merge-ineligible",
+      "not ok 18 - both exact split children remain current through the full exercise",
+      "# test-files total=1 pass=0 fail=1 assertions=70"
+    ]
+  },
+  "reproduce": [
+    "git worktree add --detach <scratch-worktree> 125bb12e761ef48e7f7b5387540e524a8c6c1c80",
+    "git -C <scratch-worktree> apply <archive>/candidate-live-metrics.patch",
+    "git -C <scratch-worktree> apply <archive>/policy-revert-live-metrics.patch",
+    "cd <scratch-worktree> && npm run test:file -- test/integration/public-binding-cell-invocation-seam.integration.test.js"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "solve-relocation-shard/1",
+  "bundle": "rs-raft-admitted-inbound-liveness--rs-raft-admitted-inbound-liveness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "bundleSha256": "fa202b54cc70c56c9fe006c5e5c5090e3f2787459c5c033322f6b188b6abbe28",
+  "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/rs-raft-admitted-inbound-liveness--rs-raft-admitted-inbound-liveness-lineage-evidence-31ee37359-2026-10-24.tar.gz",
+  "sourceCommit": "31ee37359b142a976d880876bbfdf3e878ff3d97",
+  "root": "solve/quests/rs-raft-admitted-inbound-liveness/evidence/",
+  "files": [
+    ["native-inbound-stage-design-v1.md","8ac1bb83af5e311904ecd88266b76b6bcc8a46506d2d4cde2140d27137efa547",4138],
+    ["owned-inbound-timer-design-v1.md","17c9039590111979d5f39936543c3c4336a8caa0770b60dda873f1f9b9d33e5a",4710],
+    ["owned-inbound-timer-replacement-design-v2.md","d590ea6cd417fedadadfe351f25c5fa93b56dce3c8a089e1e11eee7fb2b990c1",4196]
+  ]
+}

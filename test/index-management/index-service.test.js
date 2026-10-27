@@ -10,6 +10,8 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -515,6 +517,8 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
     tableName: 'users',
     replicaId: 'test-partition-r1',
     replicaIds: ['test-partition-r1'],
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: {
       columns: [
@@ -526,8 +530,7 @@ test('IndexService - creates SQLite index on partitions', async (t) => {
   }));
 
   await partition.initialize();
-  partition.role = 'leader';
-  partition.isLeader = true;
+  await resumeFixtureParticipantAdmission(partition);
 
   const sqlEngine = createMockSqlEngine([], [partition]);
   const cdcService = createMockCDCService();
@@ -574,6 +577,8 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
     tableName: 'users',
     replicaId: 'new-partition-r1',
     replicaIds: ['new-partition-r1'],
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: {
       columns: [
@@ -585,8 +590,7 @@ test('IndexService - creates indices on new partition via CDC', async (t) => {
   }));
 
   await newPartition.initialize();
-  newPartition.role = 'leader';
-  newPartition.isLeader = true;
+  await resumeFixtureParticipantAdmission(newPartition);
 
   const sqlEngine = createMockSqlEngine([], [newPartition]);
   const indexService = new IndexService({
@@ -640,6 +644,8 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
     tableName: 'users',
     replicaId: 'test-partition-r1',
     replicaIds: ['test-partition-r1'],
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: {
       columns: [
@@ -652,8 +658,7 @@ test('IndexService - ensureIndicesOnPartition creates all', async (t) => {
   }));
 
   await partition.initialize();
-  partition.role = 'leader';
-  partition.isLeader = true;
+  await resumeFixtureParticipantAdmission(partition);
 
   const sqlEngine = createMockSqlEngine([], [partition]);
   const indexService = new IndexService({
@@ -714,6 +719,8 @@ test('IndexService - rebuildIndex recreates on partitions', async (t) => {
     tableName: 'users',
     replicaId: 'test-partition-r1',
     replicaIds: ['test-partition-r1'],
+    nodeId: 'test-node',
+    systemTableCache: {getAll: () => [], get: () => null, filter: () => []},
     dbPath: ':memory:',
     schema: {
       columns: [
@@ -724,8 +731,7 @@ test('IndexService - rebuildIndex recreates on partitions', async (t) => {
   }));
 
   await partition.initialize();
-  partition.role = 'leader';
-  partition.isLeader = true;
+  await resumeFixtureParticipantAdmission(partition);
 
   const sqlEngine = createMockSqlEngine([], [partition]);
   const indexService = new IndexService({

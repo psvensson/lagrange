@@ -14,10 +14,9 @@ const JSON_FLAG = '--json';
 const NODE_BIN = process.execPath;
 const TEST_RUNNER = 'scripts/run-test-files.js';
 const CENSUS_SCRIPT = 'scripts/checks/attribution-provenance-census.js';
-const INTERACTION_WITNESS =
-  'test/raft/liferaft-formation-attribution-interaction.test.js';
 const SEMANTICS_WITNESS =
   'test/diagnostics/formation-attribution-semantics.test.js';
+const INTERACTION_WITNESS = SEMANTICS_WITNESS;
 const CENSUS_WITNESS =
   'test/simulation/formation-attribution-provenance.test.js';
 const UTF8 = 'utf8';

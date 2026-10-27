@@ -5,7 +5,6 @@
 // into legacy quests, and closed material goes to one archive bundle.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,6 +16,7 @@ import {
 } from '../../scripts/solve/migrate-v1.js';
 import {listQuestIds, questState, readEpic, readLog, readQuest} from '../../scripts/solve/store.js';
 import {epicProblems, questProblems} from '../../scripts/solve/schema.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const OPEN_ID = 'open-quest';
 const CLOSED_ID = 'closed-quest';
@@ -34,7 +34,7 @@ const LEDGER = ['# Experiment And Theory Ledger', '', 'preamble', '',
   '## theory-20260102-orphan', '', '- Status: falsified', '- Hypothesis: orphan theory', ''];
 
 function git(root, args) {
-  return execFileSync('git', [...GIT_USER, ...args], {cwd: root, encoding: 'utf8'});
+  return execGit([...GIT_USER, ...args], {cwd: root, encoding: 'utf8'});
 }
 
 function write(root, relative, content) {

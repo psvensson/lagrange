@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-26
 ---
 
 # Owner router
@@ -35,11 +35,11 @@ which paths a public reader may be sent to.
 | distributed harness or convergence | [`operational-ground-truth.md`](../../test/distributed/operational-ground-truth.md) |
 | writing or changing tests | [`test/guidelines/`](../../test/guidelines/INDEX.md) |
 | verifying someone else's change | [`verification-templates/`](../development/verification-templates/INDEX.md) |
-| runtime, control-plane or partition behaviour | [`runtime-contracts.md`](../../architecture/runtime-contracts.md) |
+| runtime, control-plane or partition behaviour; workflow authority, permits, recovery or a new state store | [`runtime-contracts.md`](../../architecture/runtime-contracts.md); [`authority-and-recovery.md`](../../architecture/contracts/authority-and-recovery.md) |
 | code style, file size, naming | [`code-style.md`](../development/code-style.md) |
 | recording, closing or auditing a quest's artifacts | [`quest-artifacts.md`](../development/quest-artifacts.md), [`quest-lifecycle.md`](../development/quest-lifecycle.md), [`quest-closure.md`](../development/quest-closure.md), [`quest-validators.md`](../development/quest-validators.md), [`quest-subagents.md`](../development/quest-subagents.md) |
 | proposing or changing roadmap policy | [`roadmap-policy.md`](../development/roadmap-policy.md) |
-| resuming or coordinating a service milestone | the active epic's current summary, using [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) and [`quest-subagents.md`](../development/quest-subagents.md) |
+| resuming or coordinating a service milestone, or selecting the next cutover risk-reduction unit | the active epic's current summary, using [`documentation-lifecycle.md`](../development/documentation-lifecycle.md) and [`quest-subagents.md`](../development/quest-subagents.md); for the cutover, [`contract-first-2026-10-08.md`](../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md), then [`adversarial-risk-review-2026-10-10.md`](../development/adversarial-risk-review-2026-10-10.md) with its local execution handoff |
 | choosing a physical test runner or continuing a queued run | [`home-lab.md`](../development/home-lab.md) |
 
 ## Known owner gap

@@ -41,7 +41,7 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(HERE, '..', '..', '..');
 const IDENTITY_MODULE = 'src/raft/raft-rs-peer-identity.js';
-const CONTROL_MODULE = 'src/raft/liferaft-provider.js';
+const CONTROL_MODULE = 'src/raft/raft-rs-peer-delivery.js';
 const ADDRESSY = /\b(address|host|port|endpoint|url)\b/iu;
 const NUMBER_COERCION = /\b(Number|parseInt|parseFloat)\s*\(/u;
 const TEMP_PREFIX = 'raft-rs-peer-identity-';

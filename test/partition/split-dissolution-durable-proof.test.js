@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
@@ -27,7 +28,7 @@ function buildDissolutionWorkflow(options = {}) {
     listPartitionServiceRows: (partitionId) => ([
       {replica_id: `${partitionId}-r1`, node_id: 'node-a'},
     ]),
-    deliverReplicaRemoval: async () => ({status: 'initiated'}),
+    deliverReplicaRemoval: async () => ({status: 'completed'}),
     ...options,
   });
 }
@@ -66,9 +67,7 @@ function buildDissolvingRecord(fenceToken) {
 }
 
 async function registerClaimedDissolvingWorkflow(workflow) {
-  await workflow.workflowCoordinator.registerWorkflow(
-    buildDissolvingRecord(null),
-  );
+  await registerFromRecordAsRead(workflow, buildDissolvingRecord(null));
   const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
     WORKFLOW_ID,
   );

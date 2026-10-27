@@ -1,3 +1,5 @@
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {deliveryAnswerOf, deliveryTransportOf, isDeliveredTransportDeliveryOutcome, buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Behavioral contract for the messageRouter seam, plus a contract-compliant
  * stub factory.
@@ -29,17 +31,15 @@ const CONTRACT_DEFAULT_RETRY_AFTER_MS = 1000;
  * A contract-compliant messageRouter stub.
  *
  * Facets honored (mirrors the probed real MessageRouter):
- *  - deliver() to a registered handler resolves the handler's payload with
- *    `acknowledged: true`, `noHandler: false`,
- *    `deliveryState: 'delivered'`.
+ *  - deliver() to a registered handler resolves the owner envelope, with
+ *    transport DELIVERED and the handler's verbatim answer beside it.
  *  - deliver() to an UNREGISTERED address never hangs and never lies: it
- *    resolves `acknowledged: false` with a retryable signal
+ *    resolves a transport failure with a retryable signal
  *    (`deferRetry: true`, `retryAfterMs`, `errorCode`) and
  *    `deliveryState: 'deferred'`.
  *  - `simulateNoHandlerAckAddresses`: addresses listed here reproduce the
- *    remote ACK-before-handler-lookup drop — `acknowledged: true` WITH
- *    `noHandler: true` (DELIVERED at the transport, dropped at the target;
- *    consumers must check `noHandler`, not just `acknowledged`).
+ *    remote ACK-before-handler-lookup drop: the ACK alone is insufficient;
+ *    the final transport outcome is FAILED/no_handler, with no answer.
  *
  * @param {Object} [options]
  * @param {Map<string, Function>} [options.handlers]
@@ -58,42 +58,29 @@ function createContractMessageRouterStub(options = {}) {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
+    ...handlerIdentityApi(handlers),
     async deliver(address, message, deliveryOptions = {}) {
       deliveries.push({address, message, deliveryOptions});
       if (noHandlerAckAddresses.has(address)) {
-        return {
-          acknowledged: true,
-          noHandler: true,
-          deliveryState: CONTRACT_DELIVERY_STATE.DELIVERED,
-          deferRetry: false,
-          errorCode: null,
-          retryAfterMs: null,
-        };
+        return buildDeliveryEnvelope(
+          {acknowledged: true, noHandler: true});
       }
       const handler = handlers.get(address);
       if (!handler) {
-        return {
-          acknowledged: false,
-          noHandler: false,
-          deliveryState: CONTRACT_DELIVERY_STATE.DEFERRED,
-          deferRetry: true,
-          errorCode: CONTRACT_ERROR_CODE_NO_CONNECTION,
-          retryAfterMs: CONTRACT_DEFAULT_RETRY_AFTER_MS,
-        };
+        return buildDeliveryEnvelope(
+          {
+            acknowledged: false,
+            noHandler: false,
+            deliveryState: CONTRACT_DELIVERY_STATE.DEFERRED,
+            deferRetry: true,
+            errorCode: CONTRACT_ERROR_CODE_NO_CONNECTION,
+            retryAfterMs: CONTRACT_DEFAULT_RETRY_AFTER_MS,
+          });
       }
       const handlerResult = await handler(message);
-      return {
-        acknowledged: true,
-        noHandler: false,
-        deliveryState: CONTRACT_DELIVERY_STATE.DELIVERED,
-        deferRetry: false,
-        errorCode: null,
-        retryAfterMs: null,
-        ...handlerResult,
-      };
+      return buildDeliveryEnvelope(
+        {acknowledged: true, deliveryState: CONTRACT_DELIVERY_STATE.DELIVERED},
+        handlerResult);
     },
   };
 }
@@ -109,46 +96,49 @@ function createContractMessageRouterStub(options = {}) {
  * @param {Object} implementation
  */
 function assertDeliveredFacets(t, name, delivered) {
+  const transport = deliveryTransportOf(delivered);
+  const answer = deliveryAnswerOf(delivered);
   t.equal(
-    delivered?.acknowledged,
+    isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivered)),
     true,
     `${name}: registered-handler delivery acknowledges`,
   );
   t.equal(
-    delivered?.noHandler,
+    transport.noHandler,
     false,
     `${name}: registered-handler delivery reports noHandler=false ` +
       '(consumers branch on this field)',
   );
   t.equal(
-    delivered?.deliveryState,
+    transport.deliveryState,
     'delivered',
     `${name}: registered-handler deliveryState is delivered`,
   );
   t.equal(
-    delivered?.contractProbe,
+    answer?.contractProbe,
     true,
-    `${name}: the handler payload is merged into the delivery response`,
+    `${name}: the handler payload is kept in the answer namespace`,
   );
 }
 
 function assertUndeliverableFacets(t, name, undeliverable) {
+  const transport = deliveryTransportOf(undeliverable);
   t.equal(
-    undeliverable?.acknowledged,
+    isDeliveredTransportDeliveryOutcome(deliveryTransportOf(undeliverable)),
     false,
     `${name}: an undeliverable address never fakes an ACK`,
   );
   t.ok(
-    undeliverable?.deferRetry === true ||
-      Number.isFinite(undeliverable?.retryAfterMs) ||
-      typeof undeliverable?.errorCode === 'string',
+    transport.deferRetry === true ||
+      Number.isFinite(transport.retryAfterMs) ||
+      typeof transport.errorCode === 'string',
     `${name}: an undeliverable address carries a retryable signal ` +
       '(deferRetry/retryAfterMs/errorCode) instead of hanging or throwing ' +
       'raw',
   );
   t.ok(
-    undeliverable?.deliveryState === 'deferred' ||
-      undeliverable?.deliveryState === 'failed',
+    transport.deliveryState === 'deferred' ||
+      transport.deliveryState === 'failed',
     `${name}: undeliverable deliveryState is deferred/failed, never ` +
       'delivered',
   );

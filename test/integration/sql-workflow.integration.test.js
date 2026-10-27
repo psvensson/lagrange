@@ -12,6 +12,13 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {waitForCondition} from '../partition/partition-service-test-support.js';
+import {buildCommittedCdcOutcome} from '../../src/cdc/cdc-delivery-outcome.js';
+import {
+  resumeFixtureParticipantGroupAdmission,
+} from '../test-helpers/participant-transaction-fixture.js';
+
+const PARTICIPANT_RELEASE_BUDGET_MS = 1000;
 
 /**
  * Initialize test environment.
@@ -95,6 +102,7 @@ function createTestPartition(options = {}) {
     replicaIds: options.replicaIds || ['replica-1'],
     nodeId: options.nodeId || 'node-1',
     dbPath: ':memory:',
+    systemTableCache: options.systemTableCache || new SystemTableCache(),
     schema: options.schema || {
       columns: [
         {name: 'id', type: 'INTEGER', primaryKey: true},
@@ -105,6 +113,15 @@ function createTestPartition(options = {}) {
     },
     keyRange: options.keyRange || {start: null, end: null},
   }));
+}
+
+async function initializeReleasedPartition(partition) {
+  await partition.initialize();
+  await resumeFixtureParticipantGroupAdmission(
+    [partition],
+    (predicate) => waitForCondition(
+      predicate, PARTICIPANT_RELEASE_BUDGET_MS),
+  );
 }
 
 test('End-to-end SQL workflow integration tests', async (t) => {
@@ -175,11 +192,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
 
   t.test('INSERT - inserts data into partition', async (t) => {
     const partition = createTestPartition();
-    await partition.initialize();
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
+    await initializeReleasedPartition(partition);
 
     const result = await partition.insertData('users', {
       id: 1,
@@ -236,16 +249,12 @@ test('End-to-end SQL workflow integration tests', async (t) => {
 
   t.test('UPDATE - updates data in partition', async (t) => {
     const partition = createTestPartition();
-    await partition.initialize();
+    await initializeReleasedPartition(partition);
 
     // Insert test data
     partition.db.exec(`
       INSERT INTO users (id, name, email, age) VALUES (1, 'Alice', 'alice@example.com', 30)
     `);
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
 
     const result = await partition.updateData(
       'users',
@@ -269,7 +278,7 @@ test('End-to-end SQL workflow integration tests', async (t) => {
 
   t.test('DELETE - deletes data from partition', async (t) => {
     const partition = createTestPartition();
-    await partition.initialize();
+    await initializeReleasedPartition(partition);
 
     // Insert test data
     partition.db.exec(`
@@ -277,10 +286,6 @@ test('End-to-end SQL workflow integration tests', async (t) => {
       (1, 'Alice', 'alice@example.com', 30),
       (2, 'Bob', 'bob@example.com', 25)
     `);
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
 
     const result = await partition.deleteData('users', {id: 1});
 
@@ -295,114 +300,57 @@ test('End-to-end SQL workflow integration tests', async (t) => {
     await partition.shutdown();
   });
 
-  t.test('Transaction - BEGIN, operations, COMMIT', async (t) => {
-    const partition = createTestPartition();
-    await partition.initialize();
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
-
-    // Begin transaction
-    const beginResult = await partition.beginTransaction();
-    t.equal(beginResult.success, true, 'BEGIN should succeed');
-    t.equal(partition.isInTransaction(), true, 'should be in transaction');
-
-    // Insert within transaction
-    const insertResult = await partition.executeQuery(
-      'INSERT INTO users (id, name, email, age) VALUES (?, ?, ?, ?)',
-      [1, 'Alice', 'alice@example.com', 30],
-    );
-    t.equal(insertResult.success, true, 'INSERT should succeed');
-
-    // Commit
-    const commitResult = await partition.commitTransaction();
-    t.equal(commitResult.success, true, 'COMMIT should succeed');
-    t.equal(partition.isInTransaction(), false, 'should not be in transaction');
-
-    // Verify data persisted
-    const queryResult = await partition.executeQuery('SELECT * FROM users');
-    t.equal(queryResult.rows.length, 1, 'should have committed data');
-
-    await partition.shutdown();
-  });
-
-  t.test('Transaction - ROLLBACK reverts changes', async (t) => {
-    const partition = createTestPartition();
-    await partition.initialize();
-
-    // Insert initial data
-    partition.db.exec(`
-      INSERT INTO users (id, name, email, age) VALUES (1, 'Alice', 'alice@example.com', 30)
-    `);
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
-
-    // Begin transaction
-    await partition.beginTransaction();
-
-    // Delete within transaction
-    await partition.executeQuery('DELETE FROM users WHERE id = ?', [1]);
-
-    // Verify deletion visible within transaction
-    const duringTx = await partition.executeQuery('SELECT * FROM users');
-    t.equal(duringTx.rows.length, 0, 'should see deletion during transaction');
-
-    // Rollback
-    const rollbackResult = await partition.rollbackTransaction();
-    t.equal(rollbackResult.success, true, 'ROLLBACK should succeed');
-
-    // Verify data restored
-    const afterRollback = await partition.executeQuery('SELECT * FROM users');
-    t.equal(afterRollback.rows.length, 1, 'should have original data after rollback');
-
-    await partition.shutdown();
-  });
-
   t.test('CDC - generates events for data changes', async (t) => {
-    const partition = createTestPartition();
-    await partition.initialize();
-
-    // Track CDC events
-    const cdcEvents = [];
-    partition.subscribeToCDC((event) => {
-      cdcEvents.push(event);
+    const partition = createTestPartition({
+      tableName: 'nodes',
+      schema: {
+        columns: [
+          {name: 'node_id', type: 'INTEGER', primaryKey: true},
+          {name: 'name', type: 'TEXT', notNull: true},
+          {name: 'email', type: 'TEXT'},
+          {name: 'age', type: 'INTEGER'},
+        ],
+      },
     });
+    await initializeReleasedPartition(partition);
 
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
+    try {
+      // Track CDC events
+      const cdcEvents = [];
+      let committedIndex = 0;
+      partition.subscribeToCDC((event) => {
+        cdcEvents.push(event);
+        committedIndex += 1;
+        return buildCommittedCdcOutcome([event], 'mg-1', {index: committedIndex, term: 1});
+      });
 
-    // Insert
-    await partition.insertData('users', {id: 1, name: 'Alice', email: 'a@b.com', age: 30});
+      // Insert
+      await partition.insertData('nodes', {node_id: 1, name: 'Alice', email: 'a@b.com', age: 30});
 
-    // Update
-    await partition.updateData('users', {id: 1}, {age: 31});
+      // Update
+      await partition.updateData('nodes', {node_id: 1}, {age: 31});
 
-    // Delete
-    await partition.deleteData('users', {id: 1});
+      // Delete
+      await partition.deleteData('nodes', {node_id: 1});
 
-    // Verify CDC events
-    t.equal(cdcEvents.length, 3, 'should have 3 CDC events');
-    t.equal(cdcEvents[0].operation, 'INSERT', 'first should be INSERT');
-    t.equal(cdcEvents[1].operation, 'UPDATE', 'second should be UPDATE');
-    t.equal(cdcEvents[2].operation, 'DELETE', 'third should be DELETE');
+      await waitForCondition(() => cdcEvents.length === 3, PARTICIPANT_RELEASE_BUDGET_MS);
 
-    await partition.shutdown();
+      // Verify CDC events
+      t.equal(cdcEvents.length, 3, 'should have 3 CDC events');
+      t.equal(cdcEvents[0].operation, 'INSERT', 'first should be INSERT');
+      t.equal(cdcEvents[1].operation, 'UPDATE', 'second should be UPDATE');
+      t.equal(cdcEvents[2].operation, 'DELETE', 'third should be DELETE');
+    } finally {
+      await partition.shutdown();
+    }
   });
 
   t.test('Partition size tracking - updates after writes', async (t) => {
     const partition = createTestPartition();
-    await partition.initialize();
+    await initializeReleasedPartition(partition);
 
     const initialSize = partition.getSize();
     t.ok(initialSize >= 0, 'should have initial size');
-
-    // Become leader for writes
-    partition.role = 'leader';
-    partition.isLeader = true;
 
     // Insert data
     for (let i = 1; i <= 10; i++) {

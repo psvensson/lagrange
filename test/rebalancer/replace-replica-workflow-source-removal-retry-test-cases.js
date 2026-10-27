@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 const TEST_PENDING_RESPONSE_REPLACE_TEST_NAME =
   'critical REPLACE source-removal pending response timeout stays retryable';
 const TEST_PENDING_RESPONSE_PARTITION_ID =
@@ -64,19 +65,17 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
         if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-          };
+          });
         }
         if (sourceRemovalTimeoutPending) {
           sourceRemovalTimeoutPending = false;
           throw new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT);
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     };
 
@@ -244,15 +243,13 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
+            return buildDeliveryEnvelope({acknowledged: true}, {
               status: ReplicaOperationResponseStatus.ALREADY_EXISTS,
-            };
+            });
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -483,15 +480,11 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
           if (payload?.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-            return {
-              acknowledged: true,
-              status: createResponseStatus,
-            };
+            return buildDeliveryEnvelope({acknowledged: true}, {status: createResponseStatus});
           }
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             status: ReplicaOperationResponseStatus.INITIATED,
-          };
+          });
         },
         getConnectionState: () => 'connected',
         pingNode: async () => true,
@@ -669,8 +662,14 @@ export async function registerReplaceReplicaWorkflowSourceRemovalRetryTests({
             options: {
               allowPriorityRecoveryDeferredVisibility: true,
             },
+          }, {
+            operationId: operation.operationId,
+            options: {
+              authoritativeReadMode: 'owner_rpc_required',
+              allowOwnerPersistedTransitionDeferredVisibility: false,
+            },
           }],
-          'transition resume should load operation visibility through the repository-owned observation contract',
+          'transition resume and CREATE dispatch should both load visibility through the repository-owned observation contract',
         );
       } finally {
         await coordinator.shutdown();

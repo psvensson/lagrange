@@ -11,10 +11,13 @@
  * @module runtime/wasm-component-driver-shutdown-methods
  */
 
+const CLEANUP_REJECTED = 'rejected';
+const CLEANUP_FAILED = 'WASM driver retained cleanup failures';
+
 function createWasmComponentDriverShutdownMethods() {
   return {
     /**
-     * Stop every running cell and release all driver bookkeeping.
+     * Stop every cell and native lifecycle; clear bookkeeping only on success.
      *
      * Node teardown owns this call. The runtime stop-all terminates
      * even cells missing from driver bookkeeping, so a cell orphaned
@@ -23,7 +26,17 @@ function createWasmComponentDriverShutdownMethods() {
      * @return {Promise<void>}
      */
     async shutdown() {
-      await this._componentRuntime.shutdown();
+      const lifecycles = [...new Set([
+        ...this._lifecycles.values(), this._wasmServiceLifecycle,
+      ].filter(Boolean))];
+      // Invoke now: the native owner closes admission before the first await.
+      const results = await Promise.allSettled([
+        (async () => this._componentRuntime.shutdown())(),
+        ...lifecycles.map(async (owner) => owner.shutdownAll()),
+      ]);
+      const failures = results.filter((result) => result.status === CLEANUP_REJECTED)
+        .map((result) => result.reason);
+      if (failures.length) throw new AggregateError(failures, CLEANUP_FAILED);
       this._running.clear();
       this._prepared.clear();
       this._lifecycles.clear();

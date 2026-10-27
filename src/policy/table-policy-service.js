@@ -13,13 +13,17 @@ import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {requireConfirmedSingleRowMutation} from
+  '../control-plane/control-plane-single-row-confirmation.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {assertTablePolicyCdcRequestSupported} from '../cache/cdc-table-policy.js';
 import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   POLICY_DEFAULT,
+  POLICY_ERROR_CODE,
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_LOG_MSG,
@@ -42,11 +46,31 @@ const LOCAL_STR_OBJECT = 'object';
 const TABLE_POLICY_FUNCTION_TYPE = 'function';
 const LOCAL_STR_COMMA_SPACE = ', ';
 const LOCAL_STR_CRITICAL = 'critical';
+const POLICY_MUTATION_CONFIRMATION = Object.freeze({
+  ownerName: POLICY_SUBSYSTEM.TABLE_POLICY,
+  tableName: TABLES.TABLES,
+  changed: Object.freeze({code: POLICY_ERROR_CODE.OBSERVATION_CHANGED,
+    message: 'The table policy mutation affected no row'}),
+  unconfirmed: Object.freeze({code: POLICY_ERROR_CODE.OUTCOME_UNCONFIRMED,
+    message: 'The table policy mutation application is not confirmed'}),
+});
 
 /**
  * TablePolicyService manages table policies for partition behavior.
  * Policies control splitting thresholds, merging criteria, and replication factors.
  */
+/**
+ * A typed refusal of a policy write: nothing was written.
+ * @param {string} code - POLICY_ERROR_CODE value.
+ * @param {string} message - Refusal message.
+ * @return {Error}
+ */
+function buildPolicyRefusal(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 class TablePolicyService extends EventEmitter {
   /**
    * Create a new TablePolicyService.
@@ -298,17 +322,20 @@ class TablePolicyService extends EventEmitter {
    */
   async updateTablePolicy(tableId, policyUpdates) {
     if (!tableId) {
-      throw new Error(POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.TABLE_ID_REQUIRED,
+        POLICY_ERROR_MSG.TABLE_ID_REQUIRED);
     }
 
     if (!this.cdcIntegrationService) {
       throw new Error(POLICY_ERROR_MSG.CDC_REQUIRED_FOR_UPDATE);
     }
 
-    // Validate the policy updates
+    // Validate the policy updates; a request for external CDC is refused typed.
+    assertTablePolicyCdcRequestSupported(policyUpdates);
     const validation = this.validatePolicy(policyUpdates);
     if (!validation.valid) {
-      throw new Error(`${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
+        `${POLICY_ERROR_MSG.INVALID_POLICY_PREFIX}${validation.errors.join(LOCAL_STR_COMMA_SPACE)}`);
     }
 
     const table = await this.readTableRow(tableId);
@@ -323,7 +350,7 @@ class TablePolicyService extends EventEmitter {
     // Validate the merged policy
     const mergedValidation = this.validatePolicy(newPolicy);
     if (!mergedValidation.valid) {
-      throw new Error(
+      throw buildPolicyRefusal(POLICY_ERROR_CODE.POLICY_INVALID,
         `${POLICY_ERROR_MSG.INVALID_MERGED_POLICY_PREFIX}${mergedValidation.errors.join(LOCAL_STR_COMMA_SPACE)}`,
       );
     }
@@ -335,7 +362,7 @@ class TablePolicyService extends EventEmitter {
 
     try {
       // Update via CDC integration service
-      await this.getControlPlaneSystemTableGateway().submitMutation({
+      const mutationResult = await this.getControlPlaneSystemTableGateway().submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.TABLES,
         whereClause: {table_id: tableId},
@@ -347,6 +374,8 @@ class TablePolicyService extends EventEmitter {
         workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
         deliveryPriority: LOCAL_STR_CRITICAL,
       });
+
+      requireConfirmedSingleRowMutation(mutationResult, POLICY_MUTATION_CONFIRMATION);
 
       // Invalidate cache
       this.policyCache.delete(tableId);
@@ -600,47 +629,6 @@ class TablePolicyService extends EventEmitter {
   async getEffectiveMessageGroupStorageConstraints(groupId) {
     const policy = await this.getMessageGroupPolicy(groupId);
     return extractStorageConstraints(policy.placementConstraints);
-  }
-
-  /**
-   * Check if a partition should be split based on its table's policy.
-   * @param {string} partitionId - Partition ID.
-   * @param {Object} metrics - Partition metrics.
-   * @return {Promise<boolean>} True if partition should be split.
-   */
-  async shouldSplitPartition(partitionId, metrics) {
-    const policy = await this.getPolicyForPartition(partitionId);
-    const sizeBytes = metrics.sizeBytes || 0;
-    const queriesPerMinute = metrics.queriesPerMinute || 0;
-
-    // Split if EITHER threshold is exceeded
-    return sizeBytes >= policy.splitStorageThreshold ||
-           queriesPerMinute >= policy.splitTrafficThreshold;
-  }
-
-  /**
-   * Check if two partitions should be merged.
-   * @param {string} leftPartitionId - Left partition ID.
-   * @param {string} rightPartitionId - Right partition ID.
-   * @param {Object} leftMetrics - Left partition metrics.
-   * @param {Object} rightMetrics - Right partition metrics.
-   * @return {Promise<boolean>} True if partitions should be merged.
-   */
-  async shouldMergePartitions(
-    leftPartitionId, rightPartitionId, leftMetrics, rightMetrics,
-  ) {
-    const policy =
-      await this.getPolicyForPartition(leftPartitionId);
-    const combinedStorage =
-      (leftMetrics.sizeBytes || 0) +
-      (rightMetrics.sizeBytes || 0);
-    const combinedTraffic =
-      (leftMetrics.queriesPerMinute || 0) +
-      (rightMetrics.queriesPerMinute || 0);
-
-    // Merge if BOTH thresholds are satisfied
-    return combinedStorage <= policy.mergeStorageThreshold &&
-           combinedTraffic <= policy.mergeTrafficThreshold;
   }
 
   /**

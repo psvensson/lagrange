@@ -2,6 +2,8 @@
  * MessageGroupServiceHandler - Handles CREATE_REPLICA and REMOVE_REPLICA
  * operations for message-group entities.
  */
+import {REPLICA_HANDLER_RETIREMENT_OUTCOME, retireNodeTransportHandler} from
+  './replica-transport-handler-identity.js';
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -20,6 +22,7 @@ import {
   ReplicaOperationResponseStatus,
 } from '../rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {REBALANCER_SKIP_REASON} from '../rebalancer/rebalancer-constants.js';
 import {
   EXECUTOR_OUTCOME_TYPE,
 } from '../rebalancer/executor-outcome-constants.js';
@@ -30,15 +33,44 @@ import {
   MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM,
 } from './message-group-service-handler-constants.js';
 import {
-  buildMessageGroupReplicaOptions,
-} from './message-group-replica-options.js';
-import {
   activateCreatedMessageGroupReplica,
   buildMessageGroupCreateFailureOptions,
 } from './message-group-create-activation.js';
 
+import {readMessageGroupLearnerAtRecipient} from
+  './message-group-membership-recipient.js';
+import {ReplicaCreateAdmissionOwner} from './replica-create-admission-owner.js';
+import {
+  carriesLearnerJoinPackage,
+  handleMessageGroupLearnerCreate,
+  learnerCreateDependencies,
+} from './message-group-service-handler-create-admission.js';
+
 function isFunction(value) {
   return typeof value === 'function';
+}
+
+function resolveHandlerLogger() {
+  const loggingService = LoggingService.getInstance();
+  return loggingService.isInitialized() ?
+    loggingService.forSubsystem(MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM) :
+    console;
+}
+
+function resolveHandlerControlPlaneOwners(handler, options) {
+  const controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway ||
+    createControlPlaneRuntimeBundle({
+      nodeId: handler.nodeId,
+      cdcIntegrationService: handler.cdcIntegrationService,
+      systemTableCache: handler.systemTableCache,
+    }).controlPlaneSystemTableGateway;
+  const messageGroupServiceRowOwner =
+    options.messageGroupServiceRowOwner ||
+    new MessageGroupServiceRowOwner({
+      systemTableWriter: controlPlaneSystemTableGateway,
+    });
+  return {controlPlaneSystemTableGateway, messageGroupServiceRowOwner};
 }
 
 function buildReplicaOperationResponse(status, fields = {}) {
@@ -60,6 +92,14 @@ class MessageGroupServiceHandler extends EventEmitter {
    * @param {Function} [options.resolveLocalMessageGroupReplica]
    * @param {MessageGroupServiceRowOwner}
    *   [options.messageGroupServiceRowOwner]
+   * @param {Function} [options.joinMessageGroupReplicaAsLearner] - The
+   *   physical capability an admitted learner CREATE worker calls; no
+   *   production root composes it yet (the install slice supplies it).
+   * @param {Object} [options.replicaOperationRepository] - The operation
+   *   owner a learner CREATE reads its recorded fact through.
+   * @param {number} [options.ownerIncarnation] - This node's boot
+   *   incarnation, the CREATE admission owner's boot fence.
+   * @param {Function} [options.now] - Admission generation clock.
    */
   constructor(options = {}) {
     super();
@@ -74,32 +114,19 @@ class MessageGroupServiceHandler extends EventEmitter {
       options.stopMessageGroupReplica || null;
     this.resolveLocalMessageGroupReplica =
       options.resolveLocalMessageGroupReplica || null;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      createControlPlaneRuntimeBundle({
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        systemTableCache: this.systemTableCache,
-      }).controlPlaneSystemTableGateway;
-    this.messageGroupServiceRowOwner =
-      options.messageGroupServiceRowOwner ||
-      new MessageGroupServiceRowOwner({
-        systemTableWriter: this.controlPlaneSystemTableGateway,
-      });
+    Object.assign(this, resolveHandlerControlPlaneOwners(this, options));
     this.messageRouter = options.messageRouter || null;
+    Object.assign(this, learnerCreateDependencies(options));
+    this.replicaCreateAdmissionOwner = null;
     this.rpcClient = null;
+    this.registeredRouterHandler = null;
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
 
     this.inProgressOperations = new Map();
     this.localReplicas = new Map();
-
-    const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(
-        MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM,
-      ) : console;
+    this.logger = resolveHandlerLogger();
   }
 
   initialize() {
@@ -135,7 +162,7 @@ class MessageGroupServiceHandler extends EventEmitter {
     }
   }
 
-  async handleMessage(envelope) {
+  async handleMessage(envelope, delivery, invocation) {
     const {payload, correlationId} = envelope;
     const type = payload?.[ReplicaOperationField.TYPE];
 
@@ -145,7 +172,9 @@ class MessageGroupServiceHandler extends EventEmitter {
     );
 
     let response;
-    if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
+    if (type === ReplicaOperationMessageType.READ_COMMITTED_MEMBERSHIP) {
+      response = await readMessageGroupLearnerAtRecipient(this, payload, delivery, invocation);
+    } else if (type === ReplicaOperationMessageType.CREATE_REPLICA) {
       response = await this.handleCreateReplica(payload);
     } else if (type === ReplicaOperationMessageType.REMOVE_REPLICA) {
       response = await this.handleRemoveReplica(payload);
@@ -164,146 +193,41 @@ class MessageGroupServiceHandler extends EventEmitter {
     return {...response, correlationId};
   }
 
+  /**
+   * CREATE_REPLICA for a message group (owner decision 2026-10-04, raft-rs
+   * full cutover): no message-group replica is created on a dispatcher's
+   * word. The create this answered opened a GENESIS self-founder from the
+   * services rows that elected at once; under a reissued replica name it
+   * reused a raft id whose history the group holds elsewhere. A CREATE that
+   * carries a learner join package goes to the fresh-identity path (FreshMG
+   * slice B1, message-group-service-handler-create-admission.js): only a
+   * composed learner-join capability, the exact recorded learner fact, a
+   * bound package and the durable admission CAS start one physical worker,
+   * which never calls createMessageGroupReplica (a lone self-electing founder
+   * in every production root). Every other dispatch - stray or
+   * pre-upgrade, whatever topology it carries - is refused as before: it
+   * opens nothing (no create or start, no services row, no tracked
+   * operation) and is answered ERROR, so the coordinator fails the
+   * operation once instead of retrying it.
+   * @param {Object} request - The CREATE_REPLICA payload.
+   * @return {Promise<Object>} The handler response.
+   */
   async handleCreateReplica(request) {
-    const operationId =
-      request?.[ReplicaOperationField.OPERATION_ID];
-    const groupId = this.resolveGroupId(request);
-    const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
-
-    this.logger.info(
-      MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_REQUEST,
-      {operationId, groupId, replicaId, nodeId: this.nodeId},
-    );
-
-    if (!operationId || !groupId || !replicaId) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_MISSING_FIELDS,
-        {operationId, groupId, replicaId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {
-          error:
-          MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_REQUIRED_FIELDS,
-          nodeId: this.nodeId,
-        },
-      );
+    if (carriesLearnerJoinPackage(request)) {
+      return handleMessageGroupLearnerCreate(this, request);
     }
-
-    const existingReplica =
-      this.getKnownLocalReplica(replicaId, groupId);
-    if (existingReplica &&
-        existingReplica.status === ReplicaStatus.ACTIVE) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_ALREADY_ACTIVE,
-        {groupId, replicaId, nodeId: this.nodeId},
-      );
-      this.emitExecutorOutcome(
-        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
-        operationId,
-        WORKFLOW_STEP.ACTIVE,
-        {replicaId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ALREADY_EXISTS,
-        {
-          replicaId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    if (existingReplica &&
-        existingReplica.status === ReplicaStatus.CREATING) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_IN_PROGRESS,
-        {groupId, replicaId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.IN_PROGRESS,
-        {
-          replicaId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    if (this.inProgressOperations.has(operationId)) {
-      this.logger.info(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.OPERATION_IN_PROGRESS,
-        {operationId, nodeId: this.nodeId},
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.IN_PROGRESS,
-        {
-          operationId,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    let replicaOptions;
-    try {
-      replicaOptions = this.buildReplicaOptions(groupId, replicaId, request);
-    } catch (error) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_TOPOLOGY_INVALID,
-        {
-          operationId,
-          groupId,
-          replicaId,
-          error: error.message,
-          nodeId: this.nodeId,
-        },
-      );
-      return buildReplicaOperationResponse(
-        ReplicaOperationResponseStatus.ERROR,
-        {
-          error: error.message,
-          nodeId: this.nodeId,
-        },
-      );
-    }
-
-    this.localReplicas.set(replicaId, {
-      replicaId,
-      entityId: groupId,
-      status: ReplicaStatus.CREATING,
+    const reason =
+      REBALANCER_SKIP_REASON.MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED;
+    this.logger.warn(MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_REFUSED, {
+      operationId: request?.[ReplicaOperationField.OPERATION_ID],
+      groupId: this.resolveGroupId(request),
+      replicaId: request?.[ReplicaOperationField.REPLICA_ID],
+      nodeId: this.nodeId,
+      reason,
     });
-    this.inProgressOperations.set(operationId, {
-      type: ReplicaOperationMessageType.CREATE_REPLICA,
-      replicaId,
-      entityId: groupId,
-      startedAt: Date.now(),
-      replicaOptions,
-    });
-
-    setImmediate(() => {
-      this.createReplicaAsync({
-        operationId,
-        groupId,
-        replicaId,
-        replicaOptions,
-      }).catch((error) => {
-        this.logger.error(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED,
-          {
-            operationId,
-            replicaId,
-            error: error.message,
-            stack: error.stack,
-          },
-        );
-      });
-    });
-
     return buildReplicaOperationResponse(
-      ReplicaOperationResponseStatus.INITIATED,
-      {
-        operationId,
-        replicaId,
-        nodeId: this.nodeId,
-      },
+      ReplicaOperationResponseStatus.ERROR,
+      {error: reason, reason, nodeId: this.nodeId},
     );
   }
 
@@ -393,6 +317,24 @@ class MessageGroupServiceHandler extends EventEmitter {
    */
   activateCreatedReplica(activation) {
     return activateCreatedMessageGroupReplica(this, activation);
+  }
+
+  /**
+   * The node's process-wide CREATE admission and sole-worker owner for this
+   * boot (shared with the partition handler), acquired on first use and
+   * released on shutdown.
+   * @return {ReplicaCreateAdmissionOwner}
+   */
+  getReplicaCreateAdmissionOwner() {
+    if (!this.replicaCreateAdmissionOwner) {
+      this.replicaCreateAdmissionOwner = ReplicaCreateAdmissionOwner.acquire({
+        gateway: this.controlPlaneSystemTableGateway,
+        nodeId: this.nodeId,
+        ownerIncarnation: this.ownerIncarnation,
+        now: this.now,
+      });
+    }
+    return this.replicaCreateAdmissionOwner;
   }
 
   hasInProgressReplicaRemoval(replicaId) {
@@ -634,16 +576,6 @@ class MessageGroupServiceHandler extends EventEmitter {
       null;
   }
 
-  buildReplicaOptions(groupId, replicaId, request = {}) {
-    return buildMessageGroupReplicaOptions({
-      groupId,
-      replicaId,
-      request,
-      nodeId: this.nodeId,
-      systemTableCache: this.systemTableCache,
-    });
-  }
-
   resolveActiveReplicaService(replicaId) {
     if (!isFunction(this.resolveLocalMessageGroupReplica)) {
       return null;
@@ -717,6 +649,9 @@ class MessageGroupServiceHandler extends EventEmitter {
       );
       return;
     }
+    // Retire only our own previous registration; an address may already
+    // belong to a successor handler.
+    this.unregisterFromRouter(this.messageRouter);
     this.messageRouter = messageRouter;
 
     const handlerAddress =
@@ -728,17 +663,22 @@ class MessageGroupServiceHandler extends EventEmitter {
       this.rpcClient = options.rpcClient;
     }
 
-    const routerHandler = async (envelope) => {
-      const response = await this.handleMessage(envelope);
-      if (this.rpcClient && response.correlationId) {
-        this.rpcClient.handleResponse(
+    const handler = this;
+    async function routerHandler(envelope, delivery) {
+      // Bind the callback actually invoked, not a later registration observed
+      // after MessageRouter has queued this delivery in a microtask.
+      const invocation = Object.freeze({router: messageRouter, callback: routerHandler});
+      const response = await handler.handleMessage(envelope, delivery, invocation);
+      if (handler.rpcClient && response.correlationId) {
+        handler.rpcClient.handleResponse(
           response.correlationId,
           response,
         );
       }
-      return {acknowledged: true, ...response};
-    };
+      return response;
+    }
 
+    this.registeredRouterHandler = routerHandler;
     messageRouter.register(handlerAddress, routerHandler);
 
     this.logger.info(
@@ -748,17 +688,24 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   unregisterFromRouter(messageRouter) {
-    if (!messageRouter) {
-      return;
-    }
+    if (!messageRouter || messageRouter !== this.messageRouter) return;
+    const registration = this.registeredRouterHandler;
+    if (typeof registration !== 'function') return;
 
     const handlerAddress =
       `${this.nodeId}/` +
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
       `${MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS.HANDLER_ID}`;
 
-    if (isFunction(messageRouter.unregister)) {
-      messageRouter.unregister(handlerAddress);
+    // Only an exact retirement of our own callback is a retirement; the one
+    // owner policy fails closed when the router cannot prove identity, as
+    // the partition and wasm retirements do (finding F4). A successor's
+    // callback at the address leaves nothing of ours to retire.
+    const outcome = retireNodeTransportHandler(this.logger, {transport: messageRouter,
+      address: handlerAddress, handler: registration});
+    this.registeredRouterHandler = null;
+    if (outcome !== REPLICA_HANDLER_RETIREMENT_OUTCOME.RETIRED) {
+      return;
     }
 
     this.logger.info(
@@ -768,12 +715,16 @@ class MessageGroupServiceHandler extends EventEmitter {
   }
 
   shutdown() {
+    this.unregisterFromRouter(this.messageRouter);
     this.logger.info(
       MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.SHUTTING_DOWN,
       {nodeId: this.nodeId},
     );
     this.inProgressOperations.clear();
     this.localReplicas.clear();
+    // A queued admitted worker observes the released owner and stops.
+    ReplicaCreateAdmissionOwner.release(this.replicaCreateAdmissionOwner);
+    this.replicaCreateAdmissionOwner = null;
     this.removeAllListeners();
   }
 }

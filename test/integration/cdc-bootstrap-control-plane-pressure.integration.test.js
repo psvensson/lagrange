@@ -1,4 +1,4 @@
-import LifeRaft from '@markwylde/liferaft';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -6,13 +6,20 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {ControlPlaneSystemTableGateway} from
   '../../src/control-plane/control-plane-system-table-gateway.js';
-import {MessageGroupService} from '../../src/message-group/message-group-service.js';
+import {
+  MessageGroupService,
+  RaftRole,
+} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {TABLES} from '../../src/constants/index.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {withTestDbPath} from '../test-helpers/message-group-db-path.js';
+import {
+  reportingConsensusPort,
+} from '../message-group/message-group-service-test-support.js';
 
 function initializeIntegrationEnvironment(nodeId) {
   ConfigurationManager.resetInstance();
@@ -129,31 +136,26 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       const messageGroupLogger = createRecordingLogger();
       const transport = {
         async deliver() {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
             success: false,
-            noHandler: true,
             error: 'No handler for address: seed-node/message-group/mg-pressure-r1',
-          };
+          });
         },
         async initialize() {},
         async shutdown() {},
         setServiceNodeResolver() {},
       };
 
-      const messageGroup = new MessageGroupService({
+      const messageGroup = new MessageGroupService(withTestDbPath({
         groupId: 'mg-pressure',
         replicaId: 'mg-pressure-r2',
         nodeId: 'integration-seed-node',
         transport,
-      });
+      }));
       messageGroup.logger = messageGroupLogger;
-      messageGroup.raft = {state: LifeRaft.FOLLOWER};
-      messageGroup.raftProvider = {
-        async proposeWithLeaderRouting(_raft, command, options) {
-          await options.forwardToLeader(command);
-        },
-      };
+      // A follower's port: the production proposal routing forwards to the
+      // leader target the forward selection names.
+      messageGroup.raft = reportingConsensusPort({role: RaftRole.FOLLOWER});
       messageGroup.resolveCDCForwardSelection = () => ({
         strictForwarding: true,
         strictForwardRetryAfterMs: 250,
@@ -264,6 +266,10 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       );
       t.equal(
         forwardRejection?.fields?.deliveryRejectedByHandler,
+        false,
+      );
+      t.equal(
+        forwardRejection?.fields?.noHandler,
         true,
       );
       t.equal(
@@ -329,18 +335,15 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
         'integration-buffer-growth',
       );
 
-      const handshake = await partition.subscribeToCDCWithHandshake(
+      // The handshake replays nothing (CDC decision D4): the buffer's own
+      // replay is what fails here.
+      await partition.subscribeToCDCWithHandshake(
         async () => {
           throw new Error('integration replay subscriber failure');
         },
         {subscriberId: 'integration-replay-subscriber'},
       );
-
-      t.equal(
-        handshake.catchup.completed,
-        false,
-        'handshake should surface partial catchup failure deterministically',
-      );
+      await partition.flushBufferedCDCEvents('integration-buffer-flush');
 
       const replayFailure = logger.entries.warn.find((entry) =>
         entry.message === 'Buffered CDC replay failed',
@@ -348,7 +351,7 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       t.ok(replayFailure, 'replay failure should be logged');
       t.equal(
         replayFailure?.fields?.reason,
-        'handshake_catchup_replay_failed',
+        'integration-buffer-flush',
       );
       t.equal(
         replayFailure?.fields?.replayRetryDepth,

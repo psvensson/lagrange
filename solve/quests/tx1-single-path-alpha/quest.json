@@ -1,0 +1,56 @@
+{
+  "schema": "solve-quest/2",
+  "id": "tx1-single-path-alpha",
+  "class": "product",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Current partition transactions have one executable owner path: TX1. Every TRANSACTION request uses the participant owner's current identity admission; incomplete current QUERY identity and routing-only QUERY traffic colliding with a nonterminal TX1 session fail closed without staged, local SQL, proposal or durable-outcome effects. Unrelated ordinary queries retain their current routing and statement admission. Delete the sessionId-only transaction dispatcher, local connection transaction engine, session maps and aliases, old outcome producer, marker reconstruction and expiry healing, together with their consumers and obsolete tests. Release, removal drain, startup mirror resumption and hold enforcement consume the existing current TX1 owners. Preserve current replicated PREPARE and immutable decision application, replay safety, current local-mutation fencing and valid request leadership/version gates. This child proves the removal and its current-owner regression cone; it does not certify the full rs-raft cutover, application snapshots or integrated crash recovery.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/tx1-single-path-alpha/evidence/receipt.json",
+      "requiredReceipts": [
+        "identityless-transaction-uses-current-admission-with-zero-effects",
+        "partial-query-and-session-collision-cannot-bypass-tx1",
+        "executable-session-engine-and-consumers-removed",
+        "current-release-drain-startup-and-hold-owners-preserved",
+        "current-replicated-transaction-regression-cone-preserved"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "alpha-clean-break",
+      "statement": "Follow the human alpha single-path decision of 2026-10-13. Keep no historical session or disk migration machinery to preserve earlier development builds; do not weaken malformed-current-input or current durability checks."
+    },
+    {
+      "id": "single-semantic-owner",
+      "statement": "Reuse current participant identity, session, durable reservation, application and release owners. Introduce no duplicate identity validator, hold predicate, transaction algorithm, ledger or recovery path."
+    },
+    {
+      "id": "honest-red-and-timeout-evidence",
+      "statement": "Behavioral negative controls must reach the claimed owner boundary without artificial release-state bypasses. Missing imports or fixtures are not behavioral proof. Every un-injected exhausted timeout is an unresolved system defect, even when assertions or later retries pass."
+    },
+    {
+      "id": "preserve-current-safety",
+      "statement": "Keep valid-current request ordering, direct mutation fencing, PREPARED custody, replay idempotence, immutable decisions, participant topology exclusion, exact release identity and caller budgets. Deleting old maps must update dependent release and drain consumers atomically."
+    },
+    {
+      "id": "bounded-removal-scope",
+      "statement": "Do not absorb current provisioning timeout repair, snapshot authority, FreshMG lifecycle repair or other worktree changes. Record those independent obligations and preserve their evidence."
+    },
+    {
+      "id": "independent-verification-and-exact-lab-proof",
+      "statement": "Source changes require independent content-bound approval and appropriate exact-candidate locked-lab evidence. Focused green and this child receipt are not main merge or release approval."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "sweep-timer",
+    "concurrency-serialization",
+    "owner-interaction",
+    "harness-fidelity",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "e6d43bc1acb128a2b83ac89c77a3ec400e7edb1f"
+}

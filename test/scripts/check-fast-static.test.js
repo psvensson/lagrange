@@ -8,7 +8,6 @@
 // changed what the verifier was verifying.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,17 +25,18 @@ import {
 import {
   changedCandidatePaths,
   javaScriptPaths,
+  withoutWorkspaceInjections,
 } from '../../scripts/checks/changed-paths.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
-const MAX_BUFFER = 64 * 1024 * 1024;
 const HASH = 'sha256';
 
 // Fingerprint every candidate path's bytes, so any write anywhere is visible.
 function worktreeFingerprint() {
-  const list = (args) => execFileSync('git', args,
-    {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER})
+  const list = (args) => execGit(args,
+    {cwd: root, encoding: UTF8})
     .split('\n').map((line) => line.trim()).filter(Boolean);
   const paths = [...new Set([
     ...list(['ls-files']),
@@ -103,10 +103,12 @@ test('untracked files are candidates, not invisible until staged', () => {
   // exactly when a human is least likely to look. Asserted against git's own
   // untracked list rather than by writing a probe file, so this test is itself
   // read-only - a test for a read-only contract should not dirty the tree.
-  const untracked = execFileSync('git',
+  // What the assembling layer declared it injected (a lab placement's linked
+  // tools/alloy-* directory) is workspace, not repository content.
+  const untracked = withoutWorkspaceInjections(execGit(
     ['ls-files', '--others', '--exclude-standard'],
-    {cwd: root, encoding: UTF8, maxBuffer: MAX_BUFFER})
-    .split('\n').map((line) => line.trim()).filter(Boolean);
+    {cwd: root, encoding: UTF8})
+    .split('\n').map((line) => line.trim()).filter(Boolean));
   const changed = changedCandidatePaths({root});
   for (const candidate of untracked) {
     assert.ok(changed.includes(candidate),

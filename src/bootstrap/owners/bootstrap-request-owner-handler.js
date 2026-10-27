@@ -44,7 +44,7 @@ const BOOTSTRAP_REQUEST_BOUNDED_WORK_OUTCOME = Object.freeze({
   EXPIRED: 'expired',
   FAILED: 'failed',
 });
-const CLIENT_ATTEMPT_DEADLINE_RESPONSE_GUARD_MS = NUM.HUNDRED;
+const CLIENT_ATTEMPT_DEADLINE_RESPONSE_GUARD_MS = NUM.HUNDRED; // ends-on: n/a margin
 
 function resolveClientAttemptBoundedWorkTimeoutMs(clientAttemptDeadline) {
   const deadlineMs = Number(clientAttemptDeadline?.deadlineMs);

@@ -52,14 +52,9 @@ import {
   CDC_PIPELINE_METRIC,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
-import {
-  isRaftPacket,
-  isRaftRsTransportEnvelope,
-} from '../raft/raft-packet-utils.js';
+import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {resolveRaftTransportDeliveryOptions} from '../raft/constants.js';
 import {VOTER_RAFT_ROLES} from '../raft/replica-voter-readiness.js';
-import {assertPartitionRaftProviderContract} from
-  '../raft/raft-provider-contract.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
@@ -131,7 +126,6 @@ import {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -224,7 +218,6 @@ const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
 const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
 const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS = 64;
-const DEFAULT_TRANSACTION_SESSION_ID = 'default';
 const QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION = 'migrationOperation';
 const QUERY_PAYLOAD_FIELD_MIGRATION_ID = 'migrationId';
 const QUERY_PAYLOAD_FIELD_ENTRY_ID = 'entryId';
@@ -256,7 +249,6 @@ export const PARTITION_SERVICE_SHARED = {
   CONTROL_PLANE_READINESS_DIMENSION,
   CRITICAL_SYSTEM_PARTITION_IDS,
   ConfigurationManager,
-  DEFAULT_TRANSACTION_SESSION_ID,
   Database,
   ENTITY_TYPE,
   ERRORS,
@@ -285,7 +277,6 @@ export const PARTITION_SERVICE_SHARED = {
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
   PARTITION_SERVICE_LEARNER_PROMOTION_WAKE_REASONS,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
@@ -341,7 +332,6 @@ export const PARTITION_SERVICE_SHARED = {
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
   assertCritical,
-  assertPartitionRaftProviderContract,
   attachTrafficReadinessListener,
   buildDurableCommitWitness,
   buildPartitionWriteEntry,
@@ -362,7 +352,6 @@ export const PARTITION_SERVICE_SHARED = {
   isBackgroundWorkLifecycleReady,
   isMetadataPublicationLifecycleReady,
   isPriorityControlPlanePartition,
-  isRaftPacket,
   isRaftRsTransportEnvelope,
   isSystemTableWriteReady,
   normalizePublishedRaftRole,

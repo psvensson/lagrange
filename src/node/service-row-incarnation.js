@@ -1,3 +1,5 @@
+import {COLUMN} from '../constants/columns.js';
+
 let serviceRowCreatedAtHighWater = 0;
 const SERVICE_ROW_INCARNATION_EXHAUSTED =
   'Service row incarnation space exhausted';
@@ -33,4 +35,32 @@ function mintServiceRowCreatedAt(requestedTimestamp) {
   return createdAt;
 }
 
-export {mintServiceRowCreatedAt};
+// Birth identity is shared by the two SERVICES registration owners. Lifecycle
+// status/generation, observation availability and publication rights stay with
+// their existing owners; role and update timestamps are not birth identity.
+const SERVICE_ROW_BIRTH_FIELDS = Object.freeze([
+  COLUMN.SERVICE_ID,
+  COLUMN.SERVICE_TYPE,
+  COLUMN.PARTITION_ID,
+  COLUMN.GROUP_ID,
+  COLUMN.NODE_ID,
+  COLUMN.REPLICA_ID,
+  COLUMN.ADDRESS,
+  COLUMN.CREATED_AT,
+]);
+
+/**
+ * Compare an authoritative observation with the exact owner-built birth sent.
+ * This comparison neither grants a new INSERT nor proves current activation.
+ * @param {Object|null} observed - One authoritative SERVICES row.
+ * @param {Object} expected - The captured row of the original invocation.
+ * @return {boolean} Whether the immutable birth identity matches exactly.
+ */
+function isExactServiceRowBirth(observed, expected) {
+  return Number.isSafeInteger(observed?.[COLUMN.CREATED_AT]) &&
+    observed?.create_attempt_token === expected?.create_attempt_token &&
+    SERVICE_ROW_BIRTH_FIELDS.every((field) =>
+      observed?.[field] === expected?.[field]);
+}
+
+export {mintServiceRowCreatedAt, isExactServiceRowBirth};
