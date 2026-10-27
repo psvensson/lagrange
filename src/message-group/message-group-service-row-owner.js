@@ -69,14 +69,20 @@ function resolveMessageGroupRaftRole(service) {
     (typeof service?.isLeaderReplica === 'function' &&
       service.isLeaderReplica());
   if (isLeader) {
-    return RAFT_ROLE.LEADER;
+    return normalizePublishedRaftRole(RAFT_ROLE.LEADER, {
+      collapseLeaderToFollower: false,
+    });
   }
 
   if (typeof service?.getRole === 'function') {
-    return normalizePublishedRaftRole(service.getRole());
+    return normalizePublishedRaftRole(service.getRole(), {
+      collapseLeaderToFollower: false,
+    });
   }
 
-  return normalizePublishedRaftRole(service?.role);
+  return normalizePublishedRaftRole(service?.role, {
+    collapseLeaderToFollower: false,
+  });
 }
 
 function messageGroupCreateError(replicaId, code, cause = null) {
@@ -234,8 +240,12 @@ function buildMessageGroupActivationPredicate(source) {
 // Every MG lifecycle transition (ACTIVE and STOPPED staging) stamps a new
 // state entry strictly later than the source generation it supersedes.
 async function persistMessageGroupActivation(owner, source, options) {
+  const previousFloor = Math.max(
+    durableRowVersion(source).value,
+    Number.isFinite(source?.updated_at) ? source.updated_at : 0,
+  );
   const transitionAt = nextLifecycleStateEntry(
-    options.timestamp ?? owner.now(), durableRowVersion(source).value);
+    options.timestamp ?? owner.now(), previousFloor);
   const updates = {status: options.status,
     raft_role: resolveMessageGroupRaftRole(options.service),
     address: source.address, state_entered_at: transitionAt,

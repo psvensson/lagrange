@@ -461,26 +461,17 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
           context?.schemaJobId,
           targetNodeId,
         );
-        const operation = await this.rebalanceCoordinator.createOperation({
-          type: OperationType.ADD,
-          partitionId,
-          entityType: SERVICE_TYPE.PARTITION,
-          entityId: partitionId,
-          nodeId: targetNodeId,
-          operationCreationAdmission:
-            operationCreationAdmissionByTargetNodeId.get(targetNodeId) || null,
-          controlPlaneMutationWorkClass:
-            CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
-          // Initial partition provisioning executes these operations inline
-          // below. Keep durable CDC/replay dispatch held until the complete
-          // bootstrap cohort is stamped, then skip the redundant local trigger.
-          deferDispatchUntilBootstrapTopology: true,
-          emitOperationCreated: false,
-          operationIntentId: childIntent.operationIntentId,
-          replicaIntentId: childIntent.replicaIntentId,
-          parentWorkflowFenceToken:
-            context?.schemaOwnerFenceToken ?? null,
-        });
+        const operation =
+          await this.createProvisioningOperationWithAdmissionReentry({
+            partitionId,
+            targetNodeId,
+            childIntent,
+            supportsAdmissionPrecheck,
+            operationCreationAdmission:
+              operationCreationAdmissionByTargetNodeId.get(targetNodeId) ||
+              null,
+            parentWorkflowFenceToken: context?.schemaOwnerFenceToken ?? null,
+          });
         plannedOperations.push(operation);
 
         const operationCreatedAt = Number(operation?.createdAt);

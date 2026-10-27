@@ -102,10 +102,98 @@ test('BootstrapService waits for local query transport readiness before publishi
       'partition_replica',
       'message_group_replica',
     ], 'seed ready heartbeat publishes canonical node capabilities');
-    t.same(capturedOptions, {requireDurableVisibility: true},
-      'seed ready heartbeat requires durable visibility completion');
+    t.same(capturedOptions, {
+      requireDurableVisibility: true,
+      allowReadyPromotion: true,
+    }, 'seed ready heartbeat requires durable visibility and explicit ready promotion');
     t.same(sleepDelays, [1],
       'seed ready publication should back off before the first heartbeat when local query transport is deferred');
+  });
+
+test('BootstrapService registerSeedNodeWithControlPlane promotes a cached JOINING seed row to READY and enforces the READY completion contract',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cachedRows = new Map();
+    const systemTableCache = {
+      get(tableName, key) {
+        return tableName === 'nodes' ? cachedRows.get(key) || null : null;
+      },
+    };
+
+    const service = new BootstrapService({
+      bootIncarnation: 1,
+      nodeId: 'seed-ready-contract-node',
+      nodeAddress: 'ws://localhost:19093',
+    });
+    service.systemTableCache = systemTableCache;
+    service.seedCacheHydrationPhase.waitForSystemServiceLeadersInCache =
+      async () => {};
+    service.messageRouter = {
+      getQueryDataPlaneTransportReadiness() {
+        return {ready: true, state: 'ready'};
+      },
+    };
+
+    const originalCreate = NodeStorageBudgetSetup.create;
+    const originalResolveAndPersist = NodeStorageBudgetSetup.resolveAndPersist;
+    const originalGetInstance = NodeService.getInstance;
+    NodeStorageBudgetSetup.create = () => ({});
+    NodeStorageBudgetSetup.resolveAndPersist = async ({nodeRow}) => {
+      cachedRows.set(service.nodeId, {...nodeRow});
+      return {
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      };
+    };
+    NodeService.getInstance = () => ({
+      getNodeStats: async () => ({
+        cpu: {count: 4, usagePercent: 10},
+        memory: {totalBytes: 1024, usagePercent: 20},
+        diskGb: 100,
+        diskUsagePercent: 30,
+      }),
+    });
+
+    try {
+      // Case 1: If sendHeartbeat leaves the cached seed row in JOINING/CONNECTED,
+      // registerSeedNodeWithControlPlane fails the explicit READY completion contract.
+      service.heartbeatService = {
+        sendHeartbeat: async () => {},
+      };
+      await t.rejects(
+        service.registerSeedNodeWithControlPlane(),
+        /Seed bootstrap READY contract violated/,
+        'bootstrap registration rejects when the seed row remains JOINING/CONNECTED in cache',
+      );
+
+      // Case 2: With allowReadyPromotion, the seed row is promoted to ACTIVE/READY in cache.
+      service.heartbeatService = {
+        sendHeartbeat: async (_stats, capabilities, options) => {
+          if (options?.allowReadyPromotion === true && options?.requireDurableVisibility === true) {
+            cachedRows.set(service.nodeId, {
+              ...cachedRows.get(service.nodeId),
+              status: 'active',
+              connection_state: 'ready',
+              capabilities: JSON.stringify(capabilities),
+              ready_lease_expires_at: Date.now() + 30000,
+            });
+          }
+        },
+      };
+      await service.registerSeedNodeWithControlPlane();
+      const finalRow = systemTableCache.get('nodes', service.nodeId);
+      t.equal(finalRow?.status, 'active', 'seed row is ACTIVE when registration completes');
+      t.equal(finalRow?.connection_state, 'ready', 'seed row is READY when registration completes');
+    } finally {
+      NodeStorageBudgetSetup.create = originalCreate;
+      NodeStorageBudgetSetup.resolveAndPersist = originalResolveAndPersist;
+      NodeService.getInstance = originalGetInstance;
+    }
   });
 
 test('BootstrapService waits for lifecycle metadata publication readiness before starting steady-state control-plane writers',

@@ -17,6 +17,7 @@ import {REPLICA_CLEANUP_ERROR_CODE} from
 import * as priorExistence from './replica-prior-existence.js';
 import {
   REPLICA_HANDLER_CREATE_DECISION,
+  REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_PROGRESS,
@@ -81,6 +82,26 @@ function canReleaseFreshCreateOnActivation(
     );
   }
   return true;
+}
+
+function armCreateAdmissionRecoveryRearm(handler) {
+  if (handler.shuttingDown) return;
+  handler.replicaCreateAdmissionRecoveryRearmOwner?.arm?.(
+    () => handler.startReplicaCreateAdmissionRecovery(),
+    REPLICA_HANDLER_DEFAULT.CREATE_ADMISSION_RECOVERY_RETRY_MS,
+  );
+}
+
+async function settleCreateAdmissionProgress(handler, evidence, nextState) {
+  if (!evidence) return;
+  try {
+    const progressed = await handler.getReplicaCreateAdmissionOwner()
+      .markProgress(evidence, nextState);
+    if (!progressed) armCreateAdmissionRecoveryRearm(handler);
+  } catch (error) {
+    if (error?.bootAuthorityUnavailable === true) throw error;
+    armCreateAdmissionRecoveryRearm(handler);
+  }
 }
 
 function assignReplicaHandlerCreateMethods(ReplicaHandler) {
@@ -471,12 +492,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAttemptToken,
             },
           );
-          if (createAdmissionEvidence) {
-            await this.getReplicaCreateAdmissionOwner().markProgress(
-              createAdmissionEvidence,
-              CREATE_ADMISSION_STATE.ACTIVE,
-            );
-          }
+          await settleCreateAdmissionProgress(
+            this,
+            createAdmissionEvidence,
+            CREATE_ADMISSION_STATE.ACTIVE,
+          );
         } else {
           this.setLocalReplica(replicaId, {
             replicaId,
@@ -609,8 +629,9 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
               createAdmissionEvidence,
               createAttemptToken,
             });
-          if (failedLifecyclePublished && createAdmissionEvidence) {
-            await this.getReplicaCreateAdmissionOwner().markProgress(
+          if (failedLifecyclePublished) {
+            await settleCreateAdmissionProgress(
+              this,
               createAdmissionEvidence,
               CREATE_ADMISSION_STATE.FAILED,
             );

@@ -7,6 +7,9 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_SEMI_SPACE = '; ';
 const LOCAL_STR_WARN = 'warn';
+const LOCAL_STR_ADMISSION_REENTER_CODE = 'OPERATION_CREATION_ADMISSION_REENTER';
+const LOCAL_STR_PLANNING_IDENTITY_CHANGED =
+  'readiness_planning_identity_changed';
 const TRANSIENT_PROVISIONING_SHORTFALL_REASONS = new Set([
   'cluster_member_unhealthy',
   'control_plane_write_unhealthy',
@@ -493,6 +496,106 @@ class SQLQueryEngineProvisioningAdmissionMethods {
    */
   async probeInitialTablePartitionProvisioning(options = {}) {
     return this.probeProvisioningTargetAdmission(options);
+  }
+
+  /**
+   * Return true when createOperation failed only because the control-plane
+   * planning generation advanced after admission precheck.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  isPlanningIdentityChangedReentryError(error) {
+    if (error?.code !== LOCAL_STR_ADMISSION_REENTER_CODE) {
+      return false;
+    }
+    const reasons = this.normalizeProvisioningReasonCodes(
+      error?.reasonCodes || error?.admissionResult?.blockingReasons,
+    );
+    return reasons.includes(LOCAL_STR_PLANNING_IDENTITY_CHANGED);
+  }
+
+  /**
+   * Build the createOperation move descriptor for one initial partition target.
+   * @param {Object} options
+   * @param {Object|null} operationCreationAdmission
+   * @return {Object}
+   * @private
+   */
+  buildProvisioningCreateOperationMove(options, operationCreationAdmission) {
+    return {
+      type: OperationType.ADD,
+      partitionId: options.partitionId,
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: options.partitionId,
+      nodeId: options.targetNodeId,
+      operationCreationAdmission: operationCreationAdmission || null,
+      controlPlaneMutationWorkClass:
+        CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+      // Initial partition provisioning executes these operations inline
+      // below. Keep durable CDC/replay dispatch held until the complete
+      // bootstrap cohort is stamped, then skip the redundant local trigger.
+      deferDispatchUntilBootstrapTopology: true,
+      emitOperationCreated: false,
+      operationIntentId: options.childIntent.operationIntentId,
+      replicaIntentId: options.childIntent.replicaIntentId,
+      parentWorkflowFenceToken: options.parentWorkflowFenceToken,
+    };
+  }
+
+  /**
+   * Refresh provisioning admission for one target after a planning-generation
+   * advance while preserving the deterministic child intent identity.
+   * @param {Object} options
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async refreshProvisioningOperationAdmission(options) {
+    const decision =
+      await this.rebalanceCoordinator.checkProvisioningAdmission({
+        type: OperationType.ADD,
+        partitionId: options.partitionId,
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: options.partitionId,
+        nodeId: options.targetNodeId,
+        controlPlaneMutationWorkClass:
+          CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+        operationIntentId: options.childIntent.operationIntentId,
+        replicaIntentId: options.childIntent.replicaIntentId,
+      });
+    return decision?.allowed === true ?
+      decision.operationCreationAdmission || null :
+      null;
+  }
+
+  /**
+   * Create one initial-provisioning ADD operation, re-entering admission once
+   * if a concurrent control-plane CDC event advanced the planning generation.
+   * @param {Object} options
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createProvisioningOperationWithAdmissionReentry(options) {
+    const createWithAdmission = (admission) =>
+      this.rebalanceCoordinator.createOperation(
+        this.buildProvisioningCreateOperationMove(options, admission),
+      );
+    let admission = options.operationCreationAdmission || null;
+    try {
+      return await createWithAdmission(admission);
+    } catch (error) {
+      if (
+        !options.supportsAdmissionPrecheck ||
+        !this.isPlanningIdentityChangedReentryError(error)
+      ) {
+        throw error;
+      }
+      admission = await this.refreshProvisioningOperationAdmission(options);
+      if (!admission) {
+        throw error;
+      }
+      return createWithAdmission(admission);
+    }
   }
 }
 

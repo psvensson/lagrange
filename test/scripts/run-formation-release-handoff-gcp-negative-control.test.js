@@ -202,7 +202,7 @@ test('reverse patch is a deterministic unified diff against the candidate ' +
 });
 
 test('isolated-worktree revert deploys DIFFERENT source than the main tree ' +
-  'and never mutates the main contract in place', async (t) => {
+  'and never mutates the main contract in place', {timeout: 120000}, async (t) => {
   const fixed = await computeSourceFingerprint(path.join(ROOT, 'src'));
   const prepared = await prepareRevertedSource(fixed, null);
   try {

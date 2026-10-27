@@ -471,10 +471,16 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     ) {
       return true;
     }
+    const publicationReasonCode =
+      context.publicationReasonCode || context.publication?.reasonCode || null;
     const publicationSupportsRecovery =
       context.publicationHealthy === true ||
       (priorityRecoveryActive &&
-        context.publicationMode === CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY);
+        context.publicationMode === CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY) ||
+      (context.publicationMode ===
+        CONTROL_PLANE_PUBLICATION_MODE.CONSERVATIVE_FANOUT &&
+        (publicationReasonCode === 'missing_local_group' ||
+          publicationReasonCode === 'missing_active_groups'));
     if (
       context.routingReady !== true ||
       publicationSupportsRecovery !== true ||

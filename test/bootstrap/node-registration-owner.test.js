@@ -1,6 +1,10 @@
 import {test} from '../../src/test-helpers/tap.js';
+import {
+  createBootstrapCacheHydrationApplier,
+} from '../../src/bootstrap/bootstrap-cache-hydration-applier.js';
 import {NodeRegistrationOwner} from
   '../../src/bootstrap/shared/node-registration-owner.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_PHASE_SCOPE,
@@ -1158,6 +1162,41 @@ test(
       result.nodeRow[COLUMN.NODE_ID],
       TEST_NODE_ID,
       'fresh admission over proven absence registers the joining node',
+    );
+  },
+);
+
+test(
+  'createBootstrapCacheHydrationApplier advances join-time seeded rows past ' +
+  'concurrent authoritative absence observations',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.recordAuthoritativeObservation(TABLES.SERVICE_ENDPOINTS, {
+      observedAtMs: TEST_NOW_MS + 50,
+      causeId: 'test-catchup-sweep',
+    });
+
+    const applier = createBootstrapCacheHydrationApplier(cache);
+    applier(TABLES.SERVICE_ENDPOINTS, 'UPSERT', {
+      [COLUMN.ENDPOINT_ID]: `ep-${TEST_NODE_ID}-wasm`,
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.BOOT_INCARNATION]: TEST_BOOT_INCARNATION,
+      [COLUMN.CREATED_AT]: TEST_NOW_MS,
+      [COLUMN.UPDATED_AT]: TEST_NOW_MS,
+    });
+
+    const cached = cache.get(
+      TABLES.SERVICE_ENDPOINTS,
+      `ep-${TEST_NODE_ID}-wasm`,
+    );
+    t.ok(
+      cached,
+      'seeded join-time endpoint row must not be fenced by a prior absence sweep',
+    );
+    t.equal(
+      cached?.[COLUMN.UPDATED_AT],
+      TEST_NOW_MS + 51,
+      'seeded row updated_at advances past the absence observation frontier',
     );
   },
 );

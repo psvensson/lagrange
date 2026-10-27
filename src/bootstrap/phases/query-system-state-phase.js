@@ -9,6 +9,8 @@
 
 import {assertCritical} from '../../utils/assert.js';
 import {NodeService} from '../../node/node-service.js';
+import {prepareBootstrapHydrationRow} from
+  '../bootstrap-cache-hydration-applier.js';
 import {NodeRegistrationOwner} from '../shared/node-registration-owner.js';
 import {isRetryableControlPlaneError} from
   '../../control-plane/control-plane-error-classification.js';
@@ -768,7 +770,7 @@ class QuerySystemStatePhase {
     systemTableCache.applySystemTableChange(
       tableName,
       CDC_OPERATION.UPSERT,
-      rowData,
+      prepareBootstrapHydrationRow(systemTableCache, tableName, rowData),
     );
   }
 }

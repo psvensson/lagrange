@@ -26,8 +26,11 @@ import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.
 import {TEST_CONFIG, createVirginSeedBootstrapService, initializeTestEnvironment,
   cleanupTestEnvironment, getUniquePort, gracefulShutdown,
   waitForPartitionLeaderElection} from './helpers/cluster-test-helpers.js';
-import {createParticipantReleaseDeliveryTrace, traceErrorOf} from
-  '../test-helpers/participant-release-delivery-trace.js';
+import {
+  createParticipantReleaseDeliveryTrace,
+  emitParticipantReleaseDeliveryTrace,
+  traceErrorOf,
+} from '../test-helpers/participant-release-delivery-trace.js';
 
 const NODE = 'membership-claim-cache-seed';
 const TABLE = 'replica_operations';
@@ -311,15 +314,8 @@ async function recordedStep(errors, phase, step) {
 }
 
 function emitParticipantReleaseTraceReport(participantReleaseTrace, observationErrors) {
-  let traceOutput = null;
   try {
-    traceOutput = JSON.stringify(participantReleaseTrace.report());
-  } catch (error) {
-    recordError(observationErrors, 'serialize-participant-release-trace', error);
-  }
-  if (traceOutput === null) return;
-  try {
-    console.log(traceOutput);
+    emitParticipantReleaseDeliveryTrace(participantReleaseTrace);
   } catch (error) {
     recordError(observationErrors, 'write-participant-release-trace', error);
   }

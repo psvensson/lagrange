@@ -15,6 +15,7 @@ import {
   TERMINAL_STATUSES,
 } from '../../src/rebalancer/replica-status.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
@@ -29,6 +30,8 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 import {withFoundingStamp} from '../partition/partition-founding-stamp.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   createCanonicalLifecycleServiceRow,
   createLifecycleStateStore,
@@ -161,9 +164,10 @@ async function createStandaloneLocalPartition({
     dbPath: ':memory:',
     schema,
     keyRange: {start: null, end: null},
+    systemTableCache: new SystemTableCache(),
   }));
   await partition.initialize();
-  await Promise.resolve();
+  await resumeFixtureParticipantAdmission(partition);
   return partition;
 }
 
@@ -325,22 +329,27 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
           partition_id: 'test-partition-1',
           status: 'active',
           address: `${failingNodeId}/partition/failing-svc-1`,
-          created_at: now - 60000,
-          state_entered_at: now - 60000,
-          updated_at: now - 60000,
+          created_at: now,
+          state_entered_at: now,
+          updated_at: now,
         }),
       );
 
-      await cdcIntegrationService.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
-        service_id: 'failing-svc-2',
-        node_id: failingNodeId,
-        service_type: SERVICE_TYPE.MESSAGE_GROUP_REPLICA,
-        group_id: 'test-mg-1',
-        status: 'active',
-        created_at: now - 60000,
-        state_entered_at: now - 60000,
-        updated_at: now - 60000,
-      });
+      await cdcIntegrationService.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        createCanonicalLifecycleServiceRow({
+          service_id: 'failing-svc-2',
+          replica_id: 'failing-svc-2',
+          node_id: failingNodeId,
+          service_type: SERVICE_TYPE.MESSAGE_GROUP_REPLICA,
+          group_id: 'test-mg-1',
+          status: 'active',
+          address: `${failingNodeId}/message-group/failing-svc-2`,
+          created_at: now,
+          state_entered_at: now,
+          updated_at: now,
+        }),
+      );
 
       // Wait for cache to be updated with the new data
       const cacheUpdated = await waitFor(() => {
@@ -1275,14 +1284,21 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       ];
 
       for (const svcConfig of serviceConfigs) {
-        await cdcIntegrationService.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
-          ...svcConfig,
-          service_type: SERVICE_TYPE.PARTITION,
-          partition_id: partitionId,
-          status: 'active',
-          created_at: now - 60000,
-          updated_at: now - 60000,
-        });
+        await cdcIntegrationService.insertSystemTableRow(
+          SYSTEM_TABLE_NAME.SERVICES,
+          createCanonicalLifecycleServiceRow({
+            ...svcConfig,
+            replica_id: svcConfig.service_id,
+            group_id: null,
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: partitionId,
+            status: 'active',
+            address: `${svcConfig.node_id}/partition/${svcConfig.service_id}`,
+            created_at: now,
+            state_entered_at: now,
+            updated_at: now,
+          }),
+        );
       }
 
       // Wait for cache to be updated with all nodes

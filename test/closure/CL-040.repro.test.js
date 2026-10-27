@@ -71,18 +71,21 @@ t.test('committed raft log entries agree across nodes after a partition + heal',
       net.partition(leaderA, other);
     }
     proposeWithoutWaiting(host, leaderA, {tag: 'OLD', by: leaderA});
-    await host.runUntil(1600);
+    await host.runUntilTrue(
+      () => followers.some((id) => host.isLeader(id)),
+      {deadlineMs: 3000},
+    );
     const leaderB = followers.find((id) => host.isLeader(id)) || null;
     t.ok(leaderB, 'the majority elects a new leader');
     t.ok(host.term(leaderB) > termA, 'the new leader holds a higher term');
 
     // The new leader commits a DIFFERENT entry via quorum, then the partition heals.
     proposeWithoutWaiting(host, leaderB, {tag: 'NEW', by: leaderB});
-    await host.runUntil(2200);
+    await host.runUntil(net.now() + 600);
     for (const other of followers) {
       net.heal(leaderA, other);
     }
-    await host.runUntil(3000);
+    await host.runUntil(net.now() + 800);
 
     for (const id of IDS) {
       t.ok(committedTags(host, id).includes('NEW'),

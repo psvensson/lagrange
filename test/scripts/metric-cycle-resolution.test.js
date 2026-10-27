@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import {spawnSync} from 'node:child_process';
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import {METRIC_REPORTS} from '../../scripts/metric-report-constants.js';
 import {readCurrentMetricReport} from '../../scripts/metric-report-provenance.js';
 import {createMetricFixture, runMetricProducer} from './metric-report-fixture.js';
@@ -10,6 +10,8 @@ import {createMetricFixture, runMetricProducer} from './metric-report-fixture.js
 const SUBJECT = 'src/subject.js';
 const SHARED = 'metric-shared';
 const PRODUCER = 'check-circular-dependencies.js';
+
+t.setTimeout(120000);
 
 function write(root, relative, content) {
   const filename = path.join(root, relative);

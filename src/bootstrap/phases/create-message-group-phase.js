@@ -10,6 +10,8 @@ import {
   DECLARED_MESSAGE_GROUP_REPLICA_COUNT_DEFAULT,
 } from '../replication-target-authority.js';
 import {NodeService} from '../../node/node-service.js';
+import {prepareBootstrapHydrationRow} from
+  '../bootstrap-cache-hydration-applier.js';
 import {
   IDENTITY_WAIT,
   IDENTITY_WAIT_AWAITED,
@@ -534,7 +536,11 @@ class CreateMessageGroupPhase {
           systemTableCache.applySystemTableChange(
             TABLES.SERVICES,
             CDC_OPERATION.UPSERT,
-            serviceData,
+            prepareBootstrapHydrationRow(
+              systemTableCache,
+              TABLES.SERVICES,
+              serviceData,
+            ),
           );
         }
 

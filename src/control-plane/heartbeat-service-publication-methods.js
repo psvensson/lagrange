@@ -107,6 +107,7 @@ class HeartbeatServicePublicationMethods {
     // row's ACTIVE flip has not yet propagated back through CDC (the seed's
     // own promotion rides this very heartbeat).
     const withholdReadyPromotion =
+      options.allowReadyPromotion !== true &&
       existing?.status === NODE_STATE.JOINING &&
       this.isNodeLifecycleReady?.() !== true;
     const updateRow = {
@@ -561,6 +562,12 @@ class HeartbeatServicePublicationMethods {
         SYSTEM_TABLE_NAME.NODES,
         whereClause,
         {connection_state: STATE.DISCONNECTED, ready_lease_expires_at: null},
+        {
+          expectedCacheFields: {
+            connection_state: STATE.DISCONNECTED,
+            ready_lease_expires_at: null,
+          },
+        },
       );
     } catch (error) {
       this.logger.error(HEARTBEAT_LOG_MSG.LEASE_EXPIRY_DISCONNECT_FAILED, {

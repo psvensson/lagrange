@@ -24,16 +24,24 @@ import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 
 const TRACKER_SUBSYSTEM = 'cdc-confirmation';
+const MAX_RECENT_EVENTS_PER_KEY = 8;
+const OPERATION_UPSERT = 'UPSERT';
+const OPERATION_INSERT = 'INSERT';
+const OPERATION_UPDATE = 'UPDATE';
 const CONFIRMATION_WAIT = Object.freeze({
   wait: 'CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS',
   awaited: 'CDC event applied to the local SystemTableCache',
 });
 
-function resolveRecordOriginHlc(data) {
-  const snake = data?.updated_at_hlc;
-  if (typeof snake === 'string' && snake.length > 0) return snake;
-  const camel = data?.updatedAtHlc;
-  return typeof camel === 'string' && camel.length > 0 ? camel : null;
+function nonEmptyStringOrNull(value) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function resolveRecordOriginHlc(data, metadata) {
+  const snake = nonEmptyStringOrNull(data?.updated_at_hlc);
+  if (snake) return snake;
+  return nonEmptyStringOrNull(data?.updatedAtHlc) ||
+    nonEmptyStringOrNull(metadata?.originHlc);
 }
 
 function compareHlcStrings(left, right) {
@@ -42,10 +50,6 @@ function compareHlcStrings(left, right) {
   return leftTs && rightTs ?
     leftTs.compare(rightTs) :
     String(left).localeCompare(String(right));
-}
-
-function nonEmptyStringOrNull(value) {
-  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function cloneObjectOrNull(value) {
@@ -64,41 +68,108 @@ function normalizeConfirmationOptions(timeoutOrOptions, defaultTimeoutMs) {
     operation: nonEmptyStringOrNull(opts.operation),
     causeId: nonEmptyStringOrNull(opts.causeId),
     predicate: typeof opts.predicate === 'function' ? opts.predicate : null,
-    inferredFromWrite: opts.inferredFromWrite === true,
   };
 }
 
-function matchesRequiredHlc(entry, data) {
+function matchesRequiredHlc(entry, data, metadata) {
   const requiredMinHlc = entry.minHlc || entry.originHlc;
   if (!requiredMinHlc) return true;
-  const recordHlc = resolveRecordOriginHlc(data);
-  if (recordHlc === null) return entry.inferredFromWrite;
-  return compareHlcStrings(recordHlc, requiredMinHlc) >= 0;
+  const recordHlc = resolveRecordOriginHlc(data, metadata);
+  return recordHlc !== null && compareHlcStrings(recordHlc, requiredMinHlc) >= 0;
 }
 
-function matchesExpectedFields(entry, pkField, data) {
+function matchesExpectedFields(entry, data) {
   if (!entry.expectedFields) return true;
-  const shouldCheckFields = !entry.inferredFromWrite ||
-    Object.keys(data || {}).some((field) => field !== pkField);
-  if (!shouldCheckFields) return true;
   return Object.entries(entry.expectedFields).every(
     ([field, expectedValue]) => data?.[field] === expectedValue,
   );
 }
 
+function doesOperationMatch(expectedOperation, actualOperation) {
+  if (!expectedOperation || actualOperation === expectedOperation) return true;
+  return expectedOperation === OPERATION_UPSERT &&
+    (actualOperation === OPERATION_INSERT || actualOperation === OPERATION_UPDATE);
+}
+
 function matchesOperationAndCause(entry, operation, data, metadata) {
-  const opMatches = !entry.operation || operation === entry.operation;
+  const opMatches = doesOperationMatch(entry.operation, operation);
   const causeId = metadata?.causeId || data?.causeId;
   const causeMatches = !entry.causeId || causeId === entry.causeId;
   return opMatches && causeMatches;
 }
 
 function doesConfirmationEntryMatch(entry, pkField, operation, data, metadata) {
+  void pkField;
   const basicMatch = matchesOperationAndCause(entry, operation, data, metadata) &&
-    matchesRequiredHlc(entry, data) &&
-    matchesExpectedFields(entry, pkField, data);
+    matchesRequiredHlc(entry, data, metadata) &&
+    matchesExpectedFields(entry, data);
   if (!basicMatch) return false;
   return !entry.predicate || entry.predicate(data, operation, metadata) === true;
+}
+
+function addPendingEntry(pending, key, entry) {
+  let entries = pending.get(key);
+  if (!entries) {
+    entries = new Set();
+    pending.set(key, entries);
+  }
+  entries.add(entry);
+}
+
+function removePendingEntry(pending, key, entry) {
+  const entries = pending.get(key);
+  if (!entries) return;
+  entries.delete(entry);
+  if (entries.size === 0) {
+    pending.delete(key);
+  }
+}
+
+function countPendingConfirmations(pending) {
+  let count = 0;
+  for (const entries of pending.values()) {
+    count += entries.size;
+  }
+  return count;
+}
+
+function recordRecentEvent(recentEvents, key, pkField, operation, data, metadata) {
+  let history = recentEvents.get(key);
+  if (!history) {
+    history = [];
+    recentEvents.set(key, history);
+  }
+  history.push({
+    pkField,
+    operation,
+    data: cloneObjectOrNull(data),
+    metadata: cloneObjectOrNull(metadata),
+  });
+  if (history.length > MAX_RECENT_EVENTS_PER_KEY) {
+    history.shift();
+  }
+}
+
+function hasMatchingRecentEvent(recentEvents, key, entry, pkField) {
+  if (!entry.originHlc && !entry.minHlc && !entry.causeId) return false;
+  const history = recentEvents.get(key);
+  if (!history) return false;
+  return history.some((event) =>
+    doesConfirmationEntryMatch(entry, pkField, event.operation, event.data, event.metadata),
+  );
+}
+
+function buildConfirmationTimeoutError(tableName, primaryKey, timeout) {
+  const error = new Error(
+    `${CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT}: ` +
+    `table=${tableName} key=${primaryKey} ` +
+    `timeout=${timeout}ms`,
+  );
+  error.name = CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT;
+  error.tableName = tableName;
+  error.primaryKey = primaryKey;
+  error.timeoutMs = timeout;
+  return error;
 }
 
 /**
@@ -117,8 +188,10 @@ class CDCConfirmationTracker {
       options.timeoutMs || CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS;
     this.isShutdown = false;
 
-    /** @type {Map<string, {resolve: Function, reject: Function, timer: *}>} */
+    /** @type {Map<string, Set<{resolve: Function, reject: Function, timer: *}>>} */
     this.pending = new Map();
+    /** @type {Map<string, Array<Object>>} */
+    this.recentEvents = new Map();
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -155,38 +228,36 @@ class CDCConfirmationTracker {
       return Promise.reject(this._shutdownError(tableName, primaryKey));
     }
 
+    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    if (hasMatchingRecentEvent(this.recentEvents, key, normalized, pkField)) {
+      return Promise.resolve();
+    }
+
     const startedAtMs = Date.now();
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(key);
-        const error = new Error(
-          `${CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT}: ` +
-          `table=${tableName} key=${primaryKey} ` +
-          `timeout=${timeout}ms`,
-        );
-        error.name = CDC_CONFIRMATION_ERROR_TYPE.TIMEOUT;
-        error.tableName = tableName;
-        error.primaryKey = primaryKey;
-        error.timeoutMs = timeout;
+      const entry = {
+        resolve,
+        reject,
+        timer: null,
+        ...normalized,
+      };
+      entry.timer = setTimeout(() => {
+        removePendingEntry(this.pending, key, entry);
+        const error = buildConfirmationTimeoutError(tableName, primaryKey, timeout);
         reportWaitBoundSpent(this.logger, {
           ...CONFIRMATION_WAIT,
           boundMs: timeout,
           startedAtMs,
           lastObserved: {
             confirmed: false,
-            pendingConfirmations: this.pending.size,
+            pendingConfirmations: countPendingConfirmations(this.pending),
           },
           scope: {tableName, primaryKey},
         });
         reject(error);
       }, timeout);
 
-      this.pending.set(key, {
-        resolve,
-        reject,
-        timer,
-        ...normalized,
-      });
+      addPendingEntry(this.pending, key, entry);
     });
   }
 
@@ -200,10 +271,6 @@ class CDCConfirmationTracker {
    * @param {Object} [metadata]
    */
   onEventApplied(tableName, operation, data, metadata) {
-    if (this.pending.size === 0) {
-      return;
-    }
-
     const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
     const pkValue = data && data[pkField];
     if (pkValue === undefined || pkValue === null) {
@@ -211,17 +278,20 @@ class CDCConfirmationTracker {
     }
 
     const key = `${tableName}:${pkValue}`;
-    const entry = this.pending.get(key);
-    if (!entry) {
-      return;
-    }
-    if (!doesConfirmationEntryMatch(entry, pkField, operation, data, metadata)) {
+    recordRecentEvent(this.recentEvents, key, pkField, operation, data, metadata);
+
+    const entries = this.pending.get(key);
+    if (!entries || entries.size === 0) {
       return;
     }
 
-    clearTimeout(entry.timer);
-    this.pending.delete(key);
-    entry.resolve();
+    for (const entry of [...entries]) {
+      if (doesConfirmationEntryMatch(entry, pkField, operation, data, metadata)) {
+        clearTimeout(entry.timer);
+        removePendingEntry(this.pending, key, entry);
+        entry.resolve();
+      }
+    }
   }
 
   /**
@@ -231,14 +301,17 @@ class CDCConfirmationTracker {
   shutdown() {
     this.isShutdown = true;
 
-    for (const [key, entry] of this.pending) {
-      clearTimeout(entry.timer);
+    for (const [key, entries] of this.pending) {
       const parts = key.split(':');
       const tableName = parts[0];
       const primaryKey = parts.slice(1).join(':');
-      entry.reject(this._shutdownError(tableName, primaryKey));
+      for (const entry of entries) {
+        clearTimeout(entry.timer);
+        entry.reject(this._shutdownError(tableName, primaryKey));
+      }
     }
     this.pending.clear();
+    this.recentEvents.clear();
 
     if (this.systemTableCache) {
       this.systemTableCache.offCacheChange(this._cacheListener);

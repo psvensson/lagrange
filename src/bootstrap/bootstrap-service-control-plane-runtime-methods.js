@@ -21,7 +21,9 @@ import {
   COLUMN,
   NODE_STATE,
   NUM,
+  SERVICE_STATUS,
   STATE,
+  TABLES,
 } from '../constants/index.js';
 import {raiseBootIncarnationFloor} from './boot-incarnation-owner.js';
 import {DEFAULT_NODE_CAPABILITIES} from
@@ -34,12 +36,65 @@ const bootstrapError = BOOTSTRAP_ERROR;
 const BOOTSTRAP_CONTROL_PLANE_OWNER_NAME = 'ControlPlaneSetup';
 const LOCAL_QUERY_TRANSPORT_GATE = 'local_query_transport';
 const MESSAGE_GROUP_REPLICA_SERVICE_TYPE = 'message_group';
+const FUNCTION_TYPE = 'function';
+const SEED_READY_CONTRACT_ERROR_PREFIX =
+  'Seed bootstrap READY contract violated';
 const BOOTSTRAP_CONTROL_PLANE_RUNTIME_LOG_MSG = Object.freeze({
   RETRYING_SEED_CONTROL_PLANE_REGISTRATION:
     'Retrying seed control-plane registration until local query transport is ready',
   LOCAL_QUERY_TRANSPORT_NOT_READY:
     'Local query/data-plane transport is not ready',
 });
+
+function finiteNumberOrFallback(value, fallback = 0) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function buildSeedNodeRegistrationRow(service, stats, now) {
+  const totalBytes = stats?.memory?.totalBytes;
+  const totalMemoryMb = Number.isFinite(totalBytes) ?
+    Math.round(totalBytes / NUM.BYTES_PER_MIB) : 0;
+  return {
+    [COLUMN.NODE_ID]: service.nodeId,
+    [COLUMN.NODE_ADDRESS]: service.nodeAddress,
+    [COLUMN.CPU_CORES]: finiteNumberOrFallback(stats?.cpu?.count, 0),
+    [COLUMN.MEMORY_MB]: totalMemoryMb,
+    [COLUMN.DISK_GB]: finiteNumberOrFallback(stats?.diskGb, NUM.HUNDRED),
+    [COLUMN.CPU_USAGE_PERCENT]: finiteNumberOrFallback(stats?.cpu?.usagePercent, 0),
+    [COLUMN.MEMORY_USAGE_PERCENT]: finiteNumberOrFallback(stats?.memory?.usagePercent, 0),
+    [COLUMN.DISK_USAGE_PERCENT]: finiteNumberOrFallback(stats?.diskUsagePercent, 0),
+    [COLUMN.STATUS]: NODE_STATE.JOINING,
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.CAPABILITIES]: JSON.stringify([...DEFAULT_NODE_CAPABILITIES]),
+    [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.BOOT_INCARNATION]: service.bootIncarnation,
+    [COLUMN.CREATED_AT]: now,
+  };
+}
+
+function isSeedRowReadyInCache(seedNodeRow) {
+  return Boolean(seedNodeRow) &&
+    seedNodeRow[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+    seedNodeRow[COLUMN.CONNECTION_STATE] === STATE.READY;
+}
+
+function assertSeedReadyPublicationContract(service) {
+  const cache = service.systemTableCache;
+  if (typeof cache?.get !== FUNCTION_TYPE) {
+    return;
+  }
+  const seedNodeRow = cache.get(TABLES.NODES, service.nodeId);
+  if (!seedNodeRow && !service.cdcIntegrationService) {
+    return;
+  }
+  if (!isSeedRowReadyInCache(seedNodeRow)) {
+    throw new Error(
+      `${SEED_READY_CONTRACT_ERROR_PREFIX}: nodeId=${service.nodeId} ` +
+      `status=${seedNodeRow?.[COLUMN.STATUS] ?? null} ` +
+      `connectionState=${seedNodeRow?.[COLUMN.CONNECTION_STATE] ?? null}`,
+    );
+  }
+}
 
 function createBootstrapServiceControlPlaneRuntimeMethods() {
   return {
@@ -262,37 +317,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
           .waitForSystemServiceLeadersInCache();
         await this.awaitLocalQueryTransportReadinessForReadySignal();
         const stats = await NodeService.getInstance().getNodeStats();
-        const cpuCores = Number.isFinite(stats?.cpu?.count) ?
-          stats.cpu.count : 0;
-        const totalMemoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
-          Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
-          0;
-        const diskGb = Number.isFinite(stats?.diskGb) ?
-          stats.diskGb : NUM.HUNDRED;
-        const now = Date.now();
-
-        const nodeRow = {
-          [COLUMN.NODE_ID]: this.nodeId,
-          [COLUMN.NODE_ADDRESS]: this.nodeAddress,
-          [COLUMN.CPU_CORES]: cpuCores,
-          [COLUMN.MEMORY_MB]: totalMemoryMb,
-          [COLUMN.DISK_GB]: diskGb,
-          [COLUMN.CPU_USAGE_PERCENT]:
-            Number.isFinite(stats?.cpu?.usagePercent) ?
-              stats.cpu.usagePercent : 0,
-          [COLUMN.MEMORY_USAGE_PERCENT]:
-            Number.isFinite(stats?.memory?.usagePercent) ?
-              stats.memory.usagePercent : 0,
-          [COLUMN.DISK_USAGE_PERCENT]:
-            Number.isFinite(stats?.diskUsagePercent) ?
-              stats.diskUsagePercent : 0,
-          [COLUMN.STATUS]: NODE_STATE.JOINING,
-          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-          [COLUMN.CAPABILITIES]: JSON.stringify([...DEFAULT_NODE_CAPABILITIES]),
-          [COLUMN.LAST_HEARTBEAT]: now,
-          [COLUMN.BOOT_INCARNATION]: this.bootIncarnation,
-          [COLUMN.CREATED_AT]: now,
-        };
+        const nodeRow = buildSeedNodeRegistrationRow(this, stats, Date.now());
 
         const budgetService = NodeStorageBudgetSetup.create({
           nodeId: this.nodeId,
@@ -318,8 +343,12 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
             diskUsagePercent: stats.diskUsagePercent,
           },
           [...DEFAULT_NODE_CAPABILITIES],
-          {requireDurableVisibility: true},
+          {
+            requireDurableVisibility: true,
+            allowReadyPromotion: true,
+          },
         );
+        assertSeedReadyPublicationContract(this);
       } catch (error) {
         // A newer incarnation owns this node's row: the next boot lifecycle
         // must reserve above it (boot-incarnation-owner.js).

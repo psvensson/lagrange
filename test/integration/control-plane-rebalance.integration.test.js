@@ -133,9 +133,15 @@ test('Control plane dispatch integration', async (t) => {
           },
         });
         return {
-          messageId,
-          correlationId,
-          status: ReplicaOperationResponseStatus.INITIATED,
+          queueWaitMs: 0,
+          result: {
+            messageId,
+            correlationId,
+            acknowledged: true,
+          },
+          answer: {
+            status: ReplicaOperationResponseStatus.INITIATED,
+          },
         };
       };
 

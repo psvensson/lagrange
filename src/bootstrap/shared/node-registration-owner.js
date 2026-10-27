@@ -174,7 +174,7 @@ class NodeRegistrationOwner {
 
       const endpointRow =
         existingJoinAdmissionProgress?.endpointRow ||
-        await this.registerNodeEndpoint(now);
+        await this.registerNodeEndpoint(this.delegates.getNow()());
       this.seedJoinTimeCacheRow(
         TABLES.NODE_ENDPOINTS,
         endpointRow,
