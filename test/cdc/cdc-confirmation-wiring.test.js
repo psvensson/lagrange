@@ -39,9 +39,9 @@ function createCacheStub() {
     offCacheChange(listener) {
       listeners.delete(listener);
     },
-    fire(tableName, operation, record) {
+    fire(tableName, operation, record, metadata) {
       for (const l of listeners) {
-        l(tableName, operation, record);
+        l(tableName, operation, record, metadata);
       }
     },
   };
@@ -102,7 +102,11 @@ test('CDC wiring — insertData attaches cdcConfirmation that resolves',
     t.ok(result.cdcConfirmation instanceof Promise,
       'cdcConfirmation is a Promise');
 
-    cache.fire('nodes', 'INSERT', {node_id: 'n1'});
+    cache.fire('nodes', 'INSERT', {
+      node_id: 'n1',
+      status: 'ACTIVE',
+      updated_at_hlc: result.originHlc,
+    });
     await result.cdcConfirmation;
 
     t.pass('insertData confirmation resolved');
@@ -128,7 +132,11 @@ test('CDC wiring — updateData attaches cdcConfirmation that resolves',
     t.ok(result.cdcConfirmation instanceof Promise,
       'cdcConfirmation is a Promise');
 
-    cache.fire('nodes', 'UPDATE', {node_id: 'n2', status: 'ACTIVE'});
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'n2',
+      status: 'ACTIVE',
+      updated_at_hlc: result.originHlc,
+    });
     await result.cdcConfirmation;
 
     t.pass('updateData confirmation resolved');
@@ -151,7 +159,11 @@ test('CDC wiring — upsertData attaches cdcConfirmation that resolves',
     t.ok(result.cdcConfirmation instanceof Promise,
       'cdcConfirmation is a Promise');
 
-    cache.fire('nodes', 'UPSERT', {node_id: 'n3'});
+    cache.fire('nodes', 'UPSERT', {
+      node_id: 'n3',
+      status: 'READY',
+      updated_at_hlc: result.originHlc,
+    });
     await result.cdcConfirmation;
 
     t.pass('upsertData confirmation resolved');
@@ -176,7 +188,12 @@ test('CDC wiring — deleteData attaches cdcConfirmation that resolves',
     t.ok(result.cdcConfirmation instanceof Promise,
       'cdcConfirmation is a Promise');
 
-    cache.fire('nodes', 'DELETE', {node_id: 'n4'});
+    cache.fire(
+      'nodes',
+      'DELETE',
+      {node_id: 'n4'},
+      {originHlc: result.originHlc},
+    );
     await result.cdcConfirmation;
 
     t.pass('deleteData confirmation resolved');
@@ -229,7 +246,7 @@ test('CDC wiring — shutdown rejects pending wired confirmations',
     t.end();
   });
 
-test('CDC wiring — duplicate key: second write resolves, first rejected',
+test('CDC wiring — two concurrent writes to the same key both retain and resolve their confirmations',
   async (t) => {
     const cache = createCacheStub();
     const {partition, tracker} = await createWiredPartition(cache);
@@ -249,17 +266,76 @@ test('CDC wiring — duplicate key: second write resolves, first rejected',
     t.ok(r1.cdcConfirmation instanceof Promise);
     t.ok(r2.cdcConfirmation instanceof Promise);
 
-    // Fire cache event — resolves the latest (r2) confirmation
-    cache.fire('nodes', 'UPSERT', {node_id: 'dup-1'});
+    cache.fire('nodes', 'INSERT', {
+      node_id: 'dup-1',
+      status: 'INIT',
+      updated_at_hlc: r1.originHlc,
+    });
+    await r1.cdcConfirmation;
+
+    cache.fire('nodes', 'UPSERT', {
+      node_id: 'dup-1',
+      status: 'ACTIVE',
+      updated_at_hlc: r2.originHlc,
+    });
     await r2.cdcConfirmation;
 
-    // r1 was overwritten in the tracker map; shut down to reject it
     tracker.shutdown();
+    await partition.shutdown();
+    t.end();
+  });
 
-    const settled = await Promise.allSettled([r1.cdcConfirmation]);
-    t.equal(settled[0].status, 'rejected',
-      'first confirmation rejected after overwrite');
+test('CDC wiring — rejects events missing causal HLC and resolves when CDC event arrives before waiter registration',
+  async (t) => {
+    const cache = createCacheStub();
+    const {partition, tracker} = await createWiredPartition(cache);
 
+    const r1 = await partition.insertData(
+      'nodes',
+      {node_id: 'causal-1', status: 'INIT'},
+      {awaitCDCConfirmation: true},
+    );
+
+    let r1Resolved = false;
+    void r1.cdcConfirmation.then(() => {
+      r1Resolved = true;
+    });
+
+    // Event without updated_at_hlc must not satisfy wired causal confirmation
+    cache.fire('nodes', 'INSERT', {node_id: 'causal-1', status: 'INIT'});
+    await Promise.resolve();
+    t.equal(r1Resolved, false, 'event without updated_at_hlc must not resolve wired confirmation');
+
+    cache.fire('nodes', 'INSERT', {
+      node_id: 'causal-1',
+      status: 'INIT',
+      updated_at_hlc: r1.originHlc,
+    });
+    await r1.cdcConfirmation;
+    t.equal(r1Resolved, true, 'event with matching updated_at_hlc resolves wired confirmation');
+
+    // Simulate CDC event arriving at SystemTableCache BEFORE _attachCdcConfirmation runs
+    const originalApplyWrite = partition.applyWrite.bind(partition);
+    partition.applyWrite = async (entry, phaseTimings) => {
+      const res = await originalApplyWrite(entry, phaseTimings);
+      cache.fire('nodes', 'UPDATE', {
+        node_id: 'causal-1',
+        status: 'ACTIVE',
+        updated_at_hlc: entry.timestamp,
+      });
+      return res;
+    };
+
+    const r2 = await partition.updateData(
+      'nodes',
+      {node_id: 'causal-1'},
+      {status: 'ACTIVE'},
+      {awaitCDCConfirmation: true},
+    );
+    await r2.cdcConfirmation;
+    t.pass('wired confirmation resolves even when cache event fires before _attachCdcConfirmation');
+
+    tracker.shutdown();
     await partition.shutdown();
     t.end();
   });

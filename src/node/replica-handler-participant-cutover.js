@@ -30,6 +30,12 @@ import {PARTICIPANT_RELEASE_ACTION as ACTION, PARTICIPANT_CUTOVER_OUTCOME as OUT
   '../partition/partition-participant-transaction-cutover-constants.js';
 
 const RUNS = new WeakMap();
+const RETRYABLE_MEMBER_OUTCOMES = new Set([
+  OUTCOME.DRAIN_PENDING,
+  OUTCOME.STALE,
+  OUTCOME.CENSUS_REFUSED,
+  OUTCOME.ORIGIN_REPLICATION_PENDING,
+]);
 
 function localLeader(handler, request) {
   const hosted = [...handler.localServices.values()].filter((service) =>
@@ -85,6 +91,52 @@ async function actOnCohort(handler, release, attempt, action, census, fields = {
 function attemptRefusal(request, outcome, fields = {}) {
   return releaseAnswer(outcome, request,
     {retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS, ...fields});
+}
+
+function isRetryableMemberRefusal(answer) {
+  if (!answer || typeof answer !== 'object') return false;
+  if (RETRYABLE_MEMBER_OUTCOMES.has(answer.outcome)) return true;
+  return answer.outcome === OUTCOME.UNAVAILABLE &&
+    answer.missingFact !== MISSING_FACT.RELEASE_DEADLINE;
+}
+
+function normalizeMemberRefusal(request, answer) {
+  if (!isRetryableMemberRefusal(answer) ||
+      Number.isSafeInteger(answer.retryAfterMs)) {
+    return answer;
+  }
+  return releaseAnswer(answer.outcome, {...request, ...answer},
+    {retryAfterMs: BOUND.PAUSE_RETRY_AFTER_MS, ...answer});
+}
+
+async function resumeCohort(handler, service, request, release, attempt, census,
+  fields = {}) {
+  const followers = census.filter((facts) =>
+    facts.generation.replicaId !== service.replicaId);
+  if (followers.length > 0) {
+    const followerAnswers = await actOnCohort(handler, release, attempt,
+      ACTION.RESUME, followers, fields);
+    const followerRefusal = followerAnswers.find((answer) =>
+      answer.outcome !== OUTCOME.RESUMED);
+    if (followerRefusal !== undefined) {
+      await actOnCohort(handler, release, attempt, ACTION.PAUSE, followers);
+      return normalizeMemberRefusal({...request, release}, followerRefusal);
+    }
+  }
+  const leaderMembers = census.filter((facts) =>
+    facts.generation.replicaId === service.replicaId);
+  const leaderAnswers = await actOnCohort(handler, release, attempt,
+    ACTION.RESUME, leaderMembers, fields);
+  const leaderRefusal = leaderAnswers.find((answer) =>
+    answer.outcome !== OUTCOME.RESUMED);
+  if (leaderRefusal !== undefined) {
+    if (followers.length > 0) {
+      await actOnCohort(handler, release, attempt, ACTION.PAUSE, followers);
+    }
+    return normalizeMemberRefusal({...request, release}, leaderRefusal);
+  }
+  return releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
+    {release, census});
 }
 
 function queryDrainRefusalFields(census) {
@@ -210,11 +262,8 @@ async function proveCurrentControlCohort(handler, service, request,
   // obtains newer local facts and fences OPEN on that complete census, so a
   // second caller-side INSPECT cannot authorize anything RESUME would refuse.
   // Any intervening change keeps the affected recipient closed.
-  const resumed = await actOnCohort(handler, release, attempt, ACTION.RESUME,
-    pausedCensus, {census: pausedCensus});
-  const refusal = resumed.find((answer) => answer.outcome !== OUTCOME.RESUMED);
-  return refusal ?? releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
-    {release, census: pausedCensus});
+  return resumeCohort(handler, service, request, release, attempt, pausedCensus,
+    {census: pausedCensus});
 }
 
 function localReleaseRefusal(handler, service, request) {
@@ -254,7 +303,7 @@ async function runCutoverAttempt(handler, request) {
   raiseParticipantCutoverPause(service);
   const own = await readParticipantReleaseFacts(handler, service,
     COMMITTED_MEMBERSHIP_READ_PURPOSE.RETIREMENT);
-  if (own.outcome !== OUTCOME.OBSERVED) return own;
+  if (own.outcome !== OUTCOME.OBSERVED) return normalizeMemberRefusal(request, own);
   const release = releaseIdentityOf({partitionId: service.partitionId,
     targetBuildDigest: request.targetBuildDigest,
     configurationKey: own.membership.configurationKey,
@@ -274,11 +323,13 @@ async function runCutoverAttempt(handler, request) {
   if (unavailable !== null) {
     await actOnCohort(handler, release, attempt, ACTION.PAUSE,
       census.filter((facts) => facts.outcome === OUTCOME.OBSERVED));
-    return unavailable;
+    return normalizeMemberRefusal({...request, release}, unavailable);
   }
   census = await actOnCohort(handler, release, attempt, ACTION.PAUSE, census);
   unavailable = unavailableCensus(census);
-  if (unavailable !== null) return unavailable;
+  if (unavailable !== null) {
+    return normalizeMemberRefusal({...request, release}, unavailable);
+  }
   return runPausedCutover(handler, service, request, release, attempt, cohort, census);
 }
 
@@ -306,7 +357,9 @@ async function runPausedCutover(handler, service, request, release, attempt, coh
   if (defect !== null) return attemptRefusal({...request, release}, defect);
   const application = await enableAndObserveCohort(handler, release, attempt,
     census, local, queryRelease.queryDrainProof);
-  if (application !== null) return application;
+  if (application !== null) {
+    return normalizeMemberRefusal({...request, release}, application);
+  }
   return finishEnabledCutover(handler, service, request, release, attempt, cohort, queryRelease);
 }
 
@@ -315,7 +368,9 @@ async function finishEnabledCutover(handler, service, request, release, attempt,
   const census = await readCohort(handler, service.partitionId, cohort,
     request.deadlineAtMs);
   const unavailable = unavailableCensus(census);
-  if (unavailable !== null) return unavailable;
+  if (unavailable !== null) {
+    return normalizeMemberRefusal({...request, release}, unavailable);
+  }
   const finalLocal = census.find((facts) => facts.generation.replicaId === service.replicaId);
   const finalQueryDrainProof = queryRelease.transactions === null ? null :
     transactionReleaseProofOf({release, attempt, census: finalLocal?.queryCensus,
@@ -329,11 +384,8 @@ async function finishEnabledCutover(handler, service, request, release, attempt,
   if (finalDefect !== null) return attemptRefusal({...request, release}, finalDefect);
   const currentControlOwner = await releaseControlOwnerFirst(handler, service, request);
   if (currentControlOwner !== null) return currentControlOwner;
-  const resumed = await actOnCohort(handler, release, attempt, ACTION.RESUME, census,
+  return resumeCohort(handler, service, request, release, attempt, census,
     {census, queryDrainProof: finalQueryDrainProof});
-  const refusal = resumed.find((answer) => answer.outcome !== OUTCOME.RESUMED);
-  return refusal ?? releaseAnswer(OUTCOME.CUT_OVER, {...request, release},
-    {release, census});
 }
 
 async function joinParticipantCutover(handler, current) {

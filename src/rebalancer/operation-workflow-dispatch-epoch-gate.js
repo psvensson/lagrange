@@ -15,6 +15,9 @@ import {
   MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
   assertMembershipPublicationEpochBinding,
 } from './replica-operation-membership-epoch-binding.js';
+import {
+  operationCarriesReplicaCreateAdmission,
+} from './replica-operation-create-admission-fields.js';
 import {DISPATCH_PENDING_WORKFLOW_STEPS} from './replica-operation-step-policy.js';
 
 const {
@@ -37,7 +40,8 @@ function isEpochFencedOperation(operation) {
   return (
     (operation?.type === OperationType.ADD ||
       operation?.type === OperationType.REPLACE) &&
-    DISPATCH_PENDING_WORKFLOW_STEPS.has(operation?.workflowStep)
+    DISPATCH_PENDING_WORKFLOW_STEPS.has(operation?.workflowStep) &&
+    !operationCarriesReplicaCreateAdmission(operation)
   );
 }
 
@@ -120,7 +124,18 @@ async function ensureDispatchMembershipEpochOrSkip(owner, operation) {
   const staleDispatchError =
     `${STALE_DISPATCH_EPOCH_PREFIX}${planningEpoch}; ` +
     `current epoch is ${currentEpoch}`;
-  await owner.failOperation(operation, staleDispatchError);
+  const terminalOutcome = await owner.failOperation(
+    operation,
+    staleDispatchError,
+    {
+      requireCreateAdmissionAbsent: true,
+      deferWhenCreateAdmissionWins: true,
+    },
+  );
+  if (terminalOutcome?.createAdmissionWon === true) {
+    Object.assign(operation, terminalOutcome.operation);
+    return null;
+  }
   return owner.buildFailedOperationResult(
     operation.operationId,
     staleDispatchError,

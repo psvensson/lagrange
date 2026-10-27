@@ -24,9 +24,9 @@ function createCacheStub() {
     offCacheChange(listener) {
       listeners.delete(listener);
     },
-    fire(tableName, operation, record) {
+    fire(tableName, operation, record, metadata) {
       for (const l of listeners) {
-        l(tableName, operation, record);
+        l(tableName, operation, record, metadata);
       }
     },
     listenerCount() {
@@ -200,7 +200,7 @@ test('CDCConfirmationTracker — ignores non-matching events', async (t) => {
   t.end();
 });
 
-test('CDCConfirmationTracker — duplicate confirmation for same key',
+test('CDCConfirmationTracker — concurrent waiters for same key both resolve independently',
   async (t) => {
     const cache = createCacheStub();
     const tracker = new CDCConfirmationTracker({
@@ -208,22 +208,39 @@ test('CDCConfirmationTracker — duplicate confirmation for same key',
       timeoutMs: 500,
     });
 
-    // Second awaitConfirmation for same key overwrites the first
-    const p1 = tracker.awaitConfirmation('nodes', 'node-1');
-    const p2 = tracker.awaitConfirmation('nodes', 'node-1');
+    let p1Resolved = false;
+    let p2Resolved = false;
+    const p1 = tracker.awaitConfirmation('nodes', 'node-1', {
+      expectedFields: {status: 'JOINING'},
+      originHlc: '1700000000001:0:node-1',
+    }).then(() => {
+      p1Resolved = true;
+    });
+    const p2 = tracker.awaitConfirmation('nodes', 'node-1', {
+      expectedFields: {status: 'ACTIVE'},
+      originHlc: '1700000000002:0:node-1',
+    }).then(() => {
+      p2Resolved = true;
+    });
 
-    cache.fire('nodes', 'INSERT', {node_id: 'node-1'});
+    cache.fire('nodes', 'INSERT', {
+      node_id: 'node-1',
+      status: 'JOINING',
+      updated_at_hlc: '1700000000001:0:node-1',
+    });
+    await p1;
+    t.equal(p1Resolved, true, 'first waiter resolved on its causal event');
+    t.equal(p2Resolved, false, 'second waiter remains pending until its own event');
 
-    // p2 should resolve (it replaced p1 in the map)
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-1',
+      status: 'ACTIVE',
+      updated_at_hlc: '1700000000002:0:node-1',
+    });
     await p2;
+    t.equal(p2Resolved, true, 'second waiter resolved on its causal event');
 
-    // p1's timer is still running — it will timeout since its entry
-    // was replaced. Clean up by shutting down.
     tracker.shutdown();
-
-    const result = await Promise.allSettled([p1]);
-    // p1 was overwritten so its timer fires or shutdown rejects it
-    t.equal(result[0].status, 'rejected');
     t.end();
   });
 
@@ -253,7 +270,7 @@ test('CDCConfirmationTracker — ignores events with null/undefined pk',
     t.end();
   });
 
-test('CDCConfirmationTracker — causal criteria ignore unrelated updates to the same key',
+test('CDCConfirmationTracker — causal criteria ignore unrelated updates and missing HLCs',
   async (t) => {
     const cache = createCacheStub();
     const tracker = new CDCConfirmationTracker({
@@ -279,6 +296,15 @@ test('CDCConfirmationTracker — causal criteria ignore unrelated updates to the
     await Promise.resolve();
     t.equal(resolved, false, 'unrelated heartbeat must not satisfy causal confirmation');
 
+    // Event with matching fields but absent causal HLC metadata must NOT resolve
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-1',
+      status: 'active',
+      storage_budget_source: 'test-update-source',
+    });
+    await Promise.resolve();
+    t.equal(resolved, false, 'event missing causal HLC metadata must not satisfy causal confirmation');
+
     // Matching causal update resolves the confirmation
     cache.fire('nodes', 'UPDATE', {
       node_id: 'node-1',
@@ -293,3 +319,28 @@ test('CDCConfirmationTracker — causal criteria ignore unrelated updates to the
     t.end();
   });
 
+test('CDCConfirmationTracker — resolves immediately when matching causal event arrived before waiter registration',
+  async (t) => {
+    const cache = createCacheStub();
+    const tracker = new CDCConfirmationTracker({
+      systemTableCache: cache,
+      timeoutMs: 100,
+    });
+
+    // CDC event arrives BEFORE awaitConfirmation is called
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-early',
+      status: 'READY',
+      updated_at_hlc: '1700000000005:0:node-early',
+    });
+
+    await tracker.awaitConfirmation('nodes', 'node-early', {
+      operation: 'UPDATE',
+      expectedFields: {status: 'READY'},
+      originHlc: '1700000000005:0:node-early',
+    });
+
+    t.pass('causal confirmation resolved from recent event history without race');
+    tracker.shutdown();
+    t.end();
+  });

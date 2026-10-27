@@ -28,7 +28,7 @@
   "censusSize": 2483,
   "digest": "fnv1a32-eb7b3244",
   "observationSchemaVersion": 2,
-  "observationDigest": "fnv1a32-dfe59699",
+  "observationDigest": "fnv1a32-c7734a1c",
   "classes": {
     "test/active-gate/active-gate-authoritative-repair-convergence.test.js": "convergence-topology",
     "test/address/address-malformed-rejection.property.test.js": "transport-messaging",
@@ -8017,8 +8017,25 @@
         "src/bootstrap/rejoin-hints.js",
         "src/bootstrap/seed-startup-storage-admission.js",
         "src/control-plane/control-plane-readiness-constants.js",
+        "src/partition/partition-committed-statement-outcome.js",
+        "src/partition/partition-participant-release-contract.js",
+        "src/partition/partition-participant-transaction-cutover-constants.js",
+        "src/partition/partition-participant-transaction-pause.js",
+        "src/partition/partition-participant-transaction-request.js",
+        "src/partition/partition-transaction-determinism-constants.js",
+        "src/partition/partition-transaction-determinism.js",
+        "src/partition/partition-write-kernel.js",
+        "src/raft/raft-committed-membership-constants.js",
+        "src/raft/raft-operation-port-constants.js",
+        "src/raft/raft-operation-port-request.js",
+        "src/raft/raft-rs-application-transaction-owner.js",
+        "src/raft/raft-rs-membership-transition.js",
+        "src/raft/raft-rs-ready-loop-constants.js",
         "src/storage/data-directory-process-owner.js",
-        "test/test-helpers/lifecycle-state-store.js"
+        "test/test-helpers/controllable-consensus-port.js",
+        "test/test-helpers/lifecycle-state-store.js",
+        "test/test-helpers/participant-transaction-fixture.js",
+        "test/test-helpers/replica-handler-identity-fixture.js"
       ],
       "env": [
         "TAP"
@@ -8317,8 +8334,7 @@
         "src/partition/partition-participant-transaction-cutover-constants.js",
         "src/raft/raft-committed-membership-constants.js",
         "src/storage/data-directory-process-owner.js",
-        "test/integration/helpers/cluster-test-helpers.js",
-        "test/test-helpers/participant-release-delivery-trace.js"
+        "test/integration/helpers/cluster-test-helpers.js"
       ]
     },
     "test/integration/message-group-multi-join-formation.integration.test.js": {

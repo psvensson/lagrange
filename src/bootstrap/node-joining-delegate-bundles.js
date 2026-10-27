@@ -1,10 +1,14 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 
 const {
+  JOINING_ERROR_MSG,
   JOIN_DELEGATE_BUNDLE,
+  NodeLifecycleStateMachine,
   NodeService,
+  NodeState,
   NodeStatePublicationOwner,
   TABLES,
+  assertCritical,
   resolveMembershipJoinIntentType,
 } = NODE_JOINING_SERVICE_SHARED;
 
@@ -454,6 +458,44 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         stopJoiningLifecycleOwners: () => self.stopJoiningLifecycleOwners(),
         emit: (event, data) => self.emit(event, data),
       };
+    },
+    rebindSeedContactAddress(seedNodeAddress) {
+      if (typeof seedNodeAddress !== 'string' ||
+          seedNodeAddress.length === 0) {
+        return;
+      }
+      this.seedNodeAddress = seedNodeAddress;
+      this.seedNodeAddresses = [
+        seedNodeAddress,
+        ...this.seedNodeAddresses.filter((candidate) =>
+          candidate !== seedNodeAddress,
+        ),
+      ];
+    },
+    handoffPreviousLifecycleStateMachine(previousLifecycleStateMachine) {
+      if (!previousLifecycleStateMachine) {
+        return;
+      }
+      const nodeService = NodeService.getInstance();
+      if (!nodeService.isInitialized()) {
+        return;
+      }
+      assertCritical(
+        nodeService.getNodeId() === this.nodeId &&
+          previousLifecycleStateMachine instanceof NodeLifecycleStateMachine &&
+          previousLifecycleStateMachine.getState() === NodeState.STOPPED &&
+          nodeService.getLifecycleStateMachine() ===
+            previousLifecycleStateMachine,
+        JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+      );
+      assertCritical(
+        nodeService.replaceExternallyManagedLifecycleStateMachine(
+          previousLifecycleStateMachine,
+          this.lifecycleStateMachine,
+        ),
+        JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+      );
+      this.outerReattemptMembershipRestorePending = true;
     },
   });
 }

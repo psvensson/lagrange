@@ -2,7 +2,10 @@
  * Runtime config, delay, and group-id helpers for LatencyGroupManager.
  */
 
-import {TABLES} from '../constants/index.js';
+import {COLUMN, TABLES} from '../constants/index.js';
+import {
+  INITIAL_MESSAGE_GROUP_ID,
+} from '../bootstrap/system-table-schemas-constants.js';
 import {
   LATENCY_TOPOLOGY_CONFIG_KEY,
   LATENCY_TOPOLOGY_DEFAULT,
@@ -79,7 +82,28 @@ function computeNextLatencyGroupCycleDelayMs(options) {
   );
 }
 
+function resolveLocalHostedMessageGroupId(options) {
+  const filterFn = options.systemTableCache?.filter;
+  if (typeof filterFn !== 'function' || !options.nodeId) {
+    return null;
+  }
+  const rows = filterFn.call(
+    options.systemTableCache,
+    TABLES.SERVICES,
+    (row) => row?.[COLUMN.NODE_ID] === options.nodeId &&
+      row?.[COLUMN.GROUP_ID] === INITIAL_MESSAGE_GROUP_ID &&
+      !hasLatencyGroup(options.systemTableCache, row[COLUMN.GROUP_ID]),
+  );
+  return Array.isArray(rows) && rows.length > 0 ?
+    rows[0][COLUMN.GROUP_ID] :
+    null;
+}
+
 function buildLatencyGroupId(options) {
+  const hostedGroupId = resolveLocalHostedMessageGroupId(options);
+  if (hostedGroupId) {
+    return hostedGroupId;
+  }
   const baseTimestamp = Number.isFinite(options.timestamp) ?
     Math.floor(options.timestamp) :
     options.nowFn();

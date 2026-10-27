@@ -90,25 +90,39 @@ function resolveNonReadQueryRefusal(service, sql, options) {
     null;
 }
 
+function resolveWriteConfirmationExpectedFields(operation) {
+  const data = operation.data;
+  if (operation.type === PARTITION_SERVICE_OPERATION.DELETE || !data) {
+    return null;
+  }
+  return Object.keys(data).length > 0 ? {...data} : null;
+}
+
+function resolveWriteConfirmationOriginHlc(result, entry) {
+  if (result?.originHlc) return result.originHlc;
+  return entry?.timestamp || null;
+}
+
+function resolveOperationPrimaryKeyValue(operation, pkField) {
+  const fromWhere = operation.whereClause ? operation.whereClause[pkField] : void 0;
+  if (fromWhere !== void 0 && fromWhere !== null) return fromWhere;
+  return operation.data ? operation.data[pkField] : void 0;
+}
+
 function buildWriteConfirmationTarget(service, result, operation, entry) {
   const tableName = operation.tableName || service.tableName;
   const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
-  const whereClause = operation.whereClause || {};
-  const data = operation.data || {};
-  const pkValue = whereClause[pkField] ?? data[pkField];
+  const pkValue = resolveOperationPrimaryKeyValue(operation, pkField);
   if (pkValue === void 0 || pkValue === null) {
     return null;
   }
-  const isDelete = operation.type === PARTITION_SERVICE_OPERATION.DELETE;
-  const expectedFields = !isDelete && Object.keys(data).length > 0 ? {...data} : null;
   return {
     tableName,
     pkValue,
     options: {
-      originHlc: result?.originHlc || entry?.timestamp || null,
-      expectedFields,
+      originHlc: resolveWriteConfirmationOriginHlc(result, entry),
+      expectedFields: resolveWriteConfirmationExpectedFields(operation),
       operation: operation.type || null,
-      inferredFromWrite: true,
     },
   };
 }
@@ -596,6 +610,9 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
     }
     const target = buildWriteConfirmationTarget(this, result, operation, entry);
     if (target) {
+      if (!result.originHlc && target.options.originHlc) {
+        result.originHlc = target.options.originHlc;
+      }
       result.cdcConfirmation = this.cdcConfirmationTracker.awaitConfirmation(
         target.tableName,
         target.pkValue,

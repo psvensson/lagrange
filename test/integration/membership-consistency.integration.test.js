@@ -384,8 +384,10 @@ test('Membership Consistency Integration Tests', {timeout: 240000}, async (t) =>
         );
       }
 
-      // Wait for setImmediate callbacks to fire
-      await new Promise((r) => setImmediate(r));
+      // Wait for asynchronous CDC notifications from the rapid oscillation to arrive
+      await waitForCondition(() =>
+        stateChanges.some((entry) => entry.state === STATE.DISCONNECTED) &&
+        stateChanges.some((entry) => entry.state === STATE.READY));
 
       // Verify state changes were recorded
       t.ok(stateChanges.length >= 1, 'state changes should be recorded');

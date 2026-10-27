@@ -529,6 +529,12 @@ class SystemTableCache {
       const appliedChangeMetadata = Object.freeze({
         causeId,
         tableMutationRevision,
+        originHlc:
+          data?.updated_at_hlc ||
+          data?.updatedAtHlc ||
+          recordForNotification?.updated_at_hlc ||
+          recordForNotification?.updatedAtHlc ||
+          null,
       });
       this.notifyApplyListeners(
         tableName,

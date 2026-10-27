@@ -305,6 +305,7 @@ class NodeRegistrationOwnerPublicationMethods {
         nodeAddress: this.nodeAddress,
         advertisedNodeWsAddress: this.advertisedNodeWsAddress,
         wsPort: this.delegates.getWsPort?.(),
+        nowMs: this.delegates.getNow()(),
         bootIncarnation: this.getRegistrationBootIncarnation(),
       });
       return endpointRows;

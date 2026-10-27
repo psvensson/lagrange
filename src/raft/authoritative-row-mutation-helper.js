@@ -340,10 +340,11 @@ class AuthoritativeRowMutationHelper {
   }
 
   buildMutationSubmission(value, authoritativeRow) {
-    const updateData = this.buildUpdateData(value, this.now());
     const cachedRow = optionalFunction(this.readRowFromCache) ?
       this.readRowFromCache(this.systemTableCache) :
       null;
+    const updatedAt = this.now();
+    const updateData = this.buildUpdateData(value, updatedAt);
     const mutationContext = {
       cachedRow,
       // The CAS guard must come from the authoritative row when one was

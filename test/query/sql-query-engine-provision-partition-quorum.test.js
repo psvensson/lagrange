@@ -1377,3 +1377,40 @@ test('SQLQueryEngine - retryable durable schema shortfall retains and reuses ' +
     'the retained child dispatches only with the completed cohort',
   );
 });
+
+test('createProvisioningOperationWithAdmissionReentry refreshes stale planning identity once', async (t) => {
+  const probeCalls = [];
+  const createCalls = [];
+  const engine = Object.create(SQLQueryEngine.prototype);
+  engine.rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      probeCalls.push(move.operationIntentId);
+      return {
+        allowed: true,
+        operationCreationAdmission: {generation: 2, nodeId: move.nodeId},
+      };
+    },
+    async createOperation(move) {
+      createCalls.push(move.operationCreationAdmission);
+      if (createCalls.length === 1) {
+        const err = new Error('stale planning identity');
+        err.code = 'OPERATION_CREATION_ADMISSION_REENTER';
+        err.reasonCodes = ['readiness_planning_identity_changed'];
+        throw err;
+      }
+      return {operationId: move.operationIntentId};
+    },
+  };
+  const op = await engine.createProvisioningOperationWithAdmissionReentry({
+    partitionId: 'tbl-reentry-p1',
+    targetNodeId: 'node-a',
+    childIntent: {operationIntentId: 'op-1', replicaIntentId: 'rep-1'},
+    supportsAdmissionPrecheck: true,
+    operationCreationAdmission: {generation: 1, nodeId: 'node-a'},
+    parentWorkflowFenceToken: 'fence-1',
+  });
+  t.equal(op.operationId, 'op-1');
+  t.same(probeCalls, ['op-1']);
+  t.equal(createCalls.length, 2);
+  t.equal(createCalls[1].generation, 2);
+});

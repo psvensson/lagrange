@@ -6,6 +6,10 @@ import {BootstrapService} from
   '../../src/bootstrap/bootstrap-service.js';
 import {reserveBootIncarnation} from
   '../../src/bootstrap/boot-incarnation-owner.js';
+import {resolveAutoRejoinStartupDecision} from
+  '../../src/bootstrap/rejoin-hints.js';
+import {readSeedStartupStorageAdmission} from
+  '../../src/bootstrap/seed-startup-storage-admission.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {
@@ -30,6 +34,8 @@ import {
 } from '../../src/runtime/pgwire-credential-verifier.js';
 import {DataDirectoryManager} from
   '../../src/storage/data-directory-manager.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../src/storage/data-directory-process-owner.js';
 import {ServiceThreadManager} from
   '../../src/threading/service-thread-manager.js';
 
@@ -44,13 +50,13 @@ const EXAMPLE_RUNTIME = Object.freeze({
   HOST: '127.0.0.1',
   LEADERSHIP_WAIT_INITIAL_DELAY_MS: 10,
   LEADERSHIP_WAIT_MAX_DELAY_MS: 100,
-  LEADERSHIP_WAIT_TIMEOUT_MS: 5_000,
+  LEADERSHIP_WAIT_TIMEOUT_MS: 15_000,
   LOG_LEVEL: 'error',
   RAFT_ELECTION_TIMEOUT_MAX_MS: 200,
   RAFT_ELECTION_TIMEOUT_MIN_MS: 100,
   RAFT_HEARTBEAT_INTERVAL_MS: 50,
   RAFT_LEADERSHIP_WAIT_BACKOFF_MS: 100,
-  RAFT_LEADERSHIP_WAIT_TIMEOUT_MS: 5_000,
+  RAFT_LEADERSHIP_WAIT_TIMEOUT_MS: 15_000,
   REBALANCER_CRITICAL_CHECK_DELAY_MS: 100,
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: 1_000,
   REBALANCER_PERIODIC_CHECK_JITTER_MS: 100,
@@ -181,6 +187,7 @@ async function shutdownSingletons() {
 async function shutdownExampleNodeResources({
   bootstrapApi,
   bootstrapService,
+  dataDirectoryProcessOwner,
   shutdownSingletonsOperation = shutdownSingletons,
   sqlAdapter,
   sqlRuntime,
@@ -191,6 +198,7 @@ async function shutdownExampleNodeResources({
     () => bootstrapApi.shutdown(),
     () => sqlRuntime?.sqlQueryEngine?.shutdown(),
     () => bootstrapService.shutdown(),
+    () => dataDirectoryProcessOwner?.release(),
     () => shutdownSingletonsOperation(),
   ], 'request binding example node shutdown failed');
 }
@@ -252,8 +260,27 @@ async function bootExampleNode(dataDir, options = {}) {
   // One boot lifecycle, one incarnation: reserved durably by the boot
   // incarnation owner over this node's data directory, as the runtime
   // entrypoint does, and handed to the lifecycle owner unchanged.
-  const bootIncarnation = await reserveBootIncarnation(
-    dataDirectoryManager.getDataDir());
+  const resolvedDataDir = dataDirectoryManager.getDataDir();
+  const dataDirectoryProcessOwner =
+    acquireDataDirectoryProcessOwner(resolvedDataDir);
+  let bootIncarnation;
+  let startupDecision;
+  let startupServicesAdmission;
+  try {
+    bootIncarnation = await reserveBootIncarnation(resolvedDataDir);
+    startupDecision = await resolveAutoRejoinStartupDecision({
+      dataDir: resolvedDataDir,
+      nodeId: EXAMPLE_NODE.NODE_ID,
+      nodeAddress,
+    });
+    startupServicesAdmission = await readSeedStartupStorageAdmission(
+      resolvedDataDir,
+      (acquisition) => acquisition,
+    );
+  } catch (error) {
+    dataDirectoryProcessOwner.release();
+    throw error;
+  }
   const bootstrapService = new BootstrapService({
     advertisedNodeWsAddress,
     bootIncarnation,
@@ -267,9 +294,12 @@ async function bootExampleNode(dataDir, options = {}) {
       replicaStaggerDelayMs: EXAMPLE_RUNTIME.REPLICA_STAGGER_DELAY_MS,
     },
     dataDirectoryManager,
+    dataDirectoryProcessOwner,
+    membershipOwnerOutcome: startupDecision.membershipOwnerOutcome,
     nodeAddress,
     nodeId: EXAMPLE_NODE.NODE_ID,
     readinessState,
+    startupServicesAdmission,
     wsPort,
   });
   const bootstrapApi = new BootstrapAPI({
@@ -327,6 +357,7 @@ async function bootExampleNode(dataDir, options = {}) {
         await shutdownExampleNodeResources({
           bootstrapApi,
           bootstrapService,
+          dataDirectoryProcessOwner,
           sqlAdapter,
           sqlRuntime,
         });
@@ -337,6 +368,7 @@ async function bootExampleNode(dataDir, options = {}) {
       await shutdownExampleNodeResources({
         bootstrapApi,
         bootstrapService,
+        dataDirectoryProcessOwner,
         sqlAdapter,
         sqlRuntime,
       });

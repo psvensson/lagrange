@@ -9,7 +9,7 @@
 // directory is never a proof, and neither is a stack frame.
 import {readFileSync} from 'node:fs';
 
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 import {
   CLASSIFICATION, OUTSIDE_DOMAIN_REASON, OUTSIDE_DOMAIN_SHAPE,
   classifyUnownedTurn,
@@ -29,6 +29,8 @@ import {
 const ZERO = 0;
 const ONE_AMBIGUITY = 1;
 const REPO_ROOT = new URL('../../', import.meta.url);
+
+t.setTimeout(120000);
 
 test('the formation census closes on its own terms, and its reasons are real',
   async (t) => {

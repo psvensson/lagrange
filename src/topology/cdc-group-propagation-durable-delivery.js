@@ -218,6 +218,12 @@ async function propagateDurableCdcEvent(owner, options) {
     const prepared = prepareDurableForegroundWave(owner, wave, events, plan);
     const result = await owner.deliverToTargetsWithRetry(prepared);
     context.assertCurrent();
+    if (!plan.useGrouped && result?.success === true) {
+      const postPlan = captureDurablePropagationPlan(owner, wave.source);
+      if (postPlan.useGrouped) {
+        owner.setPublicationMode(publicationModeOf(postPlan), postPlan.fallbackReason);
+      }
+    }
     return result;
   } finally {
     context.finish();
