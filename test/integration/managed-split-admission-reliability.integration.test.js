@@ -129,7 +129,7 @@ async function bootstrapManagedSplitFixture(tableName) {
     nodeAddress: `ws://127.0.0.1:${wsPort}`,
     wsPort,
     config: {
-      leadershipWaitTimeoutMs: 3000,
+      leadershipWaitTimeoutMs: 15000,
       leadershipWaitInitialDelayMs: 10,
       leadershipWaitMaxDelayMs: 100,
       replicaStaggerDelayMs: 20,

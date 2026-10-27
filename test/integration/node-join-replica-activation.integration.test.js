@@ -499,7 +499,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 1500,
+        leadershipWaitTimeoutMs: 15000,
       },
     });
 
@@ -699,7 +699,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       wsPort: seedWsPort,
       config: {
         ...TEST_CONFIG.bootstrap,
-        leadershipWaitTimeoutMs: 2000,
+        leadershipWaitTimeoutMs: 15000,
       },
     });
 

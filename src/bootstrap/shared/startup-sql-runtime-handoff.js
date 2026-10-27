@@ -94,6 +94,15 @@ function attachSqlRuntimeToStartupOwner(options) {
     sqlQueryEngine,
   });
   attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine);
+  const previousSqlQueryEngine = owner.sqlQueryEngine || null;
+  if (previousSqlQueryEngine && previousSqlQueryEngine !== sqlQueryEngine) {
+    previousSqlQueryEngine.transactionCoordinator?.stopRecoverySweep?.();
+    if (owner.runtimeHandoffOwner) {
+      owner.runtimeHandoffOwner.transactionRecoveryActivationStarted = false;
+      owner.runtimeHandoffOwner.transactionRecoveryActivationResult = null;
+      owner.runtimeHandoffOwner.transactionRecoveryActivationError = null;
+    }
+  }
   owner.sqlQueryEngine = sqlQueryEngine;
 
   const bootstrapTopologySnapshotOwner =

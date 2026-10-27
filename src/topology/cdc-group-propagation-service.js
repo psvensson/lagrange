@@ -139,7 +139,9 @@ class CDCGroupPropagationService extends EventEmitter {
    */ start() {
     this.ensureInitialized();
     this.refreshConfig();
-    this.durablePropagationLifetime = Object.freeze({});
+    if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+      this.durablePropagationLifetime = Object.freeze({});
+    }
     this.state = CDC_GROUP_PROPAGATION_STATE.RUNNING;
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STARTED, {
       nodeId: this.nodeId,

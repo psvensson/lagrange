@@ -172,22 +172,44 @@ function resolvePositiveInteger(value) {
   return numberIsFinite(numeric) && numeric > 0 ? mathFloor(numeric) : null;
 }
 
+const STORAGE_BUDGET_PREDICATE_COLUMNS = Object.freeze([
+  COLUMN.STORAGE_BUDGET_BYTES,
+  COLUMN.STORAGE_BUDGET_SOURCE,
+  COLUMN.STORAGE_BUDGET_UPDATED_AT,
+]);
+
+function hasStorageBudgetColumns(row) {
+  if (!row || typeof row !== 'object') {
+    return false;
+  }
+  return resolvePositiveInteger(row[COLUMN.STORAGE_BUDGET_BYTES]) !== null ||
+    (typeof row[COLUMN.STORAGE_BUDGET_SOURCE] === 'string' &&
+      row[COLUMN.STORAGE_BUDGET_SOURCE].length > 0) ||
+    resolvePositiveInteger(row[COLUMN.STORAGE_BUDGET_UPDATED_AT]) !== null;
+}
+
 // Startup-owned storage-budget columns travel with every publication so a
-// liveness write never clears the budget the registration seeded.
-function resolveStorageBudgetColumns(source) {
+// liveness write never clears the budget the registration seeded, while
+// authoritative storage-budget columns on `source` always take precedence over
+// stale cached telemetry.
+function resolveStorageBudgetColumns(telemetry, source) {
+  const budgetOwner = hasStorageBudgetColumns(source) ? source : telemetry;
+  if (!budgetOwner || typeof budgetOwner !== 'object') {
+    return {};
+  }
   const columns = {};
   const budgetBytes = resolvePositiveInteger(
-    source[COLUMN.STORAGE_BUDGET_BYTES],
+    budgetOwner[COLUMN.STORAGE_BUDGET_BYTES],
   );
   if (budgetBytes !== null) {
     columns[COLUMN.STORAGE_BUDGET_BYTES] = budgetBytes;
   }
-  const budgetSource = source[COLUMN.STORAGE_BUDGET_SOURCE];
+  const budgetSource = budgetOwner[COLUMN.STORAGE_BUDGET_SOURCE];
   if (typeof budgetSource === 'string' && budgetSource.length > 0) {
     columns[COLUMN.STORAGE_BUDGET_SOURCE] = budgetSource;
   }
   const budgetUpdatedAt = resolvePositiveInteger(
-    source[COLUMN.STORAGE_BUDGET_UPDATED_AT],
+    budgetOwner[COLUMN.STORAGE_BUDGET_UPDATED_AT],
   );
   if (budgetUpdatedAt !== null) {
     columns[COLUMN.STORAGE_BUDGET_UPDATED_AT] = budgetUpdatedAt;
@@ -195,7 +217,7 @@ function resolveStorageBudgetColumns(source) {
   return columns;
 }
 
-function resolveTelemetryColumns(telemetry) {
+function resolveTelemetryColumns(telemetry, source) {
   if (!telemetry || typeof telemetry !== 'object') {
     return {};
   }
@@ -205,7 +227,7 @@ function resolveTelemetryColumns(telemetry) {
       columns[column] = telemetry[column];
     }
   }
-  return {...columns, ...resolveStorageBudgetColumns(telemetry)};
+  return {...columns, ...resolveStorageBudgetColumns(telemetry, source)};
 }
 
 // Only forward liveness progress is written: a request that does not advance
@@ -277,8 +299,8 @@ function resolveSourceRefusalOutcome(row, knownIncarnation, bootIncarnation) {
 // observed NON-terminal status (resolveSourceRefusal admits no terminal
 // source), so the final mutation can never match a terminal row: a row
 // stopped after the read fails the CAS and the readback names it.
-function buildSourcePredicate(source, bootIncarnation) {
-  return {
+function buildSourcePredicate(source, bootIncarnation, update = null) {
+  const predicate = {
     [COLUMN.NODE_ID]: source[COLUMN.NODE_ID],
     [COLUMN.BOOT_INCARNATION]: bootIncarnation,
     [COLUMN.STATUS]: readColumn(source, COLUMN.STATUS),
@@ -286,6 +308,14 @@ function buildSourcePredicate(source, bootIncarnation) {
     [COLUMN.LAST_HEARTBEAT]: readColumn(source, COLUMN.LAST_HEARTBEAT),
     [COLUMN.CREATED_AT]: readColumn(source, COLUMN.CREATED_AT),
   };
+  if (hasStorageBudgetColumns(source) && hasStorageBudgetColumns(update)) {
+    for (const column of STORAGE_BUDGET_PREDICATE_COLUMNS) {
+      if (Object.hasOwn(source, column)) {
+        predicate[column] = readColumn(source, column);
+      }
+    }
+  }
+  return predicate;
 }
 
 function sourceLifecycleUnchanged(observed, source) {
@@ -523,7 +553,7 @@ class NodeLifecyclePublication {
         request.nodeAddress ||
         readColumn(source, COLUMN.NODE_ADDRESS) ||
         STRING.UNKNOWN,
-      ...resolveTelemetryColumns(request.telemetry),
+      ...resolveTelemetryColumns(request.telemetry, source),
       ...(decision.nextState === STATE.READY ?
         {[COLUMN.STATUS]: SERVICE_STATUS.ACTIVE} :
         {}),
@@ -584,7 +614,7 @@ class NodeLifecyclePublication {
     try {
       result = await this.gateway.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
-        buildSourcePredicate(plan.source, plan.bootIncarnation),
+        buildSourcePredicate(plan.source, plan.bootIncarnation, plan.update),
         plan.update,
         this.buildWriteOptions(plan),
       );

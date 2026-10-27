@@ -39,11 +39,13 @@ function decideDurablePropagationAdmission(occupied, sourceMismatch = false) {
 }
 
 function durablePropagationRefusal(owner, admission) {
-  return admission === DURABLE_PROPAGATION_ADMISSION.BUSY ?
-    {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
-      retryAfterMs: owner.deliveryRetryDelayMs} :
-    {...unknownCdcAcceptance(),
-      fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
+  if (admission === DURABLE_PROPAGATION_ADMISSION.BUSY) {
+    owner.activeDurablePropagation?.context?.markContended?.();
+    return {...unknownCdcAcceptance(CDC_COMPLETION.BACKPRESSURE),
+      retryAfterMs: owner.deliveryRetryDelayMs};
+  }
+  return {...unknownCdcAcceptance(),
+    fallbackReason: CDC_GROUP_PROPAGATION_REASON.SOURCE_GROUP_MISMATCH};
 }
 
 function bindWaveProgress(owner, source, events, context, plan) {

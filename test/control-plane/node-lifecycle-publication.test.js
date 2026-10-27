@@ -443,3 +443,65 @@ test('a replacement incarnation registered before the re-drive makes the old ' +
     'the old boot is refused against the replacement incarnation');
   t.same(durable.current(), replacement, 'the replacement row is untouched');
 });
+
+test('adversarial storage-budget ordering: stale cached telemetry never ' +
+  'overwrites a newer authoritative budget and concurrent budget writes ' +
+  'are fenced by the CAS predicate', async (t) => {
+  // Case 1: Budget update committed before readAuthoritativeNodeRow while cache is stale.
+  const sourceWithNewerBudget = registeredRow({
+    [COLUMN.STORAGE_BUDGET_BYTES]: 2_000_000_000,
+    [COLUMN.STORAGE_BUDGET_SOURCE]: 'test-update-source',
+    [COLUMN.STORAGE_BUDGET_UPDATED_AT]: NOW - 100,
+  });
+  const durable1 = createDurableNodes(sourceWithNewerBudget);
+  const result1 = await createPublication(durable1).publish(readyRequest({
+    telemetry: {
+      [COLUMN.CPU_CORES]: 8,
+      [COLUMN.STORAGE_BUDGET_BYTES]: 1_073_741_824,
+      [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
+      [COLUMN.STORAGE_BUDGET_UPDATED_AT]: NOW - 5_000,
+    },
+  }));
+  t.equal(result1.outcome, OUTCOME.APPLIED);
+  t.match(durable1.current(), {
+    [COLUMN.STORAGE_BUDGET_BYTES]: 2_000_000_000,
+    [COLUMN.STORAGE_BUDGET_SOURCE]: 'test-update-source',
+    [COLUMN.STORAGE_BUDGET_UPDATED_AT]: NOW - 100,
+  }, 'authoritative storage-budget columns are preserved over stale telemetry');
+
+  // Case 2: Concurrent budget update commits between readAuthoritativeNodeRow and CAS write.
+  const initialSource = registeredRow({
+    [COLUMN.STORAGE_BUDGET_BYTES]: 1_073_741_824,
+    [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
+    [COLUMN.STORAGE_BUDGET_UPDATED_AT]: NOW - 5_000,
+  });
+  const durable2 = createDurableNodes(initialSource, {
+    beforeWrite: () => {
+      durable2.replace({
+        ...initialSource,
+        [COLUMN.STORAGE_BUDGET_BYTES]: 3_000_000_000,
+        [COLUMN.STORAGE_BUDGET_SOURCE]: 'concurrent-update-source',
+        [COLUMN.STORAGE_BUDGET_UPDATED_AT]: NOW - 50,
+      });
+    },
+  });
+  const publication2 = createPublication(durable2);
+  const firstAttempt = await publication2.publish(readyRequest());
+  t.equal(firstAttempt.outcome, OUTCOME.NOT_APPLIED_SOURCE_UNCHANGED,
+    'CAS rejects overwriting a concurrent storage-budget update');
+  t.match(durable2.current(), {
+    [COLUMN.STORAGE_BUDGET_BYTES]: 3_000_000_000,
+    [COLUMN.STORAGE_BUDGET_SOURCE]: 'concurrent-update-source',
+  }, 'concurrent budget update remains intact');
+
+  // Subsequent re-drive reads the updated budget and promotes to READY without losing it.
+  const secondAttempt = await createDurableNodes(durable2.current());
+  const redrive = await createPublication(secondAttempt).publish(readyRequest());
+  t.equal(redrive.outcome, OUTCOME.APPLIED);
+  t.match(secondAttempt.current(), {
+    [COLUMN.CONNECTION_STATE]: STATE.READY,
+    [COLUMN.STORAGE_BUDGET_BYTES]: 3_000_000_000,
+    [COLUMN.STORAGE_BUDGET_SOURCE]: 'concurrent-update-source',
+  });
+});
+

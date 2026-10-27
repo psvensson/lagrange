@@ -254,7 +254,7 @@ const RATCHET_TARGETS = [
     // Cloud metric runner composition: tightened 24386 -> 24374 on the
     // checker's hint.
     baselineCloneGroupCount: 650,
-    baselineDuplicatedLineCount: 24374,
+    baselineDuplicatedLineCount: 24370,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

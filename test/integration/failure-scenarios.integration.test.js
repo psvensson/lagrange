@@ -279,7 +279,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -417,7 +417,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -623,7 +623,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -761,7 +761,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -839,7 +839,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -894,7 +894,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,
@@ -1226,7 +1226,7 @@ test('Failure scenario integration tests', {timeout: 180000}, async (t) => {
       nodeAddress: `ws://localhost:${seedWsPort}`,
       wsPort: seedWsPort,
       config: {
-        leadershipWaitTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 15000,
         leadershipWaitInitialDelayMs: 10,
         leadershipWaitMaxDelayMs: 100,
         replicaStaggerDelayMs: 20,

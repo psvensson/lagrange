@@ -1,5 +1,12 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  BootstrapJoinAdmissionOwner,
+} from '../../src/bootstrap/owners/bootstrap-join-admission-owner.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_SCHEMAS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
   PartitionServiceRowOwner,
 } from '../../src/partition/partition-service-row-owner.js';
 
@@ -224,4 +231,172 @@ test('PartitionServiceRowOwner - same-ID recreation cannot reuse a durable ' +
     'one process cannot mint the same durable incarnation twice');
   t.equal(recreated.updated_at, recreated.created_at,
     'the recreated STOPPED lifecycle starts at its unique incarnation');
+});
+
+test('PartitionServiceRowOwner + BootstrapJoinAdmissionOwner preserve canonical ' +
+  'partition leader authority across all 45 seed partitions, election transfer, ' +
+  'stale services.raft_role, non-seed join, and single-partition refusal', async (t) => {
+  const partitions = new Map();
+  const services = new Map();
+  const systemTableWriter = {
+    async insertSystemTableRow(tableName, row) {
+      if (tableName === 'services') {
+        services.set(row.service_id, {...row});
+      }
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+    async updateSystemTableRow(tableName, whereClause, updateData) {
+      if (tableName === 'partitions') {
+        const existing = partitions.get(whereClause.partition_id) || {
+          partition_id: whereClause.partition_id,
+        };
+        partitions.set(whereClause.partition_id, {
+          ...existing,
+          ...updateData,
+        });
+      }
+      return {success: true, partitionResult: {affectedRows: 1}};
+    },
+  };
+  const replicaStateMachine = {
+    async activateRegisteredReplica(options) {
+      const existing = services.get(options.replicaId);
+      const activated = {
+        ...existing,
+        status: 'active',
+        updated_at: options.timestamp,
+      };
+      services.set(options.replicaId, activated);
+      return activated;
+    },
+  };
+  const owner = new PartitionServiceRowOwner({
+    now: () => 2000,
+    systemTableWriter,
+    replicaStateMachine,
+  });
+  const systemTableCache = {
+    filter(tableName, predicate) {
+      const rows = tableName === 'partitions' ?
+        [...partitions.values()] :
+        tableName === 'services' ?
+          [...services.values()] :
+          [];
+      return rows.filter(predicate);
+    },
+  };
+  const joinAdmissionOwner = new BootstrapJoinAdmissionOwner({
+    delegates: {
+      getSystemTableCache: () => systemTableCache,
+    },
+  });
+
+  // 1. Fresh seed: all 46 system partitions register and activate with
+  // services.raft_role collapsed to follower while partitions.leader_node_id
+  // is published from live Raft leadership.
+  t.equal(SYSTEM_TABLE_SCHEMAS.length, 46,
+    'fresh seed schema corpus should cover all 46 system tables');
+  for (const schema of SYSTEM_TABLE_SCHEMAS) {
+    const tableName = schema.tableName;
+    const partitionId = INITIAL_PARTITION_IDS[tableName];
+    const replicaId = `${partitionId}-r1`;
+    partitions.set(partitionId, {
+      partition_id: partitionId,
+      table_id: tableName,
+      table_name: tableName,
+      leader_node_id: null,
+    });
+    const registration = await owner.registerReplica({
+      partitionId,
+      replicaId,
+      nodeId: 'seed-node',
+      service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+    });
+    t.equal(registration.raft_role, 'follower',
+      `${partitionId} registration collapses leader to follower in services.raft_role`);
+    await owner.activateReplica({
+      partitionId,
+      replicaId,
+      nodeId: 'seed-node',
+      registrationEvidence: registration,
+      service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+    });
+    t.equal(partitions.get(partitionId).leader_node_id, 'seed-node',
+      `${partitionId} publishes canonical leader_node_id from live Raft authority`);
+    const resolved = joinAdmissionOwner.getLeaderPartitionForTable(tableName);
+    t.same(resolved, {
+      partitionId,
+      tableName,
+      leaderNodeId: 'seed-node',
+      replicaId,
+      address: services.get(replicaId).address,
+    }, `${tableName} resolves leader from canonical partitions.leader_node_id`);
+  }
+
+  // 2. Leader election and subsequent leader transfer to node-2, plus
+  // 3. Restart with stale services.raft_role ('leader' left on seed-node), and
+  // 4. Joining through a non-seed node (node-2 is canonical leader).
+  const nodesPartitionId = INITIAL_PARTITION_IDS.nodes;
+  const node2Registration = await owner.registerReplica({
+    partitionId: nodesPartitionId,
+    replicaId: `${nodesPartitionId}-r2`,
+    nodeId: 'node-2',
+    service: {isLeaderReplica: () => false, getRole: () => 'follower'},
+  });
+  await owner.activateReplica({
+    partitionId: nodesPartitionId,
+    replicaId: `${nodesPartitionId}-r2`,
+    nodeId: 'node-2',
+    registrationEvidence: node2Registration,
+    service: {isLeaderReplica: () => true, getRole: () => 'leader'},
+  });
+  services.set(`${nodesPartitionId}-r1`, {
+    ...services.get(`${nodesPartitionId}-r1`),
+    raft_role: 'leader',
+  });
+  t.same(joinAdmissionOwner.getLeaderPartitionForTable('nodes'), {
+    partitionId: nodesPartitionId,
+    tableName: 'nodes',
+    leaderNodeId: 'node-2',
+    replicaId: `${nodesPartitionId}-r2`,
+    address: services.get(`${nodesPartitionId}-r2`).address,
+  }, 'canonical leader transfer to non-seed node wins over stale services.raft_role=leader');
+
+  // 5. Refusal when leader_node_id is absent, stale, or points to an inactive replica,
+  // and when a table has multiple partitions.
+  services.set(`${nodesPartitionId}-r2`, {
+    ...services.get(`${nodesPartitionId}-r2`),
+    status: 'stopped',
+  });
+  t.equal(joinAdmissionOwner.getLeaderPartitionForTable('nodes'), null,
+    'refuses when canonical leader_node_id points to an inactive replica');
+  partitions.set(nodesPartitionId, {
+    ...partitions.get(nodesPartitionId),
+    leader_node_id: 'ghost-node',
+  });
+  t.equal(joinAdmissionOwner.getLeaderPartitionForTable('nodes'), null,
+    'refuses when canonical leader_node_id is stale/unmatched');
+  partitions.set(nodesPartitionId, {
+    ...partitions.get(nodesPartitionId),
+    leader_node_id: null,
+  });
+  services.set(`${nodesPartitionId}-r1`, {
+    ...services.get(`${nodesPartitionId}-r1`),
+    raft_role: 'follower',
+    status: 'active',
+  });
+  t.equal(joinAdmissionOwner.getLeaderPartitionForTable('nodes'), null,
+    'refuses when canonical leader_node_id is absent and no witness exists');
+  partitions.set('user-p1', {
+    partition_id: 'user-p1',
+    table_id: 'multi_part_table',
+    leader_node_id: 'seed-node',
+  });
+  partitions.set('user-p2', {
+    partition_id: 'user-p2',
+    table_id: 'multi_part_table',
+    leader_node_id: 'seed-node',
+  });
+  t.equal(joinAdmissionOwner.getLeaderPartitionForTable('multi_part_table'), null,
+    'explicitly refuses multi-partition tables');
 });

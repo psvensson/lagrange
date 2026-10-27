@@ -22,14 +22,9 @@
 // (registerCdcAcknowledgementProposer); until one is registered a flush is a
 // typed PROPOSER_UNAVAILABLE outcome and the batch stays pending (R11).
 
-import {
-  CDC_PIPELINE_METRIC,
-} from '../constants/cdc-lifecycle-constants.js';
-import {
-  PARTITION_SERVICE_DEFAULT,
-  PARTITION_SERVICE_EVENT,
-  PARTITION_SERVICE_TYPE,
-} from './partition-service-constants.js';
+import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
+import {PARTITION_SERVICE_DEFAULT, PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_TYPE} from './partition-service-constants.js';
 import {admitCommittedCommand} from './partition-committed-command-admission.js';
 import {isWriteOutcomeUnknown} from './partition-write-kernel.js';
 import {CDC_COMPLETION, CDC_COVERAGE_STATE} from '../cdc/cdc-delivery-outcome.js';
@@ -37,28 +32,15 @@ import {beginCdcDeliveryInvocation} from '../cdc/cdc-delivery-invocation.js';
 import {captureCdcEvents} from '../cdc/cdc-event-envelope.js';
 import {cdcObligationCoverage, cdcProgressCurrent, cdcSubscriberInvocation, nextCdcSubscriber,
   observeCdcSubscriber, prepareCdcObligationProgress} from './partition-cdc-obligation-progress.js';
-import {
-  PARTITION_CDC_OBLIGATION_BOUND as BOUND,
-  PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
-  PARTITION_CDC_OBLIGATION_EVENT_FIELD as FIELD,
-  PARTITION_CDC_OBLIGATION_FAILURE_CODE as CODE,
-  PARTITION_CDC_OBLIGATION_FLUSH_STATE as FLUSH,
-  PARTITION_CDC_OBLIGATION_LOG_MSG as LOG_MSG,
-  PARTITION_CDC_OBLIGATION_ORIGIN as ORIGIN,
-  PARTITION_CDC_OBLIGATION_REASON as REASON,
-} from './partition-cdc-obligation-constants.js';
-import {
-  acknowledgedEventBytesOf,
-  buildCdcAcknowledgementCommand,
-  cdcObligationEventKeyDigest,
-  countRetainedDeliveredCdcObligations,
-  emptyAcknowledgedBytes,
-  isCdcPositionReclaimed,
-  readCdcObligationProgress,
-  readOwedCdcHead,
-  readOwedCdcObligations,
-  readOwedCdcTail,
-} from './partition-cdc-obligation-ledger.js';
+import {PARTITION_CDC_OBLIGATION_BOUND as BOUND, PARTITION_CDC_OBLIGATION_DRIVE_STATE as DRIVE,
+  PARTITION_CDC_OBLIGATION_EVENT_FIELD as FIELD, PARTITION_CDC_OBLIGATION_FAILURE_CODE as CODE,
+  PARTITION_CDC_OBLIGATION_FLUSH_STATE as FLUSH, PARTITION_CDC_OBLIGATION_LOG_MSG as LOG_MSG,
+  PARTITION_CDC_OBLIGATION_ORIGIN as ORIGIN, PARTITION_CDC_OBLIGATION_REASON as REASON} from
+  './partition-cdc-obligation-constants.js';
+import {acknowledgedEventBytesOf, buildCdcAcknowledgementCommand, cdcObligationEventKeyDigest,
+  countRetainedDeliveredCdcObligations, emptyAcknowledgedBytes, isCdcPositionReclaimed,
+  readCdcObligationProgress, readOwedCdcHead, readOwedCdcObligations, readOwedCdcTail} from
+  './partition-cdc-obligation-ledger.js';
 
 // The one acknowledgement proposer (see the header): (service, command) ->
 // Promise<write answer>, the write commit owner's.
@@ -67,6 +49,11 @@ let acknowledgementProposer = null;
 const OBLIGATION_RETRY_STATE = Object.freeze({IDLE: 'idle', ARMED: 'armed'});
 const IDLE_OBLIGATION_RETRY = Object.freeze({state: OBLIGATION_RETRY_STATE.IDLE, handle: null});
 const OBLIGATION_DRIVE_STEP = Object.freeze({READY: 'ready', PENDING: 'pending_acknowledgement'});
+const OBLIGATION_RETRY_DISPOSITION = Object.freeze({
+  PAGE_YIELDED: 'page_yielded', TRANSIENT_FAILURE: 'transient_failure',
+  BACKPRESSURE: 'backpressure', NO_PENDING_WORK: 'no_pending_work',
+  STALE_LIFETIME: 'stale_lifetime',
+});
 
 /**
  * Register the proposer a flush hands its CDC_DELIVERED command to.
@@ -91,25 +78,16 @@ function emptyBatch() {
  */
 function createCdcObligationLane(tenure = null) {
   return {
-    tenure,
-    inFlight: false,
-    rerun: false,
-    scan: null,
-    currentObligation: null,
+    tenure, inFlight: false, rerun: false, scan: null, currentObligation: null,
     // eventKey -> {logIndex, ordinal}: acknowledged here, flag not yet
     // committed (in the batch or in a proposed CDC_DELIVERED). Never
     // redelivered by this tenure; cleared when a tenure or the replica ends.
-    pending: new Map(),
-    commands: new Map(),
-    batch: emptyBatch(),
-    flushTimer: null,
-    retryTimer: IDLE_OBLIGATION_RETRY,
+    pending: new Map(), commands: new Map(), batch: emptyBatch(),
+    flushTimer: null, retryTimer: IDLE_OBLIGATION_RETRY,
     retryDelayMs: PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
     // The code the last flush was refused with before it was proposed; no
     // deadline is armed again until a new acknowledgement arrives.
-    held: null,
-    lastDrive: null,
-    lastFlush: null,
+    held: null, lastDrive: null, lastFlush: null,
   };
 }
 
@@ -119,9 +97,7 @@ function currentTenureOf(owner) {
 
 function laneOf(delivery) {
   const tenure = currentTenureOf(delivery.owner);
-  if (delivery.obligationLane.tenure !== tenure) {
-    resetCdcObligationLane(delivery);
-  }
+  if (delivery.obligationLane.tenure !== tenure) resetCdcObligationLane(delivery);
   return delivery.obligationLane;
 }
 
@@ -131,9 +107,7 @@ function laneIsCurrent(delivery, lane) {
 }
 
 function clearTimer(owner, handle) {
-  if (handle !== null) {
-    owner.timeSource.clearTimeout(handle);
-  }
+  if (handle !== null) owner.timeSource.clearTimeout(handle);
 }
 
 function trackOnOwner(owner, promise) {
@@ -151,9 +125,7 @@ function trackOnOwner(owner, promise) {
 function resetCdcObligationLane(delivery) {
   const lane = delivery.obligationLane;
   const tenure = currentTenureOf(delivery.owner);
-  if (lane.tenure === tenure && !delivery.owner.isShutdown) {
-    return;
-  }
+  if (lane.tenure === tenure && !delivery.owner.isShutdown) return;
   clearTimer(delivery.owner, lane.flushTimer);
   clearTimer(delivery.owner, lane.retryTimer.handle);
   delivery.activeCdcInvocation?.retire();
@@ -172,9 +144,7 @@ function resetCdcObligationLane(delivery) {
  */
 function settleAcknowledgedObligations(delivery, eventKeys, progress = null) {
   const lane = laneOf(delivery);
-  for (const eventKey of eventKeys) {
-    lane.pending.delete(eventKey);
-  }
+  for (const eventKey of eventKeys) lane.pending.delete(eventKey);
   for (const [eventKey, position] of lane.pending) {
     if (isCdcPositionReclaimed(position, progress)) lane.pending.delete(eventKey);
   }
@@ -191,12 +161,9 @@ function settleAcknowledgedObligations(delivery, eventKeys, progress = null) {
 function eventOf(obligation, sequenceNumber) {
   const event = {
     ...JSON.parse(obligation.eventJson),
-    [FIELD.EVENT_KEY]: obligation.eventKey,
-    [FIELD.ENTRY_ID]: obligation.entryId,
-    [FIELD.LOG_INDEX]: obligation.logIndex,
-    [FIELD.ORDINAL]: obligation.ordinal,
-    sourceLogIndex: obligation.logIndex,
-    sourceOrdinal: obligation.ordinal,
+    [FIELD.EVENT_KEY]: obligation.eventKey, [FIELD.ENTRY_ID]: obligation.entryId,
+    [FIELD.LOG_INDEX]: obligation.logIndex, [FIELD.ORDINAL]: obligation.ordinal,
+    sourceLogIndex: obligation.logIndex, sourceOrdinal: obligation.ordinal,
     sequenceNumber,
   };
   return Object.freeze({...event, ...captureCdcEvents([event])[0]});
@@ -205,11 +172,8 @@ function eventOf(obligation, sequenceNumber) {
 // --- the acknowledgement batch ---
 
 function stampOf(owner) {
-  return {
-    timestamp: owner.hlcClock.now().toString(),
-    proposedBy: owner.replicaId,
-    proposedAt: owner.timeSource.now(),
-  };
+  return {timestamp: owner.hlcClock.now().toString(),
+    proposedBy: owner.replicaId, proposedAt: owner.timeSource.now()};
 }
 
 // The batch as the pinned form wants it: groups by ascending log index, each
@@ -245,9 +209,7 @@ function keysOf(groups) {
 function armFlushDeadline(delivery) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
-  if (lane.flushTimer !== null || lane.held !== null || owner.isShutdown) {
-    return;
-  }
+  if (lane.flushTimer !== null || lane.held !== null || owner.isShutdown) return;
   lane.flushTimer = owner.timeSource.setTimeout(() => {
     lane.flushTimer = null;
     if (!laneIsCurrent(delivery, lane)) return;
@@ -258,9 +220,7 @@ function armFlushDeadline(delivery) {
 // Put a taken batch back (a flush refused before it was proposed): the keys
 // stay pending and are proposed again with the next acknowledgements.
 function restoreBatch(lane, members) {
-  for (const member of members) {
-    addToBatch(lane, member);
-  }
+  for (const member of members) addToBatch(lane, member);
 }
 
 function addToBatch(lane, obligation) {
@@ -282,22 +242,16 @@ function acknowledgeDelivered(delivery, obligation) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
   const addedBytes = acknowledgedEventBytesOf(obligation.eventKey,
-    obligation.logIndex, obligation.ordinal,
-    !lane.batch.groups.has(obligation.logIndex));
-  if (lane.batch.events > 0 &&
-      lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES) {
-    trackOnOwner(owner,
-      flushCdcAcknowledgements(delivery, REASON.BATCH_BYTES_BOUND));
+    obligation.logIndex, obligation.ordinal, !lane.batch.groups.has(obligation.logIndex));
+  if (lane.batch.events > 0 && lane.batch.bytes + addedBytes > BOUND.ACK_BATCH_MAX_BYTES) {
+    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.BATCH_BYTES_BOUND));
   }
   lane.pending.set(obligation.eventKey,
     {logIndex: obligation.logIndex, ordinal: obligation.ordinal});
   addToBatch(lane, obligation);
-  if (lane.batch.firstAcknowledgedAt === null) {
-    lane.batch.firstAcknowledgedAt = owner.timeSource.now();
-  }
+  lane.batch.firstAcknowledgedAt ??= owner.timeSource.now();
   if (lane.batch.events >= BOUND.ACK_BATCH_MAX_EVENTS) {
-    trackOnOwner(owner,
-      flushCdcAcknowledgements(delivery, REASON.BATCH_EVENTS_BOUND));
+    trackOnOwner(owner, flushCdcAcknowledgements(delivery, REASON.BATCH_EVENTS_BOUND));
     return;
   }
   armFlushDeadline(delivery);
@@ -310,11 +264,8 @@ function flushOutcome(lane, state, fields) {
 
 function logFlushRefusal(owner, groups, fields) {
   owner.logger.warn(LOG_MSG.ACKNOWLEDGEMENTS_REFUSED, {
-    partitionId: owner.partitionId,
-    groups: groups.length,
-    events: keysOf(groups).length,
-    ...fields,
-  });
+    partitionId: owner.partitionId, groups: groups.length,
+    events: keysOf(groups).length, ...fields});
 }
 
 /**
@@ -333,9 +284,7 @@ async function flushCdcAcknowledgements(delivery, reason) {
   const {owner} = delivery;
   clearTimer(owner, lane.flushTimer);
   lane.flushTimer = null;
-  if (lane.batch.events === 0) {
-    return flushOutcome(lane, FLUSH.EMPTY, {reason});
-  }
+  if (lane.batch.events === 0) return flushOutcome(lane, FLUSH.EMPTY, {reason});
   if (lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
     return flushOutcome(lane, FLUSH.BACKPRESSURE, {reason});
   }
@@ -360,10 +309,8 @@ async function flushCdcAcknowledgements(delivery, reason) {
     return flushOutcome(lane, FLUSH.PROPOSER_UNAVAILABLE,
       {reason, events: eventKeys.length, failureCode: CODE.PROPOSER_UNAVAILABLE});
   }
-  const command = buildCdcAcknowledgementCommand(owner.partitionId, groups,
-    stampOf(owner));
-  const admission = admitCommittedCommand(command,
-    {origin: ORIGIN.CDC_DELIVERY_OWNER});
+  const command = buildCdcAcknowledgementCommand(owner.partitionId, groups, stampOf(owner));
+  const admission = admitCommittedCommand(command, {origin: ORIGIN.CDC_DELIVERY_OWNER});
   if (!admission.admitted) {
     lane.held = admission.code;
     restoreBatch(lane, members);
@@ -371,8 +318,7 @@ async function flushCdcAcknowledgements(delivery, reason) {
     return flushOutcome(lane, FLUSH.REFUSED,
       {reason, events: eventKeys.length, failureCode: admission.code, proposed: false});
   }
-  const pending = {command: Object.freeze(command), members, groups,
-    inFlight: false};
+  const pending = {command: Object.freeze(command), members, groups, inFlight: false};
   lane.commands.set(command.entryId, pending);
   return proposePendingAcknowledgement(delivery, lane, pending, reason);
 }
@@ -413,8 +359,7 @@ async function proposePendingAcknowledgement(delivery, lane, pending, reason) {
       {reason, events: eventKeys.length, entryId: command.entryId,
         logIndex: answer.logIndex ?? null});
   }
-  return handleAcknowledgementRefusal(
-    delivery, lane, pending, answer, reason);
+  return handleAcknowledgementRefusal(delivery, lane, pending, answer, reason);
 }
 
 function acknowledgementFailureIsTerminal(failureCode) {
@@ -433,15 +378,11 @@ function handleAcknowledgementRefusal(delivery, lane, pending, answer, reason) {
     return flushOutcome(lane, FLUSH.RECONCILED,
       {reason, events: eventKeys.length, entryId: command.entryId, failureCode});
   }
-  if (acknowledgementFailureIsTerminal(failureCode)) {
-    lane.held = failureCode;
-  } else {
-    scheduleDeliveryRetry(delivery, answer);
-  }
+  if (acknowledgementFailureIsTerminal(failureCode)) lane.held = failureCode;
+  else scheduleDeliveryRetry(delivery, answer);
   logFlushRefusal(owner, groups, {failureCode, proposed: true});
   return flushOutcome(lane, uncertain ? FLUSH.OUTCOME_UNKNOWN : FLUSH.REFUSED,
-    {reason, events: eventKeys.length, entryId: command.entryId, failureCode,
-      proposed: true});
+    {reason, events: eventKeys.length, entryId: command.entryId, failureCode, proposed: true});
 }
 
 // Prefix reconciliation belongs to this lane's known pending identities,
@@ -449,8 +390,7 @@ function handleAcknowledgementRefusal(delivery, lane, pending, answer, reason) {
 // their own bounded replacement batch, without combining outstanding batches.
 function reconcilePendingAcknowledgement(delivery, lane, pending) {
   const progress = readCdcObligationProgress(delivery.owner.db);
-  const members = pending.members.filter((member) =>
-    !isCdcPositionReclaimed(member, progress));
+  const members = pending.members.filter((member) => !isCdcPositionReclaimed(member, progress));
   if (members.length === pending.members.length) return false;
   lane.commands.delete(pending.command.entryId);
   if (members.length > 0) {
@@ -458,7 +398,7 @@ function reconcilePendingAcknowledgement(delivery, lane, pending) {
     const command = Object.freeze(buildCdcAcknowledgementCommand(
       delivery.owner.partitionId, groups, stampOf(delivery.owner)));
     lane.commands.set(command.entryId, {command, members, groups, inFlight: false});
-    scheduleDeliveryRetry(delivery, null);
+    scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
   }
   settleAcknowledgedObligations(delivery, [], progress);
   return true;
@@ -483,17 +423,56 @@ function driveOutcome(lane, state, fields) {
   return lane.lastDrive;
 }
 
-function scheduleDeliveryRetry(delivery, error) {
+function isBackpressureError(error) {
+  const hasHint = Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0;
+  const reason = error?.reason ?? error?.cause?.reason ?? error?.cause?.error;
+  return hasHint || Boolean(error?.ownerNotReady) || reason === CDC_COMPLETION.BACKPRESSURE;
+}
+
+function resolveDeliveryRetryDisposition(delivery, lane, error = null, explicit = null) {
+  const stale = !laneIsCurrent(delivery, lane) || delivery.owner.isShutdown ||
+    Boolean(error?.stalePropagationLifetime);
+  if (stale) return OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME;
+  if (explicit !== null) return explicit;
+  return isBackpressureError(error) ?
+    OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE : OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
+}
+
+function disarmDeliveryRetry(owner, lane, resetDelay = true) {
+  clearTimer(owner, lane.retryTimer.handle);
+  lane.retryTimer = IDLE_OBLIGATION_RETRY;
+  if (resetDelay) {
+    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  }
+}
+
+function computeRetryDelayMs(lane, error, disposition) {
+  if (disposition === OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED) {
+    lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  }
+  const rawHint = error?.retryAfterMs;
+  const hasHint = Number.isFinite(rawHint) && rawHint > 0;
+  const delayMs = Math.min(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+    Math.max(1, hasHint ? Math.floor(rawHint) : lane.retryDelayMs));
+  return {delayMs, advanceBackoff: !hasHint &&
+    disposition === OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE};
+}
+
+function scheduleDeliveryRetry(delivery, error = null, explicitDisposition = null) {
   const lane = laneOf(delivery);
   const {owner} = delivery;
-  const hasHint = Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > 0;
-  const hinted = hasHint ? Math.floor(error.retryAfterMs) : lane.retryDelayMs;
-  const delayMs = Math.min(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-    Math.max(1, hinted));
-  if (lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED || owner.isShutdown) {
-    return delayMs;
+  const disposition = resolveDeliveryRetryDisposition(
+    delivery, lane, error, explicitDisposition);
+  lane.lastRetryDisposition = disposition;
+  if (disposition === OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME ||
+      disposition === OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK) {
+    if (disposition === OBLIGATION_RETRY_DISPOSITION.STALE_LIFETIME) lane.currentObligation = null;
+    disarmDeliveryRetry(owner, lane, disposition === OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
+    return 0;
   }
-  if (!hasHint) {
+  const {delayMs, advanceBackoff} = computeRetryDelayMs(lane, error, disposition);
+  if (lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED || owner.isShutdown) return delayMs;
+  if (advanceBackoff) {
     lane.retryDelayMs = Math.min(PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
       lane.retryDelayMs * 2);
   }
@@ -502,13 +481,31 @@ function scheduleDeliveryRetry(delivery, error) {
     if (!laneIsCurrent(delivery, lane)) return;
     trackOnOwner(owner, (async () => {
       await retryAcknowledgements(delivery, lane);
-      if (laneIsCurrent(delivery, lane)) {
-        await driveCdcObligations(delivery, REASON.DELIVERY_RETRY);
-      }
+      if (laneIsCurrent(delivery, lane)) await driveCdcObligations(delivery, REASON.DELIVERY_RETRY);
     })());
   }, delayMs);
   lane.retryTimer = {state: OBLIGATION_RETRY_STATE.ARMED, handle};
   return delayMs;
+}
+
+function recordUncoveredSubscriberHint(state, answer) {
+  const hint = answer?.retryAfterMs;
+  if (Number.isFinite(hint) && hint > 0) {
+    state.retryAfterMs = state.retryAfterMs === null ? hint : Math.min(state.retryAfterMs, hint);
+  }
+  if (answer?.error === CDC_COMPLETION.BACKPRESSURE ||
+      answer?.reason === CDC_COMPLETION.BACKPRESSURE) {
+    state.backpressured = true;
+  }
+}
+
+function throwUncoveredObligationError(lane, current, state) {
+  if (!current) lane.currentObligation = null;
+  const error = new Error(CDC_COMPLETION.UNKNOWN);
+  error.deferRetry = true;
+  if (state.retryAfterMs !== null) error.retryAfterMs = state.retryAfterMs;
+  if (state.backpressured) error.reason = CDC_COMPLETION.BACKPRESSURE;
+  throw error;
 }
 
 // Deliver one owed obligation to every current subscriber; acknowledged when
@@ -518,6 +515,7 @@ async function deliverObligation(delivery, lane, obligation, subscribers, contex
   const {owner} = delivery;
   const event = eventOf(obligation, delivery.nextCDCEventSequenceNumber());
   const cell = prepareCdcObligationProgress(delivery, lane, event, subscribers);
+  const hintState = {retryAfterMs: null, backpressured: false};
   for (let visited = 0; visited < subscribers.length; visited += 1) {
     const branch = nextCdcSubscriber(cell);
     const scoped = cdcSubscriberInvocation(delivery, lane, cell, branch, context, event);
@@ -526,17 +524,16 @@ async function deliverObligation(delivery, lane, obligation, subscribers, contex
     const answer = await delivery.deliverCDCEventToSubscriber(branch.wrapper, event, scoped);
     scoped.assertCurrent();
     observeCdcSubscriber(branch, answer, event);
+    if (branch.coverage.state === CDC_COVERAGE_STATE.UNCOVERED) {
+      recordUncoveredSubscriberHint(hintState, answer);
+    }
   }
   context.assertCurrent();
-  // Re-observe every captured topology before consuming aggregate coverage,
-  // including subscriber branches skipped because an earlier call covered them.
   const current = cdcProgressCurrent(delivery, lane, cell);
   const state = cdcObligationCoverage(cell);
   if (!current || state === CDC_COVERAGE_STATE.UNCOVERED) {
-    throw Object.assign(new Error(CDC_COMPLETION.UNKNOWN), {deferRetry: true});
+    throwUncoveredObligationError(lane, current, hintState);
   }
-  // Provisional scan release discards ALL optimization state, including
-  // receipts alongside weak coverage. The ledger alone retains this debt.
   lane.currentObligation = null;
   if (state === CDC_COVERAGE_STATE.PROVISIONAL) return state;
   owner.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
@@ -556,9 +553,9 @@ function drivePrecondition(delivery, lane, reason) {
 
 function drivePage(owner, lane) {
   lane.scan ??= {cursor: null, through: readOwedCdcTail(owner.db), provisional: false};
+  lane.scan.through ??= readOwedCdcTail(owner.db);
   return lane.scan.through === null ? [] : readOwedCdcObligations(owner.db,
-    {after: lane.scan.cursor ?? undefined, through: lane.scan.through,
-      limit: 1});
+    {after: lane.scan.cursor ?? undefined, through: lane.scan.through, limit: 1});
 }
 
 // Delivering past the lowest owed row keeps every delivered row above it in
@@ -577,9 +574,7 @@ function retainedDeliveredBackpressured(owner, lane, obligation) {
 }
 
 function acknowledgementBackpressured(owner, lane, obligation) {
-  if (lane.held !== null || lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) {
-    return true;
-  }
+  if (lane.held !== null || lane.commands.size >= BOUND.ACK_MAX_OUTSTANDING_BATCHES) return true;
   if (!retainedDeliveredBackpressured(owner, lane, obligation)) return false;
   lane.scan = null;
   return true;
@@ -611,9 +606,8 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
     lane.pending.has(obligation.eventKey) ? OBLIGATION_DRIVE_STEP.PENDING :
       OBLIGATION_DRIVE_STEP.READY;
   if (step === DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE) {
-    scheduleDeliveryRetry(delivery, null);
-    return {outcome: driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE,
-      {reason, delivered})};
+    scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.BACKPRESSURE);
+    return {outcome: driveOutcome(lane, DRIVE.ACKNOWLEDGEMENT_BACKPRESSURE, {reason, delivered})};
   }
   if (step === OBLIGATION_DRIVE_STEP.PENDING) {
     lane.scan.cursor = obligationCursor(obligation);
@@ -631,20 +625,46 @@ async function driveOneObligation(delivery, lane, obligation, subscribers,
   }
 }
 
-function drivePageFinished(delivery, lane, visited, reason, delivered) {
-  const scan = lane.scan;
-  const reachedTail = scan.cursor?.logIndex === scan.through?.logIndex &&
+function hasOwedWorkBeyondScan(owner, scan) {
+  const tail = readOwedCdcTail(owner.db);
+  if (tail === null) return false;
+  if (scan.through === null) return true;
+  return tail.logIndex > scan.through.logIndex ||
+    (tail.logIndex === scan.through.logIndex && tail.ordinal > scan.through.ordinal);
+}
+
+function scanReachedTail(scan) {
+  return scan.cursor?.logIndex === scan.through?.logIndex &&
     scan.cursor?.ordinal === scan.through?.ordinal;
-  if (visited >= BOUND.DRIVE_PAGE_ROWS && !reachedTail) {
-    const retryDelayMs = scheduleDeliveryRetry(delivery, null);
-    return driveOutcome(lane, DRIVE.PAGE_YIELDED, {reason, delivered, retryDelayMs});
+}
+
+function yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention) {
+  if (yieldedOnContention && !scan.provisional) scan.through = null;
+  const disposition = delivered > 0 || !scan.provisional ?
+    OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED : OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE;
+  const retryDelayMs = scheduleDeliveryRetry(delivery, null, disposition);
+  return driveOutcome(lane, DRIVE.PAGE_YIELDED, {reason, delivered, retryDelayMs});
+}
+
+function drivePageFinished(
+  delivery, lane, visited, reason, delivered, yieldedOnContention = false,
+) {
+  const scan = lane.scan;
+  if ((visited >= BOUND.DRIVE_PAGE_ROWS || yieldedOnContention) && !scanReachedTail(scan)) {
+    return yieldPageOutcome(delivery, lane, scan, reason, delivered, yieldedOnContention);
   }
   lane.scan = null;
   if (scan.provisional) {
-    const retryDelayMs = scheduleDeliveryRetry(delivery, null);
+    const retryDelayMs = scheduleDeliveryRetry(
+      delivery, null, OBLIGATION_RETRY_DISPOSITION.TRANSIENT_FAILURE);
     return driveOutcome(lane, DRIVE.PROVISIONAL, {reason, delivered, retryDelayMs});
   }
   lane.retryDelayMs = PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+  if (hasOwedWorkBeyondScan(delivery.owner, scan)) {
+    lane.rerun = true;
+  } else if (!lane.rerun) {
+    scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.NO_PENDING_WORK);
+  }
   return driveOutcome(lane, DRIVE.DRAINED, {reason, delivered});
 }
 
@@ -655,12 +675,12 @@ async function driveOnce(delivery, lane, reason) {
   const subscribersCurrent = captureSubscriberCurrentness(delivery, precondition.subscribers);
   let delivered = 0;
   let visited = 0;
+  let yieldedOnContention = false;
   while (visited < BOUND.DRIVE_PAGE_ROWS) {
-    // Reserve response/cleanup custody before reading the next event_json.
-    // A SQLite statement is exhausted synchronously; none spans the await.
     const context = beginCdcDeliveryInvocation(delivery,
       () => laneIsCurrent(delivery, lane) && subscribersCurrent(),
       () => resumeAfterCdcCleanup(delivery));
+    let stepContended = false;
     try {
       const [obligation] = drivePage(owner, lane);
       if (!obligation) break;
@@ -669,6 +689,7 @@ async function driveOnce(delivery, lane, reason) {
         precondition.subscribers, reason, delivered, context);
       if (result.outcome) return result.outcome;
       delivered += result.delivered;
+      stepContended = context.isContended?.() === true && delivered > 0;
     } finally {
       context.finish();
     }
@@ -676,8 +697,12 @@ async function driveOnce(delivery, lane, reason) {
       lane.rerun = true;
       return driveOutcome(lane, DRIVE.JOINED_IN_FLIGHT, {reason, delivered});
     }
+    if (stepContended) {
+      yieldedOnContention = true;
+      break;
+    }
   }
-  return drivePageFinished(delivery, lane, visited, reason, delivered);
+  return drivePageFinished(delivery, lane, visited, reason, delivered, yieldedOnContention);
 }
 
 function captureSubscriberCurrentness(delivery, subscribers) {
@@ -695,10 +720,32 @@ function captureSubscriberCurrentness(delivery, subscribers) {
 
 function resumeAfterCdcCleanup(delivery) {
   const lane = delivery.obligationLane;
+  if (!lane.inFlight && lane.rerun &&
+      lane.retryTimer.state !== OBLIGATION_RETRY_STATE.ARMED &&
+      laneIsCurrent(delivery, lane)) {
+    trackOnOwner(delivery.owner, driveCdcObligations(delivery, REASON.DELIVERY_RETRY));
+  }
+}
+
+function canContinueDrainedPass(delivery, lane, outcome) {
+  return outcome.state === DRIVE.DRAINED && lane.rerun &&
+    !delivery.activeCdcInvocation && laneIsCurrent(delivery, lane);
+}
+
+async function runSingleFlightDrivePasses(delivery, lane, reason) {
+  let outcome = null;
+  let totalDelivered = 0;
+  do {
+    lane.rerun = false;
+    outcome = await driveOnce(delivery, lane, reason);
+    totalDelivered += outcome.delivered ?? 0;
+  } while (canContinueDrainedPass(delivery, lane, outcome));
   if (lane.rerun && laneIsCurrent(delivery, lane)) {
     lane.rerun = false;
-    scheduleDeliveryRetry(delivery, null);
+    scheduleDeliveryRetry(delivery, null, OBLIGATION_RETRY_DISPOSITION.PAGE_YIELDED);
   }
+  return totalDelivered === (outcome.delivered ?? 0) ?
+    outcome : driveOutcome(lane, outcome.state, {...outcome, delivered: totalDelivered});
 }
 
 /**
@@ -719,12 +766,7 @@ async function driveCdcObligations(delivery, reason) {
   }
   lane.inFlight = true;
   try {
-    const outcome = await driveOnce(delivery, lane, reason);
-    if (lane.rerun && laneIsCurrent(delivery, lane)) {
-      lane.rerun = false;
-      scheduleDeliveryRetry(delivery, null);
-    }
-    return outcome;
+    return await runSingleFlightDrivePasses(delivery, lane, reason);
   } catch (error) {
     delivery.owner.logger.error(LOG_MSG.DRIVE_FAILED, {
       partitionId: delivery.owner.partitionId, reason,
@@ -743,27 +785,16 @@ async function driveCdcObligations(delivery, reason) {
 function cdcObligationDiagnosticsOf(delivery) {
   const lane = laneOf(delivery);
   return Object.freeze({
-    inFlight: lane.inFlight,
-    pendingAcknowledgements: lane.pending.size,
+    inFlight: lane.inFlight, pendingAcknowledgements: lane.pending.size,
     outstandingAcknowledgementBatches: lane.commands.size,
-    batchEvents: lane.batch.events,
-    batchBytes: lane.batch.bytes,
-    batchGroups: lane.batch.groups.size,
-    flushArmed: lane.flushTimer !== null,
+    batchEvents: lane.batch.events, batchBytes: lane.batch.bytes,
+    batchGroups: lane.batch.groups.size, flushArmed: lane.flushTimer !== null,
     retryArmed: lane.retryTimer.state === OBLIGATION_RETRY_STATE.ARMED,
-    held: lane.held,
-    proposerRegistered: acknowledgementProposer !== null,
-    lastDrive: lane.lastDrive,
-    lastFlush: lane.lastFlush,
+    held: lane.held, proposerRegistered: acknowledgementProposer !== null,
+    lastDrive: lane.lastDrive, lastFlush: lane.lastFlush,
   });
 }
 
-export {
-  cdcObligationDiagnosticsOf,
-  createCdcObligationLane,
-  driveCdcObligations,
-  flushCdcAcknowledgements,
-  registerCdcAcknowledgementProposer,
-  resetCdcObligationLane,
-  settleAcknowledgedObligations,
-};
+export {OBLIGATION_RETRY_DISPOSITION, cdcObligationDiagnosticsOf, createCdcObligationLane,
+  driveCdcObligations, flushCdcAcknowledgements, registerCdcAcknowledgementProposer,
+  resetCdcObligationLane, scheduleDeliveryRetry, settleAcknowledgedObligations};

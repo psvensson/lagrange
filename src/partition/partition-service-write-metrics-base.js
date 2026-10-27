@@ -90,6 +90,29 @@ function resolveNonReadQueryRefusal(service, sql, options) {
     null;
 }
 
+function buildWriteConfirmationTarget(service, result, operation, entry) {
+  const tableName = operation.tableName || service.tableName;
+  const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+  const whereClause = operation.whereClause || {};
+  const data = operation.data || {};
+  const pkValue = whereClause[pkField] ?? data[pkField];
+  if (pkValue === void 0 || pkValue === null) {
+    return null;
+  }
+  const isDelete = operation.type === PARTITION_SERVICE_OPERATION.DELETE;
+  const expectedFields = !isDelete && Object.keys(data).length > 0 ? {...data} : null;
+  return {
+    tableName,
+    pkValue,
+    options: {
+      originHlc: result?.originHlc || entry?.timestamp || null,
+      expectedFields,
+      operation: operation.type || null,
+      inferredFromWrite: true,
+    },
+  };
+}
+
 function executeAdmittedReadQuery(service, admission, params, options) {
   const sqliteStartMs = service.timeSource.now();
   const visibleRows = collectBoundedSqliteRows(admission.statement, params, {
@@ -471,7 +494,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
       } catch (_metricsErr) {
         // Ignore metrics emission failures on the leader-local path.
       }
-      this._attachCdcConfirmation(result, operation, options);
+      this._attachCdcConfirmation(result, operation, options, entry);
       return result;
     }
     if (this.leaderId && this.transport) {
@@ -522,7 +545,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
         } catch (_metricsErr) {
           // Ignore metrics emission failures on the forwarded path.
         }
-        this._attachCdcConfirmation(result, operation, options);
+        this._attachCdcConfirmation(result, operation, options, entry);
         return result;
       } catch (error) {
         this.recordWritePhaseDuration(
@@ -567,19 +590,16 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
    * @param {Object} [options] - Write options.
    * @private
    */
-  _attachCdcConfirmation(result, operation, options) {
+  _attachCdcConfirmation(result, operation, options, entry = null) {
     if (!options?.awaitCDCConfirmation || !this.cdcConfirmationTracker) {
       return;
     }
-    const tableName = operation.tableName || this.tableName;
-    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
-    const whereClause = operation.whereClause || {};
-    const data = operation.data || {};
-    const pkValue = whereClause[pkField] ?? data[pkField];
-    if (pkValue !== void 0 && pkValue !== null) {
+    const target = buildWriteConfirmationTarget(this, result, operation, entry);
+    if (target) {
       result.cdcConfirmation = this.cdcConfirmationTracker.awaitConfirmation(
-        tableName,
-        pkValue,
+        target.tableName,
+        target.pkValue,
+        target.options,
       );
     }
   }

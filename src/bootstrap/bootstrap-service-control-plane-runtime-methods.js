@@ -24,6 +24,8 @@ import {
   STATE,
 } from '../constants/index.js';
 import {raiseBootIncarnationFloor} from './boot-incarnation-owner.js';
+import {DEFAULT_NODE_CAPABILITIES} from
+  '../control-plane/control-plane-constants.js';
 import {STALE_NODE_INCARNATION_CODE} from
   '../control-plane/control-plane-error-classification.js';
 
@@ -286,7 +288,7 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
               stats.diskUsagePercent : 0,
           [COLUMN.STATUS]: NODE_STATE.JOINING,
           [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-          [COLUMN.CAPABILITIES]: JSON.stringify([]),
+          [COLUMN.CAPABILITIES]: JSON.stringify([...DEFAULT_NODE_CAPABILITIES]),
           [COLUMN.LAST_HEARTBEAT]: now,
           [COLUMN.BOOT_INCARNATION]: this.bootIncarnation,
           [COLUMN.CREATED_AT]: now,
@@ -315,6 +317,8 @@ function createBootstrapServiceControlPlaneRuntimeMethods() {
             diskGb: stats.diskGb,
             diskUsagePercent: stats.diskUsagePercent,
           },
+          [...DEFAULT_NODE_CAPABILITIES],
+          {requireDurableVisibility: true},
         );
       } catch (error) {
         // A newer incarnation owns this node's row: the next boot lifecycle

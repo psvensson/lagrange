@@ -95,9 +95,13 @@ async function applySettlement(service, settlement) {
   });
   const result = canonicalTransactionSettlementResult(
     answer?.[COORDINATOR_SETTLEMENT_RESULT]);
-  if (answer?.committed !== true || result === null ||
-      ![SETTLEMENT_OUTCOME.APPLIED, SETTLEMENT_OUTCOME.REPLAYED,
-        SETTLEMENT_OUTCOME.ALREADY_RECORDED].includes(result.outcome)) return null;
+  const satisfied = answer?.committed === true ?
+    [SETTLEMENT_OUTCOME.APPLIED, SETTLEMENT_OUTCOME.REPLAYED,
+      SETTLEMENT_OUTCOME.ALREADY_RECORDED].includes(result?.outcome) :
+    answer?.success === true &&
+      [SETTLEMENT_OUTCOME.REPLAYED,
+        SETTLEMENT_OUTCOME.ALREADY_RECORDED].includes(result?.outcome);
+  if (!satisfied || result === null) return null;
   return result;
 }
 
@@ -189,11 +193,12 @@ async function settleOne(engine, service, transactionId, now) {
   const participantIds = await settleParticipants(engine, authority);
   if (participantIds === null) return null;
   const terminalStatus = TERMINAL_STATUS[authority.decision.decision];
-  if (!terminalStatus || await applySettlement(service,
-    settlementOf(KIND.PROGRESS, authority, {
-      decisionDigest: authority.decision.decisionDigest,
-      status: terminalStatus,
-    })) === null) return null;
+  if (!terminalStatus ||
+      (authority.row.status !== terminalStatus && await applySettlement(service,
+        settlementOf(KIND.PROGRESS, authority, {
+          decisionDigest: authority.decision.decisionDigest,
+          status: terminalStatus,
+        })) === null)) return null;
   const after = await readAuthority(engine, transactionId, now);
   if (!after || after.decision.state !== RECORDED_DECISION_STATE.RECORDED ||
       after.decision.decisionText !== authority.decision.decisionText ||

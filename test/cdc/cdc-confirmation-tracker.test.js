@@ -252,3 +252,44 @@ test('CDCConfirmationTracker — ignores events with null/undefined pk',
     tracker.shutdown();
     t.end();
   });
+
+test('CDCConfirmationTracker — causal criteria ignore unrelated updates to the same key',
+  async (t) => {
+    const cache = createCacheStub();
+    const tracker = new CDCConfirmationTracker({
+      systemTableCache: cache,
+      timeoutMs: 500,
+    });
+
+    let resolved = false;
+    const promise = tracker.awaitConfirmation('nodes', 'node-1', {
+      expectedFields: {storage_budget_source: 'test-update-source'},
+      originHlc: '1700000000002:0:node-1',
+    }).then(() => {
+      resolved = true;
+    });
+
+    // Unrelated heartbeat update with older HLC and stale budget source must NOT resolve
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-1',
+      status: 'active',
+      storage_budget_source: 'backfill',
+      updated_at_hlc: '1700000000001:0:node-1',
+    });
+    await Promise.resolve();
+    t.equal(resolved, false, 'unrelated heartbeat must not satisfy causal confirmation');
+
+    // Matching causal update resolves the confirmation
+    cache.fire('nodes', 'UPDATE', {
+      node_id: 'node-1',
+      status: 'active',
+      storage_budget_source: 'test-update-source',
+      updated_at_hlc: '1700000000002:0:node-1',
+    });
+    await promise;
+    t.equal(resolved, true, 'matching causal update resolves confirmation');
+
+    tracker.shutdown();
+    t.end();
+  });
+
