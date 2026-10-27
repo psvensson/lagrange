@@ -1,0 +1,11 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {"id": "current-duplicate-policy-and-reviewed-contract", "passed": true},
+    {"id": "unchanged-clock-and-authority-behavior", "passed": true},
+    {"id": "owned-completion-and-adversarial-audit-controls", "passed": true},
+    {"id": "exact-candidate-owner-composition", "passed": true},
+    {"id": "independent-review-and-applicable-gates", "passed": true}
+  ]
+}

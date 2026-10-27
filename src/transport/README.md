@@ -2,19 +2,18 @@
 
 ## Role
 
-`src/transport/` owns message routing, node-to-node delivery, WebSocket and
-in-process transports, connection pooling, provider registration, and RPC
-correlation behavior.
+`src/transport/` owns message routing, node-to-node delivery over the
+`MessageRouter` WebSocket and in-process connections, and RPC correlation
+behavior. `MessageRouter` is the one transport; there is no provider registry,
+connection pool or alternate WebSocket transport.
 
 ## Primary Owners
 
 - `MessageRouter` owns local and remote message delivery semantics.
-- `RouterDeliveryManager` owns delivery lifecycle and pending responses.
+- `MessageRouter` owns delivery lifecycle; `message-router-delivery-behaviors.js` owns local/remote delivery selection and `message-router-pending-response-ledger.js` owns pending responses.
 - `RouterServerManager` owns server-side router setup.
-- `ConnectionPool` owns connection reuse and lifecycle.
-- `TransportRegistry` owns provider registration.
-- `WebSocketTransportProvider` and `InProcTransport` own concrete transport
-  implementations.
+- `inproc-transport.js` (`InProcWebSocket`) owns the in-process connection
+  pair the router uses for same-process peers.
 - `RPCClient` owns request/response correlation from callers.
 - The bulk transfer channel (`bulk-transfer-channel.js`) owns a SECOND
   per-peer socket lane for snapshot bulk bytes: admitted through the same
@@ -31,8 +30,8 @@ correlation behavior.
 - `index.js` for exported transport surface.
 - `message-router.js` before changing routing semantics.
 - `message-router-shared.js` before changing shared delivery classification.
-- `router-delivery-manager.js` and `router-server-manager.js` before changing
-  router lifecycle.
+- `message-router-delivery-behaviors.js`, `message-router-pending-response-ledger.js`,
+  and `router-server-manager.js` before changing router lifecycle.
 - `transport-semantic-outcome.js` for canonical transport outcomes.
 - `node-address-resolution.js` before changing endpoint selection.
 

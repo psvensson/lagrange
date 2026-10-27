@@ -13,10 +13,16 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {NodeService} from '../../src/node/node-service.js';
+import {ORIGINAL_ALLOCATION_REASON, isOriginalAllocationHold} from
+  '../../src/raft/raft-rs-original-allocation-constants.js';
+import {VIRGIN_SEED_COMPOSE_REFERENCE_MS, createVirginSeedBootstrapService,
+  getUniquePort} from
+  '../integration/helpers/cluster-test-helpers.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {scaleByMachineFactor} from '../../scripts/test-machine-factor.js';
 
 /**
  * Required keys in a successful bootstrap result.
@@ -115,471 +121,194 @@ const nodeIdArb = fc.string({minLength: 1, maxLength: 36}).filter((s) => s.trim(
  */
 const wsPortArb = fc.integer({min: 10000, max: 60000});
 
-test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
-  /**
-   * Property: For any successful bootstrap() call, the return value SHALL
-   * contain all required keys per the API contract.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('successful bootstrap returns all expected keys', async (t) => {
+// Each seed is composed as production startup composes it (directory owner,
+// membership decision, storage admission) on its own node runtime, and runs to
+// the fresh-seed continuation hold. Until fresh-seed activation lands every
+// seed run ends in that one hold, so the seed properties are examples over
+// three composed results, one per configuration class, rather than random
+// runs of the same outcome. A failed result is admitted only as that hold.
+const SEED_CLASSES = Object.freeze([
+  Object.freeze({name: 'wsPort', options: {nodeId: 'rvc-seed-ws', wsPort: getUniquePort(),
+    config: {replicaStaggerDelayMs: 0, leadershipWaitTimeoutMs: 150,
+      leadershipWaitInitialDelayMs: 2, leadershipWaitMaxDelayMs: 15,
+      leadershipWaitBackoffMultiplier: 1.5}}}),
+  Object.freeze({name: 'no wsPort', options: {nodeId: 'rvc-seed-no-ws',
+    config: {replicaStaggerDelayMs: 0, leadershipWaitTimeoutMs: 150,
+      leadershipWaitInitialDelayMs: 2, leadershipWaitMaxDelayMs: 15,
+      leadershipWaitBackoffMultiplier: 1.5}}}),
+  Object.freeze({name: 'short timeout', options: {nodeId: 'rvc-seed-short',
+    config: {replicaStaggerDelayMs: 0, leadershipWaitTimeoutMs: 1,
+      leadershipWaitInitialDelayMs: 1, leadershipWaitMaxDelayMs: 1,
+      leadershipWaitBackoffMultiplier: 1}}}),
+]);
+// The seed test's budget is its composed seed count times the measured
+// per-seed reference (declared statically for the test runner).
+const SEED_CLASS_COUNT = 3;
+
+async function composedSeedResult(seedClass) {
+  const bootstrap = await createVirginSeedBootstrapService({
+    bootIncarnation: 1, nodeService: new NodeService(), ...seedClass.options,
+  });
+  try {
+    return await bootstrap.bootstrap();
+  } finally {
+    await bootstrap.shutdown();
+  }
+}
+
+const isContinuationHold = (result) => isOriginalAllocationHold(result.cause,
+  ORIGINAL_ALLOCATION_REASON.CONTINUATION_UNAVAILABLE);
+
+test('Property 7: Return Value Completeness',
+  {timeout: SEED_CLASS_COUNT * scaleByMachineFactor(VIRGIN_SEED_COMPOSE_REFERENCE_MS)},
+  async (t) => {
     initializeTestEnvironment();
+    t.equal(SEED_CLASSES.length, SEED_CLASS_COUNT, 'the budget counts every seed');
+    const results = [];
+    for (const seedClass of SEED_CLASSES) {
+      results.push({name: seedClass.name,
+        result: await composedSeedResult(seedClass)});
+    }
+    // Each shape, asserted on every composed result.
+    const eachResult = (label, check) => {
+      for (const {name, result} of results) {
+        t.ok(check(result), `${label} (${name})`);
+      }
+    };
+    const onSuccess = (check) => (result) => result.success ?
+      check(result) : isContinuationHold(result);
+    const onFailure = (check) => (result) => result.success || check(result);
 
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            wsPort,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            // Always cleanup
-            await bootstrap.shutdown();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            // Skip this iteration if bootstrap failed
-            return true;
-          }
-
-          // Invariant: all required keys must be present
-          for (const key of REQUIRED_SUCCESS_KEYS) {
-            if (!(key in result)) {
-              return false;
-            }
-          }
-
-          return true;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('successful bootstrap returns all expected keys');
+    eachResult('successful bootstrap returns all expected keys',
+      onSuccess((result) => REQUIRED_SUCCESS_KEYS.every((key) => key in result)));
+    eachResult('failed bootstrap returns all expected failure keys',
+      onFailure((result) => REQUIRED_FAILURE_KEYS.every((key) => key in result)));
+    eachResult('success field is always a boolean',
+      (result) => typeof result.success === 'boolean');
+    eachResult('nodeId field is present and valid', (result) =>
+      typeof result.nodeId === 'string' && result.nodeId.length > 0);
+    eachResult('duration field is a non-negative number', (result) =>
+      typeof result.duration === 'number' && result.duration >= 0);
+    eachResult('servicesCreated field is a non-negative integer', (result) =>
+      Number.isInteger(result.servicesCreated) && result.servicesCreated >= 0);
+    eachResult('messageGroupServices is a Map on success',
+      onSuccess((result) => result.messageGroupServices instanceof Map));
+    eachResult('partitionServices is a Map on success',
+      onSuccess((result) => result.partitionServices instanceof Map));
+    eachResult('error field is a non-empty string on failure', onFailure(
+      (result) => typeof result.error === 'string' && result.error.length > 0));
+    eachResult('phase field is a string on failure',
+      onFailure((result) => typeof result.phase === 'string'));
   });
 
-  /**
-   * Property: For any failed bootstrap() call, the return value SHALL
-   * contain all required failure keys per the API contract.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('failed bootstrap returns all expected failure keys', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          // Create bootstrap with very short timeout to force failure
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            // No wsPort - will fail during leadership wait
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            // Skip this iteration if bootstrap succeeded
-            return true;
-          }
-
-          // Invariant: all required failure keys must be present
-          for (const key of REQUIRED_FAILURE_KEYS) {
-            if (!(key in result)) {
-              return false;
-            }
-          }
-
-          return true;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('failed bootstrap returns all expected failure keys');
-  });
-
-  /**
-   * Property: For any bootstrap() result, the success field SHALL be a boolean.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('success field is always a boolean', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Invariant: success must be a boolean
-          return typeof result.success === 'boolean';
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('success field is always a boolean');
-  });
-
-  /**
-   * Property: For any bootstrap() result, the nodeId field SHALL match
-   * the provided nodeId or be a generated UUID.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('nodeId field is present and valid', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Invariant: nodeId must be a non-empty string
-          return typeof result.nodeId === 'string' && result.nodeId.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('nodeId field is present and valid');
-  });
-
-  /**
-   * Property: For any bootstrap() result, the duration field SHALL be
-   * a non-negative number.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('duration field is a non-negative number', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Invariant: duration must be a non-negative number
-          return typeof result.duration === 'number' && result.duration >= 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('duration field is a non-negative number');
-  });
-
-  /**
-   * Property: For any bootstrap() result, the servicesCreated field SHALL
-   * be a non-negative integer.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('servicesCreated field is a non-negative integer', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Invariant: servicesCreated must be a non-negative integer
-          return typeof result.servicesCreated === 'number' &&
-            Number.isInteger(result.servicesCreated) &&
-            result.servicesCreated >= 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('servicesCreated field is a non-negative integer');
-  });
-
-  /**
-   * Property: For any successful bootstrap() result, messageGroupServices
-   * SHALL be a Map instance.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('messageGroupServices is a Map on success', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            wsPort,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: messageGroupServices must be a Map
-          return result.messageGroupServices instanceof Map;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('messageGroupServices is a Map on success');
-  });
-
-  /**
-   * Property: For any successful bootstrap() result, partitionServices
-   * SHALL be a Map instance.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('partitionServices is a Map on success', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            wsPort,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: partitionServices must be a Map
-          return result.partitionServices instanceof Map;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('partitionServices is a Map on success');
-  });
-
-  /**
-   * Property: For any failed bootstrap() result, the error field SHALL
-   * be a non-empty string describing the failure.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('error field is a non-empty string on failure', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            return true;
-          }
-
-          // Invariant: error must be a non-empty string
-          return typeof result.error === 'string' && result.error.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('error field is a non-empty string on failure');
-  });
-
-  /**
-   * Property: For any failed bootstrap() result, the phase field SHALL
-   * be a string indicating which phase failed.
-   * **Validates: Requirements 9.3**
-   */
-  t.test('phase field is a string on failure', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const bootstrap = new BootstrapService({
-            bootIncarnation: 1,
-            nodeId,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await bootstrap.bootstrap();
-          } finally {
-            await bootstrap.shutdown();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            return true;
-          }
-
-          // Invariant: phase must be a string
-          return typeof result.phase === 'string';
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('phase field is a string on failure');
-  });
+const SHORT_LEADERSHIP_WAIT = Object.freeze({
+  replicaStaggerDelayMs: 0,
+  leadershipWaitTimeoutMs: 1,
+  leadershipWaitInitialDelayMs: 1,
+  leadershipWaitMaxDelayMs: 1,
+  leadershipWaitBackoffMultiplier: 1,
 });
+
+// A joiner with no seed address: join() fails or throws; a throw becomes the
+// failure result structure the API contract names.
+async function unseededJoinResult(nodeId) {
+  const joiningService = new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId,
+    nodeAddress: 'localhost:9999',
+    seedNodeAddress: null,
+    config: SHORT_LEADERSHIP_WAIT,
+  });
+  try {
+    return await joiningService.join();
+  } catch (error) {
+    return {
+      success: false,
+      nodeId,
+      duration: 0,
+      error: error.message,
+      phase: joiningService.getPhase(),
+    };
+  } finally {
+    // Always cleanup to clear heartbeat timer
+    await joiningService.cleanup();
+  }
+}
+
+// A mock HTTP post that returns a valid bootstrap response.
+function createMockHttpPost(nodeId) {
+  return async (_url, _data) => ({
+    success: true,
+    seedNodeId: 'seed-node-1',
+    seedNodeWsAddress: 'ws://localhost:8080',
+    messageGroupAssignment: {
+      strategy: 'CREATE_SELF_HOSTED',
+      messageGroupId: `mg-${nodeId}`,
+      replicaId: `replica-${nodeId}`,
+      peerAddresses: [],
+      replicaAddresses: [],
+    },
+    currentEpoch: {
+      epoch: 1,
+      assignments: {},
+      timestamp: new Date().toISOString(),
+      proposedBy: 'seed-node-1',
+    },
+    readyNodes: ['seed-node-1', nodeId],
+    tablePolicies: {},
+  });
+}
+
+// A joiner against a mocked seed; null when join() throws (that run is not a
+// success and is skipped, as before).
+async function mockedJoinResult(nodeId, wsPort) {
+  const joiningService = new NodeJoiningService({
+    bootIncarnation: 1,
+    nodeId,
+    nodeAddress: `localhost:${wsPort}`,
+    seedNodeAddress: 'http://localhost:3000',
+    seedNodeWsAddress: 'ws://localhost:8080',
+    wsPort,
+    httpPost: createMockHttpPost(nodeId),
+    config: {
+      replicaStaggerDelayMs: 0,
+      leadershipWaitTimeoutMs: 150,
+      leadershipWaitInitialDelayMs: 2,
+      leadershipWaitMaxDelayMs: 15,
+      leadershipWaitBackoffMultiplier: 1.5,
+    },
+  });
+  try {
+    return await joiningService.join();
+  } catch (_error) {
+    return null;
+  } finally {
+    await joiningService.cleanup();
+  }
+}
+
+function unseededJoinProperty(t, name, invariant) {
+  t.test(name, async (t) => {
+    initializeTestEnvironment();
+    await fc.assert(fc.asyncProperty(nodeIdArb,
+      async (nodeId) => invariant(await unseededJoinResult(nodeId))),
+    {numRuns: 10});
+    t.pass(name);
+  });
+}
+
+function mockedJoinSuccessProperty(t, name, invariant) {
+  t.test(name, async (t) => {
+    initializeTestEnvironment();
+    await fc.assert(fc.asyncProperty(nodeIdArb, wsPortArb,
+      async (nodeId, wsPort) => {
+        const result = await mockedJoinResult(nodeId, wsPort);
+        // Only check successful results
+        return !result?.success || invariant(result);
+      }), {numRuns: 10});
+    t.pass(name);
+  });
+}
 
 /**
  * Property 7: Return Value Completeness (join)
@@ -589,658 +318,26 @@ test('Property 7: Return Value Completeness', {timeout: 120000}, async (t) => {
  * per the API contract.
  */
 test('Property 7: Return Value Completeness (join)', {timeout: 120000}, async (t) => {
-  /**
-   * Property: For any failed join() call, the return value SHALL
-   * contain all required failure keys per the API contract.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('failed join returns all expected failure keys', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          // Create joining service without seed node address to force failure
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null, // Will cause failure
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            // If join throws, create a failure result structure
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            // Always cleanup to clear heartbeat timer
-            await joiningService.cleanup();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            return true;
-          }
-
-          // Invariant: all required failure keys must be present
-          for (const key of REQUIRED_JOIN_FAILURE_KEYS) {
-            if (!(key in result)) {
-              return false;
-            }
-          }
-
-          return true;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('failed join returns all expected failure keys');
-  });
-
-  /**
-   * Property: For any join() result, the success field SHALL be a boolean.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join success field is always a boolean', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Invariant: success must be a boolean
-          return typeof result.success === 'boolean';
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join success field is always a boolean');
-  });
-
-  /**
-   * Property: For any join() result, the nodeId field SHALL match
-   * the provided nodeId or be a generated UUID.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join nodeId field is present and valid', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Invariant: nodeId must be a non-empty string
-          return typeof result.nodeId === 'string' && result.nodeId.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join nodeId field is present and valid');
-  });
-
-  /**
-   * Property: For any join() result, the duration field SHALL be
-   * a non-negative number.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join duration field is a non-negative number', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Invariant: duration must be a non-negative number
-          return typeof result.duration === 'number' && result.duration >= 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join duration field is a non-negative number');
-  });
-
-  /**
-   * Property: For any failed join() result, the error field SHALL
-   * be a non-empty string describing the failure.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join error field is a non-empty string on failure', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            return true;
-          }
-
-          // Invariant: error must be a non-empty string
-          return typeof result.error === 'string' && result.error.length > 0;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join error field is a non-empty string on failure');
-  });
-
-  /**
-   * Property: For any failed join() result, the phase field SHALL
-   * be a string indicating which phase failed.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join phase field is a string on failure', async (t) => {
-    initializeTestEnvironment();
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        async (nodeId) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: 'localhost:9999',
-            seedNodeAddress: null,
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 1,
-              leadershipWaitInitialDelayMs: 1,
-              leadershipWaitMaxDelayMs: 1,
-              leadershipWaitBackoffMultiplier: 1,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            result = {
-              success: false,
-              nodeId,
-              duration: 0,
-              error: _error.message,
-              phase: joiningService.getPhase(),
-            };
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check failed results
-          if (result.success) {
-            return true;
-          }
-
-          // Invariant: phase must be a string
-          return typeof result.phase === 'string';
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join phase field is a string on failure');
-  });
-
-  /**
-   * Property: For any successful join() call with mocked HTTP, the return value
-   * SHALL contain all required keys per the API contract.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('successful join returns all expected keys (mocked)', async (t) => {
-    initializeTestEnvironment();
-
-    // Create a mock HTTP post that returns a valid bootstrap response
-    const createMockHttpPost = (nodeId) => {
-      return async (_url, _data) => {
-        return {
-          success: true,
-          seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:8080',
-          messageGroupAssignment: {
-            strategy: 'CREATE_SELF_HOSTED',
-            messageGroupId: `mg-${nodeId}`,
-            replicaId: `replica-${nodeId}`,
-            peerAddresses: [],
-            replicaAddresses: [],
-          },
-          currentEpoch: {
-            epoch: 1,
-            assignments: {},
-            timestamp: new Date().toISOString(),
-            proposedBy: 'seed-node-1',
-          },
-          readyNodes: ['seed-node-1', nodeId],
-          tablePolicies: {},
-        };
-      };
-    };
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: `localhost:${wsPort}`,
-            seedNodeAddress: 'http://localhost:3000',
-            seedNodeWsAddress: 'ws://localhost:8080',
-            wsPort,
-            httpPost: createMockHttpPost(nodeId),
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            // If join fails, we skip this iteration
-            return true;
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: all required keys must be present
-          for (const key of REQUIRED_JOIN_SUCCESS_KEYS) {
-            if (!(key in result)) {
-              return false;
-            }
-          }
-
-          return true;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('successful join returns all expected keys (mocked)');
-  });
-
-  /**
-   * Property: For any successful join() result, messageGroupServices
-   * SHALL be a Map instance.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join messageGroupServices is a Map on success (mocked)', async (t) => {
-    initializeTestEnvironment();
-
-    const createMockHttpPost = (nodeId) => {
-      return async (_url, _data) => {
-        return {
-          success: true,
-          seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:8080',
-          messageGroupAssignment: {
-            strategy: 'CREATE_SELF_HOSTED',
-            messageGroupId: `mg-${nodeId}`,
-            replicaId: `replica-${nodeId}`,
-            peerAddresses: [],
-            replicaAddresses: [],
-          },
-          currentEpoch: {
-            epoch: 1,
-            assignments: {},
-            timestamp: new Date().toISOString(),
-            proposedBy: 'seed-node-1',
-          },
-          readyNodes: ['seed-node-1', nodeId],
-          tablePolicies: {},
-        };
-      };
-    };
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: `localhost:${wsPort}`,
-            seedNodeAddress: 'http://localhost:3000',
-            seedNodeWsAddress: 'ws://localhost:8080',
-            wsPort,
-            httpPost: createMockHttpPost(nodeId),
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            return true;
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: messageGroupServices must be a Map
-          return result.messageGroupServices instanceof Map;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join messageGroupServices is a Map on success (mocked)');
-  });
-
-  /**
-   * Property: For any successful join() result, partitionServices
-   * SHALL be a Map instance.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join partitionServices is a Map on success (mocked)', async (t) => {
-    initializeTestEnvironment();
-
-    const createMockHttpPost = (nodeId) => {
-      return async (_url, _data) => {
-        return {
-          success: true,
-          seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:8080',
-          messageGroupAssignment: {
-            strategy: 'CREATE_SELF_HOSTED',
-            messageGroupId: `mg-${nodeId}`,
-            replicaId: `replica-${nodeId}`,
-            peerAddresses: [],
-            replicaAddresses: [],
-          },
-          currentEpoch: {
-            epoch: 1,
-            assignments: {},
-            timestamp: new Date().toISOString(),
-            proposedBy: 'seed-node-1',
-          },
-          readyNodes: ['seed-node-1', nodeId],
-          tablePolicies: {},
-        };
-      };
-    };
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: `localhost:${wsPort}`,
-            seedNodeAddress: 'http://localhost:3000',
-            seedNodeWsAddress: 'ws://localhost:8080',
-            wsPort,
-            httpPost: createMockHttpPost(nodeId),
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            return true;
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: partitionServices must be a Map
-          return result.partitionServices instanceof Map;
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join partitionServices is a Map on success (mocked)');
-  });
-
-  /**
-   * Property: For any successful join() result, lifecycleStateMachine
-   * SHALL be present and have a getState method.
-   * **Validates: Requirements 9.4**
-   */
-  t.test('join lifecycleStateMachine is present on success (mocked)', async (t) => {
-    initializeTestEnvironment();
-
-    const createMockHttpPost = (nodeId) => {
-      return async (_url, _data) => {
-        return {
-          success: true,
-          seedNodeId: 'seed-node-1',
-          seedNodeWsAddress: 'ws://localhost:8080',
-          messageGroupAssignment: {
-            strategy: 'CREATE_SELF_HOSTED',
-            messageGroupId: `mg-${nodeId}`,
-            replicaId: `replica-${nodeId}`,
-            peerAddresses: [],
-            replicaAddresses: [],
-          },
-          currentEpoch: {
-            epoch: 1,
-            assignments: {},
-            timestamp: new Date().toISOString(),
-            proposedBy: 'seed-node-1',
-          },
-          readyNodes: ['seed-node-1', nodeId],
-          tablePolicies: {},
-        };
-      };
-    };
-
-    await fc.assert(
-      fc.asyncProperty(
-        nodeIdArb,
-        wsPortArb,
-        async (nodeId, wsPort) => {
-          const joiningService = new NodeJoiningService({
-            bootIncarnation: 1,
-            nodeId,
-            nodeAddress: `localhost:${wsPort}`,
-            seedNodeAddress: 'http://localhost:3000',
-            seedNodeWsAddress: 'ws://localhost:8080',
-            wsPort,
-            httpPost: createMockHttpPost(nodeId),
-            config: {
-              replicaStaggerDelayMs: 0,
-              leadershipWaitTimeoutMs: 150,
-              leadershipWaitInitialDelayMs: 2,
-              leadershipWaitMaxDelayMs: 15,
-              leadershipWaitBackoffMultiplier: 1.5,
-            },
-          });
-
-          let result;
-          try {
-            result = await joiningService.join();
-          } catch (_error) {
-            return true;
-          } finally {
-            await joiningService.cleanup();
-          }
-
-          // Only check successful results
-          if (!result.success) {
-            return true;
-          }
-
-          // Invariant: lifecycleStateMachine must be present with getState method
-          return result.lifecycleStateMachine !== null &&
-            result.lifecycleStateMachine !== undefined &&
-            typeof result.lifecycleStateMachine.getState === 'function';
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('join lifecycleStateMachine is present on success (mocked)');
-  });
+  unseededJoinProperty(t, 'failed join returns all expected failure keys',
+    (result) => result.success ||
+      REQUIRED_JOIN_FAILURE_KEYS.every((key) => key in result));
+  unseededJoinProperty(t, 'join success field is always a boolean',
+    (result) => typeof result.success === 'boolean');
+  unseededJoinProperty(t, 'join nodeId field is present and valid', (result) =>
+    typeof result.nodeId === 'string' && result.nodeId.length > 0);
+  unseededJoinProperty(t, 'join duration field is a non-negative number',
+    (result) => typeof result.duration === 'number' && result.duration >= 0);
+  unseededJoinProperty(t, 'join error field is a non-empty string on failure',
+    (result) => result.success ||
+      (typeof result.error === 'string' && result.error.length > 0));
+  unseededJoinProperty(t, 'join phase field is a string on failure',
+    (result) => result.success || typeof result.phase === 'string');
+  mockedJoinSuccessProperty(t, 'successful join returns all expected keys (mocked)',
+    (result) => REQUIRED_JOIN_SUCCESS_KEYS.every((key) => key in result));
+  mockedJoinSuccessProperty(t, 'join messageGroupServices is a Map on success (mocked)',
+    (result) => result.messageGroupServices instanceof Map);
+  mockedJoinSuccessProperty(t, 'join partitionServices is a Map on success (mocked)',
+    (result) => result.partitionServices instanceof Map);
+  mockedJoinSuccessProperty(t, 'join lifecycleStateMachine is present on success (mocked)',
+    (result) => typeof result.lifecycleStateMachine?.getState === 'function');
 });

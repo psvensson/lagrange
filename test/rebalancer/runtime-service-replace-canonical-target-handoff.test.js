@@ -8,6 +8,7 @@
  * next evaluation schedules a duplicate canonical ADD.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -164,6 +165,17 @@ async function drainImmediateWork() {
 
 function createLifecycleManager(cache, activeEffects, activationRecord) {
   return {
+    // The production-shaped manager without a journal (design
+    // ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3 RV2.2, with the U1 v3
+    // hydration addendum): the journal-only read the deferred CREATE runs
+    // before any resume answers UNAVAILABLE, so a native_js definition keeps
+    // the generic create path.
+    async readRetainedCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
+    async resumeConsensusCreation() {
+      return {outcome: 'UNAVAILABLE'};
+    },
     async createReplica() {},
     async startReplica(handle) {
       activationRecord.executionEffects.push(handle.serviceId);
@@ -217,7 +229,7 @@ function createInProcessRuntimeRouter(handlerByNodeId) {
       const nodeId = target.split('/')[0];
       const handler = handlerByNodeId.get(nodeId);
       if (!handler) {
-        return {acknowledged: false, error: `No handler for ${nodeId}`};
+        return buildDeliveryEnvelope({acknowledged: false, error: `No handler for ${nodeId}`});
       }
       let response;
       if (payload?.[ReplicaOperationField.TYPE] ===
@@ -226,7 +238,7 @@ function createInProcessRuntimeRouter(handlerByNodeId) {
       } else {
         response = await handler.handleRemoveReplica(payload);
       }
-      return {acknowledged: true, ...response};
+      return buildDeliveryEnvelope({acknowledged: true}, {...response});
     },
   };
 }

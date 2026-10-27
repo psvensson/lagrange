@@ -60,7 +60,7 @@ async function createWorld() {
   // builds it: the transport, its exact handler and the executor's owner.
   const runtime = (lane = () => stateMachine) => ({replicaId: REPLICA_ID,
     partitionId: PARTITION_ID, unifiedAddress: ADDRESS, transport: router,
-    transportHandler: () => ({acknowledged: true}),
+    transportHandler: () => (null),
     resolveHandlerRetirementLane: lane});
   for (const status of [ReplicaStatus.PENDING, ReplicaStatus.CREATING,
     ReplicaStatus.SYNCING]) {

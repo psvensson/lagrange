@@ -1,0 +1,39 @@
+{
+  "schema": "solve-quest/2",
+  "id": "partition-deferred-evaluation-obligation-scheduler",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "PartitionSplitMergeManager owns one bounded deferred-evaluation scheduler whose obligations retain independent due-time eligibility: firing an earlier managed-split retry dispatches only contexts due at that time, keeps a later merge-traffic-span follow-up armed, and vice versa. Equal deadlines coalesce, duplicate logical requests occupy one retained obligation, periodic reset may admit a new pair follow-up only after the prior obligation is serviced, busy or backpressured evaluation continues through the existing requestEvaluation owner, and shutdown cancels the timer and discards all retained obligations. Under periodic-only idle load, repeated unrelated five-second split retries cannot consume the merge pair's sixty-five-second sampling follow-up, so the pair becomes eligible and merges without timeout, cadence, or hysteresis changes.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/partition-deferred-evaluation-obligation-scheduler/evidence/receipt.json",
+      "requiredReceipts": [
+        "due-obligations-retained-and-dispatched"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-bounded-owner",
+      "statement": "PartitionSplitMergeManager retains at most one obligation per logical deferred context and owns one timer for the earliest deadline. Callers do not add timers or bypass requestEvaluation."
+    },
+    {
+      "id": "due-time-eligibility",
+      "statement": "A flush removes and dispatches only obligations whose own deadline is due. Every later obligation remains retained and re-arms the one owner timer at the next deadline."
+    },
+    {
+      "id": "existing-evaluation-semantics",
+      "statement": "Busy-state retry, pressure deferral, debounce, periodic reset, diagnostics, and shutdown continue through their existing owners. No timeout, traffic window, cadence, hysteresis threshold, or ratchet is raised."
+    },
+    {
+      "id": "interaction-witness",
+      "statement": "The regression covers both arrival orders, duplicate logical requests, equal deadlines, shutdown, and the production periodic-only idle-merge interaction with repeated unrelated managed-split retries."
+    },
+    {
+      "id": "independent-verification",
+      "statement": "After the last source-changing attempt, root independently verifies owner boundaries, timer lifecycle, adversarial ordering, and the retained-obligation witness before Solver landing."
+    }
+  ],
+  "sealedAt": "7ee6712d12c3791570ec488bd9f1ac81a708f840"
+}

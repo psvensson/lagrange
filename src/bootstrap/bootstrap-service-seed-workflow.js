@@ -11,16 +11,26 @@ import {
 } from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
 import {
+  attachSqlRuntimeToStartupOwner,
   activateSteadyStateRuntimeHandoff,
 } from './shared/startup-sql-runtime-handoff.js';
 import {
   WORK_CLASS,
 } from '../runtime/work-class-scheduler.js';
+import {runtimeBuildProvenance, RUNTIME_BUILD_STATE} from
+  '../diagnostics/runtime-build-provenance.js';
+import {completeParticipantRelease} from '../node/participant-release-client.js';
+import {observeParticipantReleaseClockValue,
+  participantReleaseSeedBudgetObservation, readParticipantReleaseClock} from
+  '../node/participant-release-diagnostic-observation.js';
+import {PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_TRIGGER} from
+  '../partition/partition-participant-transaction-cutover-constants.js';
 import {
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
-import {NUM} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
@@ -30,6 +40,10 @@ const TYPE_OBJECT = 'object';
 const DEFERRED_START_IMMEDIATE = 'immediate';
 const DEFERRED_START_TIMEOUT = 'timeout';
 const SEED_WORKFLOW_PLAN_VERSION = 'seed-startup-plan/v1';
+const SEED_PARTICIPANT_RELEASE_ERROR = Object.freeze({
+  AUTHORITY_UNAVAILABLE: 'Seed participant release authority unavailable',
+  FAILED_PREFIX: 'Seed participant release failed: ',
+});
 const SEED_WORKFLOW_PHASE = Object.freeze({
   CONTROL_PLANE_READY: 'seed_workflow:control_plane_ready',
   RUNTIME_READY: 'seed_workflow:runtime_ready',
@@ -75,6 +89,20 @@ const PHASE_EVENT = Object.freeze({
 });
 const DEFERRED_LATENCY_TOPOLOGY_FAILURE =
   'Deferred latency topology lifecycle start failed';
+function seedReleaseFailureProjection({startObservation, terminalObservation,
+  budgetMs, ordinal, total, completed, attemptCount, firstBlockedDrain,
+  firstJoinedAttempt}) {
+  return {
+    ...participantReleaseSeedBudgetObservation(
+      startObservation, terminalObservation, budgetMs),
+    ordinal,
+    total,
+    completed,
+    attemptCount,
+    firstBlockedDrain,
+    firstJoinedAttempt,
+  };
+}
 
 function createBootstrapServiceSeedWorkflowMethods() {
   return {
@@ -186,6 +214,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
         setTimeout(startTopologyAsync, 0);
     },
     completeSuccessfulBootstrap() {
+      this.assertOriginalSeedPublicAdmission();
       const duration = Date.now() - this.startTime;
       const alreadyComplete = this.phase === BootstrapPhase.COMPLETE;
 
@@ -196,6 +225,16 @@ function createBootstrapServiceSeedWorkflowMethods() {
         }
         this.phase = BootstrapPhase.COMPLETE;
         this.clearNodeReadyRebalanceState();
+        const sqlQueryEngine =
+          this.seedRuntimeBridgeOwner.acquireSqlQueryEngine();
+        attachSqlRuntimeToStartupOwner({
+          owner: this,
+          sqlQueryEngine,
+          systemTableCache: this.getSystemTableCache(),
+          cacheMutationTarget: this.getSystemTableCache(),
+          messageRouter: this.messageRouter,
+          partitionServicesProvider: () => this.partitionServices,
+        });
         activateSteadyStateRuntimeHandoff({
           owner: this.runtimeHandoffOwner,
           activateControlPlaneBackgroundWriters: true,
@@ -234,6 +273,63 @@ function createBootstrapServiceSeedWorkflowMethods() {
         transport: this.transport,
         messageRouter: this.messageRouter,
       };
+    },
+    async releaseSeedParticipantCohorts() {
+      const build = await runtimeBuildProvenance();
+      if (build.state !== RUNTIME_BUILD_STATE.MEASURED) {
+        throw new Error(`Seed participant release build unavailable: ${build.reason}`);
+      }
+      const services = [...this.partitionServices.values()].sort((left, right) => {
+        const leftControl = left.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        const rightControl = right.tableName === TABLES.SQL_TRANSACTIONS ? 0 : 1;
+        return leftControl - rightControl || left.partitionId.localeCompare(right.partitionId);
+      });
+      // The registry has one entry per local REPLICA. Release authority,
+      // however, is owned by one PARTITION cohort and its full current
+      // membership. A second local replica must not restart the same entire
+      // pause/enable/observe/control/resume protocol under this shared budget.
+      // This Set tracks only which intents the seed issues, never OPEN or
+      // other consensus/authorization facts. Their owner still checks every
+      // current member and both control fences on each actual release.
+      const selectedPartitionIds = new Set();
+      const cohorts = services.filter((service) => {
+        if (selectedPartitionIds.has(service.partitionId)) return false;
+        selectedPartitionIds.add(service.partitionId);
+        return true;
+      });
+      const timeSource = this.nodeService.getTimeSource();
+      const budgetMs = this.config.leadershipWaitTimeoutMs;
+      const startMs = timeSource.now();
+      const startObservation = observeParticipantReleaseClockValue(startMs);
+      const deadline = startMs + budgetMs;
+      let completed = 0;
+      for (const service of cohorts) {
+        const authorization = this.replicaHandler
+          .participantReleaseAuthorizationOwner.authorizeFreshSeed({
+            partitionId: service.partitionId,
+            targetBuildDigest: build.digest,
+            membershipOwnerOutcome: this.membershipOwnerOutcome,
+          });
+        if (authorization === null) {
+          throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.AUTHORITY_UNAVAILABLE);
+        }
+        const {answer, attemptCount, firstBlockedDrain, firstJoinedAttempt} =
+          await completeParticipantRelease(this.replicaHandler, {
+            partitionId: service.partitionId, targetBuildDigest: build.digest,
+            trigger: PARTICIPANT_RELEASE_TRIGGER.FRESH_SEED,
+            deadlineAtMs: deadline, authorization,
+          }, {now: () => timeSource.now(), sleep: (delayMs) => this.sleep(delayMs)});
+        if (answer?.outcome !== PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER) {
+          const terminalObservation = readParticipantReleaseClock(timeSource);
+          const seedRelease = seedReleaseFailureProjection({startObservation,
+            terminalObservation, budgetMs, ordinal: completed + 1,
+            total: cohorts.length, completed, attemptCount, firstBlockedDrain,
+            firstJoinedAttempt});
+          throw new Error(SEED_PARTICIPANT_RELEASE_ERROR.FAILED_PREFIX +
+            JSON.stringify({partitionId: service.partitionId, answer, seedRelease}));
+        }
+        completed += 1;
+      }
     },
     buildSeedCheckpointSteps(startupPipelineRunner, seedPlan) {
       const phases = Array.isArray(seedPlan?.phases) ? seedPlan.phases : [];
@@ -287,14 +383,12 @@ function createBootstrapServiceSeedWorkflowMethods() {
             resolveCheckpointSnapshot(),
           ),
           run: async () => {
-            if (!this.replicaStateMachine) {
-              this.seedRuntimeBridgeOwner
-                .ensureBootstrapCdcIntegrationService();
-              this.initializeReplicaStateMachine();
-            }
             await startupPipelineRunner.run({
               phases: phases.slice(NUM.THREE, NUM.FOUR),
             });
+            if (this.originalAllocationPreparation?.isColdRecovery()) {
+              this.assertOriginalSeedPublicAdmission();
+            }
           },
         },
         {
@@ -323,9 +417,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
             });
 
             const replicaHandlerStartMs = Date.now();
-            if (!this.replicaHandler) {
-              this.initializeReplicaHandler();
-            }
+            this.initializeReplicaHandler();
             this.logger.info(POST_PIPELINE_LOG.REPLICA_HANDLER, {
               nodeId: this.nodeId,
               durationMs: Date.now() - replicaHandlerStartMs,
@@ -398,6 +490,7 @@ function createBootstrapServiceSeedWorkflowMethods() {
       });
 
       try {
+        await this.prepareOriginalSeedAttempt();
         const startupPipelineRunner = new StartupPipelineRunner({
           logger: this.logger,
           eventSink: this,

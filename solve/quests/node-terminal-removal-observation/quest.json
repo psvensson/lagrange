@@ -1,0 +1,45 @@
+{
+  "schema": "solve-quest/2",
+  "id": "node-terminal-removal-observation",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Removing a terminal NODES row consumes one explicit observed node ID, issued boot incarnation and STOPPED or FAILED status at NodesOwner. One conditional gateway delete names all three fields. Delayed requests and retries cannot remove a rejoined incarnation or a row whose status changed. Only an applied, exact one-row result is reported removed; zero rows are a typed observation-changed refusal and unavailable effect counts remain unconfirmed. HTTP and CLI preserve that original intent, and the obsolete unconditional owner removal API is absent.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/node-terminal-removal-observation/evidence/receipt.json",
+      "requiredReceipts": [
+        "mutation-time-incarnation-and-status-fences",
+        "exact-delete-repeated-and-stale-retry",
+        "gateway-outcome-and-retry-identity",
+        "http-cli-original-observation",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "single-owner",
+      "statement": "NodesOwner owns terminal eligibility, exact deletion and effect classification. Admin is a representation adapter. Use existing deleteWhere and gateway; no extra read as race protection, unconditional deletion alias, alternative SQL path or new removal controller."
+    },
+    {
+      "id": "intent-and-retry",
+      "statement": "Require explicit original positive bootIncarnation and terminal status through HTTP and CLI; no fallback to a newly read row. Gateway retry retains the same predicate and logical write identity. A missing count, settled replay with unavailable count, failed or deferred mutation never proves that one row was removed."
+    },
+    {
+      "id": "bounded-scope",
+      "statement": "Only NODES terminal removal owner, admin/CLI consumers, corresponding documentation and witnesses are in scope. Service scaling, reserved-name handling and remaining client SQL writers are separate units. No main merge, publication, baseline increase or timeout relaxation."
+    },
+    {
+      "id": "proof",
+      "statement": "Retain source-bound semantic red before production edits; prove real gateway delete against SQLite plus cache observation, rejoin active incarnation two surviving stopped incarnation one, status-only race, exact terminal deletion, repeated stale intent and retry behavior. Run canonical runner retries zero with thermal/controller coordination and require independent review before composition."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "concurrency-serialization",
+    "retry-loops",
+    "harness-fidelity"
+  ],
+  "sealedAt": "8fee98abecb29133815f9ffab9c096019692f24b"
+}

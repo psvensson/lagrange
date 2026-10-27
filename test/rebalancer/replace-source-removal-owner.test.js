@@ -20,6 +20,7 @@
  *   W7  step 0 + step 1: the waiting owner is woken by the node's consensus
  *       relay (a committed membership change), with no timer firing.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
@@ -101,7 +102,7 @@ async function createHarness({
           {...coordinator.repository.getReplicaOperationRowFromCache?.(
             operationId)} : null,
       });
-      return {acknowledged: true, status: 'initiated'};
+      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
     },
   };
   coordinator = createTestCoordinator({
@@ -284,6 +285,41 @@ test('W5 (D2/P4): time past the former budgets fails nothing after the ' +
     await harness.coordinator.reconcileOperationProgress(harness.operation);
     t.equal((await persistedOperation(harness)).workflowStep,
       WORKFLOW_STEP.REMOVED, 'the committed removal still completes it');
+  } finally {
+    await harness.coordinator.shutdown();
+  }
+});
+
+test('W5b (D2): the exempt REPLACE budget check reports no ' +
+  'wait_bound_spent (as at base, it only records its diagnostic)', async (t) => {
+  const harness = await createHarness();
+  try {
+    await driveToRemovalIntent(harness);
+    const lines = [];
+    const owner = harness.owner;
+    owner.logger = {
+      error: (message, context) => lines.push({level: 'error', context}),
+      warn: (message) => lines.push({level: 'warn', message}),
+      info: (message) => lines.push({level: 'info', message}),
+      debug: () => {},
+    };
+    // Reach the budget check itself: no retry grace, no observed progress.
+    owner.hasActiveTransitionRetryGrace = () => false;
+    owner.reconcileOperationProgress = async () => false;
+    const operation = await persistedOperation(harness);
+    t.equal(operation.workflowStep, WORKFLOW_STEP.STOPPING,
+      'the REPLACE waits at STOPPING (a time-exempt owner phase)');
+
+    await owner.reconcileTimeoutOperation(operation,
+      Date.now() + LONG_AFTER_MS);
+
+    t.equal(lines.filter((line) =>
+      line.context?.event === 'wait_bound_spent').length, 0,
+    'a diagnostic-only budget is not a bound: no wait_bound_spent');
+    t.equal(lines.filter((line) => line.level === 'error').length, 0,
+      'and no ERROR at all');
+    t.notOk(harness.coordinator.repository.isOperationTerminal(
+      await persistedOperation(harness)), 'and nothing is failed');
   } finally {
     await harness.coordinator.shutdown();
   }

@@ -9,6 +9,7 @@
  * Requirements: 8.1, 8.2, 8.3
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
 import {test} from '../../src/test-helpers/tap.js';
@@ -122,8 +123,11 @@ function createMockSqlQueryEngine(options = {}) {
         };
       }
 
-      if (sql.includes('INSERT INTO replica_operations') ||
-          sql.includes('INSERT OR IGNORE')) {
+      if (sql.includes('INSERT OR IGNORE INTO storage_reservations')) {
+        return {success: true, changes: 1};
+      }
+
+      if (sql.includes('INSERT INTO replica_operations')) {
         // Insert new operation
         const [
           operationId, type, partitionId, replicaId, targetClaimKey,
@@ -174,7 +178,7 @@ function createMockCoordinatorDeps(sqlEngine) {
       insertSystemTableRow: async () => ({success: true}),
     },
     messageRouter: withFixtureCommittedMembership({
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
     }, null),
     controlPlaneSystemTableGateway: {
       readAuthoritativeRows: async (_tableName, sql, params = [], queryOptions = {}) =>

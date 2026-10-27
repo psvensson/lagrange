@@ -96,6 +96,7 @@
  * reconcile onto the amended branch.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -467,12 +468,12 @@ function createHarness(store) {
     },
     messageRouter: {
       async deliver(target, payload, options) {
-        const witnessAnswer = witness.answer(payload);
+        const witnessAnswer = witness.deliveryFor(payload);
         if (witnessAnswer) {
           return witnessAnswer;
         }
         deliveries.push({target, payload, options});
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: {

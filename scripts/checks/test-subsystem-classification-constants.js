@@ -131,6 +131,7 @@ export const SUBSYSTEM_RULES = Object.freeze([
   {id: 'integration-convergence', pattern: /^test\/integration\/(?!.*(rebalance|admission)).*(benchmark|strict-)/, subsystem: SUBSYSTEM_CONVERGENCE_TOPOLOGY},
   {id: 'integration-admin', pattern: /^test\/integration\/(?!.*(cdc|websocket)).*(admin|debug-join)/, subsystem: SUBSYSTEM_ADMIN_DIAGNOSTICS},
   {id: 'integration-harness', pattern: /^test\/integration\/.*(failure-scenarios|multi-node-cluster)/, subsystem: SUBSYSTEM_DISTRIBUTED_HARNESS},
+  {id: 'integration-transactions', pattern: /^test\/integration\/(?!pgwire-).*transaction-coordinator/, subsystem: SUBSYSTEM_TRANSACTIONS},
 
   {id: 'directory-rebalancer', pattern: new RegExp(`^test\\/rebalancer\\/${NOT_PGWIRE}`), subsystem: SUBSYSTEM_PLACEMENT_REBALANCE},
   {id: 'directory-bootstrap', pattern: new RegExp(`^test\\/(bootstrap|node|entrypoint|boot)\\/(.*\\/)?${NOT_PGWIRE}`), subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP},
@@ -166,6 +167,46 @@ export const SUBSYSTEM_RULES = Object.freeze([
 // semantic home differs from what their path implies. Each must name exactly
 // one live test and carry a reason, so a stale override fails like a dead rule.
 export const SUBSYSTEM_OVERRIDES = Object.freeze({
+  'test/integration/message-group-learner-discovery.integration.test.js': {
+    subsystem: SUBSYSTEM_TRANSPORT_MESSAGING,
+    reason: 'proves the owned discovery triggers (restart scan, sweep, replicated-row wake) driving the registered recipient read over real routers and the real lane; native and operation SQL provide the exact-action evidence',
+  },
+  'test/integration/message-group-learner-recipient.integration.test.js': {
+    subsystem: SUBSYSTEM_TRANSPORT_MESSAGING,
+    reason: 'proves actual registered recipient and delivery lifetime to the operation owner; native and operation SQL provide the underlying exact-action evidence',
+  },
+  'test/integration/message-group-learner-process-loss.integration.test.js': {
+    subsystem: SUBSYSTEM_STORAGE_RAFT,
+    reason: 'proves committed learner recovery across process loss and membership-holder replacement; local SQL and transport are fixture physics',
+  },
+  'test/integration/message-group-learner-runtime-authorization.integration.test.js': {
+    subsystem: SUBSYSTEM_STORAGE_RAFT,
+    reason: 'proves durable operation authorization before native Raft membership; repository storage and inbox transport supply the cross-owner fixture',
+  },
+  'test/integration/message-group-learner-successor-ordering.integration.test.js': {
+    subsystem: SUBSYSTEM_PLACEMENT_REBALANCE,
+    reason: 'proves the operation owner issues an ordered learner successor only over a fenced, registry-vouched noncommitted attempt; real routers, the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-promotion.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves a joined learner is promoted to voter only over the exact caught-up proof, the native promotion turn and the recorded voter stamp; routers, the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-promotion-selection-guards.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves every refusal branch and precondition of the promotion selection\'s branch CAS on the joined-learner world (crafted native answers and observations, forged rows, an isolated newer-term leader); the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-promotion-recording-guards.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves every refusal branch and precondition of the voter-stamp receipt and the recorded voter fact predicate on the natively promoted learner (crafted native answers, forged rows, holder interleavings); routers, the native group and operation SQL supply the fixture',
+  },
+  'test/integration/message-group-learner-join.integration.test.js': {
+    subsystem: SUBSYSTEM_BOOTSTRAP_MEMBERSHIP,
+    reason: 'proves a recorded learner joins its group through the CREATE admission and install owners; the partition-shaped install path and transport are fixture, not the asserted responsibility',
+  },
+  'test/integration/message-group-membership-claim-cache.integration.test.js': {
+    subsystem: SUBSYSTEM_CDC_METADATA,
+    reason: 'proves repository mutation visibility in SystemTableCache; seed and message group supply the fixture, not the asserted responsibility',
+  },
   'test/integration/benchmark-system-table-read-path.integration.test.js': {
     subsystem: SUBSYSTEM_QUERY_SQL,
     reason: 'benchmarks a read path; the area under proof is the query engine, not convergence behaviour',

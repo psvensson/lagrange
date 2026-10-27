@@ -165,22 +165,17 @@ test('BootstrapAPI delegates strategy to MessageGroupAssignment',
 
     const result = api.determineMessageGroupAssignment('new-node-1');
 
+    // W8 (identity-reuse safety fix, A3): with the seed's whole mg-1 on the
+    // seed, the joiner hosts its own new group; this test once pinned the
+    // MOVE of an mg-1 replica to it.
     t.equal(
       result.strategy,
-      BOOTSTRAP_ASSIGNMENT_STRATEGY.MOVE_REPLICA,
-      'should use MOVE_REPLICA via MessageGroupAssignment',
+      BOOTSTRAP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
+      'the joiner hosts its own group via MessageGroupAssignment',
     );
-    t.equal(result.groupId, 'mg-1', 'should target existing group');
-    t.equal(
-      result.sourceNodeId, 'seed-node-1',
-      'should identify source node',
-    );
-    t.ok(result.replicaToMove, 'should identify replica to move');
-    t.ok(result.peerAddresses, 'should augment with peer addresses');
-    t.equal(
-      result.peerAddresses.length, 3,
-      'should have 3 peer addresses',
-    );
+    t.not(result.groupId, 'mg-1', 'mg-1 is not spread to the joiner');
+    t.notOk(result.sourceNodeId, 'no source node is named');
+    t.notOk(result.replicaToMove, 'no replica is moved');
   },
 );
 
@@ -383,8 +378,8 @@ test('MessageGroupAssignment is the single strategy owner',
     );
     t.equal(
       typeof mgAssignment.findMovableReplica,
-      'function',
-      'should have findMovableReplica method',
+      'undefined',
+      'no movable-replica selection exists (identity-reuse safety fix)',
     );
 
     const api = new BootstrapAPI({

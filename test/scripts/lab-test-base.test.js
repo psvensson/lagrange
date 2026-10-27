@@ -12,13 +12,14 @@
 //   c0 (origin/main) -- c1 (Dockerfile) -- c2 (docs/notes.md)   head = c2
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {after, test} from 'node:test';
 
-import {labTestSelectorArgs} from '../../scripts/lab/probe.js';
+import {labTestSelectorArgs, prepareSelectorImportGraph} from '../../scripts/lab/probe.js';
+import {IMPORT_GRAPH_PATH, IMPORT_GRAPH_SEAL_PATH}
+  from '../../scripts/checks/impact-proof-cone-constants.js';
 import {planChangeProof} from '../../scripts/select-change-tests.js';
 import {resolvedCheckBase} from '../../scripts/checks/changed-paths.js';
 import {
@@ -28,6 +29,7 @@ import {
   SELECTION_REFUSED,
 } from '../../scripts/checks/change-selection-constants.js';
 import {gitProcessEnvironment} from '../../scripts/checks/git-process-environment.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const UTF8 = 'utf8';
 const SELECTOR_BASE_FLAG = '--base';
@@ -38,7 +40,7 @@ const SPINE_TEST = 'test/spine.test.js';
 const NO_RANGE_ENV = Object.freeze({});
 
 function git(repo, args) {
-  return execFileSync('git', args,
+  return execGit(args,
     {cwd: repo, encoding: UTF8, stdio: 'pipe', env: gitProcessEnvironment()}).trim();
 }
 
@@ -109,4 +111,36 @@ test('the same head yields different plans for two bases', () => {
   assert.deepEqual(published, labChangePlan(null).plan,
     'naming origin/main\'s merge base is the default');
   assert.notDeepEqual(published, branchPoint);
+});
+
+// A checkout that never generated the import graph (a fresh worktree) refused
+// every changed run whose cone held a test helper as UNKNOWN_SCOPE ("import
+// graph is not generated"). The lab has the selector's own producer make it
+// there first, once, and never leaves a tracked file changed by it.
+test('a checkout without the import graph gets it from its producer before selecting', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-graph-'));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const seal = path.join(root, IMPORT_GRAPH_SEAL_PATH);
+  fs.mkdirSync(path.dirname(seal), {recursive: true});
+  fs.writeFileSync(seal, 'committed seal\n');
+  const produced = [];
+  const lines = [];
+  const io = {
+    write: (line) => lines.push(line),
+    produce: async (args, cwd) => {
+      produced.push([args, cwd]);
+      fs.mkdirSync(path.dirname(path.join(cwd, IMPORT_GRAPH_PATH)), {recursive: true});
+      fs.writeFileSync(path.join(cwd, IMPORT_GRAPH_PATH), '{}');
+      fs.writeFileSync(seal, 'rewritten seal\n');
+    },
+  };
+  assert.equal(await prepareSelectorImportGraph(root, io), true);
+  assert.deepEqual(produced, [[['scripts/generate-global-owner-debt-inventory.js',
+    '--refresh-import-graph-only'], root]], 'the producer the selector\'s own hint names');
+  assert.ok(fs.existsSync(path.join(root, IMPORT_GRAPH_PATH)));
+  assert.equal(fs.readFileSync(seal, UTF8), 'committed seal\n', 'the tracked seal is put back');
+  assert.deepEqual(lines, ['lab test: generating the import graph the change selector reads ' +
+    `(none yet) in ${root}`]);
+  assert.equal(await prepareSelectorImportGraph(root, io), false, 'a graph there is left alone');
+  assert.equal(produced.length, 1);
 });

@@ -2,10 +2,12 @@
  * Message Group Service - construction and persisted-state accessors.
  * Holds the public class declaration: constructor wiring plus the role and
  * leader-node mutation-helper backed property accessors.
- * Implements 3-replica Raft groups using liferaft library for consensus.
+ * Each replica's consensus is a raft-rs semantic operation port over its own
+ * durable replica database (design R3).
  * Requirements: 1.4, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.4, 6.5
  */
 import {EventEmitter} from 'events';
+import {ProposalQueue} from '../partition/proposal-queue.js';
 import {
   ENTITY_TYPE,
   NUM,
@@ -21,11 +23,10 @@ import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   attachTrafficReadinessListener,
 } from '../bootstrap/traffic-readiness-utils.js';
-import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
-import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
-import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
+import {createRaftRsOperationPort} from '../raft/raft-rs-operation-port.js';
+import {RAFT_OPERATION_PORT_REQUEST} from '../raft/raft-operation-port-request.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   MESSAGE_GROUP_SERVICE_DEFAULT,
@@ -36,6 +37,7 @@ import {
 import {CDCHandler} from './cdc-handler.js';
 import {MessageGroupForwardingOwner} from './message-group-forwarding-owner.js';
 import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
+import {MessageRetryHandler} from './message-retry-handler.js';
 import {
   FORWARD_TOPOLOGY_REPAIR_DEFAULT,
   MESSAGE_GROUP_SERVICE_LITERAL,
@@ -45,15 +47,105 @@ import {
 import {resolveOwnedTimeSource} from '../time/time-source.js';
 import {resolveOwnedRandomSource} from '../random/random-source.js';
 
-/**
- * MessageGroupService provides reliable inter-service communication.
- * Implements a 3-replica Raft group using liferaft library.
- */
 // Five timings with one rule: an explicit positive override wins, otherwise
 // the owner's default. Stated once here rather than five times in a
 // constructor that already carries the replica's whole shape.
 function resolvePositiveMs(value, fallbackMs) {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallbackMs;
+}
+
+function resolveNonNegativeMs(value, fallbackMs) {
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallbackMs;
+}
+
+function validateMessageGroupServiceOptions(service, options) {
+  if (!options.groupId) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_GROUP_ID);
+  }
+  if (!options.replicaId) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REPLICA_ID);
+  }
+  if (!options.transport) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_TRANSPORT);
+  }
+  if (!service.isWebSocketBasedTransport(options.transport)) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.INVALID_TRANSPORT);
+  }
+}
+
+function resolveMessageGroupConfigTimings(options) {
+  const config = ConfigurationManager.getInstance();
+  const retryMaxDelayMs =
+    config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_DELAY_MS) ??
+    MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_DELAY_MS;
+  return {
+    deliveryTimeoutMs:
+      config.get(CONFIG_KEY.MESSAGE_GROUP_DELIVERY_TIMEOUT_MS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.DELIVERY_TIMEOUT_MS,
+    retryMaxAttempts:
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_ATTEMPTS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_ATTEMPTS,
+    retryInitialDelayMs:
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_INITIAL_DELAY_MS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_INITIAL_DELAY_MS,
+    retryBackoffMultiplier:
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_BACKOFF_MULTIPLIER) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_BACKOFF_MULTIPLIER,
+    retryMaxDelayMs,
+    retryJitterFactor:
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR,
+    leaderActivationStabilizationMs: resolveNonNegativeMs(
+      options.leaderActivationStabilizationMs,
+      config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
+        MESSAGE_GROUP_SERVICE_LITERAL.VALUE_250,
+    ),
+    leaderActivationNodeSpacingMs: resolveNonNegativeMs(
+      options.leaderActivationNodeSpacingMs,
+      config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
+        MESSAGE_GROUP_SERVICE_LITERAL.VALUE_25,
+    ),
+    ...resolveForwardRepairTimings(options, {
+      suppressionCeilingMs: Math.min(
+        retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE),
+    }),
+  };
+}
+
+function readServiceSqlQueryEngine(service) {
+  return service.cdcIntegrationService?.sqlQueryEngine || null;
+}
+
+function rebindSystemTableCacheListener(previousCache, nextCache, listener) {
+  if (!listener || previousCache === nextCache) return;
+  if (typeof previousCache?.offCacheChange === 'function') {
+    previousCache.offCacheChange(listener);
+  }
+  if (typeof nextCache?.onCacheChange === 'function') {
+    nextCache.onCacheChange(listener);
+  }
+}
+
+function resolveMessageGroupLifecycleFields(options) {
+  const isJoiningExistingGroup = Boolean(options.isJoiningExistingGroup);
+  return {
+    cdcIntegrationService: options.cdcIntegrationService || null,
+    tablePolicyService: options.tablePolicyService || null,
+    rebalanceCoordinator: options.rebalanceCoordinator || null,
+    publishRoleMetadata: options.publishRoleMetadata !== false,
+    publishLeaderNodeMetadata: options.publishLeaderNodeMetadata !== false,
+    metadataPublicationReadinessState:
+      options.metadataPublicationReadinessState ??
+      options.bootstrapReadinessState ??
+      null,
+    isJoiningExistingGroup,
+    identityExisted: options.identityExisted === true,
+    identityRecorded: options.identityRecorded ?? null,
+    bootstrapMembership: options.bootstrapMembership,
+    deferElectionUntilJoinConvergence:
+      options.deferElectionUntilJoinConvergence === true,
+    deferElection: Boolean(options.deferElection) || isJoiningExistingGroup,
+  };
 }
 
 function resolveForwardRepairTimings(options, {suppressionCeilingMs}) {
@@ -82,6 +174,22 @@ function resolveReplicaNodeService(options) {
   return options.nodeService || NodeService.getInstance();
 }
 
+// The replica's durable consensus database: required, and never in memory -
+// its term, vote and configuration must survive a restart.
+function requireDurableDbPath(dbPath) {
+  if (typeof dbPath !== 'string' || dbPath.length === 0) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_DB_PATH);
+  }
+  if (dbPath === MESSAGE_GROUP_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.IN_MEMORY_DB_PATH_REFUSED);
+  }
+  return dbPath;
+}
+
+/**
+ * MessageGroupService provides reliable inter-service communication over a
+ * raft-rs replicated group.
+ */
 class MessageGroupService extends EventEmitter {
   /**
    * Create a new MessageGroupService.
@@ -91,23 +199,13 @@ class MessageGroupService extends EventEmitter {
    * @param {string} options.nodeId - Node ID hosting this replica.
    * @param {Array<string>} options.replicaIds - All replica IDs in the group.
    * @param {Object} options.transport - WebSocket-based transport for communication.
+   * @param {string} options.dbPath - This replica's durable consensus database.
    */
   constructor(options = {}) {
     super();
-    if (!options.groupId) {
-      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_GROUP_ID);
-    }
-    if (!options.replicaId) {
-      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REPLICA_ID);
-    }
-    // Transport is now required - WebSocket transport is mandatory
-    if (!options.transport) {
-      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_TRANSPORT);
-    }
-    // Validate transport is WebSocket-based (MessageRouter)
-    if (!this.isWebSocketBasedTransport(options.transport)) {
-      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.INVALID_TRANSPORT);
-    }
+    validateMessageGroupServiceOptions(this, options);
+    this.dbPath = requireDurableDbPath(options.dbPath);
+    this.db = null;
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
     // One clock for this replica: the ledger's stamps and the turns its
@@ -115,27 +213,27 @@ class MessageGroupService extends EventEmitter {
     // Unsupplied, it is the host clock exactly as before.
     const clocks = resolveOwnedTimeSource(options);
     // Held separately from the resolved source: a replica that was GIVEN a
-    // clock hosts its consensus timers on it, and one that was not leaves
-    // liferaft on its own tick-tock exactly as production does.
+    // clock hosts its consensus port's timers on it, and one that was not
+    // leaves the port on the host clock exactly as production does.
     this.providedTimeSource = clocks.providedTimeSource;
-    // The node's randomness, when it owns one. Election timing is drawn from
-    // it; unsupplied, liferaft keeps Math.random.
+    // The node's randomness, when it owns one, handed to the consensus port
+    // with the clock.
     this.providedRandomSource = resolveOwnedRandomSource(options);
     this.timeSource = clocks.timeSource;
+    this.cdcCommitWaiters = new ProposalQueue({timeSource: this.timeSource});
+    this.cdcCommitLifetime = null;
     this.now =
       typeof options.now === 'function' ?
         options.now :
         () => this.timeSource.now();
     this.nodeId = options.nodeId || STRING.UNKNOWN;
-    // COPY, for the same reason as the partition sibling: this list is
-    // mutated in place by raft lifecycle, and callers hand in the shared
-    // INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration.
+    // COPY, for the same reason as the partition sibling: callers hand in
+    // the shared INITIAL_MESSAGE_GROUP_REPLICA_IDS declaration. The group's
+    // membership is its committed configuration, never this hint list.
     this.replicaIds = Array.isArray(options.replicaIds) ?
       [...options.replicaIds] :
       [this.replicaId];
     this.transport = options.transport;
-    this.raftProvider = options.raftProvider || new LiferaftProvider();
-    assertRaftProviderContract(this.raftProvider);
     // Peer addresses for cross-node communication
     // Map of replicaId -> unified address (e.g., 'nodeId/message-group/replicaId')
     // Used when joining an existing message group on a different node
@@ -151,48 +249,10 @@ class MessageGroupService extends EventEmitter {
       ENTITY_TYPE.MESSAGE_GROUP,
       this.replicaId,
     );
-    // Configuration
-    const config = ConfigurationManager.getInstance();
-    this.deliveryTimeoutMs =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_DELIVERY_TIMEOUT_MS) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.DELIVERY_TIMEOUT_MS;
-    this.retryMaxAttempts =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_ATTEMPTS) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_ATTEMPTS;
-    this.retryInitialDelayMs =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_INITIAL_DELAY_MS) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_INITIAL_DELAY_MS;
-    this.retryBackoffMultiplier =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_BACKOFF_MULTIPLIER) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_BACKOFF_MULTIPLIER;
-    this.retryMaxDelayMs =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_DELAY_MS) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_DELAY_MS;
-    this.retryJitterFactor =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
-      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR;
-    this.leaderActivationStabilizationMs =
-      Number.isFinite(options.leaderActivationStabilizationMs) &&
-      options.leaderActivationStabilizationMs >= 0 ?
-        Math.floor(options.leaderActivationStabilizationMs) :
-        (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
-          MESSAGE_GROUP_SERVICE_LITERAL.VALUE_250);
-    this.leaderActivationNodeSpacingMs =
-      Number.isFinite(options.leaderActivationNodeSpacingMs) &&
-      options.leaderActivationNodeSpacingMs >= 0 ?
-        Math.floor(options.leaderActivationNodeSpacingMs) :
-        (config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
-          MESSAGE_GROUP_SERVICE_LITERAL.VALUE_25);
-    Object.assign(this, resolveForwardRepairTimings(options, {
-      suppressionCeilingMs: Math.min(
-        this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE),
-    }));
-    // Raft state - using liferaft library
+    Object.assign(this, resolveMessageGroupConfigTimings(options));
+    // The replica's raft-rs operation port, opened in initialize().
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
     this.raft = null;
-    // Initialized in initialize()
-    this.raftRuntime = null;
-    this.logAdapter = InMemoryLogAdapter;
     // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
     this.operationLedger = new MessageGroupOperationLedger({
       now: this.now,
@@ -200,17 +260,18 @@ class MessageGroupService extends EventEmitter {
     });
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.tablePolicyService = options.tablePolicyService || null;
-    this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.metadataPublicationReadinessTransitionListener =
+      this.handleMetadataPublicationReadinessTransition.bind(this);
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
+    Object.assign(this, resolveMessageGroupLifecycleFields(options));
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
       createControlPlaneRuntimeBundle({
         // The gateway stamps and times for the node hosting this replica.
         now: () => this.timeSource.now(),
         nodeId: this.nodeId,
-        getSqlQueryEngine: () =>
-          this.cdcIntegrationService?.sqlQueryEngine || null,
+        getSqlQueryEngine: () => readServiceSqlQueryEngine(this),
         getCdcIntegrationService: () => this.cdcIntegrationService,
         getSystemTableCache: () => this.systemTableCache,
         getMessageRouter: () => this.transport,
@@ -243,6 +304,13 @@ class MessageGroupService extends EventEmitter {
     // Logging
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME);
+    // The owner a routed command's attempts run under: its retry delays and
+    // stamps read this replica's clock, and it logs as this replica.
+    this.commandRetryHandler = new MessageRetryHandler({
+      timeSource: this.timeSource,
+      randomSource: this.providedRandomSource,
+      logger: this.logger,
+    });
     this.forwardingOwner = new MessageGroupForwardingOwner({
       service: this,
       buildDeferredCdcForwardError,
@@ -254,70 +322,56 @@ class MessageGroupService extends EventEmitter {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
-    this.metadataPublicationReadinessTransitionListener =
-      this.handleMetadataPublicationReadinessTransition.bind(this);
-    this.releaseMetadataPublicationReadinessListener = null;
-    this._metadataPublicationReadinessState = null;
-    this.publishRoleMetadata = options.publishRoleMetadata !== false;
-    this.publishLeaderNodeMetadata =
-      options.publishLeaderNodeMetadata !== false;
-    this.metadataPublicationReadinessState =
-      options.metadataPublicationReadinessState ||
-      options.bootstrapReadinessState ||
-      null;
     // State
     this.initialized = false;
+    this.startupFailure = null;
+    this.isShutdown = false;
+    this.initializationSettlement = null;
+    this.shutdownSettlement = null;
+    this.consensusCloseSettlement = null;
     this.isLeader = false;
     this.leaderActivationGate = new LeaderActivationGate({
       holdoffMs: this.leaderActivationStabilizationMs,
-      activationScheduler: options.leaderActivationScheduler || null,
+      activationScheduler: options.leaderActivationScheduler ?? null,
       sharedActivationScheduler: {
         nodeId: this.nodeId,
         spacingMs: this.leaderActivationNodeSpacingMs,
-        timeSource: this.providedTimeSource || undefined,
+        timeSource: this.providedTimeSource ?? undefined,
       },
-      timeSource: this.providedTimeSource || undefined,
+      timeSource: this.providedTimeSource ?? undefined,
     });
     this.lastLeaderCdcResubscribeTerm = undefined;
-    // Defer election start until all replicas are ready
-    // When true, the Raft election timer won't start until startElection() is called
-    // This prevents election storms when multiple replicas are created on the same node
-    this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
-    this.deferElectionUntilJoinConvergence =
-      options.deferElectionUntilJoinConvergence === true;
-    this.deferElection =
-      options.deferElection || this.isJoiningExistingGroup || false;
+    Object.defineProperty(this, RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING, {
+      value: options.originalAllocationOpening,
+    });
     this.electionStarted = false;
     this.raftTimingConfig = null;
-    this.joinSuppressedHeartbeat = null;
+  }
+  /**
+   * Build this replica's raft-rs operation port.
+   * @param {Object} request - Its RAFT_OPERATION_PORT_REQUEST.
+   * @return {Object} The frozen operation port.
+   */
+  createOperationPort(request) {
+    if (this.originalAllocationOpening === undefined) return createRaftRsOperationPort(request);
+    return createRaftRsOperationPort({
+      ...request,
+      [RAFT_OPERATION_PORT_REQUEST.ORIGINAL_ALLOCATION_OPENING]: this.originalAllocationOpening,
+    });
   }
   get systemTableCache() {
     return this._systemTableCache || null;
   }
   set systemTableCache(systemTableCache) {
     const previousCache = this._systemTableCache || null;
-    if (
-      previousCache &&
-      previousCache !== systemTableCache &&
-      typeof previousCache.offCacheChange === 'function' &&
-      this.systemTableCacheChangeListener
-    ) {
-      previousCache.offCacheChange(this.systemTableCacheChangeListener);
-    }
     this._systemTableCache = systemTableCache;
     this.roleMutationHelper?.setSystemTableCache(systemTableCache);
     this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
     if (this.rebalancer) {
       this.rebalancer.systemTableCache = systemTableCache;
     }
-    if (
-      systemTableCache &&
-      systemTableCache !== previousCache &&
-      typeof systemTableCache.onCacheChange === 'function' &&
-      this.systemTableCacheChangeListener
-    ) {
-      systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
-    }
+    rebindSystemTableCacheListener(
+      previousCache, systemTableCache, this.systemTableCacheChangeListener);
     this.scheduleRaftPeerReconciliation();
   }
   get cdcIntegrationService() {

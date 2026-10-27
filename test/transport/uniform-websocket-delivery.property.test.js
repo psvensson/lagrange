@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 /**
  * Property test for Uniform WebSocket Delivery.
  * Property 3: For any message delivery (whether to local or remote address),
@@ -64,7 +65,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           await router.initialize();
 
           // Register a handler for the address (simulating local service)
-          router.register(targetAddress, () => ({acknowledged: true, data: 'response'}));
+          router.register(targetAddress, () => ({data: 'response'}));
 
           // Attempt delivery - should fail because no WebSocket connection exists
           const result = await router.deliver(targetAddress, message);
@@ -72,9 +73,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           await router.shutdown();
 
           // Without a connection, delivery must fail for remote targets.
-          return result.acknowledged === false &&
-                 typeof result.error === 'string' &&
-                 result.error.includes('No connection');
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                 typeof result.transport.error === 'string' &&
+                 result.transport.error.includes('No connection');
         },
       ),
       {numRuns: 10},
@@ -177,9 +178,9 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           await router.shutdown();
 
           // Should fail with "No connection to node {nodeId}", proving nodeId was extracted.
-          return result.acknowledged === false &&
-                 result.error.includes('No connection to node') &&
-                 result.error.includes(nodeId);
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === false &&
+                 result.transport.error.includes('No connection to node') &&
+                 result.transport.error.includes(nodeId);
         },
       ),
       {numRuns: 10},
@@ -220,7 +221,7 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           const selfAddress = `${localNodeId}/${entityType}/${entityId}`;
 
           // Register handler
-          router.register(selfAddress, () => ({acknowledged: true}));
+          router.register(selfAddress, () => (null));
 
           // Attempt delivery to self
           const result = await router.deliver(selfAddress, message);
@@ -228,8 +229,8 @@ test('Property 3: Uniform WebSocket Delivery', async (t) => {
           await router.shutdown();
 
           // Self-addressed delivery should succeed through the local path.
-          return result.acknowledged === true &&
-               result.error === undefined;
+          return isDeliveredTransportDeliveryOutcome(deliveryTransportOf(result)) === true &&
+               result.transport.error === null;
         },
       ),
       {numRuns: 10},

@@ -1,0 +1,29 @@
+{
+  "schema": "solve-quest/2",
+  "id": "metric-report-provenance",
+  "class": "fix",
+  "statement": "Metric inventories consume only reports bound by one shared provenance owner to their measured source/configuration, producer and installed tool identity. Producers seal reports; inventory refreshes stale reports only and retains the matching-input fast path. No unsealed legacy fallback, report-mtime authority, duplicate metric policy, ratchet increase, protocol gate or release-acceptance claim.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/metric-report-provenance/evidence/receipt.json",
+      "requiredReceipts": [
+        "fresh-graph-stale-report-discriminator",
+        "canonical-provenance-and-selective-refresh",
+        "producer-seals-and-negative-matrix",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Metric report producer/consumer provenance and its behavioral witnesses, metadata and normal-hook preservation only. Original Q6 and integration trees are read-only."
+    },
+    {
+      "id": "acceptance",
+      "statement": "Independent delta review and applicable exact-source gates remain separate from this author WIP."
+    }
+  ],
+  "sealedAt": "ddc34a6a6272a94415b989d33ad79968426aac71"
+}

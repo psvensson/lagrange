@@ -27,14 +27,13 @@ const RAFT_CHURN_SYNC_SECTION = Object.freeze({
   // registerPartitionsWithReplicaHandler sweep (re-register every replica).
   REPLICA_REGISTRATION_SWEEP: 'replica_registration_sweep',
   // PartitionService.scheduleLeaderOwnedActivation activate callback (the
-  // leader-path leaf; includes reconstructPreparedState).
+  // leader-path leaf; includes durable mirror worker resumption).
   LEADER_ACTIVATION: 'leader_activation',
   // RebalanceCoordinator.reconcileReservations periodic sweep (expire stale
   // + release orphan storage reservations; the continuous post-formation
   // churn site measured at 30-41 runs/min on the seed).
   STORAGE_RESERVATION_RECONCILE: 'storage_reservation_reconcile',
-  // PartitionServiceTransactionBase.enforcePreparedStateHoldTimeouts sweep
-  // (stuck-transaction heal / heal-deferred path; continuous on the seed).
+  // Current participant PREPARED-hold sweep (continuous on the seed).
   STUCK_TRANSACTION_HEAL: 'stuck_transaction_heal',
   // One SQLite follower commit+state-machine-apply transaction slice. The
   // slice owner has a wall-time budget and yields before starting another.

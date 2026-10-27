@@ -11,8 +11,10 @@
 // them per quest.
 
 import {createHash} from 'node:crypto';
+import {types} from 'node:util';
 
 const arrayIsArray = Array.isArray;
+const isProxy = types.isProxy.bind(types);
 const jsonStringify = JSON.stringify;
 const numberIsFinite = Number.isFinite;
 const objectDefineProperty = Object.defineProperty;
@@ -113,7 +115,7 @@ function isOwnEnumerableDataProperty(value, key) {
 }
 
 function isRecord(value) {
-  if (!value || typeof value !== 'object' || arrayIsArray(value)) {
+  if (!value || typeof value !== 'object' || isProxy(value) || arrayIsArray(value)) {
     return false;
   }
   const prototype = objectGetPrototypeOf(value);
@@ -156,7 +158,7 @@ function hasCanonicalLength(value) {
 }
 
 function isDenseDataArray(value) {
-  if (!arrayIsArray(value) ||
+  if (isProxy(value) || !arrayIsArray(value) ||
       objectGetPrototypeOf(value) !== canonicalArrayPrototype ||
       !hasCanonicalLength(value)) {
     return false;
@@ -308,6 +310,9 @@ function serializeDataValue(value, options, depth) {
       SERIALIZATION_TEXT.BOOLEAN_FALSE;
   }
   if (typeof value === 'number' && numberIsFinite(value)) return `${value}`;
+  // Reject before Array.isArray or reflection, including revoked proxies and
+  // nested arrays reached by a direct serializer/digest caller.
+  if (isProxy(value)) throw new TypeError(SERIALIZATION_TEXT.INVALID_DATA);
   if (arrayIsArray(value)) return serializeArrayData(value, options, depth);
   return serializeRecordData(value, options, depth);
 }

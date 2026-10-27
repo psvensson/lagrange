@@ -25,6 +25,7 @@ const LATENCY_TOPOLOGY_DEFAULT = Object.freeze({
   GROUP_THRESHOLD_MS: DEFAULT_CONFIG.latency.groupThresholdMs,
   RECALC_INTERVAL_MS: DEFAULT_CONFIG.latency.recalcIntervalMs,
   RECALC_JITTER_RATIO: DEFAULT_CONFIG.latency.recalcJitterRatio,
+  // ends-on: the target node answers the ping
   PING_TIMEOUT_MS: DEFAULT_CONFIG.latency.pingTimeoutMs,
   PING_RETRY_COUNT: DEFAULT_CONFIG.latency.pingRetryCount,
   SMOOTHING_ALPHA: DEFAULT_CONFIG.latency.smoothingAlpha,

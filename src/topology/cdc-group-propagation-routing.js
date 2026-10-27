@@ -11,14 +11,6 @@ function buildGroupedContextResult(sourceGroupId, targets, fallbackReason) {
   };
 }
 
-function resolveSourceMessageGroupId(sourceMessageGroupService) {
-  const groupId = sourceMessageGroupService?.groupId;
-  if (typeof groupId !== 'string' || groupId.length === 0) {
-    return null;
-  }
-  return groupId;
-}
-
 function resolveActiveMessageGroupServices(options = {}) {
   const rowPredicate =
     typeof options.predicate === 'function' ? options.predicate : null;
@@ -60,7 +52,7 @@ function sortCoordinatorCandidates(services) {
   });
 }
 
-function resolveCoordinatorAddress(options = {}) {
+function resolveCoordinatorService(options = {}) {
   const services = resolveActiveMessageGroupServices({
     systemTableCache: options.systemTableCache,
     predicate: (serviceRow) => serviceRow?.[COLUMN.NODE_ID] === options.coordinatorNodeId,
@@ -69,7 +61,20 @@ function resolveCoordinatorAddress(options = {}) {
     return null;
   }
   const sorted = sortCoordinatorCandidates(services);
-  return sorted[0]?.[COLUMN.ADDRESS] || null;
+  return sorted[0] ?? null;
+}
+
+function observedServiceRoute(service, systemTableCache) {
+  const node = systemTableCache.get(TABLES.NODES, service[COLUMN.NODE_ID]);
+  // These are existing owner-published lifetime facts, not a cache revision
+  // or a guessed lease. Missing remote facts cannot establish a replacement.
+  return {
+    serviceId: service[COLUMN.SERVICE_ID] ?? null,
+    replicaId: service[COLUMN.REPLICA_ID] ?? null,
+    serviceCreatedAt: service[COLUMN.CREATED_AT] ?? null,
+    createAttemptToken: service.create_attempt_token ?? null,
+    nodeBootIncarnation: node?.[COLUMN.BOOT_INCARNATION] ?? null,
+  };
 }
 
 function resolveMessageGroupId(serviceRow, options = {}) {
@@ -126,35 +131,10 @@ function buildSafeTargets(options = {}) {
       groupId,
       coordinatorNodeId: selectedService[COLUMN.NODE_ID] || null,
       address: selectedService[COLUMN.ADDRESS],
+      ...observedServiceRoute(selectedService, options.systemTableCache),
     });
   }
   return targets;
-}
-
-/**
- * Resolve every message-group id KNOWN to the sender's cache regardless of
- * row status/address. CL-014: fan-out target resolution silently drops
- * groups that are not ACTIVE-with-address at event time — comparing this
- * set against the resolved targets makes that drop observable.
- * @param {Object} options
- * @return {Set<string>}
- */
-function resolveKnownMessageGroupIds(options = {}) {
-  const rows = options.systemTableCache.filter(
-    TABLES.SERVICES,
-    (serviceRow) =>
-      serviceRow?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
-  );
-  const groupIds = new Set();
-  for (const serviceRow of rows) {
-    const groupId = resolveMessageGroupId(serviceRow, {
-      messageGroupReplicaSuffix: options.messageGroupReplicaSuffix,
-    });
-    if (groupId) {
-      groupIds.add(groupId);
-    }
-  }
-  return groupIds;
 }
 
 function buildGroupedContext(options = {}) {
@@ -204,11 +184,11 @@ function buildGroupedContext(options = {}) {
         CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_NODE,
       );
     }
-    const address = resolveCoordinatorAddress({
+    const service = resolveCoordinatorService({
       coordinatorNodeId,
       systemTableCache: options.systemTableCache,
     });
-    if (!address) {
+    if (!service) {
       return buildGroupedContextResult(
         sourceGroupId,
         [],
@@ -218,7 +198,8 @@ function buildGroupedContext(options = {}) {
     targets.push({
       groupId,
       coordinatorNodeId,
-      address,
+      address: service[COLUMN.ADDRESS],
+      ...observedServiceRoute(service, options.systemTableCache),
     });
   }
 
@@ -239,6 +220,4 @@ function buildGroupedContext(options = {}) {
 export {
   buildGroupedContext,
   buildSafeTargets,
-  resolveKnownMessageGroupIds,
-  resolveSourceMessageGroupId,
 };

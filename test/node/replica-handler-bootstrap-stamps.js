@@ -10,6 +10,7 @@ import {
   COMMITTED_MEMBERSHIP_STAMP_KIND,
 } from '../../src/raft/raft-committed-membership-constants.js';
 import {deriveRaftRsPeerId} from '../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from '../../src/raft/raft-rs-conf-state-key.js';
 import {ReplicaOperationField} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {SYSTEM_TABLE_NAME} from
@@ -27,16 +28,21 @@ const DEFAULT_COMMITTED_INDEX = 7;
  */
 function committedStampFor(members, {appliedIndex = DEFAULT_COMMITTED_INDEX,
   learners = []} = {}) {
+  const voters = members.map(deriveRaftRsPeerId);
+  const learnerPeerIds = learners.map(deriveRaftRsPeerId);
   const identities = {};
   for (const member of [...members, ...learners]) {
     identities[deriveRaftRsPeerId(member)] = member;
   }
   return {
     kind: COMMITTED_MEMBERSHIP_STAMP_KIND.COMMITTED,
-    voters: members.map(deriveRaftRsPeerId),
+    voters,
     votersOutgoing: [],
-    learners: learners.map(deriveRaftRsPeerId),
+    learners: learnerPeerIds,
+    learnersNext: [],
     appliedIndex,
+    configurationKey: raftRsConfStateKey({voters, learners: learnerPeerIds}),
+    membershipGenerationIndex: 0,
     commitIndex: appliedIndex,
     term: 1,
     leaderId: members[0] ?? null,

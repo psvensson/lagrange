@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "local-constructor-dependency-audit",
+  "class": "fix",
+  "statement": "The mixed cache/SQL audit distinguishes local constructor dependency forwarding from active or unclassified truth use without claiming transitive provider purity.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/local-constructor-dependency-audit/evidence/receipt.json",
+      "requiredReceipts": [
+        "local-forwarding-and-active-use"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "one-local-policy",
+      "statement": "Keep passiveConstructionOccurrences as sole occurrence policy. No provider interpreter, name-based getter waiver, subtree exemption, production edits or baseline increase."
+    },
+    {
+      "id": "bounded-grammar",
+      "statement": "Only static constructor option reference paths and immutable simple aliases whose every use forwards qualify. Calls, computed access, callbacks, decision expressions, mutation, conflicting bindings, destructuring and unknown escapes remain conservative."
+    },
+    {
+      "id": "proof-ceiling",
+      "statement": "Preserve all existing decision-boundary tests and prove unchanged actual seed/bridge positives plus active local mutations. Zero caller findings do not certify provider or constructor purity. Independent review required before dependency consumption."
+    }
+  ],
+  "sealedAt": "7b3a60abaa9982c3a177ca98f7fee9c17487c8c6"
+}

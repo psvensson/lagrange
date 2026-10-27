@@ -1,8 +1,8 @@
 import {
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
-} from '../../../src/control-plane/priority-recovery-snapshot.js';
+  ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD,
+  ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD,
+  LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION,
+} from './active-gate-closure-classification.js';
 import {
   PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_RULES,
   PUBLICATION_EVIDENCE_ACTIVE_GATE_PUBLICATION_MEMBERSHIP_STATE,
@@ -295,16 +295,14 @@ function buildActiveGatePublicationMembershipEvidence({
     normalizeOptionalString(progress?.closureWitnessClass);
   const closureWitnessSatisfiesPublication =
     closureRecordId ===
-      PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD &&
+      ACTIVE_GATE_CLOSURE_RECORD_ID_PRIORITY_SPREAD &&
     closureWitnessClass ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-        .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING;
+      ACTIVE_GATE_CLOSURE_WITNESS_CLASS_PRIORITY_SPREAD;
   const stalePublicationClosure =
     normalizeOptionalString(
       priorityRecoveryObservation?.priorityRecoveryClosureState,
     ) ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
-        .SATISFIED_STALE_PUBLICATION ||
+      LEGACY_PRIORITY_RECOVERY_CLOSURE_STATE_SATISFIED_STALE_PUBLICATION ||
     closureWitnessSatisfiesPublication;
   const currentPublicationGateReasons = resolvePublicationGateReasons({
     publicationConvergenceGate,

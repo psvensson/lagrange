@@ -1,6 +1,9 @@
 import {assertCritical} from '../../utils/assert.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
+import {getMessageGroupDbPath} from '../../storage/data-directory-manager.js';
 import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
 } from '../shared/message-group-transport-handler.js';
@@ -49,6 +52,21 @@ function buildJoinEnvelopeLogger(options, logger, address) {
   };
 }
 
+/**
+ * The join replica's identity options (F1): a rejoin's replica named by this
+ * node's existing services row opened before - without its record it is
+ * refused reseed-required; a first join's replica steps nothing until its row
+ * is durable.
+ * @param {Object} options - Join replica options.
+ * @return {Object} {identityExisted, identityRecorded}.
+ */
+function joinReplicaIdentity(options) {
+  return {
+    identityExisted: options.identityExisted === true,
+    identityRecorded: options.identityRecorded ?? null,
+  };
+}
+
 const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
   /**
    * Create a join message-group replica with unified lifecycle.
@@ -69,7 +87,8 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
 
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
-    if (messageGroupServices.has(options.replicaId)) {
+    if (messageGroupCreationAlreadySettled(
+      messageGroupServices, options.replicaId)) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
@@ -84,11 +103,14 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       nodeId: this.nodeId,
       replicaIds: options.replicaIds,
       transport: this.delegates.getMessageRouter(),
+      dbPath: getMessageGroupDbPath(
+        this.delegates.getDataDir(), options.groupId, options.replicaId),
       peerAddresses: options.peerAddresses,
       deferElection: Boolean(options.deferElection),
       deferElectionUntilJoinConvergence:
         options.deferElectionUntilJoinConvergence === true,
       isJoiningExistingGroup: Boolean(options.isJoiningExistingGroup),
+      ...joinReplicaIdentity(options),
       publishRoleMetadata: options.publishRoleMetadata !== false,
       publishLeaderNodeMetadata:
         options.publishLeaderNodeMetadata !== false,
@@ -121,7 +143,9 @@ const CREATE_MESSAGE_GROUP_REPLICA_LIFECYCLE_METHODS = {
       );
     }
 
-    await messageGroup.initialize();
+    await initializeRegisteredMessageGroup({messageGroup,
+      messageGroupServices, messageRouter,
+      address: unifiedAddress, replicaId: options.replicaId});
     attachMessageGroupServiceBeforePublish(this.delegates, messageGroup);
     messageGroupServices.set(options.replicaId, messageGroup);
     this.delegates.pushJoinMessageGroupReplica(messageGroup);

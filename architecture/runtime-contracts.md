@@ -58,6 +58,80 @@ Forbidden runtime patterns:
 - feature-local implementations of existing cache/read/write/retry primitives
 - shadow state for lifecycle, readiness, admission, leader, or routing truth
 
+## Retained Native History And Participant Origin
+
+`RaftRsDurableStore.readRetainedHistoryIn` owns the DDL-free read snapshot of
+the existing native record. It validates required raw rows before the legacy
+reader's normalization, keeps exact decimal-string positions, and distinguishes
+applied entries, committed entries awaiting application, and local uncommitted
+entries. It preserves the complete retained record. Snapshot coverage names
+the missing prefix; configuration entries remain bytes for the native
+membership owner. This observation is neither a replay engine nor application
+effect permission.
+
+Original-allocation preparation consumes that assessment before its application
+callback and again at the existing final native construction boundary. It
+requires the exact declared founder configuration and original bootstrap,
+admission and membership-generation provenance. Uncovered snapshot prefixes or
+uninterpreted configuration history remain `CLASSIFICATION_UNAVAILABLE`.
+
+The participant store's `readPartitionWriteOriginHistory` binds that native
+view to its generation/origin row in one owned read transaction. Its byte owner
+recognizes the canonical generation-origin command. A null applied origin is
+separate from a committed-pending ENABLE and from a local uncommitted proposal.
+An applied origin must match the first applied canonical command at its exact
+index and term; later idempotent origins may coexist in every range. Missing
+observations are unavailable, contradictory observations are contrary, and
+other commands remain explicitly unclassified. Inspection never installs
+schema enforcement, resets the generation, changes bytes, proposes or applies.
+
+These are bounded observation primitives. Complete SQL/MG effect correspondence,
+checkpoint/application binding and protected activation remain further owner
+obligations. The retained original startup composition still holds at
+`CLASSIFICATION_UNAVAILABLE`; no observation here grants public admission.
+
+## Fresh Original Publication And Admission
+
+The same live original-allocation preparation authorizes election scheduling
+only for an exact opening it admitted and the native owner consumed. A cold
+inspection, serialized declaration or another attempt grants no continuation.
+The existing service keeps physical SQLite/native custody; preparation borrows
+its exact consumed opening's handle and revokes continuation with its attempt.
+
+SERVICES row owners keep canonical row construction. Original registration
+uses the declaration's reserved birth timestamp and create token. Preparation
+retains one exact publication value per original right and the lifecycle owner
+durably commits `UNUSED -> SUBMITTED` before the one submission. The existing
+authoritative local-leader read gateway must return that exact committed value
+before the lifecycle owner commits `SUBMITTED -> TRANSFERRED`. A lost answer,
+absent row or unavailable observation keeps `SUBMITTED`. A repeated call in
+the same live attempt may observe the retained operation; it cannot resubmit
+or mint another birth. It returns the original exact row even when the native
+role changed meanwhile; a new role observation cannot replace that publication
+value. A changed declared identity or birth still refuses. This does not make an unknown submission final or
+authorize cold recovery.
+
+The anchor's cluster identity follows the same operation using its declared
+identity. Preparation owns the all-rights-transferred decision consumed by
+public transport, bootstrap success and readiness. Its first successful
+decision reads every exact durable right. The same live attempt retains this
+monotonic completion so ordinary founder retirement does not recreate original
+startup debt. Every later use still requires its live issuer mode and directory
+custody; shutdown and another preparation cannot borrow it. Membership still owns the
+earlier restart decision; the entrypoint preserves its typed outcome. Fresh
+activation does not weaken retained, partial, uncertain or cold startup holds.
+BootstrapAPI receives the named startup adapter, steady-state runtime owner
+and seed admission operation explicitly; it has no legacy whole-service
+fallback. The supported seed composition binds admission to its actual owner,
+and joining composition has no original allocation operation.
+
+The supported seed entrypoint acquires the actual transport listener before
+binding its public HTTP listener. A bind rejection remains the original typed
+startup error and is unwound by the existing acquisition ledger; it cannot
+become a returned runtime or a ready HTTP response. The ledger retains process
+custody if owned cleanup fails. The joining startup retry policy remains owned
+by its existing join operation.
+
 ## System-Table Row Lifecycle
 
 For every system-table-backed entity, exactly one component owns row creation,
@@ -90,6 +164,23 @@ Forbidden patterns:
 - treating a cache hit or generic row absence as physical-cleanup authority
 - one persisted field carrying unrelated claim, lease, workflow, and entity
   lifecycle semantics
+
+### Terminal Node Removal
+
+Terminal NODES metadata removal is owned by `NodesOwner.removeTerminalNode`.
+The caller supplies the observed node ID, issued boot incarnation and `stopped`
+or `failed` status. The owner deletes with all three equality predicates in one
+gateway mutation. Zero matched rows mean observation changed, never removed;
+an unavailable affected-row count remains unconfirmed. HTTP
+`DELETE /api/admin/nodes/:nodeId` requires `{bootIncarnation, status}`; CLI
+`remove-node <node_id> <boot_incarnation> <status>` carries the same observation.
+Retries retain it. A new removal intent requires a new observation.
+
+CDC conditional DELETE visibility observes disappearance of the matched row,
+including every predicate field. A successor at the same key is preserved.
+Zero matched rows or an unknown effect count establish no absence postcondition.
+Primary-key-only deletion requests key absence and retains its authoritative
+cache reconciliation on a zero-row repeat.
 
 ## Cache And Read Models
 
@@ -443,6 +534,21 @@ Required contract:
    the architecture explicitly says otherwise.
 
 ## Query Routing And Transport
+
+`MessageRouter.deliver` resolves to one owner-built `{transport, answer}`
+envelope. The transport owner alone computes this hop's outcome and identity;
+consumers read it through `deliveryTransportOf` and `deliveryAnswerOf`, which
+refuse unowned copies. ACK frames remain internal evidence; `deliveryState`
+is the public outcome. A handler's refusal, retry advice or fields named like
+transport fields cannot rewrite that outcome. Forwarders consume the onward
+envelope and return its answer or an explicit domain refusal.
+
+The local answer is the handler's returned value, without copying or property
+evaluation. Remote answers use the existing JSON frame encoding. A handler
+throw, or a remote answer serialization failure, is `handler_failed`; local
+reference semantics do not introduce a second JSON conversion. A lost answer
+after submission retains the existing owner's retry/unknown-outcome obligation.
+Router-proven pre-send refusal remains distinct through `recoverableBeforeSend`.
 
 During splits, moves, and leader elections, queries may be slower but must not
 fail because topology is transient.

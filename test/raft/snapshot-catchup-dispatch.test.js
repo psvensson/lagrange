@@ -6,9 +6,6 @@ import Database from 'better-sqlite3';
 
 import {test} from '../../src/test-helpers/tap.js';
 
-import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
-import LifeRaft from '../../src/raft/liferaft.js';
-import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {
   listCheckpointGenerations,
 } from '../../src/raft/snapshot-checkpoint-store.js';
@@ -34,34 +31,30 @@ import {
   createInProcWebSocketPair,
 } from '../../src/transport/inproc-transport.js';
 
-// S4 (quest raft-snapshot-compacted-follower-catchup) leader decision-site
-// attacks over REAL adapters: an INSTALLED leader (compacted-empty log +
-// boundary keys) emits the typed install_snapshot decision at exactly the
-// b1 (startIndex <= boundary) and b2 (unrecoverable failedIndex <= boundary)
-// sites; a boundary-0 leader with a genuine log gap emits the DISTINCT
-// catchup_range_empty decision and NEVER install_snapshot; absent callback
-// records an observable typed no-op on the instance; and a normal lagging
-// follower still receives a real catch-up batch (non-boundary path
-// unchanged). Plus dispatcher refusals: per-follower single-flight and the
-// corruption decision never minting a checkpoint.
+// S4 (quest raft-snapshot-compacted-follower-catchup) dispatcher attacks over
+// REAL adapters: the corruption decision never mints a checkpoint, dispatch
+// is per-follower single-flight, the newest eligible generation is served
+// over the injected socket, identity pinning, and below-boundary generations
+// are skipped.
+//
+// The leader decision-site cases (b1, b2, absent callback, boundary-0 gap,
+// non-boundary batch) drove the retired runtime's append-fail handler and are
+// deleted with it. raft-rs does not yet consume the catch-up decision or
+// handle a snapshot message, so leader-side catch-up dispatch is an open
+// release-blocking frontier of epic raft-rs-full-cutover R5 ("snapshot/
+// restart/catch-up under rs-raft durable state"); nothing here certifies it.
 
 const PARTITION_ID = 'sql_transactions-p1';
 const STATE_TABLE = 'sql_transactions';
 const TERM = 4;
 const SEALED_EPOCH = 7;
 const ENTRY_COUNT = 3;
-const EXTRA_ENTRY_COUNT = 2;
 const FOLLOWER_ADDRESS = 'node-f/partition/sql_transactions-p1-r2';
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
   raftGroupId: PARTITION_ID,
   entity: Object.freeze({kind: 'partition', id: STATE_TABLE}),
   membershipEpoch: SEALED_EPOCH,
-});
-const HUGE_TIMERS = Object.freeze({
-  'heartbeat': '10s',
-  'election min': '20s',
-  'election max': '30s',
 });
 
 // Build a sealed generation from a source replica with ENTRY_COUNT
@@ -88,211 +81,6 @@ async function createSealedGenerationFixture() {
     },
   };
 }
-
-// INSTALLED leader: install the sealed generation into a fresh replica db,
-// open a real SQLiteLogAdapter over it, append EXTRA committed entries above
-// the boundary, and promote a huge-timer LifeRaft manually.
-async function createInstalledLeaderFixture(raftOptions = {}) {
-  const generation = await createSealedGenerationFixture();
-  const leaderDbPath = path.join(generation.workDir, 'leader.db');
-  await installSealedGeneration({
-    replicaDbPath: leaderDbPath,
-    checkpointsRoot: generation.checkpointsRoot,
-    generationIndex: generation.boundaryIndex,
-    identity: IDENTITY,
-  });
-  const leaderDb = new Database(leaderDbPath);
-  const adapter = new SQLiteLogAdapter(
-    leaderDb, {address: PARTITION_ID, term: TERM});
-  const raft = new LifeRaft('node-l/partition/sql_transactions-p1-r1', {
-    ...HUGE_TIMERS,
-    'Log': function SQLiteLogFactory() {
-      return adapter;
-    },
-    ...raftOptions,
-  });
-  for (let ordinal = 1; ordinal <= EXTRA_ENTRY_COUNT; ordinal += 1) {
-    const entry = adapter.saveCommand({sql: `extra-${ordinal}`}, TERM);
-    adapter.commit(entry.index);
-  }
-  raft.change({state: LifeRaft.LEADER, term: TERM});
-  return {
-    ...generation,
-    raft,
-    boundaryIndex: generation.boundaryIndex,
-    headIndex: generation.boundaryIndex + EXTRA_ENTRY_COUNT,
-    close() {
-      raft.end();
-      leaderDb.close();
-      generation.close();
-    },
-  };
-}
-
-function appendFailPacket(raft, {failedIndex, followerLast}) {
-  return {
-    type: 'append fail',
-    term: TERM,
-    state: LifeRaft.FOLLOWER,
-    address: FOLLOWER_ADDRESS,
-    leader: raft.address,
-    last: followerLast,
-    data: {index: failedIndex, term: TERM},
-  };
-}
-
-async function driveAppendFail(raft, packetFacts) {
-  const incoming = raft.listeners('data')[0];
-  const writes = [];
-  await incoming(appendFailPacket(raft, packetFacts), (packet) => {
-    writes.push(packet ?? null);
-  });
-  return writes;
-}
-
-test('b1: fresh follower against an installed leader draws install_snapshot',
-  async (t) => {
-    const decisions = [];
-    const fixture = await createInstalledLeaderFixture({
-      onSnapshotCatchupNeeded: (decision) => decisions.push(decision),
-    });
-    try {
-      // The follower fails at a RETAINED index (boundary+1) but its own last
-      // index is 0, so the leader's fast-forward start is 1 <= boundary.
-      const writes = await driveAppendFail(fixture.raft, {
-        failedIndex: fixture.boundaryIndex + 1,
-        followerLast: {index: 0, term: 0},
-      });
-      t.same(writes, [null], 'the append-fail is consumed without a batch');
-      t.equal(decisions.length, 1, 'exactly one decision is emitted');
-      t.same(decisions[0], {
-        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        followerAddress: FOLLOWER_ADDRESS,
-        startIndex: 1,
-        failedIndex: fixture.boundaryIndex + 1,
-        leaderBoundary: fixture.boundaryIndex,
-      }, 'the decision carries startIndex 1 and the leader boundary');
-      t.ok(Object.isFrozen(decisions[0]), 'the decision is frozen');
-    } finally {
-      fixture.close();
-    }
-  });
-
-test('b2: an unrecoverable failedIndex at the boundary draws install_snapshot',
-  async (t) => {
-    const decisions = [];
-    const fixture = await createInstalledLeaderFixture({
-      onSnapshotCatchupNeeded: (decision) => decisions.push(decision),
-    });
-    try {
-      // APPEND_FAIL names the boundary index itself: get(M) is null on the
-      // compacted-empty log, so this reaches the unrecoverable branch.
-      const writes = await driveAppendFail(fixture.raft, {
-        failedIndex: fixture.boundaryIndex,
-        followerLast: {index: 0, term: 0},
-      });
-      t.same(writes, [null], 'the append-fail is consumed without a batch');
-      t.equal(decisions.length, 1, 'exactly one decision is emitted');
-      t.equal(decisions[0].outcome,
-        RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        'the unrecoverable branch emits install_snapshot');
-      t.equal(decisions[0].failedIndex, fixture.boundaryIndex,
-        'the decision names the compacted failed index');
-      t.equal(decisions[0].leaderBoundary, fixture.boundaryIndex,
-        'the decision carries the leader boundary');
-    } finally {
-      fixture.close();
-    }
-  });
-
-test('absent callback records the typed decision as an observable no-op',
-  async (t) => {
-    const fixture = await createInstalledLeaderFixture();
-    try {
-      const writes = await driveAppendFail(fixture.raft, {
-        failedIndex: fixture.boundaryIndex + 1,
-        followerLast: {index: 0, term: 0},
-      });
-      t.same(writes, [null], 'the append-fail is still consumed silently');
-      t.same(fixture.raft._lastSnapshotCatchupDecision, {
-        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        followerAddress: FOLLOWER_ADDRESS,
-        startIndex: 1,
-        failedIndex: fixture.boundaryIndex + 1,
-        leaderBoundary: fixture.boundaryIndex,
-      }, 'the typed decision is recorded on the instance');
-      t.ok(Object.isFrozen(fixture.raft._lastSnapshotCatchupDecision),
-        'the recorded decision is frozen');
-    } finally {
-      fixture.close();
-    }
-  });
-
-test('a boundary-0 genuine gap draws catchup_range_empty, never an install',
-  async (t) => {
-    const decisions = [];
-    const raft = new LifeRaft('node-l/partition/gap-leader', {
-      ...HUGE_TIMERS,
-      'Log': InMemoryLogAdapter,
-      'onSnapshotCatchupNeeded': (decision) => decisions.push(decision),
-    });
-    try {
-      // Torn log: entries exist only at 70..75; the prefix is a genuine gap
-      // with NO boundary excuse (in-memory adapters have no boundary at all).
-      for (let index = 70; index <= 75; index += 1) {
-        await raft.log.saveCommand({type: 'gap-entry', index}, TERM, index);
-      }
-      raft.change({state: LifeRaft.LEADER, term: TERM});
-      const writes = await driveAppendFail(raft, {
-        failedIndex: 70,
-        followerLast: {index: 0, term: 0},
-      });
-      t.same(writes, [null], 'the empty read stays a silent write()');
-      t.equal(decisions.length, 1, 'exactly one decision is emitted');
-      t.equal(decisions[0].outcome,
-        RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.CATCHUP_RANGE_EMPTY,
-        'the corruption case is the DISTINCT catchup_range_empty decision');
-      t.not(decisions[0].outcome,
-        RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
-        'a boundary-0 gap can never draw install_snapshot');
-      t.equal(decisions[0].leaderBoundary, 0,
-        'the decision records the boundary-0 evidence');
-    } finally {
-      raft.end();
-    }
-  });
-
-test('non-boundary catch-up is unchanged: a lagging follower gets a batch',
-  async (t) => {
-    const decisions = [];
-    const raft = new LifeRaft('node-l/partition/full-leader', {
-      ...HUGE_TIMERS,
-      'Log': InMemoryLogAdapter,
-      'onSnapshotCatchupNeeded': (decision) => decisions.push(decision),
-    });
-    try {
-      for (let index = 1; index <= 10; index += 1) {
-        await raft.log.saveCommand({type: 'entry', index}, TERM, index);
-      }
-      await raft.log.commit(10);
-      raft.change({state: LifeRaft.LEADER, term: TERM});
-      const writes = await driveAppendFail(raft, {
-        failedIndex: 4,
-        followerLast: {index: 3, term: TERM},
-      });
-      t.equal(writes.length, 1, 'one reply is written');
-      t.equal(writes[0]?.type, 'append', 'the reply is a catch-up batch');
-      t.equal(writes[0].data[0].index, 4,
-        'the batch fast-forwards to the follower position');
-      t.equal(writes[0].data[writes[0].data.length - 1].index, 10,
-        'the batch runs to the leader head');
-      t.same(decisions, [], 'no catch-up decision is emitted');
-      t.equal(raft._lastSnapshotCatchupDecision, undefined,
-        'nothing is recorded on the instance either');
-    } finally {
-      raft.end();
-    }
-  });
 
 test('dispatch refuses catchup_range_empty and never mints a checkpoint',
   async (t) => {

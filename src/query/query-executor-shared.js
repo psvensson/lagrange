@@ -38,6 +38,14 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
+// The one participant failure entry every statement kind is reported with.
+import {
+  buildDistributedFailureSummary,
+  buildParticipantFailureEntry,
+  normalizeParticipantFailureString,
+  normalizeParticipantRetryAfterMs,
+  resolveParticipantBackpressureState,
+} from './query-execution-budget.js';
 import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
 import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
 import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
@@ -58,7 +66,6 @@ import {
 import {isDeferredReadinessPlanningSnapshot} from
   '../control-plane/readiness-planning-version-contract.js';
 import {isRetryableControlPlaneError} from '../control-plane/control-plane-error-classification.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {CONTROL_PLANE_READ_LEADER_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
 import {isPriorityControlPlanePartition} from '../bootstrap/system-partition-classification.js';
@@ -155,7 +162,6 @@ const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
 const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
   NONE: 'none',
-  RETRY_SAME_ADDRESS: 'retry_same_address',
   DEFER_PARTITION_RETRY: 'defer_partition_retry',
   WIDEN_TO_RECOVERY_CANDIDATE: 'widen_to_recovery_candidate',
 });
@@ -202,67 +208,6 @@ function buildPartitionServiceWitnessFingerprint(service) {
       QUERY_EXECUTOR_LITERAL.STRING_VALUE,
   ].join(QUERY_EXECUTOR_LITERAL.STRING_VALUE_2);
 }
-function normalizeParticipantFailureString(value) {
-  return typeof value === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
-    value.length > 0 ?
-    value :
-    null;
-}
-function normalizeParticipantRetryAfterMs(value) {
-  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
-}
-function resolveParticipantBackpressureState(result = {}) {
-  if (typeof result?.backpressured === QUERY_EXECUTOR_LITERAL.STRING_BOOLEAN) {
-    return result.backpressured;
-  }
-  if (result?.deferRetry === true) {
-    return true;
-  }
-  return (
-    Number.isFinite(result?.retryAfterMs) && result.retryAfterMs > 0
-  );
-}
-function buildParticipantFailureEntry(result) {
-  return {
-    partitionId: result.partitionId,
-    participantNodeId: normalizeParticipantFailureString(
-      result.participantNodeId,
-    ),
-    participantAddress: normalizeParticipantFailureString(
-      result.participantAddress,
-    ),
-    errorCode: normalizeParticipantFailureString(result.errorCode),
-    failureCode: normalizeParticipantFailureString(result.failureCode),
-    committed: result?.committed === true,
-    outcome: normalizeParticipantFailureString(result.outcome),
-    disposition: normalizeParticipantFailureString(result.disposition),
-    logIndex: Number.isSafeInteger(result?.logIndex) ? result.logIndex : null,
-    entryId: normalizeParticipantFailureString(result.entryId),
-    error: result.error || ERRORS.QUERY_FAILED,
-    durationMs: Number.isFinite(result?.durationMs) ?
-      Math.max(0, Math.floor(result.durationMs)) :
-      null,
-    retryAfterMs: normalizeParticipantRetryAfterMs(result?.retryAfterMs),
-    deferRetry: result?.deferRetry === true,
-    backpressured: resolveParticipantBackpressureState(result),
-    failedTable: normalizeParticipantFailureString(result.failedTable),
-  };
-}
-function buildDistributedFailureSummary(failedResults) {
-  const participantFailures = failedResults.map((result) =>
-    buildParticipantFailureEntry(result),
-  );
-  return {
-    failedPartitions: failedResults.map((result) => result.partitionId),
-    partitionErrors: participantFailures,
-    participantFailures,
-    firstFailedParticipant:
-      participantFailures.length > 0 ?
-        participantFailures[0] :
-        null,
-  };
-}
-
 /**
  * QueryExecutor handles parallel query execution across partitions
  * and aggregates results while preserving SQL semantics.
@@ -295,7 +240,6 @@ export const QUERY_EXECUTOR_SHARED = {
   METRICS_LOG_TAG,
   MIGRATION_PARTITION_OPERATION,
   NUM,
-  PARTITION_SERVICE_ERROR_MSG,
   PG_EXPR_TYPE,
   ParallelQueryCoordinator,
   QUERY_AST_NODE,

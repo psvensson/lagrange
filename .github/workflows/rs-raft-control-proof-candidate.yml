@@ -1,0 +1,81 @@
+# WIP exact controlled candidate, static/lint and original real route proof.
+# Not independent review; source-only negative stays separately preserved.
+name: rs-raft-control-proof-candidate
+on:
+  push:
+    branches: [continue/rs-raft-seed-control-proof-amortization-20261014]
+    paths:
+      - .github/workflows/rs-raft-control-proof-candidate.yml
+      - src/node/replica-handler-participant-cutover.js
+      - test/partition/participant-release-protocol.test.js
+      - test/shards/impact-graph-seal.json
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-control-proof-candidate
+  cancel-in-progress: false
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install immutable dependencies
+        run: npm ci
+      - name: Retain source-bound lint and complete protocol/observer outcomes
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-control-proof-candidate
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/tree.txt"
+          npx eslint src/node/replica-handler-participant-cutover.js \
+            test/partition/participant-release-protocol.test.js > "$OUT/scoped-lint.log" 2>&1
+          lint=$?
+          printf '%s\n' "$lint" > "$OUT/lint.status"
+          if test "$lint" -ne 0; then cat "$OUT/scoped-lint.log"; fi
+          fail=0
+          if test "$lint" -ne 0; then fail=1; fi
+          for file in \
+            test/partition/participant-release-protocol.test.js \
+            test/partition/participant-release-applied-position.test.js \
+            test/node/replica-handler-release-recovery.test.js \
+            test/partition/participant-release-native-application-order.test.js; do
+            name="${file##*/}"
+            npm run -s test:file -- "$file" > "$OUT/$name.log" 2>&1
+            result=$?
+            printf '%s\n' "$result" > "$OUT/$name.status"
+            echo "$file status=$result"
+            tail -n 38 "$OUT/$name.log" | cut -c 1-290
+            if test "$result" -ne 0; then fail=1; fi
+            if test -f ".tap/test-results/$file.tap"; then
+              cp ".tap/test-results/$file.tap" "$OUT/$name.full.tap"
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$fail"
+      - name: Preserve every exact candidate receipt, including red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-control-proof-candidate-${{ github.sha }}
+          path: test-output/rs-raft-control-proof-candidate/
+          retention-days: 14
+          if-no-files-found: warn

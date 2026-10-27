@@ -163,7 +163,6 @@ t.test('CL-036 activation wiring: stable leader ownership level-triggers reasser
   context.isLeader = true;
   context.isShutdown = false;
   context.isJoiningExistingGroup = true;
-  context.lastPreparedStateReconstructionTerm = 7;
   context.replicaId = `${PARTITION_ID}-r4`;
   context.replicaIds = [context.replicaId, `${PARTITION_ID}-r2`];
   context.partitionId = PARTITION_ID;

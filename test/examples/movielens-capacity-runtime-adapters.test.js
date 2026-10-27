@@ -70,22 +70,34 @@ function coordinate(sideId) {
   };
 }
 
-function lagrangeSession(semanticOracleDigest) {
-  const executableDigest = digestBenchmarkSemanticData({wasm: 'fixture'});
-  return {
+function lagrangeSession(semanticOracleDigest, options = {}) {
+  const executableDigest =
+    options.executableDigest ||
+    digestBenchmarkSemanticData({wasm: 'fixture'});
+  const sessionGeneration = options.sessionGeneration ?? 0;
+  const bindingVersionId =
+    options.bindingVersionId || 'binding-version-v1';
+  const serviceId = options.serviceId || 'service-v1';
+  const storagePath =
+    options.storagePath || `/tmp/movielens-session-${sessionGeneration}`;
+  const executedOperationIds = [];
+  const session = {
     alternative: ALTERNATIVE,
     artifact: {executableDigest},
     dataset: DATASET,
+    executedOperationIds,
     prepared: {
       deployment: {
         binding: {name: 'movielens-public-grouped-reduce'},
         manifest: {runtime: {kind: 'wasm_component'}},
         readyCell: {
-          bindingVersionId: 'binding-version-v1',
-          serviceId: 'service-v1',
+          bindingVersionId,
+          replicaId: `replica-${sessionGeneration}`,
+          serviceId,
         },
       },
       async executeCapacityOperation({idempotencyKey, operationId}) {
+        executedOperationIds.push(operationId);
         const tenantId = 'public';
         const body = {
           datasetDigest: DATASET.digest,
@@ -110,7 +122,7 @@ function lagrangeSession(semanticOracleDigest) {
         const requestDigest =
           digestBenchmarkSemanticData(normalizedRequest);
         const intentDigest = digestBenchmarkSemanticData({
-          bindingVersionId: 'binding-version-v1',
+          bindingVersionId,
           method: normalizedRequest.method,
           path: normalizedRequest.path,
           requestDigest,
@@ -121,7 +133,7 @@ function lagrangeSession(semanticOracleDigest) {
             tenantId,
             invocationIdentity,
           ])}`;
-        const journalCommand = `invoke:service-v1:${intentDigest}`;
+        const journalCommand = `invoke:${serviceId}:${intentDigest}`;
         const ranking = expectedRanking();
         return {
           oracle: {
@@ -133,7 +145,7 @@ function lagrangeSession(semanticOracleDigest) {
           response: {
             status: 200,
             requestWitness: {
-              bindingVersionId: 'binding-version-v1',
+              bindingVersionId,
               body: JSON.stringify(body),
               idempotencyKey,
               intentDigest,
@@ -144,7 +156,7 @@ function lagrangeSession(semanticOracleDigest) {
               normalizedRequest,
               path: normalizedRequest.path,
               requestDigest,
-              routeServiceId: 'service-v1',
+              routeServiceId: serviceId,
               tenantId,
             },
           },
@@ -180,16 +192,56 @@ function lagrangeSession(semanticOracleDigest) {
           operationId,
         };
       },
-      async resetRunState() {
-        return {
-          durableResultRows: 0,
-          invocationJournalRows: 0,
-          state: 'public_request_results_and_journal_cleared',
-        };
-      },
+    },
+    runtimeObservation: {
+      processId: 1000 + sessionGeneration,
+      storagePath,
     },
     semanticOracleDigest,
+    async resetRunState() {
+      if (typeof options.customReset === 'function') {
+        return options.customReset(session);
+      }
+      const nextGeneration = sessionGeneration + 1;
+      const nextSession = lagrangeSession(semanticOracleDigest, {
+        ...options.nextSessionOptions,
+        sessionGeneration: nextGeneration,
+      });
+      if (typeof options.onNextSession === 'function') {
+        options.onNextSession(nextSession);
+      }
+      return {
+        ownerReceipt: {
+          durableResultRows: 0,
+          freshSession: {
+            bindingName:
+              nextSession.prepared.deployment.binding.name,
+            bindingVersionId:
+              nextSession.prepared.deployment.readyCell.bindingVersionId,
+            executableDigest: nextSession.artifact.executableDigest,
+            replicaId:
+              nextSession.prepared.deployment.readyCell.replicaId,
+            routeServiceId:
+              nextSession.prepared.deployment.readyCell.serviceId,
+            runtimeKind:
+              nextSession.prepared.deployment.manifest.runtime.kind,
+            storagePath: nextSession.runtimeObservation.storagePath,
+          },
+          invocationJournalRows: 0,
+          previousSessionTeardown: {
+            cellAbsent: true,
+            nodeStopped: true,
+            replicaId: `replica-${sessionGeneration}`,
+            storagePath,
+            temporaryDirectoryAbsent: true,
+          },
+          state: 'public_request_isolated_session_reset',
+        },
+        session: nextSession,
+      };
+    },
   };
+  return session;
 }
 
 function postgresqlSession() {
@@ -301,18 +353,72 @@ test('adapter reset receipts are owner-derived and side-specific', async () => {
     movielensCapacitySemanticOracleDigest(ALTERNATIVE);
   const operationManifest =
     movielensCapacityOperationManifest(DATASET, POSTGRESQL_QUERY_SQL);
+  let replacementSession = null;
+  const initialSession = lagrangeSession(semanticOracleDigest, {
+    onNextSession(nextSession) {
+      replacementSession = nextSession;
+    },
+  });
   const adapter = createMovielensLagrangeCapacityAdapter({
-    session: lagrangeSession(semanticOracleDigest),
+    session: initialSession,
     sideId: 'lagrange',
     operationManifest,
     semanticOracleDigest,
   });
+  await executeOne(adapter);
+  assert.equal(initialSession.executedOperationIds.length, 1);
   const receipt = await adapter.resetRunState(coordinate('lagrange'));
   assert.equal(receipt.sideId, 'lagrange');
   assert.match(receipt.resetDigest, /^sha256:[0-9a-f]{64}$/u);
   assert.equal(
     receipt.ownerReceipt.state,
-    'public_request_results_and_journal_cleared',
+    'public_request_isolated_session_reset',
+  );
+  assert.equal(receipt.ownerReceipt.durableResultRows, 0);
+  assert.equal(receipt.ownerReceipt.invocationJournalRows, 0);
+  assert.equal(
+    receipt.ownerReceipt.previousSessionTeardown.temporaryDirectoryAbsent,
+    true,
+  );
+  assert.notEqual(
+    receipt.ownerReceipt.freshSession.storagePath,
+    receipt.ownerReceipt.previousSessionTeardown.storagePath,
+  );
+  await executeOne(adapter);
+  assert.equal(initialSession.executedOperationIds.length, 1);
+  assert.equal(replacementSession.executedOperationIds.length, 1);
+
+  const inPlaceAdapter = createMovielensLagrangeCapacityAdapter({
+    session: lagrangeSession(semanticOracleDigest, {
+      customReset(currentSession) {
+        return {
+          ownerReceipt: receipt.ownerReceipt,
+          session: currentSession,
+        };
+      },
+    }),
+    sideId: 'lagrange',
+    operationManifest,
+    semanticOracleDigest,
+  });
+  await assert.rejects(
+    inPlaceAdapter.resetRunState(coordinate('lagrange')),
+    /isolated Lagrange session reset receipt is invalid/u,
+  );
+
+  const driftedAdapter = createMovielensLagrangeCapacityAdapter({
+    session: lagrangeSession(semanticOracleDigest, {
+      nextSessionOptions: {
+        bindingVersionId: 'binding-version-drifted',
+      },
+    }),
+    sideId: 'lagrange',
+    operationManifest,
+    semanticOracleDigest,
+  });
+  await assert.rejects(
+    driftedAdapter.resetRunState(coordinate('lagrange')),
+    /isolated Lagrange reset session runtime identity drifted/u,
   );
 });
 

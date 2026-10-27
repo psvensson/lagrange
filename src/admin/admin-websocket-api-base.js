@@ -5,6 +5,10 @@ import {
 import {
   ADMIN_WEBSOCKET_LIFECYCLE_STATE,
 } from './admin-websocket-lifecycle-state.js';
+import {
+  AdminOwnerOperations,
+  registerAdminOwnerOperationRoutes,
+} from './admin-owner-operations.js';
 
 const LOCAL_STR_SYSTEM_TABLE_CACHE_NOT_INITIALIZED = 'System table cache not initialized';
 
@@ -54,8 +58,6 @@ const {
 } = ADMIN_WEBSOCKET_API_SHARED;
 
 const ADMIN_FIELD = Object.freeze({
-  CONFIG_DUMP_TIMEOUT: 'CACHE_DUMP_TIMEOUT_MS',
-  DUMP_TIMEOUT_MS: 'cacheDumpTimeoutMs',
   LOCAL_DUMP_HANDLER: 'executeLocalCacheDumpEnvelope',
   LIVE_MAP: 'liveQueryMap',
   MUTATION_TARGET: 'cacheMutationTarget',
@@ -115,13 +117,6 @@ const ADMIN_SERVICE_ENVELOPE_HANDLER = Object.freeze({
   [ADMIN_SERVICE_OPERATION.EXECUTE_QUERY]: async (api, payload, context) => ({
     queryResult: await api.executeLocalQueryEnvelope(payload, context),
   }),
-  [ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK]:
-    async (api, payload, context) => ({
-      queryResult: await api.executeLocalPartitionCallbackEnvelope(
-        payload,
-        context,
-      ),
-    }),
   [ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP]: (api) => ({
     cacheDump: api[ADMIN_FIELD.LOCAL_DUMP_HANDLER](),
   }),
@@ -146,9 +141,12 @@ class AdminWebSocketAPIBase {
     this.testRunService = options.testRunService || new AdminTestRunService();
     this.debugMetadataStore =
       options.debugMetadataStore ||
-      (this.sqlQueryEngine ?
-        new DebugMetadataStore({sqlQueryEngine: this.sqlQueryEngine}) :
-        null);
+      new DebugMetadataStore({
+        getControlPlaneSystemTableGateway: () =>
+          this.resolveControlPlaneSystemTableGateway(),
+      });
+    this.ownerOperations = new AdminOwnerOperations(
+      options.adminOwnerProviders, this.nodeId);
     this.debugDapRouter = options.debugDapRouter || null;
     this.traceCollector = options.traceCollector || new TraceCollector();
     this.serviceDispatcher =
@@ -195,9 +193,6 @@ class AdminWebSocketAPIBase {
     this.queryTimeoutMs =
       config.get(ADMIN_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       ADMIN_DEFAULT.QUERY_TIMEOUT_MS;
-    this[ADMIN_FIELD.DUMP_TIMEOUT_MS] =
-      config.get(ADMIN_CONFIG_KEY[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT]) ||
-      ADMIN_DEFAULT[ADMIN_FIELD.CONFIG_DUMP_TIMEOUT];
     this.logger = this.initLogger();
     this.fastify = null;
     this.initialized = false;
@@ -231,6 +226,7 @@ class AdminWebSocketAPIBase {
     this.preflightSnapshot = new AdminPreflightSnapshot({
       [ADMIN_FIELD.STORAGE_VIEW]: this[ADMIN_FIELD.STORAGE_VIEW],
       nodeId: this.nodeId,
+      logger: this.logger,
       messageRouter: this.messageRouter,
       [ADMIN_FIELD.MUTATION_TARGET]: this[ADMIN_FIELD.MUTATION_TARGET],
       sqlQueryEngine: this.sqlQueryEngine,
@@ -280,6 +276,19 @@ class AdminWebSocketAPIBase {
     });
 
     this[ADMIN_FIELD.SUBSCRIBE_CHANGES]();
+  }
+  /**
+   * The control-plane system-table gateway, resolved at call time: the
+   * registered gateway may appear after the admin API starts.
+   * @return {Object|null}
+   */
+  resolveControlPlaneSystemTableGateway() {
+    this.controlPlaneSystemTableGateway =
+      this.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      this.sqlQueryEngine?.controlPlaneSystemTableGateway ||
+      null;
+    return this.controlPlaneSystemTableGateway;
   }
   subscribeToCacheNotifications() {
     if (
@@ -487,6 +496,7 @@ class AdminWebSocketAPIBase {
     this.fastify.post(ADMIN_ROUTE.DEBUG_DAP_REQUEST, async (request, reply) => {
       return this.debugHandlers.handleDebugDapRequest(request, reply);
     });
+    registerAdminOwnerOperationRoutes(this.fastify, this.ownerOperations);
 
     this.fastify.get(ADMIN_ROUTE.PLAYBACK_VIEWER, async (_request, reply) => {
       return this.debugHandlers.handlePlaybackViewerPage(reply);
@@ -646,10 +656,7 @@ class AdminWebSocketAPIBase {
             targetAddress: ADMIN_LOCAL_DISPATCH.TARGET_ADDRESS,
             targetNodeId: this.nodeId,
           },
-          delivery: {
-            acknowledged: true,
-            payload,
-          },
+          answer: {payload},
         };
       },
     };

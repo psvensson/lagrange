@@ -26,16 +26,15 @@ import {
 } from '../constants/transport.js';
 import {HOST, METRICS_LOG_TAG} from '../constants/index.js';
 import {
-  isRaftPacket,
   isRaftTransportPayload,
 } from '../raft/raft-packet-utils.js';
 import {
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_DELIVERY_OUTCOME_METADATA_FIELDS,
   buildTransportDeliveryOutcome,
-  buildQueryTransportSemanticOutcome,
 } from './transport-semantic-outcome.js';
-import {CONNECTION_CLOSE_DISPOSITION, ConnectionState, EMPTY_ROUTER_REASON, INLINE_ACK_PASSTHROUGH_KEYS, INLINE_ACK_RESULT_FIELD, INPROC, IPV6_ANY_HOST, IPV6_HOST_PREFIX, IPV6_HOST_SUFFIX, InProcWebSocket, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, QUERY_TRANSPORT_DELIVERY_STATE, QUERY_TRANSPORT_SELECTION, QUEUE_WAIT_BUCKETS, QUEUE_WAIT_BUCKET_OVERFLOW, RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS, RECONNECT_DISPOSITION, RETIRED_PENDING_RESPONSE_REASON, ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE, ROUTER_NO_CONNECTION_ERROR_CODE, RouterMessageType, SERVICE_RESPONSE_DISPOSITION_KIND, TRANSPORT_PRESSURE_SUMMARY_FIELD, UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS, WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY, WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, buildQueueWaitSummary, createInProcWebSocketPair, createQueueWaitHistogram, extractSqlOperationKind, extractSqlTableName, isSupersedableHeartbeatNodeStateUpdate, isSupersedableRaftAppendFail, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, queueMicrotaskFn, recordQueueWaitDuration, resolveNodeStateUpdateReplacementNodeId, resolveOperationIdFromMessage, resolvePendingReplacementKey, resolveQueueWaitBucket, resolveRequestIdFromMessage, summarizeRaftAppendCommand} from './message-router-shared-vocabulary.js';
+import {buildQueryTransportSemanticOutcome} from './transport-query-semantic-outcome.js';
+import {ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE} from './transport-error-codes.js';
+import {CONNECTION_CLOSE_DISPOSITION, ConnectionState, EMPTY_ROUTER_REASON, INPROC, IPV6_ANY_HOST, IPV6_HOST_PREFIX, IPV6_HOST_SUFFIX, InProcWebSocket, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE, OUTBOUND_QUEUE_BACKPRESSURE_SCOPE, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_DIVISOR, OUTBOUND_QUEUE_PENDING_SOURCE_LIMIT_MINIMUM, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, QUERY_TRANSPORT_SELECTION, QUEUE_WAIT_BUCKETS, QUEUE_WAIT_BUCKET_OVERFLOW, RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS, RECONNECT_DISPOSITION, RETIRED_PENDING_RESPONSE_REASON, ROUTER_CONNECTION_CLOSED_ERROR_CODE, ROUTER_MESSAGE_TIMEOUT_ERROR_CODE, ROUTER_NO_CONNECTION_ERROR_CODE, RouterMessageType, SERVICE_RESPONSE_DISPOSITION_KIND, TRANSPORT_PRESSURE_SUMMARY_FIELD, UNMATCHED_SERVICE_RESPONSE_WARN_INTERVAL_MS, WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY, WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE, buildQueueWaitSummary, createInProcWebSocketPair, createQueueWaitHistogram, extractSqlOperationKind, extractSqlTableName, isSupersedableHeartbeatNodeStateUpdate, normalizeIdentifier, queueMicrotaskFn, recordQueueWaitDuration, resolveNodeStateUpdateReplacementNodeId, resolveOperationIdFromMessage, resolvePendingReplacementKey, resolveQueueWaitBucket, resolveRequestIdFromMessage} from './message-router-shared-vocabulary.js';
 import {adjustInFlightPriorityCount, buildDerivedDeliverySource, buildPendingSourceSummary, buildRetiredPendingClassification, buildServiceResponseDisposition, buildSupersededPendingResult, canDispatchPendingItem, countInFlightByPriority, countInFlightReadinessReserve, countPendingByPriority, countPendingBySource, dequeueNextPendingItem, normalizeDeliveryOutcome, normalizeOutboundDeliveryPriority, normalizeRetryAfterMs, peekNextPendingItem, resolveBackgroundInFlightLimit, resolveBackgroundPendingLimit, resolveBoundedCriticalReserve, resolveDeliverySource, resolveNextPendingItemIndex, resolvePendingSourceLimit, resolveReadinessReserveInFlightLimit} from './message-router-outbound-queue-admission.js';
 import {INCOMING_CONNECTION_ADOPTION, OutboundDeliveryRegistryOwner} from './message-router-outbound-delivery-registry.js';
 
@@ -96,9 +95,63 @@ function readOwnBootIncarnation(source) {
     TRANSPORT_NUM.ZERO;
 }
 
+function deliveryRouterMatches(router, identity) {
+  return router.initialized === true && router.isShuttingDown !== true &&
+    router.nodeId === identity.nodeId && router.bootIncarnation === identity.bootIncarnation;
+}
+
+function deliveryConnectionMatches(router, connection, ws, identity) {
+  return mapPrototypeGet(router.nodeConnections, identity.senderNodeId) === connection &&
+    connection.retired !== true && connection.state === ConnectionState.CONNECTED &&
+    connection.ws === ws && ws.readyState === WebSocket.OPEN &&
+    connection.connectionId === identity.connectionId &&
+    connection.bootIncarnation === identity.senderBootIncarnation;
+}
+
 class RouterConnectionAuthorityOwner {
+  // Rotated at shutdown, never a per-request ledger. Old local deliveries
+  // cannot resurrect if the same router object is initialized again.
+  #deliveryLifetime = new AbortController();
+
   constructor(router) {
     this.router = router;
+  }
+  invalidateDeliveries() {
+    const retired = this.#deliveryLifetime;
+    this.#deliveryLifetime = new AbortController();
+    retired.abort();
+  }
+  // A deadline can be acquired before initialize(). It consumes this owner's
+  // shutdown lifetime without borrowing connection or membership authority.
+  captureDeliveryLifetime() {
+    const lifetime = this.#deliveryLifetime;
+    return objectFreeze({signal: lifetime.signal,
+      isCurrent: () => lifetime === this.#deliveryLifetime});
+  }
+  captureLocalDelivery() {
+    const {nodeId, bootIncarnation} = this.router;
+    if (!deliveryRouterMatches(this.router, {nodeId, bootIncarnation})) return null;
+    const identity = objectFreeze({nodeId, bootIncarnation,
+      senderNodeId: nodeId, senderBootIncarnation: bootIncarnation,
+      connectionId: this.router.getLocalBootIncarnationIdentity().connectionId});
+    const lifetime = this.#deliveryLifetime;
+    return objectFreeze({...identity, isCurrent: () =>
+      lifetime === this.#deliveryLifetime && deliveryRouterMatches(this.router, identity)});
+  }
+  // nodeId is from the socket listener's adopted connection, NOT a wire field.
+  // A watermark or a different socket for the same node is never a grant.
+  captureIncomingDelivery(nodeId, ws) {
+    const connection = mapPrototypeGet(this.router.nodeConnections, nodeId);
+    const primary = this.getCurrentPrimaryBootIncarnation(nodeId);
+    if (!primary || connection.nodeId !== nodeId || connection.ws !== ws ||
+        connection.retired === true || ws.readyState !== WebSocket.OPEN) return null;
+    const local = this.captureLocalDelivery();
+    if (!local) return null;
+    const identity = objectFreeze({nodeId: local.nodeId,
+      bootIncarnation: local.bootIncarnation, senderNodeId: primary.nodeId,
+      senderBootIncarnation: primary.bootIncarnation, connectionId: primary.connectionId});
+    return objectFreeze({...identity, isCurrent: () => local.isCurrent() &&
+      deliveryConnectionMatches(this.router, connection, ws, identity)});
   }
   readIncomingBootIncarnation(message) {
     return readOwnBootIncarnation(message);
@@ -517,8 +570,6 @@ const MESSAGE_ROUTER_SHARED = {
   EventEmitter,
   HOST,
   INCOMING_CONNECTION_ADOPTION,
-  INLINE_ACK_PASSTHROUGH_KEYS,
-  INLINE_ACK_RESULT_FIELD,
   INPROC,
   IPV6_ANY_HOST,
   IPV6_HOST_PREFIX,
@@ -535,7 +586,6 @@ const MESSAGE_ROUTER_SHARED = {
   OutboundDeliveryPriority,
   OutboundDeliveryRegistryOwner,
   QUERY_DATA_PLANE_MESSAGE_TYPE,
-  QUERY_TRANSPORT_DELIVERY_STATE,
   QUERY_TRANSPORT_SELECTION,
   QUEUE_WAIT_BUCKETS,
   QUEUE_WAIT_BUCKET_OVERFLOW,
@@ -591,11 +641,8 @@ const MESSAGE_ROUTER_SHARED = {
   dequeueNextPendingItem,
   extractSqlOperationKind,
   extractSqlTableName,
-  isRaftPacket,
   isRaftTransportPayload,
   isSupersedableHeartbeatNodeStateUpdate,
-  isSupersedableRaftAppendFail,
-  isSupersedableRaftHeartbeatAppend,
   normalizeDeliveryOutcome,
   normalizeIdentifier,
   normalizeOutboundDeliveryPriority,
@@ -616,7 +663,6 @@ const MESSAGE_ROUTER_SHARED = {
   resolveQueueWaitBucket,
   resolveReadinessReserveInFlightLimit,
   resolveRequestIdFromMessage,
-  summarizeRaftAppendCommand,
   uuidv4,
 };
 

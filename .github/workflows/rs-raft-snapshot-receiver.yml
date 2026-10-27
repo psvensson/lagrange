@@ -1,0 +1,176 @@
+name: rs-raft-snapshot-receiver
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-snapshot-receiver.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-snapshot-receiver-20261012
+  cancel-in-progress: false
+jobs:
+  exact-receiver-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      BASE: 4981aad1ed8eef5784f531a5cccc0b76b477ae01
+      LOCAL_CANDIDATE: 7d91de9ff1cf8d4a8c24558603b97d75e75db0e3
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+      LAGRANGE_SKIP_PRECOMMIT: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Recover exact local commits with verified Git bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          E="$RUNNER_TEMP/snapshot-receiver-proof"
+          mkdir -p "$E"
+          echo "E=$E" >> "$GITHUB_ENV"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code "$BASE" HEAD -- src test solve
+          python3 - <<'PY'
+          import base64,hashlib,json,os,urllib.request
+          from pathlib import Path
+          out=Path(os.environ['RUNNER_TEMP'])/'snapshot-receiver-proof'
+          parts=['32c3c3fdcbd43a96364e7f5fe060d47f0a8ee3c2','5b654b452cfaaa94b1e5d42b89ca35a122373347','edb4d313b96d5ebdd17312141d5818c62aa42d5f','9fd197bcfef7be83e05d963ee7025ca0363b1926','9231e9a2cee1cb3a028892da505a0ac364d4eaa1']
+          result=[]
+          for sha in parts:
+              req=urllib.request.Request('https://api.github.com/repos/psvensson/lagrange/git/blobs/'+sha,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','User-Agent':'lagrange-snapshot-proof'})
+              with urllib.request.urlopen(req,timeout=30) as response: value=json.load(response)
+              data=base64.b64decode(value['content'])
+              assert hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()==sha
+              result.append(data)
+          bundle=b''.join(result)
+          assert hashlib.sha256(bundle).hexdigest()=='c2c6aa8a48d8572b176344d3ef3c114f5a3840e959e84deb3014b31b4cc3a650'
+          (out/'candidate.bundle').write_bytes(bundle)
+          PY
+          git bundle verify "$E/candidate.bundle" > "$E/bundle-verify.log" 2>&1
+          git fetch "$E/candidate.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$LOCAL_CANDIDATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-ff "$LOCAL_CANDIDATE" -m 'WIP snapshot receiver: preserve exact local source on existing review branch'
+          test "$(git rev-parse HEAD:src)" = 34af50ee2245c8bd99b0f87e484beb6871d11c3c
+          test "$(git rev-parse HEAD:test)" = 8672c9e4fb158200c69e6b2beec6bc47bab40f32
+          test "$(git rev-parse HEAD:solve)" = 7a4be183b354b85dbf4c186824ec8d2f0bf99b36
+          git rev-parse HEAD > "$E/candidate-sha.txt"
+          test -z "$(git status --porcelain)"
+          npm ci > "$E/install.log" 2>&1
+          node --version > "$E/node-version.txt"
+      - name: Measure exact baseline candidate revert and wider owner interactions
+        id: measure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,re,shutil,subprocess
+          from pathlib import Path
+          E=Path(os.environ['E']); BASE=os.environ['BASE']
+          source=['src/raft/raft-rs-replica-lifecycle-owner.js','src/raft/snapshot-install-constants.js','src/raft/snapshot-install.js','src/raft/snapshot-receiver-admission.js']
+          native='test/integration/message-group-learner-runtime-authorization.integration.test.js'
+          staging='test/raft/snapshot-lifecycle-staging.test.js'
+          wide=['test/raft/snapshot-install-transition.test.js','test/raft/snapshot-install-restart-states.test.js','test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js','test/message-group/message-group-fresh-learner-snapshot.test.js','test/raft/raft-rs-backend/runtime-opening-history.integration.test.js','test/raft/raft-rs-backend/runtime-opening-refusal.integration.test.js','test/raft/raft-rs-backend/startup-cleanup.integration.test.js','test/node/replica-runtime-cleanup-custody.integration.test.js','test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js','test/raft/raft-rs-backend/durable-commit-sync.test.js']
+          def command(label,args,limit=300):
+              with (E/(label+'.log')).open('wb') as out:
+                  try: code=subprocess.run(args,stdout=out,stderr=subprocess.STDOUT,timeout=limit).returncode
+                  except subprocess.TimeoutExpired:
+                      code=124; out.write(b'\nOUTER LIMIT: INCOMPLETE, NOT BEHAVIORAL PROOF\n')
+              (E/(label+'-exit.txt')).write_text(str(code)+'\n'); return code
+          def tests(label,files):
+              code=command(label,['npm','run','-s','test:file','--',*files],480)
+              target=E/(label+'-tap')
+              if Path('.tap/test-results').exists(): shutil.move('.tap/test-results',target)
+              rows=[]
+              for f in files:
+                  p=target/(f+'.tap'); text=p.read_text() if p.exists() else ''
+                  counts={}
+                  for name in ['tests','pass','fail','cancelled','skipped','todo']:
+                      m=re.search(r'^# '+name+r' (\d+)\s*$',text,re.M); counts[name]=int(m.group(1)) if m else None
+                  durations=[float(x) for x in re.findall(r'^\s*duration_ms: ([\d.]+)',text,re.M)]
+                  rows.append({'file':f,'present':bool(text),'counts':counts,'failed':re.findall(r'^not ok \d+ - (.*)$',text,re.M),'assertionFailures':text.count("code: 'ERR_ASSERTION'"),'testSha256':hashlib.sha256(Path(f).read_bytes()).hexdigest(),'maxNodeDurationMs':max(durations) if durations else None,'durationToleranceMs':300000 if '.integration.test.js' in f else 20000})
+              result={'exit':code,'files':rows}; (E/(label+'.json')).write_text(json.dumps(result,indent=2)+'\n'); return result
+          candidate={f:Path(f).read_bytes() for f in source}
+          old={}
+          for f in source:
+              p=subprocess.run(['git','show',BASE+':'+f],stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+              old[f]=p.stdout if p.returncode==0 else None
+          def restore(values):
+              for f,data in values.items():
+                  if data is None: Path(f).unlink(missing_ok=True)
+                  else: Path(f).write_bytes(data)
+          try:
+              restore(old); baseline=tests('baseline',[native])
+              restore(candidate); positive=tests('candidate',[native,staging])
+              restore(old); revert=tests('source-revert',[native])
+          finally: restore(candidate)
+          assert subprocess.run(['git','diff','--exit-code','--','src']).returncode==0
+          broader=tests('wider',wide)
+          checker='scripts/checks/raft-rs-operation-boundary-audit.js'
+          gates={}
+          gates['lint']=command('lint',['node_modules/.bin/eslint',*source,checker,native,staging])==0
+          gates['impact']=command('impact',['npm','run','-s','audit:impact-contracts'])==0
+          gates['boundary']=command('boundary',['node','--input-type=module','-e',"import {auditRaftRsOperationBoundary} from './scripts/checks/raft-rs-operation-boundary-audit.js'; const v=auditRaftRsOperationBoundary({root:process.cwd()}); console.log(JSON.stringify(v)); process.exitCode=v.length?1:0;"])==0
+          gates['whitespace']=command('whitespace',['git','diff','--check',BASE,'HEAD'])==0
+          gates['changed-literals']=command('changed-literals',['node','--input-type=module','-e',"import {collectMagicLiteralViolations} from './scripts/check-guideline-literals.js'; const v=collectMagicLiteralViolations(JSON.parse(process.argv[1]),{}); console.log(JSON.stringify(v)); process.exitCode=v.length?1:0;",json.dumps(source)])==0
+          guideline=command('guidelines',['npm','run','-s','audit:guidelines'])
+          a=baseline['files'][0]; b=positive['files'][0]; r=revert['files'][0]
+          expected={'tests':72,'pass':56,'fail':16,'cancelled':0,'skipped':0,'todo':0}
+          checks={'baseline':baseline['exit']==1 and a['counts']==expected,'candidate':positive['exit']==0 and b['counts']['tests']==72 and b['counts']['pass']==72 and positive['files'][1]['counts']['tests']==21 and positive['files'][1]['counts']['pass']==21,'source-only-revert':revert['exit']==1 and r['counts']==expected,'negative-assertions':a['assertionFailures']==r['assertionFailures']==16 and a['failed']==r['failed'],'identical-native-tests':a['testSha256']==b['testSha256']==r['testSha256']=='b212ad9139fa03cd3ad698d2a1e853eb9e5e2cfb46a2548c16c18cb530e54444','wider-files':broader['exit']==0 and len(broader['files'])==10 and all(f['present'] for f in broader['files']),**gates}
+          checks['node-duration-tolerance']=all(f['maxNodeDurationMs'] is None or f['maxNodeDurationMs']<=f['durationToleranceMs'] for run in [positive,broader] for f in run['files'])
+          summary={'input':os.environ['GITHUB_SHA'],'baseline':BASE,'localCandidate':os.environ['LOCAL_CANDIDATE'],'hostedCandidate':(E/'candidate-sha.txt').read_text().strip(),'checks':checks,'nativeBaseline':a['counts'],'nativeCandidate':b['counts'],'nativeRevert':r['counts'],'stagingCandidate':positive['files'][1]['counts'],'widerRequestedFiles':10,'widerExit':broader['exit'],'guidelineExit':guideline,'focusedProofPassed':all(checks.values()),'allRunGatesPassed':all(checks.values()) and guideline==0,'independentApproval':False,'mergeReady':False,'scope':'Native FRESH_CREATE receiver/staging/restart admission, real three-replica learner fixture, SQLite and current CREATE commit serialization. Not live catchup/reseed, arbitrary external writers, full SQL/CDC startup, full corpus or physical multi-host certification. Known partition-unreadable and replica-handler failures are not repaired or included in this ten-file wider subset.'}
+          (E/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          (E/'source-hashes.json').write_text(json.dumps({f:hashlib.sha256(Path(f).read_bytes()).hexdigest() for f in source},indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Preserve exact candidate and raw measurements on existing branch only
+        if: steps.measure.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- src test
+          DEST="solve/quests/snapshot-receiver-admission/evidence/native-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp "$E/summary.json" "$DEST/summary.json"
+          tar -czf "$DEST/raw-evidence.tar.gz" -C "$E" .
+          sha256sum "$DEST/raw-evidence.tar.gz" > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          git commit -m 'WIP snapshot receiver: retain exact refusal/recovery proof and unresolved global gates'
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$E/published-sha.txt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-snapshot-receiver-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/snapshot-receiver-proof/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unresolved gates RED and independent approval explicit
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['RUNNER_TEMP'])/'snapshot-receiver-proof/summary.json'
+          assert p.exists(), 'Incomplete run, no approval'
+          s=json.loads(p.read_text())
+          assert s['allRunGatesPassed'], 'WIP only: global gates remain red; no independent approval or main merge'
+          PY

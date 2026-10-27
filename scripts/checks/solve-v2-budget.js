@@ -22,7 +22,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {ALLOWLIST as BINARY_GUARD_ALLOWLIST} from './check-solve-binary-guard.js';
 import {verifyMigrationCorpus} from '../solve/migrate-v1.js';
@@ -32,6 +31,7 @@ import {
   alwaysLoadClosure, declaredRules, steeringCorpusLines,
 } from './check-steering-diet.js';
 import {ruleSetOffences, sealedRuleCount} from './check-rule-set.js';
+import {execGit} from './git-invocation.js';
 
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
@@ -59,7 +59,6 @@ const NOT_PRESENT = -1;
 const EMPTY_TEXT = '';
 const UNKNOWN_METRIC_PREFIX = 'solve-v2-budget: no such metric: ';
 const METRIC_ID_SEPARATOR = ',';
-const GIT_BINARY = 'git';
 const GIT_LS_SOLVE = Object.freeze(['ls-files', '-z', 'solve']);
 const NUL = '\0';
 const LINE_SEPARATOR = '\n';
@@ -145,7 +144,7 @@ function linesOf(files) {
 }
 
 function trackedSolveFiles() {
-  const out = execFileSync(GIT_BINARY, [...GIT_LS_SOLVE], {
+  const out = execGit([...GIT_LS_SOLVE], {
     cwd: REPO_ROOT, encoding: TEXT_ENCODING,
   });
   return arrayFilter(stringSplit(out, NUL), Boolean);

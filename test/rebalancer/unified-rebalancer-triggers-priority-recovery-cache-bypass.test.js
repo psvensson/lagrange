@@ -79,7 +79,6 @@ const TEST_SCALAR = Object.freeze({
   TYPE_NUMBER: 'number',
 });
 const MOCK_DELIVERY_RESULT = Object.freeze({
-  acknowledged: true,
   status: TEST_SCALAR.DELIVERY_STATUS_COMPLETED,
 });
 

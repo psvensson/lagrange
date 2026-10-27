@@ -39,53 +39,6 @@ const NODE_SERVICE_LOG_MSG = Object.freeze({
   SHUTDOWN_COMPLETE: 'Node service shutdown complete',
 });
 
-const NODE_LIFECYCLE_SERVICE_SUBSYSTEM = 'node-lifecycle';
-
-const NODE_LIFECYCLE_SERVICE_EVENT = Object.freeze({
-  NODE_REGISTERED: 'nodeRegistered',
-  HEARTBEAT_UPDATED: 'heartbeatUpdated',
-  HEARTBEAT_ERROR: 'heartbeatError',
-  NODE_STATUS_CHANGED: 'nodeStatusChanged',
-  NODE_FAILED: 'nodeFailed',
-  NODE_SUSPECTED: 'nodeSuspected',
-  NODE_ACTIVE: 'nodeActive',
-  NODE_REMOVED: 'nodeRemoved',
-});
-
-const NODE_LIFECYCLE_SERVICE_LOG_MSG = Object.freeze({
-  INITIALIZED: 'Node lifecycle service initialized',
-  REGISTERING_NODE: 'Registering node via CDC',
-  REGISTER_NODE_FAILED: 'Failed to register node via CDC',
-  UPDATING_HEARTBEAT: 'Updating node heartbeat via CDC',
-  UPDATE_HEARTBEAT_FAILED: 'Failed to update heartbeat via CDC',
-  MARKING_NODE_FAILED: 'Marking node as failed via CDC',
-  MARK_NODE_FAILED_FAILED: 'Failed to mark node as failed via CDC',
-  MARKING_NODE_SUSPECTED: 'Marking node as suspected via CDC',
-  MARK_NODE_SUSPECTED_FAILED: 'Failed to mark node as suspected via CDC',
-  MARKING_NODE_ACTIVE: 'Marking node as active via CDC',
-  MARK_NODE_ACTIVE_FAILED: 'Failed to mark node as active via CDC',
-  REMOVING_NODE: 'Removing node via CDC',
-  REMOVE_NODE_FAILED: 'Failed to remove node via CDC',
-  STARTING_HEARTBEAT: 'Starting heartbeat timer',
-  HEARTBEAT_FAILED: 'Heartbeat update failed',
-  STOPPED_HEARTBEAT: 'Stopped heartbeat timer',
-  STARTING_FAILURE_DETECTION: 'Starting failure detection',
-  FAILURE_DETECTION_ERROR: 'Failure detection error',
-  STOPPED_FAILURE_DETECTION: 'Stopped failure detection',
-  HEARTBEAT_TIMEOUT_FAILED: 'Node heartbeat timeout, marking as failed',
-  HEARTBEAT_DELAYED_SUSPECTED: 'Node heartbeat delayed, marking as suspected',
-  SERVICE_NOT_INITIALIZED: 'NodeLifecycleService not initialized',
-  SHUTDOWN: 'Node lifecycle service shutdown',
-});
-
-const NODE_LIFECYCLE_SERVICE_ERROR_MSG = Object.freeze({
-  MISSING_CDC:
-    'NodeLifecycleService requires cdcIntegrationService or controlPlaneSystemTableGateway',
-  MISSING_NODE_ID: 'NodeLifecycleService requires nodeId',
-  NOT_INITIALIZED: 'NodeLifecycleService not initialized',
-  INVALID_NODES_CACHE: 'NodeLifecycleService requires a valid nodes cache array',
-});
-
 const NODE_STATUS = NODE_STATE;
 
 const NODE_SERVICE_ERROR_MSG = Object.freeze({
@@ -134,12 +87,6 @@ const NODE_CONFIG_KEY = Object.freeze({
   STATS_COLLECTION_INTERVAL_MS: CONFIG_KEY.NODE_STATS_COLLECTION_INTERVAL_MS,
   MAX_SERVICES_PER_NODE: CONFIG_KEY.NODE_MAX_SERVICES_PER_NODE,
   FAILURE_DETECTION_INTERVAL_MS: CONFIG_KEY.NODE_FAILURE_DETECTION_INTERVAL_MS,
-});
-
-const NODE_LIFECYCLE_DEFAULT = Object.freeze({
-  HEARTBEAT_INTERVAL_MS: TIME_MS.SECOND * NUM.FIVE,
-  HEARTBEAT_TIMEOUT_MS: TIME_MS.SECOND * (NUM.TEN + NUM.FIVE),
-  FAILURE_DETECTION_INTERVAL_MS: TIME_MS.SECOND * NUM.TEN,
 });
 
 const NODE_LIFECYCLE_REASON = Object.freeze({
@@ -317,13 +264,8 @@ export {
   NODE_SERVICE_EVENT,
   NODE_SERVICE_LOG_MSG,
   NODE_SERVICE_ERROR_MSG,
-  NODE_LIFECYCLE_SERVICE_SUBSYSTEM,
-  NODE_LIFECYCLE_SERVICE_EVENT,
-  NODE_LIFECYCLE_SERVICE_LOG_MSG,
-  NODE_LIFECYCLE_SERVICE_ERROR_MSG,
   NODE_STATUS,
   NODE_CONFIG_KEY,
-  NODE_LIFECYCLE_DEFAULT,
   NODE_LIFECYCLE_REASON,
   NODE_DEFAULT,
   NODE_SERVICE_DEFAULT,

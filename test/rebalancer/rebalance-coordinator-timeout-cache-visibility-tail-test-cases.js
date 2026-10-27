@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {registerRebalanceCoordinatorTimeoutCacheVisibilityTailMoreTests} from './rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js';
 
 const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = 15_000;
@@ -76,7 +77,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -175,7 +176,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -274,7 +275,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       tablePolicyService: {
@@ -375,7 +376,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -459,7 +460,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -491,10 +492,21 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         enableTimeouts: false,
       });
-
+      let reservationRecoveryCalls = 0;
+      const ensureReservationForOperation =
+        coordinator.ensureReservationForOperation.bind(coordinator);
+      coordinator.ensureReservationForOperation = async (...args) => {
+        reservationRecoveryCalls += 1;
+        return ensureReservationForOperation(...args);
+      };
       coordinator.initialize();
       try {
+        t.notOk(coordinator.hasStorageReservationSupport(),
+          'the reduced owner has no storage-reservation subsystem');
         const result = await coordinator.handleRecovery();
+        t.equal(reservationRecoveryCalls, 0,
+          'reservation recovery stays disengaged when its canonical ' +
+          'support owner is absent');
         t.equal(
           result.totalIncomplete,
           1,
@@ -563,7 +575,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -638,7 +650,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -709,7 +721,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -807,7 +819,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -889,7 +901,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -966,7 +978,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -1055,7 +1067,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -1149,7 +1161,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -1243,7 +1255,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         tablePolicyService: {
@@ -1319,7 +1331,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};
@@ -1409,7 +1421,7 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
           getOutboundPressureSummary() {
             return {backpressured: true};

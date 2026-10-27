@@ -5,6 +5,7 @@
  * by failing coverage first.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -93,16 +94,15 @@ function createJoinDataRouter(dataByPartition) {
   return {
     async deliver(address, message) {
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       const rows = dataByPartition.get(partitionId) || [];
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows,
         changes: rows.length,
-      };
+      });
     },
   };
 }
@@ -231,22 +231,17 @@ test('baseline gap: distributed read should fail-closed on required participant 
   const failingRouter = {
     async deliver(address, message) {
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       if (partitionId === 'p2') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'simulated failure',
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [{id: 1}],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: [{id: 1}]});
     },
   };
 
@@ -270,23 +265,21 @@ test('baseline gap: multi-partition UPDATE surfaces partial failure', async (t) 
   const failingRouter = {
     async deliver(address, message) {
       if (message.type !== 'QUERY') {
-        return {acknowledged: true, success: true};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true});
       }
       const partitionId = address.split('/')[2];
       if (partitionId === 'p2') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'write failed on p2',
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 2,
-      };
+      });
     },
   };
 

@@ -1,4 +1,7 @@
+import {deliveryTransportOf} from '../transport/transport-semantic-outcome.js';
 import {NUM} from '../constants/index.js';
+import {CDC_COMPLETION} from '../cdc/cdc-delivery-outcome.js';
+import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
 import {ControlPlaneMessageType} from '../control-plane/control-plane-constants.js';
 import {
   CRITICAL_TRANSPORT_TARGET_REASON,
@@ -23,25 +26,16 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   BOOTSTRAP_HINT: 'bootstrap_hint',
   INITIALIZING_MESSAGE_GROUP_SERVICE: 'Initializing message group service',
   DEFERRING_ELECTION_START: 'Deferring election start',
-  HEARTBEAT_ELECTION: 'heartbeat, election',
-  CLEARED_LIFERAFT_TIMERS_FOR_DEFERRED_ELECTION:
-    'Cleared liferaft timers for deferred election',
   FAILED_DURING_INITIALIZE_CLEANING_UP_RAFT:
     'Failed during initialize, cleaning up raft',
   MESSAGE_GROUP_SERVICE_INITIALIZED: 'Message group service initialized',
   INITIALIZED: 'initialized',
   LEADER_CHANGED: 'Leader changed',
-  SINGLE_REPLICA_BECOMING_LEADER_IMMEDIATELY:
-    'Single replica - becoming leader immediately',
   LEADERELECTED: 'leaderElected',
   STARTING_RAFT_ELECTION_TIMER: 'Starting Raft election timer',
   APPLIED_RUNTIME_RAFT_TIMING_CONFIGURATION:
     'Applied runtime raft timing configuration',
-  TICKINTERVALMS: 'tickIntervalMs',
-  MESSAGE: 'MESSAGE',
-  CDC: 'CDC',
   CDCAPPLIED: 'cdcApplied',
-  ACK: 'ACK',
   MESSAGEGROUPSERVICE_NOT_INITIALIZED: 'MessageGroupService not initialized',
   SENDING_MESSAGE: 'Sending message',
   MESSAGE_DELIVERED_DIRECTLY: 'Message delivered directly',
@@ -59,7 +53,6 @@ const MESSAGE_GROUP_SERVICE_LITERAL = Object.freeze({
   DELIVERY_ATTEMPT_FAILED: 'Delivery attempt failed',
   MAX_RETRIES_EXCEEDED: 'Max retries exceeded',
   RAFT_COMMAND_FAILED: 'Raft command failed',
-  RECEIVED_RAFT_PACKET: 'Received Raft packet',
   DATA: 'data',
   RECEIVED_APPLICATION_MESSAGE: 'Received application message',
   DUPLICATE_MESSAGE_IGNORED: 'Duplicate message ignored',
@@ -95,12 +88,24 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   COOLDOWN_MS: 1000,
   FAILURE_COOLDOWN_MS: 5000,
   NO_CHANGE_COOLDOWN_MS: 2000,
+  // ends-on: the authoritative control-plane read returns its rows
   QUERY_TIMEOUT_MS: 1500,
 });
 const CDC_FORWARD_MAX_RELAY_DEPTH = 2;
+
+/**
+ * The relay depth one CDC forward send carries: the sending hop's depth plus
+ * one. This is the single increment of the rule; callers pass their hop.
+ * @param {number} hopDepth - The sending hop's own relay depth.
+ * @return {number} The depth on the wire.
+ */
+function cdcRelaySendDepth(hopDepth) {
+  const sendDepth = hopDepth + 1;
+  if (sendDepth > CDC_FORWARD_MAX_RELAY_DEPTH) throw cdcDeliveryBudgetError(CDC_COMPLETION.INVALID);
+  return sendDepth;
+}
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
 const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
-const CDC_BATCH_COMMAND_TYPE = 'CDC_BATCH';
 const DIRECT_ONLY_MESSAGE_TYPES = new Set([
   ...Object.values(ControlPlaneMessageType),
 ]);
@@ -203,34 +208,20 @@ function shouldSynthesizeMessageGroupDeliverySource(
   return !hasRouterVisibleDeliverySource(sourceContext?.payload);
 }
 
-function shouldDeferImmediateDeliveryRetry(result) {
-  return Boolean(
-    result &&
-    typeof result === 'object' &&
-    result.deferRetry === true &&
-    Number.isFinite(result.retryAfterMs) &&
-    result.retryAfterMs > 0,
-  );
-}
-
-function buildDeferredDeliveryError(deliveryResult) {
-  const error = new Error(deliveryResult?.error || 'Message delivery deferred');
-  if (
-    typeof deliveryResult?.errorCode === 'string' &&
-    deliveryResult.errorCode.length > 0
-  ) {
-    error.code = deliveryResult.errorCode;
-  }
-  if (deliveryResult?.deferRetry === true) {
-    error.deferRetry = true;
-  }
-  if (Number.isFinite(deliveryResult?.retryAfterMs)) {
-    error.retryAfterMs = Math.max(
-      0,
-      Math.floor(deliveryResult.retryAfterMs),
-    );
-  }
-  return error;
+// An exception is needed only at the direct-only API boundary. Read the
+// canonical envelope once, preserving every transport discriminator; never
+// reconstruct it from a second MG-specific flat delivery record.
+function buildDirectDeliveryError(delivery, fallbackMessage) {
+  const outcome = deliveryTransportOf(delivery);
+  return Object.assign(new Error(outcome.error || fallbackMessage), {
+    code: outcome.errorCode,
+    deliveryState: outcome.deliveryState,
+    reasonCode: outcome.reasonCode,
+    noHandler: outcome.noHandler,
+    deferRetry: outcome.deferRetry,
+    retryAfterMs: outcome.retryAfterMs,
+    recoverableBeforeSend: outcome.recoverableBeforeSend,
+  });
 }
 
 function buildDeferredCdcForwardError(message, retryAfterMs = 0) {
@@ -272,6 +263,10 @@ function wrapCdcProposeError(message, error) {
   }
   if (typeof error?.code === 'string' && error.code.length > 0) {
     wrappedError.code = error.code;
+  }
+  // The consensus port's typed reason survives the wrap.
+  if (typeof error?.reason === 'string' && error.reason.length > 0) {
+    wrappedError.reason = error.reason;
   }
   if (error?.retryable === false) {
     wrappedError.retryable = false;
@@ -351,50 +346,9 @@ function normalizeMessageDeliveryMode(deliveryMode) {
   return MESSAGE_DELIVERY_MODE.AUTO;
 }
 
-function buildLatencyCdcPropagationResult({
-  messageId,
-  status,
-  acknowledged = true,
-  success,
-  error,
-  deferRetry,
-  retryAfterMs,
-  tableName,
-  operation,
-  eventCount,
-}) {
-  const result = {
-    messageId,
-    status,
-    acknowledged,
-  };
-  if (typeof success === 'boolean') {
-    result.success = success;
-  }
-  if (typeof error === 'string' && error.length > 0) {
-    result.error = error;
-  }
-  if (deferRetry === true) {
-    result.deferRetry = true;
-  }
-  if (Number.isFinite(retryAfterMs)) {
-    result.retryAfterMs = retryAfterMs;
-  }
-  if (typeof tableName === 'string' && tableName.length > 0) {
-    result.tableName = tableName;
-  }
-  if (typeof operation === 'string' && operation.length > 0) {
-    result.operation = operation;
-  }
-  if (Number.isInteger(eventCount) && eventCount >= 0) {
-    result.eventCount = eventCount;
-  }
-  return result;
-}
-
 export {
-  CDC_BATCH_COMMAND_TYPE,
   CDC_FORWARD_MAX_RELAY_DEPTH,
+  cdcRelaySendDepth,
   DIRECT_ONLY_MESSAGE_TYPES,
   FLUSH_SKIP_DISABLED,
   FLUSH_SKIP_NOT_OWNER,
@@ -406,11 +360,9 @@ export {
   ROLE_PERSIST_ERROR_MSG,
   boundCdcForwardErrorDetail,
   buildDeferredCdcForwardError,
-  buildDeferredDeliveryError,
-  buildLatencyCdcPropagationResult,
+  buildDirectDeliveryError,
   isWebSocketBasedMessageRouterTransport,
   normalizeMessageDeliveryMode,
   resolveTransportDeliveryOptions,
-  shouldDeferImmediateDeliveryRetry,
   wrapCdcProposeError,
 };

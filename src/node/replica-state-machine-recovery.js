@@ -14,6 +14,7 @@ import {
 } from
   './replica-state-machine-lifecycle-observation.js';
 import {completeRemovalInLane} from './replica-state-machine-transition.js';
+import {createRemovalCompletionReceiptVerifier} from './replica-state-machine-removal-completion-receipt.js';
 import {removeFromTracking} from './replica-state-machine-metrics.js';
 import {
   advanceReplicaRevision,
@@ -31,7 +32,6 @@ import {
   REPLICA_STATE_MACHINE_REASON,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
-
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
 const REMOVAL_AUTHORITY_KIND = Object.freeze({
   ABSENT: 'absent',
@@ -44,6 +44,10 @@ const EXISTING_RECOVERY_SNAPSHOT_OUTCOME = Object.freeze({
   REPLACED: 'replaced',
   SAME: 'same',
 });
+
+function normalizeRecoveryCleanupToken(context) {
+  return context.cleanupToken ?? null;
+}
 function removalAuthority(
   kind,
   row = null,
@@ -125,6 +129,8 @@ async function bindAuthoritativeRemovalAuthority(
         serviceAddress: row.address,
         replicaIdentity: row.replica_id,
         groupId: row.group_id,
+        cleanupToken: row.cleanup_token,
+        createAttemptToken: row.create_attempt_token,
         createdAt: row.created_at,
         durableVersionColumn: version.column,
         durableVersion: version.value,
@@ -185,12 +191,25 @@ async function observeRemovalAuthority(
 function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
   let exactDeleteAttempted = false;
   let deletedGenerationBound = false;
-  return Object.freeze({
-    isCurrent: () => isRemovalAuthorityCurrent(
+  const isCurrent = () => isRemovalAuthorityCurrent(
+    stateMachine,
+    replicaId,
+    authority,
+  );
+  const completionReceipt = createRemovalCompletionReceiptVerifier({
+    stateMachine, replicaId, authority, isAuthorityCurrent: isCurrent,
+  });
+  const requireAbsent = async () => {
+    if (!deletedGenerationBound || !isCurrent()) return false;
+    const observation = await observeAuthoritativeReplicaLifecycle(
       stateMachine,
       replicaId,
-      authority,
-    ),
+    );
+    return isCurrent() && observation.available === true &&
+      observation.row === null;
+  };
+  return Object.freeze({
+    isCurrent,
     requireRemoving: () => authority.kind ===
         REMOVAL_AUTHORITY_KIND.REMOVING &&
       observeRemovalAuthority(stateMachine, replicaId, authority),
@@ -214,18 +233,10 @@ function buildRemovalAuthorityGuard(stateMachine, replicaId, authority) {
         observation.available === true && observation.row === null;
       return deletedGenerationBound;
     },
-    requireAbsent: async () => {
-      if (!deletedGenerationBound ||
-          !isRemovalAuthorityCurrent(stateMachine, replicaId, authority)) {
-        return false;
-      }
-      const observation = await observeAuthoritativeReplicaLifecycle(
-        stateMachine,
-        replicaId,
-      );
-      return isRemovalAuthorityCurrent(stateMachine, replicaId, authority) &&
-        observation.available === true && observation.row === null;
-    },
+    confirmCleanupComplete: completionReceipt.confirm,
+    requireAbsent,
+    requireComplete: () => deletedGenerationBound ?
+      requireAbsent() : completionReceipt.requireCurrent(),
   });
 }
 
@@ -263,7 +274,7 @@ async function completeDurableRemovalWithAuthority(
       authority,
     );
     if (await action(guard) !== true ||
-        !await guard.requireAbsent() ||
+        !await guard.requireComplete() ||
         !guard.isCurrent()) {
       return false;
     }
@@ -582,6 +593,7 @@ function replaceExistingRecoverySnapshot(stateMachine, replicaId,
     existingState.serviceType === context.serviceType &&
     existingState.replicaIdentity === context.replicaIdentity &&
     existingState.groupId === (context.groupId ?? null) &&
+    existingState.cleanupToken === (context.cleanupToken ?? null) &&
     existingState.createdAt === context.createdAt;
   if (sameGeneration &&
       (context.authoritativeSnapshot !== true || sameAuthoritativeIdentity)) {
@@ -614,6 +626,8 @@ function buildRecoveryRegistrationContext(stateMachine, context, state,
     serviceAddress: context.serviceAddress || null,
     replicaIdentity: context.replicaIdentity || null,
     groupId: context.groupId ?? null,
+    cleanupToken: context.cleanupToken ?? null,
+    createAttemptToken: context.createAttemptToken ?? null,
     createdAt: context.createdAt,
     authoritativeSnapshot: context.authoritativeSnapshot === true,
     triggerReason: context.reason ||
@@ -651,6 +665,8 @@ function installAuthoritativeReplicaLifecycleInLane(
       serviceAddress: row.address,
       replicaIdentity: row.replica_id,
       groupId: row.group_id,
+      cleanupToken: row.cleanup_token,
+      createAttemptToken: row.create_attempt_token,
       createdAt: row.created_at,
       durableVersionColumn: version.column,
       durableVersion: version.value,
@@ -719,12 +735,6 @@ function registerReplicaSnapshot(stateMachine, replicaId, context = {}) {
   return runSerializedReplicaMutation(stateMachine, replicaId, register);
 }
 
-/**
- * Register a replica directly for recovery purposes.
- * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
- * @param {string} replicaId - Replica identifier.
- * @param {Object} context - Replica context.
- */
 function registerReplicaForRecovery(stateMachine, replicaId, context) {
   const now = stateMachine.now();
   const state = context.state;
@@ -736,25 +746,30 @@ function registerReplicaForRecovery(stateMachine, replicaId, context) {
   const replicaState = {
     replicaId,
     partitionId: context.partitionId,
-    nodeId: context.nodeId || stateMachine.nodeId,
+    nodeId: context.nodeId ?? stateMachine.nodeId,
     state,
     stateEnteredAt,
-    timeoutStartedAt:
-      stateMachine.timeouts[state] === undefined ? null : stateEnteredAt,
+    timeoutStartedAt: recoveryTimeoutStartedAt(
+      stateMachine,
+      state,
+      stateEnteredAt,
+    ),
     previousState: null,
-    triggerReason: context.triggerReason ||
+    triggerReason: context.triggerReason ??
       REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
     errorMessage: null,
     metadata: {},
-    serviceId: context.serviceId || null,
-    serviceType: context.serviceType || SERVICE_TYPE.PARTITION,
-    serviceAddress: context.serviceAddress || null,
-    replicaIdentity: context.replicaIdentity || null,
+    serviceId: context.serviceId ?? null,
+    serviceType: context.serviceType ?? SERVICE_TYPE.PARTITION,
+    serviceAddress: context.serviceAddress ?? null,
+    replicaIdentity: context.replicaIdentity ?? null,
     groupId: context.groupId ?? null,
+    cleanupToken: normalizeRecoveryCleanupToken(context),
+    createAttemptToken: context.createAttemptToken ?? null,
     createdAt: context.createdAt,
     lifecycleIdentityAuthoritative:
       context.authoritativeSnapshot === true,
-    durableVersionColumn: context.durableVersionColumn ||
+    durableVersionColumn: context.durableVersionColumn ??
       'state_entered_at',
     durableVersion: Number.isFinite(context.durableVersion) ?
       context.durableVersion : stateEnteredAt,
@@ -768,6 +783,10 @@ function registerReplicaForRecovery(stateMachine, replicaId, context) {
     state,
     nodeId: stateMachine.nodeId,
   });
+}
+
+function recoveryTimeoutStartedAt(stateMachine, state, stateEnteredAt) {
+  return stateMachine.timeouts[state] === undefined ? null : stateEnteredAt;
 }
 
 export {

@@ -635,7 +635,7 @@ describe('minimal deployment request Cell routing', () => {
         );
         routerB.register(HANDLER_ADDRESS_B, originalHandlerB);
 
-        routerB.unregister(HANDLER_ADDRESS_B);
+        routerB.unregisterExact(HANDLER_ADDRESS_B, originalHandlerB);
         const noHandler = await api.getFastify().inject(
           requestOptions('no-handler'),
         );

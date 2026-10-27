@@ -1,0 +1,61 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "fresh-seed-activation",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/fresh-seed-activation.integration.test.js": "a9d96448ae31023e3dc7de5947dda22c8c5b70a2496058cbae796bb86de5d771",
+    "test/bootstrap/seed-original-attempt-lifetime.test.js": "dcb9242fd6f5d796430048b4ea81859900f66741717cee3dee10b3e8cf603b38"
+  },
+  "generatedAt": "2026-10-26T09:10:10.345Z",
+  "receipts": [
+    {
+      "id": "protected-activation-admitted-openings-only",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 .*$\" test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "Startup natively opens, activates election scheduling and observes leadership for exactly the declared groups after their admitted openings; without a live attempt every continuation entry holds AUTHORITY.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    },
+    {
+      "id": "original-rights-durable-monotonic-transfer",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R2 .*$\" test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "Every declared SERVICES right and the anchor identity right reads UNUSED, SUBMITTED, TRANSFERRED; the owner read at settle equals the durable read after custody is released. Unknown publication retains SUBMITTED until exact live readback without another INSERT.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    },
+    {
+      "id": "public-admission-closed-until-handoff",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 .*$\" test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "No bracketed public accept precedes all rights TRANSFERRED and readiness serves after; with rights untransferred startWebSocketServer, openExternalTransportAdmission and completeSuccessfulBootstrap hold.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    },
+    {
+      "id": "public-write-and-read-served",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 .*$\" test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "CREATE, INSERT and SELECT through openApplicationDatabase.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    },
+    {
+      "id": "same-data-restart-served-or-typed-hold",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 .*$\" test/bootstrap/fresh-seed-activation.integration.test.js",
+      "detail": "A cold restart serves the pre-restart row or is an owner-named hold; durable rights are unchanged. Not a recovery claim.",
+      "testFile": "test/bootstrap/fresh-seed-activation.integration.test.js"
+    },
+    {
+      "id": "retained-partial-uncertain-cold-states-keep-hold",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-original-attempt-lifetime.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-allocation-custody.test.js test/raft/raft-rs-original-allocation-preparation.test.js test/raft/raft-rs-original-allocation-store.test.js test/raft/raft-rs-original-opening-authority.test.js test/raft/raft-rs-original-opening-effect-cut.test.js test/raft/raft-rs-original-opening.test.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/bootstrap/seed-retained-effects.integration.test.js",
+      "detail": "Existing owner witnesses (with the recorded correspondence update of the lifetime continuation negative) stay green.",
+      "testFile": "test/bootstrap/seed-original-attempt-lifetime.test.js"
+    },
+    {
+      "id": "independent-verification-and-applicable-gates",
+      "passed": true,
+      "command": "node scripts/quest-evidence/fresh-seed-activation.js --check-verification && npm run -s test:duplication && npm run -s audit:shards",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner, and the ratchets outside land.",
+      "testFile": null
+    }
+  ]
+}

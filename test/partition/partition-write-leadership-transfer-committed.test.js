@@ -30,12 +30,15 @@
 // voter cut off from the group, so it can only abort one election timeout
 // later.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import Database from 'better-sqlite3';
 
 import {formAdmittedGroup} from './partition-admitted-group-fixture.js';
+import {attachPartitionReleaseOwners} from './partition-release-fixture.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -82,8 +85,8 @@ const RAFT_TIMING = Object.freeze({
 // group, derived by the owner that derives it for every partition replica.
 const INDEX_ONE_TIMEOUTS = computeReplicaElectionTimeouts({
   replicaId: 'second', replicaIds: ['first', 'second'],
-  baseElectionMinMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS,
-  baseElectionMaxMs: PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS,
+  baseElectionMinMs: PARTITION_SERVICE_VALUE.RAFT_ELECTION_MIN_DEFAULT_MS,
+  baseElectionMaxMs: PARTITION_SERVICE_VALUE.RAFT_ELECTION_MAX_DEFAULT_MS,
   electionJitterPerReplicaMs:
     PARTITION_SERVICE_VALUE.ELECTION_JITTER_PER_REPLICA_MS,
 });
@@ -177,11 +180,17 @@ async function withTransferToCutOffVoter(raftTiming, body) {
   const transportDeliver = network.deliver;
   const cutOffAddress = group.addressOf(MEMBERS[2]);
   const proposals = [];
+  let owners = null;
   try {
+    // Released by the real release owners, as production releases a group.
+    owners = await attachPartitionReleaseOwners(group.services,
+      {directory: path.dirname(group.dbFileOf(MEMBERS[0])),
+        budgetMs: FORMATION_BUDGET_MS});
+    await owners.release(PARTITION_ID);
     assert.equal((await writeRow(leader, 'row-before', 'before')).success,
       true, 'setup: the group serves a write');
     network.deliver = (address, ...rest) => (address === cutOffAddress ?
-      Promise.resolve({acknowledged: true}) :
+      Promise.resolve(buildDeliveryEnvelope({acknowledged: true})) :
       transportDeliver.call(network, address, ...rest));
     cutOff.raft.stopScheduling();
     const termBefore = leader.raft.readStatus().term;
@@ -203,6 +212,7 @@ async function withTransferToCutOffVoter(raftTiming, body) {
   } finally {
     setActualCoreEntryObserver(null);
     network.deliver = transportDeliver;
+    await owners?.dispose();
     await group.dispose();
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();

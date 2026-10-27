@@ -95,10 +95,8 @@ const WORKLOAD_TEXT = Object.freeze({
   PASS: 'pass',
   PREPARED_INPUT_REQUIRED:
     'MovieLens artifact, dataset, and named alternative are required',
-  RESET_DELETE_OPERATIONS_SQL: 'DELETE FROM wasm_operations',
-  RESET_REQUIRES_DRAIN:
-    'MovieLens workload reset requires drained operations',
-  RESET_STATE: 'public_request_results_and_journal_cleared',
+  EMPTY_CUSTODY_REQUIRED:
+    'MovieLens isolated session requires empty initial custody',
   RESULT_KEY_SPACE_EXHAUSTED:
     'MovieLens operation result key space exhausted',
   SEMANTIC_EQUIVALENT: 'equivalent',
@@ -626,28 +624,17 @@ async function prepareMovielensPublicRequestWorkload({
     });
   }
 
-  async function resetRunState() {
-    const drained = await drainOperations();
-    if (drained.inFlight !== 0) {
-      throw new Error(WORKLOAD_TEXT.RESET_REQUIRES_DRAIN);
+  async function verifyEmptyCustody() {
+    if (inFlight.size !== 0 || nextResultKeyOffset !== 0) {
+      throw new Error(WORKLOAD_TEXT.EMPTY_CUSTODY_REQUIRED);
     }
-    await executeSql(
-      ports,
-      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_MOVIES}"`,
-    );
-    await executeSql(
-      ports,
-      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_SCORES}"`,
-    );
-    await executeSql(ports, WORKLOAD_TEXT.RESET_DELETE_OPERATIONS_SQL);
     const durableResults = await assertNoDurableResults(ports);
     const invocationJournalRows =
       await assertNoDurableInvocationJournal(ports);
-    nextResultKeyOffset = 0;
     return Object.freeze({
       durableResultRows: durableResults.totalRows,
       invocationJournalRows,
-      state: WORKLOAD_TEXT.RESET_STATE,
+      tableRows: durableResults.tableRows,
     });
   }
 
@@ -659,8 +646,8 @@ async function prepareMovielensPublicRequestWorkload({
     executeOperation,
     inputDurability,
     replayOperation,
-    resetRunState,
     timeoutSemantics: WORKLOAD_TEXT.TIMEOUT_SEMANTICS,
+    verifyEmptyCustody,
     workloadManifest,
   });
 }

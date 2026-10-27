@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import {
   WasmComponentDriver,
+  WASM_COMPONENT_ERROR,
 } from '../../src/runtime/wasm-component-driver.js';
 import {
   RuntimeDriver,
@@ -41,11 +42,37 @@ const CONTRACT_METHODS = [
   'invoke',
 ];
 
+// Contract tests use the same explicit composition-root lifecycle seam as
+// wasm-component-driver.test.js. A driver with no such owner must refuse
+// consensus prepare, rather than manufacturing replica storage/lifecycle.
+function conformingDriver() {
+  const replicas = new Map();
+  const owner = {
+    createReplica(definition) {
+      const replica = {serviceId: definition.serviceId};
+      replicas.set(definition.serviceId, replica);
+      return replica;
+    },
+    async startReplica(serviceId) {
+      return replicas.has(serviceId) ?
+        {started: true, port: 9090, endpoint: null} : null;
+    },
+    async stopReplica(serviceId) {
+      replicas.delete(serviceId);
+      return {stopped: true};
+    },
+    getReplica(serviceId) {
+      return replicas.get(serviceId) ?? null;
+    },
+  };
+  return new WasmComponentDriver({wasmServiceLifecycle: owner});
+}
+
 describe('WasmComponentDriver contract conformance', () => {
   let driver;
 
   beforeEach(() => {
-    driver = new WasmComponentDriver();
+    driver = conformingDriver();
   });
 
   // -------------------------------------------------------
@@ -79,6 +106,16 @@ describe('WasmComponentDriver contract conformance', () => {
     it('should implement health', () => {
       assert.equal(typeof driver.health, 'function');
     });
+  });
+
+  it('refuses consensus prepare without the composition-root lifecycle owner', async () => {
+    const missingOwner = new WasmComponentDriver();
+    const def = {serviceId: 'missing-owner', runtime_ref: 'ref-1'};
+    const result = await missingOwner.prepare(def, {});
+    assert.equal(result.status, PREPARE_STATUS.FAILED);
+    assert.equal(result.error, WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED);
+    const starting = await missingOwner.start({serviceId: def.serviceId});
+    assert.equal(starting.status, START_STATUS.FAILED);
   });
 
   // -------------------------------------------------------
@@ -292,6 +329,17 @@ describe('WasmComponentDriver contract conformance', () => {
         // Whole-node teardown chain (node-shutdown-cell-worker-teardown):
         // the driver terminates every live cell worker at node shutdown.
         'shutdown',
+        // Superseded by appending (design ACTIVATION-DISCOVERY-DESIGN-20261017 Revision 3
+        // RV2.3, RV3.4, stage 1c): the runtime's token-keyed PRESENT hop for a
+        // bound replica whose services row it projected; no metadata write.
+        'markServicesRowPresent',
+        // Superseded by appending (design RECOVERY-DESIGN-20261017 R1-A, R2-F):
+        // the by-path local reader of an inventoried bound creation, through
+        // the composition root's lifecycle; read-only, no metadata write.
+        'inspectRetainedCreation',
+        // U1 physical owner currentness observation: read-only, synchronous,
+        // separate from durable creation intent and permitted execution.
+        'observeCurrentCreation',
       ]);
       for (const name of proto) {
         assert.ok(
@@ -335,7 +383,7 @@ describe('WasmComponentDriver contract conformance', () => {
       await fc.assert(fc.asyncProperty(
         fc.string({minLength: 1}).filter((s) => s.trim().length > 0),
         async (ref) => {
-          const freshDriver = new WasmComponentDriver();
+          const freshDriver = conformingDriver();
           const def = {serviceId: 'svc-pbt', runtime_ref: ref};
           const result = await freshDriver.prepare(def, {});
           assert.equal(result.status, PREPARE_STATUS.READY);
@@ -347,7 +395,7 @@ describe('WasmComponentDriver contract conformance', () => {
       await fc.assert(fc.asyncProperty(
         fc.string({minLength: 1}).filter((s) => s.trim().length > 0),
         async (ref) => {
-          const freshDriver = new WasmComponentDriver();
+          const freshDriver = conformingDriver();
           const def = {serviceId: 'svc-pbt', runtime_ref: ref};
           await freshDriver.prepare(def, {});
           const result = await freshDriver.start(

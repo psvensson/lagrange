@@ -1394,3 +1394,83 @@ test('parallel coordination executor uses normal SQL without polluting ' +
     'dialect selection cannot replace the bound service session');
   t.end();
 });
+
+test('MovieLens affinity demo deploys and invokes a public WASI call Binding ' +
+  'without direct config or service_definitions SQL', async (t) => {
+  const runnerSource = await readFile(
+    'examples/service-data-affinity/run-affinity-demo.js',
+    'utf8',
+  );
+  t.notMatch(
+    runnerSource,
+    /INSERT INTO config|INSERT INTO service_definitions|deployQueryLoopService/,
+    'demo runner contains no raw system-table scaffolding',
+  );
+  t.match(
+    runnerSource,
+    /deployMovieLensCallBinding\(/,
+    'demo runner deploys the MovieLens WASI call Binding via the public pipeline',
+  );
+  t.match(
+    runnerSource,
+    /invokeMovieLensCallBinding\(/,
+    'demo runner invokes the deployed call Binding over pgwire',
+  );
+
+  const {topnReduce, topnRun} = await import(
+    '../../examples/service-data-affinity/lagrange.service.js'
+  );
+  const {aggregateRatings, rankMovieQuality} = await import(
+    '../../examples/service-data-affinity/movie-ranking.js'
+  );
+  const rawRatings = [
+    {movie_id: 10, rating: 5},
+    {movie_id: 10, rating: 5},
+    {movie_id: 20, rating: 4},
+    {movie_id: 20, rating: 5},
+    {movie_id: 20, rating: 5},
+    {movie_id: 30, rating: 4},
+  ];
+  // Split inside movie 20 so movie 20 straddles both shards as a boundary movie.
+  const shard1 = [
+    {movie_id: 10, rating_sum: 10, rating_count: 2},
+    {movie_id: 20, rating_sum: 4, rating_count: 1},
+  ];
+  const shard2 = [
+    {movie_id: 20, rating_sum: 10, rating_count: 2},
+    {movie_id: 30, rating_sum: 4, rating_count: 1},
+  ];
+  const partials = [];
+  topnRun(shard1, {}, {
+    emit: (key, value) => partials.push([key, JSON.stringify(value)]),
+  });
+  topnRun(shard2, {}, {
+    emit: (key, value) => partials.push([key, JSON.stringify(value)]),
+  });
+  const reduced = topnReduce(partials);
+  const reference = rankMovieQuality(aggregateRatings(rawRatings), 10);
+  t.same(
+    reduced.map((row) => row.movie_id),
+    reference.map((row) => row.movieId),
+    'call-Binding run/reduce reconstructs straddling boundary movies exactly',
+  );
+  t.ok(
+    reduced.every((row, index) =>
+      Math.abs(row.score - reference[index].score) < 1e-12),
+    'call-Binding scores match the reference Bayesian formula',
+  );
+
+  const {isDataAffinityPlacementSuboptimal} = await import(
+    '../../src/rebalancer/placement-owner-decision.js'
+  );
+  t.equal(
+    isDataAffinityPlacementSuboptimal(
+      {activationPinNodeIds: ['node-c']},
+      [{node_id: 'node-a'}, {node_id: 'node-b'}],
+      [{node_id: 'node-a'}, {node_id: 'node-b'}, {node_id: 'node-c'}],
+    ),
+    true,
+    'an unplaced activation-pin host marks DATA_AFFINITY placement suboptimal',
+  );
+  t.end();
+});

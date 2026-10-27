@@ -84,6 +84,13 @@ function createNodeWebSocketAddressResolver(nodeService) {
   };
 }
 
+// Select only the physical transport constructor. Semantic configuration and
+// immediate startup custody stay in MessageRouterSetup.create.
+function createPhysicalMessageRouter(routerFactory, options) {
+  if (typeof routerFactory === 'function') return routerFactory(options);
+  return new MessageRouter(options);
+}
+
 /**
  * Shared message router setup used by both bootstrap paths.
  * Provides a static factory method to create and configure a MessageRouter.
@@ -117,6 +124,7 @@ class MessageRouterSetup {
     bootIncarnation,
     nodeService,
     routerFactory,
+    retainRouter,
   }) {
     // The node runtime whose cache resolves addresses. Default is the process
     // singleton, so single-node deployment is unchanged.
@@ -142,10 +150,7 @@ class MessageRouterSetup {
     // service-node resolution, node-address resolution, the bulk-channel
     // registry, local-versus-remote routing and admission. The default
     // constructs today's MessageRouter, so production is unchanged.
-    const createRouter = typeof routerFactory === 'function' ?
-      routerFactory :
-      (routerOptions) => new MessageRouter(routerOptions);
-    const messageRouter = createRouter({
+    const messageRouter = createPhysicalMessageRouter(routerFactory, {
       nodeId,
       nodeAddress,
       advertisedAddress: advertisedNodeWsAddress || null,
@@ -158,6 +163,9 @@ class MessageRouterSetup {
       outboundQueueReadinessInflightReserve:
         TRANSPORT_DEFAULT.PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE,
     });
+    // The startup host takes custody before configuration or initialization
+    // can fail or yield. Its cleanup joins acquisition before closing this object.
+    retainRouter?.(messageRouter);
 
     // Set up resolver to extract nodeId from address pattern "${nodeId}/..."
     // This enables routing messages to remote nodes based on address patterns

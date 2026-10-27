@@ -1,4 +1,5 @@
 import {assertCritical} from '../../utils/assert.js';
+import {copyCdcEvent} from '../../cdc/cdc-event-envelope.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
 import {
@@ -19,6 +20,9 @@ import {
 } from '../../cache/cache-constants.js';
 import {resolveHostedNodeClock} from
   '../shared/hosted-replica-authorities.js';
+import {SQLQueryEngine} from '../../query/sql-query-engine.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../control-plane/control-plane-readiness-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -31,6 +35,40 @@ class SeedRuntimeBridgeOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
     this.compatibilityPhase = options.compatibilityPhase || null;
+    this.sqlQueryEngine = null;
+    this.bootstrapTopologySnapshotOwner = null;
+  }
+
+  attachBootstrapTopologySnapshotOwner(owner) {
+    this.bootstrapTopologySnapshotOwner = owner;
+    this.sqlQueryEngine?.queryExecutor.setBootstrapTopologySnapshotOwner(owner);
+  }
+
+  acquireSqlQueryEngine() {
+    if (this.sqlQueryEngine !== null) return this.sqlQueryEngine;
+    const d = this.delegates;
+    const cdcIntegrationService = this.ensureBootstrapCdcIntegrationService();
+    const engine = new SQLQueryEngine({
+      nowFn: resolveHostedNodeClock(d), systemCache: d.getSystemTableCache(),
+      messageRouter: d.getMessageRouter(), nodeId: d.getNodeId(),
+      cdcIntegrationService, partitionServicesProvider: () => d.getPartitionServices(),
+      bootstrapTopologySnapshotOwner: this.bootstrapTopologySnapshotOwner,
+      rebalanceCoordinator: d.getRebalanceCoordinator(),
+      controlPlaneReadinessService:
+        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
+      defaultRoutingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+      migrationAutoWire: false, autoStartDistributedTransactionRecovery: false,
+      unrefRetryDelayTimers: true,
+    });
+    this.sqlQueryEngine = engine;
+    d.setSqlQueryEngine?.(engine);
+    cdcIntegrationService.setSqlQueryEngine(engine);
+    return engine;
+  }
+
+  releaseSqlQueryEngine(engine) {
+    if (this.sqlQueryEngine === engine) this.sqlQueryEngine = null;
   }
 
   getCompatibilityOverride(methodName) {
@@ -159,10 +197,10 @@ class SeedRuntimeBridgeOwner {
     });
   }
 
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
+  async propagatePartitionCDCEvent(messageGroupService, cdcEvent, deliveryContext = null) {
     const override = this.getCompatibilityOverride('propagatePartitionCDCEvent');
     if (override) {
-      return override(messageGroupService, cdcEvent);
+      return override(messageGroupService, cdcEvent, deliveryContext);
     }
 
     const d = this.delegates;
@@ -171,10 +209,9 @@ class SeedRuntimeBridgeOwner {
       BOOTSTRAP_ERROR.LATENCY_TOPOLOGY_MISSING,
     );
     return topologyOwners.cdcGroupPropagationService.propagateCDCEvent({
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      data: cdcEvent.data,
+      ...copyCdcEvent(cdcEvent),
       sourceMessageGroupService: messageGroupService,
+      deliveryContext,
     });
   }
 

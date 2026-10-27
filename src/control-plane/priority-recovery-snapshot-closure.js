@@ -214,7 +214,6 @@ function buildPriorityRecoveryDecisionSnapshots(options = {}) {
     ...decisionSnapshotSummary,
     closureWitness: buildPriorityRecoveryClosureWitness({
       decisionSnapshots: decisionSnapshotSummary,
-      priorityPartitionSummary,
     }),
   };
 }
@@ -244,6 +243,12 @@ function buildPriorityRecoveryOperationAssessment(options = {}) {
   };
 }
 
+// "May another operation be planned for this operation's partition?"
+// Owner ruling 2026-10-05 (a satisfied-in-flight REPLACE blocks planning):
+// an unresolved operation blocks planning and creation of a second operation
+// on its partition until it reaches its own terminal state, whatever the
+// spread reads. Spread satisfaction (including a REPLACE's remove-dispatch
+// grace) answers safety/spread questions only, never this one.
 function shouldPriorityRecoveryOperationBlockPlanning(assessment) {
   if (!assessment || typeof assessment !== 'object') {
     return true;
@@ -254,13 +259,34 @@ function shouldPriorityRecoveryOperationBlockPlanning(assessment) {
   ) {
     return true;
   }
-  if (assessment.spreadCompletion?.satisfied === true) {
-    return false;
-  }
   return (
     assessment.semanticState !==
     PRIORITY_RECOVERY_SEMANTIC_STATE.COORDINATION_MISMATCH
   );
+}
+
+// "Does this operation still hold a slot of the cluster-wide priority ADD
+// budget that OTHER partitions draw from?" An operation whose partition's
+// spread is satisfied has finished its add-like work and releases the slot,
+// so a long source-removal phase cannot monopolize the budget. A
+// cross-partition resource answer only: admission on the operation's own
+// partition asks shouldPriorityRecoveryOperationBlockPlanning.
+// Byte-for-byte the pre-ruling planning answer: a missing assessment or an
+// authoritatively deferred operation read keeps its slot BEFORE a satisfied
+// spread may give it back.
+function doesPriorityRecoveryOperationHoldAddBudget(assessment) {
+  if (
+    !assessment ||
+    typeof assessment !== 'object' ||
+    assessment.completion?.state ===
+      PRIORITY_RECOVERY_COMPLETION_STATE.OPERATION_VISIBILITY_DEFERRED
+  ) {
+    return true;
+  }
+  if (assessment.spreadCompletion?.satisfied === true) {
+    return false;
+  }
+  return shouldPriorityRecoveryOperationBlockPlanning(assessment);
 }
 
 function buildPriorityRecoveryRediscoveryState(options = {}) {
@@ -332,6 +358,7 @@ export {
   buildPriorityRecoveryOperationAssessment,
   buildPriorityRecoveryPartitionAssessment,
   buildPriorityRecoveryRediscoveryState,
+  doesPriorityRecoveryOperationHoldAddBudget,
   shouldPriorityRecoveryOperationBlockPlanning,
   shouldUseAuthoritativePriorityRecoveryRediscovery,
 };

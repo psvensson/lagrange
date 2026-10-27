@@ -1,0 +1,58 @@
+{
+  "schema": "solve-quest/2",
+  "id": "participant-release-deadline-recovery-witness",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Demonstrate through the registered participant-release and recovery owners with real PartitionService/native persistence that pre-ENABLE deadline expiry leaves the dependent closed without erasing an earlier control origin; a missing dependent origin requires current fresh-storage or explicit operator authority; and a lost ENABLE answer followed by intact restart, missing control authority and lost consensus notifications preserves the committed origin and makes progress through the existing recovery retry when current control authority returns. Distinguish boundary evidence, enforced refusal and a reachable defect. This witness-only unit does not repair production source or certify full seed startup.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/participant-release-deadline-recovery-witness/evidence/receipt.json",
+      "requiredReceipts": [
+        "pre-enable-expiry-keeps-origins-and-admission-safe",
+        "absent-origin-refusal-and-authorized-progress",
+        "lost-enable-answer-restart-and-retained-recovery",
+        "semantic-negative-controls",
+        "independent-scope-evidence-and-static-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owners-and-real-persistence",
+      "statement": "Reuse the existing participant-release protocol fixture, actual PartitionService/native Raft and SQLite, registered ReplicaHandler route, durable origin owner, tracked-service registry, participant authorization and recovery queue. Only transport response timing/loss, consensus notification loss and the existing injectable handler clock are controlled by the test. No substituted release facts, status, origin, membership, authorization decisions, native commit or final admission."
+    },
+    {
+      "id": "distinct-authority-and-recovery",
+      "statement": "Absent-origin fresh storage and intact existing-origin restart are distinct. A no-origin participant remains closed without fresh-storage or operator authorization; an operator continuation uses the actual authorization owner and a new request, never extends the expired request. Existing-origin recovery consumes a current leader, measured build, current control owner, membership, generation, complete census and final resume. A wake and a retry timer grant no authority."
+    },
+    {
+      "id": "deadline-and-loss-fidelity",
+      "statement": "The deadline schedule waits for the original dependent PAUSE reply, then advances only the injected handler clock to the original shared 3000ms deadline before returning that reply. The lost-answer schedule drops one actual dependent ENABLE response only after the real route settled and durable origin is observed. Original delivery is called once. Existing production/test deadlines, assertions, baselines and runtime source remain unchanged."
+    },
+    {
+      "id": "restart-and-notification-custody",
+      "statement": "Recreate the exact dependent and control identities from their same retained SQLite files through the existing durable-record bootstrap and real constructors. Do not delete files after failed cleanup. Suppress only actual dependent consensus notifications during restart, recording engagement; registry and existing retry remain the sole recovery triggers. After the missing-control recovery refusal, do not explicitly release the dependent, poll its Raft status, manufacture events, or mutate admission to make progress."
+    },
+    {
+      "id": "discriminating-exact-evidence",
+      "statement": "Independent review precedes interpretation. Root coordinates exact-commit locked-lab positive and targeted source-mutation controls with identical test bytes and no retry-only green. A setup failure, dropped no-op, early timeout, missing import or absent assertion is not an engaged negative. Keep safety, progress and performance verdicts separate."
+    },
+    {
+      "id": "bounded-unit-and-history",
+      "statement": "This child preserves the passive diagnostic Quest and all earlier seals. Tests and their fixture extraction may change; production repair needs a separately reviewed and sealed bounded unit after a real defect is demonstrated. No full fresh-seed timing, remote routing, cross-host fault, U1, TX1, FreshMG, corpus, publication or release acceptance follows from this single-process owner witness."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "retry-loops",
+    "transport-delivery",
+    "sweep-timer",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "be93c7e5d9a76a39e76a530c93715521b2281356"
+}

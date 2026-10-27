@@ -1,0 +1,24 @@
+{
+  "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+  "state": "pre-hook source; no independent approval",
+  "files": {
+    "docs/admin-api-reference.md": "de95131fbb25d11f49276a5ea2416b8f7e7f795297b84571e20e309250f645a7",
+    "solve/quests/log-owner-diagnostic-marker/evidence/receipt.json": "26577660de129a67c68c8f71f54e39eb1a3b7a702c96ec0e7d05c723d91292b5",
+    "solve/quests/log-owner-diagnostic-marker/log.ndjson": "01b264b50fbc1ee207395a90fb09049cbe6df5dfede87ac9d6979fd7ea0431f5",
+    "solve/quests/log-owner-diagnostic-marker/quest.json": "7020e6d7377c31261534d2c7ae27407e8117fe61670d56442bbd3033c576bc00",
+    "src/admin/admin-owner-operations.js": "db14a1c51f68798dc5f21b53b504bed874d5777bcb41f25286d0687a15ccc1c0",
+    "src/control-plane/owners/log-diagnostic-marker-contract.js": "bb2d40e3d3c7a308f5a4affb6fa57fe857a8af409772c09a60efc270bbb8aa00",
+    "src/control-plane/owners/logs-owner.js": "eef1bf5a64dd48b349b983c5165b9c30b09add64e54f203fe0b82ba34f877ccc",
+    "src/entrypoint-runtime-admin-composition.js": "42f56106849a49cde30208494c2891c8b9d6e42f24837d2b54081aa0a95f5244",
+    "test/control-plane/log-diagnostic-marker.test.js": "12d1616b134c148285187c0f430f7fa477a91afbadc2a3482eb48f4da5d767f2",
+    "test/distributed/harness/__tests__/network-partition-split-brain-scenario.test.js": "04daa3b459bfed31a4d3fca16e9aec6c17949d848a2e5b955fb20c1f85b6eb51",
+    "test/distributed/harness/cluster-node-handle-layer.js": "522d30f9f6b4705ca662ad8277601deee99a7b2c57bdcfd299a9885485d23c4e",
+    "test/distributed/harness/cluster-node-owner-operations.js": "c4b23b6a726b30dfa6b6c47727ca9fc4b0d8485609031f3fd9d339dd128fbce4",
+    "test/distributed/scenarios/admin-query-smoke.js": "7a92645d7b5b86720b494eea590f0346f99de6a136d37557874e39a2f7b52bd5",
+    "test/distributed/scenarios/network-partition-marker.js": "a5ce9b1fb55cf1ff16031e16c6e75558c237a13b5088452f275775df197ddc07",
+    "test/distributed/scenarios/network-partition-split-brain.js": "4c2a575cec1aa3658f39d5fc0ce0c16faf6502c1aedd490558023b420cb5946b",
+    "test/integration/control-plane-log-marker.integration.test.js": "45017a66f256db4d26e9dc6a05c920b87cd7010d197a496b9d63b5759d489bbe",
+    "test/raft/raft-rs-backend/log-marker-partition.test.js": "bc39a465c1213a0112c57eb3cdeaf20ceb22740d676417d25343c51fc1c4aa9b",
+    "test/shards/impact-contracts.json": "9963d51fce3002a4aece11295ebc58393bcb6861336bfce34aa294998c707bf2"
+  }
+}

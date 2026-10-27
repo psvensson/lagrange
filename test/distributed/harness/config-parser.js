@@ -15,8 +15,8 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
-  RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
+  PARTITION_CONFIG_ENV_FIELDS,
 } from './constants.js';
 import {
   resolvePostgresBaselineBenchmarkConfig,
@@ -40,31 +40,11 @@ function resolvePartitionStartupConfig(partial = {}) {
   }
 
   const normalized = {};
-  const splitThresholdBytes =
-    normalizePositiveInteger(partial.splitThresholdBytes);
-  const splitThresholdQpm =
-    normalizePositiveInteger(partial.splitThresholdQpm);
-  const mergeThresholdBytes =
-    normalizePositiveInteger(partial.mergeThresholdBytes);
-  const mergeThresholdQpm =
-    normalizePositiveInteger(partial.mergeThresholdQpm);
-  const evaluationIntervalMs =
-    normalizePositiveInteger(partial.evaluationIntervalMs);
-
-  if (splitThresholdBytes !== null) {
-    normalized.splitThresholdBytes = splitThresholdBytes;
-  }
-  if (splitThresholdQpm !== null) {
-    normalized.splitThresholdQpm = splitThresholdQpm;
-  }
-  if (mergeThresholdBytes !== null) {
-    normalized.mergeThresholdBytes = mergeThresholdBytes;
-  }
-  if (mergeThresholdQpm !== null) {
-    normalized.mergeThresholdQpm = mergeThresholdQpm;
-  }
-  if (evaluationIntervalMs !== null) {
-    normalized.evaluationIntervalMs = evaluationIntervalMs;
+  for (const [field] of PARTITION_CONFIG_ENV_FIELDS) {
+    const value = normalizePositiveInteger(partial[field]);
+    if (value !== null) {
+      normalized[field] = value;
+    }
   }
 
   return Object.keys(normalized).length > ZERO ? normalized : null;
@@ -197,7 +177,6 @@ function mergeWithDefaults(partial = {}) {
       enabled: BENCHMARK_GATE_DEFAULTS.enabled,
       maxThroughputRegressionRatio:
         BENCHMARK_GATE_DEFAULTS.maxThroughputRegressionRatio,
-      baselineProvider: BENCHMARK_GATE_DEFAULTS.baselineProvider,
       failIfBaselineMissing: BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
       approvedMitigationId: BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
       ...(partial.benchmarkGate || {}),
@@ -213,8 +192,6 @@ function mergeWithDefaults(partial = {}) {
     },
     ...(partition ? {partition} : {}),
     ...(scenarioOverrides ? {scenarios: scenarioOverrides} : {}),
-    raftProvider:
-      partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),
     ...(partial.gcp ? {gcp: partial.gcp} : {}),
   };

@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {DistributedMergeEngine} from '../../src/query/distributed/distributed-merge-engine.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -13,7 +14,7 @@ function createExecutor() {
   return new QueryExecutor({
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, success: true, rows: []};
+        return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
       },
     },
     systemCache: {

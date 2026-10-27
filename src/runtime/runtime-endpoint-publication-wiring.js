@@ -79,6 +79,19 @@ function resolveLogicalServiceId(systemTableCache, replicaId) {
   return matchingServiceIds[0];
 }
 
+// The one binding-first resolution the writer and the remover share (design
+// ACTIVATION-DISCOVERY-DESIGN-20261017 RV2.3, RV3.1): a bound replica names
+// its logical service in its binding and its row by its instance-qualified
+// physical replica id, with no logical resolution; an unbound replica id is
+// parsed against the desired definitions as before.
+function resolveRuntimeEndpointIdentity(systemTableCache, replicaId, consensusBinding) {
+  if (consensusBinding) {
+    return {serviceId: consensusBinding.serviceDefinitionId, endpointKey: replicaId};
+  }
+  const serviceId = resolveLogicalServiceId(systemTableCache, replicaId);
+  return {serviceId, endpointKey: serviceId};
+}
+
 // A completed incarnation outcome is the owner's mutation result; an
 // unresolved write error is rethrown; a stale or unknown-incarnation outcome
 // is a typed non-success the runtime lifecycle records.
@@ -100,22 +113,21 @@ function wireRuntimeEndpointPublication(options = {}) {
     systemTableCache,
   } = options;
 
-  // Both directions resolve the replica's logical service from the desired
-  // state the runtime-service rebalancer placed it for: one owner, one path.
+  // Both directions resolve the replica's logical service and row key through
+  // resolveRuntimeEndpointIdentity: one owner, one path.
   const writeRuntimeEndpointAtIncarnation = async (
     replicaId,
     _runtimeKind,
     endpointIntent,
     mutationContext = {},
   ) => {
-    const logicalServiceId = resolveLogicalServiceId(
-      systemTableCache,
-      replicaId,
-    );
+    const identity = resolveRuntimeEndpointIdentity(systemTableCache, replicaId,
+      endpointIntent?.consensusBinding);
     const endpointRow = buildRuntimeEndpointRow(
-      logicalServiceId,
+      identity.serviceId,
       nodeId,
       endpointIntent,
+      identity.endpointKey,
     );
     // Birth or refresh at this node's exact boot incarnation: a newer
     // incarnation's endpoint for the same (service, node) is never replaced.
@@ -125,10 +137,11 @@ function wireRuntimeEndpointPublication(options = {}) {
       observe: () => readAuthoritativeEndpointRow(
         serviceEndpointsOwner.getGateway(), SERVICE_ENDPOINTS_TABLE,
         endpointRow[COLUMN.ENDPOINT_ID]),
-      insert: (row) => serviceEndpointsOwner.insertEndpoint(row,
-        mutationContext),
-      update: (whereClause, data) => serviceEndpointsOwner.updateWhere(
-        whereClause, data, mutationContext),
+      insert: (row, identity) => serviceEndpointsOwner.insertEndpoint(row,
+        {...mutationContext, ...identity}),
+      update: (whereClause, data, identity) =>
+        serviceEndpointsOwner.updateWhere(whereClause, data,
+          {...mutationContext, ...identity}),
     }));
   };
   serviceRuntimeLifecycle.setEndpointWriter(writeRuntimeEndpointAtIncarnation);
@@ -136,16 +149,15 @@ function wireRuntimeEndpointPublication(options = {}) {
   const removeRuntimeEndpointAtIncarnation = async (
     replicaId,
     _runtimeNodeId,
-    mutationContext = {},
+    removal = {},
   ) => {
-    const logicalServiceId = resolveLogicalServiceId(
-      systemTableCache,
-      replicaId,
-    );
+    const {consensusBinding = null, ...mutationContext} = removal;
+    const identity = resolveRuntimeEndpointIdentity(systemTableCache, replicaId,
+      consensusBinding);
     // Remove only this incarnation's endpoint: the predicate carries the
     // exact boot incarnation, so a replacement boot's endpoint (same
     // deterministic id) is never deleted by delayed teardown.
-    const endpointId = deriveEndpointId(logicalServiceId, nodeId);
+    const endpointId = deriveEndpointId(identity.endpointKey, nodeId);
     return settleEndpointOutcome(await mutateEndpointAtIncarnation({
       bootIncarnation,
       whereClause: {[COLUMN.ENDPOINT_ID]: endpointId},

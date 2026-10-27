@@ -7,7 +7,10 @@
  */
 
 import {MessageGroupService} from '../../message-group/message-group-service.js';
+import {originalSeedPeerAddresses} from '../seed-original-allocation-declaration.js';
 import {
+  initializeRegisteredMessageGroup,
+  messageGroupCreationAlreadySettled,
   registerMessageGroupTransportHandler,
   retireMessageGroupTransportHandler,
 } from '../shared/message-group-transport-handler.js';
@@ -37,6 +40,12 @@ import {resolveHostedNodeClock, resolveHostedReplicaAuthorities} from
  * @param {string} replicaId
  * @return {string}
  */
+import {reportWaitBoundSpent} from '../../logging/wait-bound-spent.js';
+
+const SEED_MESSAGE_GROUP_LEADERSHIP_WAIT = Object.freeze({
+  wait: 'leadershipWaitTimeoutMs',
+  awaited: 'a leader among the seed message-group replicas',
+});
 const formatReplicaMissingAtStart = (replicaId) =>
   `Message-group replica ${replicaId} missing at start`;
 
@@ -75,10 +84,8 @@ class SeedMessageGroupsPhase {
 
     d.resetMessageGroupReplicas();
     const nodeId = d.getNodeId();
-    const peerAddresses = replicaIds.map((replicaId) =>
-      `${nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
-    );
+    const peerAddresses = originalSeedPeerAddresses(nodeId,
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP, replicaIds);
     for (let index = 0; index < replicaIds.length; index++) {
       const replicaId = replicaIds[index];
       d.queueBootstrapServiceReplica(
@@ -125,18 +132,19 @@ class SeedMessageGroupsPhase {
     const serviceId =
       directOptions?.replicaId ||
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = directOptions ||
+    let options = d.admitOriginalSeedReplica(directOptions ||
       d.resolveBootstrapReplicaOptions(
         serviceId,
         UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-      );
+      ));
 
-    if (d.getMessageGroupServices().has(options.replicaId)) {
-      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-    }
-
-    if (options.createDelayMs > 0) {
+    const messageGroupServices = d.getMessageGroupServices();
+    if (!messageGroupServices.has(options.replicaId) && options.createDelayMs > 0) {
       await d.sleep(options.createDelayMs);
+    }
+    options = d.admitOriginalSeedReplica(options);
+    if (messageGroupCreationAlreadySettled(messageGroupServices, options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
     }
 
     const messageGroup = new MessageGroupService({
@@ -146,16 +154,19 @@ class SeedMessageGroupsPhase {
       replicaIds: options.replicaIds,
       peerAddresses: options.peerAddresses,
       transport: d.getMessageRouter(),
+      dbPath: options.dbPath,
+      originalAllocationOpening: options.originalAllocationOpening,
       deferElection: Boolean(options.deferElection),
+      identityExisted: options.identityExisted,
       // The replica is hosted by this node: this node's clock, and this
       // node's runtime for its node-local cache.
       ...resolveHostedReplicaAuthorities(d),
-      bootstrapReadinessState:
-        typeof d.getBootstrapReadinessState === 'function' ?
-          d.getBootstrapReadinessState() :
-          null,
+      bootstrapReadinessState: d.getBootstrapReadinessState(),
     });
 
+    // Cleanup must retain successful-but-revoked initialization as well as
+    // failed initialization. This map is custody before it is live service.
+    messageGroupServices.set(options.replicaId, messageGroup);
     const unifiedAddress =
       `${d.getNodeId()}${ADDRESS.SEPARATOR}` +
       `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
@@ -166,15 +177,16 @@ class SeedMessageGroupsPhase {
       resolveLane: () => d.getReplicaStateMachine?.() || null,
     });
 
-    await messageGroup.initialize();
+    await initializeRegisteredMessageGroup({messageGroup,
+      messageGroupServices,
+      messageRouter: d.getMessageRouter(),
+      address: unifiedAddress, replicaId: options.replicaId});
+    d.assertOriginalSeedAttempt();
 
     if (typeof d.attachMessageGroupService === 'function') {
       d.attachMessageGroupService(messageGroup);
     }
 
-    d.getMessageGroupServices().set(
-      options.replicaId, messageGroup,
-    );
     d.pushMessageGroupReplica(messageGroup);
     d.incrementServicesCreated();
 
@@ -196,6 +208,7 @@ class SeedMessageGroupsPhase {
    */
   async startBootstrapMessageGroupReplica(replicaHandle, _context) {
     const d = this.delegates;
+    d.assertOriginalSeedAttempt();
     const directOptions = _context?.replicaOptions || null;
     const serviceId =
       directOptions?.replicaId ||
@@ -215,6 +228,7 @@ class SeedMessageGroupsPhase {
     );
 
     if (!options.deferElection) {
+      d.assertOriginalSeedContinuation(options.replicaId);
       messageGroup.startElection();
     }
 
@@ -333,6 +347,13 @@ class SeedMessageGroupsPhase {
       }
     }
 
+    this.reportMessageGroupLeadershipSpent(logger, {
+      groupId,
+      replicaIds,
+      timeoutMs,
+      elapsedMs: now() - startTime,
+      lastDelayMs: delay,
+    });
     const error = new Error(
       BOOTSTRAP_ERROR.messageGroupLeadershipTimeout(
         groupId, timeoutMs,
@@ -341,6 +362,48 @@ class SeedMessageGroupsPhase {
     error.groupId = groupId;
     error.timeoutMs = timeoutMs;
     throw error;
+  }
+
+  /**
+   * Report the spent message-group leadership wait with each replica's
+   * last observed presence and role.
+   * @param {Object} logger
+   * @param {Object} spent - {groupId, replicaIds, timeoutMs, elapsedMs,
+   *   lastDelayMs}.
+   */
+  reportMessageGroupLeadershipSpent(logger, spent) {
+    // Observers: the replica reads run inside the reporter's guard, so a
+    // failing read never replaces the leadership timeout error.
+    reportWaitBoundSpent(logger, {
+      ...SEED_MESSAGE_GROUP_LEADERSHIP_WAIT,
+      boundMs: spent.timeoutMs,
+      elapsedMs: spent.elapsedMs,
+      lastObserved: () => ({
+        replicas: this.observeMessageGroupReplicas(spent.replicaIds),
+        lastDelayMs: spent.lastDelayMs,
+      }),
+      scope: () => ({
+        nodeId: this.delegates.getNodeId(),
+        groupId: spent.groupId,
+      }),
+    });
+  }
+
+  /**
+   * Each replica's presence and leader as this node last sees them.
+   * @param {Array<string>} replicaIds
+   * @return {Array<Object>} {replicaId, present, leaderId} per replica.
+   */
+  observeMessageGroupReplicas(replicaIds) {
+    const services = this.delegates.getMessageGroupServices();
+    return replicaIds.map((replicaId) => {
+      const service = services.get(replicaId);
+      return {
+        replicaId,
+        present: Boolean(service),
+        leaderId: service?.getLeaderId?.() ?? null,
+      };
+    });
   }
 
   /**

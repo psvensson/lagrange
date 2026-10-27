@@ -5,13 +5,12 @@
 // staged diff, so editing a file that already contains legacy hash names
 // never fails — only introducing a new one does.
 
-import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 
+import {spawnGit} from './checks/git-invocation.js';
 import {isOpaqueConstantName} from './check-guideline-constant-names.js';
 import {EXIT_CODE, SCRIPT_TEXT} from './guideline-check-constants.js';
 
-const GIT_COMMAND = 'git';
 const GIT_DIFF_ARGS = Object.freeze([
   'diff',
   '--cached',
@@ -58,10 +57,7 @@ function collectOpaqueAddedConstants(diffText) {
 }
 
 function readStagedDiff() {
-  const result = spawnSync(GIT_COMMAND, GIT_DIFF_ARGS, {
-    encoding: 'utf8',
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  const result = spawnGit(GIT_DIFF_ARGS, {encoding: 'utf8'});
   if (result.status !== EXIT_CODE.SUCCESS) {
     throw new Error(result.stderr?.trim() || 'git diff --cached failed');
   }

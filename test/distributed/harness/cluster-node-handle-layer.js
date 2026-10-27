@@ -1,5 +1,7 @@
 import {CLUSTER_CONTROL_SNAPSHOT_ADMIN_LAYER} from './cluster-control-snapshot-admin-layer.js';
 import {ADMIN_ROUTE} from '../../../src/admin/admin-constants.js';
+import {requestDiagnosticMarker, requestPostgresWireScale, requestTablePolicyUpdate} from
+  './cluster-node-owner-operations.js';
 const {
   ADMIN_HEALTH_PATH,
   ADMIN_QUERY_TIMEOUT_MS,
@@ -32,7 +34,6 @@ const {
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
-  PARTITION_CALLBACK_MESSAGE_TYPE,
   PORTS,
   QUERY_MESSAGE_TYPE,
   QUERY_RESULT_MESSAGE_TYPE,
@@ -188,6 +189,9 @@ class NodeHandle {
     this.containerId = containerId;
     this.ip = ip;
     this.role = role;
+    // Where the node runs (the harness's provider assignment), or null
+    // when the handle was built without one; gates never infer it.
+    this.hostIdentity = options.hostIdentity || null;
     this._dockerProvider = dockerProvider;
     this._adminApiPort = adminApiPort;
     // REST port override for host-network mode (each node binds a per-node
@@ -257,35 +261,6 @@ class NodeHandle {
         timeoutMs,
         lane,
       },
-    );
-  }
-
-  /**
-   * Execute a partition callback via Admin API WebSocket.
-   * @param {Object} payload
-   * @param {string} payload.statement - SELECT statement.
-   * @param {Array<*>} [payload.parameters] - Bind parameters.
-   * @param {string} payload.callbackModuleRef - Module reference.
-   * @param {string} payload.callbackExport - Callback export.
-   * @param {string} payload.runtimeKind - Runtime kind.
-   * @returns {Promise<Object>} Callback execution result payload.
-   */
-  async partitionCallback(payload) {
-    if (!payload || typeof payload !== 'object') {
-      throw new Error(
-        'Partition callback payload must be an object for node ' + this.id,
-      );
-    }
-    return this._sendAdminRequest(
-      {
-        type: PARTITION_CALLBACK_MESSAGE_TYPE,
-        statement: payload.statement,
-        parameters: Array.isArray(payload.parameters) ? payload.parameters : [],
-        callbackModuleRef: payload.callbackModuleRef,
-        callbackExport: payload.callbackExport,
-        runtimeKind: payload.runtimeKind,
-      },
-      'partition callback',
     );
   }
 
@@ -846,9 +821,6 @@ class NodeHandle {
       affectedRows: parsed.affectedRows,
       writeReceipt: parsed.writeReceipt,
       readAuthorityWitnesses: parsed.readAuthorityWitnesses,
-      hostResult: parsed.hostResult,
-      callbackModuleRef: parsed.callbackModuleRef,
-      callbackExport: parsed.callbackExport,
       warning: parsed.warning,
       outcome: typeof parsed.outcome === 'string' ? parsed.outcome : undefined,
       visibilityState:
@@ -1014,6 +986,24 @@ class NodeHandle {
         },
       ],
     };
+  }
+
+  /** Merge table-policy overrides through the owner (no SQL). */
+  updateTablePolicy(tableId, policy, options = {}) {
+    return requestTablePolicyUpdate({ip: this.ip,
+      adminApiPort: this._adminApiPort}, tableId, policy, options);
+  }
+
+  /** Persist built-in PG-wire desired state through its owner (no SQL). */
+  scalePostgresWireListener(desiredState, options = {}) {
+    return requestPostgresWireScale({ip: this.ip,
+      adminApiPort: this._adminApiPort}, desiredState, options);
+  }
+
+  /** Record a diagnostic marker through LogsOwner (no SQL). */
+  appendDiagnosticMarker(marker, options = {}) {
+    return requestDiagnosticMarker({ip: this.ip,
+      adminApiPort: this._adminApiPort}, marker, options);
   }
 
   /** Read the node-owned process resource sample from its diagnostics route. */

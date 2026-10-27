@@ -1,3 +1,6 @@
+import {retireNodeTransportHandler} from './replica-transport-handler-identity.js';
+import {settlePendingReplicaRuntimeCleanup, fenceFailedReplicaCreateRuntime,
+  shutdownReplicaHandler} from './replica-runtime-cleanup-custody.js';
 import {
   assignReplicaHandlerRuntimeMetadataMethods,
 } from './replica-handler-runtime-metadata-methods.js';
@@ -8,10 +11,11 @@ import {removeReplicaStorageArtifacts} from
   './replica-storage-artifacts.js';
 import {isCleanupTombstoneRow} from
   './replica-cleanup-tombstone-owner.js';
-
+import {inspectSnapshotInstallArtifactsForGeneration,
+  removeSnapshotInstallArtifactsForGeneration,
+  resolveReplicaCheckpointsRoot} from '../raft/snapshot-install.js';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const CLEANUP_STORAGE_AUTHORITY_KIND = 'cleanup_owned';
-
 function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   assignReplicaHandlerRuntimeMetadataMethods(ReplicaHandler, options);
   const {
@@ -19,7 +23,6 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     NUM,
     REPLICA_HANDLER_ADDRESS,
     REPLICA_HANDLER_ERRNO,
-    REPLICA_HANDLER_EVENT,
     REPLICA_HANDLER_LOG_MSG,
     REPLICA_HANDLER_NUM,
     REPLICA_HANDLER_SERVICE,
@@ -74,37 +77,13 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @return {Promise<boolean>} Whether a created runtime was fenced.
      * @private
      */
-    async fenceFailedReplicaCreateRuntime(
-      replicaId,
-      partitionId,
-      service = null,
-    ) {
-      if (!service) {
-        return false;
-      }
-      try {
-        if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-          await service.shutdown();
-        }
-      } catch (error) {
-        this.logger.warn(
-          REPLICA_HANDLER_LOG_MSG.LOCAL_CLEANUP_RETRY_REQUIRED,
-          {
-            replicaId,
-            partitionId,
-            nodeId: this.nodeId,
-            error: error.message,
-          },
-        );
-      }
-      if (this.localServices.get(replicaId) === service) {
-        this.localServices.delete(replicaId);
-      }
-      const localReplica = this.localReplicas.get(replicaId);
-      if (localReplica?.service === service) {
-        this.setLocalReplica(replicaId, {service: null});
-      }
-      return true;
+    async fenceFailedReplicaCreateRuntime(replicaId, partitionId,
+      service = null, primary = null) {
+      return fenceFailedReplicaCreateRuntime(this, replicaId, partitionId, service, primary);
+    }
+
+    settlePendingReplicaRuntimeCleanup(replicaId, partitionId) {
+      return settlePendingReplicaRuntimeCleanup(this, replicaId, partitionId);
     }
 
     /**
@@ -200,6 +179,29 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             `Replica cleanup ownership changed for ${replicaId}`,
           );
         }
+        this.assertGroupRetiredTombstoneBeforeDelete(partitionId,
+          replicaId);
+        const installGeneration = {
+          checkpointsRoot: resolveReplicaCheckpointsRoot(dbPath),
+          replicaId,
+          replicaCreatedAt: storageAuthority.replicaCreatedAt,
+          attemptToken: storageAuthority.createAttemptToken,
+        };
+        const installPreflight =
+          inspectSnapshotInstallArtifactsForGeneration(installGeneration);
+        if (!installPreflight.allAbsent && installPreflight.owned !== true) {
+          const error = new Error(
+            `Replica storage cleanup incomplete for ${replicaId}`,
+          );
+          error.artifactOutcomes = installPreflight.outcomes;
+          throw error;
+        }
+        if (!await this.getReplicaCleanupTombstoneOwner()
+          .requireCurrent(storageAuthority)) {
+          throw new Error(
+            `Replica cleanup ownership changed for ${replicaId}`,
+          );
+        }
         const removal = await removeReplicaStorageArtifacts(
           fs,
           dbPath,
@@ -212,11 +214,24 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
             }
           },
         );
-        if (!removal.allAbsent) {
+        const installRemoval =
+          await removeSnapshotInstallArtifactsForGeneration({
+            ...installGeneration,
+            beforeRemove: async () => {
+              if (!await this.getReplicaCleanupTombstoneOwner()
+                .requireCurrent(storageAuthority)) {
+                throw new Error(
+                  `Replica cleanup ownership changed for ${replicaId}`,
+                );
+              }
+            },
+          });
+        if (!removal.allAbsent || !installRemoval.allAbsent) {
           const error = new Error(
             `Replica storage cleanup incomplete for ${replicaId}`,
           );
-          error.artifactOutcomes = removal.outcomes;
+          error.artifactOutcomes = [...removal.outcomes,
+            ...installRemoval.outcomes];
           throw error;
         }
         const partitionDir = path.dirname(dbPath);
@@ -393,6 +408,11 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         tableName: replicaInfo.tableName,
         nodeId: this.nodeId,
       });
+      // A member that missed its REMOVE must not linger in a retired group.
+      this.registerOperationTask(this.retireIfOpenedIntoRetiredGroup(replicaId)
+        .catch((error) => this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.OPENED_INTO_RETIRED_GROUP,
+          {replicaId, error: error?.message || String(error)})));
     }
     /**
      * Swap a tracked replica's LIVE service instance (snapshot-install
@@ -541,6 +561,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.NO_MESSAGE_ROUTER);
         return;
       }
+      this.unregisterFromRouter(this.messageRouter);
       this.messageRouter = messageRouter;
       const handlerAddress =
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
@@ -557,11 +578,9 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
         if (this.rpcClient && response.correlationId) {
           this.rpcClient.handleResponse(response.correlationId, response);
         }
-        return {
-          acknowledged: true,
-          ...response,
-        };
+        return response;
       };
+      this.registeredRouterHandler = routerHandler;
       messageRouter.register(handlerAddress, routerHandler);
       this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_ROUTER, {
         address: handlerAddress,
@@ -573,15 +592,19 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
      * @param {Object} messageRouter - Message router instance.
      */
     unregisterFromRouter(messageRouter) {
-      if (!messageRouter) {
+      if (!messageRouter || messageRouter !== this.messageRouter) {
         return;
       }
       const handlerAddress =
         `${this.nodeId}/${REPLICA_HANDLER_ADDRESS.SERVICE_SEGMENT}/` +
         `${REPLICA_HANDLER_ADDRESS.HANDLER_ID}`;
-      messageRouter.unregister(handlerAddress);
+      // Only our own exact registration is retired; a successor's handler
+      // at the address is never removed (finding F2).
+      retireNodeTransportHandler(this.logger, {transport: messageRouter,
+        address: handlerAddress, handler: this.registeredRouterHandler});
       if (this.messageRouter === messageRouter) {
         this.messageRouter = null;
+        this.registeredRouterHandler = null;
       }
       this.logger.info(REPLICA_HANDLER_LOG_MSG.UNREGISTERED_ROUTER, {
         address: handlerAddress,
@@ -591,52 +614,10 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     /**
      * Shutdown the replica handler.
      */
-    async shutdown() {
-      if (this.shutdownPromise) {
-        return this.shutdownPromise;
-      }
-      this.shutdownPromise = (async () => {
-        this.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {
-          nodeId: this.nodeId,
-        });
-        this.shuttingDown = true;
-        // A removal waiting for its replica to leave consensus stops waiting.
-        this.removalConsensusExitRelease?.abort();
-        for (const progress of this.creationProgressByReplica.values()) {
-          this.creationProgressReporter.fail(
-            progress,
-            REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN,
-            {stage: ReplicaStatus.FAILED},
-          );
-        }
-        await Promise.allSettled([...this.operationTasks]);
-        const servicesToShutdown = new Set([
-          ...this.localServices.values(),
-          ...[...this.localReplicas.values()]
-            .map((replica) => replica?.service)
-            .filter(Boolean),
-        ]);
-        for (const service of servicesToShutdown) {
-          try {
-            if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-              await service.shutdown();
-            }
-          } catch (error) {
-            this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
-              nodeId: this.nodeId,
-              error: error.message,
-            });
-          }
-        }
-        this.creationProgressByReplica.clear();
-        this.inProgressOperations.clear();
-        this.localServices.clear();
-        this.localReplicas.clear();
-        this.initialized = false;
-        this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
-      })();
-      return this.shutdownPromise;
+    shutdown() {
+      return shutdownReplicaHandler(this, options);
     }
+
     /**
      * Get service reference for a replica from local tracking.
      * @param {string} replicaId - Replica ID.

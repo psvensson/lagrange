@@ -10,6 +10,10 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from '../rebalancer/rebalancer-entity-identity.js';
+import {
+  MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE,
+  assertMembershipPublicationEpochBinding,
+} from '../rebalancer/replica-operation-membership-epoch-binding.js';
 
 const {
   COLUMN,
@@ -36,6 +40,7 @@ const DISPATCH_RETRY_READY_NODE_DIMENSIONS = Object.freeze([
   CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
 ]);
+const DISPATCH_ROW_EPOCH_BINDING_SOURCE = 'replica dispatch row';
 
 class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
   /**
@@ -145,6 +150,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       entityType: row[COLUMN.ENTITY_TYPE],
       entityId: row[COLUMN.ENTITY_ID],
       replicaId: row.replica_id,
+      targetClaimKey: row.target_claim_key ?? null,
       sourceNodeId: row.source_node_id,
       targetNodeId: row.target_node_id,
       status: row.status,
@@ -155,6 +161,21 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       errorMessage: row.error_message,
       stepsHistory,
     };
+    const membershipPublicationEpochBinding =
+      assertMembershipPublicationEpochBinding(
+        row.membership_publication_epoch,
+        {
+          source: DISPATCH_ROW_EPOCH_BINDING_SOURCE,
+          operationId: row.operation_id,
+        },
+      );
+    if (
+      membershipPublicationEpochBinding.state ===
+        MEMBERSHIP_PUBLICATION_EPOCH_BINDING_STATE.BOUND
+    ) {
+      operation.membershipPublicationEpoch =
+        membershipPublicationEpochBinding.epoch;
+    }
     assertCanonicalRebalancerEntityIdentity(operation);
     const sourceReplicaId = getOperationMetadataString(
       stepsHistory,
@@ -217,6 +238,7 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       type: operation.type,
       partition_id: operation.partitionId,
       replica_id: operation.replicaId,
+      target_claim_key: operation.targetClaimKey || null,
       source_node_id: operation.sourceNodeId,
       target_node_id: operation.targetNodeId,
       status: operation.status,
@@ -228,6 +250,8 @@ class ReplicaDispatchReadinessCapture extends ReplicaDispatchRetryScheduling {
       steps_history: stepsHistory,
       [COLUMN.ENTITY_TYPE]: operation.entityType,
       [COLUMN.ENTITY_ID]: operation.entityId,
+      membership_publication_epoch:
+        operation.membershipPublicationEpoch ?? null,
     };
   }
 

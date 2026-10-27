@@ -113,9 +113,6 @@ test('createJoiningPhaseOwners routes directly to extracted phase owners ' +
     async phaseCreateSelfHostedMessageGroup() {
       throw new Error('wrapper path must not be called');
     },
-    async phaseJoinExistingMessageGroup() {
-      throw new Error('wrapper path must not be called');
-    },
     async phaseWaitForLeadership() {
       throw new Error('wrapper path must not be called');
     },
@@ -139,12 +136,6 @@ test('createJoiningPhaseOwners routes directly to extracted phase owners ' +
     createMessageGroupPhase: {
       async phaseCreateSelfHostedMessageGroup(assignment) {
         calls.push([JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP, assignment]);
-        return assignment;
-      },
-    },
-    joinMessageGroupRuntimeOwner: {
-      async phaseJoinExistingMessageGroup(assignment) {
-        calls.push([JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP, assignment]);
         return assignment;
       },
     },
@@ -172,12 +163,6 @@ test('createJoiningPhaseOwners routes directly to extracted phase owners ' +
     }),
     {groupId: 'mg-1'},
   );
-  t.same(
-    await owners[JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP]({
-      groupId: 'mg-2',
-    }),
-    {groupId: 'mg-2'},
-  );
   t.equal(await owners[JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP](), 'leadership');
   t.equal(await owners[JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE](), 'query');
   t.same(
@@ -186,7 +171,6 @@ test('createJoiningPhaseOwners routes directly to extracted phase owners ' +
       JOIN_PHASE_OWNER.CONTACT_SEED,
       JOIN_PHASE_OWNER.CONNECT_WEBSOCKET,
       [JOIN_PHASE_OWNER.CREATE_SELF_HOSTED_MESSAGE_GROUP, {groupId: 'mg-1'}],
-      [JOIN_PHASE_OWNER.JOIN_EXISTING_MESSAGE_GROUP, {groupId: 'mg-2'}],
       JOIN_PHASE_OWNER.WAIT_FOR_LEADERSHIP,
       JOIN_PHASE_OWNER.QUERY_SYSTEM_STATE,
     ],

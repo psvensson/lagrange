@@ -54,7 +54,16 @@ const FORBIDDEN_REPLICA_ROLES_FRAGMENT = 'replicaRoles';
 const MEMBERSHIP_PUBLICATION_WAKEUP_FRAGMENT =
   'enqueueMembershipPublicationReconcile';
 const MERGE_PLANNING_EVIDENCE_FRAGMENT = 'mergePlanningEvidenceRows';
-const PRIORITY_RECOVERY_SPREAD_GAP_FRAGMENT = 'hasPriorityRecoverySpreadGap';
+// Superseded 2026-10-04 (one-spread-authority): the decision used to be
+// required to read hasPriorityRecoverySpreadGap directly; it now must read the
+// one rule, resolvePrioritySpreadPending (census gap OR witness PENDING). The
+// protected property - the decision consumes the summary authority - is kept.
+const PRIORITY_SPREAD_RULE_FRAGMENT = 'resolvePrioritySpreadPending';
+const RESOLVE_PRIORITY_SPREAD_PENDING_FUNCTION = 'resolvePrioritySpreadPending';
+const PRIORITY_RECOVERY_SPREAD_GAP_FRAGMENT =
+  'resolvePrioritySpreadPendingFromSummary';
+const PRIORITY_CLOSURE_WITNESS_PENDING_FRAGMENT =
+  'isPriorityRecoveryClosureWitnessPending';
 const CACHE_VISIBILITY_SUBSCRIPTION_FRAGMENT = 'systemTableCache.onCacheChange';
 const PRIORITY_STANDALONE_REMOVE_FRAGMENT = 'prioritySpreadStandaloneSafe';
 const PRIORITY_RECOVERY_REASON_GATE_FILTER_FRAGMENT =
@@ -247,8 +256,37 @@ test('detects publication recovery gate code that skips summary authority',
     t.ok(
       violations.some((violation) =>
         violation.functionName === BUILD_PRIORITY_SPREAD_DECISION_FUNCTION &&
+        violation.target === PRIORITY_SPREAD_RULE_FRAGMENT,
+      ),
+    );
+  });
+
+test('detects a priority-spread rule that lets the closure witness do more than add a blocker',
+  async (t) => {
+    const violations = collectRuntimeGrammarContractViolationsFromSource(
+      [
+        'function resolvePrioritySpreadPendingFromSummary() { return true; }',
+        'function resolvePrioritySpreadPending(options) {',
+        '  return options.priorityRecoveryClosureWitness?.state !== \'closure_satisfied_fresh\' &&',
+        '    resolvePrioritySpreadPendingFromSummary(options.priorityPartitionSummary);',
+        '}',
+      ].join('\n'),
+      PUBLICATION_PRIORITY_SPREAD_FILE_PATH,
+    );
+
+    t.ok(
+      violations.some((violation) =>
+        violation.functionName === RESOLVE_PRIORITY_SPREAD_PENDING_FUNCTION &&
+        violation.target === PRIORITY_CLOSURE_WITNESS_PENDING_FRAGMENT,
+      ),
+      'a rule that does not OR in the PENDING witness is a violation',
+    );
+    t.notOk(
+      violations.some((violation) =>
+        violation.functionName === RESOLVE_PRIORITY_SPREAD_PENDING_FUNCTION &&
         violation.target === PRIORITY_RECOVERY_SPREAD_GAP_FRAGMENT,
       ),
+      'the census read itself is present',
     );
   });
 

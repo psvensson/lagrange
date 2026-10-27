@@ -11,7 +11,7 @@
 // turn, after the announcement that showed it usable has run to its end.
 
 import {RUNTIME_PHASE} from '../raft/raft-rs-runtime-owner-constants.js';
-import {isHeldByHostFailure} from './partition-write-kernel.js';
+import {isHeldByHostFailure} from '../raft/raft-operation-port.js';
 
 const CONSENSUS_HOLD_LOG_MSG = Object.freeze({
   UNEXPECTED_THROW_HELD:

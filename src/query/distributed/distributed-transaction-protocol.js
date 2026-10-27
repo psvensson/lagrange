@@ -5,18 +5,35 @@ import {
 } from '../query-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
 import {
-  COMMIT_MODE,
   PARTICIPANT_COMMIT_OUTCOME,
 } from '../../constants/index.js';
 import {
   IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES,
+  PARTICIPANT_ANSWER_DISPOSITION,
+  PARTICIPANT_ANSWER_DISPOSITION_FIELD,
   PARTICIPANT_RETRY_LOG_MSG,
   PARTICIPANT_STATUS,
   TIMEOUT_ERROR_MESSAGES,
   TRANSACTION_STATUS,
 } from './distributed-transaction-coordinator-constants.js';
+import {PARTICIPANT_TRANSACTION_DECISION} from
+  '../../partition/partition-participant-transaction-constants.js';
+import {participantIdentityOf} from './distributed-transaction-identity.js';
+import {
+  readWaitClock,
+  reportWaitBoundSpent,
+} from '../../logging/wait-bound-spent.js';
+import {noteCommitPoint} from './distributed-transaction-commit-point.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const TRANSACTION_BUDGET_WAIT = Object.freeze({
+  wait: 'TIMEOUT_BUDGET_DEFAULT.TRANSACTION_BUDGET_MS',
+  awaited: 'distributed transaction commit protocol completion',
+});
+const PARTICIPANT_RETRY_WAIT = Object.freeze({
+  wait: 'PARTICIPANT_RETRY_DEFAULT.MAX_RETRIES',
+  awaited: 'participant stage operation success',
+});
 const COMMIT_MISS_RESOLUTION = Object.freeze({
   NOT_A_MISS: 'NOT_A_MISS',
   COMMITTED: PARTICIPANT_COMMIT_OUTCOME.COMMITTED,
@@ -39,7 +56,10 @@ function hasTimeoutFailure(failedParticipants) {
 }
 
 /**
- * Resolve prepare-stage participant keys.
+ * Resolve prepare-stage participant keys: every participant whose PREPARE
+ * evidence this coordinator has not retained (a PREPARED participant row
+ * recovered without its digest is asked again under the same identity; the
+ * participant answers a PREPARED row from the row).
  * @param {Object} tx - Transaction state.
  * @return {string[]} Participant keys.
  * @private
@@ -49,8 +69,9 @@ function getPrepareParticipantKeys(tx) {
   return Array.from(tx.participants.values())
     .filter(
       (participant) =>
-        participant.status !== PARTICIPANT_STATUS.PREPARED &&
-        participant.status !== PARTICIPANT_STATUS.COMMITTED,
+        participant.status !== PARTICIPANT_STATUS.COMMITTED &&
+        !(participant.status === PARTICIPANT_STATUS.PREPARED &&
+          participant.prepareEvidenceRetained === true),
     )
     .map((participant) => participant.partitionId)
     .sort();
@@ -101,9 +122,9 @@ function createTransactionTimeoutError() {
 }
 
 /**
- * Treat replayed participant commits that already cleared local transaction
- * state as idempotent success so recovery can converge after ambiguous ACK
- * loss or duplicate commit delivery.
+ * Whether a participant COMMIT failed as a commit miss (the participant no
+ * longer holds the transaction): its outcome is then read from the
+ * participant's durable row, never assumed (seam D, S2).
  * @param {string} stage
  * @param {Error|Object} error
  * @return {boolean}
@@ -122,10 +143,116 @@ function isParticipantCommitMiss(stage, error) {
   return IDEMPOTENT_COMMIT_MISS_ERROR_MESSAGES.has(errorMessage);
 }
 
+/**
+ * Count participants per status (small last-observed summary).
+ * @param {Object} tx - Transaction state.
+ * @return {Object} status -> count.
+ * @private
+ */
+
+function countParticipantStatuses(tx) {
+  const counts = {};
+  for (const participant of tx.participants?.values?.() || []) {
+    counts[participant.status] = (counts[participant.status] || 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Report a spent transaction budget (or a participant-timeout abort).
+ * @param {Object} owner - Coordinator.
+ * @param {Object} tx - Transaction state.
+ * @param {string} stage - Stage where the abort was decided.
+ * @private
+ */
+
+function reportTransactionBudgetSpent(owner, tx, stage) {
+  const nowMs = owner.now();
+  reportWaitBoundSpent(owner.logger, {
+    ...TRANSACTION_BUDGET_WAIT,
+    boundMs: tx.timeoutBudget?.configuredBudgetMs ??
+      owner.transactionBudgetMs,
+    elapsedMs: Number.isFinite(tx.createdAt) ? nowMs - tx.createdAt : null,
+    lastObserved: () => ({
+      stage,
+      status: tx.status,
+      commitMode: tx.commitMode,
+      remainingBudgetMs: owner.getRemainingTransactionBudgetMs(tx),
+      participantStatuses: countParticipantStatuses(tx),
+    }),
+    scope: {transactionId: tx.transactionId, sessionId: tx.sessionId},
+  });
+}
+
+/**
+ * Report exhausted participant-operation retries.
+ * @param {Object} owner - Coordinator.
+ * @param {Object} spent - {tx, stage, partitionId, attempt, error,
+ *   startedAtMs}.
+ * @private
+ */
+
+function reportParticipantRetriesSpent(owner, spent) {
+  reportWaitBoundSpent(owner.logger, {
+    ...PARTICIPANT_RETRY_WAIT,
+    boundMs: null,
+    elapsedMs: owner.now() - spent.startedAtMs,
+    lastObserved: () => ({
+      stage: spent.stage,
+      maxRetries: owner.participantRetryMaxRetries,
+      attempts: spent.attempt + 1,
+      lastError: spent.error?.message || String(spent.error),
+      lastErrorCode: spent.error?.errorCode || spent.error?.code || null,
+    }),
+    scope: {
+      transactionId: spent.tx.transactionId,
+      partitionId: spent.partitionId,
+    },
+  });
+}
+
+// The typed fields a participant failure carries onto the coordinator's
+// failed-participant entries (the participant wire owner names them).
+const PARTICIPANT_FAILURE_FIELDS = Object.freeze([
+  'failureCode',
+  'refusalCause',
+  'outcome',
+  'state',
+  PARTICIPANT_ANSWER_DISPOSITION_FIELD,
+]);
+
+function participantFailureFieldsOf(error) {
+  const fields = {};
+  for (const field of PARTICIPANT_FAILURE_FIELDS) {
+    const value = error?.[field];
+    if (typeof value === 'string' && value.length > 0) {
+      fields[field] = value;
+    }
+  }
+  return fields;
+}
+
+// Whether a failed attempt is retried: a definitive refusal never is; an
+// answer to be asked again (DEFER) or one whose outcome is unknown is retried
+// within the transaction budget while the stage enforces it; anything else
+// within the bounded attempts.
+function isRetriedParticipantFailure(owner, error, attempt, budgetBound) {
+  const disposition = error?.[PARTICIPANT_ANSWER_DISPOSITION_FIELD];
+  if (disposition === PARTICIPANT_ANSWER_DISPOSITION.REFUSED) {
+    return false;
+  }
+  if (budgetBound && (disposition === PARTICIPANT_ANSWER_DISPOSITION.DEFER ||
+      disposition === PARTICIPANT_ANSWER_DISPOSITION.UNKNOWN)) {
+    return true;
+  }
+  return attempt < owner.participantRetryMaxRetries;
+}
+
 const distributedTransactionProtocolMethods = {
   async setTransactionStatus(tx, status) {
     const previousStatus = tx.status;
     const previousUpdatedAt = tx.updatedAt;
+    noteCommitPoint(tx, status);
     tx.status = status;
     tx.updatedAt = this.now();
     try {
@@ -166,7 +293,11 @@ const distributedTransactionProtocolMethods = {
   },
 
   /**
-   * Abort one transaction due to timeout budget exhaustion.
+   * Abort one undecided transaction whose timeout budget is spent: the
+   * rollback protocol records a bound ROLLBACK decision before its fanout
+   * whenever a PREPARE may have been sent (seam C). A transaction whose
+   * COMMIT is decided is never rolled back: the budget bounds the caller's
+   * wait, not the decision, and recovery drives the COMMIT forward.
    * @param {Object} tx - Transaction state.
    * @param {string} stage - Protocol stage where timeout happened.
    * @return {Promise<Object>} Timeout failure payload.
@@ -174,6 +305,10 @@ const distributedTransactionProtocolMethods = {
    */
 
   async abortTimedOutTransaction(tx, stage) {
+    reportTransactionBudgetSpent(this, tx, stage);
+    if (tx.decision?.decision === PARTICIPANT_TRANSACTION_DECISION.COMMIT) {
+      return this.driveTransactionDecision(tx, null);
+    }
     if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
       await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
     }
@@ -188,235 +323,6 @@ const distributedTransactionProtocolMethods = {
       stage,
       errorCode: QUERY_ERROR_CODE.TIMEOUT,
       error: QUERY_ERROR_MSG.QUERY_TIMEOUT,
-    };
-  },
-
-  /**
-   * Drive one transaction through the commit protocol.
-   * Supports replay from PREPARING/PREPARED/COMMITTING statuses.
-   *
-   * @param {Object} tx - Transaction state.
-   * @param {Object} [options] - Commit options.
-   * @param {boolean} [options.allowTimedOutCommitStatuses] - Allow commit
-   *   continuation for PREPARED/COMMITTING transactions after timeout.
-   * @return {Promise<Object>} Commit result.
-   * @private
-   */
-
-  async runCommitProtocol(tx, options = {}) {
-    const commitStatusAllowsTimeout =
-      options.allowTimedOutCommitStatuses === true &&
-      (tx.status === TRANSACTION_STATUS.PREPARED ||
-        tx.status === TRANSACTION_STATUS.COMMITTING);
-
-    if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-      return this.abortTimedOutTransaction(tx, tx.status);
-    }
-
-    if (
-      tx.status === TRANSACTION_STATUS.ACTIVE ||
-      tx.status === TRANSACTION_STATUS.FAILED
-    ) {
-      await this.setTransactionStatus(
-        tx,
-        tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT ?
-          TRANSACTION_STATUS.COMMITTING :
-          TRANSACTION_STATUS.PREPARING,
-      );
-    }
-
-    if (tx.status === TRANSACTION_STATUS.PREPARING) {
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARING);
-      }
-      const prepareFailures = await this.executeParticipantStage(
-        tx,
-        PARTICIPANT_STATUS.PREPARING,
-        PARTICIPANT_STATUS.PREPARED,
-        (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
-        {participantKeys: this.getPrepareParticipantKeys(tx)},
-      );
-      if (prepareFailures.length > 0) {
-        if (this.hasTimeoutFailure(prepareFailures)) {
-          return this.abortTimedOutTransaction(
-            tx,
-            TRANSACTION_STATUS.PREPARING,
-          );
-        }
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-        const rollbackResult = await this.runRollbackProtocol(tx);
-        return {
-          success: false,
-          operation: QUERY_OPERATION.COMMIT,
-          transactionId: tx.transactionId,
-          participants: this.getOrderedParticipantIds(tx),
-          failedParticipants: prepareFailures,
-          rollbackFailedParticipants: rollbackResult.failedParticipants || [],
-          stage: TRANSACTION_STATUS.PREPARING,
-          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        };
-      }
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARING);
-      }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
-    }
-
-    if (tx.status === TRANSACTION_STATUS.PREPARED) {
-      if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-        return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.PREPARED);
-      }
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
-    }
-
-    if (tx.status !== TRANSACTION_STATUS.COMMITTING) {
-      return this.buildParticipantFailureResult(
-        tx,
-        QUERY_OPERATION.COMMIT,
-        tx.status,
-        [],
-      );
-    }
-
-    if (!commitStatusAllowsTimeout && this.isTransactionBudgetExceeded(tx)) {
-      return this.abortTimedOutTransaction(tx, TRANSACTION_STATUS.COMMITTING);
-    }
-    const commitStageResult =
-      tx.commitMode === COMMIT_MODE.ONE_PHASE_COMMIT ?
-        await this.executeOnePhaseCommitStage(tx, {
-          skipBudgetEnforcement: commitStatusAllowsTimeout,
-        }) :
-        {
-          failedParticipants: await this.executeParticipantStage(
-            tx,
-            PARTICIPANT_STATUS.COMMITTING,
-            PARTICIPANT_STATUS.COMMITTED,
-            (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
-            {
-              participantKeys: this.getCommitParticipantKeys(tx),
-              skipBudgetEnforcement: commitStatusAllowsTimeout,
-            },
-          ),
-          deferred: false,
-        };
-    const commitFailures = commitStageResult.failedParticipants;
-    if (commitFailures.length > 0) {
-      if (
-        !commitStatusAllowsTimeout &&
-        this.hasTimeoutFailure(commitFailures)
-      ) {
-        return this.abortTimedOutTransaction(
-          tx,
-          TRANSACTION_STATUS.COMMITTING,
-        );
-      }
-      if (commitStageResult.deferred !== true) {
-        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
-      }
-      return {
-        ...this.buildParticipantFailureResult(
-          tx,
-          QUERY_OPERATION.COMMIT,
-          TRANSACTION_STATUS.COMMITTING,
-          commitFailures,
-        ),
-        deferred: commitStageResult.deferred === true,
-        commitMode: tx.commitMode,
-      };
-    }
-
-    await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
-    this.transactionsBySession.delete(tx.sessionId);
-    return {
-      success: true,
-      operation: QUERY_OPERATION.COMMIT,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      transactionMode: tx.transactionMode,
-      commitMode: tx.commitMode,
-      decisionTrace: tx.decisionTrace.map((entry) => ({...entry})),
-    };
-  },
-
-  async executeOnePhaseCommitStage(tx, options = {}) {
-    const participantKeys = this.getCommitParticipantKeys(tx);
-    const failedParticipants = [];
-    let deferred = false;
-    for (const partitionId of participantKeys) {
-      const participant = tx.participants.get(partitionId);
-      participant.status = PARTICIPANT_STATUS.COMMITTING;
-      participant.updatedAt = this.now();
-      participant.lastError = null;
-      await this.persistParticipantRecord(tx, participant);
-      try {
-        await this.executeParticipantOperationWithRetry(
-          tx,
-          PARTICIPANT_STATUS.COMMITTING,
-          partitionId,
-          () => this.commitParticipant(tx.sessionId, partitionId),
-          options,
-        );
-        participant.status = PARTICIPANT_STATUS.COMMITTED;
-        participant.lastError = null;
-      } catch (error) {
-        const outcome = error?.[PARTICIPANT_COMMIT_OUTCOME_FIELD];
-        deferred = outcome === PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
-        participant.status = deferred ?
-          PARTICIPANT_STATUS.COMMITTING :
-          PARTICIPANT_STATUS.FAILED;
-        participant.lastError = error.message;
-        failedParticipants.push({partitionId, error: error.message});
-      }
-      participant.updatedAt = this.now();
-      await this.persistParticipantRecord(tx, participant);
-    }
-    return {failedParticipants, deferred};
-  },
-
-  /**
-   * Drive one transaction through rollback.
-   * Supports replay from ACTIVE/ROLLING_BACK statuses.
-   *
-   * @param {Object} tx - Transaction state.
-   * @return {Promise<Object>} Rollback result.
-   * @private
-   */
-
-  async runRollbackProtocol(tx) {
-    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-    }
-
-    const rollbackFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.ROLLING_BACK,
-      PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId),
-      {participantKeys: this.getRollbackParticipantKeys(tx)},
-    );
-
-    if (rollbackFailures.length > 0) {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
-    } else {
-      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
-      this.transactionsBySession.delete(tx.sessionId);
-    }
-
-    return {
-      success: rollbackFailures.length === 0,
-      operation: QUERY_OPERATION.ROLLBACK,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: rollbackFailures,
-      errorCode:
-        rollbackFailures.length > 0 ?
-          QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
-          undefined,
-      error:
-        rollbackFailures.length > 0 ?
-          QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
-          undefined,
     };
   },
 
@@ -446,6 +352,8 @@ const distributedTransactionProtocolMethods = {
 
   /**
    * Execute one participant stage and persist participant state updates.
+   * The operation receives the partition and its participant record; a
+   * failed participant's entry carries the typed fields its failure named.
    *
    * @param {Object} tx - Transaction state object.
    * @param {string} transientStatus - Status while stage is running.
@@ -472,31 +380,39 @@ const distributedTransactionProtocolMethods = {
     if (Array.isArray(options.participantKeys)) {
       stageOptions.participantKeys = options.participantKeys;
     }
+    const typedFailures = new Map();
     const failedParticipants =
       await this.workflowCoordinator.executeParticipantStage(
         tx.workflowId,
         transientStatus,
         successStatus,
-        (partitionId) =>
+        (partitionId, participant) =>
           this.executeParticipantOperationWithRetry(
             tx,
             transientStatus,
             partitionId,
-            operation,
+            (attemptPartitionId) => operation(attemptPartitionId, participant),
             {
               skipBudgetEnforcement: options.skipBudgetEnforcement === true,
             },
-          ),
+          ).catch((error) => {
+            typedFailures.set(partitionId, participantFailureFieldsOf(error));
+            throw error;
+          }),
         stageOptions,
       );
     return failedParticipants.map((entry) => ({
       partitionId: entry.participantKey,
       error: entry.error,
+      ...(typedFailures.get(entry.participantKey) || {}),
     }));
   },
 
   /**
-   * Execute one participant operation with bounded exponential retry.
+   * Execute one participant operation with bounded retry. A definitive
+   * participant refusal is never retried; a deferred or unknown answer is
+   * asked again under the same identity within the transaction budget while
+   * the stage enforces it; any other failure within the bounded attempts.
    *
    * @param {Object} tx - Transaction state.
    * @param {string} stage - Participant stage.
@@ -505,7 +421,7 @@ const distributedTransactionProtocolMethods = {
    * @param {Object} [options] - Retry options.
    * @param {boolean} [options.skipBudgetEnforcement] - Skip budget timeout
    *   checks before attempts and retries.
-   * @return {Promise<void>}
+   * @return {Promise<*>} What the participant operation resolved with.
    * @private
    */
 
@@ -517,18 +433,16 @@ const distributedTransactionProtocolMethods = {
     options = {},
   ) {
     let attempt = 0;
+    const startedAtMs = readWaitClock(this);
     const skipBudgetEnforcement = options.skipBudgetEnforcement === true;
+    const budgetBound = !skipBudgetEnforcement &&
+      stage !== PARTICIPANT_STATUS.ROLLING_BACK;
     while (true) {
-      if (
-        !skipBudgetEnforcement &&
-        stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-        this.isTransactionBudgetExceeded(tx)
-      ) {
+      if (budgetBound && this.isTransactionBudgetExceeded(tx)) {
         throw this.createTransactionTimeoutError();
       }
       try {
-        await operation(partitionId);
-        return;
+        return await operation(partitionId);
       } catch (error) {
         const commitMissResolution =
           await this.resolveParticipantCommitMiss(
@@ -538,7 +452,7 @@ const distributedTransactionProtocolMethods = {
             error,
           );
         if (commitMissResolution === COMMIT_MISS_RESOLUTION.COMMITTED) {
-          return;
+          return commitMissResolution;
         }
         if (commitMissResolution === COMMIT_MISS_RESOLUTION.NOT_COMMITTED) {
           error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
@@ -549,7 +463,10 @@ const distributedTransactionProtocolMethods = {
           error[PARTICIPANT_COMMIT_OUTCOME_FIELD] =
             PARTICIPANT_COMMIT_OUTCOME.UNKNOWN;
         }
-        if (attempt >= this.participantRetryMaxRetries) {
+        if (!isRetriedParticipantFailure(this, error, attempt, budgetBound)) {
+          reportParticipantRetriesSpent(this, {
+            tx, stage, partitionId, attempt, error, startedAtMs,
+          });
           throw error;
         }
 
@@ -565,11 +482,7 @@ const distributedTransactionProtocolMethods = {
           retryDelayMs,
           error: error.message,
         });
-        if (
-          !skipBudgetEnforcement &&
-          stage !== PARTICIPANT_STATUS.ROLLING_BACK &&
-          this.isTransactionBudgetExceeded(tx)
-        ) {
+        if (budgetBound && this.isTransactionBudgetExceeded(tx)) {
           throw this.createTransactionTimeoutError();
         }
         await this.sleep(retryDelayMs);
@@ -577,12 +490,21 @@ const distributedTransactionProtocolMethods = {
     }
   },
 
+  /**
+   * Resolve a participant COMMIT miss by the participant's durable outcome,
+   * in every commit mode (seam D, S2): COMMITTED settles the participant,
+   * NOT_COMMITTED is definitive, and UNKNOWN (absence, a PREPARED row, a
+   * failed read, no reader) is never taken as COMMITTED.
+   * @param {Object} tx - Transaction state.
+   * @param {string} stage - Participant stage.
+   * @param {string} partitionId - Participant partition ID.
+   * @param {Error|Object} error - The failed COMMIT.
+   * @return {Promise<string>} A COMMIT_MISS_RESOLUTION.
+   * @private
+   */
   async resolveParticipantCommitMiss(tx, stage, partitionId, error) {
     if (!isParticipantCommitMiss(stage, error)) {
       return COMMIT_MISS_RESOLUTION.NOT_A_MISS;
-    }
-    if (tx.commitMode === COMMIT_MODE.TWO_PHASE_COMMIT) {
-      return COMMIT_MISS_RESOLUTION.COMMITTED;
     }
     if (typeof this.resolveParticipantCommitOutcome !== LOCAL_STR_FUNCTION) {
       return COMMIT_MISS_RESOLUTION.UNKNOWN;
@@ -590,7 +512,7 @@ const distributedTransactionProtocolMethods = {
     const outcome = await this.resolveParticipantCommitOutcome(
       tx.sessionId,
       partitionId,
-      tx.transactionEpoch,
+      participantIdentityOf(tx, partitionId),
     );
     return Object.values(PARTICIPANT_COMMIT_OUTCOME).includes(outcome) ?
       outcome :
@@ -634,11 +556,8 @@ const {
   getRemainingTransactionBudgetMs,
   isTransactionBudgetExceeded,
   abortTimedOutTransaction,
-  runCommitProtocol,
-  runRollbackProtocol,
   buildParticipantFailureResult,
   executeParticipantStage,
-  executeOnePhaseCommitStage,
   executeParticipantOperationWithRetry,
   resolveParticipantCommitMiss,
   emitParticipantRetryDiagnostic,
@@ -651,15 +570,13 @@ export {
   isTransactionBudgetExceeded,
   hasTimeoutFailure,
   abortTimedOutTransaction,
-  runCommitProtocol,
-  runRollbackProtocol,
   buildParticipantFailureResult,
   getPrepareParticipantKeys,
   getCommitParticipantKeys,
   getRollbackParticipantKeys,
   executeParticipantStage,
-  executeOnePhaseCommitStage,
   executeParticipantOperationWithRetry,
+  reportTransactionBudgetSpent,
   resolveParticipantCommitMiss,
   createTransactionTimeoutError,
   emitParticipantRetryDiagnostic,

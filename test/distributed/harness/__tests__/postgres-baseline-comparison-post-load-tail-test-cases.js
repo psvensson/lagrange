@@ -72,11 +72,8 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -249,11 +246,8 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -421,11 +415,8 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -647,11 +638,8 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
-        if (statement.startsWith('UPDATE partitions SET table_name')) {
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -858,11 +846,8 @@ export function registerPostgresBaselineComparisonPostLoadTailTests({
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
             return {rows: [{count: 0}]};

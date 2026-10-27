@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -329,7 +330,7 @@ async (t) => {
   const messageRouter = {
     deliver: async () => {
       deliveries += 1;
-      return {acknowledged: true, success: true, rows: []};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 
@@ -389,7 +390,7 @@ test('QueryExecutor - executeOnPartition fails closed on stale service ' +
   const messageRouter = {
     deliver: async () => {
       deliveries += 1;
-      return {acknowledged: true, success: true, rows: []};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 
@@ -463,7 +464,7 @@ test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
   const messageRouter = {
     deliver: async () => {
       deliveries += 1;
-      return {acknowledged: true, success: true, rows: []};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 
@@ -547,26 +548,23 @@ test('QueryExecutor - executeOnPartition widens recovery-owned system-table ' +
     deliver: async (address) => {
       deliveries.push(address);
       if (address === followerAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           redirect: leaderRedirect,
           leaderAddress: redirectedLeaderAddress,
-        };
+        });
       }
       if (address === redirectedLeaderAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -618,7 +616,11 @@ test('QueryExecutor - executeOnPartition forwards router delivery overrides',
     const messageRouter = {
       deliver: async (address, message, options) => {
         deliveries.push({address, message, options});
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       },
     };
 
@@ -672,7 +674,11 @@ test('QueryExecutor - executeOnPartitions forwards router delivery source',
     const messageRouter = {
       deliver: async (address, message, options) => {
         deliveries.push({address, message, options});
-        return {acknowledged: true, success: true, rows: [], changes: 1};
+        return buildDeliveryEnvelope({acknowledged: true}, {
+          success: true,
+          rows: [],
+          changes: 1,
+        });
       },
     };
 
@@ -783,11 +789,7 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
     deliver: async (address) => {
       deliveries += 1;
       lastAddress = address;
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 
@@ -873,11 +875,7 @@ test('QueryExecutor - executeOnPartition fails closed during the fresh ' +
   const messageRouter = {
     deliver: async () => {
       deliveries += 1;
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
     },
   };
 
@@ -909,12 +907,11 @@ test('QueryExecutor - executeOnPartition forwards migration operation metadata',
     const messageRouter = {
       deliver: async (_address, message) => {
         capturedMessage = message;
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       },
     };
 
@@ -948,20 +945,18 @@ test('QueryExecutor - executeOnPartition forwards sessionId through leader redir
       async deliver(address, message) {
         capturedMessages.push({address, message});
         if (address === 'follower-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             redirect: 'LEADER_REDIRECT',
             leaderAddress: 'leader-node/partition/p1',
             partitionId: 'p1',
-          };
+          });
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       },
     };
     const systemCache = {
@@ -1075,12 +1070,11 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 1,
-      };
+      });
     },
   };
 
@@ -1164,12 +1158,11 @@ test('QueryExecutor - executeOnPartition repairs a zero-row canonical leader ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 1,
-      };
+      });
     },
   };
 

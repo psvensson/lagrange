@@ -3,6 +3,7 @@
  * Requirements: 7.8, 7.10, 7.11, 7.14
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   NodeJoiningService,
@@ -104,11 +105,7 @@ test('NodeJoiningService - blocking authoritative backfill uses critical deliver
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {
@@ -215,11 +212,7 @@ test('NodeJoiningService - pressure-degraded backfill skips replica fanout',
         },
         async deliver(address, payload, options) {
           replicaDeliveries.push({address, payload, options});
-          return {
-            acknowledged: true,
-            success: true,
-            rows: [],
-          };
+          return buildDeliveryEnvelope({acknowledged: true}, {success: true, rows: []});
         },
       };
       service.cdcIntegrationService = {
@@ -366,7 +359,12 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
     }
   });
 
-test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
+// W8 (identity-reuse safety fix, A3): a joiner of a seed whose whole mg-1
+// is on the seed hosts its own new message group; mg-1's membership stays
+// the seed's. This test once pinned the MOVE of an mg-1 replica to the
+// joiner.
+test('NodeJoiningService - full join hosts its own message group; mg-1 ' +
+  'stays on the seed', async (t) => {
   initializeTestEnvironment();
 
   // Configure faster Raft elections for testing
@@ -426,7 +424,7 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
         ]});
 
         service.messageGroupServiceHandler = {};
-        const transportHandler = () => ({acknowledged: true});
+        const transportHandler = () => (null);
         service.messageRouter = createIdentityTransport();
         service.messageRouter.register(
           'join-activation-node/message-group/mg-cache-r1', transportHandler);
@@ -462,12 +460,9 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       }
     });
 
-  // Create system table cache with message group data
-  // This triggers MOVE_REPLICA strategy when there are 2+ replicas on same node
+  // The seed's message group, all three replicas on the seed: the layout
+  // that used to make the seed move one of them to the joiner.
   const systemTableCache = new SystemTableCache();
-
-  // Add message group to cache - no message_groups table entry means no leader check
-  // The services table entries are used for MOVE_REPLICA assignment
 
   // Add 3 replicas on the same node (seed-node-1) with leader role and addresses
   // This satisfies the leader readiness check
@@ -565,10 +560,10 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
     };
     service.triggerJoinReconciler = async function() {};
 
-    // Mock phaseJoinExistingMessageGroup - it requires SQL engine which isn't available
-    service.phaseJoinExistingMessageGroup = async function() {
-      // Skip actual message group joining - just mark as complete
-    };
+    // The self-hosted group's runtime needs a SQL engine this test has
+    // not; the assignment is what is witnessed.
+    service.createMessageGroupPhase.phaseCreateSelfHostedMessageGroup =
+      async function() {};
 
     service.phaseWaitForLeadership = async () => {
       throw new Error('leadership timeout (test)');
@@ -587,19 +582,17 @@ test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
       t.ok(result.error.includes('leadership'), 'error should mention leadership');
     }
 
-    // Verify the bootstrap response had correct MOVE_REPLICA strategy
-    // This is available even if join failed
+    // The assignment is available even if the join failed.
     t.ok(service.bootstrapResponse, 'should have bootstrap response');
-    t.ok(
-      service.bootstrapResponse.messageGroupAssignment.strategy ===
-        AssignmentStrategy.MOVE_REPLICA,
-      'should use MOVE_REPLICA strategy',
-    );
-    t.equal(
-      service.bootstrapResponse.messageGroupAssignment.groupId,
-      'mg-1',
-      'should target existing group',
-    );
+    const assignment = service.bootstrapResponse.messageGroupAssignment;
+    t.equal(assignment.strategy, AssignmentStrategy.CREATE_SELF_HOSTED,
+      'the joiner hosts its own message group');
+    t.not(assignment.groupId, 'mg-1', 'mg-1 is not spread to the joiner');
+    t.notOk(assignment.replicaToMove, 'no mg-1 replica is moved');
+    t.same(['mg-1-r1', 'mg-1-r2', 'mg-1-r3'].map((replicaId) =>
+      systemTableCache.get('services', replicaId)?.node_id),
+    ['seed-node-1', 'seed-node-1', 'seed-node-1'],
+    'mg-1\'s replicas all stay on the seed');
   } finally {
     // Cleanup
     if (service) {
@@ -723,7 +716,7 @@ test('NodeJoiningService - emits events', async (t) => {
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
-      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
+      this.messageRouter.register(unifiedAddress, async () => (null));
     };
     service.phaseWaitForLeadership = async function() {};
     service.getLeaderMessageGroupService = function() {
@@ -932,10 +925,6 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 
@@ -1076,10 +1065,6 @@ test('NodeJoiningService - CDC propagation reuses captured ingress when operatio
           return {
             subscriberId: options.subscriberId || 'sub-1',
             subscriptionEpoch: 1,
-            catchup: {
-              mode: 'none',
-              bufferedEventsReplayed: 0,
-            },
           };
         };
 

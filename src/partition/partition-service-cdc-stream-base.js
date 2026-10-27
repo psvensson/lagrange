@@ -1,5 +1,6 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceWriteMetricsBase} from './partition-service-write-metrics-base.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {
   startPartitionSizeCadence, stopPartitionSizeCadence,
 } from './partition-service-size-cadence.js';
@@ -10,6 +11,9 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {PROPOSAL_QUEUE_PROPOSAL_STATE} from './proposal-queue-constants.js';
+import {committedStatementEntryKey} from './partition-committed-statement-outcome.js';
+import {isTableCdcObligationRecorded} from '../cache/cdc-table-policy.js';
 
 const {
   CDC_LIFECYCLE_LOG_MSG,
@@ -26,10 +30,54 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PARTITION_SPLIT_MIRROR_ORIGIN,
-  STRING,
   SYSTEM_TABLE_NAME,
   fs,
 } = PARTITION_SERVICE_SHARED;
+
+const COMMIT_DEADLINE_WAIT = Object.freeze({
+  wait: 'PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS',
+  awaited: 'consensus commit of one admitted partition write',
+});
+const KNOWN_PROPOSAL_STATES = new Set(
+  Object.values(PROPOSAL_QUEUE_PROPOSAL_STATE));
+const UNRECOGNIZED_PROPOSAL_STATE = 'unrecognized_proposal_state';
+
+// What the queue knew of a released write, log-safe: its proposal state
+// name; anything else by type and serialized size, never by value (no row
+// data in an ERROR line).
+function describeReleasedProposal(proposal) {
+  if (proposal == null || KNOWN_PROPOSAL_STATES.has(proposal)) {
+    return proposal ?? null;
+  }
+  return {
+    state: UNRECOGNIZED_PROPOSAL_STATE,
+    type: typeof proposal?.type === 'string' ? proposal.type : typeof proposal,
+    serializedChars: JSON.stringify(proposal)?.length ?? null,
+  };
+}
+
+/**
+ * Report a spent commit deadline for one pending write.
+ * @param {Object} service - Partition service.
+ * @param {Object} pending - {entryId, proposal, logIndex} from the queue.
+ * @param {Object} deadline - {timeoutMs, startedAtMs} on the replica clock.
+ * @private
+ */
+function reportCommitDeadlineSpent(service, pending, deadline) {
+  reportWaitBoundSpent(service.logger, {
+    ...COMMIT_DEADLINE_WAIT,
+    boundMs: deadline.timeoutMs,
+    elapsedMs: service.timeSource.now() - deadline.startedAtMs,
+    // Observer: a throw here can never skip the queue's release.
+    lastObserved: () => ({
+      proposal: describeReleasedProposal(pending.proposal),
+      logIndex: pending.logIndex,
+      role: service.role ?? null,
+      pendingCommitCount: service.proposalQueue?.size ?? null,
+    }),
+    scope: {partitionId: service.partitionId, entryId: pending.entryId},
+  });
+}
 
 class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
@@ -42,7 +90,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   bufferCDCEventWithoutSubscribers(cdcEvent, tableName) {
-    if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
+    if (!isTableCdcObligationRecorded(tableName)) {
       return;
     }
     const buffered = this.cdcEventBuffer.buffer(cdcEvent);
@@ -71,7 +119,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   cdcEventHasNoAudience(tableName) {
     return this.cdcSubscribers.size === 0 &&
-      !this.shouldBufferCdcWithoutSubscribers(tableName);
+      !isTableCdcObligationRecorded(tableName);
   }
   /**
    * Generate a CDC event for a write operation.
@@ -278,17 +326,20 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
     // write still pending at it is released with the write kernel's typed
     // answer: one handed to consensus may still commit, so its outcome is not
     // known here; one never handed to it was not proposed.
+    const startedAtMs = this.timeSource.now();
     const timeoutId = this.timeSource.setTimeout(() => {
-      this.proposalQueue.releaseEntry(entryId, (pending) =>
-        buildReleasedPendingWriteAnswer(pending, this.partitionId, {
+      this.proposalQueue.releaseEntry(entryId, (pending) => {
+        reportCommitDeadlineSpent(this, pending, {timeoutMs, startedAtMs});
+        return buildReleasedPendingWriteAnswer(pending, this.partitionId, {
           cause: PARTITION_WRITE_RELEASE_CAUSE.COMMIT_DEADLINE_EXCEEDED,
           deadlineMs: timeoutMs,
-        }));
+        });
+      });
     }, timeoutMs);
     try {
       this.proposalQueue.enqueue(entryId, buildPendingProposal({
         options, resolve: resolvePending, reject: rejectPending, timeoutId,
-      }));
+      }), options.admissionClass);
     } catch (error) {
       this.timeSource.clearTimeout(timeoutId);
       throw error;
@@ -367,22 +418,7 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    * @private
    */
   getCommittedEntryKey(command) {
-    if (!command || !command.sql) {
-      return null;
-    }
-    if (command.entryId) {
-      return `entry:${command.entryId}`;
-    }
-    const params = Array.isArray(command.params) ?
-      JSON.stringify(command.params) :
-      STRING.EMPTY;
-    return [
-      command.proposedBy || STRING.EMPTY,
-      String(command.proposedAt || 0),
-      command.timestamp || STRING.EMPTY,
-      command.sql,
-      params,
-    ].join(PARTITION_SERVICE_LITERAL.VALUE);
+    return committedStatementEntryKey(command);
   }
   /**
    * Extract data from INSERT SQL by querying the inserted row.
@@ -472,34 +508,6 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
    */
   parseValue(val) {
     return this.syncCDCGeneratorDependencies().parseValue(val);
-  }
-  /**
-   * Resolve whether late-subscriber external CDC is enabled for a table.
-   * Control-plane propagation tables remain driven by the canonical CDC
-   * policy matrix; user tables may override external CDC via tables.table_policies.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when external CDC buffering should remain enabled.
-   * @private
-   */
-  /**
-   * Resolve whether late-subscriber external CDC is enabled for a table.
-   * Delegates to partition-cdc-delivery.js.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when external CDC buffering should remain enabled.
-   * @private
-   */
-  isExternalCdcAllowedForTable(tableName) {
-    return this.cdcDelivery.isExternalCdcAllowedForTable(tableName);
-  }
-  /**
-   * Determine whether CDC events should be buffered when there are no
-   * subscribers yet. Delegates to partition-cdc-delivery.js.
-   * @param {string} tableName - Table name.
-   * @return {boolean} True when buffering should stay enabled.
-   * @private
-   */
-  shouldBufferCdcWithoutSubscribers(tableName) {
-    return this.cdcDelivery.shouldBufferCdcWithoutSubscribers(tableName);
   }
   /**
    * Allocate next CDC event sequence number.

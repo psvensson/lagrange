@@ -183,8 +183,7 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
     crlfDelay: Infinity,
   });
 
-  let total = 0;
-  let batch = [];
+  const parsedRows = [];
   for await (const line of rl) {
     if (!line) {
       continue;
@@ -192,15 +191,21 @@ async function loadRatingsIntoLagrange({target = DEFAULT_TARGET} = {}) {
     const [userId, movieId, rating, ts] = line.split(
       RATINGS_FIELD_DELIMITER,
     );
-    total += 1;
-    batch.push([
-      total,
+    parsedRows.push([
       Number(userId),
       Number(movieId),
       Number(rating),
       Number(ts),
     ]);
+  }
+  parsedRows.sort((left, right) =>
+    (left[1] - right[1]) || (left[0] - right[0]) || (left[3] - right[3]));
 
+  let total = 0;
+  let batch = [];
+  for (const [userId, movieId, rating, ts] of parsedRows) {
+    total += 1;
+    batch.push([total, userId, movieId, rating, ts]);
     if (batch.length >= BATCH_SIZE) {
       await flushBatch(client, batch);
       batch = [];

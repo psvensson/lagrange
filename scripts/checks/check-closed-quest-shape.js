@@ -46,7 +46,7 @@ import {requiredProofArtifacts} from '../solve/probes.js';
 import {
   admittedEdges, baseFromArgv, changedPathsBetween, readBlobs, reportRecordOffences, trackedAt,
 } from './quest-record-transitions.js';
-import {publicationBase, resolvedCheckBase} from './changed-paths.js';
+import {repositoryCheckBase} from './changed-paths.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PATH_SEPARATOR = '/';
@@ -223,7 +223,7 @@ function closedRequirementsAt(root, rev) {
  */
 function closedQuestShapeOffences(options = {}) {
   const root = options.root || REPO_ROOT;
-  const base = options.base || publicationBase(root);
+  const base = options.base || repositoryCheckBase(root);
   const composition = arrayFlatMap(
     arrayFilter(listQuestIds(root), (id) => isClosed(root, id)),
     (id) => compositionOffences(root, id));
@@ -240,7 +240,7 @@ function closedQuestShapeOffences(options = {}) {
 }
 
 function main(argv) {
-  const base = baseFromArgv(argv) || resolvedCheckBase();
+  const base = baseFromArgv(argv);
   return reportRecordOffences({argv,
     offences: closedQuestShapeOffences(base ? {base} : {}),
     cleanMessage: CLEAN_MESSAGE, header: OFFENCE_HEADER, remediation: REMEDIATION});

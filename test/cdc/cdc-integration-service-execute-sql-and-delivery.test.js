@@ -14,6 +14,7 @@ import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
 } from '../../src/query/query-constants.js';
+import {ERRORS} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import * as partitionWriteKernel from
@@ -221,10 +222,17 @@ test('CDCIntegrationService - transient detection includes leader-transition que
     );
     t.equal(
       service.isTransientCdcError(
-        new Error('Transaction already active on this partition'),
+        {
+          error: ERRORS.WRITE_CUTOVER_PAUSED,
+          failureCode:
+            partitionWriteKernel.PARTITION_WRITE_LEADERSHIP_REFUSAL
+              .CUTOVER_PAUSED,
+          deferRetry: true,
+          retryAfterMs: 25,
+        },
       ),
       true,
-      'partition transaction contention should be retried on system-table writes',
+      'typed partition cutover pauses should be retried on system-table writes',
     );
     t.equal(
       service.isTransientCdcError({

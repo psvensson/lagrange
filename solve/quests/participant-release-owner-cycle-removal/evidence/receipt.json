@@ -1,0 +1,27 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "participant-release-owner-cycle-removal",
+  "status": "pass",
+  "base": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e",
+  "generatedAt": "2026-10-13T19:21:26.085703+00:00",
+  "receipts": [
+    {
+      "id": "single-owner-equivalence-and-independent-review",
+      "passed": true,
+      "detail": "Exact 11-path frozen manifest91a528e3 and independent source reviewf32b20f9 approve byte-equivalent consolidation with lexical guarded OPEN preserved; measured immutable b1d7116c."
+    },
+    {
+      "id": "existing-owner-regressions-on-locked-lab",
+      "passed": true,
+      "detail": "Immutable b1d7116c: four existing files,32 runner assertions,first attempts,zero runner retries on locked lenovo-laptop and tv-dator. Hashbound lab manifestb8c8791c/17 artifacts independently approved by reviewc2de9a45. Raw classified stdout retained; child TAP is not archived separately."
+    },
+    {
+      "id": "zero-cycles-and-changed-path-static-gates",
+      "passed": true,
+      "detail": "Zero actual dependency cycles and unchanged-path static checks pass, but8 cyclomatic,1 cognitive and13 literal findings persist unchanged from predecessor. No baseline raised. These findings remain merge/static obligations.",
+      "verifiedOnComposedLineage": "03d5f1c384c8ab27a2af21308f90a5859c5e9dda"
+    }
+  ],
+  "inputSha": "b1d7116c11102725ce34f4d18021f924851b9efe",
+  "evidenceLimit": "Behavior-preserving consolidation only; no startup, application-barrier, orphan-composition, whole-corpus, Quest-land or main approval."
+}

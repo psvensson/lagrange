@@ -1,6 +1,12 @@
 import Database from 'better-sqlite3';
 import path from 'node:path';
 
+// Resource custody only: SQLite still decides exclusive ownership. Keep each
+// acquired handle reachable until explicit release or process death, even when
+// failed startup drops its ledger or an embedded caller drops its runtime.
+const heldDataDirectoryDatabases = new Set();
+const dataDirectoryOwnerHandles = new WeakMap();
+
 const DATA_DIRECTORY_OWNER_DB = '.lagrange-data-directory-owner.sqlite';
 const DATA_DIRECTORY_OWNER_ERROR_CODE = 'DATA_DIRECTORY_ALREADY_OWNED';
 const DATA_DIRECTORY_OWNER_UNAVAILABLE_ERROR_CODE =
@@ -38,20 +44,33 @@ function acquireDataDirectoryProcessOwner(dataDir) {
       cause?.code === 'SQLITE_LOCKED';
     throw dataDirectoryOwnershipError(canonicalDataDir, cause, alreadyOwned);
   }
+  heldDataDirectoryDatabases.add(database);
   let released = false;
-  return Object.freeze({
+  const owner = Object.freeze({
     dataDir: canonicalDataDir,
     lockPath,
     release() {
       if (released) return;
-      released = true;
       try {
         database.exec(DATA_DIRECTORY_OWNER_SQL.RELEASE);
       } finally {
         database.close();
+        heldDataDirectoryDatabases.delete(database);
+        dataDirectoryOwnerHandles.delete(owner);
+        released = true;
       }
     },
   });
+  dataDirectoryOwnerHandles.set(owner, {database, canonicalDataDir});
+  return owner;
+}
+
+// This is a current custody check, not an allocation or membership decision.
+// A copied object/path cannot stand in for the actual unreleased SQLite owner.
+function ownsDataDirectoryProcessOwner(owner, dataDir) {
+  const held = dataDirectoryOwnerHandles.get(owner);
+  return held?.canonicalDataDir === path.resolve(dataDir) &&
+    held.database.open === true && held.database.inTransaction === true;
 }
 
 function bindDataDirectoryProcessOwner(runtime, owner) {
@@ -59,11 +78,9 @@ function bindDataDirectoryProcessOwner(runtime, owner) {
   return Object.freeze({
     ...runtime,
     async shutdownRuntime() {
-      try {
-        return await shutdownRuntime.call(runtime);
-      } finally {
-        owner.release();
-      }
+      const result = await shutdownRuntime.call(runtime);
+      owner.release();
+      return result;
     },
   });
 }
@@ -72,4 +89,5 @@ export {
   DATA_DIRECTORY_OWNER_ERROR_CODE,
   acquireDataDirectoryProcessOwner,
   bindDataDirectoryProcessOwner,
+  ownsDataDirectoryProcessOwner,
 };

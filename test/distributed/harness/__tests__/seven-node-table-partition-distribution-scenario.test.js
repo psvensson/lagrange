@@ -8,7 +8,6 @@ const SQL_FROM_PARTITIONS = 'FROM partitions';
 const SQL_FROM_SERVICES = 'FROM services';
 const SQL_FROM_TABLES = 'FROM tables';
 const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
-const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATION_INSERT = 'INSERT';
 const TABLE_POLICIES_JSON = JSON.stringify({
   externalCdcAllowed: false,
@@ -73,11 +72,11 @@ describe('seven-node-table-partition-distribution scenario', () => {
     const seedNode = {
       id: 'seed-1',
       role: 'seed',
+      updateTablePolicy: async () => {
+        return {success: true, outcome: 'applied'};
+      },
       query: async (sql) => {
         if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
-          return {rows: []};
-        }
-        if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
           return {rows: []};
         }
         if (sql.includes(SQL_FROM_TABLES)) {

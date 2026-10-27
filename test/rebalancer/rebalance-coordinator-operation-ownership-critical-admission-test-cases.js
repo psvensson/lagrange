@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionTests({
   test,
   assert,
@@ -31,7 +32,9 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         getPolicyForPartition: async () => ({minReplicaCount: 1}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true, status: 'completed'}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
+          status: 'completed',
+        })),
       },
       sqlQueryEngine: {
         executeQuery: async () => ({success: true, rows: [], changes: 0}),
@@ -99,7 +102,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -168,7 +171,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -241,7 +244,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -317,7 +320,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
         getOutboundPressureSummary() {
           return {backpressured: true};
@@ -391,7 +394,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
         getOutboundPressureSummary() {
           return {backpressured: true};
@@ -492,7 +495,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -565,7 +568,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
         getOutboundPressureSummary() {
           return {backpressured: true};
@@ -632,7 +635,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -714,7 +717,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {
@@ -779,7 +782,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -898,7 +901,7 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'completed'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
           },
         },
         sqlQueryEngine: {

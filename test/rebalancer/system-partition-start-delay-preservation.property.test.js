@@ -11,6 +11,7 @@
  * - isSystemPartitionEntity() classification is unchanged
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
@@ -111,7 +112,7 @@ function createRebalancer(entityId, entityType = EntityType.PARTITION) {
     },
     messageRouter: {
       getConnectionState: () => 'connected',
-      deliver: async () => ({acknowledged: true}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
       pingNode: async () => true,
       isOutboundQueueAvailable: () => true,
     },

@@ -1,3 +1,5 @@
+import {hasConsensusCreation, CONSENSUS_BOOTSTRAP} from
+  '../service/service-consensus-bootstrap.js';
 /**
  * Wasm_Component_Driver — runtime driver for WASM component
  * workloads running inside replicated service runtime.
@@ -18,8 +20,8 @@
  *
  * @module runtime/wasm-component-driver
  */
-
 import {RUNTIME_KIND, RUNTIME_FIELD} from '../constants/runtime.js';
+import {FIELD} from '../constants/fields.js';
 import {CancellationToken} from '../query/cancellation-token.js';
 import {
   RuntimeDriver,
@@ -53,66 +55,19 @@ import {WasiComponentCellRuntime} from
 import {
   createWasmComponentDriverShutdownMethods,
 } from './wasm-component-driver-shutdown-methods.js';
+import {WASM_COMPONENT_ERROR, DRIVER_ACTION, DRIVER_SEPARATOR, buildDriverStatusResult} from
+  './wasm-component-driver-vocabulary.js';
+import {startBoundReplica, retireBoundReplica, markBoundServicesRowPresent,
+  inspectBoundRetainedCreation, observeBoundCurrentCreation, prepareBoundReplica} from
+  './wasm-component-driver-consensus.js';
 
 // --- Driver-specific constants ---
-
-const WASM_COMPONENT_ERROR = Object.freeze({
-  DEFINITION_REQUIRED: 'service definition is required',
-  REF_REQUIRED:
-    'runtime_ref is required for wasm_component driver',
-  REF_MUST_BE_STRING: 'runtime_ref must be a string',
-  REF_EMPTY: 'runtime_ref must not be empty',
-  REPLICA_CONTEXT_REQUIRED: 'replicaContext is required',
-  SERVICE_ID_REQUIRED:
-    'replicaContext.serviceId is required',
-  NOT_PREPARED:
-    'driver has not been prepared for this service',
-  NOT_STARTED: 'service is not running',
-  LIFECYCLE_NOT_OBJECT:
-    'wasmLifecycle must be a non-null object',
-  CREATE_REPLICA_FAILED: 'failed to create WASM replica',
-  START_REPLICA_FAILED: 'failed to start WASM replica',
-  START_REPLICA_NO_RESULT:
-    'failed to start WASM replica: lifecycle returned no startup result',
-  STOP_REPLICA_FAILED: 'failed to stop WASM replica',
-  VALIDATION_PIPELINE_FAILED:
-    'WASM validation pipeline failed',
-  DEPENDENCY_RESOLUTION_FAILED:
-    'WASM dependency resolution failed',
-  LOCK_VALIDATION_FAILED:
-    'WASM lock validation failed',
-  UNKNOWN_LIFECYCLE_FAILURE:
-    'unknown lifecycle failure',
-  ARTIFACT_LOADER_REQUIRED:
-    'request Cell Artifact loader is unavailable',
-  COMPONENT_INVOKE_FAILED:
-    'request Cell Component invocation failed',
-  COMPONENT_START_FAILED:
-    'request Cell Component startup failed',
-  CALL_COMPONENT_INVOKE_FAILED:
-    'call Cell Component invocation failed',
-  CALL_PARTIALS_INVALID:
-    'call Cell Component emitted invalid partials',
-  RUNTIME_ACCESS_POLICY_DENIED:
-    'request Cell runtime access policy is unavailable or denied',
-});
-
-const DRIVER_ACTION = Object.freeze({
-  INVOKE: 'invoke',
-  PREPARE: 'prepare',
-  START: 'start',
-  STOP: 'stop',
-});
 
 const DRIVER_FIELD = Object.freeze({
   SERVICE_ID: 'serviceId',
   SERVICE_ID_LEGACY: 'service_id',
 });
 
-const DRIVER_SEPARATOR = Object.freeze({
-  DETAIL: ': ',
-  ERROR_LIST: '; ',
-});
 const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
   HOST: 'localhost',
   PROTOCOL: 'ws',
@@ -128,18 +83,6 @@ const RUNTIME_ACCESS = Object.freeze({
 const CELL_WORLD = Object.freeze({
   CALL: 'call-cell',
 });
-
-function buildDriverStatusResult(status, error, detailKey, detailValue) {
-  const result = {status};
-  if (error) {
-    result.error = error;
-  }
-  if (detailKey && detailValue !== undefined) {
-    result[detailKey] = detailValue;
-  }
-  return result;
-}
-
 
 function buildDriverServiceScopedError(baseMessage, serviceId) {
   return `${baseMessage}${DRIVER_SEPARATOR.DETAIL}'${serviceId}'`;
@@ -216,14 +159,6 @@ async function resolveRuntimeAccessTables(replicaContext) {
  * for actual WASM replica management while conforming to the
  * unified RuntimeDriver contract.
  *
- * Usage:
- *   const driver = new WasmComponentDriver();
- *   const validation = driver.validateDescriptor(definition);
- *   await driver.prepare(definition, {wasmLifecycle, replicaConfig});
- *   await driver.start(replicaContext);
- *   const health = await driver.health(replicaContext);
- *   await driver.stop(replicaContext);
- *
  * @extends RuntimeDriver
  */
 class WasmComponentDriver extends RuntimeDriver {
@@ -245,13 +180,17 @@ class WasmComponentDriver extends RuntimeDriver {
     this._running = new Set();
 
     /**
-     * WasmServiceLifecycle reference keyed by serviceId.
-     * Stored per-service so different services can use
-     * different lifecycle instances if needed.
+     * The WasmServiceLifecycle of each service whose consensus replica
+     * this driver created.
      * @type {Map<string, Object>}
      * @private
      */
     this._lifecycles = new Map();
+
+    // The runtime composition root's lifecycle: it alone creates consensus
+    // replicas, on the storage its data directory owns. A prepare context
+    // cannot supply another.
+    this._wasmServiceLifecycle = options.wasmServiceLifecycle || null;
 
     this._artifactLoader = options.artifactLoader || null;
     this._componentRuntime =
@@ -315,14 +254,12 @@ class WasmComponentDriver extends RuntimeDriver {
   /**
    * Prepare runtime artifacts for a wasm_component service.
    *
-   * Optionally delegates to WasmServiceLifecycle.createReplica
-   * when a lifecycle instance is provided in context.
+   * Delegates to the composition root's WasmServiceLifecycle,
+   * when one is wired, to create the placed consensus replica.
    *
-   * Idempotent: re-preparing an already-prepared service
-   * updates the stored definition.
-   *
+   * Bound re-entry preserves the captured original instance, not a new definition.
    * @param {Object} definition - The service definition.
-   * @param {Object} context - Optional {wasmLifecycle, replicaConfig}.
+   * @param {Object} context - Optional prepare context.
    * @return {Promise<{status: string, error?: string}>}
    */
   async prepare(definition, context) {
@@ -346,11 +283,20 @@ class WasmComponentDriver extends RuntimeDriver {
 
     const serviceId = resolveDriverServiceId(definition);
 
-    if (isRequestCellDefinition(definition)) {
+    if (hasConsensusCreation(definition)) {
+      if (isRequestCellDefinition(definition) || this._requestCells.has(serviceId)) {
+        return buildDriverStatusResult(
+          PREPARE_STATUS.FAILED, CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED);
+      }
+      return this.#prepareConsensusReplica(definition, serviceId, context);
+    } else if (hasConsensusCreation(this._prepared.get(serviceId))) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED, CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED);
+    } else if (isRequestCellDefinition(definition)) {
       return this.#prepareRequestCell(definition, serviceId);
+    } else {
+      return this.#prepareConsensusReplica(definition, serviceId, context);
     }
-
-    return this.#prepareLegacyReplica(definition, context, serviceId);
   }
 
   async #prepareRequestCell(definition, serviceId) {
@@ -388,29 +334,30 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #prepareLegacyReplica(definition, context, serviceId) {
-    const wasmLifecycle = context?.wasmLifecycle;
-    if (wasmLifecycle) {
-      if (typeof wasmLifecycle !== 'object') {
-        throw new DriverLifecycleError(
-          this.kind, DRIVER_ACTION.PREPARE,
-          WASM_COMPONENT_ERROR.LIFECYCLE_NOT_OBJECT,
-        );
-      }
-
-      const replicaConfig = context.replicaConfig;
-      try {
-        wasmLifecycle.createReplica(definition, replicaConfig);
-      } catch (cause) {
-        return buildDriverStatusResult(
-          PREPARE_STATUS.FAILED,
-          `${WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
-            `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
-        );
-      }
-      this._lifecycles.set(serviceId, wasmLifecycle);
+  #prepareConsensusReplica(definition, serviceId, context) {
+    const lifecycle = this._wasmServiceLifecycle;
+    if (!lifecycle) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED,
+      );
     }
-
+    if (hasConsensusCreation(definition)) {
+      return prepareBoundReplica(this, lifecycle, definition, serviceId, context);
+    }
+    try {
+      lifecycle.createReplica(definition, {
+        replicaId: definition[FIELD.REPLICA_ID],
+        replicaIds: definition[FIELD.REPLICA_IDS],
+      });
+    } catch (cause) {
+      return buildDriverStatusResult(
+        PREPARE_STATUS.FAILED,
+        `${cause.code || WASM_COMPONENT_ERROR.CREATE_REPLICA_FAILED}` +
+          `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+      );
+    }
+    this._lifecycles.set(serviceId, lifecycle);
     this._prepared.set(serviceId, definition);
     return {status: PREPARE_STATUS.READY};
   }
@@ -418,10 +365,10 @@ class WasmComponentDriver extends RuntimeDriver {
   /**
    * Start a wasm_component service replica.
    *
-   * Optionally delegates to WasmServiceLifecycle.startReplica
-   * when a lifecycle instance was provided during prepare.
-   * Returns an endpoint intent if the lifecycle returns port
-   * and endpoint information.
+   * A request Cell starts on its Component runtime; a consensus replica
+   * starts through the WasmServiceLifecycle that prepared it, which opens
+   * its raft-rs consensus. Returns an endpoint intent if the lifecycle
+   * returns port and endpoint information.
    *
    * Idempotent: starting an already-running replica is a no-op.
    *
@@ -456,7 +403,12 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
+    const bound = hasConsensusCreation(this._prepared.get(serviceId));
+    const incomingBound = hasConsensusCreation(replicaContext.definition ?? replicaContext);
     const requestCell = this._requestCells.get(serviceId);
+    if (bound !== incomingBound || (bound && requestCell)) {
+      return {status: START_STATUS.FAILED, error: CONSENSUS_BOOTSTRAP.CONTEXT_REQUIRED};
+    }
     if (requestCell) {
       return this.#startRequestCell(
         requestCell,
@@ -466,15 +418,17 @@ class WasmComponentDriver extends RuntimeDriver {
     }
 
     const lifecycle = this._lifecycles.get(serviceId);
-    if (lifecycle) {
-      return this.#startLegacyReplica(
-        lifecycle,
-        replicaContext,
-        serviceId,
+    if (!lifecycle) {
+      return buildDriverStatusResult(
+        START_STATUS.FAILED,
+        WASM_COMPONENT_ERROR.CONSENSUS_LIFECYCLE_REQUIRED,
       );
     }
-
-    return this.#startStandaloneReplica(replicaContext, serviceId);
+    return this.#startConsensusReplica(
+      lifecycle,
+      replicaContext,
+      serviceId,
+    );
   }
 
   async #startRequestCell(requestCell, replicaContext, serviceId) {
@@ -500,12 +454,13 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #startLegacyReplica(lifecycle, replicaContext, serviceId) {
+  async #startConsensusReplica(lifecycle, replicaContext, serviceId) {
+    if (hasConsensusCreation(this._prepared.get(serviceId))) {
+      return startBoundReplica(this, lifecycle, replicaContext, serviceId);
+    }
     try {
-      const startResult = lifecycle.startReplica(
-        serviceId, replicaContext.startOptions,
-      );
-      return this.#projectLegacyStartResult(
+      const startResult = await lifecycle.startReplica(serviceId, replicaContext.startOptions);
+      return this.#projectConsensusStartResult(
         startResult,
         replicaContext,
         serviceId,
@@ -519,7 +474,7 @@ class WasmComponentDriver extends RuntimeDriver {
     }
   }
 
-  #projectLegacyStartResult(startResult, replicaContext, serviceId) {
+  #projectConsensusStartResult(startResult, replicaContext, serviceId) {
     if (!startResult) {
       return buildDriverStatusResult(
         START_STATUS.FAILED,
@@ -552,21 +507,31 @@ class WasmComponentDriver extends RuntimeDriver {
     return result;
   }
 
-  #startStandaloneReplica(replicaContext, serviceId) {
-    // No lifecycle — standalone/test mode
-    this._running.add(serviceId);
+  /**
+   * Enable role/leader services-row publication for a bound replica whose
+   * row the runtime projected, by its exact retained token (design RV3.4).
+   * @param {string} serviceId
+   * @param {string} serviceType - The projected row's service_type.
+   * @param {Object} consensusResourceToken
+   * @return {{outcome: string}}
+   */
+  markServicesRowPresent(serviceId, serviceType, consensusResourceToken) {
+    return markBoundServicesRowPresent(this, serviceId, serviceType, consensusResourceToken);
+  }
 
-    const result = {status: START_STATUS.RUNNING};
-    if (replicaContext.endpointHost &&
-        replicaContext.endpointPort) {
-      result.endpointIntent = {
-        host: replicaContext.endpointHost,
-        port: replicaContext.endpointPort,
-        protocol: replicaContext.endpointProtocol ??
-          DRIVER_ENDPOINT_DEFAULT.PROTOCOL,
-      };
-    }
-    return result;
+  /**
+   * The local half of one inventoried bound creation (design
+   * RECOVERY-DESIGN-20261017 R1-A): read by path, no physical effect.
+   * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+   * @return {{outcome: string}}
+   */
+  inspectRetainedCreation(owned) {
+    return inspectBoundRetainedCreation(this, owned);
+  }
+
+  /** Synchronous physical observation, independent of prepared bookkeeping. */
+  observeCurrentCreation(owned) {
+    return observeBoundCurrentCreation(this, owned);
   }
 
   /**
@@ -596,6 +561,10 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
 
+    // A creation-bound stop retires its exact retained resource (D7'/N4).
+    if (hasConsensusCreation(replicaContext.definition ?? replicaContext)) {
+      return retireBoundReplica(this, replicaContext, serviceId);
+    }
     const lifecycle = this._lifecycles.get(serviceId);
     if (this._requestCells.has(serviceId)) {
       await this._componentRuntime.stop(serviceId);

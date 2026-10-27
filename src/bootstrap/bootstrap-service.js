@@ -51,7 +51,10 @@ import {
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
-import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
+import {
+  createRuntimeStartupWiring,
+  createWasmServiceNodeDependencies,
+} from '../runtime/runtime-startup-wiring.js';
 import {
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
@@ -123,6 +126,8 @@ const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPart
 const LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE = 'Retrying seed steady-state control-plane writers until ';
 const LOCAL_STR_LIFECYCLE_METADATA_PUBLICATION_READINESS = 'lifecycle metadata publication readiness is satisfied';
 const LOCAL_STR_DEFERRING_SEED_STEADY_STATE_CONTROL_PLAN = 'Deferring seed steady-state control-plane writers until ';
+const SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT =
+  'seed_steady_state_control_plane_writers';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapLog = BOOTSTRAP_LOG_MSG;
@@ -183,7 +188,7 @@ class BootstrapService extends EventEmitter {
         options.routerFactory :
         undefined;
     // The node's randomness, when it owns one. Consensus draws its election
-    // timing from here; unsupplied, liferaft keeps Math.random exactly as
+    // timing from here; unsupplied, production consensus keeps its platform randomness as
     // production does.
     this.randomSource =
       options.randomSource &&
@@ -208,6 +213,7 @@ class BootstrapService extends EventEmitter {
     );
     this.bootstrapReadinessState = options.readinessState || null;
     this.startupServicesAdmission = options.startupServicesAdmission || null;
+    this.membershipOwnerOutcome = options.membershipOwnerOutcome || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.onLocalAdminRuntimeReady =
       typeof options.onLocalAdminRuntimeReady === LOCAL_STR_FUNCTION ?
@@ -229,6 +235,11 @@ class BootstrapService extends EventEmitter {
     // receivers fence stale-incarnation (zombie) writers.
     this.bootIncarnation = bootIncarnation;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
+    this.dataDirectoryProcessOwner = options.dataDirectoryProcessOwner || null;
+    this.startupAbortSignal = options.startupAbortSignal || null;
+    this.originalAllocationPreparation = null;
+    this.originalAllocationInitialization = null;
+    this.detachOriginalAllocationAbort = null;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({
         maxConcurrent: this.config.maxConcurrentServiceActions,
@@ -282,6 +293,7 @@ class BootstrapService extends EventEmitter {
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+      wasmServiceDependencies: createWasmServiceNodeDependencies(this),
     });
     const self = this;
     this.runtimeDependencyOwner = {
@@ -322,6 +334,9 @@ class BootstrapService extends EventEmitter {
       },
       get tablePolicyService() {
         return self.tablePolicyService;
+      },
+      get systemMetadataOwners() {
+        return self.systemMetadataOwners;
       },
       get latencyTopology() {
         return self.latencyTopology;
@@ -446,6 +461,9 @@ class BootstrapService extends EventEmitter {
         getMetadataPublicationReadinessOptions: () => ({
           readinessState: this.bootstrapReadinessState,
           sleep: (delayMs) => this.sleep(delayMs),
+          logger: this.logger,
+          scope: {nodeId: this.nodeId},
+          spentSubject: SEED_STEADY_STATE_METADATA_PUBLICATION_SPENT_SUBJECT,
           onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
             this.logger.warn(
               LOCAL_STR_RETRYING_SEED_STEADY_STATE_CONTROL_PLANE +
@@ -682,34 +700,6 @@ class BootstrapService extends EventEmitter {
       infrastructureJoinComplete: this.phase === BootstrapPhase.COMPLETE,
       recovery,
     });
-  }
-
-  /**
-   * Bootstrap and exit on failure.
-   * This is the main entry point for seed node startup.
-   * @param {Object} options - Bootstrap options; bootIncarnation is required
-   *   (the constructor refuses its absence before any side effect).
-   * @return {Promise<Object>} Bootstrap result.
-   */
-  static async bootstrapOrExit(options = {}) {
-    const bootstrap = new BootstrapService(options);
-    const result = await bootstrap.bootstrap();
-
-    if (!result.success) {
-      const loggingService = LoggingService.getInstance();
-      const logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
-
-      logger.error(BootstrapLog.BOOTSTRAP_EXIT_FAILED, {
-        nodeId: result.nodeId,
-        error: result.error,
-        phase: result.phase,
-      });
-
-      // Exit with non-zero code (Requirement 6.16)
-      process.exit(1);
-    }
-
-    return result;
   }
 }
 

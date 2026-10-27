@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -24,6 +25,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
   createStorageOwners,
   createTransactionCoordinator,
   createCoordinator,
+  seedStorageIncreasingOperation,
   disablePersistenceConfirmation,
 }) {
   test('RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight',
@@ -48,7 +50,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -120,7 +122,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -173,7 +175,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -305,7 +307,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -395,7 +397,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -523,7 +525,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       messageRouter: {
         async deliver(target, request) {
           deliveries.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -564,6 +566,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         errorMessage: null,
         stepsHistory: [],
       };
+      seedStorageIncreasingOperation(coordinator, operation);
 
       const result = await coordinator.dispatchOperation(operation);
 
@@ -679,7 +682,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -800,7 +803,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       messageRouter: {
         async deliver(target, request) {
           deliveries.push({target, request});
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {
@@ -841,6 +844,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         errorMessage: null,
         stepsHistory: [],
       };
+      seedStorageIncreasingOperation(coordinator, operation);
 
       const result = await coordinator.dispatchOperation(operation);
 
@@ -911,7 +915,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -988,7 +992,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -1072,7 +1076,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'completed'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'});
         },
       },
       sqlQueryEngine: {
@@ -1148,7 +1152,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: false, error: 'test error'};
+          return buildDeliveryEnvelope({acknowledged: false, error: 'test error'});
         },
       },
       sqlQueryEngine: {
@@ -1234,7 +1238,7 @@ export function registerRebalanceCoordinatorOperationOwnershipTailMoreTests({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: 'initiated'};
+          return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
         },
       },
       sqlQueryEngine: {

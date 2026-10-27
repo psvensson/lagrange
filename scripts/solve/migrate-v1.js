@@ -17,6 +17,7 @@ import {
 } from './schema.js';
 import {parseFrontMatter} from './store.js';
 import {solveBinaryOffences} from '../checks/check-solve-binary-guard.js';
+import {execGit} from '../checks/git-invocation.js';
 
 const TEXT_ENCODING = 'utf8';
 const LINE_SEPARATOR = '\n';
@@ -96,9 +97,7 @@ const V1_TYPE = Object.freeze({
 });
 const KEPT_VERBATIM = 'kept verbatim';
 const NO_KIND = '<none>';
-const GIT = 'git';
 const GIT_ADDED_COMMITS = Object.freeze(['log', '--diff-filter=A', '--format=%H', '--']);
-const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 const TAR = 'tar';
 const TAR_ARGUMENTS = Object.freeze(['-czf']);
 const TAR_DIRECTORY_FLAG = '-C';
@@ -238,7 +237,7 @@ function relative(root, file) {
 }
 
 function git(root, args) {
-  return execFileSync(GIT, args, {cwd: root, encoding: TEXT_ENCODING, maxBuffer: GIT_MAX_BUFFER});
+  return execGit(args, {cwd: root, encoding: TEXT_ENCODING});
 }
 
 // --- classification ----------------------------------------------------------
@@ -610,8 +609,7 @@ function v1LogPaths(root, baseCommit) {
 // `<sha> blob <size>\n<size bytes>\n`.
 function readV1Logs(root, baseCommit, logPaths) {
   const request = logPaths.map((file) => `${baseCommit}:${file}`).join(LINE_SEPARATOR);
-  const output = execFileSync(GIT, [...GIT_CAT_FILE], {cwd: root, input: request,
-    maxBuffer: GIT_MAX_BUFFER});
+  const output = execGit([...GIT_CAT_FILE], {cwd: root, input: request});
   const contents = new Map();
   let cursor = 0;
   for (const file of logPaths) {

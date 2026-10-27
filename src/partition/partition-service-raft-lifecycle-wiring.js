@@ -5,6 +5,10 @@ import {
   PARTITION_WRITE_RELEASE_CAUSE,
   buildReleasedPendingWriteAnswer,
 } from './partition-write-kernel.js';
+import {discardParticipantSessions} from
+  './partition-participant-transaction-session.js';
+import {runLeaderDeterminismSelfCheck} from
+  './partition-participant-transaction-self-check.js';
 
 const {
   PARTITION_SERVICE_EVENT,
@@ -34,23 +38,27 @@ function wirePartitionRaftLifecycleEvents(
   // A replica that stops leading releases every pending write at once, each
   // answered with what this replica knows of it (the write kernel's typed
   // answer): one handed to consensus has an outcome this replica cannot know;
-  // one never handed to it was not proposed, and this replica does not lead.
-  const releasePendingWrites = () => service.releasePendingCommittedWrites(
-    (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
-      {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+  // one never handed to it (a write parked while the partition was reserved
+  // among them) was not proposed, and this replica does not lead. Its
+  // participant staging sessions are discarded with it (TX1 design 7: they
+  // hold nothing durable and no connection state).
+  const releasePendingWrites = () => {
+    service.releasePendingCommittedWrites(
+      (pending) => buildReleasedPendingWriteAnswer(pending, service.partitionId,
+        {cause: PARTITION_WRITE_RELEASE_CAUSE.LEADERSHIP_LOST}));
+    discardParticipantSessions(service);
+  };
   // Every announcement is also where the partition sees its group held (the
   // port announces a held group without a role) and serving again.
   const observeConsensusHold = createConsensusHoldLog(service);
   // The term is the consensus core's own (readStatus().term); nothing here
   // copies it. Committed entries are applied only by the port's
-  // committed-entry application, so COMMIT carries no handler; it stays in
-  // the map because the lifecycle owner subscribes to every named event.
+  // committed-entry application, which is why no commit event is wired.
   wireReplicaLifecycleEvents(service, {
     events: {
       LEADER: PARTITION_SERVICE_ROLE.LEADER,
       FOLLOWER: PARTITION_SERVICE_ROLE.FOLLOWER,
       CANDIDATE: PARTITION_SERVICE_ROLE.CANDIDATE,
-      COMMIT: PARTITION_SERVICE_REASON.COMMIT,
       LEADER_CHANGE: PARTITION_SERVICE_REASON.LEADER_CHANGE,
       TERM_CHANGE: PARTITION_SERVICE_REASON.TERM_CHANGE,
     },
@@ -67,6 +75,9 @@ function wirePartitionRaftLifecycleEvents(
         term,
       });
       service.scheduleLeaderOwnedActivation(term);
+      // The leader's determinism self-check (TX1 design 3.3), once per
+      // connection, before it stages any transaction.
+      runLeaderDeterminismSelfCheck(service);
       observeConsensusHold();
     },
     onFollower: ({term, demotedByLeaderChange}) => {

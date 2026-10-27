@@ -3,12 +3,16 @@ import {
   SERVICE_LIFECYCLE_STATE,
   SERVICE_OPERATION_STATE,
 } from '../constants/index.js';
+import {SERVICE_INSTANCE_OUTCOME as INSTANCE_OUTCOME} from '../constants/service-instance.js';
 import {
   LIFECYCLE_MGR_MSG,
   SERVICE_LIFECYCLE_LOG,
   SERVICE_LIFECYCLE_METRIC_STATUS,
   resolveServiceFields,
 } from './service-lifecycle-common.js';
+
+import {isConsensusCreationRow, inventoryConsensusCreationRow} from
+  './service-consensus-creation-intent.js';
 
 const OPERATION_COMMAND_SEPARATOR = ':';
 const RECOVERY_RESULT_STATUS = Object.freeze({
@@ -92,6 +96,18 @@ async function failRecoveryJournalState(manager, {
 }
 
 async function recoverOperationRow(manager, operationRow, resolveServiceContext, defaultContext) {
+  if (operationRow?.__recoveryCorrupt === true) {
+    return buildRecoveryResult(RECOVERY_RESULT_STATUS.FAILED, {
+      operationId: operationRow.operation_id ?? null,
+      error: INSTANCE_OUTCOME.CORRUPT_STATE,
+    });
+  }
+  // A consensus creation row answers its journal half only (design
+  // RECOVERY-DESIGN-20261017 R1-A, R2-G): no metadata read, no reservation,
+  // no effect; its node re-enters it under its own id.
+  if (isConsensusCreationRow(operationRow)) {
+    return inventoryConsensusCreationRow(operationRow);
+  }
   const operationId = operationRow.operation_id || operationRow.operationId;
   const operationState = operationRow.state;
   const operation = {operationId};
@@ -170,7 +186,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         definition: resolvedServiceContext.definition || serviceContext,
         context: runtimeContext,
       });
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.CREATED);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.CREATED);
     } else if (lifecycleOperation === SERVICE_LIFECYCLE_OPERATION.START) {
       const replicaHandle = resolvedServiceContext.replicaHandle || serviceContext;
       await manager._enforceRuntimePolicy(lifecycleOperation, replicaHandle, runtimeContext);
@@ -181,7 +197,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         currentState,
         SERVICE_LIFECYCLE_STATE.STARTING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STARTING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STARTING);
       result = await adapter.startReplica(replicaHandle, runtimeContext);
       manager._assertTransition(
         serviceId,
@@ -189,7 +205,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         SERVICE_LIFECYCLE_STATE.STARTING,
         SERVICE_LIFECYCLE_STATE.RUNNING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
     } else if (lifecycleOperation === SERVICE_LIFECYCLE_OPERATION.STOP) {
       const replicaHandle = resolvedServiceContext.replicaHandle || serviceContext;
       const currentState = manager.getReplicaState(replicaHandle);
@@ -199,7 +215,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         currentState,
         SERVICE_LIFECYCLE_STATE.STOPPING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STOPPING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STOPPING);
       result = await adapter.stopReplica(replicaHandle, runtimeContext);
       manager._assertTransition(
         serviceId,
@@ -207,7 +223,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         SERVICE_LIFECYCLE_STATE.STOPPING,
         SERVICE_LIFECYCLE_STATE.STOPPED,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STOPPED);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STOPPED);
     } else if (lifecycleOperation === SERVICE_LIFECYCLE_OPERATION.RESTART) {
       const replicaHandle = resolvedServiceContext.replicaHandle || serviceContext;
       await manager._enforceRuntimePolicy(lifecycleOperation, replicaHandle, runtimeContext);
@@ -218,7 +234,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         currentState,
         SERVICE_LIFECYCLE_STATE.STOPPING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STOPPING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STOPPING);
       await adapter.stopReplica(replicaHandle, runtimeContext);
       manager._assertTransition(
         serviceId,
@@ -226,14 +242,14 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         SERVICE_LIFECYCLE_STATE.STOPPING,
         SERVICE_LIFECYCLE_STATE.STOPPED,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STOPPED);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STOPPED);
       manager._assertTransition(
         serviceId,
         lifecycleOperation,
         SERVICE_LIFECYCLE_STATE.STOPPED,
         SERVICE_LIFECYCLE_STATE.STARTING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.STARTING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.STARTING);
       result = await adapter.startReplica(replicaHandle, runtimeContext);
       manager._assertTransition(
         serviceId,
@@ -241,7 +257,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
         SERVICE_LIFECYCLE_STATE.STARTING,
         SERVICE_LIFECYCLE_STATE.RUNNING,
       );
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.RUNNING);
     } else {
       return buildRecoveryResult(RECOVERY_RESULT_STATUS.SKIPPED, {
         operationId,
@@ -276,7 +292,7 @@ async function recoverOperationRow(manager, operationRow, resolveServiceContext,
     });
   } catch (error) {
     if (replicaId) {
-      manager._replicaStateById.set(replicaId, SERVICE_LIFECYCLE_STATE.FAILED);
+      manager._setGenericReplicaState(replicaId, SERVICE_LIFECYCLE_STATE.FAILED);
     }
     await failRecoveryJournalState(manager, {
       operation,
@@ -312,13 +328,23 @@ async function recoverPendingOperations(manager, options = {}) {
   const defaultContext = options.context || {};
   const operationRows = await manager._readRecoverableOperations();
   const recoveryResults = [];
+  // The scan is total (R2-E): one row's failure is that row's typed result,
+  // never the end of the scan.
   for (const operationRow of operationRows) {
-    const result = await recoverOperationRow(
-      manager,
-      operationRow,
-      resolveServiceContext,
-      defaultContext,
-    );
+    let result;
+    try {
+      result = await recoverOperationRow(
+        manager,
+        operationRow,
+        resolveServiceContext,
+        defaultContext,
+      );
+    } catch (error) {
+      result = buildRecoveryResult(RECOVERY_RESULT_STATUS.FAILED, {
+        operationId: operationRow?.operation_id ?? operationRow?.operationId ?? null,
+        error: error.message,
+      });
+    }
     recoveryResults.push(result);
   }
   return recoveryResults;

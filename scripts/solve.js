@@ -11,6 +11,7 @@
 //   node scripts/solve.js land --id <quest>
 //   node scripts/solve.js evidence add <file> --id <quest> [--text "<why>"] [--replace]
 //   node scripts/solve.js evidence delete <asset> --authorize-asset <asset>
+//   node scripts/solve.js evidence relocate --id <quest> --paths-file <list> --source-commit <sha> [--record-to <quest>] [--label <name>] [--dry-run]
 //   node scripts/solve.js board
 // Every command accepts --json.
 
@@ -21,7 +22,8 @@ import {fileURLToPath} from 'node:url';
 
 import {ENTRY_TYPE, QUEST_STATUS} from './solve/schema.js';
 import {
-  SolveError, board, evidenceAdd, evidenceDelete, land, note, probe, start,
+  SolveError, board, evidenceAdd, evidenceDelete, evidenceRelocate, land, note,
+  probe, start,
 } from './solve/commands.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -34,13 +36,18 @@ const JSON_INDENT = 2;
 const LINE_SEPARATOR = '\n';
 const EVIDENCE_ADD = 'add';
 const EVIDENCE_DELETE = 'delete';
+const EVIDENCE_RELOCATE = 'relocate';
 const AUTHORIZE_ASSET_FLAG = 'authorize-asset';
+const RELOCATE_FLAG = Object.freeze({PATHS_FILE: 'paths-file',
+  SOURCE_COMMIT: 'source-commit', RECORD_TO: 'record-to', DRY_RUN: 'dry-run'});
 const USAGE = 'usage: solve <start|note|probe|land|evidence|board> [--id <quest>] [--json]';
 const NOTE_USAGE = 'note needs one of --finding, --attempt, --verification, --blocked, ' +
   '--exhausted, --superseded';
 const EVIDENCE_USAGE = 'usage: solve evidence add <file> --id <quest> ' +
   '[--text "<why>"] [--replace] | ' +
-  'solve evidence delete <asset> --authorize-asset <asset>';
+  'solve evidence delete <asset> --authorize-asset <asset> | ' +
+  'solve evidence relocate --id <quest> --paths-file <list> --source-commit <sha> ' +
+  '[--record-to <quest>] [--label <name>] [--dry-run]';
 const NEXT_OWNER_FLAG = 'next-owner';
 const LEGACY_TAG = ', legacy';
 const LIST_SEPARATOR = ', ';
@@ -105,7 +112,16 @@ function cmdLand(root, {flags}) {
   return land(root, {id: flags.id, log: (text) => process.stderr.write(text)});
 }
 
+function cmdEvidenceRelocate(root, flags) {
+  return evidenceRelocate(root, {id: flags.id,
+    pathsFile: flags[RELOCATE_FLAG.PATHS_FILE],
+    sourceCommit: flags[RELOCATE_FLAG.SOURCE_COMMIT],
+    recordTo: flags[RELOCATE_FLAG.RECORD_TO], label: flags.label,
+    dryRun: flags[RELOCATE_FLAG.DRY_RUN] === true, tmpdir: os.tmpdir()});
+}
+
 function cmdEvidence(root, {flags, positional}) {
+  if (positional[0] === EVIDENCE_RELOCATE) return cmdEvidenceRelocate(root, flags);
   if (!positional[1]) throw new SolveError(EVIDENCE_USAGE);
   if (positional[0] === EVIDENCE_DELETE) {
     return evidenceDelete(root, {asset: positional[1],

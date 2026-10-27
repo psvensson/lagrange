@@ -18,7 +18,6 @@
 // srcFingerprint (16-hex over src/) so live per-node reports, which stamp
 // SRC_FINGERPRINT at boot, can be bound to the same frozen candidate.
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import process from 'node:process';
 import {fileURLToPath} from 'node:url';
@@ -28,6 +27,7 @@ import {
   computeSourceFingerprint,
   SOURCE_FINGERPRINT_ALGORITHM,
 } from '../src/diagnostics/source-fingerprint.js';
+import {execGit} from './checks/git-invocation.js';
 
 const DEFAULT_ENCODING = 'utf8';
 const RELEASE_CONTENT_DIGEST_ALGORITHM =
@@ -40,7 +40,6 @@ const USAGE_TEXT =
   'usage: release-content-digest [--check <frozen-record.json>]\n';
 const CHECK_MISMATCH_PREFIX = 'release-content digest mismatch: ';
 const CHECK_OK_PREFIX = 'release-content digest verified: ';
-const GIT_BIN = 'git';
 const GIT_DIR_FLAG = '-C';
 const GIT_REV_PARSE_HEAD_ARGS = Object.freeze(['rev-parse', 'HEAD']);
 const MISMATCH_SEPARATOR = '; ';
@@ -51,8 +50,7 @@ const RECORD_IDENTITY_KEYS = Object.freeze([
 ]);
 
 function listTrackedReleaseFiles(root) {
-  const stdout = execFileSync('git', ['-C', root, 'ls-files', '-z'],
-    {encoding: DEFAULT_ENCODING, maxBuffer: 64 * 1024 * 1024});
+  const stdout = execGit(['-C', root, 'ls-files', '-z'], {encoding: DEFAULT_ENCODING});
   return stdout
     .split(NUL_SEPARATOR)
     .filter((relativePath) => relativePath.length > 0)
@@ -60,7 +58,7 @@ function listTrackedReleaseFiles(root) {
 }
 
 function resolveHeadCommit(root) {
-  return execFileSync(GIT_BIN, [GIT_DIR_FLAG, root, ...GIT_REV_PARSE_HEAD_ARGS],
+  return execGit([GIT_DIR_FLAG, root, ...GIT_REV_PARSE_HEAD_ARGS],
     {encoding: DEFAULT_ENCODING}).trim();
 }
 

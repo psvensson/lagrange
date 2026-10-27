@@ -4,6 +4,7 @@
  * that snapshot; JavaScript object behaviour is never authority.
  */
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -21,6 +22,8 @@ import {bootstrapOfRequest} from
   '../../../src/raft/raft-rs-bootstrap-membership.js';
 import {deriveRaftRsPeerId} from
   '../../../src/raft/raft-rs-peer-identity.js';
+import {raftRsConfStateKey} from
+  '../../../src/raft/raft-rs-conf-state-key.js';
 import {readCommittedMembershipStamp} from
   '../../../src/rebalancer/committed-membership-bootstrap-read.js';
 import {PARTITION_REPLICA_MEMBERSHIP_STATE} from
@@ -39,7 +42,10 @@ function committedStamp(overrides = {}) {
     voters: [PEER_ID],
     votersOutgoing: [],
     learners: [],
+    learnersNext: [],
     appliedIndex: 1,
+    configurationKey: raftRsConfStateKey({voters: [PEER_ID]}),
+    membershipGenerationIndex: 0,
     commitIndex: 1,
     term: 1,
     leaderId: REPLICA_ID,
@@ -216,14 +222,12 @@ test('bootstrap reads require semantic delivery even when the router ACKs ' +
   const owner = {
     nodeId: 'bootstrap-reader-node',
     systemTableCache: {get: () => null},
-    messageRouter: {deliver: async () => ({
-      acknowledged: true,
-      noHandler: true,
-      deferRetry: true,
-      retryAfterMs: 275,
-      status: 'completed',
-      membership: committedStamp(),
-    })},
+    messageRouter: {deliver: async () => (buildDeliveryEnvelope(
+      {acknowledged: true, noHandler: true, deferRetry: true, retryAfterMs: 275},
+      {
+        status: 'completed',
+        membership: committedStamp(),
+      }))},
   };
   await assert.rejects(
     readCommittedMembershipStamp(owner, 'adversarial-bootstrap-p1'),
@@ -236,23 +240,25 @@ test('bootstrap reads require semantic delivery even when the router ACKs ' +
 
 test('bootstrap reads reject ACKs carrying contradictory transport failure',
   async () => {
-    for (const conflict of [
-      {deferRetry: true, retryAfterMs: 25},
-      {errorCode: 'ROUTER_CONNECTION_CLOSED'},
-      {errorCode: ROUTER_NO_CONNECTION_ERROR_CODE},
-      {errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE},
-      {deliveryState: 'failed'},
-      {error: 'connection failed'},
+    // Router facts that contradict the acknowledgement, and an answer whose
+    // completed status carries an error (never a completion).
+    for (const [conflict, answerConflict] of [
+      [{deferRetry: true, retryAfterMs: 25}, {}],
+      [{errorCode: 'ROUTER_CONNECTION_CLOSED'}, {}],
+      [{errorCode: ROUTER_NO_CONNECTION_ERROR_CODE}, {}],
+      [{errorCode: OUTBOUND_QUEUE_BACKPRESSURE_ERROR_CODE}, {}],
+      [{deliveryState: 'failed'}, {}],
+      [{}, {error: 'connection failed'}],
     ]) {
       const owner = {
         nodeId: 'bootstrap-reader-node',
         systemTableCache: {get: () => null},
-        messageRouter: {deliver: async () => ({
-          acknowledged: true,
-          status: 'completed',
-          membership: committedStamp(),
-          ...conflict,
-        })},
+        messageRouter: {deliver: async () => (buildDeliveryEnvelope(
+          {acknowledged: true, ...conflict}, {
+            status: 'completed',
+            membership: committedStamp(),
+            ...answerConflict,
+          }))},
       };
       await assert.rejects(
         readCommittedMembershipStamp(owner, 'adversarial-bootstrap-p1'),

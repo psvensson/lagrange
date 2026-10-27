@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {AuthoritativeControlPlaneView} from
   '../../src/control-plane/authoritative-control-plane-view.js';
@@ -107,7 +108,6 @@ async (t) => {
   let ownerReadDeliveryCount = 0;
   const ownerReadDeliveryAddresses = [];
   let ownerReadResponse = {
-    acknowledged: true,
     success: true,
     rows: placementRows,
     readAuthorityWitness: {
@@ -125,7 +125,7 @@ async (t) => {
     async deliver(address) {
       ownerReadDeliveryCount++;
       ownerReadDeliveryAddresses.push(address);
-      return ownerReadResponse;
+      return buildDeliveryEnvelope({acknowledged: true}, ownerReadResponse);
     },
   };
   const queryExecutor = new QueryExecutor({
@@ -296,7 +296,6 @@ async (t) => {
   ownerPartitionRow.leader_node_id = nodeId;
   ownerServiceRow.raft_role = RAFT_ROLE.LEADER;
   ownerReadResponse = {
-    acknowledged: true,
     success: true,
     rows: placementRows,
   };

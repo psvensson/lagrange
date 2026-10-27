@@ -1,0 +1,75 @@
+{
+  "schema": "controlled-negative/1",
+  "quest": "failed-create-target-authoritative-cleanup",
+  "baseCommit": "79d16909296d88397fb277da95138a23c37f3dd9",
+  "candidateSourceScope": {
+    "pathList": "source-paths.txt",
+    "pathCount": 50,
+    "sortedNulPathSha256": "837cdbadabc88d43030af6590660446cd090d6170123170a2fee0d58d6053547",
+    "normalizedTarSha256": "f1d455fb59c2e94ff03198d30404de93df6e8daa690f0d62566956219ce91395"
+  },
+  "treatment": {
+    "patch": "restore-pre-fix-shortcuts.patch",
+    "patchSha256": "50ad0d0594e114f45712444076dbb2f9f6eb01bcc6ed1c4713467d16083a79f2",
+    "mutatedNormalizedTarSha256": "a00e7a57bf6ab57345804c5e4a86947052028d48ef9ccc5e9025f78784b6e6e6",
+    "restoredShortcuts": [
+      "projected FAILED directly creates a tokenless planner REMOVE without the OperationWorkflowOwner cleanup decision",
+      "terminal failure persistence omits the fresh lifecycle-generation revalidation after initial admission"
+    ],
+    "mutatedFiles": [
+      {
+        "path": "src/rebalancer/move-planner-move-calculation-methods.js",
+        "candidateSha256": "b949b12ba65506496074b55fd7ac417d646876b7f0bbcba3aaf3a2729331b746",
+        "mutatedSha256": "d15eb754841db5ef41b937ea6596b053df2f11b354bfaebb4812bec0be8ed4dc"
+      },
+      {
+        "path": "src/rebalancer/operation-workflow-transition-persistence.js",
+        "candidateSha256": "58552286df6aa52f2dda8a8590a9535106a320b103f88112cb82620754934b82",
+        "mutatedSha256": "d9ee4549f0b6329b4a100ed96f5c1b8956c837bccbcc07d1b01e04d74c0529bf"
+      }
+    ]
+  },
+  "runs": [
+    {
+      "command": "node test/rebalancer/terminal-failed-add-target-cleanup.test.js",
+      "exitCode": 1,
+      "classification": "expected-negative",
+      "assertions": {
+        "total": 46,
+        "pass": 40,
+        "fail": 6
+      },
+      "artifactSha256": "7337e0d8a23c2a10401feb0cb3fad92d68d9c91e9191ea9824dd0c4450c26054",
+      "observedFailures": [
+        "projected FAILED bypasses an ineligible owner decision and becomes tokenless cleanup",
+        "stale FAILED generation terminalizes after the create generation restarts"
+      ],
+      "artifactEncoding": "gzip",
+      "decodedArtifactSha256": "f232f7102e81059f2fcaa54b5a61cf65ab58c833618df44e334cb1b9ee8664c1",
+      "artifactStore": {
+        "quest": "failed-create-cleanup-settlement-separation",
+        "asset": "failed-create-cleanup-settlement-separation--epics__raft-rs-full-cutover__quest-records__failed-create-target-authoritative-cleanup__controlled-negative__terminal-old-shortcuts.expected-red.tap.gz",
+        "url": "https://github.com/psvensson/lagrange/releases/download/solve-evidence/failed-create-cleanup-settlement-separation--epics__raft-rs-full-cutover__quest-records__failed-create-target-authoritative-cleanup__controlled-negative__terminal-old-shortcuts.expected-red.tap.gz"
+      }
+    },
+    {
+      "command": "node test/node/replica-failed-create-cleanup-generation.test.js",
+      "exitCode": 0,
+      "classification": "mutant-scope-control",
+      "assertions": {
+        "total": 37,
+        "pass": 37,
+        "fail": 0
+      },
+      "artifact": "lifecycle-mutant-control.tap",
+      "artifactSha256": "342ea7b7d41a6d19dd0f80da510937d86fc9759efe5685190f4edcd0aa17d011"
+    }
+  ],
+  "populationRule": "Expected-negative and mutant-scope-control runs are archived proof artifacts only and are excluded from every positive receipt and certification count.",
+  "reproduction": [
+    "Create a detached worktree at baseCommit.",
+    "Overlay the candidate files named by source-paths.txt and verify candidateSourceScope hashes.",
+    "Apply restore-pre-fix-shortcuts.patch and verify treatment.mutatedNormalizedTarSha256 over the same path list.",
+    "Download the evidence-store asset, verify its archive hash, decompress it, run each command, and compare decoded output hashes and exit codes."
+  ]
+}

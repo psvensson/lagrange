@@ -1,0 +1,77 @@
+# Native V10 application-order witness, unchanged tracked bytes from original source-only red.
+# No V11-V14 synchronous exit/core/scheduler diagnostic seam installed.
+name: rs-raft-native-original-witness
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-original-witness.yml
+      - src/raft/raft-rs-inbound-timer-custody.js
+      - src/raft/raft-rs-runtime-owner.js
+      - src/raft/raft-rs-runtime-owner-constants.js
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+      - test/partition/participant-release-native-application-order.test.js
+      - test/shards/subsystem-classes.json
+      - test/shards/impact-graph-seal.json
+permissions:
+  contents: read
+jobs:
+  exact-original:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact native candidate with uninstrumented V10 witness
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OLD=c12840725e12c87855b2942566313ecee37bc487
+          TEST=test/partition/participant-release-native-application-order.test.js
+          OUT=test-output/rs-raft-native-original
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/head.txt"
+          git rev-parse HEAD^{tree} > "$OUT/head-tree.txt"
+          git rev-parse "$OLD:$TEST" > "$OUT/original-test-blob.txt"
+          git show "$OLD:$TEST" > "$TEST"
+          sha256sum "$TEST" > "$OUT/original-test-sha256.txt"
+          if grep -Eq 'installBeforeExitDiagnostic|setActualCoreEntryObserver|setNativeInboundStageObserver' "$TEST"; then
+            echo 'Unexpected observer in original test' > "$OUT/preflight-refusal.txt"
+            exit 1
+          fi
+          npm ci > "$OUT/install.log" 2>&1
+          install=$?
+          printf '%s\n' "$install" > "$OUT/install.status"
+          if test "$install" -ne 0; then
+            echo 'dependency install unavailable'
+            exit 1
+          fi
+          node --check "$TEST" > "$OUT/syntax.log" 2>&1
+          syntax=$?
+          printf '%s\n' "$syntax" > "$OUT/syntax.status"
+          npm run -s test:file -- "$TEST" > "$OUT/test.log" 2>&1
+          outcome=$?
+          printf '%s\n' "$outcome" > "$OUT/test.status"
+          tail -n 70 "$OUT/test.log"
+          test ! -d test-output/reports || find test-output/reports -maxdepth 1 -type f -name '*.ndjson' -exec cp {} "$OUT/" \;
+          git diff --name-only -- src > "$OUT/production-diff.txt"
+          echo "HEAD=$GITHUB_SHA original-v10=$OLD test=$outcome"
+          test "$syntax" -eq 0 && test "$outcome" -eq 0 || exit 1
+      - name: Preserve original immutable witness and candidate output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-original-native-${{ github.sha }}
+          path: test-output/rs-raft-native-original/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,11 +1,13 @@
+import {
+  resolvePrioritySpreadPending,
+} from '../../src/control-plane/publication-recovery-priority-spread.js';
+
 export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTests(context) {
   const {
     buildPriorityRecoveryClosureWitness,
     buildPriorityRecoveryDecisionSnapshots,
     PRIORITY_RECOVERY_BLOCKER_REASON_OPERATION_NO_TRANSITIONS,
     PRIORITY_RECOVERY_BLOCKER_REASON_RECOVERY_ELIGIBLE_EXCLUDED,
-    PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
-    PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
     PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
     PRIORITY_RECOVERY_EMPTY_COUNT,
     PRIORITY_RECOVERY_ENTITY_TYPE_PARTITION,
@@ -24,14 +26,17 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
     PRIORITY_RECOVERY_OPERATION_UPDATED_AT_MS,
     PRIORITY_RECOVERY_PUBLICATION_STATUS_PUBLISHED,
     PRIORITY_RECOVERY_RAFT_ROLE_VOTER,
-    PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
+    PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
     PRIORITY_RECOVERY_REPLICA_ID_SYNCING,
     PRIORITY_RECOVERY_REQUIRED_DISTINCT_NODE_COUNT,
     PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
     PRIORITY_RECOVERY_SAMPLE_PUBLICATION_EPOCH,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
     PRIORITY_RECOVERY_SEMANTIC_STATE_COORDINATION_MISMATCH,
+    PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
     PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
     PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+    PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON_UNSATISFIED,
     PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID,
     PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_REPLACEMENT_REPLICA_ID,
     PRIORITY_RECOVERY_SQL_TRANSACTIONS_REPLACEMENT_REPLICA_ID,
@@ -303,7 +308,16 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
     );
   });
 
-  test('priority recovery closure witness reports stale durable spread once decision snapshots satisfy publication closure',
+  // SUPERSEDED (owner decision 2026-10-04, "delete the second authority").
+  // Before: once every tracked partition was converged or
+  // spread_satisfied_in_flight, the witness reported the stale-publication
+  // state (prioritySpreadPending false, refresh required, CL-003) and
+  // synthesized a satisfied summary that overrode the census gap. Now the
+  // witness has two states and produces no summary: no tracked partition is
+  // unresolved, so it is non-pending - and that says nothing about spread;
+  // the census gap carried by the summary still decides (asserted through the
+  // one rule below).
+  test('priority recovery closure witness never synthesizes a summary or clears a census gap',
     async (t) => {
       const decisionSnapshots = {
         publicationEpoch: 9,
@@ -346,36 +360,44 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
 
       const closureWitness = buildPriorityRecoveryClosureWitness({
         decisionSnapshots,
-        priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
       });
 
-      t.match(closureWitness, {
-        state:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
-          .SATISFIED_STALE_PUBLICATION,
-        prioritySpreadPending: false,
-        publicationRefreshRequired: true,
-        closureRecordId:
-        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD,
-        closureWitnessClass:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS
-          .PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING,
-      });
+      t.equal(
+        closureWitness.state,
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+        'no tracked partition is unresolved: the witness is non-pending',
+      );
       t.same(
         closureWitness.blockedPartitionIds,
         [],
-        'closure satisfaction should clear the stale blocked-partition view',
+        'the witness adds no blocker',
       );
-      t.match(closureWitness.refreshedPriorityPartitionSummary, {
-        satisfied: true,
-        requiredDistinctNodeCount: 3,
-        readyEligibleNodeCount: 3,
-        totalPriorityPartitionCount: 1,
-        missingPartitionIds: [],
-        blockedPartitions: [],
-      });
+      t.same(
+        Object.keys(closureWitness).filter((key) =>
+          [
+            'prioritySpreadPending',
+            'publicationRefreshRequired',
+            'refreshedPriorityPartitionSummary',
+            'closureRecordId',
+            'closureWitnessClass',
+            'summarySpreadPending',
+          ].includes(key)),
+        [],
+        'the witness carries no spread answer, summary or closure record',
+      );
+      t.equal(
+        resolvePrioritySpreadPending({
+          priorityPartitionSummary: decisionSnapshots.priorityPartitionSummary,
+          priorityRecoveryClosureWitness: closureWitness,
+        }),
+        true,
+        'the census gap still decides: spread stays pending',
+      );
     });
 
+  // SUPERSEDED state assertion: before, the witness reported the deleted
+  // stale-publication state (prioritySpreadPending false). The protected
+  // property - non-priority stalls never block the priority closure - holds.
   test('priority recovery closure witness ignores unresolved non-priority partitions when priority publication closure is already satisfied',
     async (t) => {
       const nonPriorityPartitionId =
@@ -428,12 +450,10 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         },
       });
 
-      t.match(closureWitness, {
-        state:
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE
-          .SATISFIED_STALE_PUBLICATION,
-        prioritySpreadPending: false,
-      });
+      t.equal(
+        closureWitness.state,
+        PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+      );
       t.same(
         closureWitness.blockedPartitionIds,
         [],
@@ -560,11 +580,15 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       t.ok(targetSnapshot, 'target partition snapshot should exist');
       t.same(
         targetSnapshot.spreadCompletion,
+        // SUPERSEDED sub-assertion (owner decision 2026-10-04). Before: the
+        // completed follow-up ADD was listed as a partial satisfier
+        // (satisfyingOperationIds ['op-replica-followup-add']). An ADD now
+        // credits nothing; the numeric gap stays open exactly as before.
         {
           satisfied: false,
           reasonCode: 'unsatisfied',
-          satisfyingOperationIds: ['op-replica-followup-add'],
-          satisfyingOperationCount: 1,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: 0,
           blockingOperationIds: [],
           blockingOperationCount: 0,
         },
@@ -575,10 +599,10 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         'blocked_unclassified',
         'the partition should stay unresolved until a second distinct target covers the gap',
       );
+      // The witness's PENDING state is the blocker; it no longer carries a
+      // prioritySpreadPending field of its own (owner decision 2026-10-04).
       t.match(decisionSnapshots.closureWitness, {
         state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
-        prioritySpreadPending: true,
-        refreshedPriorityPartitionSummary: null,
       }, 'publication closure must remain pending while numeric spread is uncovered');
       t.match(
         targetSnapshot.progress,
@@ -589,7 +613,7 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       );
     });
 
-  test('priority recovery decision snapshots treat completed REPLACE on an eligible operational target as spread-satisfied',
+  test('priority recovery decision snapshots leave a completed REPLACE with a census gap to the follow-up owner',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
@@ -670,17 +694,25 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         }],
       });
 
+      // SUPERSEDED (owner decision 2026-10-04). Before: a completed REPLACE
+      // whose target was active satisfied the census gap on the operation's
+      // behalf (spread_satisfied_in_flight, nothing unresolved). A completed
+      // operation now contributes nothing: while the census still shows the
+      // gap the partition stays unresolved (blocked_unclassified), which is a
+      // follow-up-requiring state, so the follow-up owner plans the next
+      // operation from the census (86b7b178c / H5b). The completed placement
+      // still suppresses needs_operation, as before.
       t.same(
         decisionSnapshots.partitionIdsBySemanticState[
           PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
         ],
-        [SQL_TRANSACTION_PRIORITY_PARTITION_ID],
-        'completed REPLACE placement should satisfy a stale priority spread summary when the target is active on an eligible node',
+        [],
+        'a completed REPLACE never satisfies a census gap on its own behalf',
       );
       t.same(
         decisionSnapshots.unresolvedSemanticStateIds,
-        [],
-        'completed REPLACE placement should not keep priority recovery unresolved',
+        [PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED],
+        'the census gap stays unresolved for the follow-up owner',
       );
 
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -692,26 +724,23 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       t.same(
         targetSnapshot.spreadCompletion,
         {
-          satisfied: true,
-          reasonCode:
-          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
-          satisfyingOperationIds: [
-            PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
-          ],
-          satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+          satisfied: false,
+          reasonCode: PRIORITY_RECOVERY_SPREAD_COMPLETION_REASON_UNSATISFIED,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
           blockingOperationIds: [],
           blockingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
         },
-        'terminal REPLACE rows should remain spread-relevant when they left an operational target',
+        'a terminal REPLACE is no satisfier and no blocker',
       );
       t.equal(
         targetSnapshot.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'completed REPLACE placement should leave the needs-operation state',
+        PRIORITY_RECOVERY_SEMANTIC_STATE_BLOCKED_UNCLASSIFIED,
+        'completed REPLACE placement still leaves the needs-operation state',
       );
     });
 
-  test('priority recovery decision snapshots let completed REPLACE placement override stale pending no-transition blockers',
+  test('priority recovery decision snapshots keep completed REPLACE placement from leaving stale pending no-transition blockers',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: PRIORITY_RECOVERY_SAMPLE_CAPTURED_AT_MS,
@@ -824,17 +853,25 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
         [],
         'a stale pending REPLACE must not remain a no-transition blocker once completed placement evidence already satisfies spread',
       );
+      // SUPERSEDED (owner decision 2026-10-04). Before: the completed
+      // REPLACE's active target satisfied the census gap, so the partition
+      // read spread_satisfied_in_flight and nothing was unresolved. The
+      // protected property - the stale PENDING row is not a no-transition
+      // blocker (fb0193300) - is asserted above and holds. What changed: the
+      // completed REPLACE credits nothing, so with the census gap still open
+      // the partition is honestly recovering in flight on its one open
+      // operation, which its owner drives (dispatch-pending drain).
       t.same(
         decisionSnapshots.partitionIdsBySemanticState[
-          PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT
+          PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT
         ],
         [PRIORITY_RECOVERY_SQL_TRANSACTION_PARTICIPANTS_PARTITION_ID],
-        'completed placement evidence should be canonical for the partition-level state',
+        'the open pending REPLACE owns the partition-level state',
       );
       t.same(
         decisionSnapshots.unresolvedSemanticStateIds,
-        [],
-        'completed placement evidence should close the unresolved priority state',
+        [PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT],
+        'the census gap keeps the priority state unresolved',
       );
 
       const pendingSnapshot = decisionSnapshots.snapshots.find((entry) =>
@@ -847,29 +884,27 @@ export function registerPriorityRecoverySnapshotTerminalPlacementSpreadClosureTe
       t.same(
         pendingSnapshot.spreadCompletion,
         {
-          satisfied: true,
+          satisfied: false,
           reasonCode:
-          PRIORITY_RECOVERY_REASON_OPERATIONAL_TARGET_VISIBLE_ON_ELIGIBLE_NODE,
-          satisfyingOperationIds: [
-            PRIORITY_RECOVERY_OPERATION_ID_COMPLETED_REPLACE_VISIBLE,
-          ],
-          satisfyingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
+          PRIORITY_RECOVERY_REASON_ACTIVE_OPERATION_STILL_BLOCKS_SPREAD,
+          satisfyingOperationIds: [],
+          satisfyingOperationCount: PRIORITY_RECOVERY_EMPTY_COUNT,
           blockingOperationIds: [
             PRIORITY_RECOVERY_OPERATION_ID_PENDING_REPLACE_STALE,
           ],
           blockingOperationCount: PRIORITY_RECOVERY_SINGLE_SPREAD_GAP,
         },
-        'the stale pending row should remain visible as context without owning the partition outcome',
+        'the pending row is the open blocking operation; the completed REPLACE credits nothing',
       );
       t.same(
         pendingSnapshot.blockerReasons,
         [],
-        'partition-level spread satisfaction should clear synthetic no-transition blockers',
+        'no synthetic no-transition blocker is raised for the pending row',
       );
       t.equal(
         pendingSnapshot.semanticState,
-        PRIORITY_RECOVERY_SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT,
-        'the stale pending row should inherit the partition-level spread-satisfied state',
+        PRIORITY_RECOVERY_SEMANTIC_STATE_RECOVERING_IN_FLIGHT,
+        'the pending row reads recovering in flight',
       );
     });
 }

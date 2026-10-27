@@ -9,8 +9,12 @@ import {buildControlPlaneReadAuthority} from
   '../control-plane/control-plane-system-table-gateway-read-contracts.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
   '../control-plane/control-plane-system-table-gateway-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
+import {coordinatorTableParticipantRefusal} from
+  './distributed/distributed-transaction-participant-admission.js';
 
 const LOCAL_STR_STRING = 'string';
+const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_WAIT_FOR_CONDITION = 'wait_for_condition';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_BINARY = 'binary';
@@ -20,6 +24,51 @@ const LOCAL_STR_LITERAL = 'literal';
 const LOCAL_STR_PARAMETER = 'parameter';
 const LOCAL_STR_COLUMN_REF = 'column_ref';
 const LOCAL_STR_STAR = 'star';
+
+/**
+ * Read the caller's last-observed state at expiry; an observer failure is
+ * itself the observation (the spent error must still be thrown).
+ * @param {Function|undefined} observe
+ * @return {Object|null}
+ * @private
+ */
+function observeConditionWait(observe) {
+  if (typeof observe !== LOCAL_STR_FUNCTION) {
+    return null;
+  }
+  try {
+    return observe();
+  } catch (observeError) {
+    return {observeError: observeError?.message || String(observeError)};
+  }
+}
+
+/**
+ * Report one spent waitForCondition bound and mark the thrown error so a
+ * caller that used to log the same expiry does not log it twice.
+ * @param {Object} engine - SQL query engine.
+ * @param {Object} spent - {error, budget, polls, timeoutError,
+ *   timeoutOptions}.
+ * @private
+ */
+function reportConditionWaitSpent(engine, spent) {
+  const options = spent.timeoutOptions;
+  const observed = observeConditionWait(options.observe);
+  reportWaitBoundSpent(engine.logger, {
+    wait: options.nestedOperation || LOCAL_STR_WAIT_FOR_CONDITION,
+    awaited: spent.timeoutError,
+    boundMs: spent.budget?.configuredBudgetMs,
+    elapsedMs: (engine.nowFn || Date.now)() - spent.budget?.startedAtMs,
+    lastObserved: {
+      predicateSatisfied: false,
+      polls: spent.polls,
+      classification: spent.error.timeoutClassification?.classification,
+      ...observed,
+    },
+    scope: options.scope,
+  });
+  spent.error.waitBoundSpentReported = true;
+}
 
 const {
   AuthoritativeControlPlaneView,
@@ -38,6 +87,44 @@ const {
   isRetryableControlPlaneError,
 } = SQL_QUERY_ENGINE_SHARED;
 
+// Preserve the same request identity and caller budget on every read branch.
+function selectRequestOptions(queryOptions, sessionId, transactionRead) {
+  return {
+    sessionId: transactionRead ? sessionId : null,
+    transactionIdentity: transactionRead?.identity,
+    timeoutMs: queryOptions.timeoutMs,
+    timeoutBudget: queryOptions.timeoutBudget || null,
+    cancellationToken: queryOptions.cancellationToken || null,
+    resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
+    resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
+  };
+}
+
+function fromlessSelectResult(first, partitionId) {
+  if (!first || !first.success) {
+    return {
+      success: false,
+      error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
+      errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+    };
+  }
+
+  return {
+    success: true,
+    rows: first.rows || [],
+    count: first.rows?.length || 0,
+    partitions: [partitionId],
+    tableName: null,
+    distributedPlan: null,
+    distributedDiagnostics: null,
+    distributedMetrics: {
+      planningDurationMs: 0,
+      executionDurationMs: 0,
+      fanout: null,
+      mergeDurationMs: 0,
+    },
+  };
+}
 class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverlay {
   /**
    * Create one control-plane timeout budget.
@@ -108,8 +195,10 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       }) :
       this.createControlPlaneTimeoutBudget(timeoutMs);
 
+    let polls = 0;
     while (true) {
       throwIfCancellationRequested(cancellationToken);
+      polls += 1;
       if (await predicate()) {
         return;
       }
@@ -127,7 +216,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     if (await predicate()) {
       return;
     }
-    throw createTimeoutBudgetError({
+    const spentError = createTimeoutBudgetError({
       message: timeoutError,
       budget: effectiveBudget,
       classification:
@@ -136,6 +225,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       nestedOperation: timeoutOptions.nestedOperation || LOCAL_STR_WAIT_FOR_CONDITION,
       now: this.nowFn,
     });
+    reportConditionWaitSpent(this, {
+      error: spentError,
+      budget: effectiveBudget,
+      polls,
+      timeoutError,
+      timeoutOptions,
+    });
+    throw spentError;
   }
 
   /**
@@ -163,16 +260,31 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
     queryOptions = {},
     rawSql = null,
   ) {
+    if (!sessionId) {
+      return this.executeSelectOwned(ast, params, sessionId, queryOptions, rawSql);
+    }
+    // Capture the admitted identity before waiting for the request lane. A
+    // later BEGIN on a reused session cannot adopt this earlier read.
+    const expected = queryOptions.expectedTransactionId ??
+      this.transactionCoordinator.getTransaction(sessionId)?.transactionId;
+    return this.transactionCoordinator.executeReadStatement(sessionId,
+      expected, (transactionRead) => this.executeSelectOwned(ast, params,
+        sessionId, queryOptions, rawSql, transactionRead));
+  }
+
+  async executeSelectOwned(ast, params, sessionId, queryOptions, rawSql,
+    transactionRead = null) {
     // FROM-less SELECT (e.g., SELECT 1, SELECT 1+1) — route to any
     // available partition and let SQLite evaluate the expression.
     if (!ast.from) {
-      return this.executeFromlessSelect(ast, params, sessionId);
+      return this.executeFromlessSelect(ast, params, sessionId, queryOptions,
+        transactionRead);
     }
 
     const tableName = ast.from.name;
     const tableInfo = this.getTableInfo(tableName);
     const dualWriteMode = this.isDualWriteModeActiveForTable(tableInfo);
-    const authoritativeLocalResult =
+    const authoritativeLocalResult = transactionRead ? null :
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
         ast,
@@ -222,7 +334,7 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       this.isSystemTable(tableName) &&
       routingReadinessDimension ===
         CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
-    const preferLeader =
+    const preferLeader = transactionRead ? true :
       typeof queryOptions?.preferLeader === 'boolean' ?
         queryOptions.preferLeader :
         (this.isSystemTable(tableName) && !recoveryLaneSystemTableSelect);
@@ -245,6 +357,13 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       }
     }
 
+    if (transactionRead) {
+      const allParticipants = Array.from(distributedPlan.tablePlans.values())
+        .flatMap((plan) => plan.partitions);
+      const enlisted = await transactionRead.enlist(allParticipants);
+      if (enlisted.success !== true) return enlisted;
+    }
+
     // Execute on resolved partitions
     const executionStartTimeMs = Date.now();
     const deliveryPriority = this.resolveRoutedDeliveryPriority(
@@ -259,16 +378,12 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       partitionIds,
       params,
       {
+        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
         preferLeader,
         preferSameLatencyGroup,
         deliveryPriority,
         distributedPlan,
         routingReadinessDimension,
-        timeoutMs: queryOptions.timeoutMs,
-        timeoutBudget: queryOptions.timeoutBudget || null,
-        cancellationToken: queryOptions.cancellationToken || null,
-        resultMaxBytes: queryOptions.budgets?.RESULT_MAX_BYTES,
-        resultMaxRows: queryOptions.budgets?.RESULT_MAX_ROWS,
       },
     );
     const executionDurationMs = Date.now() - executionStartTimeMs;
@@ -562,7 +677,8 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeFromlessSelect(ast, params, _sessionId) {
+  async executeFromlessSelect(ast, params, sessionId, queryOptions,
+    transactionRead) {
     const allPartitions = this.systemCache?.getAll?.(TABLES.PARTITIONS) || [];
     if (allPartitions.length === 0) {
       return {
@@ -572,7 +688,14 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       };
     }
 
-    const targetPartitionId = allPartitions[0].partition_id;
+    const target = transactionRead ? allPartitions.find((partition) =>
+      !coordinatorTableParticipantRefusal(partition.table_name)) : allPartitions[0];
+    if (!target) return coordinatorTableParticipantRefusal(allPartitions[0].table_name);
+    const targetPartitionId = target.partition_id;
+    if (transactionRead) {
+      const enlisted = await transactionRead.enlist([targetPartitionId]);
+      if (enlisted.success !== true) return enlisted;
+    }
     const cols = ast.columns.map((col) =>
       this.queryExecutor.buildColumnSQL(col),
     );
@@ -584,37 +707,15 @@ class SQLQueryEngineSelectExecution extends SQLQueryEngineBootstrapRoutingOverla
       params,
       null,
       true,
-      false,
+      Boolean(transactionRead),
       false,
       {
+        ...selectRequestOptions(queryOptions, sessionId, transactionRead),
         routingReadinessDimension: this.defaultRoutingReadinessDimension,
       },
     );
 
-    const first = results[0];
-    if (!first || !first.success) {
-      return {
-        success: false,
-        error: first?.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
-        errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
-      };
-    }
-
-    return {
-      success: true,
-      rows: first.rows || [],
-      count: first.rows?.length || 0,
-      partitions: [targetPartitionId],
-      tableName: null,
-      distributedPlan: null,
-      distributedDiagnostics: null,
-      distributedMetrics: {
-        planningDurationMs: 0,
-        executionDurationMs: 0,
-        fanout: null,
-        mergeDurationMs: 0,
-      },
-    };
+    return fromlessSelectResult(results[0], targetPartitionId);
   }
 
   isRetryableControlPlaneMutationFailure(error) {

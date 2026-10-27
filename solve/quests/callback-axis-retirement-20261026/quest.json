@@ -1,0 +1,34 @@
+{
+  "schema": "solve-quest/2",
+  "id": "callback-axis-retirement-20261026",
+  "class": "fix",
+  "epic": "callback-axis-retirement",
+  "statement": "Retire the legacy partition_callback execution axis, uploader/catalog scripts, and legacy-distributed-sql fixtures with zero compatibility fallbacks, re-anchor wasm-service-failover on a genuine WASI Binding, shrink the callback-axis accretion allowlist to empty, and bring the repository-wide cyclomatic complexity ratchet green.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/callback-axis-retirement-20261026/evidence/receipt.json",
+      "requiredReceipts": [
+        "callback-axis-source-and-fixture-deletion",
+        "wasm-service-failover-wasi-binding-reanchor",
+        "zero-allowlist-and-portability-contract-gates",
+        "complexity-ratchet-and-independent-verification"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "no-legacy-or-fallbacks",
+      "statement": "Delete src/query/callback/*, src/query/wasm-call-adapter.js, EXECUTION_MODE.PARTITION_CALLBACK, scripts/examples/{build-upload-run,cli-args,example-execution,package-examples,run-examples-catalog,validate-output}.js, test/fixtures/legacy-distributed-sql/*, and test/distributed/scenarios/examples-catalog.js without leaving compatibility shims or fallback branches."
+    },
+    {
+      "id": "preserve-admin-sql-and-stage-plan-owners",
+      "statement": "Keep AdminWsClient.query for SQL callers (MovieLens affinity demo and formation probe) while removing AdminWsClient.partitionCallback, and preserve SQL_STATEMENT, STAGE, and PLAN execution modes in SqlQueryEngine."
+    },
+    {
+      "id": "empty-accretion-allowlist",
+      "statement": "Shrink AXIS_ALLOWLIST in test/contract/callback-axis-accretion.test.js to an empty Set so any future callback-axis token in src/ fails closed."
+    }
+  ],
+  "sealedAt": "1931d8d1844109839619e459ea8bbc46fa620362"
+}

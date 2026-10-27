@@ -47,6 +47,7 @@ import {
   MovielensPublicRequestLiveFailure,
   buildMovielensPublicRequestLiveEnvelope,
   closeFailedOpening,
+  closeWorkloadSession,
   openMovielensPublicRequestWorkloadLive,
   preregisterRequestWitness,
   runMovielensPublicRequestWorkloadSession,
@@ -334,7 +335,7 @@ describe('MovieLens public request workload contract', () => {
           async dispatch(envelope) {
             dispatchedEnvelope = envelope;
             return {
-              delivery: {
+              answer: {
                 componentResponse: {
                   body: 'completed',
                   headers: [],
@@ -566,6 +567,66 @@ describe('MovieLens public request workload contract', () => {
         ],
       );
       assert.equal(failedOpening.teardown.nodeStopped, null);
+    });
+
+  it('preserves temporary-root custody on disk when shutdown fails',
+    async () => {
+      const temporaryRoot = await mkdtemp(
+        path.join(tmpdir(), 'movielens-failed-shutdown-custody-'),
+      );
+      const sentinelPath = path.join(temporaryRoot, 'custody-sentinel.txt');
+      await writeFile(sentinelPath, 'retained-custody', 'utf8');
+      try {
+        const cleanupState = {
+          cellStopped: true,
+          nodeStopped: false,
+          tempRemoved: false,
+        };
+        await assert.rejects(
+          closeWorkloadSession({
+            cleanupState,
+            node: {
+              async shutdown() {
+                throw new Error('node shutdown failed');
+              },
+            },
+            prepared: null,
+            temporaryRoot,
+          }),
+          /MovieLens workload cleanup failed/u,
+        );
+        assert.equal(cleanupState.nodeStopped, false);
+        assert.equal(cleanupState.tempRemoved, false);
+        assert.equal(await readFile(sentinelPath, 'utf8'), 'retained-custody');
+
+        const failedOpening = await closeFailedOpening({
+          node: {
+            async shutdown() {
+              throw new Error('opening shutdown failed');
+            },
+          },
+          nodeBootAttempted: true,
+          postgresCleanup: null,
+          prepareAttempted: false,
+          prepared: null,
+          temporaryRoot,
+        });
+        assert.equal(failedOpening.teardown.nodeStopped, null);
+        assert.equal(failedOpening.teardown.temporaryDirectoryAbsent, null);
+        assert.equal(await readFile(sentinelPath, 'utf8'), 'retained-custody');
+
+        const adapterSource = await readFile(
+          new URL(
+            '../../examples/service-data-affinity/' +
+              'movielens-public-request-workload-adapter.js',
+            import.meta.url,
+          ),
+          'utf8',
+        );
+        assert.doesNotMatch(adapterSource, /DELETE FROM wasm_operations/u);
+      } finally {
+        await rm(temporaryRoot, {force: true, recursive: true});
+      }
     });
 
   it('surfaces every node shutdown failure before teardown can pass',

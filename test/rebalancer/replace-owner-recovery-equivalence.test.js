@@ -24,6 +24,7 @@
  * runtime rebuild loses the proposals it held). It is not derived from rows.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -231,16 +232,20 @@ async function deliver(world, target, payload) {
     if (sourceRowStatus(world) === ReplicaStatus.ACTIVE) {
       setSourceRow(world, ReplicaStatus.REMOVING);
     }
-    return {acknowledged: true,
-      status: ReplicaOperationResponseStatus.INITIATED};
+    return buildDeliveryEnvelope({acknowledged: true}, {
+      status: ReplicaOperationResponseStatus.INITIATED,
+    });
   }
   if (payload?.type === ReplicaOperationMessageType.STEP_DOWN_REPLICA) {
     world.stepDowns.push(payload);
-    return {acknowledged: true,
+    return buildDeliveryEnvelope({acknowledged: true}, {
       status: ReplicaOperationResponseStatus.COMPLETED,
-      handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED};
+      handoffBranch: REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TRANSFER_REQUESTED,
+    });
   }
-  return {acknowledged: true, status: ReplicaOperationResponseStatus.INITIATED};
+  return buildDeliveryEnvelope({acknowledged: true}, {
+    status: ReplicaOperationResponseStatus.INITIATED,
+  });
 }
 
 // The node's system-table cache. Its change listeners (the production

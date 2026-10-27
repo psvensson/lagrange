@@ -41,6 +41,10 @@ describe('scenario-config defaults', () => {
       slowFollower.preFaultDelayMs,
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
     );
+    assert.equal(seedRestart.tableName, 'user_load_logs');
+    assert.equal(partitionKillHeal.tableName, 'user_load_logs');
+    assert.equal(diskFull.tableName, 'user_load_logs');
+    assert.equal(slowFollower.tableName, 'user_load_logs');
   });
 
   it('uses shortened distribution and restart timing defaults', () => {
@@ -62,9 +66,23 @@ describe('scenario-config defaults', () => {
       distribution.workloadProfile,
       'benchmark_events_mixed',
     );
+    assert.equal(
+      distribution.tableName,
+      'benchmark_events',
+    );
     assert.deepEqual(
       distribution.loadOperations,
       ['INSERT', 'SELECT'],
+    );
+    assert.throws(
+      () => resolveSeedRestartUnderLoadScenarioConfig({tableName: 'logs'}),
+      /Scenario config cannot target protected system table logs/,
+    );
+    assert.throws(
+      () => resolveSevenNodeReadWriteLoadDistributionScenarioConfig({
+        tableName: 'logs',
+      }),
+      /Scenario config cannot target protected system table logs/,
     );
   });
 });

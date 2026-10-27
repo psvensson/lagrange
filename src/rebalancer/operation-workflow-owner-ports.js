@@ -42,6 +42,8 @@ import {
   resolveOperationWorkflowOwnerLeaseFreshnessState,
   resolveOperationWorkflowPublicationFenceState,
 } from './operation-workflow-port-freshness.js';
+import {reportCoordinatorHandoffStepTimeoutStop} from
+  './operation-workflow-coordinator-created-handoff-scheduling.js';
 
 const OPERATION_WORKFLOW_OWNER_PORT_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD = null;
@@ -800,6 +802,8 @@ async function wakeOperationWorkflowRemoteOwner(
       nowMs,
     );
   if (handoffTimeoutDecision?.shouldStop === true) {
+    reportCoordinatorHandoffStepTimeoutStop(
+      owner, operation, handoffTimeoutDecision);
     owner.clearCreatedOperationHandoffRetry?.(operation.operationId);
     return false;
   }

@@ -1,0 +1,1282 @@
+{
+  "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+  "files": {
+    "src/admin/admin-owner-operations.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 40,
+          "text": "configByKey: (configKey) =>",
+          "message": "Method 'configByKey' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 42,
+          "text": "nodeById: (nodeId) => `/api/admin/nodes/${encodeURIComponent(nodeId)}`,",
+          "message": "Method 'nodeById' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 43,
+          "text": "nodeDrain: (nodeId) =>",
+          "message": "Method 'nodeDrain' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 45,
+          "text": "tablePolicy: (tableId) =>",
+          "message": "Method 'tablePolicy' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 96,
+          "text": "function isNonEmptyString(value) {",
+          "message": "Function 'isNonEmptyString' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 96,
+          "text": "function isNonEmptyString(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 100,
+          "text": "function answer(statusCode, body) {",
+          "message": "Function 'answer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 104,
+          "text": "function refusal(code, message) {",
+          "message": "Function 'refusal' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 113,
+          "text": "function ownerNotReady(retryAfterMs = null, error = null) {",
+          "message": "Function 'ownerNotReady' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 113,
+          "text": "function ownerNotReady(retryAfterMs = null, error = null) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 124,
+          "text": "function applied(fields) {",
+          "message": "Function 'applied' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 139,
+          "text": "function ownerFailed(error, code) {",
+          "message": "Function 'ownerFailed' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 139,
+          "text": "function ownerFailed(error, code) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 155,
+          "text": "function answerOwnerFailure(error) {",
+          "message": "Function 'answerOwnerFailure' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 155,
+          "text": "function answerOwnerFailure(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 167,
+          "text": "function resolveOwner(provider) {",
+          "message": "Function 'resolveOwner' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 167,
+          "text": "function resolveOwner(provider) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 182,
+          "text": "constructor(providers = {}, nodeId = null) {",
+          "message": "Constructor has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 197,
+          "text": "async setConfig(configKey, body = {}) {",
+          "message": "Async method 'setConfig' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 197,
+          "text": "async setConfig(configKey, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 223,
+          "text": "async drainNode(nodeId, body = {}) {",
+          "message": "Async method 'drainNode' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 223,
+          "text": "async drainNode(nodeId, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 259,
+          "text": "async removeNode(nodeId, observation) {",
+          "message": "Async method 'removeNode' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 259,
+          "text": "async removeNode(nodeId, observation) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 270,
+          "text": "async scalePostgresWireListener(body) {",
+          "message": "Async method 'scalePostgresWireListener' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 270,
+          "text": "async scalePostgresWireListener(body) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 286,
+          "text": "async updateTablePolicy(tableId, body = {}) {",
+          "message": "Async method 'updateTablePolicy' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 286,
+          "text": "async updateTablePolicy(tableId, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 298,
+          "text": "function sendAnswer(reply, result) {",
+          "message": "Function 'sendAnswer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 307,
+          "text": "function registerAdminOwnerOperationRoutes(fastify, operations) {",
+          "message": "Function 'registerAdminOwnerOperationRoutes' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 309,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 312,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 315,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 318,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 321,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 43,
+          "text": "configByKey: (configKey) =>",
+          "message": "Method 'configByKey' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 45,
+          "text": "nodeById: (nodeId) => `/api/admin/nodes/${encodeURIComponent(nodeId)}`,",
+          "message": "Method 'nodeById' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 46,
+          "text": "nodeDrain: (nodeId) =>",
+          "message": "Method 'nodeDrain' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 48,
+          "text": "tablePolicy: (tableId) =>",
+          "message": "Method 'tablePolicy' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 102,
+          "text": "function isNonEmptyString(value) {",
+          "message": "Function 'isNonEmptyString' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 102,
+          "text": "function isNonEmptyString(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 106,
+          "text": "function answer(statusCode, body) {",
+          "message": "Function 'answer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 110,
+          "text": "function refusal(code, message) {",
+          "message": "Function 'refusal' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 119,
+          "text": "function ownerNotReady(retryAfterMs = null, error = null) {",
+          "message": "Function 'ownerNotReady' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 119,
+          "text": "function ownerNotReady(retryAfterMs = null, error = null) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 130,
+          "text": "function applied(fields) {",
+          "message": "Function 'applied' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 145,
+          "text": "function ownerFailed(error, code) {",
+          "message": "Function 'ownerFailed' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 145,
+          "text": "function ownerFailed(error, code) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 161,
+          "text": "function answerOwnerFailure(error) {",
+          "message": "Function 'answerOwnerFailure' has a complexity of 9. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 161,
+          "text": "function answerOwnerFailure(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 173,
+          "text": "function resolveOwner(provider) {",
+          "message": "Function 'resolveOwner' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 173,
+          "text": "function resolveOwner(provider) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 188,
+          "text": "constructor(providers = {}, nodeId = null) {",
+          "message": "Constructor has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 204,
+          "text": "async setConfig(configKey, body = {}) {",
+          "message": "Async method 'setConfig' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 204,
+          "text": "async setConfig(configKey, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 230,
+          "text": "async drainNode(nodeId, body = {}) {",
+          "message": "Async method 'drainNode' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 230,
+          "text": "async drainNode(nodeId, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 266,
+          "text": "async removeNode(nodeId, observation) {",
+          "message": "Async method 'removeNode' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 266,
+          "text": "async removeNode(nodeId, observation) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 277,
+          "text": "async scalePostgresWireListener(body) {",
+          "message": "Async method 'scalePostgresWireListener' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 277,
+          "text": "async scalePostgresWireListener(body) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 288,
+          "text": "async appendDiagnosticMarker(body) {",
+          "message": "Async method 'appendDiagnosticMarker' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 288,
+          "text": "async appendDiagnosticMarker(body) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 304,
+          "text": "async updateTablePolicy(tableId, body = {}) {",
+          "message": "Async method 'updateTablePolicy' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 304,
+          "text": "async updateTablePolicy(tableId, body = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 316,
+          "text": "function sendAnswer(reply, result) {",
+          "message": "Function 'sendAnswer' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 325,
+          "text": "function registerAdminOwnerOperationRoutes(fastify, operations) {",
+          "message": "Function 'registerAdminOwnerOperationRoutes' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 327,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 330,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 333,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 336,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 339,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 342,
+          "text": "async (request, reply) => sendAnswer(reply,",
+          "message": "Async arrow function has a complexity of 1. Maximum allowed is 0."
+        }
+      ]
+    },
+    "src/control-plane/owners/logs-owner.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 7,
+          "text": "static OWNER_NAME = LOCAL_STR_LOGS_OWNER;",
+          "message": "Class field initializer has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 8,
+          "text": "static TABLE_NAME = TABLES.LOGS;",
+          "message": "Class field initializer has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 10,
+          "text": "async getLog(logId, options = {}) {",
+          "message": "Async method 'getLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 14,
+          "text": "async listLogs(options = {}) {",
+          "message": "Async method 'listLogs' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 18,
+          "text": "async appendLog(row, options = {}) {",
+          "message": "Async method 'appendLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 22,
+          "text": "async upsertLog(row, options = {}) {",
+          "message": "Async method 'upsertLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 26,
+          "text": "async updateLog(logId, data, options = {}) {",
+          "message": "Async method 'updateLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 30,
+          "text": "async removeLog(logId, options = {}) {",
+          "message": "Async method 'removeLog' has a complexity of 2. Maximum allowed is 0."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 11,
+          "text": "static OWNER_NAME = LOCAL_STR_LOGS_OWNER;",
+          "message": "Class field initializer has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 12,
+          "text": "static TABLE_NAME = TABLES.LOGS;",
+          "message": "Class field initializer has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 14,
+          "text": "constructor(options = {}) {",
+          "message": "Constructor has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 19,
+          "text": "async appendDiagnosticMarker(request, nodeId, options = {}) {",
+          "message": "Async method 'appendDiagnosticMarker' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 19,
+          "text": "async appendDiagnosticMarker(request, nodeId, options = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 43,
+          "text": "async getLog(logId, options = {}) {",
+          "message": "Async method 'getLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 47,
+          "text": "async listLogs(options = {}) {",
+          "message": "Async method 'listLogs' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 51,
+          "text": "async appendLog(row, options = {}) {",
+          "message": "Async method 'appendLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 55,
+          "text": "async upsertLog(row, options = {}) {",
+          "message": "Async method 'upsertLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 59,
+          "text": "async updateLog(logId, data, options = {}) {",
+          "message": "Async method 'updateLog' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 63,
+          "text": "async removeLog(logId, options = {}) {",
+          "message": "Async method 'removeLog' has a complexity of 2. Maximum allowed is 0."
+        }
+      ]
+    },
+    "src/control-plane/owners/log-diagnostic-marker-contract.js": {
+      "base": [],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 26,
+          "text": "function markerError(code, message, fields = {}) {",
+          "message": "Function 'markerError' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 30,
+          "text": "function diagnosticMarkerLogId(markerId) {",
+          "message": "Function 'diagnosticMarkerLogId' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 34,
+          "text": "function validateMarkerRequest(request) {",
+          "message": "Function 'validateMarkerRequest' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 34,
+          "text": "function validateMarkerRequest(request) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 36,
+          "text": "Object.keys(request).some((key) => !MARKER_FIELDS.has(key)) ||",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 44,
+          "text": "function compileDiagnosticMarker(request, nodeId, now) {",
+          "message": "Function 'compileDiagnosticMarker' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 44,
+          "text": "function compileDiagnosticMarker(request, nodeId, now) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 56,
+          "text": "function diagnosticMarkerWasApplied(result) {",
+          "message": "Function 'diagnosticMarkerWasApplied' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 56,
+          "text": "function diagnosticMarkerWasApplied(result) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 62,
+          "text": "function recordedDiagnosticMarker(row) {",
+          "message": "Function 'recordedDiagnosticMarker' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 67,
+          "text": "function unconfirmedDiagnosticMarker(cause = null) {",
+          "message": "Function 'unconfirmedDiagnosticMarker' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 67,
+          "text": "function unconfirmedDiagnosticMarker(cause = null) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 72,
+          "text": "function hasRecordedMarkerIdentity(row, intended) {",
+          "message": "Function 'hasRecordedMarkerIdentity' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 72,
+          "text": "function hasRecordedMarkerIdentity(row, intended) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 78,
+          "text": "function reconcileDiagnosticMarker(observation, intended, cause = null) {",
+          "message": "Function 'reconcileDiagnosticMarker' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 78,
+          "text": "function reconcileDiagnosticMarker(observation, intended, cause = null) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        }
+      ]
+    },
+    "src/entrypoint-runtime-admin-composition.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 66,
+          "text": "function resolveOwnerControlPlaneReadinessService(owner) {",
+          "message": "Function 'resolveOwnerControlPlaneReadinessService' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 76,
+          "text": "function createSqlCallbackWasmExecutor() {",
+          "message": "Function 'createSqlCallbackWasmExecutor' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 88,
+          "text": "function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {",
+          "message": "Function 'resolvePartitionServiceByPartitionId' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 88,
+          "text": "function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 109,
+          "text": "function createServiceDiagnosticsProvider(owner) {",
+          "message": "Function 'createServiceDiagnosticsProvider' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 115,
+          "text": "return () => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 115,
+          "text": "return () => {",
+          "message": "Arrow function has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 155,
+          "text": "function createAdminAPIWithLiveQuery(options) {",
+          "message": "Function 'createAdminAPIWithLiveQuery' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 155,
+          "text": "function createAdminAPIWithLiveQuery(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 199,
+          "text": "function wireReadinessStateDiagnostics(readinessState, logger, nodeId) {",
+          "message": "Function 'wireReadinessStateDiagnostics' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 200,
+          "text": "readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 211,
+          "text": "readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 228,
+          "text": "function createReadinessStateWithDiagnostics(logger, nodeId) {",
+          "message": "Function 'createReadinessStateWithDiagnostics' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 238,
+          "text": "function reportStartupRuntimeHandoff(options) {",
+          "message": "Function 'reportStartupRuntimeHandoff' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 238,
+          "text": "function reportStartupRuntimeHandoff(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 264,
+          "text": "function hydrateBootstrapApiRuntime(options) {",
+          "message": "Function 'hydrateBootstrapApiRuntime' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 264,
+          "text": "function hydrateBootstrapApiRuntime(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 282,
+          "text": "function resolveSystemCacheHandles(messageGroupServices) {",
+          "message": "Function 'resolveSystemCacheHandles' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 282,
+          "text": "function resolveSystemCacheHandles(messageGroupServices) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 313,
+          "text": "function wireSplitCompletionStabilizationReset(options) {",
+          "message": "Function 'wireSplitCompletionStabilizationReset' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 316,
+          "text": "(result) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 316,
+          "text": "(result) => {",
+          "message": "Arrow function has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 343,
+          "text": "async function createSqlRuntimeComposition(options) {",
+          "message": "Async function 'createSqlRuntimeComposition' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 343,
+          "text": "async function createSqlRuntimeComposition(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 353,
+          "text": "let detachMigrationRecovery = () => {};",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 368,
+          "text": "partitionServicesProvider: () => options.partitionServices,",
+          "message": "Method 'partitionServicesProvider' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 381,
+          "text": "now: () => Date.now(),",
+          "message": "Method 'now' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 400,
+          "text": "listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),",
+          "message": "Method 'listPartitions' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 401,
+          "text": "listOutstandingSplitProposals: () =>",
+          "message": "Method 'listOutstandingSplitProposals' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 412,
+          "text": "executeSplitCandidate: (partitionId) =>",
+          "message": "Method 'executeSplitCandidate' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 414,
+          "text": "executeMergeCandidate: (candidate, executionOptions) =>",
+          "message": "Method 'executeMergeCandidate' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 430,
+          "text": "(result) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 470,
+          "text": "cleanupErrors: cleanupErrors.map((cleanupError) =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 486,
+          "text": "function isEarlyAdminSqlEngineEnabled() {",
+          "message": "Function 'isEarlyAdminSqlEngineEnabled' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 512,
+          "text": "async function startEarlyAdminSqlRuntime(runtime) {",
+          "message": "Async function 'startEarlyAdminSqlRuntime' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 512,
+          "text": "async function startEarlyAdminSqlRuntime(runtime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 540,
+          "text": "async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {",
+          "message": "Async function 'shutdownEarlyAdminSqlRuntime' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 540,
+          "text": "async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 567,
+          "text": "function buildAdminOwnerProviders(options) {",
+          "message": "Function 'buildAdminOwnerProviders' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 569,
+          "text": "getDynamicConfigService: () =>",
+          "message": "Method 'getDynamicConfigService' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 571,
+          "text": "getTablePolicyService: () => options.owner?.tablePolicyService || null,",
+          "message": "Method 'getTablePolicyService' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 572,
+          "text": "getNodesOwner: () =>",
+          "message": "Method 'getNodesOwner' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 574,
+          "text": "getServiceDefinitionsOwner: () =>",
+          "message": "Method 'getServiceDefinitionsOwner' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 576,
+          "text": "submitLocalDrainIntent: (drainOptions) => submitLocalNodeDrainIntent({",
+          "message": "Method 'submitLocalDrainIntent' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 589,
+          "text": "async function startAdminRuntimeComposition(options) {",
+          "message": "Async function 'startAdminRuntimeComposition' has a complexity of 14. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 589,
+          "text": "async function startAdminRuntimeComposition(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 607,
+          "text": "partitionServicesProvider: () => options.partitionServices,",
+          "message": "Method 'partitionServicesProvider' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 629,
+          "text": ".catch(() => undefined);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 657,
+          "text": "async function shutdownAdminRuntimeComposition(adminRuntime) {",
+          "message": "Async function 'shutdownAdminRuntimeComposition' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 657,
+          "text": "async function shutdownAdminRuntimeComposition(adminRuntime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 66,
+          "text": "function resolveOwnerControlPlaneReadinessService(owner) {",
+          "message": "Function 'resolveOwnerControlPlaneReadinessService' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 76,
+          "text": "function createSqlCallbackWasmExecutor() {",
+          "message": "Function 'createSqlCallbackWasmExecutor' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 88,
+          "text": "function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {",
+          "message": "Function 'resolvePartitionServiceByPartitionId' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 88,
+          "text": "function resolvePartitionServiceByPartitionId(partitionServices, partitionId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 109,
+          "text": "function createServiceDiagnosticsProvider(owner) {",
+          "message": "Function 'createServiceDiagnosticsProvider' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 115,
+          "text": "return () => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 115,
+          "text": "return () => {",
+          "message": "Arrow function has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 155,
+          "text": "function createAdminAPIWithLiveQuery(options) {",
+          "message": "Function 'createAdminAPIWithLiveQuery' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 155,
+          "text": "function createAdminAPIWithLiveQuery(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 199,
+          "text": "function wireReadinessStateDiagnostics(readinessState, logger, nodeId) {",
+          "message": "Function 'wireReadinessStateDiagnostics' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 200,
+          "text": "readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 211,
+          "text": "readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 228,
+          "text": "function createReadinessStateWithDiagnostics(logger, nodeId) {",
+          "message": "Function 'createReadinessStateWithDiagnostics' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 238,
+          "text": "function reportStartupRuntimeHandoff(options) {",
+          "message": "Function 'reportStartupRuntimeHandoff' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 238,
+          "text": "function reportStartupRuntimeHandoff(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 264,
+          "text": "function hydrateBootstrapApiRuntime(options) {",
+          "message": "Function 'hydrateBootstrapApiRuntime' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 264,
+          "text": "function hydrateBootstrapApiRuntime(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 282,
+          "text": "function resolveSystemCacheHandles(messageGroupServices) {",
+          "message": "Function 'resolveSystemCacheHandles' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 282,
+          "text": "function resolveSystemCacheHandles(messageGroupServices) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 313,
+          "text": "function wireSplitCompletionStabilizationReset(options) {",
+          "message": "Function 'wireSplitCompletionStabilizationReset' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 316,
+          "text": "(result) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 316,
+          "text": "(result) => {",
+          "message": "Arrow function has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 343,
+          "text": "async function createSqlRuntimeComposition(options) {",
+          "message": "Async function 'createSqlRuntimeComposition' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 343,
+          "text": "async function createSqlRuntimeComposition(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 353,
+          "text": "let detachMigrationRecovery = () => {};",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 368,
+          "text": "partitionServicesProvider: () => options.partitionServices,",
+          "message": "Method 'partitionServicesProvider' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 381,
+          "text": "now: () => Date.now(),",
+          "message": "Method 'now' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 400,
+          "text": "listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),",
+          "message": "Method 'listPartitions' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 401,
+          "text": "listOutstandingSplitProposals: () =>",
+          "message": "Method 'listOutstandingSplitProposals' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 412,
+          "text": "executeSplitCandidate: (partitionId) =>",
+          "message": "Method 'executeSplitCandidate' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 414,
+          "text": "executeMergeCandidate: (candidate, executionOptions) =>",
+          "message": "Method 'executeMergeCandidate' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 430,
+          "text": "(result) => {",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 470,
+          "text": "cleanupErrors: cleanupErrors.map((cleanupError) =>",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 486,
+          "text": "function isEarlyAdminSqlEngineEnabled() {",
+          "message": "Function 'isEarlyAdminSqlEngineEnabled' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 512,
+          "text": "async function startEarlyAdminSqlRuntime(runtime) {",
+          "message": "Async function 'startEarlyAdminSqlRuntime' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 512,
+          "text": "async function startEarlyAdminSqlRuntime(runtime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 540,
+          "text": "async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {",
+          "message": "Async function 'shutdownEarlyAdminSqlRuntime' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 540,
+          "text": "async function shutdownEarlyAdminSqlRuntime(earlyRuntime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 567,
+          "text": "function buildAdminOwnerProviders(options) {",
+          "message": "Function 'buildAdminOwnerProviders' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 569,
+          "text": "getDynamicConfigService: () =>",
+          "message": "Method 'getDynamicConfigService' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 571,
+          "text": "getTablePolicyService: () => options.owner?.tablePolicyService || null,",
+          "message": "Method 'getTablePolicyService' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 572,
+          "text": "getNodesOwner: () =>",
+          "message": "Method 'getNodesOwner' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 574,
+          "text": "getServiceDefinitionsOwner: () =>",
+          "message": "Method 'getServiceDefinitionsOwner' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 576,
+          "text": "getLogsOwner: () => options.owner?.systemMetadataOwners?.logsOwner || null,",
+          "message": "Method 'getLogsOwner' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 577,
+          "text": "submitLocalDrainIntent: (drainOptions) => submitLocalNodeDrainIntent({",
+          "message": "Method 'submitLocalDrainIntent' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 590,
+          "text": "async function startAdminRuntimeComposition(options) {",
+          "message": "Async function 'startAdminRuntimeComposition' has a complexity of 14. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 590,
+          "text": "async function startAdminRuntimeComposition(options) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 608,
+          "text": "partitionServicesProvider: () => options.partitionServices,",
+          "message": "Method 'partitionServicesProvider' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 630,
+          "text": ".catch(() => undefined);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 658,
+          "text": "async function shutdownAdminRuntimeComposition(adminRuntime) {",
+          "message": "Async function 'shutdownAdminRuntimeComposition' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 658,
+          "text": "async function shutdownAdminRuntimeComposition(adminRuntime) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        }
+      ]
+    }
+  }
+}

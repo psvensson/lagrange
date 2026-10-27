@@ -178,23 +178,6 @@ class AdminWsClient {
   }
 
   /**
-   * Execute partition callback request over admin websocket.
-   *
-   * @param {Object} payload
-   * @return {Promise<Object>}
-   */
-  async partitionCallback(payload) {
-    return this._sendRequest({
-      type: MESSAGE_TYPE.PARTITION_CALLBACK,
-      statement: payload.statement,
-      parameters: payload.parameters || [],
-      callbackModuleRef: payload.callbackModuleRef,
-      callbackExport: payload.callbackExport,
-      runtimeKind: payload.runtimeKind,
-    });
-  }
-
-  /**
    * Send a request and await the matching `query_result` frame.
    *
    * @param {Object} payload

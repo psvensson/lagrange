@@ -9,26 +9,13 @@ import {MessageGroupServiceHandler} from
   '../../src/node/message-group-service-handler.js';
 import {
   ReplicaOperationField,
+  ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
-import {
-  EXECUTOR_OUTCOME_TYPE,
-} from '../../src/rebalancer/executor-outcome-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
-import {registerMessageGroupTransportHandler} from
-  '../../src/bootstrap/shared/message-group-transport-handler.js';
-import {createIdentityTransport} from
-  '../test-helpers/replica-handler-identity-fixture.js';
-import {
-  SERVICE_STATUS,
-  WORKFLOW_STEP,
-} from '../../src/constants/index.js';
-
-const TEST_ALREADY_ACTIVE_OPERATION_ID = 'op-message-group-already-active';
-const TEST_ALREADY_ACTIVE_GROUP_ID = 'mg-1';
-const TEST_ALREADY_ACTIVE_REPLICA_ID = 'mg-1-r4';
-const TEST_ALREADY_ACTIVE_NODE_ID = 'test-node';
+import {SERVICE_STATUS} from '../../src/constants/index.js';
+import {REBALANCER_SKIP_REASON} from
+  '../../src/rebalancer/rebalancer-constants.js';
 
 function initEnv() {
   process.env.NODE_ENV = 'test';
@@ -157,45 +144,20 @@ function createHandler(overrides = {}) {
   });
   const cdc = overrides.cdc || createMockCdc(cache);
   const nodeId = overrides.nodeId || 'test-node';
-  // The created replica's runtime: the production registration records its
-  // exact transport handler and its lifecycle owner (the node's
-  // ReplicaStateMachine) on the service.
-  const transport = createIdentityTransport();
-  const stateMachine = new ReplicaStateMachine({nodeId,
-    controlPlaneSystemTableGateway: {}});
   const createdReplicas = new Map();
 
   const handler = new MessageGroupServiceHandler({
     nodeId,
     systemTableCache: cache,
     cdcIntegrationService: cdc,
+    // A message-group CREATE_REPLICA is refused at the handler's
+    // admission: these spies record any create or start it reached.
     createMessageGroupReplica: async (options) => {
       calls.push({method: 'create', options});
-      if (overrides.createErrorObj) {
-        throw overrides.createErrorObj;
-      }
-      if (overrides.createError) {
-        throw new Error(overrides.createError);
-      }
-      const address = `${nodeId}/message-group/${options.replicaId}`;
-      const service = {groupId: options.groupId, replicaId: options.replicaId,
-        unifiedAddress: address, transport, isLeaderReplica: () => false,
-        receiveMessage: () => ({acknowledged: true})};
-      if (overrides.registerHandler === false) {
-        service.transportHandler = () => ({acknowledged: true});
-        service.resolveHandlerRetirementLane = () => stateMachine;
-      } else {
-        registerMessageGroupTransportHandler(service, {messageRouter: transport,
-          address, resolveLane: () => stateMachine});
-      }
-      createdReplicas.set(options.replicaId, service);
       return {created: true};
     },
     startMessageGroupReplica: async (options) => {
       calls.push({method: 'start', options});
-      if (overrides.startError) {
-        throw new Error(overrides.startError);
-      }
       return {started: true};
     },
     stopMessageGroupReplica: async (options) => {
@@ -212,7 +174,7 @@ function createHandler(overrides = {}) {
   });
   handler.initialize();
 
-  return {handler, cache, cdc, calls, transport, createdReplicas};
+  return {handler, cache, cdc, calls, createdReplicas};
 }
 
 function flushImmediate() {
@@ -238,319 +200,76 @@ describe('MessageGroupServiceHandler', () => {
     );
   });
 
-  it('emits active workflow progress when create is already active',
-    async () => {
+  // Owner decision 2026-10-04 (raft-rs full cutover): a message group's
+  // replica membership does not change until the fresh-identity ADD path
+  // exists. CREATE_REPLICA opened a GENESIS self-founder from the services
+  // rows that elected at once; under a reissued replica name it reused a
+  // raft id whose history the group holds elsewhere. Every CREATE_REPLICA
+  // a message-group handler receives - from the wire or called directly,
+  // whatever topology it carries and whether or not the replica is already
+  // local - is refused with the one typed reason and opens nothing: no
+  // create or start call, no services row, no tracked operation, no local
+  // replica record, no executor outcome. (The executor half the next quest
+  // reuses, createReplicaAsync, keeps its own N2/D8 witnesses.)
+  const CREATE_SHAPES = Object.freeze([
+    ['cache-derived topology (a fresh name)', {
+      [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+    }],
+    ['explicit topology', {
+      [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+      [ReplicaOperationField.REPLICA_IDS]: [
+        'mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+      [ReplicaOperationField.PEER_ADDRESSES]: [
+        'node-a/message-group/mg-1-r1',
+        'node-b/message-group/mg-1-r2',
+        'node-c/message-group/mg-1-r3',
+        'test-node/message-group/mg-1-r4',
+      ],
+    }],
+    ['a reissued name the group already holds elsewhere', {
+      [ReplicaOperationField.REPLICA_ID]: 'mg-1-r2',
+    }],
+    ['a replica already active on this node', {
+      [ReplicaOperationField.REPLICA_ID]: 'mg-1-r1',
+    }],
+  ]);
+
+  for (const [shape, fields] of CREATE_SHAPES) {
+    it(`refuses CREATE_REPLICA (${shape}) and opens nothing`, async () => {
       const emittedOutcomes = [];
-      const {handler} = createHandler({
+      const {handler, cdc, calls} = createHandler({
         executorOutcomeEmitter: {
-          emitOutcome(outcomeType, operationId, workflowStep, options) {
-            emittedOutcomes.push({
-              outcomeType,
-              operationId,
-              workflowStep,
-              options,
-            });
-          },
+          emitOutcome: (...outcome) => emittedOutcomes.push(outcome),
         },
       });
-      handler.localReplicas.set(TEST_ALREADY_ACTIVE_REPLICA_ID, {
-        replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
-        groupId: TEST_ALREADY_ACTIVE_GROUP_ID,
-        status: ReplicaStatus.ACTIVE,
+      const replicaId = fields[ReplicaOperationField.REPLICA_ID];
+
+      const response = await handler.handleMessage({
+        correlationId: 'c-1',
+        payload: {
+          [ReplicaOperationField.TYPE]: ReplicaOperationMessageType
+            .CREATE_REPLICA,
+          [ReplicaOperationField.OPERATION_ID]: `op-${shape}`,
+          [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+          ...fields,
+        },
       });
-
-      const response = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: TEST_ALREADY_ACTIVE_OPERATION_ID,
-        [ReplicaOperationField.ENTITY_ID]: TEST_ALREADY_ACTIVE_GROUP_ID,
-        [ReplicaOperationField.REPLICA_ID]: TEST_ALREADY_ACTIVE_REPLICA_ID,
-      });
-
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.ALREADY_EXISTS,
-      );
-      assert.deepEqual(
-        emittedOutcomes,
-        [
-          {
-            outcomeType: EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
-            operationId: TEST_ALREADY_ACTIVE_OPERATION_ID,
-            workflowStep: WORKFLOW_STEP.ACTIVE,
-            options: {
-              replicaId: TEST_ALREADY_ACTIVE_REPLICA_ID,
-            },
-          },
-        ],
-      );
-      assert.equal(response.nodeId, TEST_ALREADY_ACTIVE_NODE_ID);
-    });
-
-  it('creates a message-group replica from cache-derived peer topology',
-    async () => {
-      const {handler, cdc, calls} = createHandler();
-
-      const response = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-create-1',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-      });
-
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-      );
-
       await flushImmediate();
       await flushImmediate();
-
-      assert.equal(calls.length, 2);
-      assert.equal(calls[0].method, 'create');
-      assert.equal(calls[1].method, 'start');
-      assert.deepEqual(
-        calls[0].options.replicaIds,
-        ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
-      );
-      assert.ok(
-        calls[0].options.peerAddresses.includes(
-          'test-node/message-group/mg-1-r1',
-        ),
-      );
-      assert.ok(
-        calls[0].options.peerAddresses.includes(
-          'test-node/message-group/mg-1-r4',
-        ),
-      );
-      assert.equal(
-        handler.localReplicas.get('mg-1-r4')?.status,
-        ReplicaStatus.ACTIVE,
-      );
-      // Owner decision N2 (D1): the row is born STOPPED and becomes ACTIVE
-      // only through the handler-bound activation CAS on that generation.
-      assert.equal(cdc.inserts.length, 1);
-      assert.equal(cdc.inserts[0].tableName, 'services');
-      assert.equal(cdc.inserts[0].data.service_id, 'mg-1-r4');
-      assert.equal(cdc.inserts[0].data.group_id, 'mg-1');
-      assert.equal(cdc.inserts[0].data.node_id, 'test-node');
-      assert.equal(cdc.inserts[0].data.status, SERVICE_STATUS.STOPPED);
-      assert.equal(cdc.updates.length, 1);
-      assert.equal(cdc.updates[0].keyObj.status, SERVICE_STATUS.STOPPED);
-      assert.equal(cdc.updates[0].keyObj.created_at,
-        cdc.inserts[0].data.created_at,
-        'the ACTIVE CAS is fenced by the registered generation');
-      assert.equal(cdc.updates[0].updateData.status, SERVICE_STATUS.ACTIVE);
-      assert.deepEqual(cdc.operations.map((operation) => operation.type),
-        ['insert', 'update']);
-    });
-
-  it('creates a message-group replica from explicit topology when cache is sparse',
-    async () => {
-      const {handler, cdc, calls} = createHandler({
-        cache: createMockCache({
-          services: [],
-          replica_operations: [],
-        }),
-      });
-
-      const response = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-create-explicit',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-        [ReplicaOperationField.REPLICA_IDS]: [
-          'mg-1-r1',
-          'mg-1-r2',
-          'mg-1-r3',
-          'mg-1-r4',
-        ],
-        [ReplicaOperationField.PEER_ADDRESSES]: [
-          'node-a/message-group/mg-1-r1',
-          'node-b/message-group/mg-1-r2',
-          'node-c/message-group/mg-1-r3',
-          'test-node/message-group/mg-1-r4',
-        ],
-      });
-
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-      );
-
-      await flushImmediate();
-      await flushImmediate();
-
-      assert.equal(calls.length, 2);
-      assert.deepEqual(
-        calls[0].options.replicaIds,
-        ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
-      );
-      assert.deepEqual(
-        calls[0].options.peerAddresses,
-        [
-          'test-node/message-group/mg-1-r4',
-          'node-a/message-group/mg-1-r1',
-          'node-b/message-group/mg-1-r2',
-          'node-c/message-group/mg-1-r3',
-        ],
-      );
-      assert.equal(cdc.inserts.length, 1);
-    });
-
-  it('rejects incomplete explicit topology for a message-group replica',
-    async () => {
-      const {handler, calls} = createHandler({
-        cache: createMockCache({
-          services: [],
-          replica_operations: [],
-        }),
-      });
-
-      const response = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-create-invalid-topology',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-        [ReplicaOperationField.REPLICA_IDS]: ['mg-1-r4'],
-        [ReplicaOperationField.PEER_ADDRESSES]: [
-          'test-node/message-group/mg-1-r4',
-        ],
-      });
 
       assert.equal(response.status, ReplicaOperationResponseStatus.ERROR);
-      assert.match(response.error, /requires canonical peer topology/);
-      assert.equal(calls.length, 0);
+      assert.equal(response.reason, REBALANCER_SKIP_REASON
+        .MESSAGE_GROUP_MEMBERSHIP_CHANGE_UNSUPPORTED);
+      assert.equal(response.error, response.reason);
+      assert.equal(response.correlationId, 'c-1');
+      assert.deepEqual(calls, [], 'no create or start call');
+      assert.deepEqual(cdc.operations, [], 'no services row written');
+      assert.equal(handler.inProgressOperations.size, 0);
+      assert.equal(handler.localReplicas.has(replicaId), false,
+        'no local replica record');
+      assert.deepEqual(emittedOutcomes, [], 'no executor outcome');
     });
-
-  it('fails closed when the local replica handler is not registered',
-    async () => {
-      const {handler, cdc, calls} = createHandler({registerHandler: false});
-
-      const response = await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-create-unregistered',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-      });
-
-      assert.equal(
-        response.status,
-        ReplicaOperationResponseStatus.INITIATED,
-      );
-
-      await flushImmediate();
-      await flushImmediate();
-
-      assert.equal(calls.length, 2);
-      assert.equal(
-        handler.localReplicas.get('mg-1-r4')?.status,
-        ReplicaStatus.FAILED,
-      );
-      assert.equal(
-        cdc.upserts.length,
-        0,
-        'services row publication should fail closed until the replica handler is routable',
-      );
-      assert.equal(cdc.inserts.length, 1);
-      assert.equal(cdc.inserts[0].data.status, SERVICE_STATUS.STOPPED,
-        'the registration is a STOPPED birth');
-      assert.equal(cdc.updates.length, 0, 'no ACTIVE CAS without the handler');
-    });
-
-  it('forwards retryable create-failure metadata on MESSAGE_GROUP_CREATE_FAILED',
-    async () => {
-      const emittedOutcomes = [];
-      const retryableError = new Error('Operational message-group ingress not ready');
-      retryableError.errorCode = 'INGRESS_NOT_READY';
-      retryableError.retryAfterMs = 5000;
-      retryableError.deferRetry = true;
-
-      const {handler} = createHandler({
-        createErrorObj: retryableError,
-        executorOutcomeEmitter: {
-          emitOutcome(outcomeType, operationId, workflowStep, options) {
-            emittedOutcomes.push({
-              outcomeType,
-              operationId,
-              workflowStep,
-              options,
-            });
-          },
-        },
-      });
-
-      await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-retryable-fail',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-      });
-
-      await flushImmediate();
-      await flushImmediate();
-
-      assert.equal(emittedOutcomes.length, 1);
-      const outcome = emittedOutcomes[0];
-      assert.equal(
-        outcome.outcomeType,
-        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
-      );
-      assert.equal(
-        outcome.options.errorCode,
-        'INGRESS_NOT_READY',
-        'errorCode must be forwarded for retryable ingress failures',
-      );
-      assert.equal(
-        outcome.options.retryAfterMs,
-        5000,
-        'retryAfterMs must be forwarded so the owner retry lane can rearm',
-      );
-      assert.equal(
-        outcome.options.deferRetry,
-        true,
-        'deferRetry must be forwarded to arm transition retry grace',
-      );
-    });
-
-  it('omits retryable fields when create error has none',
-    async () => {
-      const emittedOutcomes = [];
-      const plainError = new Error('unexpected create failure');
-
-      const {handler} = createHandler({
-        createErrorObj: plainError,
-        executorOutcomeEmitter: {
-          emitOutcome(outcomeType, operationId, workflowStep, options) {
-            emittedOutcomes.push({outcomeType, options});
-          },
-        },
-      });
-
-      await handler.handleCreateReplica({
-        [ReplicaOperationField.OPERATION_ID]: 'op-plain-fail',
-        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
-        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
-      });
-
-      await flushImmediate();
-      await flushImmediate();
-
-      assert.equal(emittedOutcomes.length, 1);
-      const outcome = emittedOutcomes[0];
-      assert.equal(
-        outcome.outcomeType,
-        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
-      );
-      assert.equal(
-        outcome.options.retryAfterMs,
-        undefined,
-        'retryAfterMs must not be set for non-retryable failures',
-      );
-      assert.equal(
-        outcome.options.deferRetry,
-        undefined,
-        'deferRetry must not be set for non-retryable failures',
-      );
-      assert.equal(
-        outcome.options.errorCode,
-        undefined,
-        'errorCode must not be set when error carries no code',
-      );
-    });
+  }
 
   it('removes an existing local message-group replica discovered via resolver',
     async () => {

@@ -85,6 +85,7 @@ const RAFT_RS_CORE_PRIMITIVE = Object.freeze({
   APPLY_CONF_CHANGE: 'apply_conf_change',
   DECODE_CONF_CHANGE_ENTRY: 'decode_conf_change_entry',
   PROPOSE_CONF_CHANGE_V2: 'propose_conf_change_v2',
+  SEED_STORAGE: 'seed_storage',
 });
 
 const RAFT_RS_CORE_PRIMITIVES = Object.freeze(

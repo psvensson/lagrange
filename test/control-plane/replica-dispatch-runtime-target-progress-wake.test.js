@@ -1,3 +1,5 @@
+import {handlerIdentityApi} from '../test-helpers/replica-handler-identity-fixture.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   ControlPlaneField,
@@ -205,9 +207,7 @@ test(
         register(address, handler) {
           registeredHandlers.set(address, handler);
         },
-        unregister(address) {
-          registeredHandlers.delete(address);
-        },
+        ...handlerIdentityApi(registeredHandlers),
       },
       cdcIntegrationService: {
         updateSystemTableRow: async () => ({success: true}),
@@ -240,9 +240,9 @@ test(
       await drainOperationDispatchQueue(sourceDispatch);
 
       t.equal(
-        ingressResult?.acknowledged,
-        true,
-        'registered transport ingress should acknowledge the marked wake',
+        ingressResult,
+        null,
+        'registered transport ingress completes without an application answer',
       );
       t.equal(
         dispatchCallCount,
@@ -910,7 +910,7 @@ test(
               [ControlPlaneField.OPERATION_ROW]: {...sourceOperationRow},
             });
           await Promise.all([targetProgressWake, ordinaryDispatch]);
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
     });

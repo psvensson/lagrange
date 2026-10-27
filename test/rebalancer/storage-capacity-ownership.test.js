@@ -12,6 +12,7 @@
  * - No bypass paths for admission/reservation (Req 13.5)
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
@@ -386,7 +387,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -411,7 +412,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -436,7 +437,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -462,7 +463,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -487,7 +488,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -511,7 +512,7 @@ test('Req 11.4 — RebalanceCoordinator owns reservation lifecycle ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -639,7 +640,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -730,7 +731,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -765,7 +766,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {
@@ -830,7 +831,7 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
         updateSystemTableRow: async () => ({success: true}),
       },
       messageRouter: {
-        deliver: async () => ({acknowledged: true}),
+        deliver: async () => (buildDeliveryEnvelope({acknowledged: true})),
         getConnectionState: () => 'connected',
       },
       tablePolicyService: {

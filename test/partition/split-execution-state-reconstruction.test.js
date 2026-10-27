@@ -258,8 +258,8 @@ test('reconstructSplitExecutionState returns null when durable ' +
   );
 });
 
-test('handleSplitReplicationAfterWrite routes writes correctly ' +
-  'using a reconstructed execution handle ' +
+test('handleSplitReplicationAfterWrite refuses writes until a reconstructed ' +
+  'execution handle receives durable START authorization ' +
   '(uses ManagedSplitWorkflow as canonical split owner)', async (t) => {
   const PartitionService = await loadPartitionService();
   const reconstructFn =
@@ -306,16 +306,12 @@ test('handleSplitReplicationAfterWrite routes writes correctly ' +
     data: {id: 'alice', name: 'Alice'},
   });
 
-  t.same(
-    queuedEntries,
-    ['INSERT INTO users (id, name) VALUES (?, ?)'],
-    'write must be routed through replaySplitEntry after ' +
-    'reconstruction from durable state',
-  );
+  t.same(queuedEntries, [],
+    'reconstruction alone cannot admit mirrored writes before START');
 });
 
-test('handleSplitReplicationAfterWrite queues writes during ' +
-  'reconstructed backfilling phase ' +
+test('handleSplitReplicationAfterWrite does not queue writes during ' +
+  'unauthorized reconstructed backfilling ' +
   '(uses ManagedSplitWorkflow as canonical split owner)', async (t) => {
   const PartitionService = await loadPartitionService();
   const reconstructFn =
@@ -348,14 +344,7 @@ test('handleSplitReplicationAfterWrite queues writes during ' +
     whereClause: {id: 'bob'},
   });
 
-  t.equal(
-    context.splitReplication.pendingEntries.length,
-    1,
-    'write must be queued in pendingEntries during backfilling',
-  );
-  t.equal(
-    context.splitReplication.pendingEntries[0].sql,
-    'UPDATE users SET name = ? WHERE id = ?',
-    'queued entry must preserve the original SQL',
-  );
+  t.equal(context.splitReplication.pendingEntries.length, 0,
+    'pre-authorization writes are recovered by the phase owner, never by ' +
+    'an unauthorized volatile queue');
 });

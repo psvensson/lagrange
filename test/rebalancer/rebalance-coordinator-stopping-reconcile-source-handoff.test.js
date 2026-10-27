@@ -1,4 +1,5 @@
-import {ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
+import {initiatedDeliveryRouter, ControlPlaneField, ControlPlaneMessageType, OperationType, PRIORITY_DRAIN_TEST_AUTHORITATIVE_SOURCE, PRIORITY_DRAIN_TEST_ENTITY_TYPE, PRIORITY_DRAIN_TEST_NO_COMPLETED_AT, PRIORITY_DRAIN_TEST_NO_ERROR_MESSAGE, PRIORITY_DRAIN_TEST_SOURCE_NODE_ID, PRIORITY_DRAIN_TEST_TARGET_NODE_ID, RAFT_ROLE, ReplicaOperationMessageType, ReplicaOperationResponseStatus, ReplicaStatus, STOPPING_REPLICA_OBSERVATION_STATE, SYSTEM_TABLE_NAME, WORKFLOW_STEP, buildPriorityDrainReadinessService, createTestCoordinator, test} from './rebalance-coordinator-stopping-reconcile-fixtures.js';
 
 test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   'priority REPLACE while the source replica is still active', async (t) => {
@@ -19,15 +20,7 @@ test('RebalanceCoordinator dispatches source handoff instead of draining a ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
@@ -180,15 +173,7 @@ test('RebalanceCoordinator uses observed active target cache state to ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
@@ -333,15 +318,7 @@ test('RebalanceCoordinator prefers observed active target cache over stale ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {
@@ -476,10 +453,9 @@ test('RebalanceCoordinator forwards remote observed active target progress ' +
     messageRouter: {
       async deliver(target, payload, options) {
         deliveries.push({target, payload, options});
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     cacheData: {
@@ -635,15 +611,7 @@ test('RebalanceCoordinator reconciles non-dispatchable CREATING progress ' +
   const coordinator = createTestCoordinator({
     nodeId: PRIORITY_DRAIN_TEST_TARGET_NODE_ID,
     enableTimeouts: false,
-    messageRouter: {
-      async deliver(target, payload) {
-        deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: ReplicaOperationResponseStatus.INITIATED,
-        };
-      },
-    },
+    messageRouter: initiatedDeliveryRouter(deliveries),
     controlPlaneReadinessService:
       buildPriorityDrainReadinessService(TEST_PARTITION_ID),
     cacheData: {

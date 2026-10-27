@@ -2,6 +2,14 @@ import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
 import {SQLQueryEngineInitialPartitionProvisioning} from './sql-query-engine-initial-partition-provisioning.js';
 import {createSQLQueryEngineRoutingMetadataMethods} from './sql-query-engine-routing-metadata-methods.js';
 import {throwIfCancellationRequested} from './query-cancellation.js';
+import {deliverProcessedSourceReplicationStart} from
+  '../partition/managed-source-replication-start-delivery.js';
+import {
+  describeOutstandingSplitProposal,
+} from '../partition/partition-split-merge-manager-proposal-methods.js';
+import {
+  parseTablePartitionTransition,
+} from '../partition/partition-transition-row.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STEADY_STATE = 'steady_state';
@@ -70,6 +78,39 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         activeVersionByTableId.get(tableId) || DEFAULT_PARTITION_VERSION,
       );
     });
+  }
+
+  /**
+   * The outstanding durable split proposals: one per tables row whose
+   * transition is a retryable split (BLOCKED / DEFERRED / retryable
+   * FAILED) naming a source partition. The split/merge manager re-drives
+   * them; `localLeader` says whether this node's manager owns the re-drive.
+   * @return {Array<Object>} Proposal descriptors.
+   */
+  listOutstandingManagedSplitProposals() {
+    if (!this.systemCache || typeof this.systemCache.getAll !== LOCAL_STR_FUNCTION) {
+      return [];
+    }
+    const partitionsById = new Map();
+    for (const partition of this.systemCache.getAll(TABLES.PARTITIONS) || []) {
+      partitionsById.set(partition.partition_id || partition.partitionId, partition);
+    }
+    const proposals = [];
+    for (const table of this.systemCache.getAll(TABLES.TABLES) || []) {
+      const proposal = describeOutstandingSplitProposal(
+        parseTablePartitionTransition(table),
+        {tableId: table.table_id || table.tableId, nowMs: this.nowFn()},
+      );
+      if (proposal) {
+        proposals.push({
+          ...proposal,
+          localLeader: this.isLocalManagedSplitLeader(
+            partitionsById.get(proposal.partitionId),
+          ),
+        });
+      }
+    }
+    return proposals;
   }
 
   /**
@@ -178,19 +219,14 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
 
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
-      type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
-      partitionId,
-      tableId,
-      tableName,
-      transitionMetadata,
-    });
-
-    if (!response?.acknowledged || response?.success === false) {
-      throw new Error(
-        response?.error || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
-      );
-    }
+    await deliverProcessedSourceReplicationStart(
+      this.messageRouter, serviceInfo.address, {
+        type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
+        partitionId,
+        tableId,
+        tableName,
+        transitionMetadata,
+      }, QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
   }
 
   /**
@@ -281,6 +317,12 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation: LOCAL_STR_TABLE_PARTITION_METADATA_WAIT,
+        scope: {partitionId, tableId},
+        observe: () => ({
+          hasPartitionRecord:
+            this.queryExecutor?.hasPartitionRecord?.(partitionId) === true,
+          hasTableRecord: tableId ? this.hasTableMetadata(tableId) : true,
+        }),
       },
     );
   }
@@ -372,6 +414,8 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
         nestedOperation,
+        scope: {replicaId},
+        observe: () => ({usedCacheRepairWait: Boolean(usesCacheRepairWaits)}),
       },
     );
   }
@@ -484,6 +528,15 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: waitOptions.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_ROUTING_WAIT,
+        scope: {partitionId},
+        observe: () => ({
+          requiredCount,
+          routableCount: this.getRoutablePartitionServiceNodeIds(
+            partitionId,
+            routingReadinessDimension,
+          ).length,
+          routingReadinessDimension,
+        }),
       },
     );
   }
@@ -583,6 +636,15 @@ class SQLQueryEnginePartitionRoutingReadiness extends SQLQueryEngineInitialParti
         cancellationToken: options.cancellationToken || null,
         classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
         nestedOperation: LOCAL_STR_PARTITION_LEADER_WAIT,
+        scope: {partitionId},
+        observe: () => ({
+          leaderRouteFound: false,
+          routableCount: this.getRoutablePartitionServiceNodeIds(
+            partitionId,
+            routingReadinessDimension,
+          ).length,
+          routingReadinessDimension,
+        }),
       },
     );
   }

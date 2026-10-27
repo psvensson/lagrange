@@ -65,8 +65,15 @@ import {
 } from '../node/replica-handler-bootstrap-stamps.js';
 import {withFixtureCommittedMembership} from
   './committed-membership-fixture.js';
-import {createLifecycleCdcServiceForCache} from
+import {
+  createLifecycleCdcServiceForCache,
+  createLifecycleControlPlaneGatewayForCache,
+} from
   '../test-helpers/lifecycle-state-store.js';
+import {
+  buildReplicaCreateAdmissionToken,
+  buildReplicaCreateAttemptToken,
+} from '../../src/rebalancer/replica-create-admission-token.js';
 import {
   createMockCache,
   createMockCdcService,
@@ -74,9 +81,19 @@ import {
   createMockPolicyService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 import {bindRegisteredReplicaHandler} from
   '../test-helpers/replica-handler-identity-fixture.js';
+import {buildDeliveryEnvelope} from
+  '../../src/transport/transport-semantic-outcome.js';
+import {runtimeBuildProvenance} from
+  '../../src/diagnostics/runtime-build-provenance.js';
+import {
+  PARTICIPANT_CUTOVER_OUTCOME,
+  PARTICIPANT_RELEASE_RESULT_FIELD,
+  PARTICIPANT_RELEASE_ROUTE_SUFFIX,
+} from '../../src/partition/partition-participant-transaction-cutover-constants.js';
 
 const TEST_SCHEMA = Object.freeze({
   columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
@@ -165,16 +182,117 @@ function createCapturingPartitionServiceFactory(captured) {
 }
 
 function createJoinHandler({cache, captured}) {
+  const lifecycleGateway = createLifecycleControlPlaneGatewayForCache(cache);
+  const operationRows = new Map();
+  const matches = (row, where) => Object.entries(where).every(
+    ([field, value]) => row?.[field] === value,
+  );
+  const controlPlaneSystemTableGateway = {
+    async readAuthoritativeRows(tableName, sql, params = []) {
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
+        return {success: true, rows: [{
+          node_id: JOIN_NODE_ID,
+          boot_incarnation: 1,
+        }]};
+      }
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return lifecycleGateway.readAuthoritativeRows(tableName, sql, params);
+      }
+      if (sql.includes('WHERE operation_id = ?')) {
+        const row = operationRows.get(params[0]);
+        return {success: true, rows: row ? [{...row}] : []};
+      }
+      return {success: true, rows: [...operationRows.values()].filter(
+        (row) => row.target_node_id === params[0] &&
+          row.create_admission_state !== null,
+      ).map((row) => ({...row}))};
+    },
+    async updateSystemTableRow(tableName, where, data) {
+      if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return lifecycleGateway.submitMutation({
+          operation: 'update', tableName, whereClause: where, data,
+        });
+      }
+      const row = operationRows.get(where.operation_id);
+      if (!row || !matches(row, where)) {
+        return {success: true, outcome: 'observed_state_changed',
+          partitionResult: {affectedRows: 0}};
+      }
+      Object.assign(row, data);
+      return {success: true, outcome: 'applied',
+        partitionResult: {affectedRows: 1}};
+    },
+    submitMutation: lifecycleGateway.submitMutation,
+  };
   const handler = new ReplicaHandler({
     nodeId: JOIN_NODE_ID,
+    ownerIncarnation: 1,
     cdcIntegrationService: createLifecycleCdcServiceForCache(cache),
     systemTableCache: cache,
+    controlPlaneSystemTableGateway,
+    messageRouter: {
+      async deliver(address) {
+        if (address === `${JOIN_NODE_ID}${PARTICIPANT_RELEASE_ROUTE_SUFFIX}`) {
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            [PARTICIPANT_RELEASE_RESULT_FIELD]: {
+              outcome: PARTICIPANT_CUTOVER_OUTCOME.CUT_OVER,
+            },
+          });
+        }
+        return buildDeliveryEnvelope({
+          acknowledged: false,
+          noHandler: true,
+          error: 'No handler',
+        });
+      },
+    },
     dataDir: getTempDir(),
     createPartitionService: createCapturingPartitionServiceFactory(captured),
   });
   handler.initialize();
+  handler.testOperationRows = operationRows;
   handler.syncTimeoutMs = HANDLER_SYNC_TIMEOUT_MS;
   return handler;
+}
+
+function admittedCreateRequest(handler, request) {
+  const updatedAt = Date.now();
+  const admissionToken = buildReplicaCreateAdmissionToken({
+    operationId: request.operationId,
+    replicaId: request.replicaId,
+    targetNodeId: JOIN_NODE_ID,
+    workflowUpdatedAt: updatedAt,
+  });
+  handler.testOperationRows.set(request.operationId, {
+    operation_id: request.operationId,
+    type: request.operationType,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: request.partitionId,
+    partition_id: request.partitionId,
+    replica_id: request.replicaId,
+    target_node_id: JOIN_NODE_ID,
+    workflow_step: 'SENDING',
+    updated_at: updatedAt,
+    completed_at: null,
+    create_admission_state: null,
+    create_admission_token: null,
+    create_admission_replica_created_at: null,
+    create_admission_attempt_token: null,
+    create_admission_previous_attempt_token: null,
+    create_admission_attempt_seq: null,
+    create_admission_workflow_updated_at: null,
+    create_admission_owner_incarnation: null,
+  });
+  return {
+    ...request,
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: request.partitionId,
+    createAdmissionToken: admissionToken,
+    createAdmissionWorkflowUpdatedAt: updatedAt,
+    createAdmissionAttemptToken:
+      buildReplicaCreateAttemptToken(admissionToken, 1),
+    createAdmissionAttemptSeq: 1,
+  };
 }
 
 function waitForReplicaEvent(handler, successEvent, failureEvent) {
@@ -216,12 +334,12 @@ async (t) => {
     ).then(() => {
       throw new Error('self-only ADD must not create a replica');
     });
-    await handler.handleCreateReplica({
+    await handler.handleCreateReplica(admittedCreateRequest(handler, {
       operationId: 'op-add-self-only',
       operationType: OperationType.ADD,
       partitionId: ADD_PARTITION_ID,
       replicaId: ADD_REPLICA_ID,
-    });
+    }));
     await Promise.race([
       unexpectedCreate,
       new Promise((resolve) => {
@@ -249,7 +367,7 @@ async (t) => {
         'STAMP_INVALID (O1)',
     );
   } finally {
-    handler.shutdown();
+    await handler.shutdown();
   }
 });
 
@@ -257,6 +375,7 @@ test('self-only-cohort-add-deferred: the fresh-bootstrap window stays ' +
   'exempt — a first-cohort ADD on a fresh partition may form the group',
 async (t) => {
   initializeTestEnvironment();
+  await runtimeBuildProvenance();
   const cache = new SystemTableCache();
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: ADD_TABLE_ID,
@@ -282,12 +401,13 @@ async (t) => {
       'replicaCreated',
       'replicaCreationFailed',
     );
-    await handler.handleCreateReplica(withBootstrapStamp({
-      operationId: 'op-add-fresh',
-      operationType: OperationType.ADD,
-      partitionId: ADD_PARTITION_ID,
-      replicaId: ADD_REPLICA_ID,
-    }, genesisStampFor([ADD_REPLICA_ID])));
+    await handler.handleCreateReplica(admittedCreateRequest(handler,
+      withBootstrapStamp({
+        operationId: 'op-add-fresh',
+        operationType: OperationType.ADD,
+        partitionId: ADD_PARTITION_ID,
+        replicaId: ADD_REPLICA_ID,
+      }, genesisStampFor([ADD_REPLICA_ID]))));
     await outcome;
 
     t.ok(
@@ -300,7 +420,7 @@ async (t) => {
       'fresh cohort formation keeps voter bootstrap mode',
     );
   } finally {
-    handler.shutdown();
+    await handler.shutdown();
   }
 });
 
@@ -348,7 +468,7 @@ async (t) => {
       );
     }
   } finally {
-    handler.shutdown();
+    await handler.shutdown();
   }
 });
 
@@ -370,50 +490,51 @@ function createCohortServiceRow(replicaId, nodeId) {
 
 function createCohortSqlEngine({authoritativeServices}) {
   const operations = new Map();
+  const executeQuery = async (sql, params = []) => {
+    if (
+      sql.includes('SELECT * FROM services') &&
+        sql.includes('service_type = ?')
+    ) {
+      const rows = authoritativeServices.filter(
+        (row) => row.partition_id === params[1],
+      );
+      return {success: true, rows};
+    }
+    if (sql.includes('INSERT INTO replica_operations')) {
+      const [
+        operationId, type, partitionId, replicaId, targetClaimKey,
+        sourceNodeId, targetNodeId, status, workflowStep, createdAt,
+        updatedAt, completedAt, errorMessage, stepsHistory, entityType,
+        entityId,
+      ] = params;
+      operations.set(operationId, {
+        operation_id: operationId,
+        type,
+        partition_id: partitionId,
+        replica_id: replicaId,
+        target_claim_key: targetClaimKey,
+        source_node_id: sourceNodeId,
+        target_node_id: targetNodeId,
+        status,
+        workflow_step: workflowStep,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        completed_at: completedAt,
+        error_message: errorMessage,
+        steps_history: stepsHistory,
+        entity_type: entityType,
+        entity_id: entityId,
+      });
+      return {success: true, changes: 1};
+    }
+    if (sql.includes('replica_operations')) {
+      return {success: true, rows: [...operations.values()]};
+    }
+    return {success: true, rows: []};
+  };
   return {
     operations,
-    executeQuery: async (sql, params = []) => {
-      if (
-        sql.includes('SELECT * FROM services') &&
-        sql.includes('service_type = ?')
-      ) {
-        const rows = authoritativeServices.filter(
-          (row) => row.partition_id === params[1],
-        );
-        return {success: true, rows};
-      }
-      if (sql.includes('INSERT INTO replica_operations')) {
-        const [
-          operationId, type, partitionId, replicaId, targetClaimKey,
-          sourceNodeId, targetNodeId, status, workflowStep, createdAt,
-          updatedAt, completedAt, errorMessage, stepsHistory, entityType,
-          entityId,
-        ] = params;
-        operations.set(operationId, {
-          operation_id: operationId,
-          type,
-          partition_id: partitionId,
-          replica_id: replicaId,
-          target_claim_key: targetClaimKey,
-          source_node_id: sourceNodeId,
-          target_node_id: targetNodeId,
-          status,
-          workflow_step: workflowStep,
-          created_at: createdAt,
-          updated_at: updatedAt,
-          completed_at: completedAt,
-          error_message: errorMessage,
-          steps_history: stepsHistory,
-          entity_type: entityType,
-          entity_id: entityId,
-        });
-        return {success: true, changes: 1};
-      }
-      if (sql.includes('replica_operations')) {
-        return {success: true, rows: [...operations.values()]};
-      }
-      return {success: true, rows: []};
-    },
+    executeQuery: withSuccessfulStorageReservationInsert(executeQuery),
   };
 }
 

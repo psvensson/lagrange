@@ -1,4 +1,10 @@
+import {STATEMENT_INGRESS_FIELD} from './sql-statement-ingress.js';
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {QUERY_RESULT_REQUEST_FIELD} from './query-result-budget.js';
+import {deliveryTransportOf, deliveryAnswerOf, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
+import {statementParticipantFieldsOf} from
+  './distributed/distributed-transaction-identity.js';
 
 const {
   MIGRATION_PARTITION_OPERATION,
@@ -13,12 +19,6 @@ const {
   QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN,
   QUERY_MESSAGE_TYPE,
 } = QUERY_EXECUTOR_SHARED;
-
-const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
-  DEADLINE_MS: 'resultDeadlineMs',
-  MAX_BYTES: 'resultMaxBytes',
-  MAX_ROWS: 'resultMaxRows',
-});
 
 function copySafeResultLimit(request, field, value) {
   if (Number.isSafeInteger(value) && value >= 0) {
@@ -65,9 +65,23 @@ function stampMigrationIdentityFields(request, executionOptions) {
   }
 }
 
+// A statement of an open transaction carries the transaction's identity to
+// the participant it reaches (TX1 seam A): the participantId names this
+// request's partition.
+function stampTransactionIdentityFields(request, executionOptions,
+  partitionId) {
+  const identity = executionOptions.transactionIdentity;
+  if (identity && typeof partitionId === QUERY_EXECUTOR_LITERAL.STRING_STRING &&
+      partitionId.length > 0) {
+    Object.assign(request, statementParticipantFieldsOf(identity,
+      partitionId));
+  }
+}
+
 function createDefaultPartitionRequestBuilder({
   executionOptions,
   params,
+  partitionId = null,
   sql,
 }) {
   return () => {
@@ -78,6 +92,7 @@ function createDefaultPartitionRequestBuilder({
     };
     stampOptionalStringField(
       request, QUERY_MESSAGE_FIELD_SESSION_ID, executionOptions.sessionId);
+    stampTransactionIdentityFields(request, executionOptions, partitionId);
     stampOptionalStringField(
       request, QUERY_MESSAGE_FIELD_ENTRY_ID, executionOptions.entryId);
     stampOptionalStringField(
@@ -89,6 +104,9 @@ function createDefaultPartitionRequestBuilder({
       request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
         executionOptions.splitMirrorOrigin;
     }
+    stampOptionalStringField(
+      request, STATEMENT_INGRESS_FIELD,
+      executionOptions[STATEMENT_INGRESS_FIELD]);
     stampMigrationIdentityFields(request, executionOptions);
     // Write-path epoch fencing: carry the partition epoch the write was
     // planned against so the partition boundary can reject stale-epoch
@@ -116,13 +134,15 @@ function resolvePartitionExecutionBuilders({
       createDefaultPartitionRequestBuilder({
         executionOptions,
         params,
+        partitionId,
         sql,
       });
   const isSuccessfulResponse =
     typeof executionOptions.isSuccessfulResponse ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
       executionOptions.isSuccessfulResponse :
-      (response) => response?.acknowledged && response?.success;
+      (delivery) => isDeliveredTransportDeliveryOutcome(deliveryTransportOf(delivery)) &&
+        deliveryAnswerOf(delivery)?.success;
   const buildSuccessResult =
     typeof executionOptions.buildSuccessResult ===
       QUERY_EXECUTOR_LITERAL.STRING_FUNCTION ?
@@ -132,6 +152,8 @@ function resolvePartitionExecutionBuilders({
         success: true,
         rows: response.rows || [],
         changes: response.changes,
+        ...(response.settledReplay === undefined ? {} :
+          {settledReplay: response.settledReplay}),
         durableCommitWitness: response.durableCommitWitness,
         originHlc: response.originHlc,
         acceptingNodeId: response.acceptingNodeId,

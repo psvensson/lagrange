@@ -218,13 +218,14 @@ async function stepClusterConverged(ctx) {
 }
 
 async function stepPublicClientReady(ctx) {
+  let listenerDesiredState = null;
   if (ctx.config.publicClient.provisionListener) {
-    await ctx.deps.provisionListener(ctx.writer, ctx.nodes.length);
+    listenerDesiredState = await ctx.deps.provisionListener(ctx.writer, ctx.nodes.length);
   }
   const opened = await openClientsForNodes(ctx, ctx.nodes);
   return verdictOf(opened.missing.length === ZERO,
     'a public PostgreSQL-wire endpoint and client on every node',
-    opened, `no public endpoint for ${opened.missing.join(', ')}`);
+    {...opened, listenerDesiredState}, `no public endpoint for ${opened.missing.join(', ')}`);
 }
 
 async function waitForSchemaEverywhere(ctx) {

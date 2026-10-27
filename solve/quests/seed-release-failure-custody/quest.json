@@ -1,0 +1,54 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-release-failure-custody",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "A seed startup whose actual participant ENABLE commits before the release attempt expires accounts for every acquired registration resource in failure cleanup. The primary release refusal remains observable, failed native cleanup retains its exact existing owner and database, and retrying the existing top-level shutdown retries the retained cleanup instead of replaying a permanently cached rejection. Retained-store startup must consume the current membership and storage-admission owners; a committed origin does not authorize reopening a pre-registration replica that lacks its SERVICES identity. Measure that refusal separately from cleanup and recovery progress.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-release-failure-custody/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-seed-committed-origin-expiry-and-registration-cleanup",
+        "native-cleanup-custody-and-top-level-retry",
+        "retained-origin-and-authoritative-restart-frontier",
+        "semantic-negatives-and-unchanged-owner-regressions",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "existing-owner-boundary",
+      "statement": "Reuse BootstrapService, its registration phase, SeedCleanupHandler, ReplicaHandler shutdown custody, native partition lifecycle and current startup admission. No new controller, durable ledger, authority token, timer or cleanup coordinator. The registration lifecycle boundary must cover acquisition and release as well as metadata publication."
+    },
+    {
+      "id": "actual-entry-and-durable-effects",
+      "statement": "Exercise actual BootstrapService.bootstrap with real native partition groups and SQLite through the registered release route. Supply a retained directory, deliver the original ENABLE once, observe the real committed origin, and control only response scheduling or the existing injected clock. Keep the original 3000ms release budget. Observe real database close failure and restored same-owner retry; no fabricated origin, admission, consensus fact or runtime completion."
+    },
+    {
+      "id": "refusal-and-obligation",
+      "statement": "Deadline expiry remains failure, never cancellation of committed origin. Keep primary failure and cleanup evidence. Failed cleanup cannot drop exact owned resources or authorize a new instance. Only successful cleanup permits the witness to close/delete its temporary directory."
+    },
+    {
+      "id": "restart-authority-separate",
+      "statement": "Read current membership and SERVICES admission from the retained files. Never turn unreadable, missing or empty registration into permission, synthesize SERVICES rows, force fresh seed, or treat a workflow checkpoint/static founding list as placement authority. Automatic partial-seed reentry is a separate bounded contract decision if the existing producer has no sufficient grant."
+    },
+    {
+      "id": "evidence-and-scope",
+      "statement": "Independent category-complete design and witness review precedes production repair; exact-source verification precedes preservation. Use locked lab execution with no retries and retain all failed attempts. Earlier seals remain unchanged. This unit does not certify U1, TX1, FreshMG, full startup latency, distributed recovery or release."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "retry-loops",
+    "transport-delivery",
+    "sweep-timer",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "847c36a31ea3e84880dbf5e16b7e4ffb81cdd3eb"
+}

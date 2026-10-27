@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from 'espree';
 
 import {
-  auditRaftRsOperationBoundary,
+  auditRaftRsOperationBoundary, lifecycleTableWriters,
 } from '../../../scripts/checks/raft-rs-operation-boundary-audit.js';
 import {
   generateCurrentLedger,
@@ -19,11 +19,12 @@ const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SRC = path.join(ROOT, 'src');
 const SRC_RAFT = path.join(SRC, 'raft');
-const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'solve', 'quests',
-  'raft-rs-operation-port-boundary', 'capability-baseline.json'), 'utf8'));
+const BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'test', 'raft',
+  'raft-rs-backend', 'capability-baseline.json'), 'utf8'));
 const PORT_OPERATIONS = Object.freeze([
   'campaign', 'close', 'configureTick', 'probePeerProgress', 'propose',
-  'proposeConfChange', 'readCommittedMembership', 'readStatus',
+  'proposeConfChange', 'proposeMembershipTransition',
+  'readCommittedMembership', 'readStatus',
   'startScheduling', 'step',
   'stopScheduling', 'subscribe', 'tick', 'transferLeadership',
 ]);
@@ -152,15 +153,24 @@ test('the partition receives only a frozen operation port and immutable snapshot
     }
   });
 
-test('one private runtime owner is the only production binding importer', () => {
+test('one private binding owner loads native bytes and only the runtime owner imports it', () => {
   const violations = auditRaftRsOperationBoundary({root: ROOT});
-  assert.deepEqual(violations, []);
+  assert.deepEqual(violations.filter((entry) =>
+    ['binding-loader-reexport', 'binding-owner-import-bypass',
+      'direct-binding-import'].includes(entry.code)), []);
   assert.deepEqual(bindingImporters(), [],
     'the former facade loader module is no longer an importable boundary');
+  const bindingOwner = sourceOf(path.join(
+    SRC_RAFT, 'raft-rs-binding-owner.js'));
   const runtimeOwner = sourceOf(path.join(
     SRC_RAFT, 'raft-rs-runtime-owner.js'));
-  assert.match(runtimeOwner, /createRequire/u);
-  assert.match(runtimeOwner, /RAFT_RS_WASM_FILE/u);
+  assert.match(bindingOwner, /createRequire/u);
+  assert.match(bindingOwner, /RAFT_RS_WASM_FILE/u);
+  assert.match(bindingOwner,
+    /export \{instantiateRaftRsCore, verifyRaftRsBinding\}/u);
+  assert.match(runtimeOwner, /from '\.\/raft-rs-binding-owner\.js'/u);
+  assert.doesNotMatch(runtimeOwner, /createRequire/u);
+  assert.deepEqual(violations, []);
   assert.equal(fs.existsSync(path.join(SRC_RAFT, 'raft-rs-core.js')), false);
 });
 
@@ -169,15 +179,17 @@ test('retirement has one production writer and no provider control accessor',
     const sources = sourceFiles().map((file) => ({
       file: relative(file), source: sourceOf(file),
     }));
-    const writers = sources.filter(({source}) =>
-      /UPDATE\s+\$\{LIFECYCLE_TABLE\}/u.test(source))
-      .map(({file}) => file);
-    assert.deepEqual(writers, [
+    // The census owner resolves the table name behind any binding (local,
+    // imported under any alias, namespace member), not one identifier name.
+    assert.deepEqual(lifecycleTableWriters({root: ROOT}), [
       'src/raft/raft-rs-replica-lifecycle-owner.js',
     ]);
-    const provider = sourceOf(path.join(SRC_RAFT, 'raft-rs-provider.js'));
-    assert.equal(provider.includes('partitionControlOf'), false);
-    assert.equal(provider.includes('partitionControls'), false);
+    // The provider facade that once could have exposed a control accessor
+    // is deleted; its absence is owned by zero-legacy-consensus-runtime.
+    for (const {file, source} of sources) {
+      assert.equal(/partitionControlOf|partitionControls/u.test(source), false,
+        `${file} exposes no partition control accessor`);
+    }
   });
 
 test('the private owner instruments actual core entry rather than gate checks',
@@ -193,21 +205,6 @@ test('the private owner instruments actual core entry rather than gate checks',
 
 test('the operation boundary removes public capability instead of renaming it',
   () => {
-    const provider = sourceOf(path.join(SRC_RAFT, 'raft-rs-provider.js'));
-    assert.doesNotMatch(provider,
-      /RaftRsGroupHandle|raftRsGroupOf|partitionControlOf|retireFromScheduling/u);
-    assert.match(provider, /createPartitionPort/u);
-    const providerCluster = new PartitionNodeCluster({
-      partitionId: 'stateless-provider-red',
-      replicaIds: ['stateless-provider-replica'],
-    });
-    try {
-      assert.equal(Object.isFrozen(providerCluster.provider), true);
-      assert.deepEqual(Reflect.ownKeys(providerCluster.provider), [],
-        'the provider retains no options, runtime or per-group values');
-    } finally {
-      providerCluster.dispose();
-    }
     const after = generateCurrentLedger();
     const categories = [
       'publicMethods', 'publicDataProperties', 'mutablePublicValues',
@@ -264,14 +261,23 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
     fs.writeFileSync(path.join(raft,
       'raft-rs-replica-lifecycle-owner.js'), 'export const owner = true;\n');
     fs.writeFileSync(path.join(raft, 'raft-rs-lifecycle-administration.js'),
-      'export function retireReplica() {}\n');
-    fs.writeFileSync(path.join(node,
-      'replica-handler-remove-execution-methods.js'),
-    'import {retireReplica} from \'../raft/raft-rs-lifecycle-administration.js\';\n' +
-      'retireReplica();\n');
+      'export const raftRsLifecycleAdministration = ' +
+      'Object.freeze({retireReplica() {}});\n');
+    const coordinator = path.join(node,
+      'replica-handler-remove-execution-methods.js');
+    const administrationImport = 'import {raftRsLifecycleAdministration} from ' +
+      '\'../raft/raft-rs-lifecycle-administration.js\';\n';
+    fs.writeFileSync(coordinator, administrationImport +
+      'raftRsLifecycleAdministration.retireReplica(id, reason, {runtime});\n');
     fs.writeFileSync(path.join(raft, 'binding-bypass.js'),
       'import {loadRaftRsCore} from \'./raft-rs-core.js\';\n' +
       'export const escaped = loadRaftRsCore();\n');
+    fs.writeFileSync(path.join(raft, 'raft-rs-binding-owner.js'),
+      'export function instantiateRaftRsCore() {}\n' +
+      'export function verifyRaftRsBinding() {}\n');
+    fs.writeFileSync(path.join(raft, 'binding-owner-bypass.js'),
+      'import {instantiateRaftRsCore} from \'./raft-rs-binding-owner.js\';\n' +
+      'export const escaped = instantiateRaftRsCore();\n');
     fs.writeFileSync(path.join(raft, 'facade-bypass.js'),
       'export function invoke(core) {\n' +
       '  const method = \'sta\' + \'tus\';\n' +
@@ -285,15 +291,76 @@ test('the real ownership audit rejects core, facade and lifecycle mutants',
     fs.writeFileSync(path.join(raft, 'lifecycle-bypass.js'),
       'const table = \'_raft_rs_\' + \'replica_lifecycle\';\n' +
       'db.prepare(`UPDATE ${table} SET state = ?`).run(\'retired\');\n');
+    // Native retirement is found by its administration binding, renamed or
+    // aliased; another owner's own retireReplica is not a lifecycle write.
+    fs.writeFileSync(path.join(node, 'native-retirement-bypass.js'),
+      'import {raftRsLifecycleAdministration as admin} from ' +
+      '\'../raft/raft-rs-lifecycle-administration.js\';\n' +
+      'const alias = admin;\n' +
+      'alias.retireReplica(id, reason, {runtime});\n');
+    fs.writeFileSync(path.join(node, 'wasm-creation-retirement-caller.js'),
+      'export const retire = (lifecycle, origin) => ' +
+      'lifecycle.retireReplica(origin);\n');
     try {
-      const codes = new Set(auditRaftRsOperationBoundary({root: fixture})
-        .map((entry) => entry.code));
+      const audited = auditRaftRsOperationBoundary({root: fixture});
+      assert.deepEqual(audited.filter((entry) =>
+        entry.code === 'lifecycle-write-outside-owner'), [{
+        file: 'src/node/native-retirement-bypass.js',
+        code: 'lifecycle-write-outside-owner',
+        detail: 'retireReplica',
+      }], 'only the bound native retirement outside the writers is reported');
+      assert.deepEqual(audited.filter((entry) =>
+        entry.code === 'lifecycle-writer-binding-escape'), [],
+      'the coordinator\'s own direct retirement is allowed');
+      const codes = new Set(audited.map((entry) => entry.code));
       assert.equal(codes.has('binding-import-outside-owner'), true);
+      assert.equal(codes.has('binding-owner-import-bypass'), true);
       assert.equal(codes.has('core-invocation-outside-owner'), true);
       assert.equal(codes.has('core-alias-invocation-outside-owner'), true);
       assert.equal(codes.has('direct-binding-import'), true);
       assert.equal(codes.has('lifecycle-sql-outside-owner'), true);
+
+      // A writer that hands its administration binding to a helper hides the
+      // helper's retirement from the census, so the writer itself fails.
+      fs.writeFileSync(coordinator, administrationImport +
+        'import {helper} from \'./retirement-helper.js\';\n' +
+        'helper(raftRsLifecycleAdministration);\n');
+      fs.writeFileSync(path.join(node, 'retirement-helper.js'),
+        'export function helper(admin) {\n' +
+        '  return admin.retireReplica(id, reason, {runtime});\n}\n');
+      assert.deepEqual(auditRaftRsOperationBoundary({root: fixture})
+        .filter((entry) => entry.code === 'lifecycle-writer-binding-escape'), [{
+        file: 'src/node/replica-handler-remove-execution-methods.js',
+        code: 'lifecycle-writer-binding-escape',
+        detail: 'lifecycle administration binding escapes direct invocation',
+      }], 'an escape from a lifecycle writer fails closed');
     } finally {
       fs.rmSync(fixture, {recursive: true, force: true});
     }
   });
+
+test('only original preparation may import the named original-right transition', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'original-right-audit-'));
+  const raft = path.join(fixture, 'src', 'raft');
+  fs.mkdirSync(raft, {recursive: true});
+  const named = 'import {transitionOriginalRight} from ' +
+    '\'./raft-rs-replica-lifecycle-owner.js\';\n';
+  const preparation = path.join(raft, 'raft-rs-original-allocation-preparation.js');
+  try {
+    fs.writeFileSync(path.join(raft, 'raft-rs-replica-lifecycle-owner.js'),
+      'export function transitionOriginalRight() {}\n');
+    fs.writeFileSync(preparation, named);
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}), []);
+    fs.writeFileSync(path.join(raft, 'unrelated-caller.js'), named);
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}).map(({file, code}) =>
+      ({file, code})), [{file: 'src/raft/unrelated-caller.js',
+      code: 'lifecycle-owner-import-bypass'}]);
+    fs.rmSync(path.join(raft, 'unrelated-caller.js'));
+    fs.writeFileSync(preparation,
+      'import * as lifecycle from \'./raft-rs-replica-lifecycle-owner.js\';\n');
+    assert.deepEqual(auditRaftRsOperationBoundary({root: fixture}).map(({code}) => code),
+      ['lifecycle-owner-import-bypass'], 'the named permission grants no owner namespace');
+  } finally {
+    fs.rmSync(fixture, {recursive: true, force: true});
+  }
+});

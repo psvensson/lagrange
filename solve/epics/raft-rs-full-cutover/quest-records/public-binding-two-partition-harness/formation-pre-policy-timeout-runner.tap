@@ -1,0 +1,65 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/integration/public-binding-cell-invocation-seam.integration.test.js
+
+# test-files planned=1
+classified lane exclusive: 1 file(s), jobs=1
+thermal: ok cpu 61C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/integration/public-binding-cell-invocation-seam.integration.test.js (2 assertions, 102061ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input
+    # runtime start event-loop delay ms: max=2035 p99=112
+LogsTableService initialized
+metrics.logging.logs_table_connect.start {
+  bufferedEntries: 0,
+  flushMode: 'background',
+  chunkSize: 20,
+  yieldMs: 5
+}
+Connected to LoggingService, flushed 0 buffered entries
+    not ok 1 - undefined: managed split did not produce two routable partitions (undefined)
+      ---
+      stack: |
+        readable (test/integration/public-binding-cell-invocation-seam.integration.test.js:277:11)
+        async Test.<anonymous> (test/integration/public-binding-cell-invocation-seam.integration.test.js:356:23)
+      at:
+        fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+        lineNumber: 277
+        columnNumber: 11
+        functionName: readable
+      tapCaught: returnedPromiseRejection
+      source: |2
+            return await operation();
+          } catch (error) {
+            throw new Error(
+        ----------^
+              `${error?.code}: ${error?.message} (${error?.cause?.message})`);
+          }
+      ...
+    
+    1..1
+LogsTableService shutdown
+# teardown: harness-stopped pgwire replicas=["sys-postgres-wire-r1"]; stop ms=283; rest accepting after stop=false; pgwire accepting after stop=false
+not ok 1 - public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input # time=99691.243ms
+  ---
+  at:
+    fileName: test/integration/public-binding-cell-invocation-seam.integration.test.js
+    lineNumber: 282
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+  
+    test('public Binding invocation through the authenticated PostgreSQL-wire ' +
+    ^
+      'seam: Artifact, Binding, key-anchored call, no topology in consumer input',
+    {timeout: SEAM_TEST_TIMEOUT_MS}, async (t) => {
+  ...
+
+1..1
+# { total: 1, pass: 0, fail: 1 }
+# time=99701.242ms
+# test-files total=1 pass=0 fail=1 assertions=2
+(node:1707012) MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 transition listeners added to [BootstrapReadinessState]. MaxListeners is 10. Use emitter.setMaxListeners() to increase limit
+(Use `node --trace-warnings ...` to show where the warning was created)

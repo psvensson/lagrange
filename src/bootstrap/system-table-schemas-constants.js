@@ -51,6 +51,7 @@ import {
   CALL_CELL_REDUCE_RESULTS_SCHEMA,
   CALL_CELL_REDUCE_SLOTS_SCHEMA,
 } from './system-table-runtime-schema-definitions.js';
+import {SERVICE_INSTANCES_SCHEMA} from './system-table-service-instance-schema.js';
 import {
   ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
   ARTIFACT_PAYLOADS_SCHEMA,
@@ -90,6 +91,7 @@ const SYSTEM_TABLE_SCHEMAS = [
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
+  SERVICE_INSTANCES_SCHEMA,
   SERVICE_BINDINGS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,
@@ -141,6 +143,7 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: 'replica_operations-p1',
   [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: 'node_endpoints-p1',
   [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: 'service_definitions-p1',
+  [SYSTEM_TABLE_NAME.SERVICE_INSTANCES]: 'service_instances-p1',
   [SYSTEM_TABLE_NAME.SERVICE_BINDINGS]: 'service_bindings-p1',
   [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]: 'service_endpoints-p1',
   [SYSTEM_TABLE_NAME.SERVICE_TIMERS]: 'service_timers-p1',
@@ -222,6 +225,9 @@ const INITIAL_REPLICA_IDS = {
   ],
   [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: [
     'service_definitions-p1-r1', 'service_definitions-p1-r2', 'service_definitions-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.SERVICE_INSTANCES]: [
+    'service_instances-p1-r1', 'service_instances-p1-r2', 'service_instances-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.SERVICE_BINDINGS]: [
     'service_bindings-p1-r1',
@@ -433,6 +439,7 @@ export {
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,
   SERVICE_DEFINITIONS_SCHEMA,
+  SERVICE_INSTANCES_SCHEMA,
   SERVICE_BINDINGS_SCHEMA,
   SERVICE_ENDPOINTS_SCHEMA,
   SERVICE_TIMERS_SCHEMA,

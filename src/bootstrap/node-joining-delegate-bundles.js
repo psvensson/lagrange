@@ -51,6 +51,9 @@ function createNodeJoiningRuntimeDependencyOwner({service, runtimeWiring}) {
     get tablePolicyService() {
       return service.tablePolicyService;
     },
+    get systemMetadataOwners() {
+      return service.systemMetadataOwners;
+    },
     getSqlQueryEngine() {
       return (
         service.sqlQueryEngine ||

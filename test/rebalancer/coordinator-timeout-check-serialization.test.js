@@ -51,3 +51,44 @@ test('RebalanceCoordinator does not overlap periodic timeout checks', async (t) 
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 });
+
+test('the periodic check sweeps membership debt after the orphan reconcile', async (t) => {
+  const coordinator = createCoordinator();
+  coordinator.timeoutCheckIntervalMs = 5;
+  const order = [];
+  coordinator.checkTimeouts = async () => order.push('timeouts');
+  coordinator.reconcileOrphanedOperations = async () => order.push('orphans');
+  coordinator.workflowOwner.reconcileMessageGroupMembershipDebt = async (census) => {
+    order.push(`debt:${census ?? 'default'}`);
+    return {available: true, found: 0};
+  };
+  coordinator.startTimeoutChecking();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  } finally {
+    coordinator.stopTimeoutChecking();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  const firstDebt = order.indexOf('debt:default');
+  t.ok(firstDebt > 0, 'the membership-debt sweep runs on the periodic check');
+  t.equal(order[firstDebt - 1], 'orphans',
+    'the debt sweep follows the orphan reconcile of the same tick');
+  t.equal(order[firstDebt - 2], 'timeouts', 'which follows the timeout check');
+});
+
+test('the repository is bound to the issued boot incarnation the router carries', (t) => {
+  const bound = new RebalanceCoordinator({
+    nodeId: 'coordinator-node',
+    systemTableCache: {getAll: () => []},
+    cdcIntegrationService: {},
+    messageRouter: {bootIncarnation: 7},
+    tablePolicyService: {},
+    sqlQueryEngine: {executeQuery: async () => ({success: true, rows: []})},
+  });
+  t.equal(bound.repository.membershipOwnerBootIncarnation, 7,
+    'the membership owner claim is bound to this process\'s issued boot incarnation');
+  const unbound = createCoordinator();
+  t.equal(unbound.repository.membershipOwnerBootIncarnation, null,
+    'a router without an issued boot incarnation binds nothing');
+  t.end();
+});

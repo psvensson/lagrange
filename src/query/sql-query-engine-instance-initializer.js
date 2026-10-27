@@ -9,6 +9,13 @@ import {ServicesOwner} from '../control-plane/owners/services-owner.js';
 import {
   RuntimeReplicaStateProjectionOwner,
 } from './runtime-replica-state-projection-owner.js';
+import {
+  beginAnswerOf,
+  committedAnswerOf,
+  preparedEvidenceOf,
+  rolledBackAnswerOf,
+  transactionOutcomeAnswerOf,
+} from './sql-query-engine-participant-wire.js';
 
 const LOCAL_STR_SQL_CONTROL_PLANE = 'sql_control_plane';
 const LOCAL_STR_FUNCTION = 'function';
@@ -24,7 +31,6 @@ const {
   MigrationCoordinator,
   MigrationPipeline,
   PRESSURE_WORK_CLASS,
-  PartitionCallbackDispatcher,
   PartitionResolver,
   QUERY_CONFIG_KEY,
   QUERY_DEFAULTS,
@@ -191,46 +197,53 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     new DistributedTransactionCoordinator({
       // Transaction epochs and deadlines are this node's.
       now: engine.nowFn,
-      beginParticipant: async (sessionId, partitionId, transactionEpoch) =>
-        engine.deliverTransactionOperation(
+      // Every participant request carries the transaction identity the
+      // coordinator passes (TX1 seam A); the participant wire owner types
+      // each answer (sql-query-engine-participant-wire.js).
+      beginParticipant: async (sessionId, partitionId, identity) =>
+        beginAnswerOf(await engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.BEGIN,
-          {transactionEpoch},
-        ),
-      prepareParticipant: async (sessionId, partitionId) =>
-        engine.deliverTransactionOperation(
+          identity,
+        )),
+      prepareParticipant: async (sessionId, partitionId, identity) =>
+        preparedEvidenceOf(await engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.PREPARE,
-        ),
-      commitParticipant: async (sessionId, partitionId) =>
-        engine.deliverTransactionOperation(
+          identity,
+        )),
+      commitParticipant: async (sessionId, partitionId, request) =>
+        committedAnswerOf(await engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.COMMIT,
-        ),
-      rollbackParticipant: async (sessionId, partitionId) =>
-        engine.deliverTransactionOperation(
+          request,
+        )),
+      rollbackParticipant: async (sessionId, partitionId, request) =>
+        rolledBackAnswerOf(await engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.ROLLBACK,
-        ),
+          request,
+        ), typeof request?.decisionDigest === 'string' &&
+          request.decisionDigest.length > 0),
       resolveParticipantCommitOutcome: async (
         sessionId,
         partitionId,
-        transactionEpoch,
+        identity,
       ) => {
         const result = await engine.deliverTransactionOperation(
           sessionId,
           partitionId,
           QUERY_OPERATION.TRANSACTION_OUTCOME,
-          {transactionEpoch},
+          identity,
         );
-        return result.outcome;
+        return transactionOutcomeAnswerOf(result).outcome;
       },
-      persistTransaction: async (record) =>
-        engine.persistDistributedTransactionRow(record),
+      persistTransaction: async (record, persistOptions) =>
+        engine.persistDistributedTransactionRow(record, persistOptions),
       persistParticipant: async (record) =>
         engine.persistDistributedTransactionParticipantRow(record),
       persistWriteOperation: async (record) =>
@@ -238,9 +251,19 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
           ...record,
           workClass: PRESSURE_WORK_CLASS.CRITICAL,
         }),
+      persistTransactionDecision: async (record) =>
+        engine.persistDistributedTransactionDecision(record),
+      persistTransactionParticipantSet: async (record, previousText) =>
+        engine.persistDistributedTransactionParticipantSet(record, previousText),
+      readTransactionRecoveryState: async (transactionId) =>
+        engine.readDistributedTransactionRecoveryState(transactionId),
+      readTransactionDecision: async (transactionId) =>
+        engine.readDistributedTransactionRow(transactionId),
       epochSource: options.transactionEpochSource,
       loadRecoveryStateForSweep: async () =>
         engine.loadDistributedTransactionRecoveryState(),
+      retainAdvancedTransactionReadback: (row) =>
+        engine.retainAdvancedDistributedTransactionReadback(row),
     });
   engine.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
@@ -260,16 +283,6 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     calculateQuorumReplicaCount: (replicaCount) =>
       engine.calculateQuorumReplicaCount(replicaCount),
     partitionProvisioner: tablePartitionProvisioner,
-  });
-
-  engine.partitionCallbackDispatcher = new PartitionCallbackDispatcher({
-    sqlParser: {parse: (sql) => engine.parse(sql)},
-    partitionResolver: engine.partitionResolver,
-    queryExecutor: engine.queryExecutor,
-    getTablePartitions: (name) => engine.getTablePartitions(name),
-    isSystemTable: (name) => engine.isSystemTable(name),
-    resolveRoutedDeliveryPriority: (name) =>
-      engine.resolveRoutedDeliveryPriority(name),
   });
 
   engine.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);

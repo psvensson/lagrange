@@ -46,32 +46,10 @@ const AXIS_TOKEN_PATTERN = new RegExp(
 
 const PRODUCTION_INSTANTIATION_PATTERN = /new\s+WasmCallAdapter\s*\(/u;
 
-// The sealed production axis chain (census of 2026-08-01, adversarially
-// verified; token-hardening re-sweep added sql-query-engine-statement-
-// execution.js). Paths are relative to src/.
-const AXIS_ALLOWLIST = new Set([
-  'admin/admin-constants.js',
-  'admin/admin-query-result-message-envelope.js',
-  'admin/admin-service-message-adapter.js',
-  'admin/admin-websocket-api-base.js',
-  'admin/admin-websocket-message-dispatch-methods.js',
-  'admin/admin-websocket-query-execution-methods.js',
-  'debug/debug-constants.js',
-  'debug/debug-session-resolver.js',
-  'query/callback/callback-execution-host.js',
-  'query/callback/callback-module-artifact.js',
-  'query/callback/partition-callback-dispatcher.js',
-  'query/index.js',
-  'query/sql-adapter-constants.js',
-  'query/sql-query-engine-statement-execution.js',
-  'query/sql-query-engine-instance-initializer.js',
-  'query/sql-query-engine-lifecycle-and-callback-dispatch.js',
-  'query/sql-query-engine-request-dispatch.js',
-  'query/sql-query-engine-shared.js',
-  'query/sql-request.js',
-  'query/wasm-call-adapter.js',
-  'wasm-service/wasm-executor.js',
-]);
+// The legacy partition_callback execution axis has been retired (epic
+// solve/epics/callback-axis-retirement.md, rung 4). Zero production files
+// may reference any axis token.
+const AXIS_ALLOWLIST = new Set([]);
 
 // Internal helper files of the axis chain may reference each other freely;
 // everything under query/callback/ is axis-internal by definition.

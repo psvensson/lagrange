@@ -1,0 +1,51 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "owner-validation-exact-runtime-and-effects",
+      "passed": true
+    },
+    {
+      "id": "http-owner-gateway-durable-desired-state",
+      "passed": true
+    },
+    {
+      "id": "existing-placement-and-lifecycle-contract",
+      "passed": true
+    },
+    {
+      "id": "two-harnesses-and-five-scenario-caller-migration",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": true
+    }
+  ],
+  "source": {
+    "base": "e701ca2b35b9f682dcd051997d521fe3134bfc89",
+    "state": "checkpoint-awaiting-independent-review",
+    "sha256": {
+      "src/admin/admin-owner-operations.js": "fa4f7ba6823c0768ac2331cabb05555fa311c6501050e59696949969e3035117",
+      "src/control-plane/owners/service-definitions-owner.js": "bed46bc98929c22e9aa5d3c7bc35f525f88131bbfd7ec6b202e19e9ccd4abcc9",
+      "src/entrypoint-runtime-admin-composition.js": "db788865cf8ff8702b32dfad464aa5c53effab112600b653bbdc40defc8c11af",
+      "src/control-plane/owners/postgres-wire-scale-contract.js": "ff2c21b0ae4bfa5576414f77d76ba078c9394d7141324d0960ae0d47b173599e"
+    }
+  },
+  "focusedProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 10,
+    "assertions": 545,
+    "output": "/tmp/codex-pgwire-scale-20261025/green-final.log",
+    "outputSha256": "3fb239a90279b9a40daec5a2329f8b7c74c6c591da30c03099075a88beda973e"
+  },
+  "limitations": [
+    "Local HTTP/SQLite transport and controlled placement factory are bounded owner/caller proofs, not a full native cluster or scenario acceptance.",
+    "Actual listener module proves running config unchanged until subsequent stop/prepare/start; no rolling config rollout added.",
+    "Four scenarios actually provision listeners via two migrated helpers; managed-split-writes-after-cutover is a fifth shared-harness consumer using only startup/split helpers and remains unchanged.",
+    "Whole-tree complexity remains1767 against inherited1755 baseline; changed-file lint passes. Whole-tree literal and decision audits retain pre-existing findings outside changed scale paths; normal scoped hook pending.",
+    "Full public scenario executions, independent review and applicable final gates remain outstanding."
+  ]
+}

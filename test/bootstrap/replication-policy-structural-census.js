@@ -38,6 +38,7 @@ const DECLARED_DEFAULT_IDENTIFIERS = Object.freeze([
 const CREATION_SITE_FILES = Object.freeze([
   'src/bootstrap/phases/create-message-group-phase.js',
   'src/bootstrap/phases/seed-registration-phase.js',
+  'src/bootstrap/seed-foundation-rows.js',
 ]);
 
 function walkNodes(node, visit) {

@@ -12,8 +12,6 @@ const MESSAGE_GROUP_ASSIGNMENT_DEFAULT = Object.freeze({
   GROUP_ID_TAIL_LENGTH: NUM.EIGHT + NUM.FOUR,
   GROUP_ID_FALLBACK: 'group',
   REPLICA_COUNT: NUM.THREE,
-  MIN_REPLICAS_FOR_MOVE: NUM.THREE,
-  MIN_REPLICAS_ON_NODE_FOR_MOVE: 2,
   RAFT_MIN_REPLICA_COUNT: NUM.THREE,
   RAFT_ODD_MODULO: 2,
   DISTRIBUTION_NODES_PER_GROUP: NUM.THREE,
@@ -24,7 +22,6 @@ const MESSAGE_GROUP_ASSIGNMENT_DEFAULT = Object.freeze({
 
 const MESSAGE_GROUP_ASSIGNMENT_LOG_MSG = Object.freeze({
   DETERMINING: 'Determining message group assignment',
-  USING_MOVE_REPLICA: 'Using MOVE_REPLICA strategy',
   USING_CREATE_SELF_HOSTED: 'Using CREATE_SELF_HOSTED strategy',
   EXISTING_MEMBERSHIP_DETECTED:
     'Node already has message group membership, using CREATE_SELF_HOSTED',
@@ -34,9 +31,6 @@ const MESSAGE_GROUP_ASSIGNMENT_ERROR = Object.freeze({
   ASSIGNMENT_REQUIRED: 'Assignment is required',
   STRATEGY_REQUIRED: 'Strategy is required',
   GROUP_ID_REQUIRED: 'Group ID is required',
-  SOURCE_NODE_REQUIRED: 'Source node ID is required for MOVE_REPLICA',
-  REPLICA_TO_MOVE_REQUIRED: 'Replica to move is required for MOVE_REPLICA',
-  REPLICA_ADDRESSES_REQUIRED: 'Replica addresses are required for MOVE_REPLICA',
   REPLICA_COUNT_MIN: 'Replica count must be at least 3 for CREATE_SELF_HOSTED',
   REPLICA_COUNT_ODD: 'Replica count must be odd for Raft consensus',
   invalidStrategy: (strategy) => `Invalid strategy: ${strategy}`,

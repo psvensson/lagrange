@@ -1,15 +1,12 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
 import {buildAdminWriteReceipt} from './admin-write-receipt.js';
 
-const NO_HOST_CALLBACK_VALUE = null;
-const NO_CALLBACK_MODULE_REF = null;
-const NO_CALLBACK_EXPORT_REF = null;
+const NO_OPERATION_VALUE = null;
 
 const {
   ADMIN_CACHE_DUMP,
   ADMIN_QUERY_RESULT,
   EMPTY_STRING,
-  EXECUTION_MODE,
   ErrorCode,
   MessageType,
   QUERY_RESULT_MESSAGE_KIND,
@@ -35,11 +32,6 @@ function resolveAdminQueryResultPayloadContext(result) {
     result.rows !== undefined || result.results !== undefined;
   if (result.success === false) {
     return {kind: QUERY_RESULT_MESSAGE_KIND.ERROR, hasRowPayload};
-  } else if (
-    result.hostResult ||
-    result.executionMode === EXECUTION_MODE.PARTITION_CALLBACK
-  ) {
-    return {kind: QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK, hasRowPayload};
   } else if (QUERY_RESULT_WRITE_OPERATIONS.has(operation) || hasAffectedRows) {
     return {kind: QUERY_RESULT_MESSAGE_KIND.WRITE, hasRowPayload};
   } else if (hasRowPayload) {
@@ -56,9 +48,6 @@ function applyAdminQueryResultMessagePayload(
   switch (payloadContext.kind) {
   case QUERY_RESULT_MESSAGE_KIND.ERROR:
     applyAdminErrorQueryResultMessagePayload(message, result);
-    return;
-  case QUERY_RESULT_MESSAGE_KIND.HOST_CALLBACK:
-    applyAdminHostCallbackQueryResultMessagePayload(message, result);
     return;
   case QUERY_RESULT_MESSAGE_KIND.WRITE:
     applyAdminWriteQueryResultMessagePayload(
@@ -123,23 +112,12 @@ function applyAdminErrorParticipantFailuresPayload(message, result) {
       message.participantFailures[0];
 }
 
-function applyAdminHostCallbackQueryResultMessagePayload(message, result) {
-  message.operation = EXECUTION_MODE.PARTITION_CALLBACK;
-  message.results = Array.isArray(result.results) ?
-    result.results :
-    ADMIN_CACHE_DUMP.EMPTY;
-  message.hostResult = result.hostResult || NO_HOST_CALLBACK_VALUE;
-  message.callbackModuleRef =
-    result.callbackModuleRef || NO_CALLBACK_MODULE_REF;
-  message.callbackExport = result.callbackExport || NO_CALLBACK_EXPORT_REF;
-}
-
 function applyAdminWriteQueryResultMessagePayload(
   message,
   result,
   payloadContext,
 ) {
-  message.operation = result.operation || NO_HOST_CALLBACK_VALUE;
+  message.operation = result.operation || NO_OPERATION_VALUE;
   message.affectedRows = resolveAdminQueryResultAffectedRows(
     result.affectedRows,
     false,
@@ -187,7 +165,7 @@ function resolveAdminQueryResultAffectedRows(
 
 function applyAdminQueryResultTableScope(message, result) {
   message.partitions = result.partitions || ADMIN_CACHE_DUMP.EMPTY;
-  message.tableName = result.tableName || NO_HOST_CALLBACK_VALUE;
+  message.tableName = result.tableName || NO_OPERATION_VALUE;
 }
 
 function resolveAdminQueryResultRows(result) {

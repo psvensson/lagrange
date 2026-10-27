@@ -1,0 +1,178 @@
+name: rs-raft-review-followup
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths:
+      - .github/workflows/rs-raft-review-followup.yml
+      - scripts/quest-evidence/prepare-runtime-review-followup.py
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-review-followup-20261012
+  cancel-in-progress: false
+jobs:
+  review-findings:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      BASE: 56c81693d8392d18f42cd785a2ef8686a7fe4b10
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      QUEST: replicated-transaction-decision-and-apply
+      EVIDENCE: test-output/runtime-review-followup
+      NEW_TEST: test/raft/raft-rs-backend/runtime-replacement-review.integration.test.js
+      TIMING_TEST: test/raft/raft-rs-backend/operation-port-throw-containment.test.js
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Prepare test-only candidate through existing owners
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code "$BASE" -- src
+          mkdir -p "$EVIDENCE"
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          python3 scripts/quest-evidence/prepare-runtime-review-followup.py > "$EVIDENCE/changes.json"
+          node --check "$NEW_TEST"
+          node --check test/raft/raft-rs-backend/runtime-replacement-review-child.js
+          node --check "$TIMING_TEST"
+          npm run -s test:metadata:refresh > "$EVIDENCE/metadata.log" 2>&1
+          node scripts/solve.js note --id "$QUEST" --finding 'External independent Copilot PR117 review 5488915088 recommends changes: incomplete shared restoration, cross-group callback reentrancy, reload retry amplification and missing impact witness registration. This partial automated review is not a direct subagent or approving Solver verification. Candidate remains held.' --json > "$EVIDENCE/review-finding.json"
+          node scripts/solve.js note --id "$QUEST" --attempt 'Test-only PR117 follow-up: preserve native reproductions of partial restoration, reentrant callback and shared reload pressure; register both native witnesses in the existing contract and coupled pair; retain the full scheduled-tick interval on the existing VirtualTimeSource. No production changes or acceptance-threshold changes.' --json > "$EVIDENCE/attempt.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- "$TIMING_TEST" test/shards/impact-contracts.json test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json test/shards/impact-graph-seal.json "solve/quests/$QUEST/log.ndjson"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: register native review witnesses and preserve scheduled semantics on virtual time'
+          git rev-parse HEAD > "$EVIDENCE/candidate-sha.txt"
+          git diff --exit-code "$BASE" -- src
+          git diff "$BASE" -- "$TIMING_TEST" test/shards/impact-contracts.json > "$EVIDENCE/test-correction.patch"
+      - name: Reproduce native review findings without retries
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- "$NEW_TEST" > "$EVIDENCE/reviewer-red.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/reviewer-red-exit.txt"
+          test ! -d test-output/runtime-review-native || mv test-output/runtime-review-native "$EVIDENCE/reviewer-red-cases"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/reviewer-red-tap"
+          tail -30 "$EVIDENCE/reviewer-red.log"
+      - name: Existing native and operation-port regressions with unchanged timing limits
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          npm run -s test:file -- test/raft/raft-rs-backend/runtime-load-recovery.integration.test.js test/raft/raft-rs-backend/operation-port-provenance.test.js test/raft/raft-rs-backend/operation-port-ready-recovery.test.js "$TIMING_TEST" > "$EVIDENCE/regressions.log" 2>&1
+          printf '%s\n' "$?" > "$EVIDENCE/regressions-exit.txt"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/regressions-tap"
+          tail -30 "$EVIDENCE/regressions.log"
+      - name: Refuse a vacuous clock witness and restore exact candidate
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p=Path(os.environ['TIMING_TEST']); s=p.read_text()
+          anchor='    await advanceScheduledClock(clock, SCHEDULED_SPAN_MS);'
+          assert s.count(anchor)==1
+          p.write_text(s.replace(anchor, '    // Controlled negative: scheduled interval deliberately not advanced.', 1))
+          PY
+          set +e
+          npm run -s test:file -- "$TIMING_TEST" > "$EVIDENCE/clock-negative.log" 2>&1
+          STATUS=$?
+          set -e
+          printf '%s\n' "$STATUS" > "$EVIDENCE/clock-negative-exit.txt"
+          test ! -d .tap/test-results || mv .tap/test-results "$EVIDENCE/clock-negative-tap"
+          git show "$(cat "$EVIDENCE/candidate-sha.txt"):$TIMING_TEST" > "$TIMING_TEST"
+          git diff --exit-code -- "$TIMING_TEST" src
+      - name: Derive bounded measurement disposition without approving source
+        if: steps.prepare.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,re
+          from pathlib import Path
+          e=Path(os.environ['EVIDENCE']); checks={}; receipts={}
+          phases={'control':'complete','partial-restore':'partial-restore:other-group','reentrant-restore':'reentrant-restore:callback','reload-backoff':'reload-backoff:shared-window'}
+          for case,phase in phases.items():
+              p=e/'reviewer-red-cases'/f'{case}.json'
+              x=json.loads(p.read_text()) if p.exists() else {}
+              line=next((s for s in x.get('stdout','').splitlines() if s.startswith('RUNTIME_REVIEW ')),None)
+              r=json.loads(line[len('RUNTIME_REVIEW '):]) if line else {}
+              receipts[case]=r
+              checks[case]=x.get('error') is None and x.get('signal') is None and r.get('traps')==1 and r.get('phase')==phase and x.get('status')==(0 if case=='control' else 1)
+          checks['partial-engaged']=receipts['partial-restore'].get('refusals')==1 and receipts['partial-restore'].get('other',{}).get('outcome')=='CORE_FATAL'
+          callbacks=receipts['reentrant-restore'].get('callbacks',[])
+          checks['reentrancy-engaged']=len(callbacks)==1 and callbacks[0].get('enteredCore',0)>0
+          checks['amplification-engaged']=receipts['reload-backoff'].get('loadAttempts',0)>1
+          checks['native-runner-red']=(e/'reviewer-red-exit.txt').read_text().strip()=='1'
+          checks['existing-regressions']=(e/'regressions-exit.txt').read_text().strip()=='0'
+          raw=e/'regressions-tap'/f"{os.environ['TIMING_TEST']}.tap"
+          text=raw.read_text() if raw.exists() else ''
+          m=re.search(r'duration_ms:\s*([\d.]+)',text)
+          timing=float(m.group(1)) if m else None
+          checks['unchanged-two-second-bar']=timing is not None and timing<=2000 and '# fail 0' in text
+          n=e/'clock-negative-tap'/f"{os.environ['TIMING_TEST']}.tap"
+          negative=n.read_text() if n.exists() else ''
+          checks['clock-negative']=(e/'clock-negative-exit.txt').read_text().strip()=='1' and 'actual scheduled leader callback must run' in negative
+          summary={'candidate':(e/'candidate-sha.txt').read_text().strip(),'productionBaseline':os.environ['BASE'],'productionSourceChanged':False,'checks':checks,'scheduledCaseDurationMs':timing,'measurementComplete':all(checks.values()),'nativeSafetyWitnessesPass':False,'independentApproval':False,'mergeReady':False,'scope':'Three single-voter groups in one process; actual raft-rs and SQLite; existing fault seams. Native runtime corrections remain outstanding.'}
+          (e/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
+          print(json.dumps(summary,indent=2))
+          PY
+      - name: Preserve test-only candidate and all measured failures on the work branch
+        if: steps.prepare.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code "$BASE" -- src
+          DEST="solve/quests/$QUEST/evidence/runtime-review-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp -a "$EVIDENCE/." "$DEST/"
+          find "$DEST" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: retain independent-review native reds and test correction evidence'
+          REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Retain all output even when setup or measurement fails
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          git diff -- src > "$EVIDENCE/working-source.patch"
+          find "$EVIDENCE" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-review-followup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/runtime-review-followup/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep native safety failures visible as RED
+        if: always()
+        shell: bash
+        run: |
+          echo 'This is not independent approval, Quest landing or merge certification.'
+          test -f "$EVIDENCE/reviewer-red-exit.txt"
+          test "$(cat "$EVIDENCE/reviewer-red-exit.txt")" = 0

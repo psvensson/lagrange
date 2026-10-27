@@ -1,0 +1,28 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "approvedCommit": "ba3fb3bdf771132c6913de401d2bf90071ec28b9",
+  "compositionCommit": "9558c8a105477ec0a2230d17cf927d6d917ff6b2",
+  "receipts": [
+    {
+      "id": "canonical-envelope-and-no-public-ack",
+      "passed": true
+    },
+    {
+      "id": "transport-answer-isolation-local-remote-forwarded",
+      "passed": true
+    },
+    {
+      "id": "lost-answer-and-domain-refusal-preservation",
+      "passed": true
+    },
+    {
+      "id": "atomic-consumer-migration-and-handler-identity",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": true
+    }
+  ]
+}

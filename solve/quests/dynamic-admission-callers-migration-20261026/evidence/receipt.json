@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "write-ack-visibility-marker-migration",
+      "passed": true
+    },
+    {
+      "id": "mixed-load-user-table-and-marker-migration",
+      "passed": true
+    },
+    {
+      "id": "rolling-restart-and-config-no-logs-fallback",
+      "passed": true
+    },
+    {
+      "id": "targeted-test-cone-and-independent-verification",
+      "passed": true
+    }
+  ]
+}

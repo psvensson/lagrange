@@ -37,6 +37,7 @@ const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
 const SNAPSHOT_CADENCE_PATH = 'src/partition/partition-snapshot-cadence.js';
 const PARTITION_CONSTRUCTOR_PATH = 'src/partition/partition-service-core-base.js';
 const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
+const RAFT_STORE_CONSTANTS_PATH = 'src/raft/raft-rs-durable-store-constants.js';
 const HTTP_AUTHENTICATOR_PATH =
   'src/service/request-cell-http-authenticator.js';
 
@@ -53,6 +54,7 @@ const CHECKED_FILE_PATHS = Object.freeze([
   SNAPSHOT_CADENCE_PATH,
   PARTITION_CONSTRUCTOR_PATH,
   TRANSPORT_SERVER_PATH,
+  RAFT_STORE_CONSTANTS_PATH,
   HTTP_AUTHENTICATOR_PATH,
 ]);
 
@@ -65,6 +67,7 @@ const EXPECTED_STATUS = Object.freeze({
   HISTORICAL_SNAPSHOT_PROOF: 'historical_pre_cutover_only',
   MESSAGE_GROUP_COMPACTION: 'unsupported',
   LEARNER_PROMOTION: 'time_based_not_progress_based',
+  RAFT_PERSIST_DURABILITY: 'raft_promises_synced_before_send',
   NODE_TRANSPORT: 'plain_websocket_trusted_network_only',
   HTTP_AUTHENTICATION: 'basic_against_configured_pgwire_credentials',
   BACKUP_RESTORE_PITR: 'unsupported',
@@ -78,10 +81,15 @@ const AUDIT_MARKER = Object.freeze({
   RAFT_RS_NOT_CERTIFIED:
     'Current rs-raft partition checkpoint cadence is unavailable',
   CADENCE_REFUSAL: 'RAFT_SNAPSHOT_CADENCE_OUTCOME.COMMITTED_LOG_UNSUPPORTED',
-  PARTITION_RAFT_RS_CONSTRUCTOR: 'new RaftRsWasmProvider()',
-  PARTITION_ALTERNATE_REFUSAL: 'refuseBackendSelection(options)',
+  PARTITION_RAFT_RS_CONSTRUCTOR: 'createRaftRsOperationPort(request)',
+  PARTITION_NO_ALTERNATE_BACKEND:
+    'there is no selection and no injected provider',
   MESSAGE_GROUP_UNBOUNDED: 'message-group logs still grow without bound',
   LEARNER_TIME_BASED: 'time-based, not progress-based',
+  RAFT_SYNCED_BEFORE_SENT: 'synced to disk before they are sent',
+  RAFT_SYNC_SOURCE: 'SET_FULL: \'synchronous = FULL\'',
+  RAFT_DURABILITY_CONTRADICTION:
+    'Raft persist durability no longer matches the durable store',
   REPLICATION_CONTRADICTION:
     'replication capability fields contradict the active snapshot path',
   WEBSOCKET_SERVER: 'new WebSocketServer(serverOptions)',
@@ -116,6 +124,16 @@ function addProblem(problems, condition, message) {
 function limitationById(capabilities, id) {
   return capabilities.limitations.find((limitation) => limitation.id === id) ||
     null;
+}
+
+// The Raft durability claim holds only while the architecture states it and
+// the durable store still raises its persist commit to synchronous FULL.
+function raftDurabilityMatchesStore(capabilities, replication, root) {
+  return capabilities.replication.raftPersistDurability ===
+      EXPECTED_STATUS.RAFT_PERSIST_DURABILITY &&
+    replication.includes(AUDIT_MARKER.RAFT_SYNCED_BEFORE_SENT) &&
+    readText(RAFT_STORE_CONSTANTS_PATH, root)
+      .includes(AUDIT_MARKER.RAFT_SYNC_SOURCE);
 }
 
 function checkCurrentCapabilities(root = REPO_ROOT) {
@@ -211,7 +229,9 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
   const partitionConstructor = readText(PARTITION_CONSTRUCTOR_PATH, root);
   addProblem(problems,
     partitionConstructor.includes(AUDIT_MARKER.PARTITION_RAFT_RS_CONSTRUCTOR) &&
-      partitionConstructor.includes(AUDIT_MARKER.PARTITION_ALTERNATE_REFUSAL) &&
+      partitionConstructor.includes(
+        AUDIT_MARKER.PARTITION_NO_ALTERNATE_BACKEND,
+      ) &&
       capabilities.replication.partitionConsensusBackend ===
         EXPECTED_STATUS.PARTITION_BACKEND &&
       cadence.includes(AUDIT_MARKER.CADENCE_REFUSAL) &&
@@ -232,6 +252,9 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
       capabilities.replication.learnerPromotion ===
         EXPECTED_STATUS.LEARNER_PROMOTION,
     AUDIT_MARKER.REPLICATION_CONTRADICTION);
+  addProblem(problems,
+    raftDurabilityMatchesStore(capabilities, replication, root),
+    AUDIT_MARKER.RAFT_DURABILITY_CONTRADICTION);
 
   const transportServer = readText(TRANSPORT_SERVER_PATH, root);
   addProblem(problems,

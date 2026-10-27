@@ -111,13 +111,16 @@ t.test(
         'the operation owner still has active progress/retry responsibility',
       );
 
-      let ownerRpcReads = 0;
+      const ownerRpcReadsByOperationId = new Map();
       coordinator.queryAuthoritativeOperationVisibilityObservation = async (
         operationId,
         options = {},
       ) => {
         if (options.authoritativeReadMode === 'owner_rpc_required') {
-          ownerRpcReads += 1;
+          ownerRpcReadsByOperationId.set(
+            operationId,
+            (ownerRpcReadsByOperationId.get(operationId) || 0) + 1,
+          );
         }
         return {
           operation: await coordinator.queryOperationById(operationId),
@@ -141,7 +144,7 @@ t.test(
         'the dependent batch cannot overlap the ledger self-move',
       );
       t.equal(
-        ownerRpcReads,
+        ownerRpcReadsByOperationId.get(selfMove.operationId),
         1,
         'hold release is decided from the cache-bypassing lifecycle owner read',
       );
@@ -160,9 +163,15 @@ t.test(
         'authoritative terminal evidence releases the hold and admits the dependent',
       );
       t.equal(
-        ownerRpcReads,
+        ownerRpcReadsByOperationId.get(selfMove.operationId),
         2,
         'the terminal release uses the same authoritative lifecycle owner read',
+      );
+      t.equal(
+        ownerRpcReadsByOperationId.get(afterTerminal.operation.operationId),
+        1,
+        'the admitted dependent performs its own exact post-insert operation ' +
+          'authority read without changing the holder release count',
       );
     } finally {
       await coordinator.shutdown();

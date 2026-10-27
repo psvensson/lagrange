@@ -4,6 +4,7 @@
 // Distinct from query-executor-mock-message-router.js, which serves rows from
 // a partition-data map and does not record deliveries.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
@@ -17,12 +18,11 @@ export function createDeliveryTrackingMessageRouter() {
   return {
     deliver: async function(address, message) {
       deliveries.push({address, message});
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 0,
-      };
+      });
     },
     getDeliveries: function() {
       return deliveries;

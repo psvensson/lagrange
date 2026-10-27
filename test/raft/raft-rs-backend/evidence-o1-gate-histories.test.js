@@ -1,9 +1,11 @@
 // M1 (committed-read amendment 1, section 5): projected topology cannot
 // grant participation. For every history of the model and every applied cut
 // below the target's gate, a target opened from the committed configuration
-// C_j (plus itself, O2) does not campaign, is not voted for, does not lead
-// and does not commit - while the rows every replica holds claim the target
-// is a member (and omit a committed voter, and name a phantom).
+// C_j (plus itself as a learner, O2) does not campaign, is not voted for,
+// does not lead and does not commit - while the rows every replica holds
+// claim the target is a member (and omit a committed voter, and name a
+// phantom). Its ticks enter the core (a learner is never campaigned by
+// raft-rs), so its election timer runs; it still never campaigns.
 //
 // Ranges over HISTORY (challenger B section C: H1 with the transient
 // sole-voter view, H3/H4/H5 with D = {}, H6a/H6b with |D| in {1, 2} on odd
@@ -13,7 +15,8 @@
 // over the TEST'S genesis, decoded by the binding), O-b (cross-member
 // agreement of durable applied configurations at equal index). The replay
 // law itself is checked at every cut: the target's durable applied
-// configuration equals the fold of the same log over C_j + self.
+// configuration equals C_j + self-as-learner folded with the log above j
+// only - below j it is C_j itself (no transient or silent-skew view).
 
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
@@ -44,8 +47,10 @@ import {
   settle,
   termAndVote,
 } from './evidence-o1-model.js';
-import {RAFT_MEMBERSHIP_OPERATION} from
-  '../../../src/raft/raft-operation-port-constants.js';
+import {
+  RAFT_MEMBERSHIP_OPERATION,
+  RAFT_OPERATION_OUTCOME,
+} from '../../../src/raft/raft-operation-port-constants.js';
 import {PARTICIPATION_GATE} from
   '../../../src/raft/raft-committed-membership-constants.js';
 
@@ -103,8 +108,9 @@ function assertGatedAtCut(cluster, target, leader, members, cut, j) {
   assert.equal(campaign.reason, PARTICIPATION_GATE.GATE_CLOSED,
     `an explicit campaign is refused typed at cut ${cut}`);
   const tick = cluster.node(target).tick();
-  assert.equal(tick.reason, PARTICIPATION_GATE.GATE_CLOSED,
-    'a tick is refused typed');
+  assert.equal(tick.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
+    'a tick of the gated learner core enters the core (its time runs)');
+  assert.notEqual(roleOf(cluster, target), LEADER_ROLE);
   const write = cluster.node(target).propose('below-the-gate');
   assert.equal(write.reason, PARTICIPATION_GATE.GATE_CLOSED,
     'a write is refused typed, not as a generic unavailability');
@@ -120,12 +126,13 @@ function assertGatedAtCut(cluster, target, leader, members, cut, j) {
 function assertReplayLaw(cluster, {target, leader, genesis, stamp, D},
   cut) {
   const targetPeerId = peerIdIn(cluster, target, target);
-  const bootstrap = [...stamp.voters, targetPeerId];
   const view = durableOf(cluster, target).applied;
-  const replayed = replayedView(cluster, leader, bootstrap, cut);
+  const replayed = replayedView(cluster, leader, stamp, targetPeerId, cut);
   assert.deepEqual(view.voters, replayed.voters,
-    `the target durable configuration at ${cut} is the fold of the ` +
-      'leader log over C_j + self');
+    `the target durable configuration at ${cut} is C_j + self folded ` +
+      'with the leader log above j');
+  assert.deepEqual([...view.learners].sort(), replayed.learners,
+    `the target durable learners at ${cut} follow the same fold`);
   const committed = committedAt(cluster, leader, genesis, cut);
   const withoutSelf = (ids) => ids.filter((id) => id !== targetPeerId);
   const viewWithoutSelf = withoutSelf(view.voters);
@@ -134,10 +141,12 @@ function assertReplayLaw(cluster, {target, leader, genesis, stamp, D},
       `at or past j the target view is the committed configuration (${cut})`);
     return;
   }
-  const omitted = committed.voters.filter((id) =>
-    !viewWithoutSelf.includes(id));
-  assert.deepEqual(omitted, committed.voters.filter((id) => D.includes(id)),
-    `below j the view omits exactly the removed founders present at ${cut}`);
+  // Folded at C_j: no transient view - below j the view is C_j itself, so
+  // no committed voter of C_j is ever omitted (D included or not).
+  assert.deepEqual(viewWithoutSelf, [...stamp.voters].sort(),
+    `below j the view is C_j itself at ${cut} (D = ${D.length})`);
+  assert.ok(view.learners.includes(targetPeerId),
+    `below j the target is a learner of its own view at ${cut}`);
 }
 
 for (const historyKey of HISTORY_KEYS) {

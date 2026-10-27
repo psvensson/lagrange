@@ -1,25 +1,39 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
-import {PartitionServiceTransactionBase} from './partition-service-transaction-base.js';
+import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
+import {unreplicatedLocalMutationRefusal} from './partition-local-mutation-admission.js';
 import {
-  startPartitionRaftWriteCommit,
+  startAdmittedPartitionWrite,
 } from './partition-service-raft-write-commit.js';
 import {collectBoundedSqliteRows} from
   '../query/query-result-budget.js';
-import {preparePartitionReadStatement} from
-  './partition-read-statement-owner.js';
+import {
+  admitPartitionStatement,
+  classifyPartitionStatementHead,
+  partitionStatementRefusalAnswer,
+  runAdmittedPartitionStatement,
+} from './partition-statement-admission.js';
+import {
+  PARTITION_STATEMENT_KIND,
+  PARTITION_STATEMENT_PATH,
+} from './partition-statement-admission-constants.js';
 import {
   answerSettledStatement,
   readCommittedStatementOutcome,
 } from './partition-committed-statement-outcome.js';
 import {PARTITION_COMMITTED_STATEMENT_RECORD_STATE} from
   './partition-committed-statement-outcome-constants.js';
-import {buildPartitionWriteLeadershipRefusal} from
-  './partition-write-kernel.js';
 import {
   PARTITION_COMMITTED_COMMAND_ORIGIN,
   admitCommittedCommand,
   committedCommandRefusalResult,
 } from './partition-committed-command-admission.js';
+import {readPartitionWriteOrigin} from './partition-participant-transaction-store.js';
+import {deliveryTransportOf, forwardedDeliveryAnswer, isDeliveredTransportDeliveryOutcome} from
+  '../transport/transport-semantic-outcome.js';
+import {transactionSchemaWriteRefusal} from
+  '../query/distributed/distributed-transaction-schema-enforcement.js';
+import {refuseRoutedClientSystemTableWrite} from
+  '../query/sql-statement-ingress.js';
 
 
 const {
@@ -32,7 +46,6 @@ const {
   PARTITION_SERVICE_OPERATION,
   PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_VALUE,
-  PARTITION_WRITE_COMMIT_MODE,
   RaftRole,
   SQL,
   TABLES,
@@ -45,90 +58,116 @@ const {
   WRITE_PHASE_FIELD_TOTAL_MS,
   buildPartitionWriteEntry,
   getSystemCachePrimaryKeyFieldOrFallback,
-  resolvePartitionWriteCommitMode,
 } = PARTITION_SERVICE_SHARED;
 
-class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
+function buildQueryOperation(sql, params, options) {
+  return {
+    type: PARTITION_SERVICE_OPERATION.QUERY,
+    sql,
+    params,
+    // As supplied: the admission owner decides whether it is valid.
+    entryId: options.entryId ?? null,
+    operationId: options.operationId || null,
+    idempotencyKey: options.idempotencyKey || null,
+    splitMirrorOrigin: options.splitMirrorOrigin || null,
+  };
+}
+
+function resolveNonReadQueryRefusal(service, sql, options) {
+  const statementKind = classifyPartitionStatementHead(sql).kind;
+  if (statementKind === PARTITION_STATEMENT_KIND.READ) {
+    return null;
+  }
+  const ingressRefusal = refuseRoutedClientSystemTableWrite(
+    options, service.tableName);
+  if (ingressRefusal !== null) {
+    return {...ingressRefusal, partitionId: service.partitionId};
+  }
+  const schemaRefusal = transactionSchemaWriteRefusal(
+    service.db, service.tableName, readPartitionWriteOrigin(service.db) !== null);
+  return schemaRefusal !== null ?
+    {...schemaRefusal, partitionId: service.partitionId} :
+    null;
+}
+
+function executeAdmittedReadQuery(service, admission, params, options) {
+  const sqliteStartMs = service.timeSource.now();
+  const visibleRows = collectBoundedSqliteRows(admission.statement, params, {
+    cancellationToken: options.cancellationToken || null,
+    deadlineMs: options.resultDeadlineMs,
+    maxBytes: options.resultMaxBytes,
+    maxRows: options.resultMaxRows,
+  });
+  const durationMs = service.timeSource.now() - sqliteStartMs;
+  try {
+    service.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
+      partitionId: service.partitionId,
+      operation: PARTITION_SERVICE_LITERAL.SELECT,
+      durationMs,
+      rowCount: visibleRows.length,
+    });
+  } catch (metricsErr) {
+    void metricsErr;
+  }
+  return {
+    success: true,
+    rows: visibleRows,
+    count: visibleRows.length,
+    partitionId: service.partitionId,
+  };
+}
+
+class PartitionServiceWriteMetricsBase extends PartitionServiceEntryApplyBase {
   async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
+      sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
     });
     try {
-      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
-      const stmt = isSelect ?
-        preparePartitionReadStatement(this.db, sql) :
-        this.db.prepare(sql);
-      if (isSelect) {
-        const sqliteStartMs = this.timeSource.now();
-        const rows = collectBoundedSqliteRows(stmt, params, {
-          cancellationToken: options.cancellationToken || null,
-          deadlineMs: options.resultDeadlineMs,
-          maxBytes: options.resultMaxBytes,
-          maxRows: options.resultMaxRows,
-        });
-        const transaction = this.resolveActiveTransactionState(
-          options.sessionId || null,
-        );
-        const visibleRows = transaction ?
-          this.applySnapshotReadFilter(rows, transaction.state) :
-          rows;
-        const durationMs = this.timeSource.now() - sqliteStartMs;
-        try {
-          this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
-            partitionId: this.partitionId,
-            operation: PARTITION_SERVICE_LITERAL.SELECT,
-            durationMs,
-            rowCount: visibleRows.length,
-          });
-        } catch (_metricsErr) {
-          // Ignore metrics emission failures on the read path.
-        }
-        return {
-          success: true,
-          rows: visibleRows,
-          count: visibleRows.length,
-          partitionId: this.partitionId,
-        };
-      } else {
-        const transaction = this.resolveActiveTransactionState(
-          options.sessionId || null,
-        );
-        const operation = {
-          type: PARTITION_SERVICE_OPERATION.QUERY,
-          sql,
-          params,
-          // As supplied: the admission owner decides whether it is valid.
-          entryId: options.entryId ?? null,
-          operationId: options.operationId || null,
-          idempotencyKey: options.idempotencyKey || null,
-          splitMirrorOrigin: options.splitMirrorOrigin || null,
-        };
-        if (transaction) {
-          return this.executeTransactionWrite(
-            operation,
-            transaction.sessionId,
-          );
-        }
+      const operation = buildQueryOperation(sql, params, options);
+      const nonReadRefusal = resolveNonReadQueryRefusal(this, sql, options);
+      if (nonReadRefusal !== null) {
+        return nonReadRefusal;
+      }
+      // A re-delivery of a write whose entry key is settled is answered from
+      // its outcome row by applyWrite (nothing is proposed), before any
+      // admission rule or the ceiling pre-check: state that changed after the
+      // write committed never turns its outcome into a refusal.
+      if (this.isSettledRedelivery(operation)) {
         return this.proposeWrite(operation);
       }
+      // The statement-admission owner decides what a statement may prepare,
+      // ordinary statements: a
+      // refused head (a PRAGMA, TEMP DDL) is never prepared on the shared
+      // connection. A participant session statement never reaches here (its
+      // staging owner answers it).
+      const admission = admitPartitionStatement(this, sql, params);
+      if (!admission.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, admission);
+      }
+      return admission.kind === PARTITION_STATEMENT_KIND.READ ?
+        executeAdmittedReadQuery(this, admission, params, options) :
+        this.proposeWrite(operation);
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
-        sql: sql.substring(
-          0,
-          PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-        ),
+        sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
         error: error.message,
       });
       throw error;
     }
+  }
+  // Whether a request re-delivers a write whose entry key is settled (a
+  // SELECT has no committed outcome, so it is never looked up).
+  isSettledRedelivery(operation) {
+    const entryKey = typeof operation.entryId === 'string' &&
+      operation.entryId.length > 0 ? this.getCommittedEntryKey(operation) : null;
+    return entryKey !== null && classifyPartitionStatementHead(operation.sql).kind !==
+      PARTITION_STATEMENT_KIND.READ && readCommittedStatementOutcome(this,
+      entryKey).state === PARTITION_COMMITTED_STATEMENT_RECORD_STATE.SETTLED;
   }
   /**
    * Execute a SQL query directly on the local SQLite database.
@@ -143,19 +182,20 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXECUTING_QUERY, {
       partitionId: this.partitionId,
-      sql: sql.substring(
-        0,
-        PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-      ),
+      sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
       bootstrap: true,
     });
     try {
-      const isSelect = sql.trim().toUpperCase().startsWith(SQL.SELECT);
-      const stmt = isSelect ?
-        preparePartitionReadStatement(this.db, sql) :
-        this.db.prepare(sql);
-      if (isSelect) {
-        const rows = stmt.all(...params);
+      // The same owner as executeQuery: a refused head is never prepared, a
+      // write passes R1-R3, and an allocating write is rolled back and
+      // refused when it leaves the own table at the rowid ceiling.
+      const admission = admitPartitionStatement(this, sql, params,
+        PARTITION_STATEMENT_PATH.LOCAL);
+      if (!admission.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, admission);
+      }
+      if (admission.kind === PARTITION_STATEMENT_KIND.READ) {
+        const rows = admission.statement.all(...params);
         return {
           success: true,
           rows,
@@ -163,79 +203,25 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           partitionId: this.partitionId,
         };
       }
-      const info = stmt.run(...params);
+      const fenced = unreplicatedLocalMutationRefusal(this);
+      if (fenced !== null) {
+        return fenced;
+      }
+      const outcome = runAdmittedPartitionStatement(this, admission, params);
+      if (!outcome.admitted) {
+        return partitionStatementRefusalAnswer(this, sql, outcome);
+      }
       this.scheduleSizeUpdate();
       return {
         success: true,
-        changes: info.changes,
-        lastInsertRowid: info.lastInsertRowid,
+        changes: outcome.info.changes,
+        lastInsertRowid: outcome.info.lastInsertRowid,
         partitionId: this.partitionId,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.QUERY_FAILED, {
         partitionId: this.partitionId,
-        sql: sql.substring(
-          0,
-          PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS,
-        ),
-        error: error.message,
-      });
-      throw error;
-    }
-  }
-  /**
-   * Execute a write operation within an active transaction.
-   * @param {Object} operation - Write operation.
-   * @param {string|null} sessionId - Transaction session ID.
-   * @return {Promise<Object>} Operation result.
-   * @private
-   */
-  async executeTransactionWrite(operation, sessionId = null) {
-    const transaction = this.resolveActiveTransactionState(sessionId);
-    if (!transaction) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
-    }
-    const {sessionId: transactionSessionId, state: transactionState} =
-      transaction;
-    const timestamp = this.hlcClock.now();
-    const entry = buildPartitionWriteEntry(
-      {
-        ...operation,
-        sessionId: transactionSessionId,
-      },
-      {
-        timestamp,
-        proposedBy: this.replicaId,
-        proposedAt: this.timeSource.now(),
-      },
-    );
-    // A session write enters consensus inside its transaction's commit
-    // marker, so the admission owner admits it at staging exactly as the
-    // write path admits a write: an invalid entryId is refused before
-    // anything is staged, and an absent one was minted by the builder.
-    const admission = admitCommittedCommand(entry, {
-      origin: PARTITION_COMMITTED_COMMAND_ORIGIN.WRITE_PATH});
-    if (!admission.admitted) {
-      return committedCommandRefusalResult(admission, this.partitionId);
-    }
-    try {
-      const stmt = this.db.prepare(entry.sql);
-      const info = stmt.run(...(entry.params || []));
-      const trackedEntry = {...entry, changes: info.changes};
-      transactionState.operations.push(trackedEntry);
-      this.trackTransactionWriteSetKey(transactionState, trackedEntry);
-      this.syncLegacyTransactionAliases();
-      return {
-        success: true,
-        changes: info.changes,
-        lastInsertRowid: info.lastInsertRowid,
-        partitionId: this.partitionId,
-        inTransaction: true,
-        sessionId: transactionSessionId,
-      };
-    } catch (error) {
-      this.logger.error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_WRITE_FAILED, {
-        partitionId: this.partitionId,
+        sql: sql.substring(0, PARTITION_SERVICE_VALUE.DEFAULT_QUERY_TIMEOUT_MS),
         error: error.message,
       });
       throw error;
@@ -496,7 +482,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         if (!leaderAddress) {
           throw new Error(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
         }
-        const result = await this.transport.deliver(leaderAddress, {
+        const delivery = await this.transport.deliver(leaderAddress, {
           type: PARTITION_SERVICE_MESSAGE_TYPE.FORWARD_WRITE,
           operation: entry,
           operationId: correlation.operationId,
@@ -509,6 +495,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
           forwardDeliverStartMs,
         );
         const durationMs = this.timeSource.now() - proposeStartMs;
+        const forwardOutcome = deliveryTransportOf(delivery);
+        // A forwarding hop answers with the leader's answer, or its typed
+        // refusal when the leader was not reached; never the leader's
+        // transport outcome.
+        const result = forwardedDeliveryAnswer(delivery);
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_RAFT_PROPOSE, {
             partitionId: this.partitionId,
@@ -518,8 +509,10 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
             operationId: correlation.operationId,
             requestId: correlation.requestId,
             correlationId: correlation.correlationId,
-            acknowledged: result?.acknowledged === true,
-            error: result?.acknowledged === true ? null : result?.error || null,
+            deliveryState: forwardOutcome.deliveryState,
+            error: isDeliveredTransportDeliveryOutcome(forwardOutcome) ?
+              null :
+              forwardOutcome.error || null,
             writePhaseTimingMs: this.buildWritePhaseTimingPayload(
               phaseTimings,
               durationMs,
@@ -661,6 +654,11 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       proposedBy: entry?.proposedBy || this.replicaId,
       proposedAt: entry?.proposedAt,
     });
+    const schemaRefusal = transactionSchemaWriteRefusal(this.db, this.tableName,
+      readPartitionWriteOrigin(this.db) !== null);
+    if (schemaRefusal !== null) {
+      return {...schemaRefusal, partitionId: this.partitionId};
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLY_WRITE_CALLED, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -699,28 +697,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       );
       return settledAnswer;
     }
-    // Leadership is the consensus core's own, read through the port.
-    const consensusStatus = this.raft.readStatus();
-    const commitMode = resolvePartitionWriteCommitMode({
-      replicaIds: this.replicaIds,
-      raftState: consensusStatus.role,
-      raftLeaderState: RaftRole.LEADER,
-      hasKnownRemoteLeader: this.hasKnownRemoteLeaderWitness(),
-    });
-    // A rejected write is never proposed: only the consensus leader proposes,
-    // and a group held by its host failure proposes nothing.
-    if (commitMode === PARTITION_WRITE_COMMIT_MODE.REJECTED) {
-      this.recordWritePhaseDuration(
-        phaseTimings,
-        WRITE_PHASE_FIELD_APPLY_WRITE_MS,
-        applyStartMs,
-      );
-      return buildPartitionWriteLeadershipRefusal(
-        consensusStatus, this.partitionId);
-    }
-    // One propose() through the port; the committed-entry application
-    // applies the write and resolves it with its durable commit witness.
-    return startPartitionRaftWriteCommit(this, {
+    // The write commit owner: parked unproposed while a prepared participant
+    // transaction reserves the partition (re-admitted by its decision);
+    // otherwise only the consensus leader proposes, once, through the port,
+    // and the committed-entry application answers it with its durable commit
+    // witness.
+    return startAdmittedPartitionWrite(this, {
       entry,
       phaseTimings,
       applyStartMs,

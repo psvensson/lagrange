@@ -8,6 +8,7 @@
 
 import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
   '../service/service-lifecycle-command-contract.js';
+import {leadingSqlExecutableOffset} from './sql-comment-scanner.js';
 
 const SERVICE_LIFECYCLE_SQL_CLASSIFICATION = Object.freeze({
   LIFECYCLE: 'service_lifecycle',
@@ -96,14 +97,6 @@ const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
 });
 
 const MAX_LIFECYCLE_PAYLOAD_BYTES = 1024 * 1024;
-const SQL_COMMENT_TOKEN = Object.freeze({
-  BLOCK_CLOSE: '*/',
-  BLOCK_OPEN: '/*',
-  LINE: '--',
-});
-const SQL_COMMENT_SCAN_UNTERMINATED = -1;
-const SQL_LINE_BREAK_PATTERN = /[\r\n]/u;
-const SQL_WHITESPACE_PATTERN = /\s/u;
 
 const COMMAND_PREFIX = Object.freeze([
   Object.freeze({
@@ -174,61 +167,6 @@ function isPlainObject(value) {
   }
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
-}
-
-function scanLineCommentEnd(statement, start) {
-  let cursor = start + SQL_COMMENT_TOKEN.LINE.length;
-  while (cursor < statement.length &&
-      !SQL_LINE_BREAK_PATTERN.test(statement[cursor])) {
-    cursor += 1;
-  }
-  while (cursor < statement.length &&
-      SQL_LINE_BREAK_PATTERN.test(statement[cursor])) {
-    cursor += 1;
-  }
-  return cursor;
-}
-
-function scanBlockCommentEnd(statement, start) {
-  let cursor = start + SQL_COMMENT_TOKEN.BLOCK_OPEN.length;
-  let depth = 1;
-  while (cursor < statement.length) {
-    if (statement.startsWith(SQL_COMMENT_TOKEN.BLOCK_OPEN, cursor)) {
-      depth += 1;
-      cursor += SQL_COMMENT_TOKEN.BLOCK_OPEN.length;
-      continue;
-    }
-    if (statement.startsWith(SQL_COMMENT_TOKEN.BLOCK_CLOSE, cursor)) {
-      depth -= 1;
-      cursor += SQL_COMMENT_TOKEN.BLOCK_CLOSE.length;
-      if (depth === 0) return cursor;
-      continue;
-    }
-    cursor += 1;
-  }
-  return SQL_COMMENT_SCAN_UNTERMINATED;
-}
-
-function leadingSqlExecutableOffset(statement) {
-  let cursor = 0;
-  while (cursor < statement.length) {
-    while (cursor < statement.length &&
-        SQL_WHITESPACE_PATTERN.test(statement[cursor])) {
-      cursor += 1;
-    }
-    if (statement.startsWith(SQL_COMMENT_TOKEN.LINE, cursor)) {
-      cursor = scanLineCommentEnd(statement, cursor);
-      continue;
-    }
-    if (statement.startsWith(SQL_COMMENT_TOKEN.BLOCK_OPEN, cursor)) {
-      const next = scanBlockCommentEnd(statement, cursor);
-      if (next === SQL_COMMENT_SCAN_UNTERMINATED) return cursor;
-      cursor = next;
-      continue;
-    }
-    return cursor;
-  }
-  return cursor;
 }
 
 function classifyServiceLifecycleSql(statement) {

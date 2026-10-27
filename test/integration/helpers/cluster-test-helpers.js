@@ -22,6 +22,10 @@ import {BootstrapService} from '../../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../../src/bootstrap/node-joining-service.js';
 import {readSeedStartupStorageAdmission} from
   '../../../src/bootstrap/seed-startup-storage-admission.js';
+import {resolveAutoRejoinStartupDecision} from
+  '../../../src/bootstrap/rejoin-hints.js';
+import {acquireDataDirectoryProcessOwner} from
+  '../../../src/storage/data-directory-process-owner.js';
 import {
   clearRegisteredControlPlaneSystemTableGateway,
 } from '../../../src/control-plane/control-plane-gateway-registry.js';
@@ -50,12 +54,16 @@ export const EMPTY_REPLICA_STATE_MACHINE_HANDLE = Object.freeze({
  * Install the minimum lifecycle-owner handle required by phase-only seed
  * fixtures. These fixtures replace the registration phase itself, but the
  * workflow still enforces that a lifecycle owner exists before crossing the
- * registration checkpoint.
+ * registration checkpoint, and (since e29e46abf) the registration step itself
+ * acquires the replica handler and the SQL query engine before the phase it
+ * replaces; with the phases stubbed there is no cache for either to bind.
  * @param {BootstrapService} bootstrap Phase-only bootstrap fixture.
  * @return {BootstrapService} The same fixture for fluent setup.
  */
 export function installMinimumSeedBootstrapLifecycleFixture(bootstrap) {
   bootstrap.replicaStateMachine = EMPTY_REPLICA_STATE_MACHINE_HANDLE;
+  bootstrap.acquireReplicaHandler = () => {};
+  bootstrap.seedRuntimeBridgeOwner.acquireSqlQueryEngine = () => null;
   return bootstrap;
 }
 
@@ -223,7 +231,8 @@ function resolveVirginSeedDataDirectory(options, suppliedManagerDir) {
   };
 }
 
-function createVirginSeedDataDirectoryManager(suppliedManager, dataDir) {
+function createVirginSeedDataDirectoryManager(
+  suppliedManager, dataDir) {
   return suppliedManager || {
     isInitialized: () => true,
     getDataDir: () => dataDir,
@@ -237,25 +246,98 @@ function createVirginSeedDataDirectoryManager(suppliedManager, dataDir) {
   };
 }
 
-function bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir) {
+/**
+ * Bind the fixture's startup custody to the seed's shutdown, in production
+ * order (lagrange-runtime-startup.js: the cleanup ledger releases the data
+ * directory process owner after BootstrapService.shutdown, and only when that
+ * shutdown succeeded, exactly as bindDataDirectoryProcessOwner does). A
+ * fixture-owned data directory is removed only after that successful release;
+ * a failed shutdown retains both, as production's requiresSuccessfulCleanup
+ * custody does.
+ * @param {BootstrapService} bootstrap Seed bootstrap service.
+ * @param {Object} custody {dataDir, ownsDataDir, directoryOwner}; a null
+ *   directoryOwner means the caller supplied, and keeps, its own owner.
+ */
+function bindVirginSeedStartupCustody(bootstrap, custody) {
   const shutdown = bootstrap.shutdown.bind(bootstrap);
   bootstrap.shutdown = async (...args) => {
-    try {
-      return await shutdown(...args);
-    } finally {
-      rmSync(dataDir, {recursive: true, force: true});
+    const result = await shutdown(...args);
+    custody.directoryOwner?.release();
+    if (custody.ownsDataDir) {
+      rmSync(custody.dataDir, {recursive: true, force: true});
     }
+    return result;
   };
 }
 
+// The startup authorities each fixture-built seed consumed, for read-back.
+const seedStartupAuthorities = new WeakMap();
+
 /**
- * Construct a seed bootstrap fixture only after the production durable
- * SERVICES-identity reader positively proves a virgin data directory.
- * Direct BootstrapService construction deliberately remains fail closed.
- * @param {Object} options BootstrapService options.
- * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ * The production seed startup authorities for a data directory, read in
+ * production order: the data directory process owner
+ * (lagrange-runtime-startup.js acquireLagrangeRuntime), then the startup
+ * membership decision (resolveStartupJoinDecision ->
+ * resolveAutoRejoinStartupDecision), then, in startSeedNode, the durable
+ * SERVICES-identity admission. Supplied options win, as they do for the
+ * fixture; an owner this call acquired is released if a later read fails.
+ * @param {string} dataDir Seed data directory.
+ * @param {Object} options {nodeId, nodeAddress} plus optional
+ *   dataDirectoryProcessOwner / membershipOwnerOutcome.
+ * @param {Function} admit Refuses an admission this fixture must not start.
+ * @return {Promise<Object>} {dataDirectoryProcessOwner, acquiredOwner,
+ *   startupDecision (null when the outcome was supplied),
+ *   membershipOwnerOutcome, startupServicesAdmission}.
  */
-export async function createVirginSeedBootstrapService(options = {}) {
+async function acquireSeedStartupAuthority(dataDir, options, admit) {
+  const suppliedProcessOwner = Object.hasOwn(options, 'dataDirectoryProcessOwner');
+  const dataDirectoryProcessOwner = suppliedProcessOwner ?
+    options.dataDirectoryProcessOwner : acquireDataDirectoryProcessOwner(dataDir);
+  const acquiredOwner = suppliedProcessOwner ? null : dataDirectoryProcessOwner;
+  try {
+    const suppliedOutcome = Object.hasOwn(options, 'membershipOwnerOutcome');
+    const capturedOutcome = suppliedOutcome ? options.membershipOwnerOutcome : null;
+    const startupDecision = suppliedOutcome ? null :
+      await resolveAutoRejoinStartupDecision({
+        dataDir,
+        nodeId: options.nodeId,
+        nodeAddress: options.nodeAddress,
+      });
+    const membershipOwnerOutcome = suppliedOutcome ?
+      capturedOutcome : startupDecision.membershipOwnerOutcome;
+    const startupServicesAdmission = await readSeedStartupStorageAdmission(
+      dataDir,
+      (acquisition) => acquisition,
+    );
+    admit(startupServicesAdmission);
+    return {
+      dataDirectoryProcessOwner,
+      acquiredOwner,
+      startupDecision,
+      membershipOwnerOutcome,
+      startupServicesAdmission,
+    };
+  } catch (error) {
+    acquiredOwner?.release();
+    throw error;
+  }
+}
+
+function admitVirginSeedStorage(startupServicesAdmission) {
+  if (startupServicesAdmission.empty !== true) {
+    throw new Error('Virgin seed fixture found durable SERVICES identity');
+  }
+}
+
+function admitRetainedSeedStorage(startupServicesAdmission) {
+  if (startupServicesAdmission.empty === true) {
+    throw new Error('Retained seed fixture found no durable SERVICES identity');
+  }
+}
+
+async function createSeedBootstrapServiceFixture(options, admit) {
+  const nodeId = options.nodeId;
+  const nodeAddress = options.nodeAddress;
   const suppliedManager = options.dataDirectoryManager;
   const suppliedManagerDir = suppliedManager?.isInitialized?.() === true ?
     suppliedManager.getDataDir() : null;
@@ -268,22 +350,104 @@ export async function createVirginSeedBootstrapService(options = {}) {
     suppliedManager,
     dataDir,
   );
-  const startupServicesAdmission = await readSeedStartupStorageAdmission(
-    dataDir,
-    (acquisition) => acquisition,
-  );
-  if (startupServicesAdmission.empty !== true) {
-    throw new Error('Virgin seed fixture found durable SERVICES identity');
+  const authority = await acquireSeedStartupAuthority(dataDir, options, admit);
+  let bootstrap;
+  try {
+    bootstrap = new BootstrapService({
+      ...options,
+      bootIncarnation: options.bootIncarnation ?? 1,
+      nodeId,
+      nodeAddress,
+      dataDir,
+      dataDirectoryManager: manager,
+      dataDirectoryProcessOwner: authority.dataDirectoryProcessOwner,
+      startupServicesAdmission: authority.startupServicesAdmission,
+      membershipOwnerOutcome: authority.membershipOwnerOutcome,
+    });
+  } catch (error) {
+    authority.acquiredOwner?.release();
+    throw error;
   }
-  const bootstrap = new BootstrapService({
-    ...options,
-    bootIncarnation: options.bootIncarnation ?? 1,
-    dataDir,
-    dataDirectoryManager: manager,
-    startupServicesAdmission,
-  });
-  if (ownsDataDir) {
-    bindOwnedVirginSeedDataDirectoryCleanup(bootstrap, dataDir);
+  bindVirginSeedStartupCustody(bootstrap, {dataDir, ownsDataDir,
+    directoryOwner: authority.acquiredOwner});
+  seedStartupAuthorities.set(bootstrap, authority);
+  return bootstrap;
+}
+
+/**
+ * The startup authorities a fixture-built seed consumed, as the readers
+ * answered them (startupDecision is the membership owner's full decision).
+ * @param {BootstrapService} bootstrap A seed built by this module.
+ * @return {Object|null} The authorities, or null for any other seed.
+ */
+export function seedStartupAuthorityOf(bootstrap) {
+  return seedStartupAuthorities.get(bootstrap) ?? null;
+}
+
+/**
+ * Construct a seed bootstrap fixture only after the production durable
+ * SERVICES-identity reader positively proves a virgin data directory, holding
+ * the production data directory process owner for the seed's lifetime.
+ * Direct BootstrapService construction deliberately remains fail closed.
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export function createVirginSeedBootstrapService(options = {}) {
+  return createSeedBootstrapServiceFixture(options, admitVirginSeedStorage);
+}
+
+// One composed virgin seed run to the fresh-seed continuation hold: owner,
+// membership decision, storage admission, original attempt and every seed
+// replica. Measured at most 9.7s per seed on the 1.00x controller
+// (2026-10-25, return-value-completeness; the round-5 verifier measured
+// <= 8.5s). Production has no seed-start budget constant to derive this from:
+// startup acquisition is bounded by its abort signal (awaitStartupAcquisition),
+// not by a duration. A test declares its budget as a seed count times this
+// reference scaled by the machine-factor owner. The test runner resolves
+// that same owner operation in declarations and lifts the file cap to it;
+// arbitrary timeout calls remain refused.
+export const VIRGIN_SEED_COMPOSE_REFERENCE_MS = 10000;
+
+/**
+ * A virgin seed fixture owned by one test: its shutdown is bound to the
+ * test's after hook, and that shutdown releases the directory custody and
+ * then removes a fixture-owned directory (bindVirginSeedStartupCustody).
+ * @param {Object} t The test context (node:test or tap).
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export async function createOwnedVirginSeedBootstrapService(t, options = {}) {
+  const bootstrap = await createVirginSeedBootstrapService(options);
+  t.after(() => bootstrap.shutdown());
+  return bootstrap;
+}
+
+/**
+ * The same production composition for a seed's later start on a data
+ * directory an earlier start left durable SERVICES identity in.
+ * @param {Object} options BootstrapService options; dataDir is required.
+ * @return {Promise<BootstrapService>} Admitted bootstrap fixture.
+ */
+export function createRetainedSeedBootstrapService(options) {
+  return createSeedBootstrapServiceFixture(options, admitRetainedSeedStorage);
+}
+
+/**
+ * A virgin seed bootstrap fixture that has entered the original seed attempt
+ * the way production does before its first seed phase
+ * (BootstrapService.bootstrap / startSeedNode -> prepareOriginalSeedAttempt).
+ * For tests that drive seed phases directly: every phase consumes this one
+ * attempt. Shut it down to release the attempt and its directory custody.
+ * @param {Object} options BootstrapService options.
+ * @return {Promise<BootstrapService>} Prepared bootstrap fixture.
+ */
+export async function createPreparedVirginSeedBootstrapService(options = {}) {
+  const bootstrap = await createVirginSeedBootstrapService(options);
+  try {
+    await bootstrap.prepareOriginalSeedAttempt();
+  } catch (error) {
+    await bootstrap.shutdown();
+    throw error;
   }
   return bootstrap;
 }
@@ -861,7 +1025,7 @@ export const TEST_CONFIG = {
   },
   // Bootstrap configuration for fast initialization
   bootstrap: {
-    leadershipWaitTimeoutMs: 1000,
+    leadershipWaitTimeoutMs: 3000,
     leadershipWaitInitialDelayMs: 10,
     leadershipWaitMaxDelayMs: 100,
     replicaStaggerDelayMs: 20,

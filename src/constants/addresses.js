@@ -9,6 +9,7 @@ const ENTITY_TYPE = Object.freeze({
   PARTITION: 'partition',
   LIFECYCLE: 'lifecycle',
   SERVICE: 'service',
+  WASM_SERVICE: 'wasm_service',
 });
 
 export {ADDRESS, ENTITY_TYPE};

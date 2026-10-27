@@ -11,14 +11,12 @@ import {
 } from './priority-recovery-helpers.js';
 import {
   LOCAL_STR_EMPTY,
-  PRIORITY_RECOVERY_CLOSURE_RECORD_ID,
   PRIORITY_RECOVERY_CLOSURE_SATISFIED_SEMANTIC_STATE_IDS,
-  PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
   PRIORITY_RECOVERY_DECISION_SNAPSHOT_FIELD,
   PRIORITY_RECOVERY_SNAPSHOT_LITERAL,
 } from './priority-recovery-snapshot-contract.js';
-import {buildPriorityRecoveryDecisionPartitionIdSet, buildPriorityRecoverySemanticPartitionSetMap, filterPriorityRecoveryTrackedPartitionIds, hasPriorityRecoverySpreadGap, isPriorityRecoveryTrackedPartitionId, normalizePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-ingress.js';
+import {buildPriorityRecoveryDecisionPartitionIdSet, buildPriorityRecoverySemanticPartitionSetMap, filterPriorityRecoveryTrackedPartitionIds, isPriorityRecoveryTrackedPartitionId, normalizePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-ingress.js';
 import {resolvePriorityRecoveryDecisionSnapshotSemanticState} from './priority-recovery-snapshot-eligibility.js';
 import {buildTrackedPriorityRecoveryDecisionSemanticStateMap, filterPriorityRecoveryDecisionSnapshotConflicts, isPriorityRecoverySourcePartitionStateMap, resolvePriorityRecoveryFilteredSnapshotBlockerReasons, resolvePriorityRecoverySourcePartitionStateIds, selectPriorityRecoveryDecisionSnapshotSummarySnapshots} from './priority-recovery-snapshot-publication.js';
 import {buildPriorityRecoveryBlockerPartitionSetMap, buildPriorityRecoveryCompletionPartitionSetMap, normalizePriorityRecoveryBlockerPartitionIdsByReason, normalizePriorityRecoveryPartitionIdSetMap} from './priority-recovery-dispatch-snapshot.js';
@@ -313,66 +311,6 @@ function resolvePriorityRecoveryDecisionSummaryPartitionIds(
   return Object.freeze([...partitionIdSet].sort());
 }
 
-function resolvePriorityRecoveryClosureReadyEligibleNodeCount(
-  decisionSnapshots = null,
-  priorityPartitionSummary = null,
-) {
-  const summaryReadyEligibleNodeCount = normalizePriorityRecoveryInteger(
-    priorityPartitionSummary?.readyEligibleNodeCount,
-  );
-  if (summaryReadyEligibleNodeCount !== null) {
-    return summaryReadyEligibleNodeCount;
-  }
-  const snapshotReadyEligibleNodeCounts = (
-    Array.isArray(decisionSnapshots?.snapshots) ?
-      decisionSnapshots.snapshots :
-      []
-  )
-    .map((snapshot) =>
-      Array.isArray(snapshot?.publication?.concreteEligibleNodeIds) ?
-        snapshot.publication.concreteEligibleNodeIds.length :
-        null,
-    )
-    .filter((value) => Number.isInteger(value) && value >= 0);
-  if (snapshotReadyEligibleNodeCounts.length === 0) {
-    return null;
-  }
-  return Math.max(...snapshotReadyEligibleNodeCounts);
-}
-
-function buildPriorityRecoveryClosureSatisfiedPriorityPartitionSummary(
-  decisionSnapshots = null,
-  priorityPartitionSummary = null,
-) {
-  const requiredDistinctNodeCount = normalizePriorityRecoveryInteger(
-    priorityPartitionSummary?.requiredDistinctNodeCount,
-  );
-  const readyEligibleNodeCount =
-    resolvePriorityRecoveryClosureReadyEligibleNodeCount(
-      decisionSnapshots,
-      priorityPartitionSummary,
-    );
-  const totalPriorityPartitionCount =
-    normalizePriorityRecoveryInteger(
-      priorityPartitionSummary?.totalPriorityPartitionCount,
-    ) ||
-    buildPriorityRecoveryDecisionPartitionIdSet(decisionSnapshots).size ||
-    null;
-  return Object.freeze({
-    satisfied: true,
-    ...(requiredDistinctNodeCount !== null ? {requiredDistinctNodeCount} : {}),
-    ...(readyEligibleNodeCount !== null ? {readyEligibleNodeCount} : {}),
-    ...(totalPriorityPartitionCount !== null ?
-      {totalPriorityPartitionCount} :
-      {}),
-    missingPartitionIds: Object.freeze([]),
-    blockedPartitions: Object.freeze([]),
-    blockedPartitionCount: 0,
-    largestSpreadGap: 0,
-    totalSpreadGap: 0,
-  });
-}
-
 function buildPriorityRecoveryClosureWitness(options = {}) {
   const rawDecisionSnapshots =
     options.decisionSnapshots &&
@@ -384,14 +322,6 @@ function buildPriorityRecoveryClosureWitness(options = {}) {
   if (!decisionSnapshots) {
     return null;
   }
-  const priorityPartitionSummary =
-    options.priorityPartitionSummary &&
-    typeof options.priorityPartitionSummary === 'object' ?
-      options.priorityPartitionSummary :
-      decisionSnapshots.priorityPartitionSummary &&
-          typeof decisionSnapshots.priorityPartitionSummary === 'object' ?
-        decisionSnapshots.priorityPartitionSummary :
-        null;
   const unresolvedSemanticStateIds =
     PRIORITY_RECOVERY_UNRESOLVED_SEMANTIC_STATE_IDS.filter(
       (semanticStateId) =>
@@ -425,61 +355,21 @@ function buildPriorityRecoveryClosureWitness(options = {}) {
   ) {
     return null;
   }
-  const summarySpreadPending = hasPriorityRecoverySpreadGap(
-    priorityPartitionSummary,
-  );
-  if (blockedPartitionIds.length > 0) {
-    return Object.freeze({
-      state: PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING,
-      prioritySpreadPending: true,
-      publicationRefreshRequired: false,
-      closureRecordId: null,
-      closureWitnessClass: null,
-      blockedPartitionIds: Object.freeze([...blockedPartitionIds]),
-      blockedPartitionCount: blockedPartitionIds.length,
-      unresolvedSemanticStateIds: Object.freeze([
-        ...unresolvedSemanticStateIds,
-      ]),
-      satisfiedPartitionIds,
-      decisionPartitionIds,
-      refreshedPriorityPartitionSummary: null,
-      summarySpreadPending,
-      publicationEpoch: normalizePriorityRecoveryInteger(
-        decisionSnapshots.publicationEpoch,
-      ),
-    });
-  }
-  const state =
-    summarySpreadPending === true ?
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION :
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH;
+  // The closure witness may only ADD a blocker (owner decision 2026-10-04,
+  // "delete the second authority"): PENDING when a tracked priority
+  // partition is unresolved, otherwise the one non-pending state, which says
+  // nothing about spread. It never produces a summary and never carries a
+  // spread answer of its own; the census does (buildPrioritySpreadDecision).
+  const pending = blockedPartitionIds.length > 0;
   return Object.freeze({
-    state,
-    prioritySpreadPending: false,
-    publicationRefreshRequired:
-      state ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION,
-    closureRecordId:
-      state ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ?
-        PRIORITY_RECOVERY_CLOSURE_RECORD_ID.PRIORITY_SPREAD :
-        null,
-    closureWitnessClass:
-      state ===
-      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_STALE_PUBLICATION ?
-        PRIORITY_RECOVERY_CLOSURE_WITNESS_CLASS.PUBLICATION_CONVERGED_PRIORITY_SPREAD_PENDING :
-        null,
-    blockedPartitionIds: Object.freeze([]),
-    blockedPartitionCount: 0,
+    state: pending ?
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.PENDING :
+      PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE.SATISFIED_FRESH,
+    blockedPartitionIds: Object.freeze([...blockedPartitionIds]),
+    blockedPartitionCount: blockedPartitionIds.length,
     unresolvedSemanticStateIds: Object.freeze([...unresolvedSemanticStateIds]),
     satisfiedPartitionIds,
     decisionPartitionIds,
-    refreshedPriorityPartitionSummary:
-      buildPriorityRecoveryClosureSatisfiedPriorityPartitionSummary(
-        decisionSnapshots,
-        priorityPartitionSummary,
-      ),
-    summarySpreadPending,
     publicationEpoch: normalizePriorityRecoveryInteger(
       decisionSnapshots.publicationEpoch,
     ),
@@ -524,13 +414,11 @@ function buildPriorityRecoveryEmergencyBudgetOwnerIds(partitionIds = []) {
 }
 
 export {
-  buildPriorityRecoveryClosureSatisfiedPriorityPartitionSummary,
   buildPriorityRecoveryClosureWitness,
   buildPriorityRecoveryEmergencyBudgetOwnerIds,
   buildPriorityRecoveryFilteredDecisionSnapshotSummary,
   buildTrackedPriorityRecoveryDecisionSnapshots,
   resolvePriorityPartitionSummaryFromPublication,
-  resolvePriorityRecoveryClosureReadyEligibleNodeCount,
   resolvePriorityRecoveryDecisionSummaryPartitionIds,
   resolvePriorityRecoveryEmergencyBudgetOwnerId,
   resolvePriorityRecoveryFilteredSnapshotCompletionStates,

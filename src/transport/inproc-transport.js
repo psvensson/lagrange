@@ -12,10 +12,11 @@
 
 import {EventEmitter} from 'events';
 import WebSocket from 'ws';
-import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {TRANSPORT_EVENT, TRANSPORT_TYPEOF} from '../constants/transport.js';
 
 // queueMicrotask is a global in Node.js, but ESLint doesn't know about it
 const queueMicrotaskFn = globalThis.queueMicrotask;
+const INPROC_WRITE_CLOSED = 'In-process WebSocket closed before write completion';
 
 /**
  * Global registry for in-process servers.
@@ -87,15 +88,28 @@ class InProcWebSocket extends EventEmitter {
    * Messages are delivered asynchronously via microtask to preserve
    * ordering without recursion.
    * @param {string|Buffer} data - Data to send.
+   * @param {Object|Function} [options] - WebSocket options or completion callback.
+   * @param {Function} [callback] - Completion of the queued write, not application ACK.
    */
-  send(data) {
+  send(data, options, callback) {
+    const completed = typeof options === TRANSPORT_TYPEOF.FUNCTION ? options : callback;
     if (this.readyState !== WebSocket.OPEN || !this._peer) {
+      queueMicrotaskFn(() => completed?.(new Error(INPROC_WRITE_CLOSED)));
       return;
     }
-    // Deliver asynchronously to preserve ordering without recursion.
+    const peer = this._peer;
     queueMicrotaskFn(() => {
-      if (this._peer.readyState === WebSocket.OPEN) {
-        this._peer.emit(TRANSPORT_EVENT.MESSAGE, data);
+      if (this.readyState !== WebSocket.OPEN || peer.readyState !== WebSocket.OPEN) {
+        completed?.(new Error(INPROC_WRITE_CLOSED));
+        return;
+      }
+      // This microtask owns the queued data until handoff. Invoke completion
+      // even if an application listener throws; ACK/application processing is
+      // a separate result, just as it is on the real WebSocket write path.
+      try {
+        peer.emit(TRANSPORT_EVENT.MESSAGE, data);
+      } finally {
+        completed?.();
       }
     });
   }

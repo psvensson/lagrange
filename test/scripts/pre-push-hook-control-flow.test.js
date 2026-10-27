@@ -7,13 +7,14 @@
 // checkout the hook refuses a HEAD that is not the pushed commit before any
 // content stage runs. A textual witness of the hook cannot see any of this.
 import assert from 'node:assert/strict';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 import {gitProcessEnvironment} from
   '../../scripts/checks/git-process-environment.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -41,7 +42,7 @@ function write(relative, contents, mode = 0o644) {
 }
 
 function git(args) {
-  return execFileSync('git', args,
+  return execGit(args,
     {cwd: repo, encoding: UTF8, stdio: 'pipe', env: gitProcessEnvironment()}).trim();
 }
 
@@ -206,6 +207,16 @@ test('the hook hands the pushed commit to the materializer and runs no content s
     'no unused-files, lint, ratchet, cycle or export stage ran in the ' +
     'working tree');
   assert.match(run.output, /materialize-pushed-tree/u);
+});
+
+test('a mixed main plus side-branch push cannot use preservation fast path', () => {
+  const run = runHook(
+    `refs/heads/main ${shas.head} refs/heads/main ${shas.base}\n` +
+    `refs/heads/topic ${shas.head} refs/heads/topic ${ZERO_SHA}\n`);
+  assert.equal(run.status, 0, run.output);
+  assert.equal(materializerCalls(run.recorded).length, 1,
+    'main in the push keeps the full proof boundary');
+  assert.doesNotMatch(run.output, /non-main branch preservation push/u);
 });
 
 // The three things the lint stage decides: what reaches eslint, what the

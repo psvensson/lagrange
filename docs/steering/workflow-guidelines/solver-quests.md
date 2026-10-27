@@ -1,6 +1,6 @@
 ---
 audience: agent
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-26
 ---
 
 # Quest workflow
@@ -22,6 +22,28 @@ A quest directory holds its record, append-only log and required evidence.
 The record names the statement, owning epic (or `class: fix`) and one
 `doneWhen`. `start` validates it and seals only against a measuring red probe.
 Do not weaken a seal to close work; explicitly supersede a changed premise.
+When a unit of work needs a quest and none exists yet, prepare a bounded
+quest proposal (statement, owning epic, reproducer, `doneWhen`) and take the
+next authorized action; the missing record is not by itself a reason to stop.
+
+## Contract-first owner work
+
+Before adding or repairing a workflow, permit, recovery path or state store,
+apply the approved [authority and recovery principles](../../../architecture/contracts/authority-and-recovery.md):
+one owner per authoritative fact; disposable projections; no circular recovery
+prerequisite; one decision algorithm with multiple legitimate triggers; an
+owned consequence for refusal; and abstractions that reduce reasoning.
+
+Record the complete transition before implementing its parts: trigger,
+authoritative facts, permitted action, actual durable commit point,
+restart/lost-answer behavior and every remaining obligation's owner. Use
+existing owners first. Distinguish boundary-only tests from reachable
+production failures. A green primitive does not certify a complete operation.
+
+This is an application of existing rules, not a new fixed subsystem count or
+permission to rewrite sealed acceptance. The current bounded cutover work is
+routed through the existing epic's [contract-first plan](../../../solve/epics/raft-rs-full-cutover/contract-first-2026-10-08.md);
+broader convergence retains its own activation gate.
 
 ## Decision owners and work in progress
 

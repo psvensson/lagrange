@@ -11,7 +11,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 // tight real-clock wait past a reference-machine budget (doctrine:
 // hardware-relative-convergence-budget; same class e53854c9e repaired).
 import {scaleByMachineFactor} from
-  '../integration/helpers/test-machine-factor.js';
+  '../../scripts/test-machine-factor.js';
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from '../../src/rebalancer/operation-owner-turn-policy.js';

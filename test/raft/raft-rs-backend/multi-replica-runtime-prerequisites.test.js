@@ -16,6 +16,7 @@
 //        the core (progress-probe-sent), caught up -> progress-observed, not
 //        in the configuration -> a typed not-a-peer refusal.
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -215,7 +216,7 @@ for (const mode of ['rejects', 'no-handler']) {
         if (mode === 'rejects') {
           throw new Error('injected delivery rejection');
         }
-        return {acknowledged: false, noHandler: true};
+        return buildDeliveryEnvelope({acknowledged: false, noHandler: true});
       },
     });
     try {
@@ -335,7 +336,7 @@ test('F18: the progress probe sends one heartbeat round to an idle ' +
     partitionId: 'f18-progress-probe',
     replicaIds: [leader],
     sendFor: (from) => (drop.learnerToLeader && from === learner ?
-      {acknowledged: true} : undefined),
+      buildDeliveryEnvelope({acknowledged: true}) : undefined),
   });
   try {
     assert.equal((await cluster.node(leader).campaign()).outcome, CORE_OK);

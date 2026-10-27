@@ -8,9 +8,10 @@
 // date is a review cue for a human, never a push failure. Docs without the
 // field are skipped; the field is opt-in.
 
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import {execGit} from './checks/git-invocation.js';
 
 const STEERING_DIR = 'docs/steering';
 const STALE_AFTER_DAYS = 90;
@@ -42,10 +43,8 @@ function lastReviewed(file) {
 // history for it (new/untracked file, or not a git work tree).
 function lastCommitDate(file) {
   try {
-    const out = execFileSync(
-      'git', ['log', '-1', '--format=%cs', '--', file],
-      {encoding: 'utf8'},
-    ).trim();
+    const out = execGit(['log', '-1', '--format=%cs', '--', file],
+      {encoding: 'utf8'}).trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(out) ? out : NO_COMMIT_DATE;
   } catch {
     return NO_COMMIT_DATE;

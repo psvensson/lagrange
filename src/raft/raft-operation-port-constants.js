@@ -8,6 +8,9 @@ const RAFT_EVENT = Object.freeze({
   LEADER_CHANGE: 'leader change',
   COMMIT: 'commit',
   TERM_CHANGE: 'term change',
+  // A payload-free wake emitted after the runtime successfully publishes a
+  // newly applied position. Consumers re-read their canonical owner.
+  APPLIED_PROGRESS: 'applied progress',
   COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
   // The group's applied ConfState differs from the one last announced, or
   // this is the first announcement since the group was (re)constructed or
@@ -31,12 +34,72 @@ const RAFT_EVENT = Object.freeze({
   CONF_CHANGE_APPLIED: 'conf change applied',
 });
 
+// The one typed startup refusal of a replica its consensus port refused at
+// initialization - the runtime owner refused to open the group, the port
+// opened it held by its host failure (its durable record could not be read),
+// or a lone replica's campaign was refused - whatever service kind opened
+// it. The kind is the refusal's domain, never a second code.
+const RAFT_CONSENSUS_STARTUP_OUTCOME = Object.freeze({
+  CONSENSUS_INIT_REFUSED: 'consensus_init_refused',
+});
+
 // The operations of the port beyond the scheduling and proposal surface,
 // named once: the one read of the committed configuration, answered as frozen
 // data from the runtime owner's recorded observation (committed-read
 // amendment 1, section 3.1).
 const RAFT_OPERATION = Object.freeze({
   READ_COMMITTED_MEMBERSHIP: 'readCommittedMembership',
+  PROPOSE_MEMBERSHIP_TRANSITION: 'proposeMembershipTransition',
+});
+
+const RAFT_MEMBERSHIP_TRANSITION_STAGE = Object.freeze({
+  ADD_LEARNER: 'add-learner',
+  PROMOTE: 'promote',
+  REMOVE: 'remove',
+});
+
+const RAFT_MEMBERSHIP_TRANSITION_REASON = Object.freeze({
+  PROPOSED: 'membership-transition-proposed',
+  ALREADY_VOTER: 'membership-transition-already-voter',
+  ALREADY_LEARNER: 'membership-transition-already-learner',
+  ALREADY_ABSENT: 'membership-transition-already-absent',
+  NOT_LEARNER: 'membership-transition-target-not-learner',
+  PROMOTION_PROOF_REQUIRED: 'membership-transition-promotion-proof-required',
+  TARGET_OBSERVATION_INVALID:
+    'membership-transition-target-observation-invalid',
+  TARGET_OBSERVATION_STALE:
+    'membership-transition-target-observation-stale',
+  PROMOTION_PROGRESS_UNAVAILABLE:
+    'membership-transition-promotion-progress-unavailable',
+  PROMOTION_PROGRESS_BEHIND:
+    'membership-transition-promotion-progress-behind',
+  STALE_PERMIT: 'membership-transition-stale-permit',
+  STALE_RUNTIME: 'membership-transition-stale-runtime',
+  STALE_LIFECYCLE: 'membership-transition-stale-lifecycle',
+  STALE_LEADERSHIP: 'membership-transition-stale-leadership',
+  STALE_CONFIGURATION: 'membership-transition-stale-configuration',
+  CONFIGURATION_GENERATION_UNAVAILABLE:
+    'membership-transition-configuration-generation-unavailable',
+  IDENTITY_MISMATCH: 'membership-transition-identity-mismatch',
+  MALFORMED: 'membership-transition-malformed',
+  PROPOSAL_ANCHOR_UNAVAILABLE:
+    'membership-transition-proposal-anchor-unavailable',
+});
+
+// Host operation authority is observed before entering the native runtime turn.
+// An observation is not a committed-membership receipt or a CREATE grant.
+const RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME = Object.freeze({
+  OBSERVED: 'observed', REFUSED: 'refused', UNAVAILABLE: 'unavailable',
+});
+const RAFT_MEMBERSHIP_AUTHORIZATION_REASON = Object.freeze({
+  REQUIRED: 'membership-authorization-required',
+  INVALID: 'membership-authorization-invalid',
+  UNAVAILABLE: 'membership-authorization-unavailable',
+  MISMATCH: 'membership-authorization-mismatch',
+  STALE_OWNER: 'membership-authorization-stale-owner',
+  WRONG_RECIPIENT: 'membership-authorization-wrong-recipient',
+  DELIVERY_REQUIRED: 'membership-delivery-required',
+  STALE_DELIVERY: 'membership-delivery-stale',
 });
 
 const RAFT_OPERATION_OUTCOME = Object.freeze({
@@ -69,6 +132,16 @@ const RAFT_MEMBERSHIP_CHANGE_REFUSAL = Object.freeze({
   // replica that does not lead refuses one typed and retryable, naming the
   // leader it knows, instead of letting the crate forward it.
   NOT_LEADER: 'membership-change-not-leader',
+  // A change whose configuration would hold no voter (a sole voter removing
+  // or demoting itself): raft-rs takes the proposal and commits it, then
+  // refuses to apply it ("removed all voters"), so the leader's port refuses
+  // it before the core is handed it. Terminal: no later state admits it.
+  REMOVES_LAST_VOTER: 'membership-change-removes-last-voter',
+  // A change to a group its durable workflow record retires as a unit (a
+  // dissolved split/merge source, an aborted child/target): its member set
+  // is frozen, so no member is added, replaced, promoted or removed.
+  // Refused before the port; terminal for that record.
+  GROUP_RETIRING: 'membership-change-group-retiring',
 });
 
 // What probePeerProgress(peerAddress) answers: the peer's matched index
@@ -104,8 +177,7 @@ const RAFT_LEADERSHIP_TRANSFER_SUCCESSOR = Object.freeze({
 // reserved raft id, no other voter to succeed, a most-caught-up transfer
 // asked of a replica that does not lead, or a request that misses the
 // canonical shape. TRANSFER_IN_PROGRESS is the retryable answer of a
-// proposal the leader drops while a transfer it accepted is running; the
-// backend that cannot transfer refuses with UNSUPPORTED_BACKEND.
+// proposal the leader drops while a transfer it accepted is running.
 const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   TRANSFER_REQUESTED: 'transfer-requested',
   TRANSFER_FORWARDED: 'transfer-forwarded',
@@ -118,7 +190,6 @@ const RAFT_LEADERSHIP_TRANSFER_REASON = Object.freeze({
   UNKNOWN_SUCCESSOR: 'transfer-unknown-successor',
   WITHOUT_REPLICA_IDENTITY: 'transfer-without-replica-identity',
   TRANSFER_IN_PROGRESS: 'leadership-transfer-in-progress',
-  UNSUPPORTED_BACKEND: 'leadership-transfer-unsupported-backend',
 });
 
 // A partition's admission of one peer: only the leader proposes it; any
@@ -145,12 +216,17 @@ const RAFT_MEMBERSHIP_ADMISSION_OUTCOME = Object.freeze({
 });
 
 export {
+  RAFT_CONSENSUS_STARTUP_OUTCOME,
+  RAFT_MEMBERSHIP_AUTHORIZATION_OUTCOME,
+  RAFT_MEMBERSHIP_AUTHORIZATION_REASON,
   RAFT_EVENT,
   RAFT_LEADERSHIP_TRANSFER_REASON,
   RAFT_LEADERSHIP_TRANSFER_SUCCESSOR,
   RAFT_MEMBERSHIP_ADMISSION_OUTCOME,
   RAFT_MEMBERSHIP_CHANGE_REFUSAL,
   RAFT_MEMBERSHIP_OPERATION,
+  RAFT_MEMBERSHIP_TRANSITION_REASON,
+  RAFT_MEMBERSHIP_TRANSITION_STAGE,
   RAFT_MEMBERSHIP_RESERVATION_OUTCOME,
   RAFT_OPERATION,
   RAFT_OPERATION_OUTCOME,

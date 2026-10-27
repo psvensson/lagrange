@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -27,9 +28,8 @@ import {
 } from '../../src/query/query-constants.js';
 import {
 } from '../../src/query/canonical-leader-routing.js';
-import {
-  PARTITION_SERVICE_ERROR_MSG,
-} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {
   assertNoHandlerRepairConverged,
   createStaleOverlayOwnerHandoffFixture,
@@ -98,20 +98,18 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === 'follower-node/partition/p1') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           redirect: 'LEADER_REDIRECT',
           leaderAddress: 'leader-node/partition/p1',
           partitionId: 'p1',
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         rows: [],
         changes: 1,
-      };
+      });
     },
   };
 
@@ -243,26 +241,22 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler leader ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === refreshedAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -359,25 +353,21 @@ test('QueryExecutor - executeOnPartition repairs stale no-handler read ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === refreshedAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{ok: true}],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -475,25 +465,21 @@ test('QueryExecutor - executeOnPartition skips duplicate queued ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === fallbackAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{operation_id: 'op-1'}],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -626,33 +612,28 @@ async (t) => {
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === siblingAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'unexpected sibling retry on disproven leader node',
-        };
+        });
       }
       if (address === recoveryAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           changes: 1,
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -749,32 +730,27 @@ test('QueryExecutor - executeOnPartition widens owner-missing priority ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === siblingAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'unexpected sibling retry on stale service-role-derived leader node',
-        };
+        });
       }
       if (address === recoveryAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [{operation_id: 'op-1'}],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -900,27 +876,24 @@ test('QueryExecutor - executeOnPartition falls back to live replica ' +
         throw error;
       }
       if (address === 'follower-node/partition/p1') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           redirect: 'LEADER_REDIRECT',
           leaderAddress: 'new-leader/partition/p1',
           partitionId: 'p1',
-        };
+        });
       }
       if (address === 'new-leader/partition/p1') {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: [],
           changes: 1,
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -1018,26 +991,22 @@ test('QueryExecutor - executeOnPartition quarantines stale no-handler ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === staleAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true, noHandler: true}, {
           success: false,
-          noHandler: true,
           error: `${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`,
-        };
+        });
       }
       if (address === fallbackAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           changes: 1,
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -1075,6 +1044,20 @@ test('QueryExecutor - executeOnPartition quarantines stale no-handler ' +
 test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
   'write failures on another live replica', async (t) => {
   const deliveries = [];
+  const leaderFailures = [
+    {
+      success: false,
+      error: ERRORS.QUERY_FAILED,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.NOT_LEADER,
+    },
+    {
+      success: false,
+      error: ERRORS.WRITE_CUTOVER_PAUSED,
+      failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+      deferRetry: true,
+      retryAfterMs: 25,
+    },
+  ];
   const partitionId = 'replica_operations-p1';
   const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
   const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
@@ -1130,25 +1113,19 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
     async deliver(address) {
       deliveries.push(address);
       if (address === leaderAddress) {
-        return {
-          acknowledged: true,
-          success: false,
-          error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, leaderFailures.shift());
       }
       if (address === fallbackAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           changes: 1,
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -1158,19 +1135,28 @@ test('QueryExecutor - executeOnPartition retries retryable control-plane ' +
     nodeId: 'local-node',
   });
 
-  const result = await executor.executeOnPartition(
+  const codedResult = await executor.executeOnPartition(
     partitionId,
     'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
     ['active', 'op-1'],
     false,
   );
+  const deferredResult = await executor.executeOnPartition(
+    partitionId,
+    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
+    ['active', 'op-2'],
+    false,
+  );
 
-  t.equal(result.success, true);
+  t.equal(codedResult.success, true,
+    'a write code widens even when its generic text is not retryable');
+  t.equal(deferredResult.success, true,
+    'the full typed cutover-pause answer also widens');
   t.same(
     deliveries,
-    [leaderAddress, fallbackAddress],
+    [leaderAddress, fallbackAddress, leaderAddress, fallbackAddress],
     'control-plane writes should fall through to another live replica ' +
-      'when the first candidate reports retryable partition contention',
+      'for both code-owned and deferred typed answers',
   );
 });
 

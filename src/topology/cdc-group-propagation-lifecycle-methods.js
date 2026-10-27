@@ -1,52 +1,12 @@
 /**
  * Stop-lifecycle methods for CDCGroupPropagationService: the one guard every
  * arm site and post-attempt path checks, the one timer primitive that refuses
- * once stopped, the held retry delay, and the stop helpers that answer every
- * waiter with the typed stopped outcome.
+ * once stopped, and the held retry delay that stop() ends.
  */
 
-import {
-  CDC_GROUP_PROPAGATION_DELIVERY_ERROR,
-  CDC_GROUP_PROPAGATION_STATE,
-} from './cdc-group-propagation-constants.js';
+import {CDC_GROUP_PROPAGATION_STATE} from './cdc-group-propagation-constants.js';
 
 class CDCGroupPropagationLifecycleMethods {
-  /**
-   * Clear all pending background retry timers.
-   * @private
-   */
-  clearBackgroundRetryTimers() {
-    for (const retryTimer of this.backgroundRetryTimers) {
-      clearTimeout(retryTimer);
-    }
-    this.backgroundRetryTimers.clear();
-    this.backgroundRetryEntriesByKey.clear();
-  }
-  /**
-   * Clear all pending immediate publication batch timers; every waiter of a
-   * batch that will not run gets the stopped answer.
-   * @private
-   */
-  clearImmediateBatchTimers() {
-    for (const timer of this.immediateBatchTimers) {
-      clearTimeout(timer);
-    }
-    this.immediateBatchTimers.clear();
-    for (const entry of this.immediateBatchEntriesByKey.values()) {
-      this.resolveImmediateBatch(entry, this.buildStoppedFailures(entry.targets));
-    }
-    this.immediateBatchEntriesByKey.clear();
-  }
-  /**
-   * The typed stopped answer for targets that were not delivered to.
-   * @param {Array<Object>} targets
-   * @return {Array<Object>}
-   * @private
-   */
-  buildStoppedFailures(targets) {
-    return this.buildDeferredFailures(
-      targets, CDC_GROUP_PROPAGATION_DELIVERY_ERROR.PROPAGATION_STOPPED);
-  }
   /**
    * The one guard every arm site and post-attempt path checks.
    * @return {boolean}
@@ -55,8 +15,8 @@ class CDCGroupPropagationLifecycleMethods {
     return this.state === CDC_GROUP_PROPAGATION_STATE.STOPPED;
   }
   /**
-   * The owner's one timer primitive: every retry delay, batch window and
-   * background retry wave arms through it, and it refuses once stopped.
+   * The owner's one timer primitive: every retry delay arms through it, and
+   * it refuses once stopped.
    * @param {Function} callback
    * @param {number} delayMs
    * @return {*} The timer, or null when the service is stopped.

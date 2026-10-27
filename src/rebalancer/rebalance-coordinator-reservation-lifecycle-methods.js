@@ -1,5 +1,10 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  controlPlaneWriteIdentity,
+  isPendingInstanceApplied,
+  releaseControlPlaneWriteIdentities,
+} from '../control-plane/control-plane-write-identity.js';
+import {
   OPERATION_RESERVATION_ATTEMPT_OUTCOME,
 } from './operation-reservation-attempt-outcome.js';
 import {
@@ -8,6 +13,13 @@ import {
 import {
   assertCanonicalRebalancerEntityIdentity,
 } from './rebalancer-entity-identity.js';
+import {
+  adoptAuthoritativeReservationForOperation,
+  buildFailedReservationAdoption,
+  observeAuthoritativeOperationForReservation,
+} from './rebalance-coordinator-reservation-adoption.js';
+import {STORAGE_RESERVATION_AUTHORITY_ERROR} from
+  './storage-reservation-authority.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RESERVATION_ORPHAN_RECONCILE_STATE = Object.freeze({
@@ -21,6 +33,12 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION = Object.freeze({
   KEEP_ACTIVE: 'keep_active',
   RELEASE_ACTIVE: 'release_active',
 });
+
+const PROVEN_INVALID_CREATED_RESERVATION_ERRORS = Object.freeze(new Set([
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_ABSENT,
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_TERMINAL,
+  STORAGE_RESERVATION_AUTHORITY_ERROR.OPERATION_MISMATCH,
+]));
 
 const RESERVATION_ORPHAN_RECONCILE_STATE_TABLE = Object.freeze([
   Object.freeze({
@@ -80,6 +98,13 @@ const {
   assertCritical,
   readAuthoritativeControlPlaneRows,
 } = REBALANCE_COORDINATOR_SHARED;
+
+const RESERVATION_BIRTH_VERB = 'birth';
+
+// The subject of a reservation's write identities.
+function reservationWriteSubject(reservationId) {
+  return [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS, reservationId];
+}
 
 class RebalanceCoordinatorReservationLifecycleMethods {
   // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
@@ -153,12 +178,18 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     now,
     options = {},
   ) {
+    // The reservation leaves ACTIVE: its birth is a finished logical write,
+    // so an ensure after this transition is a new one, never answered from
+    // the old birth's outcome.
+    releaseControlPlaneWriteIdentities(
+      ...reservationWriteSubject(reservationId));
     const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_RESERVATION_STATUS_BY_ID,
       [nextStatus, now, now, reservationId, RESERVATION_STATUS.ACTIVE],
       {
         ownerId: options.ownerId || reservationId,
         sessionId: options.sessionId,
+        timeoutBudget: options.timeoutBudget,
       },
     );
     if (!result.success) {
@@ -175,6 +206,45 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       changed: changeCount === null || changeCount > 0,
       changeCount,
     };
+  }
+
+  async validateInsertedReservationOperation(
+    operation,
+    reservationId,
+    timeoutBudget,
+  ) {
+    const insertedOperationError =
+      await observeAuthoritativeOperationForReservation(
+        this,
+        operation,
+        {timeoutBudget},
+      );
+    if (!insertedOperationError) return null;
+    if (PROVEN_INVALID_CREATED_RESERVATION_ERRORS.has(
+      insertedOperationError,
+    )) {
+      const cleanup = await this.transitionActiveReservationById(
+        reservationId,
+        RESERVATION_STATUS.RELEASED,
+        Date.now(),
+        {ownerId: operation.operationId, timeoutBudget},
+      );
+      if (!cleanup.success) {
+        this.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RELEASE_FAILED,
+          {
+            operationId: operation.operationId,
+            reservationId,
+            error: cleanup.error,
+          },
+        );
+      }
+    }
+    return buildFailedReservationAdoption(
+      this,
+      operation,
+      insertedOperationError,
+    );
   }
 
   /**
@@ -211,6 +281,9 @@ class RebalanceCoordinatorReservationLifecycleMethods {
           LOCAL_STR_FUNCTION,
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
+    const timeoutBudget = this.createOperationMutationTimeoutBudget(
+      options.timeoutBudget,
+    );
 
     const {entityType, entityId} =
       assertCanonicalRebalancerEntityIdentity(operation);
@@ -246,9 +319,29 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       {
         ownerId: operation.operationId,
         sessionId: options.sessionId,
+        timeoutBudget,
+        // The reservation's birth is one logical write: an ensure after its
+        // answer was lost is the same entry (answered from its outcome row),
+        // never a second INSERT of the deterministic id. Its instance ends
+        // when the reservation leaves ACTIVE (transitionActiveReservation
+        // ById).
+        writeIdentity: controlPlaneWriteIdentity(
+          ...reservationWriteSubject(reservationId), RESERVATION_BIRTH_VERB),
+        // An applied earlier birth settles this one: the authority answers.
+        pendingAppliedSettles: true,
       },
     );
 
+    if (!result.success && isPendingInstanceApplied(result)) {
+      // A prior attempt applied the same birth. Its ACTIVE row and the later
+      // exact operation observation are the authority; the retry result is
+      // never interpreted as a new insert failure.
+      return adoptAuthoritativeReservationForOperation(
+        this,
+        operation,
+        {timeoutBudget},
+      );
+    }
     if (!result.success) {
       this.logger.warn(
         REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
@@ -264,6 +357,24 @@ class RebalanceCoordinatorReservationLifecycleMethods {
         error: result.error || null,
       });
     }
+
+    const changeCount = this.extractMutationChangeCount(result);
+    if (changeCount === null || changeCount <= 0) {
+      return adoptAuthoritativeReservationForOperation(
+        this, operation, {timeoutBudget});
+    }
+
+    // The operation can become terminal after the pre-insert live check.
+    // Publish CREATED only after a fresh authoritative operation observation.
+    // If terminal/absent/mismatched authority won, release this exact row now;
+    // a terminal transition after this observation will see the row in
+    // its ordinary release path.
+    const invalidOperation = await this.validateInsertedReservationOperation(
+      operation,
+      reservationId,
+      timeoutBudget,
+    );
+    if (invalidOperation) return invalidOperation;
 
     this.stats.reservationsCreated++;
 
@@ -304,41 +415,29 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    *   presence).
    * @private
    */
-  async ensureReservationForOperation(operation) {
+  async ensureReservationForOperation(operation, options = {}) {
     if (!this.isStorageIncreasingOperation(operation?.type)) {
       return Object.freeze({
         outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
       });
     }
-    const activeResult = await readAuthoritativeControlPlaneRows(
-      this.controlPlaneSystemTableGateway,
-      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
-      SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
-      [operation.operationId, RESERVATION_STATUS.ACTIVE],
-      STORAGE_RESERVATION_READ_QUERY_OPTIONS,
+    const timeoutBudget = this.createOperationMutationTimeoutBudget(
+      options.timeoutBudget,
     );
-    if (activeResult.success && activeResult.rows?.length > 0) {
-      return Object.freeze({
-        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
-        reservationId: `res-${operation.operationId}`,
-      });
+    const adoption = await adoptAuthoritativeReservationForOperation(
+      this,
+      operation,
+      {allowConfirmedAbsentReservation: true, timeoutBudget},
+    );
+    if (
+      adoption.outcome ===
+        OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE ||
+      adoption.reservationAbsent !== true ||
+      options.allowCreate === false
+    ) {
+      return adoption;
     }
-    if (!activeResult.success) {
-      this.logger.warn(
-        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
-        {
-          operationId: operation.operationId,
-          reservationId: `res-${operation.operationId}`,
-          error: activeResult.error,
-        },
-      );
-      return Object.freeze({
-        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
-        reservationId: `res-${operation.operationId}`,
-        error: activeResult.error || null,
-      });
-    }
-    return this.createReservationForOperation(operation);
+    return this.createReservationForOperation(operation, {timeoutBudget});
   }
 
   /**

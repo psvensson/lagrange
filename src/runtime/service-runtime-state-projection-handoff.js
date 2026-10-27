@@ -3,6 +3,11 @@ import {
 } from '../constants/unified-service-lifecycle.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
 
+const RUNTIME_REPLICA_STATE_PROJECTION_STATE = Object.freeze({
+  RETAINED: 'retained',
+  STOPPED: 'stopped',
+});
+
 function buildReplicaStateProjectionRequest(
   definition,
   status,
@@ -32,7 +37,13 @@ function isRetainedStateProjection(projectionResult) {
   return projectionResult?.retained === true;
 }
 
+function isStoppedStateProjection(projectionResult) {
+  return projectionResult?.state === RUNTIME_REPLICA_STATE_PROJECTION_STATE.STOPPED;
+}
+
 export {
+  RUNTIME_REPLICA_STATE_PROJECTION_STATE,
   buildReplicaStateProjectionRequest,
   isRetainedStateProjection,
+  isStoppedStateProjection,
 };

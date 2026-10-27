@@ -38,7 +38,7 @@
 // removed; a failed --gate run first keeps its diagnostics (publish-head.js).
 
 import process from 'node:process';
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -56,6 +56,7 @@ import {
 import {
   WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
+import {execGit} from './git-invocation.js';
 import {gitProcessEnvironment} from './git-process-environment.js';
 
 const TEXT_ENCODING = 'utf8';
@@ -86,7 +87,6 @@ const GATE_WORKTREE_LEAF = 'tree';
 const EMPTY_INPUT = '';
 const EXIT_USAGE = 2;
 const EXIT_GATE_FAILURE = 1;
-const GIT_BINARY = 'git';
 const GIT_WORKING_TREE_FLAG = '-C';
 const GIT_ROOT_ARGUMENTS = Object.freeze(['rev-parse', '--show-toplevel']);
 const GIT_RESET_ARGUMENTS = Object.freeze(
@@ -126,8 +126,7 @@ function usage() {
 }
 
 function repoRoot() {
-  const output = execFileSync(
-    GIT_BINARY,
+  const output = execGit(
     GIT_ROOT_ARGUMENTS,
     {encoding: TEXT_ENCODING},
   );
@@ -151,8 +150,7 @@ function materializeTreeUnderTest(root, ref, worktreePath = undefined) {
     return snapshot;
   }
   try {
-    execFileSync(
-      GIT_BINARY,
+    execGit(
       [GIT_WORKING_TREE_FLAG, snapshot, ...GIT_RESET_ARGUMENTS, ref],
       {encoding: TEXT_ENCODING});
     // reset --hard restores tracked files to the ref but leaves the
@@ -160,8 +158,7 @@ function materializeTreeUnderTest(root, ref, worktreePath = undefined) {
     // exactly the concurrent-session in-flight files this --ref mode exists
     // to exclude ("must neither dilute nor false-fail this push"). Clean
     // them, keeping the shared node_modules symlink the runners need.
-    execFileSync(
-      GIT_BINARY,
+    execGit(
       [GIT_WORKING_TREE_FLAG, snapshot, ...GIT_CLEAN_ARGUMENTS],
       {encoding: TEXT_ENCODING});
   } catch (error) {
@@ -211,7 +208,7 @@ function runCorpusGates(worktreePath) {
 // points at, and a symbolic name (HEAD) resolves to its sha, so the exported
 // identity is always the checkout's HEAD.
 function peelToCommit(root, sha) {
-  return stringTrim(execFileSync(GIT_BINARY,
+  return stringTrim(execGit(
     [GIT_WORKING_TREE_FLAG, root, ...GIT_PEEL_ARGUMENTS,
       `${sha}${COMMIT_PEEL_SUFFIX}`],
     {encoding: TEXT_ENCODING}));
@@ -221,7 +218,7 @@ function peelToCommit(root, sha) {
 // tree is copied, so a file the pushed .gitignore ignores cannot leak in.
 function checkoutExactCommit(root, commit) {
   const worktreePath = gateWorktreePath(root);
-  execFileSync(GIT_BINARY,
+  execGit(
     [GIT_WORKING_TREE_FLAG, root, ...GIT_WORKTREE_ADD_ARGUMENTS,
       worktreePath, commit],
     {encoding: TEXT_ENCODING});
@@ -287,7 +284,7 @@ function gateExactSha(root, {sha: requestedSha, refLinesFile, command}) {
       return EXIT_GATE_FAILURE;
     }
     for (const link of links) fs.unlinkSync(link.link);
-    const status = stringTrim(execFileSync(GIT_BINARY,
+    const status = stringTrim(execGit(
       [GIT_WORKING_TREE_FLAG, worktreePath, ...GIT_STATUS_ARGUMENTS],
       {encoding: TEXT_ENCODING}));
     if (status.length > 0) {

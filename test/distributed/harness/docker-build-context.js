@@ -217,6 +217,19 @@ function readDockerfile(contextPath, dockerfile) {
 }
 
 /**
+ * The context roots the build reads: the Dockerfile and every COPY source
+ * (a directory root, not its walked files), from the same parse as
+ * buildImageContext. Certification limits its checkout check to them.
+ * @param {string} contextPath - Build context directory.
+ * @param {string} dockerfile - Dockerfile path relative to the context.
+ * @return {Array<string>} Sorted, distinct, context-relative.
+ */
+function dockerfileContextRoots(contextPath, dockerfile) {
+  return Array.from(new Set([dockerfile, ...dockerfileContextSources(
+    readDockerfile(contextPath, dockerfile))])).sort();
+}
+
+/**
  * @param {string} contextPath - Build context directory.
  * @param {string} dockerfile - Dockerfile path relative to the context.
  * @return {{context: string, src: Array<string>}}
@@ -241,4 +254,5 @@ export {
   DOCKERFILE_CONTEXT_CONSTRUCT,
   DockerfileContextUnsupportedError,
   buildImageContext,
+  dockerfileContextRoots,
 };

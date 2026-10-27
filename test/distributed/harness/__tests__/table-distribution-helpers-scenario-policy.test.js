@@ -13,6 +13,9 @@ const EXPECTED_DEFAULT_TABLE_POLICIES = Object.freeze({
   mergeTrafficThreshold: 1,
 });
 const TEST_POLICY_APPLY_TIMEOUT_MS = 60000;
+const OWNER_APPLIED = Object.freeze({success: true, outcome: 'applied'});
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
 const TEST_POLICY_REMAINING_TIMEOUT_MS = 3;
 const TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS = 9;
 
@@ -52,11 +55,16 @@ test('table-distribution-helpers split policy precondition fails fast when ' +
   );
 });
 
-test('table-distribution-helpers keeps table policy mutation on the ' +
-  'canonical table_id write path', async () => {
+test('table-distribution-helpers writes table policy through its owner by ' +
+  'table_id and never with SQL', async () => {
   const sqlCalls = [];
+  const ownerWrites = [];
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy(tableId, policy) {
+      ownerWrites.push({tableId, policy});
+      return OWNER_APPLIED;
+    },
     async queryWithTimeout(sql) {
       sqlCalls.push(sql);
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
@@ -72,27 +80,11 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
           rows: [{partition_id: 'tbl-benchmark-events-1-p1'}],
         };
       }
-      if (sql.includes('FROM services')) {
+      if (sql.includes('SELECT table_policies FROM tables')) {
         return {
-          rows: [{
-            partition_id: 'tbl-benchmark-events-1-p1',
-            node_id: 'seed-1',
-            raft_role: 'leader',
-            status: 'active',
-          }],
-        };
-      }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        return {changes: 0};
-      }
-      if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
-        return {
-          rows: [{table_policies: '{}'}],
-        };
-      }
-      if (sql.includes('SELECT table_policies FROM tables WHERE table_id')) {
-        return {
-          rows: [{table_policies: '{}'}],
+          rows: [{table_policies: JSON.stringify(
+            EXPECTED_DEFAULT_TABLE_POLICIES,
+          )}],
         };
       }
       return {rows: []};
@@ -103,24 +95,56 @@ test('table-distribution-helpers keeps table policy mutation on the ' +
     tableName: 'benchmark_events',
   });
 
-  assert.equal(preparation.tablePoliciesApplied, false);
+  assert.equal(preparation.tablePoliciesApplyWarning, undefined);
+  assert.ok(ownerWrites.length >= 1, 'the policy owner is invoked');
+  assert.ok(arrayEvery(ownerWrites, (write) =>
+    write.tableId === 'tbl-benchmark-events-1'),
+  'every owner write names the canonical table_id');
+  assert.deepEqual(ownerWrites[0].policy, EXPECTED_DEFAULT_TABLE_POLICIES);
   assert.equal(
-    preparation.tablePoliciesApplyWarning,
-    'sql_system_table_update_noop_detected',
-  );
-  assert.equal(
-    sqlCalls.filter((sql) =>
-      sql.includes('UPDATE tables SET table_policies') &&
-      sql.includes('WHERE table_name')).length,
+    arrayFilter(sqlCalls, (sql) => /^\s*(UPDATE|INSERT|DELETE)\b.*\btables\b/i
+      .test(sql)).length,
     0,
-    'policy preparation must not retry table policy mutation by table_name',
+    'policy preparation issues no system-table SQL write',
   );
-  assert.ok(
-    sqlCalls.some((sql) =>
-      sql.includes('UPDATE tables SET table_policies') &&
-      sql.includes('WHERE table_id')),
-    'policy preparation must still issue the canonical table_id update',
-  );
+});
+
+test('table-distribution-helpers ends policy preparation on a typed owner ' +
+  'refusal', async () => {
+  let ownerCalls = 0;
+  const seedNode = {
+    id: 'seed-1',
+    async updateTablePolicy() {
+      ownerCalls += 1;
+      return {
+        success: false,
+        outcome: 'refused',
+        errorCode: 'TABLE_POLICY_INVALID',
+        error: 'Invalid policy',
+      };
+    },
+    async queryWithTimeout(sql) {
+      if (sql.includes('SELECT table_id FROM tables WHERE table_name')) {
+        return {rows: [{table_id: 'tbl-benchmark-events-refused'}]};
+      }
+      if (sql.includes('FROM partitions WHERE table_id')) {
+        return {rows: [{partition_id: 'tbl-benchmark-events-refused-p1'}]};
+      }
+      return {rows: []};
+    },
+  };
+
+  const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: 'benchmark_events',
+  });
+
+  assert.equal(ownerCalls, 1, 'a refusal is not retried');
+  assert.equal(preparation.tablePoliciesApplied, false);
+  assert.equal(preparation.tablePoliciesApplyWarning,
+    'table_policy_owner_refused:TABLE_POLICY_INVALID');
+  assert.throws(() => assertSplitPolicyPrecondition(preparation, {
+    scenarioName: 'seven-node-load-during-partitioning',
+  }), /table_policy_owner_refused:TABLE_POLICY_INVALID/);
 });
 
 test('table-distribution-helpers can prepare table policies once the ' +
@@ -129,6 +153,9 @@ async () => {
   let serviceQueryCount = 0;
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy() {
+      return OWNER_APPLIED;
+    },
     async queryWithTimeout(sql) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         return {rows: []};
@@ -146,9 +173,6 @@ async () => {
       if (sql.includes('FROM services')) {
         serviceQueryCount += 1;
         return {rows: []};
-      }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        return {changes: 1};
       }
       if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
         return {
@@ -195,6 +219,9 @@ test('table-distribution-helpers repairs table policy visibility from ' +
   };
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy() {
+      return OWNER_APPLIED;
+    },
     async queryWithTimeout(sql) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         return {rows: []};
@@ -218,9 +245,6 @@ test('table-distribution-helpers repairs table policy visibility from ' +
             status: 'active',
           }],
         };
-      }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        return {changes: 1};
       }
       if (sql.includes('control_snapshot_local(true)')) {
         repairCount += 1;
@@ -268,6 +292,11 @@ test('table-distribution-helpers bounds policy read-back by the remaining ' +
   try {
     const seedNode = {
       id: 'seed-1',
+      async updateTablePolicy() {
+        fakeNow =
+          TEST_POLICY_APPLY_TIMEOUT_MS - TEST_POLICY_REMAINING_TIMEOUT_MS;
+        return OWNER_APPLIED;
+      },
       async queryWithTimeout(sql, _params, options = {}) {
         if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
           return {rows: []};
@@ -294,11 +323,6 @@ test('table-distribution-helpers bounds policy read-back by the remaining ' +
             }],
           };
         }
-        if (sql.includes('UPDATE tables SET table_policies')) {
-          fakeNow =
-            TEST_POLICY_APPLY_TIMEOUT_MS - TEST_POLICY_REMAINING_TIMEOUT_MS;
-          return {changes: 0};
-        }
         if (sql.includes('control_snapshot')) {
           repairCount += 1;
           return {rows: []};
@@ -312,16 +336,14 @@ test('table-distribution-helpers bounds policy read-back by the remaining ' +
       },
     };
 
-    let thrownError = null;
-    try {
-      await prepareBenchmarkPartitioningTable(seedNode, {
-        tableName: 'benchmark_events',
-      });
-    } catch (error) {
-      thrownError = error;
-    }
+    // The owner applied the write; a read-back that never confirms it
+    // within the deadline is reported, not retried past the deadline.
+    const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+    });
 
-    assert(thrownError instanceof Error);
+    assert.equal(preparation.tablePoliciesApplyWarning,
+      'table_policy_visibility_timeout_assumed_applied');
     assert.deepEqual(policyReadTimeouts, [TEST_POLICY_REMAINING_TIMEOUT_MS]);
     assert.equal(repairCount, 0);
   } finally {
@@ -338,6 +360,11 @@ test('table-distribution-helpers bounds policy visibility repair by the ' +
   try {
     const seedNode = {
       id: 'seed-1',
+      async updateTablePolicy() {
+        fakeNow = TEST_POLICY_APPLY_TIMEOUT_MS -
+          TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS;
+        return OWNER_APPLIED;
+      },
       async queryWithTimeout(sql, _params, options = {}) {
         if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
           return {rows: []};
@@ -364,11 +391,6 @@ test('table-distribution-helpers bounds policy visibility repair by the ' +
             }],
           };
         }
-        if (sql.includes('UPDATE tables SET table_policies')) {
-          fakeNow = TEST_POLICY_APPLY_TIMEOUT_MS -
-            TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS;
-          return {changes: 0};
-        }
         if (sql.includes('SELECT table_policies FROM tables')) {
           return {rows: [{table_policies: '{}'}]};
         }
@@ -383,16 +405,14 @@ test('table-distribution-helpers bounds policy visibility repair by the ' +
       },
     };
 
-    let thrownError = null;
-    try {
-      await prepareBenchmarkPartitioningTable(seedNode, {
-        tableName: 'benchmark_events',
-      });
-    } catch (error) {
-      thrownError = error;
-    }
+    // The owner applied the write; a read-back that never confirms it
+    // within the deadline is reported, not retried past the deadline.
+    const preparation = await prepareBenchmarkPartitioningTable(seedNode, {
+      tableName: 'benchmark_events',
+    });
 
-    assert(thrownError instanceof Error);
+    assert.equal(preparation.tablePoliciesApplyWarning,
+      'table_policy_visibility_timeout_assumed_applied');
     assert.ok(repairTimeouts.length >= 1);
     assert.ok(repairTimeouts.every((timeoutMs) =>
       timeoutMs <= TEST_POLICY_REPAIR_REMAINING_TIMEOUT_MS));
@@ -401,15 +421,27 @@ test('table-distribution-helpers bounds policy visibility repair by the ' +
   }
 });
 
-test('table-distribution-helpers preserves deferred policy visibility ' +
-  'without forced repair', async () => {
-  let repairCount = 0;
+test('table-distribution-helpers retries a not-ready policy owner and ' +
+  'keeps its retry-after', async () => {
+  let ownerCalls = 0;
   let policyLookupCount = 0;
   const expectedPolicies = {
     splitStorageThreshold: 2048,
   };
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy() {
+      ownerCalls += 1;
+      if (ownerCalls === 1) {
+        return {
+          success: false,
+          outcome: 'owner_not_ready',
+          errorCode: 'ADMIN_OWNER_NOT_READY',
+          retryAfterMs: 7,
+        };
+      }
+      return OWNER_APPLIED;
+    },
     async queryWithTimeout(sql) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         return {rows: []};
@@ -434,15 +466,7 @@ test('table-distribution-helpers preserves deferred policy visibility ' +
           }],
         };
       }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        return {
-          changes: 1,
-          visibilityState: 'deferred_by_pressure',
-          retryAfterMs: 7,
-        };
-      }
       if (sql.includes('control_snapshot_local(true)')) {
-        repairCount += 1;
         return {rows: [{scope: 'local'}]};
       }
       if (sql.includes('SELECT table_policies FROM tables WHERE table_name')) {
@@ -474,12 +498,8 @@ test('table-distribution-helpers preserves deferred policy visibility ' +
     tablePolicies: expectedPolicies,
   });
 
-  assert.equal(repairCount, 0);
+  assert.equal(ownerCalls >= 2, true, 'the not-ready owner is retried');
   assert.equal(preparation.tablePoliciesApplyWarning, undefined);
-  assert.equal(
-    preparation.tablePoliciesApplyVisibilityState,
-    'deferred_by_pressure',
-  );
   assert.equal(
     preparation.tablePoliciesApplyVisibilityRetryAfterMs,
     7,
@@ -497,6 +517,26 @@ test('table-distribution-helpers preserves authority-establishment deferred ' +
   };
   const seedNode = {
     id: 'seed-1',
+    async updateTablePolicy() {
+      applyAttemptCount += 1;
+      if (applyAttemptCount === 1) {
+        const error = new Error('Message timeout');
+        error.code = 'QUERY_TIMEOUT';
+        error.retryAfterMs = 1;
+        error.outcome = 'deferred';
+        error.reasonCode = expectedReasonCode;
+        error.reasonCodes = [expectedReasonCode];
+        error.failedDimensions = ['publishedConvergencePending'];
+        error.runtimeAuthority = {
+          state: 'establishing',
+          visibility: {
+            state: 'pending_publication',
+          },
+        };
+        throw error;
+      }
+      return OWNER_APPLIED;
+    },
     async queryWithTimeout(sql) {
       if (sql.includes('CREATE TABLE IF NOT EXISTS')) {
         return {rows: []};
@@ -520,26 +560,6 @@ test('table-distribution-helpers preserves authority-establishment deferred ' +
             status: 'active',
           }],
         };
-      }
-      if (sql.includes('UPDATE tables SET table_policies')) {
-        applyAttemptCount += 1;
-        if (applyAttemptCount === 1) {
-          const error = new Error('Message timeout');
-          error.code = 'QUERY_TIMEOUT';
-          error.retryAfterMs = 1;
-          error.outcome = 'deferred';
-          error.reasonCode = expectedReasonCode;
-          error.reasonCodes = [expectedReasonCode];
-          error.failedDimensions = ['publishedConvergencePending'];
-          error.runtimeAuthority = {
-            state: 'establishing',
-            visibility: {
-              state: 'pending_publication',
-            },
-          };
-          throw error;
-        }
-        return {changes: 1};
       }
       if (sql.includes('control_snapshot_local(true)')) {
         repairCount += 1;

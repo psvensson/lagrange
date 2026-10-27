@@ -1,0 +1,93 @@
+# Bounded WIP falsifier: same real native test bytes on old and candidate,
+# on the same hosted VM. This proves only shared-runtime admitted-wake recovery.
+name: rs-raft-native-replacement-source-pair
+on:
+  push:
+    branches: [continue/rs-raft-cloud-native-inbound-owned-timer-v1-20261014]
+    paths:
+      - .github/workflows/rs-raft-native-replacement-source-pair.yml
+      - src/raft/raft-rs-runtime-owner.js
+      - src/raft/raft-rs-runtime-owner-constants.js
+      - test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-native-replacement-pair
+  cancel-in-progress: false
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Same-host WIP V2 replacement red and positive
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT="$GITHUB_WORKSPACE/test-output/native-replacement-pair"
+          mkdir -p "$OUT"
+          OLD=98d146fb2018e43e9c4603d1db1ec127b2d885b3
+          TEST=test/raft/raft-rs-backend/inbound-drain-owned-timer.test.js
+          CASE='a replacement-time native drain preserves the admitted follower debt'
+          REQUIRED='after shared recovery, exact accepted inbound debt must reenter native core'
+          printf '%s\n' "$GITHUB_SHA" > "$OUT/candidate-sha.txt"
+          printf '%s\n' "$OLD" > "$OUT/negative-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/candidate-tree.txt"
+          git rev-parse "$OLD^{tree}" > "$OUT/negative-tree.txt"
+          git cat-file -e "$OLD^{commit}" || exit 1
+          NEG="$RUNNER_TEMP/rs-raft-native-replacement-negative"
+          git worktree add --detach "$NEG" "$OLD" > "$OUT/negative-worktree.log" 2>&1 || exit 1
+          cp "$TEST" "$NEG/$TEST" || exit 1
+          cmp "$TEST" "$NEG/$TEST" || exit 1
+          sha256sum "$TEST" > "$OUT/candidate-test-sha256.txt"
+          (cd "$NEG" && sha256sum "$TEST") > "$OUT/negative-test-sha256.txt"
+          git diff --name-only "$OLD" "$GITHUB_SHA" -- src > "$OUT/source-changes.txt"
+          cat "$OUT/source-changes.txt"
+          test "$(wc -l < "$OUT/source-changes.txt")" -eq 2 || exit 1
+          grep -Fx 'src/raft/raft-rs-runtime-owner.js' "$OUT/source-changes.txt" || exit 1
+          grep -Fx 'src/raft/raft-rs-runtime-owner-constants.js' "$OUT/source-changes.txt" || exit 1
+          npm ci > "$OUT/candidate-install.log" 2>&1
+          ci=$?
+          (cd "$NEG" && npm ci) > "$OUT/negative-install.log" 2>&1
+          ni=$?
+          printf '%s\n' "$ci" > "$OUT/candidate-install.status"
+          printf '%s\n' "$ni" > "$OUT/negative-install.status"
+          if test "$ci" -ne 0 || test "$ni" -ne 0; then
+            echo 'Installation failed: no result is a semantic witness'
+            exit 1
+          fi
+          (cd "$NEG" && node --test --test-name-pattern="$CASE" "$TEST") > "$OUT/negative.tap" 2>&1
+          red=$?
+          node --test --test-name-pattern="$CASE" "$TEST" > "$OUT/candidate.tap" 2>&1
+          green=$?
+          printf '%s\n' "$red" > "$OUT/negative.status"
+          printf '%s\n' "$green" > "$OUT/candidate.status"
+          echo "same-VM older-source=$OLD exit=$red candidate=$GITHUB_SHA exit=$green"
+          tail -n 57 "$OUT/negative.tap"
+          tail -n 42 "$OUT/candidate.tap"
+          test "$red" -ne 0 || exit 1
+          grep -F "$REQUIRED" "$OUT/negative.tap" || exit 1
+          grep -F "code: 'ERR_ASSERTION'" "$OUT/negative.tap" || exit 1
+          grep -F 'actual: false' "$OUT/negative.tap" || exit 1
+          grep -F 'expected: true' "$OUT/negative.tap" || exit 1
+          test "$green" -eq 0 || exit 1
+          grep -F "ok 1 - $CASE" "$OUT/candidate.tap" || exit 1
+      - name: Preserve all exact source/TAP and custody artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-native-replacement-pair-${{ github.sha }}
+          path: test-output/native-replacement-pair/
+          retention-days: 14
+          if-no-files-found: warn

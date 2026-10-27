@@ -1,5 +1,14 @@
+import {retireNodeTransportHandler} from '../node/replica-transport-handler-identity.js';
 import {REPLICA_DISPATCH_SERVICE_SHARED} from './replica-dispatch-service-shared.js';
 import {ReplicaDispatchReadinessCapture} from './replica-dispatch-readiness-capture.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from
+  './control-plane-system-table-gateway-constants.js';
+import {SERVICE_INSTANCE_OUTCOME as LEGACY_AUTHORITY} from
+  '../constants/service-instance.js';
+import {UNIFIED_SERVICE_TYPE, WORKFLOW_STEP} from '../constants/index.js';
+import {OperationType} from '../rebalancer/replica-status.js';
+import {isIncompleteOperationRowStep} from
+  '../rebalancer/replica-operation-step-policy.js';
 
 const {
   CONTROL_PLANE_EVENT,
@@ -30,6 +39,47 @@ function unregisterMessageGroupHandlers(mgService, handlers) {
 }
 
 class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
+  /**
+   * A pre-canonical target's services row has no provable entity binding.
+   * Ask the existing operation repository's strict authoritative owner,
+   * never local cache or the caller's claimed entity, for REMOVE permission.
+   * No response from this read grants new CREATE authority.
+   */
+  async authorizeLegacyRuntimeRemoval({operationId, entityId, replicaId, nodeId} = {}) {
+    const observation = await this.readLegacyRemovalObservation(operationId);
+    const operation = observation?.operation;
+    if (!operation) {
+      return {outcome: observation?.deferredOutcome ?
+        LEGACY_AUTHORITY.UNAVAILABLE : LEGACY_AUTHORITY.CONTENT_CONFLICT};
+    }
+    const matches = operation.operationId === operationId &&
+      operation.type === OperationType.REMOVE &&
+      operation.entityType === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
+      operation.entityId === entityId &&
+      operation.replicaId === replicaId &&
+      operation.targetNodeId === nodeId &&
+      operation.workflowStep !== WORKFLOW_STEP.PENDING &&
+      isIncompleteOperationRowStep(operation.type, operation.workflowStep);
+    return {outcome: matches ? LEGACY_AUTHORITY.ADMITTED :
+      LEGACY_AUTHORITY.CONTENT_CONFLICT};
+  }
+
+  async readLegacyRemovalObservation(operationId) {
+    const repository = this.rebalanceCoordinator?.repository;
+    if (typeof repository?.queryAuthoritativeOperationVisibilityObservation !== 'function') {
+      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+    }
+    try {
+      return await repository.queryAuthoritativeOperationVisibilityObservation(
+        operationId, {
+          authoritativeReadMode: CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+          requireAbsenceConfirmation: true,
+        });
+    } catch {
+      return {deferredOutcome: LEGACY_AUTHORITY.UNAVAILABLE};
+    }
+  }
+
   isControlMessage(payload) {
     return getControlPlaneMessageCompletionKind(payload?.type) !== null;
   }
@@ -38,11 +88,10 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
    * Stop the dispatch service.
    */
   stop() {
-    if (this.directDispatchServiceAddress &&
-        this.messageRouter &&
-        typeof this.messageRouter.unregister === 'function') {
-      this.messageRouter.unregister(this.directDispatchServiceAddress);
-    }
+    // Only this service's exact registration is retired (finding F2).
+    retireNodeTransportHandler(this.logger, {transport: this.messageRouter,
+      address: this.directDispatchServiceAddress,
+      handler: this.directDispatchServiceHandler});
     this.directDispatchServiceHandler = null;
     this.directDispatchServiceAddress = null;
 

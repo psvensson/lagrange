@@ -21,15 +21,10 @@ import path from 'node:path';
 import {test} from 'node:test';
 import {fileURLToPath} from 'node:url';
 
-import Database from 'better-sqlite3';
-
-import {LiferaftProvider} from '../../../src/raft/liferaft-provider.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
 } from '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {RUNTIME_REASON} from
@@ -37,7 +32,6 @@ import {RUNTIME_REASON} from
 import {
   TRANSFER_REASON,
   TransferLeadershipDriver,
-  UNSUPPORTED_BACKEND_REASON,
   assertAccepted,
   assertLeadershipHeld,
   assertRefused,
@@ -500,43 +494,5 @@ test('W3 an open user transaction defers the request, retryable, without ' +
     assertWritable(driver, A, 'after-transaction');
   } finally {
     driver.dispose();
-  }
-});
-
-// The retired backend's own node, built through its provider seam.
-function liferaftRequest(database) {
-  return {
-    [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: 'w3-liferaft',
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: A,
-    [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: A,
-    [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: [A],
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_LOG]: {end: () => undefined},
-    [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: database,
-    [RAFT_PARTITION_NODE_REQUEST.TIMING]: {heartbeatMs: 60000,
-      electionMinMs: 60000, electionMaxMs: 120000},
-    [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: {},
-    [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: true,
-    [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: async () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (peer) => peer,
-    [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: () => undefined,
-    [RAFT_PARTITION_NODE_REQUEST.APPLY_TRANSACTION_ROLLED_BACK]: () =>
-      undefined,
-  };
-}
-
-test('W3 the Liferaft partition port refuses a transfer with its typed ' +
-  'unsupported-backend answer, never a no-op', async () => {
-  const database = new Database(':memory:');
-  const port = new LiferaftProvider().createPartitionPort(
-    liferaftRequest(database));
-  try {
-    for (const request of [namedSuccessor(A), mostCaughtUp()]) {
-      assertRefused(await port.transferLeadership(request),
-        UNSUPPORTED_BACKEND_REASON);
-    }
-  } finally {
-    port.close();
-    database.close();
   }
 });

@@ -5,9 +5,43 @@ import {
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_STATE,
 } from './replica-state-machine-constants.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {getReplicaRevision} from './replica-state-machine-serialization.js';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
+const REPLICA_STATE_TIMEOUT_WAIT = Object.freeze({
+  wait: 'REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS',
+  awaited: 'replica left its transient lifecycle state',
+});
+
+/**
+ * One replica stayed in a transient lifecycle state past its bound: one
+ * wait_bound_spent ERROR per (replica, observed state). A REMOVING replica
+ * is re-armed and re-fires every bound; the reporter folds those repeats
+ * until its observed state changes.
+ * @param {ReplicaStateMachine} stateMachine - Owning state machine.
+ * @param {Object} timedOut - The timed-out replica record.
+ * @return {void}
+ */
+function reportReplicaStateTimeoutSpent(stateMachine, timedOut) {
+  reportWaitBoundSpent(stateMachine.logger, {
+    ...REPLICA_STATE_TIMEOUT_WAIT,
+    boundMs: timedOut.timeout,
+    elapsedMs: timedOut.elapsed,
+    lastObserved: {
+      state: timedOut.state,
+      revision: timedOut.revision ?? null,
+      previousState: timedOut.stateSnapshot?.previousState ?? null,
+      triggerReason: timedOut.stateSnapshot?.triggerReason ?? null,
+    },
+    scope: {
+      nodeId: stateMachine.nodeId,
+      partitionId: timedOut.partitionId ?? null,
+      replicaId: timedOut.replicaId,
+    },
+    subject: timedOut.replicaId,
+  });
+}
 
 /**
  * Start the timeout checker interval.
@@ -95,13 +129,7 @@ function checkTimeouts(stateMachine) {
   }
 
   for (const timedOut of timedOutReplicas) {
-    stateMachine.logger.warn(REPLICA_STATE_MACHINE_LOG_MSG.OPERATION_TIMEOUT, {
-      replicaId: timedOut.replicaId,
-      state: timedOut.state,
-      elapsed: timedOut.elapsed,
-      timeout: timedOut.timeout,
-      nodeId: stateMachine.nodeId,
-    });
+    reportReplicaStateTimeoutSpent(stateMachine, timedOut);
 
     stateMachine.timeoutCount += REPLICA_STATE_MACHINE_NUM.ONE;
 

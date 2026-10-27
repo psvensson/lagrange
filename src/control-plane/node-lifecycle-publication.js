@@ -12,6 +12,7 @@ import {
 } from '../node/node-readiness-policy.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
   getControlPlaneNodeStatePublicationProfile,
 } from './control-plane-constants.js';
 import {normalizeKnownNodeBootIncarnation} from
@@ -534,9 +535,24 @@ class NodeLifecyclePublication {
     };
   }
 
+  // The READY promotion - the write that moves a non-READY row to READY - is
+  // a READY transition whatever cadence the heartbeat asked for: a joiner
+  // becomes placement-eligible on this write, and the spread that waits on
+  // that eligibility must never wait behind the background
+  // published-convergence admission (V3a, owner decision 2026-10-04). Writes
+  // on a row already READY (lease renewals, telemetry) keep the requested
+  // cadence.
+  resolveWritePublicationMode(plan) {
+    const promotesToReady = plan.nextState === STATE.READY &&
+      readColumn(plan.source, COLUMN.CONNECTION_STATE) !== STATE.READY;
+    return promotesToReady ?
+      CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE.READY_TRANSITION :
+      plan.request.publicationMode;
+  }
+
   buildWriteOptions(plan) {
     const profile = getControlPlaneNodeStatePublicationProfile({
-      publicationMode: plan.request.publicationMode,
+      publicationMode: this.resolveWritePublicationMode(plan),
       heartbeatOnly: plan.request.heartbeatOnly === true,
       state: plan.nextState,
     });

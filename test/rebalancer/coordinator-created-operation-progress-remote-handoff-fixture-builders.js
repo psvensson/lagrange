@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
@@ -507,7 +508,7 @@ export function createRemotePriorityVisibilityCoordinator() {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     tablePolicyService: {
@@ -671,7 +672,7 @@ export function createRecentIntentPolicyCoordinator() {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true};
+        return buildDeliveryEnvelope({acknowledged: true});
       },
     },
     tablePolicyService: {

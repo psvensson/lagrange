@@ -38,9 +38,6 @@ export function registerFailureBundlePriorityRecoveryClosureWitnessTests(context
         'priority-recovery-closure-evidence-report.json',
       );
       const CLOSURE_EVIDENCE_PARTITION_ID = 'control_plane_publications-p1';
-      const CLOSURE_EVIDENCE_RECORD_ID = 'CL-003';
-      const CLOSURE_EVIDENCE_WITNESS_CLASS =
-        'publication_converged_priority_spread_pending';
       const writer = new ReportWriter(CLOSURE_EVIDENCE_REPORT_PATH);
       writer.addResult('node-join-under-load', {
         passed: false,
@@ -136,53 +133,31 @@ export function registerFailureBundlePriorityRecoveryClosureWitnessTests(context
           .priorityPartitionSummary.blockedPartitionCount,
         1,
       );
+      // SUPERSEDED (owner decision 2026-10-04, "delete the second
+      // authority"). Before: the merged decision snapshots kept the old
+      // stale-publication witness (CL-003, its class) and it cleared the
+      // publication's spread gap (not pending, no reasons, satisfied summary,
+      // zero blocked). The merge still preserves a closure witness for the
+      // decision snapshots - re-derived by the runtime owner into its one
+      // non-pending state, naming no record - and the census gap the
+      // publication carries stays pending.
       assert.equal(
         scenarioBundle.controlPlane.priorityRecoveryDecisionSnapshots
           .closureWitness.state,
-        'closure_satisfied_stale_publication',
+        'closure_satisfied_fresh',
       );
       assert.equal(
         scenarioBundle.controlPlane.priorityRecoveryDecisionSnapshots
-          .closureWitness.closureRecordId,
-        CLOSURE_EVIDENCE_RECORD_ID,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.closureRecordId,
-        CLOSURE_EVIDENCE_RECORD_ID,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.closureWitnessClass,
-        CLOSURE_EVIDENCE_WITNESS_CLASS,
+          .closureWitness.closureRecordId ?? null,
+        null,
       );
       assert.equal(
         scenarioBundle.publicationConvergence.prioritySpreadPending,
-        false,
-      );
-      assert.deepEqual(
-        scenarioBundle.publicationConvergence.priorityRecoveryReasonCodes,
-        [],
-      );
-      assert.deepEqual(
-        scenarioBundle.publicationConvergence.publicationConvergenceGateReasons,
-        [],
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.priorityPartitionSummary.satisfied,
         true,
       );
       assert.equal(
-        scenarioBundle.publicationConvergence.priorityPartitionSummary
-          .blockedPartitionCount,
-        0,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence.priorityRecoveryBlockedPartitionCount,
-        0,
-      );
-      assert.equal(
-        scenarioBundle.publicationConvergence
-          .priorityRecoveryUnresolvedPartitionCount,
-        0,
+        scenarioBundle.publicationConvergence.priorityPartitionSummary.satisfied,
+        false,
       );
     },
   );

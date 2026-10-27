@@ -1,0 +1,18 @@
+[
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-baseline-cache-reuse.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-benchmark-provisioning-and-schema-watermark.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-degraded-fallback-load-admission.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-canonical-readiness-admission.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-fanout-and-strict-parity.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-retry-and-recovery.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-schema-readiness-admission-gating.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-discovery-strict-fanout-and-admin-readiness.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-fallback-policy-and-admission-diagnostics.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-node-admission-and-overload-policy.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-gate-and-metadata-fallback.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-discovery-and-heartbeat-freshness.test.js",
+  "test/distributed/harness/__tests__/postgres-baseline-comparison-strict-parity-and-cdc-telemetry.test.js"
+]

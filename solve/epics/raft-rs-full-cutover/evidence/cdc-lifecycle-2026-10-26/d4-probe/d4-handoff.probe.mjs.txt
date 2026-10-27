@@ -1,0 +1,151 @@
+// D4 probe (read-only design review): the hydration -> live CDC handoff on real
+// PartitionService owners (controllable consensus port fixture).
+import {resetFixtureSingletons, clearFixtureSingletons, startLeader, applyCommitted,
+  settleTicks, shutdownAll, durableAppliedIndex} from '../test/test-helpers/participant-transaction-fixture.js';
+import {countCdcObligations} from '../src/partition/partition-cdc-obligation-ledger.js';
+import {PARTITION_CDC_COMMAND, PARTITION_CDC_OBLIGATION_BOUND as BOUND} from '../src/partition/partition-cdc-obligation-constants.js';
+import {CDC_EVENT_SLIDING_WINDOW_CAPACITY} from '../src/constants/cdc-lifecycle-constants.js';
+import {PARTITION_SERVICE_OPERATION as OP} from '../src/partition/partition-service-constants.js';
+import {buildCommittedCdcOutcome} from '../src/cdc/cdc-delivery-outcome.js';
+import {VirtualTimeSource} from '../src/time/time-source.js';
+
+let CLOCK = null;
+const stmt = (entryId, sql, params) => ({type: OP.QUERY, entryId, sql, params,
+  timestamp: CLOCK.now().toString(), proposedBy: 'probe-elsewhere', proposedAt: 0});
+const upsert = (tag, i) => stmt(`${tag}-${i}`,
+  'INSERT OR REPLACE INTO test_table (id, value) VALUES (?, ?)', [`r-${i % 50}`, `${tag}-${i}`]);
+const distinct = (tag, i) => stmt(`${tag}-d-${i}`,
+  'INSERT OR REPLACE INTO test_table (id, value) VALUES (?, ?)', [`${tag}-${i}`, `v-${i}`]);
+const del = (tag, i) => stmt(`${tag}-del-${i}`, 'DELETE FROM test_table WHERE id = ?', [`r-${i}`]);
+const ack = (e) => buildCommittedCdcOutcome([e], 'mg-probe', {index: 1, term: 1});
+const isAck = (e) => e.type === PARTITION_CDC_COMMAND.DELIVERED;
+async function applyAcks(leader, proposed, seen) {
+  for (const c of proposed.filter(isAck)) {
+    if (seen.has(c.entryId)) continue; seen.add(c.entryId); applyCommitted(leader, c);
+  }
+  await settleTicks();
+}
+async function pump(ts, leader, proposed, seen, rounds = 30) {
+  for (let r = 0; r < rounds; r++) {
+    ts.advance(BOUND.ACK_FLUSH_DEADLINE_MS); await settleTicks(); await applyAcks(leader, proposed, seen);
+  }
+}
+// The hydration owner's read, as the seed does it (SELECT * on the local leader
+// replica), plus the position the same synchronous read could expose.
+function hydrationRead(leader) {
+  const rows = leader.db.prepare('SELECT * FROM test_table').all();
+  const appliedIndex = durableAppliedIndex(leader);
+  const ledgerMax = leader.db.prepare('SELECT MAX(log_index) AS m FROM _cdc_obligations').get().m;
+  return {rows, appliedIndex, ledgerMax};
+}
+function recorder() {
+  const got = [];
+  const fn = async (e) => { got.push({key: e.eventKey, logIndex: e.logIndex, replayOnly: e.replayOnly === true, operation: e.operation, data: e.data, oldData: e.oldData ?? e.previousData ?? null}); return ack(e); };
+  return {got, fn};
+}
+function ledgerAfter(db, H) {
+  return db.prepare('SELECT log_index, event_key, delivered FROM _cdc_obligations WHERE log_index > ? ORDER BY log_index, ordinal').all(H);
+}
+function materialize(imageRows, gotList, H) {
+  const view = new Map(imageRows.map((r) => [r.id, r.value]));
+  const ordered = [...new Map(gotList.filter((g) => g.logIndex > H).map((g) => [g.key, g])).values()]
+    .sort((a, b) => a.logIndex - b.logIndex);
+  for (const g of ordered) {
+    const id = g.data?.id ?? g.oldData?.id;
+    if (g.operation === 'DELETE') view.delete(id); else view.set(id, g.data?.value);
+  }
+  return view;
+}
+function effect(leader, imageRows, gotList, H) {
+  const truth = new Map(leader.db.prepare('SELECT * FROM test_table').all().map((r) => [r.id, r.value]));
+  const view = materialize(imageRows, gotList, H);
+  let wrong = 0; const keys = new Set([...truth.keys(), ...view.keys()]);
+  for (const k of keys) if (truth.get(k) !== view.get(k)) wrong++;
+  return {truthRows: truth.size, viewRows: view.size, rowsDiverging: wrong};
+}
+function verdict(gotList, ledgerRows) {
+  const seenKeys = new Set(gotList.map((g) => g.key));
+  const missing = ledgerRows.filter((r) => !seenKeys.has(r.event_key));
+  return {owedAfterH: ledgerRows.length, receivedAfterH: ledgerRows.length - missing.length,
+    missing: missing.length, firstMissingLogIndex: missing[0]?.log_index ?? null,
+    lastMissingLogIndex: missing.at(-1)?.log_index ?? null};
+}
+
+const out = {windowCapacityConstant: CDC_EVENT_SLIDING_WINDOW_CAPACITY};
+
+// Scenario: earlier subscribers (A..), a later subscriber B. Today's order:
+// B's hydration read at H, then M events commit and are acknowledged by the
+// earlier subscribers, then B subscribes (hydrate-before-subscribe).
+async function todaysOrder(label, earlierCount, M) {
+  resetFixtureSingletons();
+  const ts = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource: ts});
+  CLOCK = leader.hlcClock;
+  const seen = new Set();
+  const earlier = [];
+  for (let k = 0; k < earlierCount; k++) {
+    const r = recorder(); earlier.push(r);
+    await leader.subscribeToCDCWithHandshake(r.fn, {subscriberId: `A${k}`});
+  }
+  for (let i = 0; i < 20; i++) applyCommitted(leader, upsert('pre', i));
+  await settleTicks(); await pump(ts, leader, proposed, seen, 5);
+  const H = hydrationRead(leader);
+  for (let i = 0; i < M; i++) applyCommitted(leader, i === 0 ? del('gap', 3) : distinct('gap', i));
+  await settleTicks(); await pump(ts, leader, proposed, seen);
+  const ledgerBeforeB = countCdcObligations(leader.db);
+  const windowEntries = leader.cdcEventBuffer.getRecentEvents().length;
+  const B = recorder();
+  const hs = await leader.subscribeToCDCWithHandshake(B.fn, {subscriberId: 'B'});
+  await pump(ts, leader, proposed, seen, 5);
+  const rowsAfterH = ledgerAfter(leader.db, H.appliedIndex);
+  out[label] = {earlierSubscribers: earlierCount, eventsBetweenHydrationAndSubscribe: M,
+    hydrationPosition: {appliedIndex: H.appliedIndex, ledgerMaxLogIndex: H.ledgerMax, rows: H.rows.length},
+    ledgerBeforeB, windowEntriesAtHandshake: windowEntries,
+    handshakeB: {mode: hs.catchup.mode, slidingWindowEventsReplayed: hs.catchup.slidingWindowEventsReplayed},
+    bCalls: B.got.length, bReplayOnly: B.got.filter((g) => g.replayOnly).length,
+    bDuplicatesOfImage: B.got.filter((g) => g.logIndex <= H.appliedIndex).length,
+    gap: verdict(B.got, rowsAfterH), effectOnB: effect(leader, H.rows, B.got, H.appliedIndex), ledgerAfter: countCdcObligations(leader.db)};
+  await shutdownAll(leader); clearFixtureSingletons();
+}
+
+// Subscribe-before-hydrate: B registers first, then the hydration read at H'
+// on the leader, then M events; includes an event acknowledged by A but whose
+// CDC_DELIVERED has not committed (lane.pending) at B's registration.
+async function subscribeFirst(label, earlierCount, M) {
+  resetFixtureSingletons();
+  const ts = new VirtualTimeSource();
+  const {leader, proposed} = await startLeader({timeSource: ts});
+  CLOCK = leader.hlcClock;
+  const seen = new Set();
+  for (let k = 0; k < earlierCount; k++) {
+    await leader.subscribeToCDCWithHandshake(recorder().fn, {subscriberId: `A${k}`});
+  }
+  for (let i = 0; i < 20; i++) applyCommitted(leader, upsert('pre', i));
+  await settleTicks(); await pump(ts, leader, proposed, seen, 5);
+  // acknowledged-but-not-committed events at the registration instant
+  for (let i = 0; i < 7; i++) applyCommitted(leader, upsert('pend', i));
+  await settleTicks(); // A acknowledges, flush deadline not yet passed
+  const pendingAtRegistration = leader.cdcDelivery.getCdcObligationDiagnostics().pendingAcknowledgements;
+  const B = recorder();
+  const hs = await leader.subscribeToCDCWithHandshake(B.fn, {subscriberId: 'B'});
+  const H = hydrationRead(leader);           // read at or after registration, on the leader
+  for (let i = 0; i < M; i++) applyCommitted(leader, i === 0 ? del('live', 3) : distinct('live', i));
+  await settleTicks(); await pump(ts, leader, proposed, seen);
+  const rowsAfterH = ledgerAfter(leader.db, H.appliedIndex);
+  out[label] = {earlierSubscribers: earlierCount, eventsAfterHydration: M, pendingAtRegistration,
+    hydrationPosition: {appliedIndex: H.appliedIndex, ledgerMaxLogIndex: H.ledgerMax},
+    handshakeB: {mode: hs.catchup.mode, slidingWindowEventsReplayed: hs.catchup.slidingWindowEventsReplayed},
+    bCalls: B.got.length, bAtOrBelowH: B.got.filter((g) => g.logIndex <= H.appliedIndex).length,
+    gap: verdict(B.got, rowsAfterH), effectOnB: effect(leader, H.rows, B.got, H.appliedIndex),
+    sampleDeleteEvent: B.got.find((g) => g.operation === 'DELETE') ?? null,
+    ledgerAfter: countCdcObligations(leader.db)};
+  await shutdownAll(leader); clearFixtureSingletons();
+}
+
+await todaysOrder('T1_today_one_earlier_M600', 1, 600);
+await todaysOrder('T2_today_three_earlier_M200', 3, 200);
+await todaysOrder('T3_today_one_earlier_M100', 1, 100);
+await subscribeFirst('S1_subscribe_first_one_earlier_M600', 1, 600);
+await subscribeFirst('S2_subscribe_first_three_earlier_M600', 3, 600);
+console.log(JSON.stringify(out, null, 1));
+setTimeout(() => process.exit(0), 50).unref();

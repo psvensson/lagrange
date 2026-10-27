@@ -27,6 +27,7 @@
  *  - UNSAFE: a substantive denial (process_not_alive).
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_PARTICIPATION_DECISION,
@@ -289,10 +290,9 @@ function createWakeScenario(options) {
         if (payload?.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
           removals.push({target, replicaId: payload.replicaId});
         }
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
       async pingNode() {
         return true;

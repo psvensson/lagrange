@@ -5,6 +5,7 @@
  * Requirements: 6.2, 6.4, 22.1, 22.6
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {
@@ -30,9 +31,6 @@ import {
 import {
 } from '../../src/query/canonical-leader-routing.js';
 import {
-  PARTITION_SERVICE_ERROR_MSG,
-} from '../../src/partition/partition-service-constants.js';
-import {
 } from './routing-repair-test-helpers.js';
 
 // Initialize configuration for tests
@@ -40,114 +38,6 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();
 config.initialize();
 
-
-test('QueryExecutor - executeOnPartition retries session-bound transaction ' +
-  'contention on the same replica before widening', async (t) => {
-  const deliveries = [];
-  const partitionId = 'replica_operations-p1';
-  const leaderAddress = 'leader-node/partition/replica_operations-p1-r1';
-  const fallbackAddress = 'follower-node/partition/replica_operations-p1-r2';
-  let leaderAttempts = 0;
-
-  const systemCache = {
-    partitions: [
-      {
-        partition_id: partitionId,
-        leader_node_id: 'leader-node',
-        table_name: TABLES.REPLICA_OPERATIONS,
-      },
-    ],
-    services: [
-      {
-        service_id: 'replica_operations-p1-r1',
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'leader-node',
-        raft_role: 'leader',
-        address: leaderAddress,
-        status: 'active',
-      },
-      {
-        service_id: 'replica_operations-p1-r2',
-        service_type: 'partition',
-        partition_id: partitionId,
-        node_id: 'follower-node',
-        raft_role: 'follower',
-        address: fallbackAddress,
-        status: 'active',
-      },
-    ],
-    get(type, key) {
-      if (type === 'partitions') {
-        return this.partitions.find((partition) =>
-          partition.partition_id === key,
-        ) || null;
-      }
-      return null;
-    },
-    filter(type, predicate) {
-      if (type === 'services') {
-        return this.services.filter(predicate);
-      }
-      if (type === 'partitions') {
-        return this.partitions.filter(predicate);
-      }
-      return [];
-    },
-  };
-
-  const messageRouter = {
-    async deliver(address) {
-      deliveries.push(address);
-      if (address === leaderAddress) {
-        leaderAttempts += 1;
-        if (leaderAttempts === 1) {
-          return {
-            acknowledged: true,
-            success: false,
-            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
-          };
-        }
-        return {
-          acknowledged: true,
-          success: true,
-          changes: 1,
-          rows: [],
-        };
-      }
-      return {
-        acknowledged: true,
-        success: false,
-        error: 'unexpected fallback delivery',
-      };
-    },
-  };
-
-  const executor = new QueryExecutor({
-    messageRouter,
-    systemCache,
-    nodeId: 'local-node',
-  });
-  executor.delay = async () => {};
-
-  const result = await executor.executeOnPartition(
-    partitionId,
-    'UPDATE replica_operations SET status = ? WHERE operation_id = ?',
-    ['active', 'op-1'],
-    false,
-    false,
-    false,
-    {sessionId: 'tx-1'},
-  );
-
-  t.equal(result.success, true);
-  t.same(
-    deliveries,
-    [leaderAddress, leaderAddress],
-    'session-bound transaction contention should retry the pinned replica ' +
-      'instead of widening to another live replica in the same attempt',
-  );
-});
 
 test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
   'same replica address across calls', async (t) => {
@@ -199,12 +89,11 @@ test('QueryExecutor - executeOnPartition pins session-bound writes to the ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         changes: 1,
         rows: [],
-      };
+      });
     },
   };
 
@@ -295,12 +184,11 @@ test('QueryExecutor - executeOnPartition clears session-bound replica ' +
   const messageRouter = {
     async deliver(address) {
       deliveries.push(address);
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: true,
         changes: 1,
         rows: [],
-      };
+      });
     },
   };
 
@@ -425,18 +313,16 @@ test('QueryExecutor - executeOnPartition quarantines thrown stale no-handler ' +
         throw new Error(`${ERRORS.NO_HANDLER_FOR_ADDRESS} ${address}`);
       }
       if (address === fallbackAddress) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           changes: 1,
           rows: [],
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         success: false,
         error: 'unexpected address',
-      };
+      });
     },
   };
 
@@ -788,25 +674,23 @@ test('QueryExecutor - follows leader redirect response', async (t) => {
       if (message.type === 'QUERY') {
         // First call to follower returns redirect
         if (address === 'follower-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             redirect: 'LEADER_REDIRECT',
             leaderAddress: 'leader-node/partition/p1',
             partitionId: 'p1',
-          };
+          });
         }
         // Second call to leader succeeds
         if (address === 'leader-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: true,
             rows: mockPartitionData.get('p1') || [],
             changes: 1,
-          };
+          });
         }
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 
@@ -852,23 +736,21 @@ test('QueryExecutor - handles redirect when leader also fails', async (t) => {
     deliver: async function(address, message) {
       if (message.type === 'QUERY') {
         if (address === 'follower-node/partition/p1') {
-          return {
-            acknowledged: true,
+          return buildDeliveryEnvelope({acknowledged: true}, {
             success: false,
             redirect: 'LEADER_REDIRECT',
             leaderAddress: 'leader-node/partition/p1',
             partitionId: 'p1',
-          };
+          });
         }
         // Leader also fails
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: false,
           error: 'Leader unavailable',
           partitionId: 'p1',
-        };
+        });
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 

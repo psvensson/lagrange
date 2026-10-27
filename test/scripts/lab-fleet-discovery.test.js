@@ -14,6 +14,7 @@ import {test} from 'node:test';
 import {isDeepStrictEqual} from 'node:util';
 import {parse} from 'yaml';
 
+import {GIT_OUTPUT_BOUND, spawnGit} from '../../scripts/checks/git-invocation.js';
 import {runHarness} from '../../scripts/lab/harness.js';
 import {capture} from '../../scripts/lab/process.js';
 import * as labProbe from '../../scripts/lab/probe.js';
@@ -423,7 +424,7 @@ test('the controller and a lab machine compute one dependency-graph digest', (t)
 function committedRepo(t, files) {
   const repo = tempDir(t, 'fleet-requirement-');
   const git = (...args) => {
-    const result = spawnSync('git', ['-C', repo, ...args], {encoding: 'utf8'});
+    const result = spawnGit(['-C', repo, ...args], {encoding: 'utf8'});
     assert.equal(result.status, 0, result.stderr);
     return result.stdout.trim();
   };
@@ -555,7 +556,7 @@ test('a scratch lab home restores the original once, however often a test asks',
 });
 
 test('a placed commit\'s lockfile is read whole up to a named bound', (t) => {
-  const bound = labProbe.GIT_OUTPUT_MAX_BYTES;
+  const bound = GIT_OUTPUT_BOUND.COMMAND;
   // Past spawnSync's 1 MiB default, the size the lockfile is growing toward.
   const large = lockVariant((lock) => {
     lock.packages['node_modules/a'].description = 'x'.repeat(2 * 1024 * 1024);

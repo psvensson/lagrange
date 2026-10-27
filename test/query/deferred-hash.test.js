@@ -8,6 +8,7 @@
  * Requirements: 3.1, 3.2
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -68,17 +69,24 @@ function createTestCache() {
 
 function createTestRouter() {
   return {
-    deliver: async () => ({
-      acknowledged: true,
+    deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {
       success: true,
       rows: [],
       changes: 1,
-    }),
+    })),
   };
 }
 
+// The transaction row is inserted once at BEGIN and updated after it (TX1
+// seam B/S); participant and write-operation rows are upserted.
 function createTestCdc() {
   return {
+    async insertSystemTableRow() {
+      return {success: true};
+    },
+    async updateSystemTableRow() {
+      return {success: true};
+    },
     async upsertSystemTableRow() {
       return {success: true};
     },

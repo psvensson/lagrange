@@ -84,7 +84,9 @@ test('enumerations: the stamp kinds and bootstrap sources are the two ' +
     answered: ['COMMITTED'], refused: ['REFUSED'],
   });
   assertClassifies('READ_PURPOSE', COMMITTED_MEMBERSHIP_READ_PURPOSE, {
-    leaderOnly: ['BOOTSTRAP'], anyReplica: ['WITNESS'],
+    // A retirement read is a bootstrap read that also refuses a pending
+    // configuration change (a retiring group's frozen member set).
+    leaderOnly: ['BOOTSTRAP', 'RETIREMENT'], anyReplica: ['WITNESS'],
   });
   assertClassifies('ANSWER_FIELD', COMMITTED_MEMBERSHIP_ANSWER_FIELD, {
     configuration: ['VOTERS', 'VOTERS_OUTGOING', 'LEARNERS', 'IDENTITIES'],
@@ -99,13 +101,16 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
   assertClassifies('REFUSAL', COMMITTED_MEMBERSHIP_REFUSAL, {
     // Answered by the read (the port, from its recorded observation).
     portRead: ['NOT_LEADER', 'JOINT', 'IDENTITY_UNRESOLVED', 'HELD',
-      'NOT_HOSTED'],
+      'NOT_HOSTED', 'CONF_CHANGE_PENDING'],
     // Thrown by the creation owner before anything is persisted.
     creationOwner: ['MEMBERSHIP_UNREADABLE'],
     // Thrown by the target's handler on arrival.
     targetValidation: ['STAMP_INVALID', 'GENESIS_REFUSED_GROUP_EXISTS'],
     // Refused by the port's opening (O4 / A3).
     portOpening: ['DURABLE_RECORD_MISSING'],
+    // Held by the runtime ingress: a peer proved the replica's own history
+    // lost while it ran (O4 detected at runtime, local-log guard).
+    ingressHold: ['RESEED_REQUIRED'],
   });
   assertClassifies('STAMP_DEFECT', COMMITTED_MEMBERSHIP_STAMP_DEFECT, {
     shape: ['MISSING', 'UNKNOWN_KIND', 'MALFORMED'],
@@ -115,6 +120,11 @@ test('enumerations: every refusal of the boundary is decided at one named ' +
   });
   assertClassifies('PARTICIPATION_GATE', PARTICIPATION_GATE, {
     refusal: ['GATE_CLOSED'], event: ['GATE_OPENED'],
+    // The open-to-SYNCING window (verifier N3): the refusal of every command
+    // but a status read, its release, and the dropped delivery (a lost
+    // message to its sender, answered CORE_OK).
+    identityRecord: ['IDENTITY_UNRECORDED', 'IDENTITY_RECORDED',
+      'INBOUND_DROPPED_IDENTITY_UNRECORDED'],
   });
 });
 
@@ -125,6 +135,8 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
       'GROUP_RECONSTRUCTED'],
     // O4 / O3: a replica that cannot prove its role from its record.
     recordRefusal: ['DURABLE_RECORD_MISSING', 'DURABLE_RECORD_INCOMPATIBLE'],
+    // O4 at runtime: the local-log guard's durable hold.
+    historyLoss: ['RESEED_REQUIRED'],
     // The core's own eligibility, decided after the gate.
     eligibility: ['NOT_ACTIVE_VOTER'],
     hostAndLifecycle: ['CORE_REFUSED', 'GENERATION_CHANGED',
@@ -140,8 +152,7 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
     leadershipTransfer: ['TRANSFER_REQUESTED', 'TRANSFER_FORWARDED',
       'ALREADY_LEADER', 'NO_KNOWN_LEADER', 'TARGET_NOT_VOTER',
       'TARGET_UNRESERVED', 'NO_ELIGIBLE_SUCCESSOR', 'UNKNOWN_SUCCESSOR',
-      'WITHOUT_REPLICA_IDENTITY', 'TRANSFER_IN_PROGRESS',
-      'UNSUPPORTED_BACKEND'],
+      'WITHOUT_REPLICA_IDENTITY', 'TRANSFER_IN_PROGRESS'],
   });
   assert.equal(RUNTIME_REASON.DURABLE_RECORD_MISSING,
     COMMITTED_MEMBERSHIP_REFUSAL.DURABLE_RECORD_MISSING,
@@ -158,6 +169,8 @@ test('enumerations: the runtime reasons the gate and the record add sit ' +
     hostAndLifecycle: ['GENERATION_CHANGED', 'ADDRESS_RESOLUTION', 'SEND',
       'SEND_NO_HANDLER', 'APPLICATION', 'READY_DRAIN', 'READY_PERSISTENCE',
       'DISPATCH', 'UNEXPECTED_THROW'],
+    // A delivered envelope refused before step (local-log guard).
+    ingressGuard: ['LOCAL_LOG_GUARD'],
   });
   assertClassifies('RECORD_COMPATIBILITY', RAFT_RS_RECORD_COMPATIBILITY, {
     restores: ['COMPATIBLE'],
@@ -238,8 +251,9 @@ test('timing: the effective heartbeat and election window of the ' +
   assert.deepEqual(tuningOf({...productionTiming(0, 3),
     electionMaxMs: RAFT.electionTimeoutMaxMs * 2}), tuning,
   'the configured maximum (3.0 s) is not consumed by the tuning');
-  assert.equal(tuning.preVote, false);
-  assert.equal(tuning.checkQuorum, false);
+  // The cutover's closing condition: native pre-vote and check-quorum.
+  assert.equal(tuning.preVote, true);
+  assert.equal(tuning.checkQuorum, true);
 });
 
 test('timing: I3 (re-arm), I8 (first campaign), I4/B13 (transfer abort ' +

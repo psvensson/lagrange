@@ -11,6 +11,10 @@ import {
   resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
 } from '../harness/scenario-config.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 const ZERO = 0;
 
 /**
@@ -40,6 +44,7 @@ async function run(cluster, options = {}) {
   const {
     loadOpsPerSec,
     loadDuration,
+    tableName,
     preRestartDelayMs,
     preRestartActiveTimeoutMs,
     restartReadinessTimeoutMs,
@@ -53,6 +58,10 @@ async function run(cluster, options = {}) {
   const nodes = cluster.getNodes();
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];
   assert.ok(seedNode, 'Seed node should be available');
+
+  const provisionedTable = await provisionUserLoadTable(cluster, {
+    tableName,
+  });
 
   const loadNodesById = new Map(nodes.map((node) => [String(node.id), node]));
   const steadyLoadNodeIds = nodes
@@ -73,6 +82,7 @@ async function run(cluster, options = {}) {
     nodeResolver: resolveLoadNodes,
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   await sleep(preRestartDelayMs);
@@ -82,6 +92,9 @@ async function run(cluster, options = {}) {
       timeoutMs: preRestartActiveTimeoutMs,
     });
   }
+  const preRestartMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'seed-restart-under-load-pre-restart',
+  });
 
   availableLoadNodeIds.delete(String(seedNode.id));
   let restartWarning = null;
@@ -140,9 +153,20 @@ async function run(cluster, options = {}) {
     });
   }
 
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'seed-restart-under-load-post-restart',
+    writerNode: restartWarning === null ? seedNode : undefined,
+  });
+
   return {
     seedNodeId: seedNode.id,
     restartWarning,
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
+    diagnosticMarkers: {
+      preRestart: preRestartMarker,
+      postRestart: diagnosticMarker,
+    },
     loadMetrics: metrics,
     successRate,
     convergenceTiming: convergence,

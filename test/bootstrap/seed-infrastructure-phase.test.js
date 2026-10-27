@@ -4,16 +4,16 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
-  SeedInfrastructurePhase,
-} from '../../src/bootstrap/phases/seed-infrastructure-phase.js';
-import {
   MessageRouterSetup,
 } from '../../src/bootstrap/shared/message-router-setup.js';
 import {
-  ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
   TRANSPORT_SEMANTIC_OUTCOME_REASON_CODE,
   TRANSPORT_SEMANTIC_OUTCOME_STATE,
-} from '../../src/transport/transport-semantic-outcome.js';
+} from '../../src/transport/transport-query-semantic-outcome.js';
+import {ROUTER_QUERY_TRANSPORT_NOT_READY_ERROR_CODE} from
+  '../../src/transport/transport-error-codes.js';
+import {createPreparedVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const QUERY_TRANSPORT_NOT_READY_REASON =
   'operational message-group ingress not ready';
@@ -61,6 +61,30 @@ function initializeTestEnvironment() {
   logging.initialize({level: 'error'});
 }
 
+const FAILING_ON_ERROR_LOGGER = Object.freeze({
+  info() {},
+  debug() {},
+  warn() {},
+  error(message) {
+    throw new Error(`unexpected error log: ${message}`);
+  },
+});
+
+// The phase is the bootstrap owner's own seed infrastructure phase, with its
+// composed delegates, over a seed that entered the original attempt as
+// production does. The witness's inputs are supplied at the service methods
+// those delegates forward to: the query transport selection, and the leader
+// shortcut armed to fail - those two are the subject.
+function ownedSeedInfrastructurePhase(service,
+  {selection, leaderBypassMessage}) {
+  service.logger = FAILING_ON_ERROR_LOGGER;
+  service.getLeaderMessageGroupService = () => {
+    throw new Error(leaderBypassMessage);
+  };
+  service.resolveQueryTransportMessageGroupSelection = () => selection();
+  return service.seedInfrastructurePhase;
+}
+
 test(
   'SeedInfrastructurePhase only exposes initialized local message-group transport',
   async () => {
@@ -71,7 +95,7 @@ test(
     let createOptions = null;
     const leaderService = {
       initialized: false,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
     let currentSelection = {
       service: leaderService,
@@ -83,7 +107,7 @@ test(
 
     MessageRouterSetup.create = async (options) => {
       createOptions = options;
-      return {
+      const router = {
         hasSelfConnection() {
           return true;
         },
@@ -91,48 +115,21 @@ test(
           installedResolver = resolver;
         },
       };
+      // The setup owner's custody seam: the startup host retains the router.
+      options.retainRouter(router);
+      return router;
     };
 
-    let nodeId = 'seed-phase-test-node';
-    let nodeAddress = 'ws://localhost:12020';
-    let messageRouter = null;
+    const service = await createPreparedVirginSeedBootstrapService({
+      nodeId: 'seed-phase-test-node', nodeAddress: 'ws://localhost:12020',
+      wsPort: 12020,
+    });
 
     try {
-      const phase = new SeedInfrastructurePhase({
-        delegates: {
-          getLogger: () => ({
-            info() {},
-            debug() {},
-            warn() {},
-            error(message) {
-              throw new Error(`unexpected error log: ${message}`);
-            },
-          }),
-          getNodeId: () => nodeId,
-          getBootIncarnation: () => 1,
-          setNodeId(value) {
-            nodeId = value;
-          },
-          getNodeAddress: () => nodeAddress,
-          setNodeAddress(value) {
-            nodeAddress = value;
-          },
-          getConfig: () => ({wsPort: 12020}),
-          getWsPort: () => 12020,
-          getLeaderMessageGroupService: () => {
-            throw new Error(
-              'seed query transport should not bypass the selection owner',
-            );
-          },
-          resolveQueryTransportMessageGroupSelection: () => currentSelection,
-          setMessageRouter(router) {
-            messageRouter = router;
-          },
-          setTransport() {},
-          getPhase: () => 'infrastructure',
-          getServiceLifecycleManager: () => ({}),
-          getServiceReconciler: () => ({}),
-        },
+      const phase = ownedSeedInfrastructurePhase(service, {
+        selection: () => currentSelection,
+        leaderBypassMessage:
+          'seed query transport should not bypass the selection owner',
       });
 
       phase.initializeUnifiedLifecycleOwners = async () => {};
@@ -140,7 +137,8 @@ test(
 
       await phase.phaseInfrastructure();
 
-      assert.ok(messageRouter, 'phase should store the initialized message router');
+      assert.ok(service.messageRouter,
+        'phase should store the initialized message router');
       assert.equal(
         typeof installedResolver,
         'function',
@@ -172,6 +170,7 @@ test(
       );
     } finally {
       MessageRouterSetup.create = originalCreate;
+      await service.shutdown();
       NodeService.resetInstance();
     }
   },
@@ -193,7 +192,7 @@ test(
     };
     const relayService = {
       initialized: true,
-      sendMessage: async () => ({acknowledged: true}),
+      sendMessage: async () => null,
     };
 
     MessageRouterSetup.create = async () => {
@@ -207,43 +206,16 @@ test(
       };
     };
 
-    let nodeId = 'seed-phase-selection-node';
-    let nodeAddress = 'ws://localhost:12021';
+    const service = await createPreparedVirginSeedBootstrapService({
+      nodeId: 'seed-phase-selection-node', nodeAddress: 'ws://localhost:12021',
+      wsPort: 12021,
+    });
 
     try {
-      const phase = new SeedInfrastructurePhase({
-        delegates: {
-          getLogger: () => ({
-            info() {},
-            debug() {},
-            warn() {},
-            error(message) {
-              throw new Error(`unexpected error log: ${message}`);
-            },
-          }),
-          getNodeId: () => nodeId,
-          getBootIncarnation: () => 1,
-          setNodeId(value) {
-            nodeId = value;
-          },
-          getNodeAddress: () => nodeAddress,
-          setNodeAddress(value) {
-            nodeAddress = value;
-          },
-          getConfig: () => ({wsPort: 12021}),
-          getWsPort: () => 12021,
-          getLeaderMessageGroupService: () => {
-            throw new Error(
-              'seed query transport should use the dedicated selection owner',
-            );
-          },
-          resolveQueryTransportMessageGroupSelection: () => currentSelection,
-          setMessageRouter() {},
-          setTransport() {},
-          getPhase: () => 'infrastructure',
-          getServiceLifecycleManager: () => ({}),
-          getServiceReconciler: () => ({}),
-        },
+      const phase = ownedSeedInfrastructurePhase(service, {
+        selection: () => currentSelection,
+        leaderBypassMessage:
+          'seed query transport should use the dedicated selection owner',
       });
 
       phase.initializeUnifiedLifecycleOwners = async () => {};
@@ -283,6 +255,7 @@ test(
       );
     } finally {
       MessageRouterSetup.create = originalCreate;
+      await service.shutdown();
       NodeService.resetInstance();
     }
   },

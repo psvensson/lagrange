@@ -92,7 +92,7 @@ function createMockCDCService(options = {}) {
     },
     async updateSystemTableRow(tableName, whereClause, data) {
       updatedRows.push({tableName, whereClause, data});
-      return {success: true, changes: 1};
+      return {success: true, affectedRows: 1};
     },
   };
 }

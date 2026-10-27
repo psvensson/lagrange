@@ -7,7 +7,6 @@ import {
 const SQL_FROM_PARTITIONS = 'FROM partitions';
 const SQL_FROM_SERVICES = 'FROM services';
 const SQL_FROM_TABLES = 'FROM tables';
-const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATIONS =
   Object.freeze(['INSERT', 'SELECT']);
 const MOCK_TABLE_ID = 'tbl-logs-001';
@@ -95,11 +94,11 @@ describe('seven-node-load-during-partitioning scenario', () => {
             }],
           };
         },
+        updateTablePolicy: async () => {
+          tablePoliciesApplied = true;
+          return {success: true, outcome: 'applied'};
+        },
         query: async (sql) => {
-          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
-            tablePoliciesApplied = true;
-            return {rows: []};
-          }
           if (sql.includes(SQL_FROM_TABLES)) {
             return {
               rows: [{
@@ -262,11 +261,11 @@ describe('seven-node-load-during-partitioning scenario', () => {
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
+        updateTablePolicy: async () => {
+          tablePoliciesApplied = true;
+          return {success: true, outcome: 'applied'};
+        },
         query: async (sql) => {
-          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
-            tablePoliciesApplied = true;
-            return {rows: []};
-          }
           if (sql.includes('control_snapshot_local')) {
             return {
               rows: [{

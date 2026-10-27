@@ -304,6 +304,15 @@ test(ACTIVE_GATE_STARTUP_OWNER_RECONCILE_STALE_ACK_TEST_NAME, async () => {
     true,
     'owner-reconcile handoff should resolve stale selected ACK for startup',
   );
+  // The startup publication gate is real evidence, never a fabricated
+  // {ready: true}: here publication is not converged (a pending ACK), and
+  // the gate says so while naming that startup does not claim it.
+  assert.strictEqual(probeResult.publicationConvergenceGate.ready, false,
+    'a startup publication gate reports the real (unconverged) evidence');
+  assert.strictEqual(probeResult.publicationConvergenceGate.claimState,
+    'publication_convergence_not_claimed_startup');
+  assert.ok(probeResult.publicationConvergenceGate.reasons.length > 0,
+    'the unconverged startup gate names why');
   assert.strictEqual(
     probeResult.snapshotCoverage.bestCoverageNodeCount,
     ACTIVE_GATE_STARTUP_OWNER_RECONCILE_COVERAGE_COUNT,

@@ -2,8 +2,11 @@ import {
   TRANSPORT_NUM,
   TRANSPORT_TYPEOF,
 } from '../constants/transport.js';
-import {buildTransportDeliveryOutcome} from './transport-semantic-outcome.js';
-import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, isSupersedableRaftHeartbeatAppend, normalizeIdentifier, summarizeRaftAppendCommand} from './message-router-shared-vocabulary.js';
+import {
+  buildSupersededDeliveryOutcome,
+  buildTransportDeliveryOutcome,
+} from './transport-semantic-outcome.js';
+import {DELIVERY_SOURCE_MESSAGE_UNWRAP_LIMIT, EMPTY_DELIVERY_SOURCE, LOCAL_NUM_ONE, MESSAGE_ROUTER_LITERAL, OUTBOUND_QUEUE_TARGET_FALLBACK_IN_FLIGHT_SOURCE_LIMIT_DIVISOR, OutboundDeliveryPriority, QUERY_DATA_PLANE_MESSAGE_TYPE, RETIRED_PENDING_RESPONSE_REASON, SERVICE_RESPONSE_DISPOSITION_KIND, buildTypelessCdcDeliverySource, buildTypelessQueryDeliverySource, extractSqlOperationKind, extractSqlTableName, normalizeIdentifier} from './message-router-shared-vocabulary.js';
 import {isCriticalTransportTargetAddress} from '../bootstrap/system-partition-classification.js';
 import {buildPendingSourceAdmission, buildPendingSourceLimitEvidence, countCriticalPendingByAdmissionSource, countCriticalPendingBySource, countPendingBySource, normalizeQueueMaxPending, normalizeQueuedDeliverySource, resolveBoundedCriticalReserve, resolveBoundedReadinessReserve, resolveCriticalPendingSourceLimit, resolveDeliverySourceAdmissionKey, resolvePendingSourceLimit, resolveProportionalPendingSourceLimit, resolveQueuedDeliverySourceAdmissionKey} from './message-router-delivery-source-admission.js';
 
@@ -36,15 +39,6 @@ function resolveSemanticDeliverySourceMessage(message) {
 function buildDerivedDeliverySource(targetAddress, message) {
   const semanticMessage = resolveSemanticDeliverySourceMessage(message);
   const messageType = normalizeIdentifier(semanticMessage?.type)?.toLowerCase();
-  if (messageType === MESSAGE_ROUTER_LITERAL.STRING_APPEND) {
-    if (isSupersedableRaftHeartbeatAppend(semanticMessage)) {
-      return MESSAGE_ROUTER_LITERAL.STRING_RAFT_APPEND_HEARTBEAT;
-    }
-    const entry = Array.isArray(semanticMessage?.data) ?
-      semanticMessage.data[0] :
-      null;
-    return summarizeRaftAppendCommand(entry?.command);
-  }
   if (messageType === QUERY_DATA_PLANE_MESSAGE_TYPE.toLowerCase()) {
     const tableName = extractSqlTableName(semanticMessage?.sql);
     const operationKind = extractSqlOperationKind(semanticMessage?.sql);
@@ -80,8 +74,8 @@ function buildRetiredPendingClassification(reason) {
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_DEFERRED_DELIVERY;
   case RETIRED_PENDING_RESPONSE_REASON.ACK_REJECTED:
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_ACK_REJECTED;
-  case RETIRED_PENDING_RESPONSE_REASON.INLINE_ACK:
-    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_INLINE_ACK;
+  case RETIRED_PENDING_RESPONSE_REASON.SUPERSEDED:
+    return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_SUPERSEDED;
   case RETIRED_PENDING_RESPONSE_REASON.CANCELLED:
     return MESSAGE_ROUTER_LITERAL.STRING_LATE_AFTER_CANCELLED;
   default:
@@ -146,6 +140,9 @@ function buildPendingSourceSummary(
     }));
 }
 
+// The router-internal form of one delivery step: the transport facts (built
+// by the owner, closed key set), the handler's answer when there is one, and
+// the queue wait. A bare facts object is a step without an answer.
 function normalizeDeliveryOutcome(outcome) {
   if (
     outcome &&
@@ -161,6 +158,7 @@ function normalizeDeliveryOutcome(outcome) {
   ) {
     return {
       result: buildTransportDeliveryOutcome(outcome.result),
+      answer: outcome.answer ?? null,
       queueWaitMs: Number.isFinite(outcome.queueWaitMs) ?
         Math.max(TRANSPORT_NUM.ZERO, Math.floor(outcome.queueWaitMs)) :
         TRANSPORT_NUM.ZERO,
@@ -168,6 +166,7 @@ function normalizeDeliveryOutcome(outcome) {
   }
   return {
     result: buildTransportDeliveryOutcome(outcome),
+    answer: null,
     queueWaitMs: TRANSPORT_NUM.ZERO,
   };
 }
@@ -182,14 +181,9 @@ function normalizeRetryAfterMs(value, fallback) {
   return TRANSPORT_NUM.ZERO;
 }
 
-function buildSupersededPendingResult(replacedItem) {
+function buildSupersededPendingResult() {
   return {
-    result: {
-      acknowledged: true,
-      coalesced: true,
-      replacedPending: true,
-      deliverySource: replacedItem?.deliverySource || null,
-    },
+    result: buildSupersededDeliveryOutcome(),
     queueWaitMs: TRANSPORT_NUM.ZERO,
   };
 }

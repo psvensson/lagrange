@@ -1,10 +1,19 @@
 import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
+import {pickTypedWriteAnswer} from '../partition/partition-write-kernel.js';
+import {classifyThrownDeliveryError} from '../transport/transport-semantic-outcome.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
   normalizeParticipantRetryAfterMs,
   resolveParticipantBackpressureState,
 } = QUERY_EXECUTOR_SHARED;
+
+// A candidate failure is a thrown router Error or one delivery reading (the
+// partition's answer, or the transport outcome when undelivered); its text
+// and code come from the thrown error's transport outcome or the reading.
+function failureFactsOf(failure) {
+  return failure instanceof Error ? classifyThrownDeliveryError(failure) : failure ?? {};
+}
 
 function resolveRetryableLeaderFailureRetryAfterMs({
   executor,
@@ -27,18 +36,15 @@ function resolveRetryableLeaderFailureRetryAfterMs({
   ) {
     return null;
   }
+  const outcome = failureFactsOf(failure);
   const errorMessage =
-    typeof failure?.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      failure.error :
-      typeof failure?.message === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.message :
-        QUERY_EXECUTOR_LITERAL.STRING_VALUE;
+    typeof outcome.error === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+      outcome.error :
+      QUERY_EXECUTOR_LITERAL.STRING_VALUE;
   const errorCode =
-    typeof failure?.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-      failure.errorCode :
-      typeof failure?.code === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
-        failure.code :
-        null;
+    typeof outcome.errorCode === QUERY_EXECUTOR_LITERAL.STRING_STRING ?
+      outcome.errorCode :
+      null;
   if (!executor.isLeaderUnavailable(errorMessage, errorCode)) {
     return null;
   }
@@ -71,7 +77,10 @@ function buildQueryPartitionCandidateFailureDetails({
   participantAddress,
 }) {
   return {
-    errorCode: failure?.errorCode || failure?.code,
+    // The failed answer's typed fields (its code, its entryId) travel with
+    // it to the delivery's failure result.
+    ...pickTypedWriteAnswer(failure),
+    errorCode: failureFactsOf(failure).errorCode ?? null,
     retryAfterMs: resolveRetryableLeaderFailureRetryAfterMs({
       executor,
       failure,

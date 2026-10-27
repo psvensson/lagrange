@@ -134,9 +134,6 @@ const SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX = '\'';
 const SQL_CREATE_TABLE_PREFIX = 'CREATE TABLE IF NOT EXISTS ';
 const SQL_CREATE_TABLE_SUFFIX =
   ' (event_id TEXT PRIMARY KEY, payload INTEGER NOT NULL, created_at INTEGER NOT NULL)';
-const SQL_UPDATE_TABLE_POLICIES_PREFIX = 'UPDATE tables SET table_policies = \'';
-const SQL_UPDATE_TABLE_POLICIES_MID = '\' WHERE table_id = \'';
-const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
 const SQL_CONTROL_SNAPSHOT = 'SELECT * FROM control_snapshot_local()';
 const SQL_CONTROL_SNAPSHOT_FORCE_REPAIR =
   'SELECT * FROM control_snapshot_local(true)';
@@ -932,6 +929,11 @@ function resolveBenchmarkTableName(tableName) {
   if (!IDENTIFIER_PATTERN.test(candidate)) {
     return TABLE_NAME_BENCHMARK_EVENTS;
   }
+  if (candidate === TABLE_NAME_LOGS) {
+    throw new Error(
+      'System table logs cannot be used as a benchmark or user load table',
+    );
+  }
   return candidate;
 }
 
@@ -956,11 +958,7 @@ function resolvePartitioningLoadTableName(
   const candidate = explicitTableName ?
     scenarioTableName :
     benchmarkTableName || scenarioTableName;
-  const resolved = resolveBenchmarkTableName(candidate);
-  if (!explicitTableName && resolved === TABLE_NAME_LOGS) {
-    return TABLE_NAME_BENCHMARK_EVENTS;
-  }
-  return resolved;
+  return resolveBenchmarkTableName(candidate);
 }
 
 function resolveClusterNodes(cluster) {
@@ -1116,9 +1114,6 @@ export const TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS = {
   SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX,
   SQL_CREATE_TABLE_PREFIX,
   SQL_CREATE_TABLE_SUFFIX,
-  SQL_UPDATE_TABLE_POLICIES_PREFIX,
-  SQL_UPDATE_TABLE_POLICIES_MID,
-  SQL_UPDATE_TABLE_POLICIES_SUFFIX,
   SQL_CONTROL_SNAPSHOT,
   SQL_CONTROL_SNAPSHOT_FORCE_REPAIR,
   SQL_SELECT_ACTIVE_PARTITION_SERVICES_PREFIX,

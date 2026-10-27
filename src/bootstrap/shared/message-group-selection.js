@@ -249,7 +249,7 @@ async function resolveMetadataIngressReadinessAsync(
 }
 
 function recordNotReadyCandidate(summary, readiness) {
-  if (readiness.ready === true) {
+  if (!readiness || readiness.ready === true) {
     return summary;
   }
   return {
@@ -263,37 +263,61 @@ function recordNotReadyCandidate(summary, readiness) {
   };
 }
 
+function capturedPreferredSelection(service, reuseCapturedIngress) {
+  if (!service || !reuseCapturedIngress || !canReuseCapturedIngressOwner(service)) return null;
+  return buildOperationalMessageGroupSelection(service, true, 0, null,
+    MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED, MESSAGE_GROUP_SELECTION_STATE.PREFERRED_CAPTURED);
+}
+
+function readyPreferredSelection(service, readiness) {
+  return buildOperationalMessageGroupSelection(service, true, readiness.retryAfterMs, null,
+    MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED, MESSAGE_GROUP_SELECTION_STATE.PREFERRED_READY);
+}
+
+function preferredReadiness(service, requiredTables) {
+  return service?.isLeaderReplica?.() === true ?
+    resolveLeaderReadiness(service, requiredTables) :
+    resolveRelayReadiness(service, requiredTables);
+}
+
+function selectPreferredService(options, requiredTables) {
+  const service = options.preferredService || null;
+  if (!service) return null;
+  const captured = capturedPreferredSelection(service, options.reuseCapturedIngress === true);
+  if (captured) return captured;
+  const readiness = preferredReadiness(service, requiredTables);
+  return readiness.ready === true ? readyPreferredSelection(service, readiness) : readiness;
+}
+
+function selectOperationalLeader(services, requiredTables) {
+  let summary = {reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY, retryAfterMs: 0};
+  for (const service of services) {
+    if (service?.isLeaderReplica?.() !== true) continue;
+    const readiness = resolveLeaderReadiness(service, requiredTables);
+    if (readiness.ready === true) {
+      const selection = buildOperationalMessageGroupSelection(service, true,
+        readiness.retryAfterMs, null, MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
+        MESSAGE_GROUP_SELECTION_STATE.LEADER_READY);
+      return {selection, summary};
+    }
+    summary = recordNotReadyCandidate(summary, readiness);
+  }
+  return {selection: null, summary};
+}
+
 function resolveOperationalMessageGroupSelection(
   messageGroupServices,
   options = {},
 ) {
   const services = listMessageGroupServices(messageGroupServices);
   const requiredTables = normalizeRequiredTables(options.requiredTables);
-  let deferredSummary = {
-    reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
-    retryAfterMs: 0,
-  };
+  const leader = selectOperationalLeader(services, requiredTables);
+  if (leader.selection) return leader.selection;
+  let deferredSummary = leader.summary;
 
-  for (const service of services) {
-    if (service?.isLeaderReplica?.() !== true) {
-      continue;
-    }
-    const readiness = resolveLeaderReadiness(service, requiredTables);
-    if (readiness.ready === true) {
-      return buildOperationalMessageGroupSelection(
-        service,
-        true,
-        readiness.retryAfterMs,
-        null,
-        MESSAGE_GROUP_SELECTION_ROUTE.LEADER,
-        MESSAGE_GROUP_SELECTION_STATE.LEADER_READY,
-      );
-    }
-    deferredSummary = recordNotReadyCandidate(
-      deferredSummary,
-      readiness,
-    );
-  }
+  const preferred = selectPreferredService(options, requiredTables);
+  if (preferred?.ready === true) return preferred;
+  deferredSummary = recordNotReadyCandidate(deferredSummary, preferred);
 
   for (const service of services) {
     if (service?.isLeaderReplica?.() === true) {
@@ -368,17 +392,8 @@ async function resolveOperationalMessageGroupSelectionAsync(
   }
 
   if (preferredService) {
-    if (reuseCapturedIngress === true &&
-        canReuseCapturedIngressOwner(preferredService) === true) {
-      return buildOperationalMessageGroupSelection(
-        preferredService,
-        true,
-        0,
-        null,
-        MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
-        MESSAGE_GROUP_SELECTION_STATE.PREFERRED_CAPTURED,
-      );
-    }
+    const captured = capturedPreferredSelection(preferredService, reuseCapturedIngress);
+    if (captured) return captured;
     const readiness =
       requiredTables.length > 0 ?
         await resolveMetadataIngressReadinessAsync(
@@ -386,18 +401,9 @@ async function resolveOperationalMessageGroupSelectionAsync(
           requiredTables,
           MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
         ) :
-        (preferredService?.isLeaderReplica?.() === true ?
-          resolveLeaderReadiness(preferredService, requiredTables) :
-          resolveRelayReadiness(preferredService, requiredTables));
+        preferredReadiness(preferredService, requiredTables);
     if (readiness.ready === true) {
-      return buildOperationalMessageGroupSelection(
-        preferredService,
-        true,
-        readiness.retryAfterMs,
-        null,
-        MESSAGE_GROUP_SELECTION_ROUTE.PREFERRED,
-        MESSAGE_GROUP_SELECTION_STATE.PREFERRED_READY,
-      );
+      return readyPreferredSelection(preferredService, readiness);
     }
     deferredSummary = recordNotReadyCandidate(
       deferredSummary,

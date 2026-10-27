@@ -47,13 +47,17 @@ const INCOMPLETE_FROZEN_PARTICIPANTS = Object.freeze([
   }),
 ]);
 
+// The retired ONE_PHASE_COMMIT mode (TX1 prepare-first, design 9.2
+// derivation 4): a legacy row naming it is a poison row for recovery.
+const RETIRED_ONE_PHASE_COMMIT_MODE = 'ONE_PHASE_COMMIT';
+
 const MULTI_PARTICIPANT_ONE_PHASE_ROW = Object.freeze({
   transaction_id: 'tx-poison-multi-participant-1pc',
   session_id: 'session-poison-multi-participant-1pc',
   status: TRANSACTION_STATUS.COMMITTING,
   transaction_mode: TRANSACTION_MODE.EXPLICIT,
   participant_set_state: PARTICIPANT_SET_STATE.FROZEN,
-  commit_mode: COMMIT_MODE.ONE_PHASE_COMMIT,
+  commit_mode: RETIRED_ONE_PHASE_COMMIT_MODE,
   frozen_participant_count: 2,
   created_at: 1,
   updated_at: 1,

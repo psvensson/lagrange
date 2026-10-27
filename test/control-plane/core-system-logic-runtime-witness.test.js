@@ -9,16 +9,9 @@
 // invariant citing the document has its test in this file.
 
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 
 import {BOOTSTRAP_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
-import {
-  createBootstrapServiceSeedWorkflowMethods,
-} from '../../src/bootstrap/bootstrap-service-seed-workflow.js';
-import {
-  BootstrapNodeReadyRebalanceOwner,
-} from '../../src/bootstrap/owners/bootstrap-node-ready-rebalance-owner.js';
 import {
   StartupRuntimeHandoffOwner,
 } from '../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
@@ -28,9 +21,6 @@ import {HEARTBEAT_STATE} from '../../src/control-plane/heartbeat-service-constan
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {LEASE_STATE} from '../../src/control-plane/lease-service-constants.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
-import {
-  NodeLifecycleStateMachine,
-} from '../../src/node/node-lifecycle-state-machine.js';
 import {
   createNodeHosts,
   initializeTestEnvironment,
@@ -50,6 +40,8 @@ import {
   CONTROL_PLANE_PUBLICATION_STATUS,
 } from '../../src/control-plane/publication-owner-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {createOwnedVirginSeedBootstrapService} from
+  '../integration/helpers/cluster-test-helpers.js';
 
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
@@ -193,14 +185,15 @@ function createVirtualTimers() {
 }
 
 /**
- * The seed's completion step, hosted: the REAL seed workflow methods
- * (production prototype inherited) over the real StartupRuntimeHandoffOwner,
+ * The seed's completion step, hosted: a REAL BootstrapService that entered the
+ * original seed attempt as production does, over the real StartupRuntimeHandoffOwner,
  * whose steady-state owners are the real LeaseService and HeartbeatService
  * (initialized, timers injected) over the node's real CDC owner and gateway,
- * a real lifecycle state machine and a real node-ready rebalance owner.
- * @return {object}
+ * and the service's own lifecycle state machine and node-ready rebalance owner.
+ * @param {Object} t The test context; the seed is shut down after it.
+ * @return {Promise<object>}
  */
-function createSeedCompletionHost() {
+async function createSeedCompletionHost(t) {
   const cache = new SystemTableCache();
   const hosts = createNodeHosts(cache, {nodeId: NODE_ID});
   const timers = createVirtualTimers();
@@ -236,32 +229,15 @@ function createSeedCompletionHost() {
       getLogger: () => QUIET_LOGGER,
     },
   });
-  const nodeReadyRebalanceOwner = new BootstrapNodeReadyRebalanceOwner({
-    delegates: {getLogger: () => QUIET_LOGGER},
+  const seed = await createOwnedVirginSeedBootstrapService(t, {
+    nodeId: NODE_ID, nodeAddress: NODE_ADDRESS,
   });
-  const events = new EventEmitter();
-  const seed = Object.assign(Object.create(createBootstrapServiceSeedWorkflowMethods()), {
-    nodeId: NODE_ID,
-    startTime: Date.now(),
-    phase: BOOTSTRAP_PHASE.NOT_STARTED,
-    lifecycleStateMachine: new NodeLifecycleStateMachine({nodeId: NODE_ID}),
-    nodeReadyRebalanceOwner,
-    // BootstrapService's own forwarding line to its real owner.
-    clearNodeReadyRebalanceState() {
-      this.nodeReadyRebalanceOwner.clearNodeReadyRebalanceState();
-    },
+  await seed.prepareOriginalSeedAttempt();
+  // The witness's subject: the handoff owner whose steady-state owners it
+  // composed, and the node's router those owners write through.
+  Object.assign(seed, {
     runtimeHandoffOwner,
     logger: QUIET_LOGGER,
-    emit: (...args) => events.emit(...args),
-    servicesCreated: 0,
-    partitionsCreated: 0,
-    messageGroupsCreated: 0,
-    messageGroupServices: new Map(),
-    partitionServices: new Map(),
-    replicaHandler: null,
-    replicaStateMachine: null,
-    epochManager: null,
-    transport: null,
     messageRouter: hosts.messageRouter,
   });
   return {seed, runtimeHandoffOwner, leaseService, heartbeatService, timers};
@@ -269,10 +245,10 @@ function createSeedCompletionHost() {
 
 test('phase-owner-handoff-completes: completing the seed phase transfers the ' +
   'control-plane writers to the steady-state owners before the phase is complete',
-async () => {
+async (t) => {
   initializeTestEnvironment();
   const {seed, runtimeHandoffOwner, leaseService, heartbeatService, timers} =
-    createSeedCompletionHost();
+    await createSeedCompletionHost(t);
   assert.equal(runtimeHandoffOwner.hasActiveControlPlaneBackgroundWriters(), false,
     'control: before completion the steady-state owners hold nothing');
 

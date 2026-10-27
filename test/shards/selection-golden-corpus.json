@@ -5,15 +5,15 @@
   "contract": "The selector may become narrower or smarter over time. It may NEVER omit an obligation listed here.",
   "fixtures": [
     {
-      "id": "raft-follower-batch-fix",
-      "provenance": "commit 5d48920f0 fix(raft): boundary-aware prefix revalidation in follower batch tail",
+      "id": "raft-operation-port-change",
+      "provenance": "consensus cutover: operation-port changes remain storage-raft proof obligations",
       "changed": [
-        "src/raft/liferaft-follower-batch.js"
+        "src/raft/raft-rs-operation-port.js"
       ],
       "mustIncludeSubsystems": [
         "storage-raft"
       ],
-      "why": "a consensus log-tail fix; storage-raft is the semantic home and its proof must run"
+      "why": "the semantic consensus operation port is the current storage-raft owner, so changing it must still select storage-raft proof"
     },
     {
       "id": "schema-admission-drain-grace-fix",

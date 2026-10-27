@@ -1,0 +1,49 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runtime-captured-inbound-extent",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "After successful execution admission, the existing raft-rs runtime turn captures its current generation and finite inbound extent once, drains that extent before its command, and retains later accepted bytes and owned service across Ready awaits, refusals and replacement. This bounded prerequisite is a review-only source increment, not the complete release successor or a merge authorization.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runtime-captured-inbound-extent/evidence/receipt.json",
+      "requiredReceipts": [
+        "frozen-w07-green",
+        "capture-and-remainder-controls",
+        "identical-tests-source-negative",
+        "incorrect-capture-negative",
+        "affected-owner-suites",
+        "static-impact-and-independent-review"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "sole-runtime-owner",
+      "statement": "Production changes limited to raft-rs-runtime-owner.js; adjacent existing wake owner only with concrete reviewed necessity. No new scheduler, queue, timer, release command or recovery authority."
+    },
+    {
+      "id": "admitted-capture",
+      "statement": "Capture after ensureExecution succeeds, not at enqueue; all preaccepted extent drains including refused-message valid tails. Keep queue authoritative. Check generation/lifecycle before dequeue."
+    },
+    {
+      "id": "frozen-witness",
+      "statement": "W07 Git blob debc16f442ba63b100332d93b285865d36d1c376 remains identical. Add independently reviewed companion bytes before source; preserve first runs, no timeout or threshold changes and no retry-until-green."
+    },
+    {
+      "id": "preservation",
+      "statement": "Use isolated worktree and locked lab. Preserve shared staged work, historical seals and evidence. Review-only non-main preservation; full release successor remains unsealed/unactivated; no merge."
+    }
+  ],
+  "verificationTemplates": [
+    "concurrency-serialization",
+    "recovery-replay",
+    "transport-delivery",
+    "sweep-timer",
+    "harness-fidelity",
+    "owner-interaction",
+    "admission-gating"
+  ],
+  "sealedAt": "a7e821154f1039df82bfc73ef4f2e25e4fa0468d"
+}

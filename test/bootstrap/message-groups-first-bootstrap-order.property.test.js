@@ -19,7 +19,7 @@
 import {describe, it, mock} from 'node:test';
 import assert from 'node:assert';
 import fc from 'fast-check';
-import {WORKER_ENTITY_TYPE} from '../../src/worker/worker-constants.js';
+import {ENTITY_TYPE} from '../../src/constants/index.js';
 
 describe('Property 21: Message Groups First Bootstrap Order', () => {
   /**
@@ -73,14 +73,14 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           timestamp: Date.now(),
           replicaId: replicaOptions.replicaId,
           groupId: replicaOptions.groupId,
-          entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
+          entityType: ENTITY_TYPE.MESSAGE_GROUP,
         });
 
         const handle = {
           replicaId: replicaOptions.replicaId,
           groupId: replicaOptions.groupId,
-          entityType: WORKER_ENTITY_TYPE.MESSAGE_GROUP,
-          unifiedAddress: `node/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${replicaOptions.replicaId}`,
+          entityType: ENTITY_TYPE.MESSAGE_GROUP,
+          unifiedAddress: `node/${ENTITY_TYPE.MESSAGE_GROUP}/${replicaOptions.replicaId}`,
           status: 'running',
         };
 
@@ -100,15 +100,15 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           replicaId: replicaOptions.replicaId,
           partitionId: replicaOptions.partitionId,
           tableName: replicaOptions.tableName,
-          entityType: WORKER_ENTITY_TYPE.PARTITION,
+          entityType: ENTITY_TYPE.PARTITION,
         });
 
         const handle = {
           replicaId: replicaOptions.replicaId,
           partitionId: replicaOptions.partitionId,
           tableName: replicaOptions.tableName,
-          entityType: WORKER_ENTITY_TYPE.PARTITION,
-          unifiedAddress: `node/${WORKER_ENTITY_TYPE.PARTITION}/${replicaOptions.replicaId}`,
+          entityType: ENTITY_TYPE.PARTITION,
+          unifiedAddress: `node/${ENTITY_TYPE.PARTITION}/${replicaOptions.replicaId}`,
           status: 'running',
         };
 
@@ -137,7 +137,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
       getMessageGroupReplicas: mock.fn(() => {
         const replicas = [];
         for (const [_replicaId, handle] of createdReplicas) {
-          if (handle.entityType === WORKER_ENTITY_TYPE.MESSAGE_GROUP) {
+          if (handle.entityType === ENTITY_TYPE.MESSAGE_GROUP) {
             replicas.push(handle);
           }
         }
@@ -222,7 +222,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
         replicaId,
         replicaIds: messageGroupReplicaIds,
         peerAddresses: messageGroupReplicaIds.map(
-          (id) => `${nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${id}`,
+          (id) => `${nodeId}/${ENTITY_TYPE.MESSAGE_GROUP}/${id}`,
         ),
       });
 
@@ -303,7 +303,7 @@ describe('Property 21: Message Groups First Bootstrap Order', () => {
           dbPath: ':memory:',
           replicaIds,
           peerAddresses: replicaIds.map(
-            (id) => `${nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${id}`,
+            (id) => `${nodeId}/${ENTITY_TYPE.PARTITION}/${id}`,
           ),
         });
 

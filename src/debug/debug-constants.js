@@ -23,7 +23,7 @@ const DEBUG_TRACE_LEVEL_SET = new Set(Object.values(DEBUG_TRACE_LEVEL));
 
 const DEBUG_TRACE_SOURCE = Object.freeze({
   SERVICE: 'service',
-  PARTITION_CALLBACK: 'partition_callback',
+  LINEAGE: 'lineage',
 });
 
 const DEBUG_TRACE_FIELD = Object.freeze({

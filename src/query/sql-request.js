@@ -65,19 +65,13 @@ function validateSqlRequestStatementAndParameters(fields) {
   return parameters;
 }
 
-function validatePartitionCallbackRequest(fields, mode) {
-  if (mode !== EXECUTION_MODE.PARTITION_CALLBACK) return;
-  if (!fields.callbackModuleRef) {
-    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_MODULE_REF_REQUIRED);
+function resolveExpectedTransactionId(fields) {
+  const expected = fields.expectedTransactionId ?? null;
+  if (expected !== null &&
+      (typeof expected !== 'string' || expected.length === 0)) {
+    throw new Error(ADAPTER_ERROR_MSG.EXPECTED_TRANSACTION_ID_INVALID);
   }
-  if (!fields.callbackExport) {
-    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_EXPORT_REQUIRED);
-  }
-  if (!fields.runtimeKind || typeof fields.runtimeKind !== 'string') {
-    throw new Error(
-      ADAPTER_ERROR_MSG.PARTITION_CALLBACK_RUNTIME_KIND_REQUIRED,
-    );
-  }
+  return expected;
 }
 
 function hasRequiredSqlRequestFields(request) {
@@ -90,8 +84,6 @@ function hasRequiredSqlRequestFields(request) {
 }
 
 function hasValidSqlRequestRuntimeKind(request) {
-  if (request.executionMode === EXECUTION_MODE.PARTITION_CALLBACK &&
-      typeof request.runtimeKind !== 'string') return false;
   return request.runtimeKind === undefined || request.runtimeKind === null ||
     typeof request.runtimeKind === 'string';
 }
@@ -117,20 +109,20 @@ const SQL_REQUEST_VALIDATORS = Object.freeze([
  * @param {string} [fields.tenantId] - Tenant identifier.
  * @param {string} [fields.sessionId] - Session identifier.
  * @param {string} [fields.executionMode] - EXECUTION_MODE value.
- * @param {string} [fields.callbackModuleRef] - Module ref for callbacks.
- * @param {string} [fields.callbackExport] - Export name for callbacks.
  * @param {Object} [fields.budgets] - QueryBudget overrides.
  * @param {Object} [fields.hints] - PlannerHints overrides.
  * @param {string|null} [fields.dialect] - Parser dialect hint.
  * @param {Object} [fields.securityContext] - Server-derived protocol context.
+ * @param {string|null} [fields.expectedTransactionId] - The explicit
+ *   transaction the session expects to be in.
  * @return {Readonly<Object>} Frozen SqlRequest.
  * @throws {Error} If required fields are missing or invalid.
  */
 function createSqlRequest(fields) {
   const params = validateSqlRequestStatementAndParameters(fields);
+  const expectedTransactionId = resolveExpectedTransactionId(fields);
   const mode = fields.executionMode ?? EXECUTION_MODE.SQL_STATEMENT;
   const securityFields = buildSqlRequestSecurityFields(fields);
-  validatePartitionCallbackRequest(fields, mode);
 
   const request = {
     tenantId: securityFields.tenantId,
@@ -138,12 +130,14 @@ function createSqlRequest(fields) {
     statement: fields.statement,
     parameters: params,
     executionMode: mode,
-    callbackModuleRef: fields.callbackModuleRef ?? null,
-    callbackExport: fields.callbackExport ?? null,
     runtimeKind: fields.runtimeKind ?? null,
     budgets: Object.freeze({...DEFAULT_QUERY_BUDGET, ...fields.budgets}),
     hints: fields.hints ? Object.freeze({...fields.hints}) : null,
     dialect: fields.dialect ?? null,
+    // The explicit transaction the session expects to be in (a protocol
+    // session inside a transaction block): the engine refuses a statement
+    // for a transaction it no longer holds instead of running it outside.
+    ...(expectedTransactionId ? {expectedTransactionId} : {}),
     ...(fields.timeoutBudget ? {timeoutBudget: fields.timeoutBudget} : {}),
     ...(fields.cancellationToken ?
       {cancellationToken: fields.cancellationToken} : {}),

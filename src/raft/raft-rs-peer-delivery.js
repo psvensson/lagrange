@@ -5,7 +5,14 @@
 // back for its status.
 
 import {deepFreeze} from './raft-operation-port.js';
-import {RAFT_RS_TRANSPORT_PROTOCOL} from './raft-rs-ingress-constants.js';
+import {
+  RAFT_RS_MESSAGE_TYPE,
+  RAFT_RS_TRANSPORT_PROTOCOL,
+} from './raft-rs-ingress-constants.js';
+import {
+  buildSnapshotCatchupDecision,
+  RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
+} from './snapshot-catchup-constants.js';
 import {
   INBOUND_STEP_REFUSAL_OBSERVATION_LIMIT,
   PEER_DELIVERY_OBSERVATION_LIMIT,
@@ -13,6 +20,12 @@ import {
   RUNTIME_PHASE,
   RUNTIME_REASON,
 } from './raft-rs-runtime-owner-constants.js';
+import {deliveryTransportOf,
+  TRANSPORT_DELIVERY_OUTCOME_REASON_CODE,
+  isDeliveredTransportDeliveryOutcome,
+} from '../transport/transport-semantic-outcome.js';
+
+const DEFAULT_SNAPSHOT_INDEX = '0';
 
 function thenMaybe(value, continuation) {
   return value && typeof value.then === 'function' ?
@@ -71,17 +84,60 @@ function peerDeliveryFailed(group, raftPeerId, phase, cause, failedPeers) {
   return null;
 }
 
+// The transport owner alone decides whether the peer received the message;
+// a FAILED or DEFERRED outcome, including a contradictory one, is a failed
+// delivery.
 function settlePeerDelivery(group, raftPeerId, delivery, failedPeers) {
-  if (delivery && typeof delivery === 'object' &&
-      (delivery.noHandler === true || delivery.deferRetry === true ||
-        delivery.acknowledged === false || delivery.error)) {
+  // A port that resolved without a delivery envelope has no outcome: failed.
+  const outcome = deliveryTransportOf(delivery);
+  if (!isDeliveredTransportDeliveryOutcome(outcome)) {
     return peerDeliveryFailed(group, raftPeerId,
-      delivery.noHandler ? RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
-      delivery.error || delivery.reason, failedPeers);
+      outcome?.reasonCode === TRANSPORT_DELIVERY_OUTCOME_REASON_CODE.NO_HANDLER ?
+        RUNTIME_PHASE.SEND_NO_HANDLER : RUNTIME_PHASE.SEND,
+      outcome?.error || outcome?.reasonCode, failedPeers);
   }
   recordPeerDelivery(group, raftPeerId, {
     outcome: PEER_DELIVERY_OUTCOME.DELIVERED, consecutiveFailures: 0,
   });
+  return null;
+}
+
+function resolveSnapshotIndex(group, message) {
+  return String(
+    message.snapshot?.metadata?.index ||
+    group.compactedSnapshotIndex ||
+    DEFAULT_SNAPSHOT_INDEX,
+  );
+}
+
+function resolveSnapshotLeaderBoundary(group, snapshotIndex) {
+  return Number(
+    group.compactedSnapshotIndex && group.compactedSnapshotIndex > 0n ?
+      group.compactedSnapshotIndex :
+      snapshotIndex,
+  );
+}
+
+function notifySnapshotCatchupNeeded(group, address, message) {
+  const snapshotIndex = resolveSnapshotIndex(group, message);
+  group.pendingSnapshotPeers?.set(String(message.to), snapshotIndex);
+  const leaderBoundary = resolveSnapshotLeaderBoundary(group, snapshotIndex);
+  if (typeof group.snapshotCatchupNeeded !== 'function' ||
+      leaderBoundary <= 0) {
+    return null;
+  }
+  const dispatched = group.snapshotCatchupNeeded(
+    buildSnapshotCatchupDecision({
+      outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+      followerAddress: address,
+      startIndex: 1,
+      failedIndex: leaderBoundary,
+      leaderBoundary,
+    }),
+  );
+  if (dispatched && typeof dispatched.catch === 'function') {
+    dispatched.catch(() => undefined);
+  }
   return null;
 }
 
@@ -92,6 +148,9 @@ function deliverToPeer(group, message, failedPeers) {
   } catch (error) {
     return peerDeliveryFailed(group, message.to,
       RUNTIME_PHASE.ADDRESS_RESOLUTION, error, failedPeers);
+  }
+  if (message.msgType === RAFT_RS_MESSAGE_TYPE.SNAPSHOT) {
+    return notifySnapshotCatchupNeeded(group, address, message);
   }
   let delivered;
   try {

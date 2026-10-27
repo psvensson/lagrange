@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {PartitionNodeCluster} from './partition-node-cluster.js';
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 
 const REPLICAS = Object.freeze(['status-a', 'status-b', 'status-c']);
 const RS_ONLY_STATUS_FIELDS = Object.freeze(['confState', 'runtimeGeneration']);
@@ -74,7 +75,7 @@ test('readStatus answers a frozen rs-raft status while a delivery is in flight',
       assert.equal(during.role, before.role,
         'the busy status is the leader\'s own last completed observation');
 
-      releaseDelivery({acknowledged: true});
+      releaseDelivery(buildDeliveryEnvelope({acknowledged: true}));
       await pending;
       const committed = cluster.settle(
         () => port.readStatus().commitIndex > before.commitIndex);

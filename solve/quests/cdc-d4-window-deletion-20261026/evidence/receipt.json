@@ -1,0 +1,24 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "commit": "d38b9ec4549ac1eb830f7e8acf6a98e9a20cbb79",
+  "receipts": [
+    {
+      "id": "d4-sliding-window-and-catchup-deleted",
+      "passed": true,
+      "details": "Deleted 256-slot sliding window, volatile buffer handshake catch-up, catch-up modes/events, and streamMode at commit d38b9ec45"
+    },
+    {
+      "id": "w-d4a-and-w-d4b-handoff-witnesses-green",
+      "passed": true,
+      "details": "Passing tests: test/partition/cdc-hydration-live-handoff.test.js, test/partition/cdc-hydration-old-order.test.js, test/bootstrap/seed-cache-hydration-handoff.test.js, test/integration/cdc-group-boundary-handoff.integration.test.js"
+    },
+    {
+      "id": "independent-review-and-applicable-gates",
+      "passed": true,
+      "review": "solve/quests/cdc-d4-window-deletion-20261026/evidence/REVIEW-2026-10-26.md",
+      "verifier": "subagent:9d93e269-3bc8-4f32-894e-4f35e0134168",
+      "verdict": "approve"
+    }
+  ]
+}

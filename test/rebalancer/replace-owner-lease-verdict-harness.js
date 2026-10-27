@@ -16,6 +16,7 @@
  * owner's isNodeReadyForRouting reads), never by stubbing the verdict.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   OPERATION_DRAIN_OWNER_AVAILABILITY,
@@ -272,10 +273,9 @@ function createLeaseVerdictRemoteCoordinator(cell) {
     messageRouter: {
       async deliver(target, payload) {
         deliveries.push(`${payload?.type}->${target}`);
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     controlPlaneReadinessService: buildLeaseVerdictReadinessService(

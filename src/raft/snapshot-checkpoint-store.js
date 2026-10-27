@@ -20,11 +20,7 @@ import {
 } from '../runtime/oci-host-agent-durable-files.js';
 
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {
-  PARTITION_SERVICE_OPERATION,
-} from '../partition/partition-service-constants.js';
-
-import {SQLITE_RAFT_STATE_KEY} from './sqlite-log-adapter-callback-api.js';
+import {SQLITE_RAFT_STATE_KEY} from './sqlite-raft-state-constants.js';
 import {readSnapshotBoundary} from './snapshot-boundary.js';
 import {
   RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
@@ -39,6 +35,7 @@ import {
   RAFT_CHECKPOINT_PAYLOAD_SIDECAR_SUFFIXES,
   RAFT_CHECKPOINT_PAYLOAD_VERSION,
   RAFT_CHECKPOINT_VALIDATION_OUTCOME,
+  RAFT_RS_CHECKPOINT_REASON,
 } from './snapshot-checkpoint-constants.js';
 import {
   buildCheckpointDescriptor,
@@ -51,6 +48,15 @@ import {
   listCheckpointGenerations,
   sweepCheckpointGenerations,
 } from './snapshot-retention.js';
+import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {readRaftRsPeerIdentityReservations} from
+  './raft-rs-peer-identity.js';
+import {
+  computeRaftRsMaxCommittedHlc,
+  hasPendingPreparedParticipantTransactions,
+  scrubRaftRsCheckpointPayload,
+  validateRaftRsPayloadTables,
+} from './snapshot-application-content.js';
 
 const CREATION = RAFT_CHECKPOINT_CREATION_OUTCOME;
 const VALIDATION = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
@@ -64,6 +70,11 @@ const DECIMAL_RADIX = 10;
 const EMPTY_LOG_INDEX = 0;
 // CL-042 discipline: an empty log's last-log-term is 0.
 const EMPTY_LOG_TERM = 0;
+const RAFT_RS_LOCAL_TABLES = Object.freeze([
+  '_raft_rs_log', '_raft_rs_hard_state', '_raft_rs_applied_state',
+  '_raft_rs_snapshot',
+]);
+const MAX_SAFE_EXACT = BigInt(Number.MAX_SAFE_INTEGER);
 
 function creationResult(outcome, reasons = [], extra = {}) {
   return Object.freeze({
@@ -152,9 +163,6 @@ function readLastIncludedTerm(copyDb, lastIncludedIndex) {
 
 const NO_COMMITTED_HLC = '0';
 const SELECT_LOG_COMMANDS = 'SELECT command FROM _raft_log ORDER BY log_index';
-const SELECT_LOG_COMMANDS_TO =
-  'SELECT command FROM _raft_log WHERE log_index <= ? ORDER BY log_index';
-
 function parseEntryData(rawCommand) {
   try {
     const envelope = JSON.parse(rawCommand);
@@ -187,37 +195,120 @@ function computeMaxCommittedHlc(copyDb) {
   return max === null ? NO_COMMITTED_HLC : max.toString();
 }
 
-// Fail-closed prepared-2PC gate: a checkpoint cannot carry prepared-but-
-// undecided transactions (they live only in the log), so creation refuses
-// when any session has a PREPARE at or below the boundary without a
-// terminal outcome at or below the boundary. PREPAREs strictly above the
-// boundary are uncommitted and irrelevant.
-function hasPendingPreparedTransactions(copyDb, boundaryIndex) {
-  const pending = new Set();
-  for (const row of copyDb.prepare(SELECT_LOG_COMMANDS_TO)
-    .iterate(boundaryIndex)) {
-    const data = parseEntryData(row.command);
-    if (!data || typeof data.sessionId !== 'string' || !data.sessionId) {
-      continue;
-    }
-    if (data.type === PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
-      pending.add(data.sessionId);
-    } else if (
-      data.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
-      data.type === PARTITION_SERVICE_OPERATION.COMMIT ||
-      data.type === PARTITION_SERVICE_OPERATION.ROLLBACK
-    ) {
-      pending.delete(data.sessionId);
-    }
-  }
-  return pending.size > 0;
-}
-
 function scrubCopy(copyDb) {
   for (const table of RAFT_CHECKPOINT_EXCLUDED_TABLES) {
     copyDb.exec(`${DROP_TABLE_PREFIX}${table}`);
   }
   copyDb.exec(VACUUM_SQL);
+}
+
+function readRaftRsRecord(copyDb, groupId) {
+  try {
+    return RaftRsDurableStore.readDurableRecordIn(copyDb, groupId);
+  } catch {
+    return null;
+  }
+}
+
+function readRaftRsReservations(copyDb) {
+  try {
+    return readRaftRsPeerIdentityReservations(copyDb);
+  } catch {
+    return null;
+  }
+}
+
+function validRaftRsProgress(record) {
+  if (!record?.hardState) return false;
+  const applied = BigInt(record.appliedIndex);
+  const committed = BigInt(record.hardState.commit);
+  const generation = BigInt(record.membershipGenerationIndex);
+  return committed >= applied && generation <= applied &&
+    applied <= MAX_SAFE_EXACT;
+}
+
+function raftRsBoundaryTerm(record) {
+  const applied = BigInt(record.appliedIndex);
+  const boundaryEntry = record.entries.find(
+    ({index}) => BigInt(index) === applied);
+  return boundaryEntry?.term ??
+    (record.snapshot?.metadata?.index === record.appliedIndex ?
+      record.snapshot.metadata.term : null);
+}
+
+function reservationsCoverConfState(record, peerReservations) {
+  const reservedPeers = new Set(peerReservations.map(({peerId}) => peerId));
+  const configuredPeers = [record.confState.voters, record.confState.learners,
+    record.confState.votersOutgoing, record.confState.learnersNext].flat();
+  return configuredPeers.every((peerId) => reservedPeers.has(String(peerId)));
+}
+
+function readRaftRsCheckpoint(copyDb, groupId) {
+  const record = readRaftRsRecord(copyDb, groupId);
+  if (!validRaftRsProgress(record)) return null;
+  const boundaryTerm = raftRsBoundaryTerm(record);
+  if (boundaryTerm === null || BigInt(boundaryTerm) > MAX_SAFE_EXACT) return null;
+  const peerReservations = readRaftRsReservations(copyDb);
+  if (!peerReservations ||
+      !reservationsCoverConfState(record, peerReservations)) return null;
+  return {
+    groupId,
+    appliedIndex: record.appliedIndex,
+    appliedTerm: String(boundaryTerm),
+    membershipGenerationIndex: record.membershipGenerationIndex,
+    confState: record.confState,
+    peerReservations,
+  };
+}
+
+function prepareRaftRsCheckpointCopy(copyDb, groupId, entityKind) {
+  if (hasPendingPreparedParticipantTransactions(copyDb)) {
+    return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
+      [RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS])};
+  }
+  const raftRsDescriptor = readRaftRsCheckpoint(copyDb, groupId);
+  if (!raftRsDescriptor) {
+    return {gate: creationResult(CREATION.APPLY_WATERMARK_DIVERGENCE,
+      [RAFT_RS_CHECKPOINT_REASON.BOUNDARY])};
+  }
+  const maxCommittedHlc = computeRaftRsMaxCommittedHlc(copyDb, groupId);
+  scrubRaftRsCheckpointPayload(copyDb, entityKind);
+  return {
+    gate: creationResult(CREATION.CREATED),
+    watermarks: {committedIndex: Number(raftRsDescriptor.appliedIndex)},
+    lastIncluded: {found: true, term: Number(raftRsDescriptor.appliedTerm)},
+    maxCommittedHlc,
+    raftRsDescriptor,
+  };
+}
+
+function prepareSqliteCheckpointCopy(copyDb) {
+  if (holdsRaftRsLocalState(copyDb)) {
+    return {gate: creationResult(CREATION.UNSUPPORTED_ADAPTER,
+      [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_KIND_REQUIRED])};
+  }
+  if (hasPendingPreparedParticipantTransactions(copyDb)) {
+    return {gate: creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
+      [RAFT_RS_CHECKPOINT_REASON.PREPARED_TRANSACTIONS])};
+  }
+  const watermarks = readCopyWatermarks(copyDb);
+  let gate = evaluateWatermarkGate(watermarks);
+  if (gate.outcome !== CREATION.CREATED) return {gate};
+  const lastIncluded = readLastIncludedTerm(copyDb, watermarks.committedIndex);
+  if (!lastIncluded.found) {
+    gate = creationResult(
+      CREATION.APPLY_WATERMARK_DIVERGENCE, ['missing_log_entry']);
+  }
+  if (gate.outcome !== CREATION.CREATED) return {gate};
+  const maxCommittedHlc = computeMaxCommittedHlc(copyDb);
+  scrubCopy(copyDb);
+  return {gate, watermarks, lastIncluded, maxCommittedHlc};
+}
+
+function holdsRaftRsLocalState(db) {
+  const present = db.prepare(
+    'SELECT 1 FROM sqlite_master WHERE type=\'table\' AND name = ?');
+  return RAFT_RS_LOCAL_TABLES.some((table) => present.get(table));
 }
 
 function fsyncFile(file) {
@@ -236,6 +327,27 @@ function sidecarPaths(payloadPath) {
 
 function removeStagingDirectory(stagingDir) {
   fs.rmSync(stagingDir, {recursive: true, force: true});
+}
+
+function buildCreatedCheckpointDescriptor(
+  identity, prepared, payloadBytes, raftRsGroupId) {
+  const payloadKind = raftRsGroupId ?
+    RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE :
+    RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE;
+  return buildCheckpointDescriptor({
+    clusterId: identity.clusterId,
+    raftGroupId: identity.raftGroupId,
+    entity: identity.entity,
+    membershipEpoch: identity.membershipEpoch,
+    lastIncludedIndex: prepared.watermarks.committedIndex,
+    lastIncludedTerm: prepared.lastIncluded.term,
+    maxCommittedHlc: prepared.maxCommittedHlc ?? NO_COMMITTED_HLC,
+    payloadKind,
+    payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[payloadKind],
+    payloadByteLength: payloadBytes.length,
+    payloadDigest: sha256Digest(payloadBytes),
+    ...(raftRsGroupId ? {raftRs: prepared.raftRsDescriptor} : {}),
+  });
 }
 
 /**
@@ -258,6 +370,10 @@ async function createSqliteStateMachineCheckpoint(options) {
   if (!db || db.memory || !db.open) {
     return creationResult(CREATION.UNSUPPORTED_ADAPTER, ['memory_backed_db']);
   }
+  if (db.inTransaction) {
+    return creationResult(CREATION.PREPARED_TRANSACTIONS_PENDING,
+      [RAFT_RS_CHECKPOINT_REASON.LOCAL_TRANSACTION_OPEN]);
+  }
   ensureDirectory(checkpointsRoot);
   const stagingDir = path.join(
     checkpointsRoot,
@@ -268,31 +384,16 @@ async function createSqliteStateMachineCheckpoint(options) {
   try {
     await db.backup(stagingPayload);
     const copyDb = new Database(stagingPayload);
-    let watermarks;
-    let gate;
-    let lastIncluded;
-    let maxCommittedHlc = NO_COMMITTED_HLC;
+    let prepared;
     try {
-      watermarks = readCopyWatermarks(copyDb);
-      gate = evaluateWatermarkGate(watermarks);
-      if (gate.outcome === CREATION.CREATED) {
-        lastIncluded = readLastIncludedTerm(copyDb, watermarks.committedIndex);
-        if (!lastIncluded.found) {
-          gate = creationResult(
-            CREATION.APPLY_WATERMARK_DIVERGENCE, ['missing_log_entry']);
-        } else if (
-          hasPendingPreparedTransactions(copyDb, watermarks.committedIndex)
-        ) {
-          gate = creationResult(
-            CREATION.PREPARED_TRANSACTIONS_PENDING, ['prepared_undecided']);
-        } else {
-          maxCommittedHlc = computeMaxCommittedHlc(copyDb);
-          scrubCopy(copyDb);
-        }
-      }
+      prepared = options.raftRsGroupId ?
+        prepareRaftRsCheckpointCopy(
+          copyDb, options.raftRsGroupId, identity?.entity?.kind) :
+        prepareSqliteCheckpointCopy(copyDb);
     } finally {
       copyDb.close();
     }
+    const {gate, watermarks} = prepared;
     if (gate.outcome !== CREATION.CREATED) {
       return gate;
     }
@@ -301,20 +402,8 @@ async function createSqliteStateMachineCheckpoint(options) {
     }
     fsyncFile(stagingPayload);
     const payloadBytes = fs.readFileSync(stagingPayload);
-    const descriptor = buildCheckpointDescriptor({
-      clusterId: identity.clusterId,
-      raftGroupId: identity.raftGroupId,
-      entity: identity.entity,
-      membershipEpoch: identity.membershipEpoch,
-      lastIncludedIndex: watermarks.committedIndex,
-      lastIncludedTerm: lastIncluded.term,
-      maxCommittedHlc,
-      payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
-      payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
-        RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],
-      payloadByteLength: payloadBytes.length,
-      payloadDigest: sha256Digest(payloadBytes),
-    });
+    const descriptor = buildCreatedCheckpointDescriptor(
+      identity, prepared, payloadBytes, options.raftRsGroupId);
     const generationDir = path.join(
       checkpointsRoot, String(watermarks.committedIndex));
     ensureDirectory(generationDir);
@@ -367,6 +456,34 @@ function validatePayloadAgainstDescriptor(checkpointDir, descriptor) {
   }
   if (sha256Digest(payloadBytes) !== descriptor.payloadDigest) {
     return checkpointResult(VALIDATION.CORRUPT_PAYLOAD, ['digest']);
+  }
+  if (descriptor.payloadKind ===
+      RAFT_CHECKPOINT_PAYLOAD_KIND.RAFT_RS_REPLICA_IMAGE) {
+    const payloadDb = new Database(payloadPath, {readonly: true});
+    try {
+      let reservations;
+      try {
+        reservations = readRaftRsPeerIdentityReservations(payloadDb);
+      } catch {
+        return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
+          [RAFT_RS_CHECKPOINT_REASON.PEER_RESERVATIONS]);
+      }
+      const described = descriptor.raftRs.peerReservations;
+      if (reservations.length !== described.length || reservations.some(
+        (reservation, index) =>
+          reservation.replicaIdentity !== described[index].replicaIdentity ||
+          reservation.peerId !== described[index].peerId ||
+          reservation.learnerAdmission !== described[index].learnerAdmission)) {
+        return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
+          [RAFT_RS_CHECKPOINT_REASON.PEER_RESERVATIONS]);
+      }
+      if (!validateRaftRsPayloadTables(payloadDb, descriptor)) {
+        return checkpointResult(VALIDATION.CORRUPT_PAYLOAD,
+          [RAFT_RS_CHECKPOINT_REASON.PAYLOAD_TABLES]);
+      }
+    } finally {
+      payloadDb.close();
+    }
   }
   return checkpointResult(VALIDATION.VALID);
 }

@@ -25,8 +25,8 @@ import {fileURLToPath} from 'node:url';
 
 import * as portConstants from
   '../../../src/raft/raft-operation-port-constants.js';
-import {RAFT_PARTITION_NODE_REQUEST} from
-  '../../../src/raft/raft-provider-contract-constants.js';
+import {RAFT_OPERATION_PORT_REQUEST} from
+  '../../../src/raft/raft-operation-port-request.js';
 import {RAFT_RS_TRANSPORT_PROTOCOL} from
   '../../../src/raft/raft-rs-ingress-constants.js';
 import {tuningOf} from '../../../src/raft/raft-rs-runtime-tuning.js';
@@ -50,7 +50,7 @@ function transferLeaderMessageType() {
 
 function electionTickOf(cluster) {
   return tuningOf(cluster.replica(LEADER)
-    .request[RAFT_PARTITION_NODE_REQUEST.TIMING]).electionTick;
+    .request[RAFT_OPERATION_PORT_REQUEST.TIMING]).electionTick;
 }
 
 function formedCluster(partitionId) {
@@ -122,13 +122,17 @@ test('a proposal the leader drops during a peer-delivered transfer is the ' +
     cluster.isolate(TRANSFEREE);
     const leaderId = cluster.raftPeerIdOf(LEADER);
     const transfereeId = cluster.raftPeerIdOf(TRANSFEREE);
+    // The shape raft-rs's own sender writes: a follower forwarding a
+    // transfer request to its leader stamps it with its term (raft.rs
+    // send(): every message but MsgPropose, MsgReadIndex and the vote family
+    // gets m.term = self.term); the ingress refuses a term-less one.
     const delivered = cluster.node(LEADER).step({
       protocol: RAFT_RS_TRANSPORT_PROTOCOL,
       groupId: cluster.partitionId,
       from: transfereeId,
       to: leaderId,
       message: {msgType: transferLeaderMessageType(), from: transfereeId,
-        to: leaderId},
+        to: leaderId, term: String(cluster.coreStatus(TRANSFEREE).term)},
     });
     assert.equal(delivered.outcome, RAFT_OPERATION_OUTCOME.CORE_OK,
       'setup: the leader admits the transfer request a peer delivered');

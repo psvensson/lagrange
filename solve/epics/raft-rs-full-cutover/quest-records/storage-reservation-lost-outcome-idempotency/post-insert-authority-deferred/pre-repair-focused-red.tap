@@ -1,0 +1,655 @@
+
+> lagrange-server@0.2.6 test:file
+> node scripts/run-classified-test-files.js test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+
+# test-files planned=1
+classified lane ordinary: 1 file(s), jobs=4
+thermal: ok cpu 55C (coretemp/Package id 0) nvme 68C (nvme/Sensor 2)
+not ok test/rebalancer/reservation-fail-closed-dispatch-gate.test.js (40 assertions, 938ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: reservation-failure-blocks-dispatch: reservation insert failure rejects creation with no OPERATION_CREATED and no dispatch
+Creating operation {
+  operationId: 'b396da71-ac63-4e56-8e77-6c02699e85ad',
+  type: 'ADD',
+  partitionId: 'p-gate',
+  targetNodeId: 'target-node',
+  entityType: 'partition',
+  entityId: 'p-gate',
+  bootstrapTopologyStamped: true,
+  bootstrapReplicaIdCount: 2
+}
+    ok 1 - creation must fail closed when the reservation insert fails
+    ok 2 - OPERATION_CREATED must not be emitted after a reservation failure
+    ok 3 - no dispatch may run for an under-reserved operation
+    ok 4 - no reservation row exists after the failed insert
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..4
+ok 1 - reservation-failure-blocks-dispatch: reservation insert failure rejects creation with no OPERATION_CREATED and no dispatch # time=43.56ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: post-insert authority deferral: runtime-service create keeps its exact ACTIVE hold and re-enters the canonical dispatch gate once authority recovers
+Creating operation {
+  operationId: 'op-gate',
+  type: 'ADD',
+  partitionId: 'sys-postgres-wire',
+  targetNodeId: 'target-node',
+  entityType: 'runtime_service',
+  entityId: 'sys-postgres-wire',
+  bootstrapTopologyStamped: false,
+  bootstrapReplicaIdCount: 0
+}
+    ok 1 - temporary operation authority loss remains fail closed to the caller
+    ok 2 - the exact successfully inserted capacity hold remains ACTIVE
+    ok 3 - ambiguous authority does not publish a reservation creation event
+    ok 4 - ambiguous authority does not increment reservation creation stats
+    ok 5 - the coordinator-created dispatch event is not published prematurely
+    ok 6 - no physical dispatch occurs before authoritative adoption
+    not ok 7 - the operation owner retains one retry obligation for the durable PENDING row
+      ---
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 527
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:527:7)
+      source: |2
+            t.equal(dispatchCalls.length, 0,
+              'no physical dispatch occurs before authoritative adoption');
+            t.ok(
+        ------^
+              coordinator.workflowOwner.transitionRetryTimerByOperationId.has(
+                TEST_OPERATION_ID,
+      ...
+    
+    not ok 8 - the retained owner retry fires
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 535
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:535:7)
+      source: >2
+      
+            coordinator.restoreOperationAuthority();
+            t.equal(await timers.runNext(), true, 'the retained owner retry fires');
+        ------^
+            t.same(dispatchCalls, [TEST_OPERATION_ID],
+              'recovered authority crosses the existing reservation gate exactly once');
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -true
+        +false
+      ...
+    
+    not ok 9 - recovered authority crosses the existing reservation gate exactly once
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "op-gate",
+        -]
+        +Array []
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 536
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:536:7)
+      source: >2
+            coordinator.restoreOperationAuthority();
+            t.equal(await timers.runNext(), true, 'the retained owner retry fires');
+            t.same(dispatchCalls, [TEST_OPERATION_ID],
+        ------^
+              'recovered authority crosses the existing reservation gate exactly once');
+            t.equal(reservationCreatedCount, 0,
+      ...
+    
+    ok 10 - adopting the exact existing hold emits no duplicate creation event
+    ok 11 - adopting the exact existing hold increments no duplicate creation stat
+    ok 12 - the retry does not account a second operation creation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..12
+not ok 2 - post-insert authority deferral: runtime-service create keeps its exact ACTIVE hold and re-enters the canonical dispatch gate once authority recovers # time=30.737ms
+  ---
+  at:
+    fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+    lineNumber: 470
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('post-insert authority deferral: runtime-service create keeps its exact '
+    +
+  
+    ^
+      'ACTIVE hold and re-enters the canonical dispatch gate once authority recovers',
+    async (t) => {
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: post-insert authority deferral: restart recovery discovers the durable PENDING runtime-service operation and exact ACTIVE hold
+Creating operation {
+  operationId: 'op-gate',
+  type: 'ADD',
+  partitionId: 'sys-postgres-wire',
+  targetNodeId: 'target-node',
+  entityType: 'runtime_service',
+  entityId: 'sys-postgres-wire',
+  bootstrapTopologyStamped: false,
+  bootstrapReplicaIdCount: 0
+}
+    ok 1 - the first owner leaves a durable retryable PENDING operation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Starting recovery process { nodeId: 'reservation-gate-node' }
+Found incomplete operations during recovery {
+  count: 1,
+  incompleteOperationObservationState: 'present',
+  incompleteOperationRetryAfterMs: null,
+  nodeId: 'reservation-gate-node'
+}
+Storage reservation released { operationId: 'op-gate', releasedCount: 1 }
+metrics.rebalance.operation {
+  operationId: 'op-gate',
+  entityType: 'runtime_service',
+  finalState: 'failed',
+  totalDurationMs: 1
+}
+Marked incomplete operation as failed during recovery {
+  operationId: 'op-gate',
+  workflowStep: 'FAILED',
+  partitionId: 'sys-postgres-wire'
+}
+Recovery process completed {
+  nodeId: 'reservation-gate-node',
+  totalIncomplete: 1,
+  markedFailed: 1,
+  reconciled: 0,
+  errors: [],
+  incompleteOperationObservationState: 'present',
+  incompleteOperationRetryAfterMs: null
+}
+Starting storage reservation reconciliation
+Storage reservation reconciliation completed { expired: 0, orphansReleased: 0 }
+    not ok 2 - startup recovery re-enters the canonical owner dispatch path once
+      ---
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,3 +1,1 @@
+        -Array [
+        -  "op-gate",
+        -]
+        +Array []
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 590
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:590:7)
+      source: |2
+          try {
+            await restarted.workflowOwner.handleRecovery();
+            t.same(dispatchCalls, [TEST_OPERATION_ID],
+        ------^
+              'startup recovery re-enters the canonical owner dispatch path once');
+            t.not(
+      ...
+    
+    not ok 3 - restart does not terminalize the reservation-backed progress obligation
+      ---
+      found: FAILED
+      doNotWant: FAILED
+      compare: "!=="
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 592
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:592:7)
+      source: |2
+            t.same(dispatchCalls, [TEST_OPERATION_ID],
+              'startup recovery re-enters the canonical owner dispatch path once');
+            t.not(
+        ------^
+              sqlEngine.operations.get(TEST_OPERATION_ID)?.workflow_step,
+              WORKFLOW_STEP.FAILED,
+      ...
+    
+    not ok 4 - restart adopts the same exact capacity hold
+      ---
+      compare: ===
+      at:
+        fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+        lineNumber: 597
+        columnNumber: 7
+        typeName: Test
+      stack: >
+        Test.<anonymous>
+        (test/rebalancer/reservation-fail-closed-dispatch-gate.test.js:597:7)
+      source: >2
+              'restart does not terminalize the reservation-backed progress obligation',
+            );
+            t.equal(
+        ------^
+              sqlEngine.reservations.get(TEST_RESERVATION_ID)?.status,
+              RESERVATION_STATUS.ACTIVE,
+      diff: |
+        --- expected
+        +++ actual
+        @@ -1,1 +1,1 @@
+        -active
+        +released
+      ...
+    
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..4
+not ok 3 - post-insert authority deferral: restart recovery discovers the durable PENDING runtime-service operation and exact ACTIVE hold # time=25.071ms
+  ---
+  at:
+    fileName: test/rebalancer/reservation-fail-closed-dispatch-gate.test.js
+    lineNumber: 549
+    columnNumber: 1
+    isToplevel: true
+  source: >
+    });
+  
+  
+    test('post-insert authority deferral: restart recovery discovers the durable '
+    +
+  
+    ^
+      'PENDING runtime-service operation and exact ACTIVE hold', async (t) => {
+      initializeConfig();
+  ...
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Storage reservation created with operation {
+  reservationId: 'res-op-gate',
+  operationId: 'op-gate',
+  targetNodeId: 'target-node',
+  estimatedBytes: 15,
+  expiresAt: 1791350080658
+}
+Operation step changed {
+  operationId: 'op-gate',
+  previousStep: 'PENDING',
+  newStep: 'SENDING',
+  reason: 'dispatch_sending',
+  status: 'pending',
+  partitionId: 'p-gate'
+}
+# Subtest: dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with no ACTIVE reservation repairs through ensureReservationForOperation
+    ok 1 - dispatch proceeded after repair
+    ok 2 - the deterministic res-${operationId} reservation was created
+    ok 3 - the repaired reservation is ACTIVE
+    ok 4 - the reservation is bound to the dispatching operation
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..4
+ok 4 - dispatch-gate-repairs-via-ensure: dispatch of an ADD operation with no ACTIVE reservation repairs through ensureReservationForOperation # time=17.933ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: dispatch-gate-repairs-via-ensure: a failing reservation repair skips dispatch as OPERATION_NOT_DISPATCHABLE
+    ok 1 - dispatch did not proceed
+    ok 2 - dispatch is reported as skipped
+    ok 3 - skip reason is OPERATION_NOT_DISPATCHABLE
+    ok 4 - skip result carries the operation id
+    ok 5 - executeOperationInternal never ran under-reserved
+    ok 6 - no reservation row after the failed repair insert
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..6
+ok 5 - dispatch-gate-repairs-via-ensure: a failing reservation repair skips dispatch as OPERATION_NOT_DISPATCHABLE # time=15.411ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+# Subtest: divergence-arm-keeps-reservation: unresolved terminal divergence keeps the reservation ACTIVE
+    ok 1 - completeOperation keeps the reservation ACTIVE on divergence
+    ok 2 - failOperation keeps the reservation ACTIVE on divergence
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..2
+ok 6 - divergence-arm-keeps-reservation: unresolved terminal divergence keeps the reservation ACTIVE # time=14.011ms
+
+RebalanceCoordinator initialized {
+  nodeId: 'reservation-gate-node',
+  config: {
+    pendingTimeoutMs: 30000,
+    creatingTimeoutMs: 60000,
+    syncingTimeoutMs: 300000,
+    removingTimeoutMs: 60000,
+    maxConcurrentAdds: 5,
+    reservedRuntimeServicePlacementSlots: 1,
+    maxConcurrentRemoves: 5,
+    periodicCheckIntervalMs: 60000,
+    reservationTtlMs: 300000
+  }
+}
+Storage reservation released { operationId: 'op-gate', releasedCount: 1 }
+# Subtest: divergence-arm-keeps-reservation: losing to a DIFFERENT durable terminal releases the reservation
+    ok 1 - completeOperation releases the reservation on TERMINAL_ADOPTED
+Shutting down RebalanceCoordinator { nodeId: 'reservation-gate-node', inFlightOperations: 0 }
+    1..1
+ok 7 - divergence-arm-keeps-reservation: losing to a DIFFERENT durable terminal releases the reservation # time=14.365ms
+
+1..7
+# { total: 33, pass: 27, fail: 6 }
+# time=175.283ms
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'b396da71-ac63-4e56-8e77-6c02699e85ad',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'b396da71-ac63-4e56-8e77-6c02699e85ad',
+    replica_id: 'p-gate-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791349780577,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780580
+}
+Failed to create storage reservation for operation {
+  operationId: 'b396da71-ac63-4e56-8e77-6c02699e85ad',
+  reservationId: 'res-b396da71-ac63-4e56-8e77-6c02699e85ad',
+  error: 'injected storage_reservations constraint violation'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791349780602,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780602
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791349780633,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780633
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'Authoritative replica operation is unavailable for reservation adoption'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: 'sys-postgres-wire-r1',
+    status: 'failed',
+    workflow_step: 'FAILED',
+    updated_at: 1791349780634,
+    completed_at: 1791349780634,
+    error_message: 'Node recovery - incomplete operation'
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780636
+}
+Operation failed {
+  operationId: 'op-gate',
+  type: 'ADD',
+  partitionId: 'sys-postgres-wire',
+  targetNodeId: 'target-node',
+  errorMessage: 'Node recovery - incomplete operation'
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: null,
+    status: 'pending',
+    workflow_step: 'PENDING',
+    updated_at: 1791349780657,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780658
+}
+Cache/authoritative divergence detected during reconciliation {
+  divergenceType: 'cache_missing',
+  tableName: 'replica_operations',
+  ownerComponent: 'RebalanceCoordinator',
+  reconciliationReason: 'recovery_operation_persist_confirmation',
+  rowKey: 'op-gate',
+  cacheValue: null,
+  authoritativeValue: {
+    operation_id: 'op-gate',
+    replica_id: null,
+    status: 'pending',
+    workflow_step: 'SENDING',
+    updated_at: 1791349780659,
+    completed_at: null,
+    error_message: null
+  },
+  divergentFields: [
+    'operation_id',
+    'replica_id',
+    'status',
+    'workflow_step',
+    'updated_at',
+    'completed_at',
+    'error_message'
+  ],
+  detectedAt: 1791349780659
+}
+Failed to create storage reservation for operation {
+  operationId: 'op-gate',
+  reservationId: 'res-op-gate',
+  error: 'injected storage_reservations constraint violation'
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-gate',
+  disposition: 'refused',
+  step: 'ACTIVE',
+  partitionId: 'p-gate'
+}
+Committed terminal transition not authoritatively visible; repair scheduled {
+  operationId: 'op-gate',
+  workflowStep: 'ACTIVE',
+  partitionId: 'p-gate',
+  cause: 'persist_not_committed',
+  attempt: 0,
+  delayMs: 500
+}
+Terminal transition persist not committed; retry ownership kept and repair armed {
+  operationId: 'op-gate',
+  disposition: 'refused',
+  step: 'FAILED',
+  partitionId: 'p-gate'
+}
+# test-files total=1 pass=0 fail=1 assertions=40

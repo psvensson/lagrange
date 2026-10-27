@@ -1,0 +1,77 @@
+# Original full startup bodies at their original shared seed release budgets.
+# A red 1000ms or 5000ms startup cannot count as acceptance.
+name: rs-raft-control-single-census-startup
+on:
+  push:
+    branches: [continue/rs-raft-control-pause-census-20261014]
+    paths: [.github/workflows/rs-raft-control-single-census-startup.yml]
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Exact installed source
+        run: npm ci
+      - name: Original unchanged full seed 1000ms and 5000ms test bodies
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          OUT=test-output/rs-raft-single-census-startup
+          mkdir -p "$OUT"
+          git rev-parse HEAD > "$OUT/source-sha.txt"
+          git rev-parse HEAD^{tree} > "$OUT/source-tree.txt"
+          failed=0
+          for f in \
+            test/integration/message-group-membership-claim-cache.integration.test.js \
+            test/bootstrap/node-bootstrap-consistency.property.test.js; do
+            name="${f##*/}"
+            sha256sum "$f" > "$OUT/$name-original-test-sha256.txt"
+            npm run -s test:file -- "$f" > "$OUT/$name.log" 2>&1
+            rc=$?
+            printf '%s\n' "$rc" > "$OUT/$name.status"
+            echo "$f original entire test status=$rc"
+            grep -E 'Seed participant release failed|test-files total|ok test/' "$OUT/$name.log" \
+              | tail -n 9 | cut -c 1-1100 || true
+            if test "$rc" -ne 0; then failed=1; fi
+            if test -f ".tap/test-results/$f.tap"; then
+              cp ".tap/test-results/$f.tap" "$OUT/$name.full.tap"
+              sha256sum "$OUT/$name.full.tap" > "$OUT/$name.tap-sha256.txt"
+              if test "$name" = "message-group-membership-claim-cache.integration.test.js"; then
+                node scripts/quest-evidence/summarize-seed-release-trace.mjs \
+                  "$OUT/$name.full.tap" "$OUT/$name.census.json" \
+                  > "$OUT/$name.census-line.json" 2> "$OUT/$name.census-error.log"
+                parse=$?
+                printf '%s\n' "$parse" > "$OUT/$name.census.status"
+                if test "$parse" -eq 0; then cat "$OUT/$name.census-line.json"; else
+                  cat "$OUT/$name.census-error.log"; failed=1; fi
+              fi
+            fi
+            if test -d test-output/reports; then
+              mkdir -p "$OUT/$name.canonical"
+              find test-output/reports -maxdepth 1 -type f -name '*.ndjson' \
+                -exec cp {} "$OUT/$name.canonical/" \;
+            fi
+          done
+          exit "$failed"
+      - name: Preserve all source-bound raw/canonical outcomes including red
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rs-raft-single-census-startup-${{ github.sha }}
+          path: test-output/rs-raft-single-census-startup/
+          retention-days: 14
+          if-no-files-found: warn

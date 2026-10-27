@@ -1,0 +1,36 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-partition-cohort-readback",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The benchmark table readiness owner resolves the intended catalog table ID and reads its complete partition cohort. Every observed cohort row must carry the exact intended table name before readiness succeeds; any missing or conflicting name is an explicit product finding. Empty or temporarily unavailable metadata remains subject to existing readiness retry. The harness never repairs or writes system metadata.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/admin-partition-cohort-readback/evidence/receipt.json",
+      "requiredReceipts": [
+        "full-cohort-negative-and-positive-readback",
+        "existing-benchmark-readiness-callers",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair F-ADMIN-2 only at waitForSutBenchmarkTableReady and its existing full-cohort assertion. The exact a97 predecessor accepts mixed correct and nameless rows after a by-name early success. Preserve frozen original, node, scale and case checkpoints."
+    },
+    {
+      "id": "scope",
+      "statement": "Remove early acceptance from partial by-name results; consume catalog table ID and every row returned for it. No raw repair UPDATE, new metadata owner, fallback alias, widened timeout, generic SQL bypass, production lifecycle change or schema normalization."
+    },
+    {
+      "id": "proof",
+      "statement": "Seal before source. Preserve the independent reviewer red; exercise actual helper with partial missing/wrong names, all correct, empty then present, and refused/unavailable reads. Canonical runner retries0 and thermal/controller coordination, exact predecessor function metric deltas, normal hook and independent review before composition. No main merge or publish."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction"
+  ],
+  "sealedAt": "a97f79c35b7e1f6428032493918e16e623339688"
+}

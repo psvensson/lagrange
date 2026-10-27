@@ -22,7 +22,6 @@
 // tree, which is precisely what this workflow promises never to do.
 
 import assert from 'node:assert/strict';
-import {execFileSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
@@ -40,6 +39,7 @@ import {
   SUBSYSTEM_MANIFEST_PATH,
 } from '../../scripts/checks/test-subsystem-classification-constants.js';
 import {createChangeProofFixture} from './change-proof-fixture.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const root = process.cwd();
 const UTF8 = 'utf8';
@@ -173,10 +173,10 @@ test('the command never writes to the repository it inspects', () => {
   // The same read-only promise the static layer makes. Asserted here because
   // the orchestrator is the one that spawns other processes, and a spawned
   // generator writing to the tree would be invisible to a library-level test.
-  const before = execFileSync('git', ['status', '--porcelain'],
+  const before = execGit(['status', '--porcelain'],
     {cwd: repo, encoding: UTF8});
   proofFor({'docs/development/note.md': '# note\n'});
-  const after = execFileSync('git', ['status', '--porcelain'],
+  const after = execGit(['status', '--porcelain'],
     {cwd: repo, encoding: UTF8});
   assert.equal(after, before);
 });

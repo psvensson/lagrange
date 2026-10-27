@@ -1,3 +1,4 @@
+import * as instanceMetadata from './service-instance-metadata.js';
 import {TABLES} from '../../constants/index.js';
 import {SD_COL} from '../../wasm-service/wasm-service-models.js';
 import {
@@ -14,6 +15,8 @@ import {
   requestBindingServiceDefinitionRowsMatch,
 } from './request-binding-service-definition-contract.js';
 import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+import {POSTGRES_WIRE_SCALE_PREDICATE, compilePostgresWireScaleRequest,
+  describePostgresWireScaleResult} from './postgres-wire-scale-contract.js';
 
 const LOCAL_STR_SERVICE_DEFINITIONS_OWNER = 'service-definitions-owner';
 const SERVICE_DEFINITION_ROW_OWNERS = new WeakMap();
@@ -60,6 +63,7 @@ class ServiceDefinitionsOwner {
       );
     }
     this.catalogOwner = options.catalogOwner;
+    instanceMetadata.registerInstanceRows(this, options);
     this.serialGates = new Map();
     SERVICE_DEFINITION_ROW_OWNERS.set(
       this,
@@ -83,12 +87,48 @@ class ServiceDefinitionsOwner {
     return rowOwnerFor(this).getSystemTableCache();
   }
 
+  selectConsensusInstance(request, options) {
+    return instanceMetadata.selectConsensusInstance(this, request, options);
+  }
+
+  getCurrentInstance(serviceId, options) {
+    return instanceMetadata.getCurrentInstance(this, serviceId, options);
+  }
+
+  reserveInstanceResource(binding, request, options) {
+    return instanceMetadata.reserveInstanceResource(this, binding, request, options);
+  }
+
+  resolveInstanceResource(binding, token, options) {
+    return instanceMetadata.resolveInstanceResource(this, binding, token, options);
+  }
+
+  grantInstanceResource(binding, token, options) {
+    return instanceMetadata.grantInstanceResource(this, binding, token, options);
+  }
+
+  closeInstanceResource(binding, token, options) {
+    return instanceMetadata.closeInstanceResource(this, binding, token, options);
+  }
+
+  releaseInstanceResource(binding, token, options) {
+    return instanceMetadata.releaseInstanceResource(this, binding, token, options);
+  }
+
   async getServiceDefinition(serviceDefinitionId, options = {}) {
     return rowOwnerFor(this).readByPrimaryKey(serviceDefinitionId, options);
   }
 
   async listServiceDefinitions(options = {}) {
     return rowOwnerFor(this).listRows(options);
+  }
+
+  /** Persist built-in listener intent; existing placement owns convergence. */
+  async scalePostgresWireListener(request, options = {}) {
+    const desired = compilePostgresWireScaleRequest(request);
+    const result = await rowOwnerFor(this).updateWhere(
+      POSTGRES_WIRE_SCALE_PREDICATE, desired, options);
+    return describePostgresWireScaleResult(result, desired);
   }
 
   async runSerialized(key, operation) {

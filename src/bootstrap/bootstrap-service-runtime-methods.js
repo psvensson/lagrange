@@ -27,6 +27,10 @@ import {
 } from '../constants/index.js';
 import {isEndpointCurrentForNode} from
   '../control-plane/owners/endpoint-incarnation-currentness.js';
+import {prepareOriginalSeedAttempt, assertOriginalSeedAttempt, admitOriginalSeedReplica,
+  revokeOriginalSeedAttempt, closeOriginalSeedAttempt, assertOriginalSeedContinuation,
+  assertOriginalSeedPublicAdmission} from
+  './seed-original-allocation-startup.js';
 
 const BootstrapPhase = BOOTSTRAP_PHASE;
 const BootstrapEvent = BOOTSTRAP_EVENT;
@@ -41,6 +45,27 @@ const BOOTSTRAP_RUNTIME_LOG_MSG = Object.freeze({
 
 function createBootstrapServiceRuntimeMethods() {
   return {
+    prepareOriginalSeedAttempt() {
+      return prepareOriginalSeedAttempt(this);
+    },
+    assertOriginalSeedAttempt() {
+      return assertOriginalSeedAttempt(this);
+    },
+    admitOriginalSeedReplica(options) {
+      return admitOriginalSeedReplica(this, options);
+    },
+    revokeOriginalSeedAttempt() {
+      return revokeOriginalSeedAttempt(this);
+    },
+    closeOriginalSeedAttempt() {
+      return closeOriginalSeedAttempt(this);
+    },
+    assertOriginalSeedContinuation(replicaId = undefined) {
+      return assertOriginalSeedContinuation(this, replicaId);
+    },
+    assertOriginalSeedPublicAdmission() {
+      return assertOriginalSeedPublicAdmission(this);
+    },
     hasPublishedLocalServiceEndpoints() {
       const systemTableCache = this.getSystemTableCache();
       const localEndpointRows = systemTableCache?.filter?.(
@@ -164,6 +189,8 @@ function createBootstrapServiceRuntimeMethods() {
      * @private
      */
     async handleBootstrapFailure(error) {
+      this.isShuttingDown = true;
+      this.revokeOriginalSeedAttempt();
       const failedPhase = this.phase;
       this.phase = BootstrapPhase.FAILED;
       this.lastError = error;
@@ -192,7 +219,7 @@ function createBootstrapServiceRuntimeMethods() {
         registeredNodeId: this.nodeId,
       };
 
-      await this.cleanupFailedBootstrap(
+      const cleanup = await this.cleanupFailedBootstrap(
         failedPhase,
         cleanupContext,
       );
@@ -202,6 +229,7 @@ function createBootstrapServiceRuntimeMethods() {
         phase: failedPhase,
         duration,
         error: error.message,
+        cleanup,
         servicesCreated: this.servicesCreated,
       });
 
@@ -210,7 +238,9 @@ function createBootstrapServiceRuntimeMethods() {
         nodeId: this.nodeId,
         duration,
         error: error.message,
+        cause: error,
         phase: failedPhase,
+        cleanup,
         servicesCreated: this.servicesCreated,
       };
     },
@@ -220,10 +250,10 @@ function createBootstrapServiceRuntimeMethods() {
      * cleanup owner (SeedCleanupHandler — D3.1).
      * @param {string} failedPhase - The phase that failed.
      * @param {Object} cleanupContext - Context about what was created.
-     * @return {Promise<void>}
+     * @return {Promise<Object>} Frozen cleanup observation.
      */
     async cleanupFailedBootstrap(failedPhase, cleanupContext) {
-      await this.seedCleanupHandler.cleanupFailedBootstrap(
+      return this.seedCleanupHandler.cleanupFailedBootstrap(
         failedPhase,
         cleanupContext,
       );
@@ -266,10 +296,10 @@ function createBootstrapServiceRuntimeMethods() {
     /**
      * Start WebSocket server for cross-node communication.
      * Call this after bootstrap is complete to enable remote node connections.
-     * Note: If wsPort was provided during bootstrap, the server is already started.
      * @return {Promise<void>}
      */
     async startWebSocketServer() {
+      this.assertOriginalSeedPublicAdmission();
       if (!this.messageRouter) {
         throw new Error(bootstrapError.ROUTER_NOT_READY);
       }
@@ -309,6 +339,7 @@ function createBootstrapServiceRuntimeMethods() {
      * @return {void}
      */
     openExternalTransportAdmission() {
+      this.assertOriginalSeedPublicAdmission();
       if (typeof this.messageRouter?.setExternalAdmissionEnabled ===
         TYPEOF_FUNCTION) {
         this.messageRouter.setExternalAdmissionEnabled(true);
@@ -385,13 +416,13 @@ function createBootstrapServiceRuntimeMethods() {
      * @return {Promise<void>}
      */
     async shutdown() {
+      this.isShuttingDown = true;
+      this.revokeOriginalSeedAttempt();
       if (this.shutdownPromise) {
         return this.shutdownPromise;
       }
 
-      this.shutdownPromise = (async () => {
-        this.isShuttingDown = true;
-
+      const attempt = (async () => {
         if (this.deferredLatencyTopologyStartHandle) {
           if (this.deferredLatencyTopologyStartKind ===
               DEFERRED_LATENCY_TOPOLOGY_START_KIND_IMMEDIATE &&
@@ -422,8 +453,15 @@ function createBootstrapServiceRuntimeMethods() {
 
         this.emit(BootstrapEvent.SHUTDOWN, {nodeId: this.nodeId});
       })();
-
-      return this.shutdownPromise;
+      this.shutdownPromise = attempt;
+      try {
+        return await attempt;
+      } catch (error) {
+        // Native owners retain failed cleanup. Release only this rejected
+        // attempt so the next caller can retry those same obligations.
+        if (this.shutdownPromise === attempt) this.shutdownPromise = null;
+        throw error;
+      }
     },
   };
 }

@@ -51,23 +51,32 @@ Required workflow:
 This prevents full-gate resource collapse from being misdiagnosed as a long
 tail of unrelated suite failures.
 
-## Test Duration Hard Limit
+## Test Duration Targets and Hardware Tolerance
 
-**Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds.**
+Operator supersession, 2026-10-12: observed execution time depends on VM and
+hardware. The targets remain 2 seconds for a unit case and 30 seconds for an
+integration case; up to **10 times the target** is acceptable for this elapsed-
+time performance gate. Over-target measurements retain their actual duration
+and ratio and are reported as tolerated, not as meeting the target. Beyond
+20 seconds/unit or 300 seconds/integration requires investigation. Historical
+failed measurements remain unchanged; later dispositions cite this ruling.
 
-A test counts as an **integration** test (the 30-second budget) when its filename
-ends in `.integration.test.js` **or** it lives under `test/integration/` or
-`test/bootstrap/`; this is exactly the set the `test:unit` script excludes in
-`package.json`. Every other `*.test.js` is a **unit** test and is bound by the
-2-second limit. Do not reclassify a slow unit test as "integration" to dodge the
-hard error — move the file into the integration set only if it genuinely needs the
-integration harness.
+A test is integration when its filename ends in `.integration.test.js` or it
+lives under `test/integration/` or `test/bootstrap/`; all other `*.test.js` are
+unit cases. Do not reclassify tests just to gain tolerance. Per-case measurements
+are distinct from file/runner startup costs.
 
-These are test-contract limits, not an assumption that every execution host has
-the same capacity. When a test exceeds its limit, retain the failure and identify
-the product, fixture, runtime, or host cause. Do not accept it as passing or raise
-the limit to hide that cause. Use the runner's existing machine-budget handling
-where applicable and keep the required workload unchanged.
+This explicitly replaces the previous machine-specific 2/30-second HARD ERROR
+rule for observed test cost only. It does not raise production protocol, seed,
+election, lease, retry or caller deadlines; alter asserted ordering/budgets;
+turn test timeouts, hangs, missing output or unengaged cases into passes; or
+waive correctness, resource, audit or independent review requirements. Test
+runner kill timeouts are unchanged unless separately justified and reviewed.
+
+Beyond that tolerance, retain the failure and identify the product, fixture,
+runtime or host cause. Do not accept it as passing or raise the limit to hide
+that cause. Use the runner's existing machine-budget handling where applicable
+and keep the required workload unchanged.
 
 Identify the root cause by looking for unnecessary `setTimeout()` or real-time delays in tests, uncleaned timers (`setTimeout`, `setInterval`) keeping the process alive, speculative execution or background intervals not disabled in tests, or actual performance bugs in the implementation. Resolve it by mocking time-based behavior instead of waiting for real time, clearing all timers in `finally` blocks, disabling background features (speculative execution, intervals) in unit tests, and using `Promise.resolve()` or immediate callbacks instead of delays.
 

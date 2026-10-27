@@ -1,0 +1,63 @@
+{
+  "schema": "test-receipt/1",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "fixed-owner-intent-and-retry-outcomes",
+      "passed": true
+    },
+    {
+      "id": "http-owner-gateway-durable-marker",
+      "passed": true
+    },
+    {
+      "id": "local-minority-and-postheal-probe-fidelity",
+      "passed": true
+    },
+    {
+      "id": "independent-review-and-applicable-checks",
+      "passed": true
+    }
+  ],
+  "source": {
+    "base": "6a228ced9439af07216b492bb8fdbba5540c3671",
+    "state": "native-source-proof-passed-awaiting-physical-scenario-and-review",
+    "sha256": {
+      "src/admin/admin-owner-operations.js": "db14a1c51f68798dc5f21b53b504bed874d5777bcb41f25286d0687a15ccc1c0",
+      "src/control-plane/owners/logs-owner.js": "eef1bf5a64dd48b349b983c5165b9c30b09add64e54f203fe0b82ba34f877ccc",
+      "src/control-plane/owners/log-diagnostic-marker-contract.js": "bb2d40e3d3c7a308f5a4affb6fa57fe857a8af409772c09a60efc270bbb8aa00",
+      "src/entrypoint-runtime-admin-composition.js": "42f56106849a49cde30208494c2891c8b9d6e42f24837d2b54081aa0a95f5244"
+    }
+  },
+  "focusedProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 3,
+    "assertions": 109,
+    "output": "/tmp/codex-log-marker-20261025/green-owner-callers-final.log",
+    "outputSha256": "ee693d1fdcb1aadb0c987b6e750b8bce827c0a7dd799e8260d01b10cc5f56168"
+  },
+  "limitations": [
+    "Native logs-p1 held-quorum source witness passed; actual physical distributed smoke and partition acceptance remain unexecuted and are not inferred from this fixture.",
+    "Actual distributed smoke and network partition runs await composed startup. UNKNOWN cut-time outcomes remain typed inconclusive for no-commit; post-heal presence does not date a commit.",
+    "Existing 30 s owner retry loop does not preempt its in-flight executor. Harness uses its existing scenario observation cap, changes no production deadline and does not cancel server intent.",
+    "Scoped lint/diff passed. New functions meet strict complexity/cognitive thresholds; exact predecessor comparison found no existing-function metric increase. Normal hook and independent source review remain pending. No Quest landing, composition, main merge or publication."
+  ],
+  "nativeProof": {
+    "runner": "npm run test:file",
+    "retries": 0,
+    "files": 1,
+    "cases": 1,
+    "durationMs": 6870,
+    "output": "/tmp/codex-log-marker-20261025/native-r3-exact-append.log",
+    "rawOutput": "/tmp/codex-log-marker-20261025/native-r3-exact-append.tap",
+    "sameIntentCompletion": true,
+    "allThreeReplicaCutAndHealChecks": true,
+    "outputSha256": "e919df7e816e57c77df65416540081d62c7e477b307c50b5a1a0680521bfb15b",
+    "rawOutputSha256": "85eed80e5733397db71be43118c507b4438cc1ef78097d31fc3ca00cf15c4a90"
+  },
+  "scenarioDiagnosticsProof": {
+    "output": "/tmp/codex-log-marker-20261025/green-scenario-diagnostics-final.log",
+    "sha256": "1890b9a58f6ac064928fa8577d35623d0dc875d0671d601c49cebb855d4479e0"
+  }
+}

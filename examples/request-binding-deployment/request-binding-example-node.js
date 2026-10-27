@@ -273,7 +273,7 @@ async function bootExampleNode(dataDir, options = {}) {
     wsPort,
   });
   const bootstrapApi = new BootstrapAPI({
-    bootstrapService,
+    assertOriginalSeedPublicAdmission: () => bootstrapService.assertOriginalSeedPublicAdmission(),
     bootstrapStartupAdapter: bootstrapService.bootstrapApiOwner,
     epochManager: bootstrapService.epochManager,
     messageGroupServices: bootstrapService.messageGroupServices,

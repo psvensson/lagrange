@@ -1,0 +1,358 @@
+import {test} from '../../src/test-helpers/tap.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
+import {PARTITION_SERVICE_SHARED} from
+  '../../src/partition/partition-service-shared.js';
+import {PARTITION_TRANSITION_STATE} from
+  '../../src/partition/partition-constants.js';
+import {buildWorkflow} from './managed-split-workflow-test-helpers.js';
+import {
+  openRecordStore,
+  openView,
+  parsePartitionTransition,
+  readAuthoritativelyFrom,
+  turns,
+} from './workflow-record-sqlite-world.js';
+
+const {RaftRole} = PARTITION_SERVICE_SHARED;
+const QUIET = Object.freeze({debug() {}, info() {}, warn() {}, error() {}});
+const NO_TIMERS = Object.freeze({setTimeout: () => null, clearTimeout() {}});
+const SOURCE = 'users-p1';
+const clock = {now: 1000};
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => { resolve = settle; });
+  return {promise, resolve};
+}
+
+function splitMetadata(overrides = {}) {
+  return {
+    workflowId: 'split-tbl-users-users-p1-v2',
+    workflowAttempt: 1,
+    workflowFenceToken: 1,
+    primaryKeyColumn: 'id',
+    sourcePartitionId: SOURCE,
+    splitKey: 'm',
+    targetPartitionIds: ['users-p-left', 'users-p-right'],
+    targetPartitionVersion: 2,
+    ...overrides,
+  };
+}
+
+function mergeMetadata(overrides = {}) {
+  return {
+    workflowId: 'merge-tbl-users-users-p1-users-p2-v2',
+    workflowAttempt: 1,
+    workflowFenceToken: 1,
+    primaryKeyColumn: 'id',
+    sourcePartitionIds: [SOURCE, 'users-p2'],
+    targetPartitionIds: ['users-p-merged'],
+    targetPartitionVersion: 2,
+    ...overrides,
+  };
+}
+
+function installSnapshotStorage(source, events, snapshotGate = null) {
+  source.seedSplitReplayCursorFromDurableLog = (handle) => {
+    handle.snapshotBarrierIndex = null;
+    handle.replayWatermarkIndex = null;
+  };
+  source.openSplitSnapshotDatabase = () => ({
+    prepare(sql) {
+      if (sql.startsWith('PRAGMA table_info')) {
+        return {all: () => [{name: 'id'}, {name: 'name'}]};
+      }
+      return {iterate: () => [{id: 'a', name: 'Alice'}][Symbol.iterator]()};
+    },
+    close() {},
+  });
+  source.applySplitSnapshotBatch = async () => {
+    events.push('split-snapshot');
+    if (snapshotGate) await snapshotGate.promise;
+  };
+  source.backfillMergeSnapshot = async () => {
+    events.push('merge-snapshot');
+    if (snapshotGate) await snapshotGate.promise;
+  };
+  source.replaySplitEntry = async () => {};
+  source.replayMergeEntry = async () => {};
+  source.waitForMergeCutoverActivation = async () => {};
+}
+
+function buildSource(events, snapshotGate = null) {
+  const source = Object.create(PartitionService.prototype);
+  Object.assign(source, {
+    partitionId: SOURCE,
+    tableId: 'tbl-users',
+    tableName: 'users',
+    role: RaftRole.LEADER,
+    logger: QUIET,
+    splitReplication: null,
+    splitReplicationRun: null,
+    mergeReplication: null,
+    mergeReplicationRun: null,
+    timeSource: {now: () => clock.now},
+  });
+  installSnapshotStorage(source, events, snapshotGate);
+  return source;
+}
+
+function buildOwner(store, source, startDelivery) {
+  const view = openView(store);
+  const workflow = buildWorkflow({
+    cdcIntegrationService: store.cdcFor('A'),
+    getTableInfo: () => view.row(),
+    listTableInfos: () => view.list(),
+    getPartitionInfo: (id) => store.partitionRow(id),
+    logger: QUIET,
+    now: () => clock.now,
+    listTablePartitionRows: () => store.partitionIds()
+      .map((id) => store.partitionRow(id)),
+    resolveActivePartitionVersion: (row) =>
+      Number(row?.active_partition_version) || 1,
+    groupRetirementScheduler: NO_TIMERS,
+    groupRetirementLeaseScheduler: NO_TIMERS,
+    startSplitReplicationOnSourcePartition: (...args) =>
+      startDelivery(source, ...args),
+    parsePartitionTransition,
+    topologyAdapter: null,
+  }).workflow;
+  workflow.workflowOwnerId = 'owner-A';
+  readAuthoritativelyFrom(workflow, store);
+  workflow.readCommittedGroupMembers = async () => ['r1', 'r2', 'r3'];
+  workflow.listPartitionServiceRows = (partitionId) =>
+    ['r1', 'r2', 'r3'].map((replicaId) => ({partition_id: partitionId,
+      replica_id: replicaId, node_id: `n-${replicaId}`}));
+  workflow.deliverReplicaRemoval = async () => ({status: 'completed'});
+  source.sqlQueryEngine = {managedSplitWorkflow: workflow};
+  return workflow;
+}
+
+function recordSnapshot(store) {
+  const row = store.tablesRow();
+  const metadata = JSON.parse(row.partition_transition_metadata || '{}');
+  return {
+    state: row.partition_transition_state,
+    attempt: metadata.workflowAttempt ?? null,
+    fence: metadata.workflowFenceToken ?? null,
+    sourceStatus: metadata.participants?.['source-partition']?.status ?? null,
+  };
+}
+
+test('an accepted split START whose answer is lost stays on its durable ' +
+  'attempt', async (t) => {
+  clock.now = 1000;
+  const store = openRecordStore({partitions: [
+    {partition_id: SOURCE},
+    {partition_id: 'users-p3'},
+  ]});
+  const events = [];
+  const snapshotGate = deferred();
+  const source = buildSource(events, snapshotGate);
+  let starts = 0;
+  const workflow = buildOwner(store, source, async (service, partitionId,
+    tableId, tableName, transitionMetadata) => {
+    starts += 1;
+    const answer = await service.handleStartSplitReplication({partitionId,
+      tableId, tableName, transitionMetadata});
+    if (starts === 1) {
+      throw Object.assign(new Error('START_SPLIT_REPLICATION answer lost'),
+        {retryable: true});
+    }
+    return answer;
+  });
+
+  const result = await workflow.execute(SOURCE);
+  await turns(40);
+  const accepted = recordSnapshot(store);
+  t.equal(accepted.attempt, 1, 'the accepted physical worker keeps attempt 1');
+  t.equal(accepted.fence, 1, 'the accepted physical worker keeps fence 1');
+  t.equal(accepted.sourceStatus, 'snapshot_started',
+    'the record proves START acceptance before snapshot copy');
+  t.equal(accepted.state, PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+    'answer loss does not write a deferred record over accepted START');
+  t.equal(result.success, true,
+    'the owner confirms the accepted START from its durable record');
+  t.equal(starts, 1, 'the owner does not register and dispatch a successor');
+
+  snapshotGate.resolve();
+  await source.splitReplicationRun;
+});
+
+test('a split START transport failure before source acceptance defers the ' +
+  'same attempt', async (t) => {
+  clock.now = 1000;
+  const store = openRecordStore({partitions: [
+    {partition_id: SOURCE},
+    {partition_id: 'users-p3'},
+  ]});
+  const events = [];
+  const source = buildSource(events);
+  let deliveries = 0;
+  const workflow = buildOwner(store, source, async () => {
+    deliveries += 1;
+    throw Object.assign(new Error('START_SPLIT_REPLICATION not delivered'),
+      {retryable: true});
+  });
+
+  const result = await workflow.execute(SOURCE);
+  const rejected = recordSnapshot(store);
+  t.equal(result.success, false, 'an unaccepted delivery is not completed');
+  t.equal(rejected.state, PARTITION_TRANSITION_STATE.DEFERRED,
+    'the owner records a retryable deferral when START was not accepted');
+  t.equal(deliveries, 1, 'the owner performs one bounded delivery attempt');
+  t.same(events, [], 'an unaccepted delivery performs no source work');
+});
+
+test('the durable split record rejects altered payload at the same attempt ' +
+  'and fence', async (t) => {
+  clock.now = 1000;
+  const store = openRecordStore({partitions: [
+    {partition_id: SOURCE},
+    {partition_id: 'users-p3'},
+  ]});
+  const events = [];
+  const snapshotGate = deferred();
+  const source = buildSource(events, snapshotGate);
+  let alteredResponse = null;
+  let exactResponse = null;
+  const workflow = buildOwner(store, source, async (service, partitionId,
+    tableId, tableName, transitionMetadata) => {
+    alteredResponse = await service.handleStartSplitReplication({
+      partitionId,
+      tableId,
+      tableName,
+      transitionMetadata: {...transitionMetadata, splitKey: 'z'},
+    });
+    exactResponse = await service.handleStartSplitReplication({partitionId,
+      tableId, tableName, transitionMetadata});
+    return exactResponse;
+  });
+
+  const result = await workflow.execute(SOURCE);
+  await turns(20);
+  const accepted = recordSnapshot(store);
+  t.equal(alteredResponse?.acknowledged, false,
+    'same attempt and fence cannot authorize a different split key');
+  t.equal(exactResponse?.acknowledged, true,
+    'the exact durable execution payload remains admissible');
+  t.equal(result.success, true, 'the exact START completes owner admission');
+  t.equal(accepted.sourceStatus, 'snapshot_started',
+    'the durable participant records the exact accepted START');
+  t.equal(events.filter((event) => event === 'split-snapshot').length, 1,
+    'only the exact durable payload starts physical snapshot work');
+  snapshotGate.resolve();
+  await source.splitReplicationRun;
+});
+
+test('stale and different-payload START requests perform no snapshot work',
+  async (t) => {
+    for (const [kind, metadata, start] of [
+      ['split', splitMetadata({workflowAttempt: 2, workflowFenceToken: 2}),
+        (source, payload) => source.handleStartSplitReplication(payload)],
+      ['merge', mergeMetadata({workflowAttempt: 2, workflowFenceToken: 2}),
+        (source, payload) => source.handleStartMergeReplication(payload)],
+    ]) {
+      const events = [];
+      const source = buildSource(events);
+      const decisions = ['attempt_mismatch', 'invalid_transition'];
+      const owner = kind === 'split' ? {
+        acknowledgeSourceParticipant: async () => ({
+          result: decisions.shift(), splitCutoverApplied: false,
+        }),
+      } : {
+        acknowledgeMergeSourceParticipant: async () => ({
+          result: decisions.shift(), mergeCutoverApplied: false,
+        }),
+      };
+      source.sqlQueryEngine = kind === 'split' ?
+        {managedSplitWorkflow: owner} : {managedMergeWorkflow: owner};
+
+      const stale = await start(source, {transitionMetadata: metadata});
+      const changed = kind === 'split' ?
+        {...metadata, splitKey: 'z'} :
+        {...metadata, targetPartitionIds: ['users-other-merged']};
+      const mismatched = await start(source, {transitionMetadata: changed});
+      await turns(20);
+
+      t.equal(stale.acknowledged, false,
+        `${kind}: stale durable authorization is refused`);
+      t.equal(mismatched.acknowledged, false,
+        `${kind}: different payload cannot borrow authorization`);
+      t.same(events, [], `${kind}: rejected START reaches no snapshot work`);
+    }
+  });
+
+test('accepted START recovery and concurrent redelivery retain one physical ' +
+  'worker', async (t) => {
+  for (const [kind, metadata, start, runField] of [
+    ['split', splitMetadata(),
+      (source, payload) => source.handleStartSplitReplication(payload),
+      'splitReplicationRun'],
+    ['merge', mergeMetadata(),
+      (source, payload) => source.handleStartMergeReplication(payload),
+      'mergeReplicationRun'],
+  ]) {
+    const events = [];
+    const authorizationGate = deferred();
+    const owner = kind === 'split' ? {
+      acknowledgeSourceParticipant: async (_workflowId, ack) => {
+        await authorizationGate.promise;
+        return {result: 'accepted', splitCutoverApplied:
+          ack.status === 'catchup_ready'};
+      },
+    } : {
+      acknowledgeMergeSourceParticipant: async (_workflowId, ack) => {
+        await authorizationGate.promise;
+        return {result: 'accepted', mergeCutoverApplied:
+          ack.status === 'catchup_ready'};
+      },
+    };
+    const source = buildSource(events);
+    source.sqlQueryEngine = kind === 'split' ?
+      {managedSplitWorkflow: owner} : {managedMergeWorkflow: owner};
+
+    let firstSettled = false;
+    let secondSettled = false;
+    const first = start(source, {transitionMetadata: metadata})
+      .finally(() => { firstSettled = true; });
+    const second = start(source, {transitionMetadata: metadata})
+      .finally(() => { secondSettled = true; });
+    await turns(10);
+    t.equal(firstSettled, false,
+      `${kind}: START waits for durable authorization`);
+    t.equal(secondSettled, false,
+      `${kind}: concurrent redelivery joins the authorization`);
+    t.same(events, [], `${kind}: copy has not begun before authorization`);
+
+    authorizationGate.resolve();
+    const responses = await Promise.all([first, second]);
+    await source[runField];
+    t.same(responses, [
+      {acknowledged: true, success: true},
+      {acknowledged: true, success: true},
+    ], `${kind}: both exact requests observe the one accepted START`);
+    t.equal(events.filter((event) => event === `${kind}-snapshot`).length, 1,
+      `${kind}: one physical snapshot worker runs`);
+
+    const restartedEvents = [];
+    const restarted = buildSource(restartedEvents);
+    const duplicateOwner = kind === 'split' ? {
+      acknowledgeSourceParticipant: async () => ({result: 'duplicate',
+        splitCutoverApplied: false}),
+    } : {
+      acknowledgeMergeSourceParticipant: async () => ({result: 'duplicate',
+        mergeCutoverApplied: false}),
+    };
+    restarted.sqlQueryEngine = kind === 'split' ?
+      {managedSplitWorkflow: duplicateOwner} :
+      {managedMergeWorkflow: duplicateOwner};
+    const recovered = await start(restarted, {transitionMetadata: metadata});
+    await restarted[runField];
+    t.equal(recovered.acknowledged, true,
+      `${kind}: accepted START recovers the same attempt after source crash`);
+    t.equal(restartedEvents.filter(
+      (event) => event === `${kind}-snapshot`).length, 1,
+    `${kind}: recovery starts one replacement worker`);
+  }
+});

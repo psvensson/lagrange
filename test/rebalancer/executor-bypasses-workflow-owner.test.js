@@ -15,6 +15,7 @@
  * Requirements: 1.1, 1.2, 8.1
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -179,10 +180,9 @@ test('executor-side replica creation succeeds but owner-side ' +
       // Simulate ReplicaHandler accepting the dispatch and returning
       // INITIATED — the executor will do the work asynchronously.
       async deliver() {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       },
     },
     sqlQueryEngine: {

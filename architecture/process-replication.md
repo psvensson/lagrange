@@ -12,14 +12,13 @@ land on is [rebalancing](process-rebalancing.md).
 Every partition is a Raft consensus group. Current placement policy uses odd
 replica counts (three by default, with its minimum floor from
 `POLICY_DEFAULT.MIN_REPLICA_COUNT`) so an added voter improves failure tolerance
-instead of only raising the write quorum.
-
-Production partition construction uses one frozen
-`RaftRsWasmProvider` through the raft-rs operation port
-([`partition-service-core-base.js`](../src/partition/partition-service-core-base.js)).
-It refuses both legacy backend selection and provider injection; the old
-Liferaft-backed machinery still exists in other replica kinds and tests
-pending the broader cutover, but it is not an alternate partition backend.
+instead of only raising the write quorum. Consensus runs through the semantic
+Raft operation port backed by the vendored raft-rs/WASM runtime
+([`partition-service-core-base.js`](../src/partition/partition-service-core-base.js));
+there is no alternate consensus backend selection or provider injection. Each
+consensus-owning replica keeps its durable Raft state in its owned SQLite
+database; committed membership comes from raft-rs `ConfState`, not
+service/cache projections.
 
 The active entity kinds share replica-operation accounting, but they do not all
 replicate state through Raft:
@@ -27,13 +26,82 @@ replicate state through Raft:
 | Group type | State | Raft log | Consensus today |
 | --- | --- | --- | --- |
 | Partition | SQLite rows | Raft-rs durable store | Yes, through the single raft-rs operation port |
-| Message group | transport only | in-memory | Yes, using the legacy provider; log state is ephemeral across a full-group restart |
+| Message group | replicated transport/application commands | SQLite, persistent | Yes, through the raft-rs operation port |
 | Runtime-service Cell (`runtime_service`) | disposable process-local execution state; durable application state remains in tables | — | No; Cells are placed and repaired through `replica_operations`, not a service-state Raft group |
-| Legacy WASM scaffold (`wasm_service`) | `WasmServiceReplica` exposes session/KV, safety-interval, and timer classes | — | Not active; production startup constructs neither a `wasm_service` rebalancer nor its Raft instance |
+| WASM service consensus path (`wasm_service`) | session/KV, safety-interval, timer and service-state commands | SQLite, persistent | raft-rs when placement supplies an explicit canonical replica set; otherwise startup fails closed |
 
-Current WASI component execution uses Binding-derived `runtime_service` Cells.
-The `wasm_service` enum and replica classes remain compatibility/scaffold code;
-they are not evidence of an active replicated service-state path.
+Current WASI component execution continues to use Binding-derived
+`runtime_service` Cells for placed service execution. The `wasm_service`
+consensus lifecycle is a separate state-replication path and does not invent
+membership locally: it requires placement/topology to supply the founding
+replica set.
+
+### What a replica's disk keeps: process crash versus power loss
+
+Every consensus-owning replica database (partition, message group and WASM
+service alike) runs SQLite in WAL mode with `synchronous = NORMAL`. A NORMAL
+commit survives a process crash, but SQLite does not sync the WAL on commit,
+so a power loss or an OS crash can lose the commits made since the last sync.
+
+What Raft promises to its peers is therefore synced to disk before any message
+that depends on it is sent (owner decision O4, 2026-10-05). raft-rs says which
+Ready must be synced (`Ready::must_sync`: a changed term or vote, appended log
+entries, or a snapshot); the durable store commits that Ready's transaction
+with `synchronous = FULL`, so SQLite fsyncs the WAL as part of the COMMIT, and
+the runtime hands the Ready's messages to the transport only afterwards. A
+granted vote, an acknowledged append and a leader's own appended entries are
+synced to disk before they are sent and survive a power loss. The replica's
+lifecycle row (retired, or held for reseed) is synced the same way, because
+the open-time refusal reads it.
+
+Everything else keeps NORMAL: a hard state whose only change is its commit
+index, the applied index and configuration it carries, and the application's
+own rows. After a power loss these can roll back to an earlier point, and the
+replica re-applies the committed entries from its synced log. Because the WAL
+is append-only, a synced commit also makes every earlier commit of the same
+file durable.
+
+The guarantee assumes the disk honours a flush. A device or virtualisation
+layer that acknowledges a flush while the data is still in a volatile write
+cache without power-loss protection voids it. On Linux SQLite issues `fsync`
+on the WAL (and on its directory when the WAL is created); `PRAGMA fullfsync`
+only applies to macOS.
+
+### A replica held for reseed
+
+A raft-rs replica whose own log is proven shorter than what its group's leader
+holds it to have acknowledged has lost history. The proof is a heartbeat from a
+member of the replica's own configuration, at a term not below its own, whose
+commit lies beyond the replica's persisted log. Such a replica would otherwise
+vote and campaign on an empty or short log. The runtime holds it for reseed:
+it never steps, ticks, votes or campaigns again, and every operation on it is
+refused with `reseed-required`. Other groups on the node keep running.
+
+What an operator sees:
+
+- one ERROR line `raft-rs inbound step refused` (subsystem `raft-rs`, reason
+  `peer-commit-beyond-local-log`) naming the group, the replica, the sender,
+  the message's term and commit, and the replica's persisted last index;
+- the replica's lifecycle row in `_raft_rs_replica_lifecycle`, in the
+  replica's own SQLite database: `state = 'retired'`,
+  `reason = 'reseed-required'`. Find held replicas on a node with
+  `SELECT group_id, replica_identity, changed_at FROM _raft_rs_replica_lifecycle
+  WHERE reason = 'reseed-required'` against each replica database. No admin or
+  diagnostics endpoint reports this row today;
+- if the row could not be written (for example `SQLITE_BUSY`), one ERROR line
+  `raft-rs reseed hold not yet durable`. The hold stays in force in memory,
+  and the replica's next operation or delivery writes the row again.
+
+The hold is permanent. There is no reseed procedure and no release: the
+replica stays out of consensus, also across restarts, and its group runs on
+its other replicas. Restoring the group's replica count needs a
+fresh-replica-identity ADD path for that group kind, which does not exist yet
+for message groups.
+
+Message group mg-1 currently keeps all of its replicas on the seed node. Its
+committed state therefore lives only on the seed's disk: losing that disk loses
+mg-1's committed state, and there is no recovery path. A joining node hosts only
+its own message group.
 
 ### Partition checkpoint and recovery status at the raft-rs boundary
 
@@ -59,7 +127,9 @@ Operational consequences:
 - A lagging follower is **not certified** to recover by the automatic
   snapshot path on this backend. Retain the original failure and prove the
   real recovery and no-loss outcome before changing this status.
-- In-memory message-group logs still grow without bound and rely on full replay.
+- In-memory message-group logs still grow without bound and rely on full
+  replay; persistent SQLite message-group logs opened by the message-group
+  consensus owner also lack an established compaction bound.
 - Learner promotion remains time-based, not progress-based.
 
 The active [capability declaration](../docs/current-capabilities.json) and
@@ -211,16 +281,21 @@ trigger an election while it catches up.
 
 ### Stage 4 — Promoted; group healthy again
 
-Promotion is **time-based, not progress-based** — the detail most likely to
-mislead you when reading this code. The promotion check waits a fixed delay
-(30 s; 5 s for priority control-plane partitions, re-polled every second) and
-then requires only a discovered leader plus voter-count safety arithmetic: no
-overflow past the target replica count, and no even voter count. It does **not**
-compare the learner's log index against the leader's.
-Checkpoint/install components do not yet certify the automatic raft-rs recovery
-path; promotion timing is unchanged and still does not check the index — so a
-learner that has not finished catching up can in principle be promoted before
-it is genuinely current.
+Promotion requires a **current leader's progress proof** after the initial
+time-based scheduling delay (30 s; 5 s for priority control-plane partitions,
+re-polled every second) and local voter-count safety checks. The partition
+requests that proof from its discovered leader, and the leader grants it only
+when the learner's match index reaches the safe promotion index, derived from
+the committed index, for the current term and membership epoch.
+
+After the round trip, the partition validates the proof against its current
+leader identity, term, membership epoch and learner role before becoming a
+follower. A missing, stale or refused proof defers promotion with a typed reason
+and a scheduled recheck. The delay schedules the check; elapsed time alone
+does not authorize promotion. Checkpoint/install components do not yet certify
+the automatic raft-rs recovery path. The implementation owners are
+`src/partition/partition-service-learner-promotion-methods.js` and
+`src/raft/learner-promotion-progress.js`.
 
 Learner mode is not universal either: replicas created during fresh bootstrap,
 or when no viable leader row is visible, start as voters and skip the learner

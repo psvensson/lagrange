@@ -53,13 +53,53 @@ function filesMatching(pattern, {outsideRaft = false} = {}) {
     pattern.test(code)).map(({relative}) => relative).sort();
 }
 
-test('T7: the committed-membership read has exactly two callers outside ' +
-  'src/raft - the bootstrap read and the REPLACE completion witness', () => {
+test('T7: the committed-membership read has exactly six named callers ' +
+  'outside src/raft - the bootstrap read, the REPLACE completion witness, ' +
+  'the message-group consensus port\'s one reader of any purpose, the ' +
+  'registered learner read, the participant release facts and the WASM ' +
+  'genesis observation', () => {
   assert.deepEqual(filesMatching(
     /RAFT_OPERATION\.READ_COMMITTED_MEMBERSHIP|\.readCommittedMembership\(/u,
     {outsideRaft: true}), [
+    // R3: a message-group replica reads its applied ConfState only through
+    // its own port's witness read. FreshMG B2: the same one reader serves a
+    // leader replica's BOOTSTRAP-purpose answer to the learner-join
+    // descriptor producer, and a joining learner's witness of itself.
+    'src/message-group/message-group-consensus-port.js',
+    // The registered learner read: MessageGroupServiceHandler's recipient
+    // answers the LEARNER_ACTION purpose only, refusing CREATE/bootstrap
+    // (architecture/contracts/message-group-registered-learner-read.md).
+    'src/node/message-group-membership-recipient.js',
     'src/node/replica-handler-committed-membership-methods.js',
+    // The participant release facts (TX1 release interaction, accepted
+    // 2026-10-11 in replicated-transaction-decision-and-apply/log.ndjson,
+    // cutover-interaction-proposal-20261011.md): WITNESS for each replica's
+    // applied configuration, RETIREMENT for the leader's stable cohort;
+    // consolidated into the pause owner by
+    // participant-release-owner-cycle-removal/design.md.
+    'src/partition/partition-participant-transaction-pause.js',
     'src/partition/partition-service-raft-membership-administration.js',
+    // The bound WASM genesis continuation's WITNESS read of the native port's
+    // committed founding membership covering INIT (wasm-creation-genesis
+    // GENESIS-CONNECTION-STAGE-ACCEPTANCE-20261016.md; design
+    // SERVING-PUBLICATION-RETIREMENT-DESIGN-20261017 section 1, D6', N16:
+    // no genesis read once the replica serves).
+    'src/wasm-service/wasm-creation-genesis.js',
+  ]);
+});
+
+test('T7: the BOOTSTRAP purpose (leader only, never joint, identities ' +
+  'resolved) has exactly two askers outside src/raft', () => {
+  // The message-group reader takes any purpose, so the reader census above
+  // cannot see a new BOOTSTRAP asker behind it; a third asker turns this red.
+  assert.deepEqual(filesMatching(
+    /COMMITTED_MEMBERSHIP_READ_PURPOSE\.BOOTSTRAP\b|\bpurpose:\s*['"`]bootstrap['"`]/u,
+    {outsideRaft: true}), [
+    // FreshMG B2: the learner-join descriptor producer on the group leader.
+    'src/message-group/message-group-learner-join.js',
+    // The remote read's handler: a hosted partition replica answers the
+    // bootstrap read (or the retirement read) of its group.
+    'src/node/replica-handler-committed-membership-methods.js',
   ]);
 });
 
@@ -81,23 +121,58 @@ test('T7: the stamp origins - the leader\'s COMMITTED answer at creation, ' +
   'and the GENESIS founding sets of the provisioner and the seed', () => {
   assert.deepEqual(filesMatching(/\bcommittedStampOfAnswer\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
-  ['src/rebalancer/committed-membership-bootstrap-read.js']);
+  [
+    // FreshMG B2: a fresh message-group learner's join descriptor is its
+    // group leader's COMMITTED answer, re-validated by the target, and the
+    // learner and the acknowledging leader are judged on committed answers.
+    'src/message-group/message-group-learner-join.js',
+    // FreshMG 6.C C2: that acknowledgement moved to the promotion-progress
+    // owner, shared by the join and the promotion selection; it validates the
+    // leader's committed answer, never produces a stamp.
+    'src/raft/learner-catch-up-acknowledgement.js',
+    'src/rebalancer/committed-membership-bootstrap-read.js',
+    // The registered learner read's recorder: the repository is the sole
+    // decoder/validator of the learner stamp it records (contract
+    // message-group-registered-learner-read.md; FreshMG B2 design section 9).
+    'src/rebalancer/replica-operation-message-group-membership-authorization.js',
+    // FreshMG 6.C C2: the promotion selection validates the learner's own
+    // committed answer, and the voter recorder records the witness's
+    // same-read COMMITTED answer as the voter stamp (re-validated, never
+    // carried to a new replica).
+    'src/rebalancer/replica-operation-message-group-promotion.js',
+    // The WASM genesis observation validates the committed WITNESS answer
+    // (see above); the stamp is GENESIS_OBSERVED evidence, never carried to
+    // a new replica.
+    'src/wasm-service/wasm-creation-genesis.js',
+  ]);
   assert.deepEqual(filesMatching(/\bgenesisStamp\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
   [
     // V1a: the seed founds its system partitions from an explicit stamp.
-    'src/bootstrap/phases/seed-partitions-phase.js',
+    'src/bootstrap/seed-original-allocation-declaration.js',
+    // R3: a message-group replica without a durable record founds its
+    // group from the replica set it was created with.
+    'src/message-group/message-group-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
+    // R4 (raft-rs-only cutover): a WASM service replica runs on its own raft-rs
+    // port and, like a message group, founds a group without a durable
+    // record from the replica set it was created with.
+    'src/wasm-service/wasm-service-consensus-port.js',
   ]);
   assert.deepEqual(filesMatching(/\bdurableRecordBootstrap\(/u)
     .filter((file) => file !== 'src/raft/raft-committed-membership-stamp.js'),
   [
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
-    // V1a: a snapshot install's replacement reopens from its record.
-    'src/raft/snapshot-catchup.js',
+    // FreshMG B2: a fresh message-group learner opens from its installed
+    // image alone (a snapshot-install replacement of a fresh identity).
+    'src/message-group/message-group-learner-join.js',
+    // V1a: a replacement of an existing local replica (snapshot install and
+    // participant release reopen) reopens from its record through one
+    // shared options builder.
+    'src/partition/partition-reopen-options.js',
   ],
   'the one non-stamp bootstrap source (O4): a durable rejoin and a ' +
-    'snapshot-install replacement');
+    'replacement of an existing local replica');
 });
 
 test('T7: the stamp is carried, never re-derived: the set of files that ' +
@@ -105,29 +180,38 @@ test('T7: the stamp is carried, never re-derived: the set of files that ' +
   assert.deepEqual(filesMatching(
     /BOOTSTRAP_MEMBERSHIP\b|\bbootstrapMembership\b|bootstrap_membership/u), [
     // Producers.
+    'src/message-group/message-group-consensus-port.js',
+    // FreshMG B2: a fresh learner's durable-record bootstrap, handed by the
+    // learner-join capability to the replica, which carries it to its port.
+    'src/message-group/message-group-learner-join.js',
+    'src/message-group/message-group-service-state.js',
+    // R4: the WASM service replica's genesis founding set (see above).
+    'src/wasm-service/wasm-service-consensus-port.js',
     'src/query/sql-query-engine-initial-partition-provisioning.js',
     'src/rebalancer/committed-membership-bootstrap-read.js',
     'src/rebalancer/rebalance-coordinator-operation-creation.js',
     'src/bootstrap/shared/durable-rejoin-partition-restore-planner.js',
     'src/bootstrap/phases/seed-partitions-phase.js',
-    'src/raft/snapshot-catchup.js',
+    // The replacement options builder (snapshot install, release reopen).
+    'src/partition/partition-reopen-options.js',
     // Carriers: the dispatch request, row rehydration (two readers), the
-    // owner-port merge, the legacy lifecycle adapter.
+    // owner-port merge.
     'src/control-plane/replica-dispatch-readiness-capture.js',
     'src/rebalancer/operation-workflow-dispatch-response-reconcile.js',
     'src/rebalancer/operation-workflow-owner-ports.js',
     'src/rebalancer/replica-operation-repository-row-methods.js',
-    'src/node/replica-lifecycle-manager.js',
     // The target: request intake, validation, the partition, the port.
+    'src/node/replica-handler-create-admission-methods.js',
     'src/node/replica-handler-create-methods.js',
     'src/node/replica-handler-committed-membership-methods.js',
     'src/node/replica-handler-runtime-metadata-methods.js',
     'src/partition/partition-service-core-base.js',
     'src/partition/partition-service-raft-init-base.js',
     'src/raft/raft-rs-operation-port.js',
+    'src/raft/raft-rs-original-allocation-preparation.js',
     // The field names' owners.
     'src/constants/fields.js',
-    'src/raft/raft-provider-contract-constants.js',
+    'src/raft/raft-operation-port-request.js',
     'src/rebalancer/replica-operation-constants.js',
     'src/rebalancer/replica-operation-progress.js',
   ].sort());
@@ -230,15 +314,16 @@ const PARTITION_CONSTRUCTION =
 const PARTITION_CONSTRUCTION_SITES = Object.freeze({
   // The seed founds its system partitions: an explicit GENESIS stamp.
   'src/bootstrap/phases/seed-partitions-phase.js': [
-    /new PartitionService\(\{[\s\S]{0,600}?bootstrapMembership: genesisStamp\(options\.replicaIds\)/u,
+    /new PartitionService\(\{[\s\S]{0,600}?bootstrapMembership: options\.bootstrapMembership,/u,
   ],
   // The replica handler's create: the stamp it validated on arrival.
   'src/node/replica-handler-create-methods.js': [
     /this\.createPartitionService\(\{[\s\S]{0,900}?bootstrapMembership: context\.bootstrapMembership,/u,
   ],
-  // A snapshot install's replacement: the durable-record bootstrap.
+  // A snapshot install's replacement: the durable-record bootstrap of the
+  // shared replacement options builder (asserted below).
   'src/raft/snapshot-catchup.js': [
-    /buildReplacementServiceOptions\(service\) \{[\s\S]{0,400}?bootstrapMembership: durableRecordBootstrap\(\)/u,
+    /options\.createPartitionService\(\s*buildReplacementServiceOptions\(service\)\)/u,
   ],
   // Factories: they forward their caller's options unchanged (the handler's
   // stamp, a durable rejoin's restore plan, a replacement's bootstrap).
@@ -283,6 +368,11 @@ test('V1a census: every partition-service construction site in src opens ' +
       assert.match(code, evidence, `${file}: a site's bootstrap is declared`);
     }
   }
+  const reopen = FILES.find(({relative}) => relative ===
+    'src/partition/partition-reopen-options.js').code;
+  assert.match(reopen,
+    /function buildReplacementServiceOptions\(service\) \{[\s\S]{0,400}?bootstrapMembership: durableRecordBootstrap\(\)/u,
+    'a replacement opens from the durable-record bootstrap');
   assert.equal(Object.values(PARTITION_CONSTRUCTION_SITES).flat().length,
     FILES.reduce((sum, {code}) => sum + constructionSitesOf(code), 0),
     'the declared sites are all the sites in src');

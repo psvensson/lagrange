@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "status": "fail",
+  "receipts": [
+    {
+      "id": "exact-candidate-causal-owner-trace",
+      "passed": false
+    },
+    {
+      "id": "engaged-original-entry-discriminator",
+      "passed": false
+    },
+    {
+      "id": "targeted-negative-and-positive-controls",
+      "passed": false
+    },
+    {
+      "id": "independent-scope-and-evidence-review",
+      "passed": false
+    }
+  ]
+}

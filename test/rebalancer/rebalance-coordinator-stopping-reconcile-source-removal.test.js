@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   OPERATION_WORKFLOW_OWNER_SHARED,
   OperationType,
@@ -26,10 +27,7 @@ async (t) => {
   const messageRouter = {
     async deliver(target, payload) {
       deliveries.push({target, payload});
-      return {
-        acknowledged: true,
-        status: 'initiated',
-      };
+      return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
     },
   };
   const coordinator = createTestCoordinator({
@@ -151,10 +149,7 @@ test('RebalanceCoordinator completes ACTIVE REPLACE when source removal is alrea
     const messageRouter = {
       async deliver(target, payload) {
         deliveries.push({target, payload});
-        return {
-          acknowledged: true,
-          status: 'initiated',
-        };
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     };
     const coordinator = createTestCoordinator({
@@ -430,27 +425,24 @@ test('RebalanceCoordinator keeps REPLACE STOPPING in progress when replayed ' +
     async deliver(target, payload) {
       deliveries.push({target, payload});
       if (payload.type === ReplicaOperationMessageType.CREATE_REPLICA) {
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       }
       if (payload.type === ReplicaOperationMessageType.REMOVE_REPLICA) {
         const removeDispatchCount = deliveries.filter((entry) =>
           entry.payload.type ===
             ReplicaOperationMessageType.REMOVE_REPLICA,
         ).length;
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           status: removeDispatchCount >= 2 ?
             ReplicaOperationResponseStatus.COMPLETED :
             ReplicaOperationResponseStatus.INITIATED,
-        };
+        });
       }
-      return {
-        acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         status: ReplicaOperationResponseStatus.IN_PROGRESS,
-      };
+      });
     },
   };
   const coordinator = createTestCoordinator({

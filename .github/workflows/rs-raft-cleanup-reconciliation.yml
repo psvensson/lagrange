@@ -1,0 +1,118 @@
+name: rs-raft-cleanup-reconciliation
+on:
+  push:
+    branches: [resume/rs-raft-runtime-recovery-20261012]
+    paths: [.github/workflows/rs-raft-cleanup-reconciliation.yml]
+permissions:
+  contents: read
+concurrency:
+  group: rs-raft-cleanup-reconciliation-20261012
+  cancel-in-progress: false
+jobs:
+  exact-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      BRANCH: resume/rs-raft-runtime-recovery-20261012
+      EVIDENCE: test-output/cleanup-reconciliation-hosted
+      LAGRANGE_RETRY_FAILED_ONCE: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Recover byte-exact reviewed input and locked dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          python3 - <<'PY'
+          import base64,hashlib,json,os,urllib.request
+          from pathlib import Path
+          pieces=[]
+          for expected in ['7a9d65c3949a6356ea96b34335eb124e402da502','cad1e2a9b74783b9dff0af2947d74c5e4f370ea4','a8be79db9a6bde90c5e3684505b31d9879d041d4','77b9b70f35af93ad3363a83a6c33e17e9a8e2562','a3c0637706758b39baf04bcfea61ad0ce613be82']:
+              request=urllib.request.Request(f'https://api.github.com/repos/psvensson/lagrange/git/blobs/{expected}',headers={'Accept':'application/vnd.github+json','Authorization':'Bearer '+os.environ['GH_TOKEN'],'User-Agent':'lagrange-exact-reconciliation'})
+              with urllib.request.urlopen(request,timeout=30) as response: blob=json.load(response)
+              data=base64.b64decode(blob['content'])
+              assert hashlib.sha1(f'blob {len(data)}\0'.encode()+data).hexdigest()==expected
+              pieces.append(data)
+          payload=b''.join(pieces)
+          assert hashlib.sha256(payload).hexdigest()=='865067bf738aae26e9b3f40bf8f832a46ae981620ef5b977a37ca9dbaa5ece53'
+          (Path(os.environ['EVIDENCE'])/'reconciliation.patch.gz').write_bytes(payload)
+          script=Path('scripts/quest-evidence/measure-cleanup-reconciliation-20261012.py')
+          assert hashlib.sha256(script.read_bytes()).hexdigest()=='687bf7f905cc6f1140ad062253fc7487f456c1af2c07be66de2dedbbee19c1d5'
+          compile(script.read_text(),str(script),'exec')
+          PY
+          npm ci > "$EVIDENCE/install.log" 2>&1
+          node --version > "$EVIDENCE/node-version.txt"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          test -z "$(git status --porcelain)"
+      - name: Measure exact source controls and complete requested file set
+        id: measure
+        shell: bash
+        run: |
+          set +e
+          python3 -B scripts/quest-evidence/measure-cleanup-reconciliation-20261012.py > "$EVIDENCE/measurement.log" 2>&1
+          STATUS=$?
+          printf '%s\n' "$STATUS" > "$EVIDENCE/measurement-exit.txt"
+          tail -100 "$EVIDENCE/measurement.log"
+          exit "$STATUS"
+      - name: Preserve WIP source and complete evidence on the existing branch
+        if: steps.measure.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- src test
+          DEST="solve/quests/replica-cleanup-host-custody/evidence/reconciled-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$DEST"
+          cp "$EVIDENCE/summary.json" "$DEST/summary.json"
+          tar -czf "$DEST/raw-evidence.tar.gz" -C "$EVIDENCE" .
+          sha256sum "$DEST/raw-evidence.tar.gz" > "$DEST/SHA256SUMS"
+          git add -- "$DEST"
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP cleanup: retain exact reconciliation proof and unresolved wider failures'
+          REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$REMOTE" = "$GITHUB_SHA"
+          HEADER="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$HEADER" push origin "HEAD:refs/heads/$BRANCH"
+          test "$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" = "$(git rev-parse HEAD)"
+          git rev-parse HEAD > "$EVIDENCE/published-sha.txt"
+      - name: Retain incomplete attempts without rewriting earlier evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$EVIDENCE"
+          git status --porcelain > "$EVIDENCE/final-status.txt"
+          git rev-parse HEAD > "$EVIDENCE/final-head.txt"
+          git diff -- src | gzip -n > "$EVIDENCE/uncommitted-source.patch.gz"
+          find "$EVIDENCE" -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > "$EVIDENCE/SHA256SUMS"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: rs-raft-cleanup-reconciliation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-output/cleanup-reconciliation-hosted/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Keep unresolved wider and static gates visible
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path(os.environ['EVIDENCE'])/'summary.json'
+          assert p.is_file(), 'proof incomplete; retained outputs are not acceptance'
+          summary=json.loads(p.read_text())
+          assert summary['allRunGatesPassed'], 'WIP only: unresolved tests/static gates, no independent approval or merge'
+          PY

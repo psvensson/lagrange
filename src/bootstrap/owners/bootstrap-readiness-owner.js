@@ -1,4 +1,5 @@
 import {HTTP_STATUS} from '../../constants/index.js';
+import {ORIGINAL_ALLOCATION} from '../../raft/raft-rs-original-allocation-constants.js';
 import {
   BOOTSTRAP_API_LIVENESS,
   BOOTSTRAP_API_PROBE_SCOPE,
@@ -104,7 +105,8 @@ class BootstrapReadinessOwner {
     return response;
   }
   async handleReadinessProbeRequest(reply) {
-    const snapshot = await this.evaluateReadinessSnapshotForProbe();
+    const snapshot = this.applyOriginalSeedAdmission(
+      await this.evaluateReadinessSnapshotForProbe());
     const statusCode = snapshot.ready ?
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
@@ -114,10 +116,10 @@ class BootstrapReadinessOwner {
     return response;
   }
   async handleBootstrapReadinessProbeRequest(reply) {
-    const snapshot = this.resolveReadinessSnapshotForScope(
+    const snapshot = this.applyOriginalSeedAdmission(this.resolveReadinessSnapshotForScope(
       await this.evaluateReadinessSnapshotForProbe(),
       BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
-    );
+    ));
     const statusCode = snapshot.ready ?
       HTTP_STATUS.OK :
       HTTP_STATUS.SERVICE_UNAVAILABLE;
@@ -131,6 +133,19 @@ class BootstrapReadinessOwner {
     );
     reply.code(statusCode);
     return response;
+  }
+  applyOriginalSeedAdmission(snapshot) {
+    // Seed composition supplies its original issuer. A joining node has no
+    // original allocation and retains its existing readiness contract.
+    const assertAdmission = this.delegates.assertOriginalSeedPublicAdmission;
+    if (assertAdmission === null || assertAdmission === undefined) return snapshot;
+    try {
+      assertAdmission();
+      return snapshot;
+    } catch (error) {
+      if (error.code !== ORIGINAL_ALLOCATION.HOLD) throw error;
+      return {...snapshot, ready: false, reasons: [...(snapshot.reasons || []), error.reason]};
+    }
   }
 }
 

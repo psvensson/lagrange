@@ -35,8 +35,15 @@ import {clearLeaderOrRecordDebt} from
   './replica-state-machine-leader-clear.js';
 import {createReplicaRowInCdc} from
   './replica-state-machine-create-persistence.js';
-import {mintServiceRowCreatedAt} from './service-row-incarnation.js';
-
+import {
+  buildCreateAdmissionLifecycleIdentity,
+  isCreateAdmissionTransitionAllowed,
+} from './replica-state-machine-create-admission-transition.js';
+import {
+  isCreateSyncingEdge,
+  resolveCreateSyncingEdge,
+  settleUnappliedLifecycleWrite,
+} from './replica-state-machine-create-syncing-edge.js';
 const STATE_ENTERED_AT_COLUMN = 'state_entered_at';
 const OBSERVED_STATE_CHANGED_OUTCOME = 'observed_state_changed';
 import {
@@ -49,12 +56,10 @@ import {
   REPLICA_STATE_MACHINE_STATE,
   REPLICA_STATE_MACHINE_TRANSITION,
 } from './replica-state-machine-constants.js';
-
 const LOCAL_STR_CRITICAL = 'critical';
 const LOCAL_STR_BACKGROUND = 'background';
 
 const ReplicaState = REPLICA_STATE_MACHINE_STATE;
-
 const BACKGROUND_PERSISTENCE_STATES = new Set([
   ReplicaState.PENDING,
   ReplicaState.CREATING,
@@ -65,17 +70,17 @@ const RETAINS_CANONICAL_PARTITION_LEADER_SERVICE_STATES = new Set([
   ReplicaState.ACTIVE,
 ]);
 
-async function resolveUncertainLifecycleUpdate(
-  stateMachine,
-  replicaState,
-  previousState,
-  cause,
-) {
+async function resolveUncertainLifecycleUpdate(stateMachine, replicaState,
+  previousState, cause) {
+  if (isCreateSyncingEdge(replicaState, previousState)) {
+    const resolved = await resolveCreateSyncingEdge(stateMachine,
+      replicaState, previousState, cause);
+    if (resolved === null) throw cause;
+    return resolved;
+  }
   const serviceId = replicaState.serviceId || replicaState.replicaId;
   const observation = await observeAuthoritativeReplicaLifecycle(
-    stateMachine,
-    serviceId,
-  );
+    stateMachine, serviceId);
   if (observation.available !== true ||
       !rowMatchesReplicaLifecycle(observation.row, replicaState)) {
     throw cause;
@@ -129,19 +134,6 @@ function resolveTransitionTimestamp(stateMachine, existingState, context) {
   return {
     observedNow,
     now: nextLifecycleStateEntry(observedNow, sourceVersion),
-  };
-}
-
-function buildTransitionLifecycleIdentity(replicaId, existingState, now) {
-  const createdAt = Number.isFinite(existingState?.createdAt) ?
-    existingState.createdAt :
-    mintServiceRowCreatedAt(now);
-  return {
-    replicaIdentity: existingState?.replicaIdentity || replicaId,
-    groupId: existingState?.groupId ?? null,
-    createdAt,
-    lifecycleIdentityAuthoritative:
-      existingState?.lifecycleIdentityAuthoritative === true,
   };
 }
 
@@ -201,13 +193,24 @@ function buildTransitionState(
         context.serviceAddress,
         existingState?.serviceAddress,
       ),
-      ...buildTransitionLifecycleIdentity(replicaId, existingState, now),
+      ...buildCreateAdmissionLifecycleIdentity(
+        replicaId,
+        existingState,
+        now,
+        context,
+      ),
+      cleanupToken: transitionValue(
+        context.cleanupToken, existingState?.cleanupToken, null),
+      createAttemptToken: transitionValue(
+        context.createAttemptToken,
+        existingState?.createAttemptToken,
+        null,
+      ),
       durableVersionColumn: STATE_ENTERED_AT_COLUMN,
       durableVersion: now,
     },
   };
 }
-
 function commitTransition(
   stateMachine,
   replicaId,
@@ -498,7 +501,13 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
   const admission = captureReplicaAdmission(stateMachine, replicaId);
   const currentState = admission.sourceState;
   const validate = options.validate !== false;
-
+  if (!isCreateAdmissionTransitionAllowed(
+    stateMachine,
+    replicaId,
+    currentState,
+    context,
+    options.expectedSourceEvidence,
+  )) return false;
   if (stateMachine.uncertainRemovingIntentByReplicaId.has(replicaId) &&
       newState !== ReplicaState.REMOVING) {
     return refuseTransition(
@@ -578,29 +587,21 @@ async function updateReplicaStateInCdc(
       .submitMutation(mutation, persistenceOptions);
     const durableApplyConfirmed =
       didDurableServiceRowWriteApply(mutationResult);
-    if (durableApplyConfirmed) {
-      stateMachine.clearServiceRowLocalOnly?.(serviceId);
-      await clearLeaderOrRecordDebt(
-        stateMachine,
-        replicaState,
-        previousState,
-      );
+    if (!durableApplyConfirmed) {
+      return await settleUnappliedLifecycleWrite(stateMachine, replicaState,
+        previousState, mutationResult);
     }
-
+    stateMachine.clearServiceRowLocalOnly?.(serviceId);
+    await clearLeaderOrRecordDebt(stateMachine, replicaState, previousState);
     reportServiceRowPersisted(stateMachine, replicaState);
-
     return mutationResult;
   } catch (error) {
     reportServiceRowPersistenceError(stateMachine, replicaState, error);
     if (replicaState.state === ReplicaState.REMOVING) {
       throw error;
     }
-    return resolveUncertainLifecycleUpdate(
-      stateMachine,
-      replicaState,
-      previousState,
-      error,
-    );
+    return resolveUncertainLifecycleUpdate(stateMachine, replicaState,
+      previousState, error);
   }
 }
 
@@ -684,8 +685,9 @@ function buildUpdateCdcData(replicaState, previousState) {
     previous_state: previousState,
     trigger_reason: replicaState.triggerReason,
     updated_at: durableUpdatedAt,
+    cleanup_token: replicaState.cleanupToken ?? null,
+    create_attempt_token: replicaState.createAttemptToken ?? null,
   };
-
   if (replicaState.errorMessage) {
     cdcData.error_message = replicaState.errorMessage;
   }
@@ -743,7 +745,9 @@ function buildCreateCdcData(
     group_id: groupId,
     replica_id: replicaState.replicaIdentity,
     address,
+    cleanup_token: replicaState.cleanupToken ?? null,
     created_at: createdAt,
+    create_attempt_token: replicaState.createAttemptToken ?? null,
   };
 }
 

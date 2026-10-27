@@ -1,0 +1,30 @@
+{
+  "schema": "solve-quest/2",
+  "id": "runner-native-proof-composition-20261025",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Compose the independently reviewed Package 2 TAP child-output contract onto the tested native-fixture lineage at its sole subprocess owner. On Node 24, ordinary node:test and TAP children must use one canonical TAP parser input, including when an external Node test parent supplies NODE_TEST_CONTEXT; both asynchronous and synchronous execution must retain exact assertion counts, failure status, skip and TODO refusals, empty-output refusal, loader context, and existing budgets. Preserve distinct broader corpus failures without legacy paths, permissive parser fallbacks or changed product source.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/runner-native-proof-composition-20261025/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-tap-reporter",
+        "standalone-child-context",
+        "node24-native-affected-cone",
+        "review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Compose only the exact independently reviewed source/test bytes from 2dd9c9c, with generated inventories and this Quest. Do not change native production code, the formal Package 3 witness, or source-specific evidence. The remaining nonzero 80-file failures have separate owners and are not silently absorbed."
+    },
+    {
+      "id": "negative-control",
+      "statement": "The unchanged Node test fixture must fail at zero parsed assertions before composition while its test actually passes; after composition, one TAP and one node:test fixture must succeed with exact counts, skips/fails must still fail, and NODE_TEST_CONTEXT from a caller must not redirect the independent child stream."
+    }
+  ],
+  "sealedAt": "c99946c407ab18fef966dee6fa39bc05090111ee"
+}

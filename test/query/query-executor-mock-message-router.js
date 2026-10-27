@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 // Mock message router that routes queries to mock partition data.
 const mockPartitionData = new Map();
 
@@ -10,14 +11,13 @@ export function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: data.length || 1,
-        };
+        });
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 }

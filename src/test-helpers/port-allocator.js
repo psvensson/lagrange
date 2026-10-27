@@ -10,6 +10,7 @@
  * in parallel.
  */
 
+import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import {createServer} from 'node:net';
@@ -19,6 +20,8 @@ import {
   PORT_RANGE_START,
   PORT_RANGE_END,
   PORTS_PER_TEST_FILE,
+  PORT_PROBE_BATCH,
+  PORT_PROBE_SCRIPT,
   DEFAULT_TEST_FILE_ID,
   TEST_HOST,
 } from './port-allocator-constants.js';
@@ -258,13 +261,32 @@ function registerExitCleanup() {
 }
 
 /**
- * Reserve a unique port across concurrent test worker processes.
+ * Test-bind candidate port groups (see PORT_PROBE_SCRIPT).
  *
- * @param {number} requestedPort - Preferred port candidate.
- * @param {string} testFileId - Allocator owner identifier.
- * @return {number} Reserved port.
+ * @param {Array<number[]>} groups - Candidate groups, in preference order.
+ * @return {number} Index of the first group whose every port binds, or -1.
  */
-function reservePort(requestedPort, testFileId) {
+function firstBindableGroup(groups) {
+  if (groups.length === 0) {
+    return -1;
+  }
+  const answer = execFileSync(process.execPath,
+    ['-e', PORT_PROBE_SCRIPT, JSON.stringify(groups), TEST_HOST],
+    {encoding: LOCAL_STR_UTF8});
+  return Number.parseInt(answer, 10);
+}
+
+/**
+ * Walk the allocator range from `requestedPort`, offering every first port
+ * whose group is unreserved to the bind probe in batches; reserve the first
+ * group that binds.
+ *
+ * @param {number} requestedPort - Preferred first-port candidate.
+ * @param {number} count - Group length.
+ * @param {string} testFileId - Allocator owner identifier.
+ * @return {number[]} The reserved group, lowest first.
+ */
+function reserveBindableGroup(requestedPort, count, testFileId) {
   registerExitCleanup();
 
   return withAllocatorLock(() => {
@@ -274,26 +296,47 @@ function reservePort(requestedPort, testFileId) {
     const startOffset =
       ((requestedPort - PORT_RANGE_START) % TOTAL_PORTS + TOTAL_PORTS) %
       TOTAL_PORTS;
-
-    for (let attempt = 0; attempt < TOTAL_PORTS; attempt++) {
-      const port = PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
-      const key = String(port);
-      if (reservations[key]) {
+    let batch = [];
+    for (let attempt = 0; attempt <= TOTAL_PORTS; attempt++) {
+      if (attempt < TOTAL_PORTS) {
+        const firstPort =
+          PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
+        if (isBlockFree(reservations, firstPort, count)) {
+          batch.push(Array.from({length: count},
+            (_unused, index) => firstPort + index));
+        }
+      }
+      if (batch.length < PORT_PROBE_BATCH && attempt < TOTAL_PORTS) {
         continue;
       }
-
-      reservations[key] = {
-        pid: process.pid,
-        testFileId,
-      };
+      const chosen = batch[firstBindableGroup(batch)];
+      batch = [];
+      if (!chosen) {
+        continue;
+      }
+      for (const port of chosen) {
+        reservations[String(port)] = {pid: process.pid, testFileId};
+        processReservedPorts.add(port);
+      }
       state.reservations = reservations;
       saveAllocatorState(state);
-      processReservedPorts.add(port);
-      return port;
+      return chosen;
     }
 
     throw new Error(LOCAL_STR_NO_AVAILABLE_TEST_PORTS_REMAIN_IN_ALLOCA);
   });
+}
+
+/**
+ * Reserve a unique port across concurrent test worker processes; the port
+ * is test-bound before it is handed out.
+ *
+ * @param {number} requestedPort - Preferred port candidate.
+ * @param {string} testFileId - Allocator owner identifier.
+ * @return {number} Reserved port.
+ */
+function reservePort(requestedPort, testFileId) {
+  return reserveBindableGroup(requestedPort, 1, testFileId)[0];
 }
 
 function isBlockFree(reservations, firstPort, count) {
@@ -311,7 +354,8 @@ function isBlockFree(reservations, firstPort, count) {
 /**
  * Reserve `count` CONSECUTIVE ports across concurrent test worker
  * processes, for runtimes that derive sibling listener ports from one base
- * (for example REST, admin = REST + 1, transport = REST + 2).
+ * (for example REST, admin = REST + 1, transport = REST + 2). Every port of
+ * the block is test-bound before it is handed out.
  *
  * @param {number} requestedPort - Preferred first-port candidate.
  * @param {number} count - Block length.
@@ -319,36 +363,7 @@ function isBlockFree(reservations, firstPort, count) {
  * @return {number[]} Reserved consecutive ports, lowest first.
  */
 function reservePortBlock(requestedPort, count, testFileId) {
-  registerExitCleanup();
-
-  return withAllocatorLock(() => {
-    const state = loadAllocatorState();
-    pruneDeadReservations(state);
-    const reservations = state.reservations || {};
-    const startOffset =
-      ((requestedPort - PORT_RANGE_START) % TOTAL_PORTS + TOTAL_PORTS) %
-      TOTAL_PORTS;
-
-    for (let attempt = 0; attempt < TOTAL_PORTS; attempt++) {
-      const firstPort =
-        PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
-      if (!isBlockFree(reservations, firstPort, count)) {
-        continue;
-      }
-      const block = [];
-      for (let index = 0; index < count; index++) {
-        const port = firstPort + index;
-        reservations[String(port)] = {pid: process.pid, testFileId};
-        processReservedPorts.add(port);
-        block.push(port);
-      }
-      state.reservations = reservations;
-      saveAllocatorState(state);
-      return block;
-    }
-
-    throw new Error(LOCAL_STR_NO_AVAILABLE_TEST_PORTS_REMAIN_IN_ALLOCA);
-  });
+  return reserveBindableGroup(requestedPort, count, testFileId);
 }
 
 /**

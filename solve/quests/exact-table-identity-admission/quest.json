@@ -1,0 +1,42 @@
+{
+  "schema": "solve-quest/2",
+  "id": "exact-table-identity-admission",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Client DML admission, reserved system-table creation and runtime table grants use the existing exact-case logical catalog identity. Exact reserved names are refused before schema-job persistence and during provisioning/resume even without cache presence. Distinct user tables such as Logs retain parser-preserved identity, routing and runtime grants; lowercase logs remains reserved. Existing client origin forwarding and owner mutation paths are preserved.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/exact-table-identity-admission/evidence/receipt.json",
+      "requiredReceipts": [
+        "reserved-name-create-and-resume",
+        "case-exact-ingress-routing-and-runtime-grants",
+        "existing-lowercase-client-and-owner-paths",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "identity",
+      "statement": "Supersede only the original admission lowercasing premise and uppercase TABLES refusal expectation. Catalog identity already preserves case; do not fold or migrate catalog rows or grant aliases. Preserve parser semantics for quoted, unquoted and namespaced identifiers. Runtime grant identifiers may now contain the same uppercase ASCII characters as supported SQL identifiers; existing lowercase grants remain unchanged."
+    },
+    {
+      "id": "owner",
+      "statement": "One shared logical-name/system predicate owner; TableCreationService validates before durable schema-job creation and at provisioning/resume. RuntimeAccessPolicyOwner retains capability ownership and exact identity comparison. No cache prerequisite, SQL bypass, broad DDL security claim or fallback."
+    },
+    {
+      "id": "scope",
+      "statement": "Only logical table identity, reserved-name creation and associated runtime grants, DML-scope documentation and source-bound tests. Node e701 and scale 6a228 stay frozen. Diagnostic markers and remaining example callers remain separate. No landing/publication, increased baselines or timeout changes."
+    },
+    {
+      "id": "proof",
+      "statement": "Canonical runner retries zero with controller/thermal coordination; retain predecessor red, parser/creation/routing/grant cases, lowercase regressions and independent review before composition."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "harness-fidelity"
+  ],
+  "sealedAt": "6a228ced9439af07216b492bb8fdbba5540c3671"
+}

@@ -7,6 +7,7 @@
  * the fixture's state - a test moves it the way raft would (a removal commits
  * only when the test says so); nothing here derives it from rows.
  */
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   PARTITION_REPLICA_MEMBERSHIP_STATE,
 } from '../../src/partition/partition-replica-membership-constants.js';
@@ -74,16 +75,13 @@ export function createReplaceWitness(options = {}) {
       if (type === ReplicaOperationMessageType.READ_REPLICA_MEMBERSHIP) {
         witness.reads.push(payload);
         if (!witness.available) {
-          return {acknowledged: true, deliveryState: 'delivered',
-            status: ReplicaOperationResponseStatus.ERROR,
+          return {status: ReplicaOperationResponseStatus.ERROR,
             error: 'witness unavailable'};
         }
         const leaderReplicaId = witness.addressedLeads ?
           payload[ReplicaOperationField.REPLICA_ID] :
           witness.leaderReplicaId;
         return {
-          acknowledged: true,
-          deliveryState: 'delivered',
           status: ReplicaOperationResponseStatus.COMPLETED,
           [ReplicaOperationField.MEMBERSHIP]: {
             state: witness.sourceVoter ?
@@ -109,13 +107,21 @@ export function createReplaceWitness(options = {}) {
           witness.commitRemoval();
         }
         return {
-          acknowledged: true,
-          deliveryState: 'delivered',
           status: ReplicaOperationResponseStatus.INITIATED,
           [ReplicaOperationField.PROPOSAL]: {outcome: PORT_OUTCOME_PROPOSED},
         };
       }
       return undefined;
+    },
+    /**
+     * The router's delivery of a witness message (the handler answered), or
+     * undefined for any other message (the caller's router delivers those).
+     * @param {Object} payload
+     * @return {Object|undefined}
+     */
+    deliveryFor(payload) {
+      const answered = witness.answer(payload);
+      return answered === undefined ? undefined : deliveredReplaceWitnessResponse(answered);
     },
   };
   return witness;
@@ -155,11 +161,10 @@ export function installReplaceWitnesses(router, options = {}) {
  * answer. Transport-negative tests bypass this helper and supply their own
  * delivery outcome, so an application-looking body cannot manufacture ACK.
  * @param {Object} answered - The invoked fixture handler's response.
- * @return {Object} A production-shaped delivered router response.
+ * @return {Object} The router's delivery envelope around that answer.
  */
 export function deliveredReplaceWitnessResponse(answered) {
-  return {acknowledged: true, noHandler: false, deliveryState: 'delivered',
-    deferRetry: false, errorCode: null, retryAfterMs: null, ...answered};
+  return buildDeliveryEnvelope({acknowledged: true}, answered);
 }
 
 /**

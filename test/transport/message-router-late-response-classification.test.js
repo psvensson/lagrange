@@ -1,6 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {RouterMessageHandler} from '../../src/transport/router-message-handler.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
 
 test('MessageRouter preserves retired late-response classification and delivery source',
@@ -164,45 +163,4 @@ test('MessageRouter tracks settled, absorbed, and orphaned service-response disp
     );
 
     await router.shutdown();
-  });
-
-test('RouterMessageHandler treats service responses as delegated adapter traffic',
-  async (t) => {
-    const debugs = [];
-    const warns = [];
-    const messageHandler = new RouterMessageHandler({
-      logger: {
-        debug(message, context) {
-          debugs.push({message, context});
-        },
-        warn(message, context) {
-          warns.push({message, context});
-        },
-        error() {},
-      },
-      handlers: new Map(),
-      pendingMessages: new Map(),
-      pendingPings: new Map(),
-      nodeConnections: new Map(),
-      nodeId: 'router-message-handler-test',
-      sendRaw() {},
-      emit() {},
-    });
-
-    messageHandler.handleServiceResponse({
-      messageId: 'adapter-response-1',
-      result: {ok: true},
-    });
-
-    t.equal(
-      warns.length,
-      0,
-      'the adapter should not emit warning-level orphan semantics on its own',
-    );
-    t.ok(
-      debugs.some((entry) =>
-        entry.context?.messageId === 'adapter-response-1' &&
-        entry.context?.delegatedResponseHandler === false),
-      'the adapter should only note the missing owner callback at debug level',
-    );
   });

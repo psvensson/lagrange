@@ -13,6 +13,10 @@ import {
   LOAD_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
 } from '../harness/constants.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 
 const LOAD_OPS_PER_SEC = 100;
 const MIN_SUCCESS_RATE = 0.58;
@@ -46,7 +50,7 @@ function sleep(delayMs) {
  *
  * @param {Object} cluster - Cluster handle from the harness.
  */
-async function run(cluster) {
+async function run(cluster, options = {}) {
   // Honor the configured load duration (e.g. local-memory-soak.json
   // "1800s") so the configured warmup plus analysis window can complete;
   // fall back to the harness default when the config does not override it.
@@ -72,10 +76,13 @@ async function run(cluster) {
     }
   }
 
+  const provisionedTable = await provisionUserLoadTable(cluster, options);
+
   // 1. Start sustained write load at target rate.
   const loadRun = cluster.startLoad({
     opsPerSec: LOAD_OPS_PER_SEC,
     duration: loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   // 2. Wait for the full load duration to complete.
@@ -141,7 +148,13 @@ async function run(cluster) {
     forceRepairAfterMs: 0,
   });
 
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'sustained-write-throughput-post-load',
+  });
+
   return {
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
     loadMetrics: metrics,
     successRate,
   };

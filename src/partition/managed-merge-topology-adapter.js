@@ -1,4 +1,6 @@
 import {TABLES} from '../constants/index.js';
+import {readCommittedGroupMemberIds} from './group-retirement-members.js';
+import {observeSystemRows} from './group-retirement-redrive.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
@@ -8,6 +10,8 @@ import {
 import {
   PARTITION_SERVICE_MESSAGE_TYPE,
 } from './partition-service-constants.js';
+import {deliverProcessedSourceReplicationStart} from
+  './managed-source-replication-start-delivery.js';
 
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_FUNCTION = 'function';
@@ -139,17 +143,14 @@ class ManagedMergeTopologyAdapter {
       throw new Error(MERGE_REPLICATION_START_FAILED);
     }
 
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
-      type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
-      partitionId,
-      tableId,
-      tableName,
-      transitionMetadata,
-    });
-
-    if (!response?.acknowledged || response?.success === false) {
-      throw new Error(response?.error || MERGE_REPLICATION_START_FAILED);
-    }
+    await deliverProcessedSourceReplicationStart(
+      this.messageRouter, serviceInfo.address, {
+        type: PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION,
+        partitionId,
+        tableId,
+        tableName,
+        transitionMetadata,
+      }, MERGE_REPLICATION_START_FAILED);
   }
 
   /**
@@ -186,6 +187,31 @@ class ManagedMergeTopologyAdapter {
   }
 
   /**
+   * The committed member identities of one partition's group (voters and
+   * learners), read from its leader by the creation owner's
+   * committed-membership read over this node's rebalance coordinator: the
+   * group-retirement step's frozen member set (group-retirement-members.js).
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<string[]>} Throws the read's typed refusal.
+   */
+  readCommittedGroupMembers(partitionId) {
+    return readCommittedGroupMemberIds(
+      this.sqlQueryEngine?.rebalanceCoordinator || null, partitionId);
+  }
+
+  /**
+   * Observe nodes-, services-, partitions- and tables-row changes (the
+   * workflow owner's group-retirement events: node ready/departed, member
+   * row changed, group row changed, retiring record).
+   * @param {Function} listener - (tableName, operation, row) => void.
+   * @return {Function|null} Unsubscribe.
+   */
+  observeSystemRows(listener) {
+    return observeSystemRows(getRuntimeView(this.sqlQueryEngine),
+      listener);
+  }
+
+  /**
    * Deliver one replica-removal request to the node hosting a retired
    * source replica. Reuses the existing rebalancer REMOVE_REPLICA node
    * handler (ReplicaHandler.handleRemoveReplica).
@@ -199,7 +225,8 @@ class ManagedMergeTopologyAdapter {
       return Promise.resolve(null);
     }
     const target = nodeId + LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX;
-    return this.messageRouter.deliver(target, request.message);
+    return this.messageRouter.deliver(target, request.message)
+      .then(({answer}) => answer);
   }
 
   get logger() {

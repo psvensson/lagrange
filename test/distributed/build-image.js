@@ -7,14 +7,13 @@
  * module is self-contained (run.js re-exports them for its existing callers).
  */
 
-import {execFile} from 'node:child_process';
+import {execGitAsync, isGitOutputTooLarge} from '../../scripts/checks/git-invocation.js';
 import {DockerProvider} from './harness/docker-provider.js';
+import {readBaseImages} from './harness/certification-image-identity.js';
 
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_LINE_EMPTY = '';
-const GIT_HASH_COMMAND = 'git';
 const GIT_HASH_ARGS = Object.freeze(['rev-parse', '--short=12', 'HEAD']);
-const GIT_STATUS_COMMAND = 'git';
 const GIT_STATUS_ARGS = Object.freeze(['status', '--porcelain']);
 const GIT_HASH_FALLBACK = 'unknown';
 const IMAGE_LABEL_GIT_HASH = 'ddb.git-hash';
@@ -40,6 +39,9 @@ const BUILD_PROGRESS_PROGRESS_KEY = 'progress';
 const BUILD_PROGRESS_ERROR_KEY = 'error';
 const REMOTE_BUILD_HOSTS_MISSING =
   'docker.buildOnHosts requires at least one docker.hosts entry';
+const CERTIFICATION_BUILD_REFUSED =
+  'certification build refused (nothing built): ';
+const LOCAL_DOCKER_HOST = 'local docker socket';
 
 /**
  * Resolve current git short hash.
@@ -47,16 +49,15 @@ const REMOTE_BUILD_HOSTS_MISSING =
  * @return {Promise<string>}
  */
 async function resolveGitHash(cwd = process.cwd()) {
-  return new Promise((resolveHash) => {
-    execFile(GIT_HASH_COMMAND, GIT_HASH_ARGS, {cwd}, (error, stdout) => {
-      if (error) {
-        resolveHash(GIT_HASH_FALLBACK);
-        return;
-      }
-      const hash = String(stdout || DOCKER_LINE_EMPTY).trim();
-      resolveHash(hash || GIT_HASH_FALLBACK);
-    });
-  });
+  let stdout;
+  try {
+    ({stdout} = await execGitAsync(GIT_HASH_ARGS, {cwd}));
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) throw error;
+    return GIT_HASH_FALLBACK;
+  }
+  const hash = String(stdout || DOCKER_LINE_EMPTY).trim();
+  return hash || GIT_HASH_FALLBACK;
 }
 
 /**
@@ -65,15 +66,15 @@ async function resolveGitHash(cwd = process.cwd()) {
  * @return {Promise<boolean>}
  */
 async function resolveGitDirty(cwd = process.cwd()) {
-  return new Promise((resolveDirty) => {
-    execFile(GIT_STATUS_COMMAND, GIT_STATUS_ARGS, {cwd}, (error, stdout) => {
-      if (error) {
-        resolveDirty(false);
-        return;
-      }
-      resolveDirty(String(stdout || DOCKER_LINE_EMPTY).trim().length > 0);
-    });
-  });
+  let stdout;
+  try {
+    ({stdout} = await execGitAsync(GIT_STATUS_ARGS, {cwd}));
+  } catch (error) {
+    // A status past the git output bound is not a clean workspace.
+    if (isGitOutputTooLarge(error)) throw error;
+    return false;
+  }
+  return String(stdout || DOCKER_LINE_EMPTY).trim().length > 0;
 }
 
 function defaultExtractBuildProgressLine(event) {
@@ -246,6 +247,42 @@ async function ensureImageOnProvider({
   return {image: config.image, gitHash, gitDirty, reused: false};
 }
 
+function describeBuildHost(config, index) {
+  const docker = config?.docker || {};
+  return docker.buildOnHosts === true && Array.isArray(docker.hosts) ?
+    String(docker.hosts[index]) :
+    LOCAL_DOCKER_HOST;
+}
+
+// A certification build (test/distributed/harness/certification-image-
+// identity.js): never reuses an image by label, builds fresh on EVERY
+// provider with the certification labels, and reads the labels BACK from
+// each host's image. A request the checkout cannot honour builds nothing.
+async function buildCertificationImages({providers, config, verbose, gitHash,
+  gitDirty, extractBuildProgressLine, certification}) {
+  if (certification.refusal) {
+    throw new Error(CERTIFICATION_BUILD_REFUSED + certification.refusal);
+  }
+  const imageReadback = [];
+  for (let index = 0; index < providers.length; index += 1) {
+    const provider = providers[index];
+    logBuildStart({config, verbose, gitHash, gitDirty});
+    await provider.buildImage(
+      BUILD_CONTEXT_PATH,
+      config.image,
+      config.dockerfile || DEFAULT_DOCKERFILE,
+      buildProgressSink(verbose, extractBuildProgressLine),
+      {[IMAGE_LABEL_GIT_HASH]: gitHash, ...certification.labels},
+    );
+    const inspect = await provider.inspectImage(config.image);
+    imageReadback.push({host: describeBuildHost(config, index),
+      baseImages: await readBaseImages(provider, certification.baseImageRefs),
+      imageId: inspect?.Id ?? null, labels: inspect?.Config?.Labels ?? null});
+  }
+  return {image: config.image, gitHash, gitDirty, imageReadback,
+    reused: false};
+}
+
 /**
  * Build the Docker image before running scenarios. By default the historical
  * local build behavior is unchanged. Explicit remote-host configs may set
@@ -260,6 +297,8 @@ async function ensureImageOnProvider({
  * @param {string} [options.gitHash]
  * @param {boolean} [options.gitDirty]
  * @param {Function} [options.extractBuildProgressLine]
+ * @param {Object} [options.certification] A certification build request
+ *   (certification-image-identity.js prepareCertificationBuild().build).
  * @return {Promise<Object>}
  */
 async function buildImage(
@@ -277,6 +316,11 @@ async function buildImage(
     options.gitDirty :
     await resolveGitDirty();
   const providers = createBuildProviders(config, dockerOperationSink);
+  if (options.certification) {
+    return buildCertificationImages({providers, config, verbose, gitHash,
+      gitDirty, extractBuildProgressLine,
+      certification: options.certification});
+  }
   const results = [];
   for (const provider of providers) {
     results.push(await ensureImageOnProvider({

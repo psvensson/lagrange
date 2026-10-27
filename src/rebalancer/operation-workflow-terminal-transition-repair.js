@@ -1,3 +1,4 @@
+import {deliveryTransportOf, deliveryAnswerOf} from '../transport/transport-semantic-outcome.js';
 import {TIME_MS} from '../constants/index.js';
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {
@@ -9,9 +10,20 @@ import {
 import {
   admitReplaceTerminalRepair,
 } from './operation-workflow-replace-terminal-admission.js';
+import {isFailedCreateCleanupToken} from './failed-create-cleanup-token.js';
+import {assertCanonicalRebalancerEntityIdentity} from
+  './rebalancer-entity-identity.js';
 
 const {
+  OperationType,
   REBALANCE_COORDINATOR_LOG_MSG,
+  ReplicaOperationField,
+  ReplicaOperationMessageType,
+  ReplicaStatus,
+  WORKFLOW_STEP,
+  isCompletedReplicaOperationAnswer,
+  isDeliveredTransportDeliveryOutcome,
+  resolveOperationHandlerType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
 // Terminal-transition repair: the write-side half of the post-commit visibility
@@ -28,12 +40,209 @@ const {
 const TERMINAL_TRANSITION_REPAIR_RETRY_DELAY_MS = TIME_MS.SECOND / 2;
 const TERMINAL_TRANSITION_REPAIR_RETRY_MAX_DELAY_MS = TIME_MS.SECOND * 30;
 const TERMINAL_TRANSITION_REPAIR_RETRY_BACKOFF_MULTIPLIER = 2;
+const FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY =
+  'failed-create-cleanup-release-recovery-scan';
 const TERMINAL_TRANSITION_REPAIR_CAUSE = Object.freeze({
   CONFIRMATION_FAILED: 'confirmation_failed',
   CONFIRMATION_DEFERRED: 'confirmation_deferred',
   REPAIR_UNCONFIRMED: 'repair_unconfirmed',
   PERSIST_NOT_COMMITTED: 'persist_not_committed',
+  FAILED_CREATE_CLEANUP_RELEASE_PENDING:
+    'failed_create_cleanup_release_pending',
 });
+
+function isTerminalFailedCreateCleanupRemove(operation) {
+  const precondition = operation?.[
+    ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+  ];
+  return operation?.type === OperationType.REMOVE &&
+    operation.workflowStep === WORKFLOW_STEP.REMOVED &&
+    operation.status === ReplicaStatus.REMOVED &&
+    isFailedCreateCleanupToken(precondition?.cleanup_token) &&
+    typeof precondition?.create_attempt_token === 'string' &&
+    precondition.create_attempt_token.length > 0;
+}
+
+async function deliverFailedCreateCleanupRelease(owner, operation) {
+  try {
+    const precondition = operation[
+      ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION
+    ];
+    const {entityType, entityId} =
+      assertCanonicalRebalancerEntityIdentity(operation);
+    const target = `${operation.targetNodeId}/service/` +
+      resolveOperationHandlerType(entityType);
+    const request = {
+      [ReplicaOperationField.TYPE]:
+        ReplicaOperationMessageType.REMOVE_REPLICA,
+      [ReplicaOperationField.OPERATION_ID]: operation.operationId,
+      [ReplicaOperationField.OPERATION_TYPE]: operation.type,
+      [ReplicaOperationField.PARTITION_ID]: operation.partitionId,
+      [ReplicaOperationField.REPLICA_ID]: operation.replicaId,
+      [ReplicaOperationField.ENTITY_TYPE]: entityType,
+      [ReplicaOperationField.ENTITY_ID]: entityId,
+      [ReplicaOperationField.FAILED_CREATE_TARGET_LIFECYCLE_PRECONDITION]:
+        precondition,
+    };
+    const deliveryEnvelope = await owner.deliverReplicaOperationRequest(
+      operation,
+      target,
+      request,
+      operation.targetNodeId,
+    );
+    const transport = deliveryTransportOf(deliveryEnvelope);
+    const answer = deliveryAnswerOf(deliveryEnvelope);
+    return isDeliveredTransportDeliveryOutcome(transport) &&
+      isCompletedReplicaOperationAnswer(answer);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function armFailedCreateCleanupRelease(owner, operation) {
+  if (!isTerminalFailedCreateCleanupRemove(operation)) return false;
+  armTerminalTransitionRepair(
+    owner,
+    operation,
+    TERMINAL_TRANSITION_REPAIR_CAUSE
+      .FAILED_CREATE_CLEANUP_RELEASE_PENDING,
+  );
+  return true;
+}
+
+function isFailedCreateCleanupRecoveryOwnerCurrent(
+  owner,
+  ownershipFenceEpoch,
+) {
+  return owner.isInitialized && !owner.isShuttingDown &&
+    Number.isInteger(ownershipFenceEpoch) &&
+    typeof owner.getOperationOwnershipFenceEpoch === 'function' &&
+    owner.getOperationOwnershipFenceEpoch() === ownershipFenceEpoch;
+}
+
+function reportFailedCreateCleanupRecoveryQueryFailure(options, error) {
+  if (typeof options.onQueryFailure === 'function') {
+    options.onQueryFailure(error);
+  }
+}
+
+async function runFailedCreateCleanupReleaseRecoveryScan(
+  owner,
+  ownershipFenceEpoch,
+  options,
+) {
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+    owner,
+    ownershipFenceEpoch,
+  )) return 0;
+  let operations;
+  try {
+    operations = await owner.repository
+      .queryTerminalFailedCreateCleanupOperations();
+  } catch (error) {
+    if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+      owner,
+      ownershipFenceEpoch,
+    )) return 0;
+    scheduleFailedCreateCleanupRecoveryScan(owner, ownershipFenceEpoch);
+    reportFailedCreateCleanupRecoveryQueryFailure(options, error);
+    throw error;
+  }
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(
+    owner,
+    ownershipFenceEpoch,
+  )) return 0;
+  clearFailedCreateCleanupRecoveryScan(owner);
+  let armed = 0;
+  for (const operation of operations) {
+    if (armFailedCreateCleanupRelease(owner, operation)) armed += 1;
+  }
+  return armed;
+}
+
+function recoverFailedCreateCleanupReleaseDebt(owner, options = {}) {
+  const ownershipFenceEpoch = Number.isInteger(
+    options.operationOwnershipFenceEpoch,
+  ) ?
+    options.operationOwnershipFenceEpoch :
+    owner.getOperationOwnershipFenceEpoch();
+  const ownerKey = owner.getOperationOwnerSingleFlightKey(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+  return owner.operationWorkflowRunExclusive(
+    ownerKey,
+    () => runFailedCreateCleanupReleaseRecoveryScan(
+      owner,
+      ownershipFenceEpoch,
+      options,
+    ),
+  );
+}
+
+function clearFailedCreateCleanupRecoveryScan(owner) {
+  const timer = owner.terminalTransitionRepairTimerByOperationId.get(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+  if (timer) owner.clearTimeoutFn(timer);
+  owner.terminalTransitionRepairTimerByOperationId.delete(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+  owner.terminalTransitionRepairStateByOperationId.delete(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+}
+
+function unrefNativeRetryTimer(owner, timer) {
+  if (owner.usesNativeRetryTimers === true &&
+      typeof timer?.unref === 'function') {
+    timer.unref();
+  }
+}
+
+function scheduleFailedCreateCleanupRecoveryScan(
+  owner,
+  ownershipFenceEpoch,
+) {
+  if (!isFailedCreateCleanupRecoveryOwnerCurrent(owner, ownershipFenceEpoch) ||
+      owner.terminalTransitionRepairTimerByOperationId
+        .has(FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY)) return;
+  const previous = owner.terminalTransitionRepairStateByOperationId.get(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+  );
+  const attempt = previous ? previous.attempt + 1 : 0;
+  owner.terminalTransitionRepairStateByOperationId.set(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+    {
+      recoveryScan: true,
+      attempt,
+      operationOwnershipFenceEpoch: ownershipFenceEpoch,
+    },
+  );
+  const timer = owner.setTimeoutFn(() => {
+    owner.terminalTransitionRepairTimerByOperationId.delete(
+      FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+    );
+    return recoverFailedCreateCleanupReleaseDebt(owner, {
+      operationOwnershipFenceEpoch: ownershipFenceEpoch,
+      onQueryFailure(error) {
+        owner.logger.warn(
+          REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_UNCONFIRMED,
+          {operationId: FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+            error: error?.message || String(error)},
+        );
+      },
+    }).catch(() => {});
+  }, resolveTerminalTransitionRepairDelayMs(attempt));
+  // The startup debt scan remains level-triggered, but production's native
+  // background timer must not become the sole reason an otherwise idle
+  // process stays alive. Injected schedulers remain referenced so tests can
+  // deterministically observe every backoff and callback.
+  unrefNativeRetryTimer(owner, timer);
+  owner.terminalTransitionRepairTimerByOperationId.set(
+    FAILED_CREATE_CLEANUP_RECOVERY_SCAN_KEY,
+    timer,
+  );
+}
 
 function resolveTerminalTransitionRepairDelayMs(attempt) {
   const exponential =
@@ -43,6 +252,28 @@ function resolveTerminalTransitionRepairDelayMs(attempt) {
     TERMINAL_TRANSITION_REPAIR_RETRY_MAX_DELAY_MS,
     Math.max(1, Math.floor(exponential)),
   );
+}
+
+function buildTerminalTransitionRepairState(
+  owner,
+  existingState,
+  projectedOperation,
+  persistOptions,
+  cause,
+) {
+  return {
+    projectedOperation: existingState?.projectedOperation ||
+      owner.cloneOperationSnapshot(projectedOperation),
+    persistOptions: existingState?.persistOptions || persistOptions,
+    cleanupRelease: Boolean(existingState?.cleanupRelease) || cause ===
+      TERMINAL_TRANSITION_REPAIR_CAUSE
+        .FAILED_CREATE_CLEANUP_RELEASE_PENDING,
+    persistenceRepair: existingState ?
+      Boolean(existingState.persistenceRepair) :
+      cause !== TERMINAL_TRANSITION_REPAIR_CAUSE
+        .FAILED_CREATE_CLEANUP_RELEASE_PENDING,
+    attempt: existingState ? existingState.attempt + 1 : 0,
+  };
 }
 
 function isTerminalTransitionRepairConfirmed(visibility) {
@@ -118,22 +349,22 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause,
   }
   const existingState =
     owner.terminalTransitionRepairStateByOperationId.get(operationId);
-  const attempt = existingState ? existingState.attempt + 1 : 0;
-  owner.terminalTransitionRepairStateByOperationId.set(operationId, {
-    projectedOperation:
-      existingState?.projectedOperation ||
-      owner.cloneOperationSnapshot(projectedOperation),
-    persistOptions: existingState?.persistOptions || persistOptions,
-    attempt,
-  });
+  const state = buildTerminalTransitionRepairState(
+    owner,
+    existingState,
+    projectedOperation,
+    persistOptions,
+    cause,
+  );
+  owner.terminalTransitionRepairStateByOperationId.set(operationId, state);
   if (owner.terminalTransitionRepairTimerByOperationId.has(operationId)) {
     return;
   }
-  const delayMs = resolveTerminalTransitionRepairDelayMs(attempt);
+  const delayMs = resolveTerminalTransitionRepairDelayMs(state.attempt);
   logTerminalTransitionRepairArmed(owner, projectedOperation, {
     operationId,
     cause,
-    attempt,
+    attempt: state.attempt,
     delayMs,
   });
   // The callback returns its promise so a deterministic test scheduler can
@@ -153,6 +384,7 @@ function armTerminalTransitionRepair(owner, projectedOperation, cause,
       },
     );
   }, delayMs);
+  unrefNativeRetryTimer(owner, timerHandle);
   owner.terminalTransitionRepairTimerByOperationId.set(
     operationId,
     timerHandle,
@@ -227,6 +459,14 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       const heldState =
         owner.terminalTransitionRepairStateByOperationId.get(operationId);
       if (!heldState || owner.isShuttingDown) {
+        return;
+      }
+      if (heldState.cleanupRelease && !heldState.persistenceRepair) {
+        await runFailedCreateCleanupReleaseAttempt(
+          owner,
+          operationId,
+          heldState,
+        );
         return;
       }
       const repairAdmission = await admitReplaceTerminalRepair(owner,
@@ -312,6 +552,17 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
           );
           return;
         }
+        if (heldState.cleanupRelease) {
+          heldState.persistenceRepair = false;
+          heldState.projectedOperation = visibility.operation;
+          if (!await deliverFailedCreateCleanupRelease(
+            owner,
+            visibility.operation,
+          )) {
+            rearmTerminalTransitionRepairIfHeld(owner, operationId);
+            return;
+          }
+        }
         owner.logger.info(
           REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_SUCCEEDED,
           {
@@ -327,6 +578,33 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       rearmTerminalTransitionRepairIfHeld(owner, operationId);
     },
   );
+}
+
+async function runFailedCreateCleanupReleaseAttempt(
+  owner,
+  operationId,
+  heldState,
+) {
+  const authoritative = await owner.repository
+    .queryReplicaOperationPersistenceAuthorityOperation(
+      heldState.projectedOperation,
+    );
+  if (!isTerminalFailedCreateCleanupRemove(authoritative) ||
+      !await deliverFailedCreateCleanupRelease(owner, authoritative)) {
+    rearmTerminalTransitionRepairIfHeld(owner, operationId);
+    return;
+  }
+  owner.logger.info(
+    REBALANCE_COORDINATOR_LOG_MSG.FAILED_CREATE_CLEANUP_RELEASE_SUCCEEDED,
+    {
+      operationId,
+      workflowStep: authoritative.workflowStep,
+      partitionId: authoritative.partitionId,
+      targetNodeId: authoritative.targetNodeId,
+      attempt: heldState.attempt,
+    },
+  );
+  clearTerminalTransitionRepair(owner, operationId);
 }
 
 /**
@@ -381,7 +659,9 @@ async function resolveRefusedTerminalTransitionRepairPersist(
 
 export {
   TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armFailedCreateCleanupRelease,
   armTerminalTransitionRepair,
   clearTerminalTransitionRepair,
+  recoverFailedCreateCleanupReleaseDebt,
   runTerminalTransitionRepairAttempt,
 };

@@ -7,7 +7,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   checkLearnerPromotionWithGrantedProof,
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
   createLoopbackTransport,
   createTrafficReadinessState,
@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
-  const raftProvider = new ControllablePartitionRaftProvider();
+  const consensusPort = new ControllableConsensusPort();
   const partition = createControllablePartitionService({
     partitionId: 'test-partition-leader-gate',
     tableId: 'leader_gate_test',
@@ -82,16 +82,15 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     dbPath: ':memory:',
     deferElection: true,
     leaderActivationStabilizationMs: 20,
-  }, raftProvider);
+  }, consensusPort);
 
   await partition.initialize();
 
-  let reconstructions = 0;
+  let mirrorResumptions = 0;
   let rebalancerLeadershipUpdates = 0;
   let leaderEvents = 0;
-  partition.reconstructPreparedState = () => {
-    reconstructions += 1;
-    return {preparedTransactionCount: 0, prepareLostCount: 0};
+  partition.resumeDurableMirrorReplicationWorkers = () => {
+    mirrorResumptions += 1;
   };
   partition.updateRebalancerLeadership = () => {
     rebalancerLeadershipUpdates += 1;
@@ -100,34 +99,34 @@ test('PartitionService - leader activation dedupes same-term flaps and cancels o
     leaderEvents += 1;
   });
 
-  raftProvider.setTerm(7);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.LEADER);
+  consensusPort.setTerm(7);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.LEADER);
 
   await waitForCondition(() => leaderEvents === 1, 500, 10);
 
-  t.equal(reconstructions, 1, 'prepared-state reconstruction should run once');
+  t.equal(mirrorResumptions, 1, 'durable mirror resumption should run once');
   t.equal(
     rebalancerLeadershipUpdates,
     1,
     'leader-owned background work should activate once',
   );
 
-  reconstructions = 0;
+  mirrorResumptions = 0;
   leaderEvents = 0;
   rebalancerLeadershipUpdates = 0;
 
-  raftProvider.setTerm(8);
-  raftProvider.setRole(RaftRole.LEADER);
-  raftProvider.setRole(RaftRole.CANDIDATE);
+  consensusPort.setTerm(8);
+  consensusPort.setRole(RaftRole.LEADER);
+  consensusPort.setRole(RaftRole.CANDIDATE);
 
   await new Promise((resolve) => setTimeout(resolve, 60));
 
   t.equal(
-    reconstructions,
+    mirrorResumptions,
     0,
-    'candidate demotion should cancel pending leader reconstruction',
+    'candidate demotion should cancel pending mirror resumption',
   );
   t.equal(
     leaderEvents,

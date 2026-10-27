@@ -3,7 +3,7 @@
  * summarized with a pass rate; a run without a report records nothing.
  */
 
-import {execFileSync, spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,6 +20,7 @@ import {gitProcessEnvironment} from '../../scripts/checks/git-process-environmen
 import {
   FORMATION_OWNER,
 } from '../../src/diagnostics/formation-diagnostics-contract.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const FORMATION_HEALTH_WORKFLOW_PATH = '.github/workflows/formation-health.yml';
 const DEPENDENCY_POLICY_PATH = 'dependency-policy.json';
@@ -313,7 +314,7 @@ test('--calibration counts formation-path owners missing from the table', (t) =>
 // The nightly workflow's token commits one inert file and nothing else.
 test('--bot-commits flags a formation-health commit that touches anything but the trend', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-bot-'));
-  const git = (...args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
+  const git = (...args) => execGit(args, {cwd: root, encoding: 'utf8'}).trim();
   git('init', '-q', '-b', 'main');
   git('config', 'commit.gpgsign', 'false');
   const commit = (name, email, file, message) => {
@@ -364,7 +365,7 @@ const measured = (verdict, at = '2026-09-15T03:59:00.000Z') =>
 function trendRepo(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'formation-trend-push-'));
   t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
-  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+  const git = (...args) => execGit(['-c', 'user.name=t', '-c', 'user.email=t@t',
     ...args], {cwd: root, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
   const write = (file, text, mode = 0o644) => {
     fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});
@@ -572,9 +573,11 @@ test('only PASS and FAIL count as measuring for --metric', (t) => {
 const HOOK_CLOSURE = Object.freeze([
   '.githooks/pre-push',
   'scripts/checks/formation-health.js',
+  'scripts/checks/git-invocation.js',
   'examples/service-data-affinity/formation-verdict.js',
   'src/diagnostics/formation-diagnostics-contract.js',
   'src/test-helpers/probe-guard.js',
+  'test/distributed/harness/certification-evidence-statement.js',
 ]);
 
 test('the real hook admits a trend append and refuses a smuggled change, at any checkout path', (t) => {
@@ -583,7 +586,7 @@ test('the real hook admits a trend append and refuses a smuggled change, at any 
     t.teardown(() => fs.rmSync(top, {recursive: true, force: true}));
     const root = path.join(top, parent, 'lagrange');
     fs.mkdirSync(root, {recursive: true});
-    const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    const git = (...args) => execGit(['-c', 'user.name=t', '-c', 'user.email=t@t',
       ...args], {cwd: root, encoding: 'utf8', env: gitProcessEnvironment()}).trim();
     for (const file of HOOK_CLOSURE) {
       fs.mkdirSync(path.dirname(path.join(root, file)), {recursive: true});

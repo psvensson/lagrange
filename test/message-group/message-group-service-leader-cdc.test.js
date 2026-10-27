@@ -12,20 +12,23 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
-import {
-  MessageGroupService,
-} from '../../src/message-group/message-group-service.js';
+import {RaftRole} from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
   ConfigurationManager,
 } from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
-import {RAFT_EVENT} from '../../src/raft/constants.js';
 import {
   CACHE_HYDRATION_TABLES,
 } from '../../src/cache/cache-constants.js';
 import {TEST_BOOT_INCARNATION} from '../test-helpers/boot-incarnation-fixture.js';
+import {
+  ControllableConsensusPort,
+} from '../test-helpers/controllable-consensus-port.js';
+import {
+  createControllableMessageGroupService,
+} from './message-group-service-test-support.js';
 
 // Test-local fixture constants.
 const TEST_PORT_BASE = 25300;
@@ -85,7 +88,8 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: TEST_GROUP_ID,
         replicaId,
         nodeId,
@@ -93,7 +97,7 @@ test(
         leaderActivationStabilizationMs: 0,
         leaderActivationNodeSpacingMs: 0,
         leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
-      });
+      }, port);
 
       await service.initialize();
 
@@ -120,8 +124,8 @@ test(
       };
 
       // Simulate leadership loss then gain.
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       // Assert subscribeToCDC called for EACH CDC-propagated table.
       t.equal(
@@ -159,7 +163,8 @@ test(
     const {router, nodeId, cleanup} = await createTestTransport();
     try {
       const replicaId = `${TEST_GROUP_ID}-count-r1`;
-      const service = new MessageGroupService({
+      const port = new ControllableConsensusPort();
+      const service = createControllableMessageGroupService({
         groupId: `${TEST_GROUP_ID}-count`,
         replicaId,
         nodeId,
@@ -167,7 +172,7 @@ test(
         leaderActivationStabilizationMs: 0,
         leaderActivationNodeSpacingMs: 0,
         leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
-      });
+      }, port);
 
       await service.initialize();
 
@@ -185,8 +190,8 @@ test(
         return originalSubscribeToCDC(tableName);
       };
 
-      service.raft.emit(RAFT_EVENT.FOLLOWER);
-      service.raft.emit(RAFT_EVENT.LEADER);
+      port.setRole(RaftRole.FOLLOWER);
+      port.setRole(RaftRole.LEADER);
 
       // The count of re-subscribe calls must exactly equal the
       // number of CDC-propagated tables — no more, no fewer.

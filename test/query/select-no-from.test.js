@@ -3,6 +3,7 @@
  * Bug: executeSelect crashes with TypeError when ast.from is null.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 
@@ -19,14 +20,13 @@ function createMockMessageRouter() {
       const replicaId = parts[2];
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(replicaId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: 0,
-        };
+        });
       }
-      return {acknowledged: true, success: true};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true});
     },
   };
 }

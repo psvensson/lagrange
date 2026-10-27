@@ -9,6 +9,7 @@ import {
 const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
+  isBootstrapPeerAdmissible,
   reconcileRaftPeersFromCacheForService,
   redriveAdmissionsOnMembershipChange,
 } from './partition-service-raft-peer-cache-reconciliation.js';
@@ -29,15 +30,13 @@ import {
 } from '../raft/snapshot-install.js';
 import {RAFT_EVENT} from '../raft/constants.js';
 import {
-  RAFT_PARTITION_NODE_REQUEST,
-} from '../raft/raft-provider-contract-constants.js';
+  RAFT_OPERATION_PORT_REQUEST,
+  hostedConsensusSubstrate,
+} from '../raft/raft-operation-port-request.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
   cleanupStaleTransferStaging,
 } from '../raft/snapshot-transfer-receiver.js';
-import {
-  createPartitionSnapshotCadence,
-} from './partition-snapshot-cadence.js';
 import {
   detectLegacyPartitionConsensusState,
   legacyPartitionConsensusStateError,
@@ -46,12 +45,15 @@ import {
   LEGACY_PARTITION_CONSENSUS_OUTCOME,
 } from './partition-legacy-consensus-state-constants.js';
 import {
-  consensusInitRefusedError,
+  refusePartitionConsensusHeldAtOpen,
+  refusePartitionConsensusStartup,
   openPartitionConsensusPort,
 } from './partition-consensus-port-opening.js';
 import {createCommittedStatementOutcomeTable} from
   './partition-committed-statement-outcome.js';
-import {isHeldByHostFailure} from './partition-write-kernel.js';
+import {openParticipantTransactionStore} from
+  './partition-participant-transaction-store.js';
+import {REPLICA_DB_PRAGMA} from '../storage/storage-constants.js';
 
 const {
   AddressManager,
@@ -62,13 +64,11 @@ const {
   Database,
   ENTITY_TYPE,
   PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON,
-  PARTITION_SERVICE_LIFERAFT_TIMER,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_TYPE,
@@ -85,37 +85,9 @@ const {
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
 
-// The clock and randomness a replica hands its consensus port (the rs-raft
-// runtime's timers and ticks run on the clock). Absent keys mean the port
-// resolves the host clock, so production is byte-identical.
-function hostedConsensusSubstrate(replica) {
-  const substrate = {};
-  if (replica.providedTimeSource) {
-    substrate.timeSource = replica.providedTimeSource;
-  }
-  if (replica.providedRandomSource) {
-    substrate.randomSource = replica.providedRandomSource;
-  }
-  return substrate;
-}
+const SERVICE_SHUTDOWN = 'partition_service_shutdown';
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
-  /**
-   * One checkpoint-cadence tick, driven by the 1s prepared-state-hold sweep
-   * (S6 Phase A link 1). The cadence owner holds the leader-only role gate
-   * and the in-flight flag — the sweep only provides the heartbeat. Lazily
-   * constructed so guard-injected services without raft state stay inert.
-   * The returned promise NEVER rejects (typed outcomes only).
-   * @param {number} nowMs sweep timestamp (nowMs-overridable in guards)
-   * @return {Promise<Object>} typed frozen cadence tick result
-   */
-  runSnapshotCadenceTick(nowMs) {
-    if (!this.snapshotCadence) {
-      this.snapshotCadence = createPartitionSnapshotCadence({service: this});
-    }
-    return this.snapshotCadence.tick(nowMs);
-  }
-
   /**
    * Resolve the current raft term when a live raft instance exists; the
    * leadership-state helper passes it with the leadership event so the
@@ -303,11 +275,40 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   }
   /**
    * Initialize the partition service.
-   * Uses liferaft library for Raft consensus with simplified transport.
+   * Opens the partition's raft-rs consensus port over its durable store.
    * Requirements: 8.1, 10.1, 10.2, 10.3, 10.4, 10.5
    * @return {Promise<void>}
    */
-  async initialize() {
+  initialize() {
+    if (this.startupFailure !== null) {
+      return Promise.reject(this.startupFailure);
+    }
+    if (this.isShutdown) {
+      return Promise.reject(
+        Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN}));
+    }
+    if (this.initializationSettlement) {
+      return this.initializationSettlement;
+    }
+    if (this.initialized) {
+      return Promise.resolve();
+    }
+    const {promise, resolve, reject} = Promise.withResolvers();
+    this.initializationSettlement = promise;
+    this.initializeUnserialized().then(resolve, reject).finally(() => {
+      if (this.initializationSettlement === promise) {
+        this.initializationSettlement = null;
+      }
+    });
+    return promise;
+  }
+  async initializeUnserialized() {
+    if (this.startupFailure !== null) {
+      throw this.startupFailure;
+    }
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+    }
     if (this.initialized) {
       return;
     }
@@ -367,8 +368,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         dbPath: this.dbPath,
       });
       this.db = new Database(this.dbPath);
-      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
-      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
+      this.db.pragma(REPLICA_DB_PRAGMA.JOURNAL_MODE);
+      this.db.pragma(REPLICA_DB_PRAGMA.SYNCHRONOUS);
       // Before any DDL and before the port: a database holding the retired
       // backend's consensus state and no rs-raft record is never reused.
       const legacyConsensusState = detectLegacyPartitionConsensusState({
@@ -380,8 +381,8 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         throw legacyPartitionConsensusStateError(
           legacyConsensusState, this.partitionId);
       }
-      this.createTransactionOutcomeTable();
       createCommittedStatementOutcomeTable(this.db);
+      openParticipantTransactionStore(this.db);
       if (this.schema) {
         this.createTable();
       }
@@ -395,13 +396,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     const config = ConfigurationManager.getInstance();
     const heartbeatMs =
       config.get(CONFIG_KEY.RAFT_HEARTBEAT_INTERVAL_MS) ||
-      PARTITION_SERVICE_VALUE.LIFERAFT_HEARTBEAT_DEFAULT_MS;
+      PARTITION_SERVICE_VALUE.RAFT_HEARTBEAT_DEFAULT_MS;
     const baseElectionMinMs =
       config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MIN_MS) ||
-      PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MIN_DEFAULT_MS;
+      PARTITION_SERVICE_VALUE.RAFT_ELECTION_MIN_DEFAULT_MS;
     const baseElectionMaxMs =
       config.get(CONFIG_KEY.RAFT_ELECTION_TIMEOUT_MAX_MS) ||
-      PARTITION_SERVICE_VALUE.LIFERAFT_ELECTION_MAX_DEFAULT_MS;
+      PARTITION_SERVICE_VALUE.RAFT_ELECTION_MAX_DEFAULT_MS;
     const tickIntervalMs = config.get(CONFIG_KEY.RAFT_TICK_INTERVAL_MS);
     const {electionMinMs, electionMaxMs} = computeReplicaElectionTimeouts({
       replicaId: this.replicaId,
@@ -435,19 +436,25 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     // is read from a global - a backend that needs something absent from
     // this request changes the boundary rather than reaching around it.
     this.raft = await openPartitionConsensusPort(this, {
-      [RAFT_PARTITION_NODE_REQUEST.GROUP_ID]: this.partitionId,
-      [RAFT_PARTITION_NODE_REQUEST.PEER_ID]: this.replicaId,
-      [RAFT_PARTITION_NODE_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
-      [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
+      [RAFT_OPERATION_PORT_REQUEST.GROUP_ID]: this.partitionId,
+      [RAFT_OPERATION_PORT_REQUEST.PEER_ID]: this.replicaId,
+      [RAFT_OPERATION_PORT_REQUEST.PEER_ADDRESS]: this.unifiedAddress,
+      [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_PEER_IDS]: this.replicaIds,
       ...(this.bootstrapMembership === null ? {} : {
-        [RAFT_PARTITION_NODE_REQUEST.BOOTSTRAP_MEMBERSHIP]:
+        [RAFT_OPERATION_PORT_REQUEST.BOOTSTRAP_MEMBERSHIP]:
           this.bootstrapMembership,
       }),
-      [RAFT_PARTITION_NODE_REQUEST.DURABLE_STORAGE]: this.db,
-      [RAFT_PARTITION_NODE_REQUEST.TIMING]: this.raftTimingConfig,
-      [RAFT_PARTITION_NODE_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
-      [RAFT_PARTITION_NODE_REQUEST.DEFER_ELECTION]: this.deferElection,
-      [RAFT_PARTITION_NODE_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
+      [RAFT_OPERATION_PORT_REQUEST.IDENTITY_EXISTED]: this.identityExisted,
+      ...(this.identityRecorded === null ? {} : {
+        [RAFT_OPERATION_PORT_REQUEST.IDENTITY_RECORDED]:
+          this.identityRecorded,
+      }),
+      [RAFT_OPERATION_PORT_REQUEST.DURABLE_STORAGE]: this.db,
+      [RAFT_OPERATION_PORT_REQUEST.TIMING]: this.raftTimingConfig,
+      [RAFT_OPERATION_PORT_REQUEST.SUBSTRATE]: hostedConsensusSubstrate(this),
+      [RAFT_OPERATION_PORT_REQUEST.DEFER_ELECTION]:
+        this.defersElectionScheduling(),
+      [RAFT_OPERATION_PORT_REQUEST.SEND_TO_PEER]: (peerAddress, packet) =>
         this.transport.deliver(
           peerAddress,
           packet,
@@ -456,13 +463,13 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
             targetAddress: peerAddress,
           }),
         ),
-      [RAFT_PARTITION_NODE_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
+      [RAFT_OPERATION_PORT_REQUEST.RESOLVE_PEER_ADDRESS]: (address) =>
         this.buildPeerAddress(address),
       // One committed record per applied entry, inside the transaction
       // that also advances the rs-raft applied state.
-      [RAFT_PARTITION_NODE_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
+      [RAFT_OPERATION_PORT_REQUEST.APPLY_COMMITTED_ENTRY]: (committed) =>
         this.applyCommittedEntry(committed),
-      [RAFT_PARTITION_NODE_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
+      [RAFT_OPERATION_PORT_REQUEST.SNAPSHOT_CATCHUP_NEEDED]: (decision) => {
         if (typeof this.onSnapshotCatchupNeeded ===
             PARTITION_SERVICE_TYPE.FUNCTION) {
           this.onSnapshotCatchupNeeded(decision);
@@ -471,7 +478,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     });
     await this.refuseConsensusHeldAtOpen();
     // Committed-prefix divergence witness (quest raft-committed-prefix-
-    // conflict-livelock): the follower-side liferaft surfaces a poisoned
+    // conflict-livelock): the follower's consensus core surfaces a poisoned
     // committed prefix exactly once per conflict identity instead of
     // retrying an impossible truncation every heartbeat. Log it as the
     // durable operator-visible signal; repair itself rides the existing
@@ -491,36 +498,27 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         );
       },
     );
-    if (this.deferElection && this.raft) {
-      this.raft.stopScheduling(
-        PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CLEARED_LIFERAFT_TIMERS, {
-        replicaId: this.replicaId,
-        partitionId: this.partitionId,
-      });
+    if (this.defersElectionScheduling() && this.raft) {
+      this.raft.stopScheduling();
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.STOPPED_SCHEDULING_FOR_DEFERRED_ELECTION, {
+          replicaId: this.replicaId,
+          partitionId: this.partitionId,
+        });
     }
     // A demotion the port announces is the core's: a lone leader whose group
     // becomes unusable is announced without a role and must stop leading
     // (its writes are refused, not proposed into a broken group). Only a
-    // joining learner's catch-up keeps its learner role.
+    // joining learner's catch-up keeps its learner role. Its ticks keep
+    // running: the core decides whether it may campaign (a learner never
+    // does), and a replica whose ticks stop keeps a stale leader lease.
     const shouldIgnoreDemotionEvent = (eventName) => {
       const isJoiningLearner =
         this.isJoiningExistingGroup === true &&
         isCatchupLearnerRaftRole(this.role);
-      if (!isJoiningLearner) {
-        return false;
-      }
-      if (
-        eventName !== PARTITION_SERVICE_ROLE.FOLLOWER &&
-        eventName !== PARTITION_SERVICE_ROLE.CANDIDATE
-      ) {
-        return false;
-      }
-      if (this.raft) {
-        this.raft.stopScheduling(
-          PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION);
-      }
-      return true;
+      return isJoiningLearner && (
+        eventName === PARTITION_SERVICE_ROLE.FOLLOWER ||
+        eventName === PARTITION_SERVICE_ROLE.CANDIDATE);
     };
     if (this.isJoiningExistingGroup) {
       this.role = RaftRole.LEARNER;
@@ -544,8 +542,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     for (const peerId of this.replicaIds) {
       // A committed member the address book cannot place yet resolves once
       // discovery catches up; the bootstrap membership, not the address
-      // book, names the members (owner decision O1).
-      const peerAddress = peerId === this.replicaId ? null :
+      // book, names the members (owner decision O1). A peer whose row has
+      // not recorded its fact is admitted only on that row change (F2).
+      const peerAddress = peerId === this.replicaId ||
+        !isBootstrapPeerAdmissible(this, peerId) ? null :
         this.resolveKnownPeerAddress(peerId);
       if (peerAddress !== null) {
         if (!this.suppressLifecycleLogs) {
@@ -598,8 +598,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       // releases what it acquired (R11) instead of reporting a leader.
       const campaign = await this.raft.campaign();
       if (campaign?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK) {
-        await this.shutdown();
-        throw consensusInitRefusedError(this.partitionId, campaign);
+        await refusePartitionConsensusStartup(this, campaign);
       }
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
@@ -611,6 +610,9 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     this.startPeriodicSizeUpdates();
     this.startPreparedStateHoldTimeoutSweep();
     await this.updatePartitionSize();
+    if (this.isShutdown) {
+      throw Object.assign(new Error(SERVICE_SHUTDOWN), {code: SERVICE_SHUTDOWN});
+    }
     this.initialized = true;
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.READY, {
       sizeBytes: this.sizeBytes,
@@ -630,6 +632,18 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     });
   }
   /**
+   * Whether this replica's tick scheduling waits for startElection(): a
+   * founder's or a restored voter's deferred election does; a joiner's does
+   * not - its core is a learner of its own configuration until the AddNode
+   * that admits it is applied, so it cannot campaign, and it is ticked from
+   * its opening so its election timer never freezes.
+   * @return {boolean}
+   * @private
+   */
+  defersElectionScheduling() {
+    return this.deferElection === true && !this.isJoiningExistingGroup;
+  }
+  /**
    * Refuse initialization when the port opened the group held by its host
    * failure (its durable record could not be read at open), whatever the
    * replica count, releasing what initialization acquired (R11): a replica
@@ -639,12 +653,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    * @private
    */
   async refuseConsensusHeldAtOpen() {
-    const opened = this.raft.readStatus();
-    if (!isHeldByHostFailure(opened)) {
-      return;
-    }
-    await this.shutdown();
-    throw consensusInitRefusedError(this.partitionId, opened);
+    await refusePartitionConsensusHeldAtOpen(this, this.raft.readStatus());
   }
   /**
    * Start the Raft election timer.

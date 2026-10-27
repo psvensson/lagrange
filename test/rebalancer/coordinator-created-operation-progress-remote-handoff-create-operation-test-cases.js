@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {
   RebalanceCoordinator as ProductionRebalanceCoordinator,
 } from '../../src/rebalancer/rebalance-coordinator.js';
@@ -16,8 +17,10 @@ import {
 import {TIMEOUT_BUDGET_DEFAULT} from
   '../../src/control-plane/timeout-budget.js';
 import {
+  createAllowAllStorageAdmissionService,
   createMockControlPlaneReadinessService,
   createMockTransactionCoordinator,
+  withSuccessfulStorageReservationInsert,
 } from './test-helpers.js';
 import {
   createRecentIntentPolicyCoordinator,
@@ -39,7 +42,6 @@ import {
   REMOTE_HANDOFF_TEST_INITIAL_NOW_MS,
   REMOTE_HANDOFF_TIMEOUT_OVERRUN_MS,
 } from './coordinator-created-operation-progress-remote-handoff-fixture-builders.js';
-import {createAllowAllStorageAdmissionService} from './test-helpers.js';
 
 export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
   test,
@@ -110,6 +112,8 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       return {success: true, rows: [], affectedRows: 0};
     };
 
+    const reservationAwareExecuteQuery =
+      withSuccessfulStorageReservationInsert(executeQuery);
     let deliveryAttempt = 0;
     const deliver = async (target, payload) => {
       deliveries.push({target, payload});
@@ -120,13 +124,13 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
         error.retryAfterMs = 250;
         throw error;
       }
-      return {acknowledged: true};
+      return buildDeliveryEnvelope({acknowledged: true});
     };
     const coordinator = createRemoteHandoffCoordinator({
       authoritativeRead,
       deferredTimers,
       deliver,
-      executeQuery,
+      executeQuery: reservationAwareExecuteQuery,
     });
 
     try {
@@ -252,7 +256,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -385,6 +389,8 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       return {success: true, rows: [], affectedRows: 0};
     };
 
+    const reservationAwareExecuteQuery =
+      withSuccessfulStorageReservationInsert(executeQuery);
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-source',
       systemTableCache: {
@@ -416,12 +422,12 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return authoritativeRead(tableName, sql, params);
         },
         async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
+          return reservationAwareExecuteQuery(sql, params);
         },
       },
       sqlQueryEngine: {
         async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
+          return reservationAwareExecuteQuery(sql, params);
         },
       },
       tablePolicyService: {
@@ -438,7 +444,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),
@@ -570,6 +576,8 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       return {success: true, rows: [], affectedRows: 0};
     };
 
+    const reservationAwareExecuteQuery =
+      withSuccessfulStorageReservationInsert(executeQuery);
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-source',
       systemTableCache: {
@@ -601,12 +609,12 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
           return authoritativeRead(tableName, sql, params);
         },
         async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
+          return reservationAwareExecuteQuery(sql, params);
         },
       },
       sqlQueryEngine: {
         async executeQuery(sql, params = []) {
-          return executeQuery(sql, params);
+          return reservationAwareExecuteQuery(sql, params);
         },
       },
       tablePolicyService: {
@@ -623,7 +631,7 @@ export function registerCoordinatorCreatedRemoteHandoffCreateOperationTests({
       messageRouter: {
         async deliver(target, payload) {
           deliveries.push({target, payload});
-          return {acknowledged: true};
+          return buildDeliveryEnvelope({acknowledged: true});
         },
       },
       controlPlaneReadinessService: createMockControlPlaneReadinessService(),

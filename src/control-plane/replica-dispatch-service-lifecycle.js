@@ -299,13 +299,13 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
             payload.type !== ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH
           ) {
             return {
-              acknowledged: false,
+              success: false,
               error:
                 REPLICA_DISPATCH_SERVICE_LITERAL.UNSUPPORTED_DISPATCH_CONTROL_MESSAGE,
             };
           }
           await this.handleReplicaOperationDispatch(payload);
-          return {acknowledged: true};
+          return null;
         };
         this.messageRouter.register(
           this.directDispatchServiceAddress,

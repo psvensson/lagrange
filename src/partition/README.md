@@ -11,7 +11,7 @@ transactions, and partition-local write kernels.
 - `PartitionService` owns partition-local service behavior and consumes the
   frozen partition Raft operation port. rs-raft is the only partition
   consensus path: there is no backend selector and no default fallback.
-- The port comes from `createPartitionPort(...)` on the rs-raft provider. The
+- The port comes directly from `createRaftRsOperationPort(...)`. The
   rs-raft path keeps binding/core entry private to
   `src/raft/raft-rs-runtime-owner.js`; local rs-raft active/retired
   eligibility belongs to `RaftRsReplicaLifecycleOwner`.
@@ -26,7 +26,11 @@ transactions, and partition-local write kernels.
   rs-raft record (`legacy_partition_consensus_state_detected`); such state is
   never migrated or reused.
 - `PartitionWriteKernel` owns partition write execution.
-- `PartitionTransactionHandler` owns partition-local transaction handling.
+- `partition-participant-transaction-request.js`,
+  `partition-participant-transaction-session.js`,
+  `partition-participant-transaction-store.js`, and
+  `partition-participant-transaction-apply.js` own the current TX1 request,
+  volatile staging, durable custody, and committed application boundaries.
 - `ManagedSplitWorkflow` owns split lifecycle progression.
 - `PartitionSplitMergeManager` owns split/merge evaluation and triggering.
 - `PartitionServiceRowOwner` owns partition service-row field mutation.

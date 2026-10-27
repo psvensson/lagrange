@@ -25,7 +25,6 @@ const MESSAGE_GROUP_FORWARDING_OWNER_LITERAL = Object.freeze({
   METADATA_INGRESS: 'metadata_ingress',
   NO_CONNECTION_TO_NODE: 'No connection to node',
   NO_HANDLER_REGISTERED_FOR_ADDRESS: 'No handler registered for address',
-  OUTBOUND_QUEUE_BACKPRESSURED: 'OUTBOUND_QUEUE_BACKPRESSURED',
   OUTBOUND_QUEUE_FOR_NODE: 'Outbound queue for node',
   REPAIRED_MESSAGE_DASH_GROUP_FORWARD_TOPOLOGY_FROM_AUTHORITATIVE_ROWS:
     'Repaired message-group forward topology from authoritative rows',
@@ -58,13 +57,20 @@ const MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION = Object.freeze({
 
 const MESSAGE_GROUP_CDC_INGRESS_STATE = Object.freeze({
   DEFER_INGRESS_NOT_INITIALIZED: 'defer_ingress_not_initialized',
+  DEFER_NATIVE_TARGET_UNAVAILABLE: 'defer_native_target_unavailable',
   DEFER_STRICT_TARGET_UNKNOWN: 'defer_strict_target_unknown',
+  FORWARD_NATIVE_LEADER: 'forward_native_leader',
   FORWARD_NON_STRICT: 'forward_non_strict',
   FORWARD_STRICT_RECOVERY_TARGET: 'forward_strict_recovery_target',
   FORWARD_STRICT_TARGET: 'forward_strict_target',
   LOCAL_RAFT_LEADER: 'local_raft_leader',
   LOCAL_STRICT_CONVERGENCE_INGRESS: 'local_strict_convergence_ingress',
   LOCAL_STRICT_RECOVERY_INGRESS: 'local_strict_recovery_ingress',
+});
+
+// Transient request context, never part of a CDC event or native command.
+const MESSAGE_GROUP_CDC_FORWARD_MODE = Object.freeze({
+  NATIVE_COMMIT: 'native_commit',
 });
 
 const MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE = Object.freeze({
@@ -168,9 +174,10 @@ function resolveCDCForwardDeliveryProfile(
   );
 }
 
-function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
+function buildForwardTopologyRepairReadOptions(service, workloadProfile, remainingMs = null) {
   return {
-    queryTimeoutMs: service.forwardTopologyRepairQueryTimeoutMs,
+    queryTimeoutMs: remainingMs === null ? service.forwardTopologyRepairQueryTimeoutMs :
+      Math.min(service.forwardTopologyRepairQueryTimeoutMs, remainingMs()),
     sessionId:
       `message-group-forward-topology:${service.groupId}:${service.now()}`,
     routingReadinessDimension:
@@ -185,6 +192,7 @@ function buildForwardTopologyRepairReadOptions(service, workloadProfile) {
 export {
   FORWARD_TOPOLOGY_REPAIR_OUTCOME,
   MESSAGE_GROUP_CDC_FORWARD_FAILURE_STATE,
+  MESSAGE_GROUP_CDC_FORWARD_MODE,
   MESSAGE_GROUP_CDC_INGRESS_ACTION,
   MESSAGE_GROUP_CDC_INGRESS_INITIALIZATION,
   MESSAGE_GROUP_CDC_INGRESS_STATE,

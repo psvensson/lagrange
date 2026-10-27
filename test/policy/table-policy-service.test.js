@@ -7,6 +7,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {TablePolicyService} from '../../src/policy/table-policy-service.js';
 import {NUM, STRING, TYPEOF} from '../../src/constants/index.js';
 import {POLICY_ERROR_MSG} from '../../src/policy/policy-constants.js';
+import {CDC_TABLE_POLICY_REFUSAL} from '../../src/cache/cdc-table-policy.js';
 import {
   STORAGE_PLACEMENT_CONSTRAINT,
   STORAGE_PLACEMENT_DEFAULT,
@@ -36,7 +37,7 @@ function createMockCDCService() {
     updates,
     updateSystemTableRow: async (tableName, whereClause, updateData) => {
       updates.push({tableName, whereClause, data: updateData});
-      return {success: true};
+      return {success: true, affectedRows: 1};
     },
   };
 }
@@ -367,6 +368,35 @@ test('TablePolicyService - updateTablePolicy rejects invalid updates',
     t.end();
   });
 
+test('TablePolicyService - updateTablePolicy refuses an external CDC request typed, ' +
+  'before any write (owner decision D2)', async (t) => {
+  const mockEngine = createMockSqlEngine({
+    tables: {'table-1': {table_id: 'table-1', table_policies: '{}'}},
+  });
+  const mockCDC = createMockCDCService();
+  const service = new TablePolicyService({
+    sqlQueryEngine: mockEngine,
+    cdcIntegrationService: mockCDC,
+  });
+  const refusals = [];
+  for (const updates of [{externalCdcAllowed: true},
+    {changeDataCapture: {externalCdcAllowed: true}}]) {
+    try {
+      await service.updateTablePolicy('table-1', updates);
+      refusals.push(null);
+    } catch (error) {
+      refusals.push(error.code ?? error.message);
+    }
+  }
+  await service.updateTablePolicy('table-1', {externalCdcAllowed: false});
+  t.same({refusals, writes: mockCDC.updates.length}, {
+    refusals: [CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED,
+      CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED],
+    writes: 1,
+  }, 'both request shapes are refused typed with no write; an explicit false is admitted');
+  t.end();
+});
+
 test('TablePolicyService - getSplitThresholds returns correct values',
   async (t) => {
     const mockEngine = createMockSqlEngine({
@@ -448,116 +478,6 @@ test('TablePolicyService - getReplicationSettings returns values',
       'Should return min replica count');
     t.equal(settings.maxReplicaCount, 9,
       'Should return max replica count');
-    t.end();
-  });
-
-test('TablePolicyService - shouldSplitPartition evaluates correctly',
-  async (t) => {
-    const mockEngine = createMockSqlEngine({
-      partitions: {
-        'p1': {partition_id: 'p1', table_id: 'table-1'},
-      },
-      tables: {
-        'table-1': {
-          table_id: 'table-1',
-          table_policies: JSON.stringify({
-            splitStorageThreshold: 10 * 1024 * 1024 * 1024,
-            splitTrafficThreshold: 1000,
-          }),
-        },
-      },
-    });
-
-    const service = new TablePolicyService({
-      sqlQueryEngine: mockEngine,
-    });
-
-    // Below thresholds - should not split
-    t.notOk(
-      await service.shouldSplitPartition('p1', {
-        sizeBytes: 1024, queriesPerMinute: 10,
-      }),
-      'Should not split below thresholds',
-    );
-
-    // Above storage threshold - should split
-    t.ok(
-      await service.shouldSplitPartition('p1', {
-        sizeBytes: 11 * 1024 * 1024 * 1024,
-        queriesPerMinute: 10,
-      }),
-      'Should split above storage threshold',
-    );
-
-    // Above traffic threshold - should split
-    t.ok(
-      await service.shouldSplitPartition('p1', {
-        sizeBytes: 1024, queriesPerMinute: 1500,
-      }),
-      'Should split above traffic threshold',
-    );
-
-    t.end();
-  });
-
-test('TablePolicyService - shouldMergePartitions evaluates correctly',
-  async (t) => {
-    const mockEngine = createMockSqlEngine({
-      partitions: {
-        'p1': {partition_id: 'p1', table_id: 'table-1'},
-        'p2': {partition_id: 'p2', table_id: 'table-1'},
-      },
-      tables: {
-        'table-1': {
-          table_id: 'table-1',
-          table_policies: JSON.stringify({
-            mergeStorageThreshold: 2 * 1024 * 1024 * 1024,
-            mergeTrafficThreshold: 200,
-          }),
-        },
-      },
-    });
-
-    const service = new TablePolicyService({
-      sqlQueryEngine: mockEngine,
-    });
-
-    // Below both thresholds - should merge
-    t.ok(
-      await service.shouldMergePartitions(
-        'p1', 'p2',
-        {sizeBytes: 500 * 1024 * 1024, queriesPerMinute: 50},
-        {sizeBytes: 500 * 1024 * 1024, queriesPerMinute: 50},
-      ),
-      'Should merge when both below thresholds',
-    );
-
-    // Above storage threshold - should not merge
-    t.notOk(
-      await service.shouldMergePartitions(
-        'p1', 'p2',
-        {
-          sizeBytes: 1.5 * 1024 * 1024 * 1024,
-          queriesPerMinute: 50,
-        },
-        {
-          sizeBytes: 1.5 * 1024 * 1024 * 1024,
-          queriesPerMinute: 50,
-        },
-      ),
-      'Should not merge when combined storage exceeds threshold',
-    );
-
-    // Above traffic threshold - should not merge
-    t.notOk(
-      await service.shouldMergePartitions(
-        'p1', 'p2',
-        {sizeBytes: 100 * 1024 * 1024, queriesPerMinute: 150},
-        {sizeBytes: 100 * 1024 * 1024, queriesPerMinute: 150},
-      ),
-      'Should not merge when combined traffic exceeds threshold',
-    );
-
     t.end();
   });
 

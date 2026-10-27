@@ -100,7 +100,7 @@ class DebugSessionResolver {
     }
 
     const source = scope.source || inferSource(scope);
-    if (source === DEBUG_TRACE_SOURCE.PARTITION_CALLBACK) {
+    if (source === DEBUG_TRACE_SOURCE.LINEAGE) {
       return this.resolveCallbackSession(scope);
     }
     return this.resolveServiceSession(scope);
@@ -207,7 +207,7 @@ function resolveLineageId(scope) {
  */
 function inferSource(scope) {
   if (resolveLineageId(scope)) {
-    return DEBUG_TRACE_SOURCE.PARTITION_CALLBACK;
+    return DEBUG_TRACE_SOURCE.LINEAGE;
   }
   return DEBUG_TRACE_SOURCE.SERVICE;
 }

@@ -1,0 +1,1655 @@
+{
+  "base": "a97f79c35b7e1f6428032493918e16e623339688",
+  "files": {
+    "test/distributed/scenarios/postgres-baseline-comparison-benchmark-table-load.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 51,
+          "text": "function buildBenchmarkMetadataFlow(state, tableName) {",
+          "message": "Function 'buildBenchmarkMetadataFlow' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 65,
+          "text": "function normalizePositiveIntegerOrNull(value) {",
+          "message": "Function 'normalizePositiveIntegerOrNull' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 65,
+          "text": "function normalizePositiveIntegerOrNull(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 76,
+          "text": "function isBenchmarkTableCreateTimeoutError(error) {",
+          "message": "Function 'isBenchmarkTableCreateTimeoutError' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 76,
+          "text": "function isBenchmarkTableCreateTimeoutError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 93,
+          "text": "function isRetriableBenchmarkTableProgressError(error) {",
+          "message": "Function 'isRetriableBenchmarkTableProgressError' has a complexity of 22. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 93,
+          "text": "function isRetriableBenchmarkTableProgressError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 127,
+          "text": "function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {",
+          "message": "Function 'hasBenchmarkTableBootstrapProgress' has a complexity of 17. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 127,
+          "text": "function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 138,
+          "text": "(partitionId) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 138,
+          "text": "(partitionId) =>",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 148,
+          "text": "async function buildBenchmarkTableFailureAttempt({",
+          "message": "Async function 'buildBenchmarkTableFailureAttempt' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 175,
+          "text": "async function refreshBenchmarkTableCreateReadModel(",
+          "message": "Async function 'refreshBenchmarkTableCreateReadModel' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 175,
+          "text": "async function refreshBenchmarkTableCreateReadModel(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 195,
+          "text": "function createBenchmarkTableCreateAttempt(",
+          "message": "Function 'createBenchmarkTableCreateAttempt' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 195,
+          "text": "function createBenchmarkTableCreateAttempt(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 224,
+          "text": "function finalizeBenchmarkTableCreateAttempt(",
+          "message": "Function 'finalizeBenchmarkTableCreateAttempt' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 224,
+          "text": "function finalizeBenchmarkTableCreateAttempt(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 251,
+          "text": "function attachBenchmarkTableCreateAttempt(error, createAttempt) {",
+          "message": "Function 'attachBenchmarkTableCreateAttempt' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 251,
+          "text": "function attachBenchmarkTableCreateAttempt(error, createAttempt) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 260,
+          "text": "function resolveBenchmarkTableCreateAttempt(error) {",
+          "message": "Function 'resolveBenchmarkTableCreateAttempt' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 260,
+          "text": "function resolveBenchmarkTableCreateAttempt(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 271,
+          "text": "function resolveSystemTableReadPath(seedNode, candidateNodes) {",
+          "message": "Function 'resolveSystemTableReadPath' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 282,
+          "text": "async function queryControlWithNodeFallback(",
+          "message": "Async function 'queryControlWithNodeFallback' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 282,
+          "text": "async function queryControlWithNodeFallback(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 290,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 290,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 313,
+          "text": ".map((entry) => entry.nodeId + '=' + entry.error)",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 322,
+          "text": "function resolveCanonicalSystemTableWriteNode(nodes) {",
+          "message": "Function 'resolveCanonicalSystemTableWriteNode' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 322,
+          "text": "function resolveCanonicalSystemTableWriteNode(nodes) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 324,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 324,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 342,
+          "text": "async function applyBenchmarkTablePolicyOnCanonicalNode(nodes, tableId,",
+          "message": "Async function 'applyBenchmarkTablePolicyOnCanonicalNode' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 342,
+          "text": "async function applyBenchmarkTablePolicyOnCanonicalNode(nodes, tableId,",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 355,
+          "text": "async function querySutTableMetadata(",
+          "message": "Async function 'querySutTableMetadata' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 377,
+          "text": "async function querySutTableId(nodeClient, systemTableReadNodes, tableName) {",
+          "message": "Async function 'querySutTableId' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 386,
+          "text": "function resolveScenarioOverrides(cluster) {",
+          "message": "Function 'resolveScenarioOverrides' has a complexity of 16. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 386,
+          "text": "function resolveScenarioOverrides(cluster) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 12 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 393,
+          "text": "(options) => new Pool(options);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 397,
+          "text": "(nodes, options) => new LoadGenerator(nodes, options);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 422,
+          "text": "function resolveProgressHeartbeatIntervalMs(value) {",
+          "message": "Function 'resolveProgressHeartbeatIntervalMs' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 422,
+          "text": "function resolveProgressHeartbeatIntervalMs(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 428,
+          "text": "function emitScenarioPhaseEvent(phaseEventSink, event) {",
+          "message": "Function 'emitScenarioPhaseEvent' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 428,
+          "text": "function emitScenarioPhaseEvent(phaseEventSink, event) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 443,
+          "text": "function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {",
+          "message": "Function 'buildLoadProgressDetails' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 443,
+          "text": "function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 465,
+          "text": "function startLoadProgressReporter({loadRun, intervalMs, label, onProgress}) {",
+          "message": "Function 'startLoadProgressReporter' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 465,
+          "text": "function startLoadProgressReporter({loadRun, intervalMs, label, onProgress}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 471,
+          "text": "stop() {},",
+          "message": "Method 'stop' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 480,
+          "text": "const scheduleNextHeartbeat = () => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 480,
+          "text": "const scheduleNextHeartbeat = () => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 484,
+          "text": "timerId = setTimeout(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 484,
+          "text": "timerId = setTimeout(() => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 511,
+          "text": "stop() {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 511,
+          "text": "stop() {",
+          "message": "Method 'stop' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 521,
+          "text": "function resolveNodeClientChannelPolicyOverrides(cluster) {",
+          "message": "Function 'resolveNodeClientChannelPolicyOverrides' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 521,
+          "text": "function resolveNodeClientChannelPolicyOverrides(cluster) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 529,
+          "text": "async function ensureSutBenchmarkTable(",
+          "message": "Async function 'ensureSutBenchmarkTable' has a complexity of 23. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 529,
+          "text": "async function ensureSutBenchmarkTable(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 29 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 677,
+          "text": "async function ensurePostgresBenchmarkTable(pool, tableName) {",
+          "message": "Async function 'ensurePostgresBenchmarkTable' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 681,
+          "text": "function isRetriableTableReadyError(error) {",
+          "message": "Function 'isRetriableTableReadyError' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 681,
+          "text": "function isRetriableTableReadyError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 706,
+          "text": "async function assertBenchmarkPartitionRowsCarryTableName(nodeClient,",
+          "message": "Async function 'assertBenchmarkPartitionRowsCarryTableName' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 706,
+          "text": "async function assertBenchmarkPartitionRowsCarryTableName(nodeClient,",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 718,
+          "text": "async function waitForSutBenchmarkTableReady(",
+          "message": "Async function 'waitForSutBenchmarkTableReady' has a complexity of 12. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 718,
+          "text": "async function waitForSutBenchmarkTableReady(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 16 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 800,
+          "text": "function buildBaselineLoadNodes(pool, nodeCount) {",
+          "message": "Function 'buildBaselineLoadNodes' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 800,
+          "text": "function buildBaselineLoadNodes(pool, nodeCount) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 807,
+          "text": "query: (sql) => pool.query(sql),",
+          "message": "Method 'query' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 813,
+          "text": "async function runBaselineSharedLoad({",
+          "message": "Async function 'runBaselineSharedLoad' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 813,
+          "text": "async function runBaselineSharedLoad({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 869,
+          "text": "query: (sql) => pool.query(sql),",
+          "message": "Method 'query' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 879,
+          "text": "async function runSutSharedLoad({",
+          "message": "Async function 'runSutSharedLoad' has a complexity of 19. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 879,
+          "text": "async function runSutSharedLoad({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 20 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 906,
+          "text": "const routedLoadNodes = loadNodes.map((node) => ({",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 909,
+          "text": "query: (sql) => {",
+          "message": "Method 'query' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 909,
+          "text": "query: (sql) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 982,
+          "text": "(sql) => routedLoadNodes[ZERO].query(sql) :",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 995,
+          "text": "monitoredNodeIds: loadNodes.map((node) => String(node?.id || '')),",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 996,
+          "text": "admittedNodeIds: loadNodes.map((node) => String(node?.id || '')),",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 1022,
+          "text": "async function attachSemanticParityReceipt({",
+          "message": "Async function 'attachSemanticParityReceipt' has a complexity of 27. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1022,
+          "text": "async function attachSemanticParityReceipt({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1099,
+          "text": "function isNodeAdminReady(diagnostics) {",
+          "message": "Function 'isNodeAdminReady' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1099,
+          "text": "function isNodeAdminReady(diagnostics) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1109,
+          "text": "function isLoadNodeCandidate(node) {",
+          "message": "Function 'isLoadNodeCandidate' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1109,
+          "text": "function isLoadNodeCandidate(node) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1116,
+          "text": "function normalizeAdminQueryTraceTimestamp(value) {",
+          "message": "Function 'normalizeAdminQueryTraceTimestamp' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1116,
+          "text": "function normalizeAdminQueryTraceTimestamp(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1120,
+          "text": "function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {",
+          "message": "Function 'sanitizeAdminQueryTraceEntry' has a complexity of 32. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1120,
+          "text": "function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 13 to the 0 allowed."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 50,
+          "text": "function buildBenchmarkMetadataFlow(state, tableName) {",
+          "message": "Function 'buildBenchmarkMetadataFlow' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 64,
+          "text": "function normalizePositiveIntegerOrNull(value) {",
+          "message": "Function 'normalizePositiveIntegerOrNull' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 64,
+          "text": "function normalizePositiveIntegerOrNull(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 75,
+          "text": "function isBenchmarkTableCreateTimeoutError(error) {",
+          "message": "Function 'isBenchmarkTableCreateTimeoutError' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 75,
+          "text": "function isBenchmarkTableCreateTimeoutError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 92,
+          "text": "function isRetriableBenchmarkTableProgressError(error) {",
+          "message": "Function 'isRetriableBenchmarkTableProgressError' has a complexity of 22. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 92,
+          "text": "function isRetriableBenchmarkTableProgressError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 126,
+          "text": "function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {",
+          "message": "Function 'hasBenchmarkTableBootstrapProgress' has a complexity of 17. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 126,
+          "text": "function hasBenchmarkTableBootstrapProgress(metadataSnapshot) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 137,
+          "text": "(partitionId) =>",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 137,
+          "text": "(partitionId) =>",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 147,
+          "text": "async function buildBenchmarkTableFailureAttempt({",
+          "message": "Async function 'buildBenchmarkTableFailureAttempt' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 174,
+          "text": "async function refreshBenchmarkTableCreateReadModel(",
+          "message": "Async function 'refreshBenchmarkTableCreateReadModel' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 174,
+          "text": "async function refreshBenchmarkTableCreateReadModel(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 194,
+          "text": "function createBenchmarkTableCreateAttempt(",
+          "message": "Function 'createBenchmarkTableCreateAttempt' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 194,
+          "text": "function createBenchmarkTableCreateAttempt(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 223,
+          "text": "function finalizeBenchmarkTableCreateAttempt(",
+          "message": "Function 'finalizeBenchmarkTableCreateAttempt' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 223,
+          "text": "function finalizeBenchmarkTableCreateAttempt(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 250,
+          "text": "function attachBenchmarkTableCreateAttempt(error, createAttempt) {",
+          "message": "Function 'attachBenchmarkTableCreateAttempt' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 250,
+          "text": "function attachBenchmarkTableCreateAttempt(error, createAttempt) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 259,
+          "text": "function resolveBenchmarkTableCreateAttempt(error) {",
+          "message": "Function 'resolveBenchmarkTableCreateAttempt' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 259,
+          "text": "function resolveBenchmarkTableCreateAttempt(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 270,
+          "text": "function resolveSystemTableReadPath(seedNode, candidateNodes) {",
+          "message": "Function 'resolveSystemTableReadPath' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 281,
+          "text": "async function queryControlWithNodeFallback(",
+          "message": "Async function 'queryControlWithNodeFallback' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 281,
+          "text": "async function queryControlWithNodeFallback(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 289,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 289,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 312,
+          "text": ".map((entry) => entry.nodeId + '=' + entry.error)",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 321,
+          "text": "function resolveCanonicalSystemTableWriteNode(nodes) {",
+          "message": "Function 'resolveCanonicalSystemTableWriteNode' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 321,
+          "text": "function resolveCanonicalSystemTableWriteNode(nodes) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 323,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 323,
+          "text": "nodes.filter((node) => node && typeof node.id === 'string') :",
+          "message": "Arrow function has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 341,
+          "text": "async function applyBenchmarkTablePolicyOnCanonicalNode(nodes, tableId,",
+          "message": "Async function 'applyBenchmarkTablePolicyOnCanonicalNode' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 341,
+          "text": "async function applyBenchmarkTablePolicyOnCanonicalNode(nodes, tableId,",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 354,
+          "text": "async function querySutTableMetadata(",
+          "message": "Async function 'querySutTableMetadata' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 376,
+          "text": "async function querySutTableId(nodeClient, systemTableReadNodes, tableName) {",
+          "message": "Async function 'querySutTableId' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 385,
+          "text": "function resolveScenarioOverrides(cluster) {",
+          "message": "Function 'resolveScenarioOverrides' has a complexity of 16. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 385,
+          "text": "function resolveScenarioOverrides(cluster) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 12 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 392,
+          "text": "(options) => new Pool(options);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 396,
+          "text": "(nodes, options) => new LoadGenerator(nodes, options);",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 421,
+          "text": "function resolveProgressHeartbeatIntervalMs(value) {",
+          "message": "Function 'resolveProgressHeartbeatIntervalMs' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 421,
+          "text": "function resolveProgressHeartbeatIntervalMs(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 427,
+          "text": "function emitScenarioPhaseEvent(phaseEventSink, event) {",
+          "message": "Function 'emitScenarioPhaseEvent' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 427,
+          "text": "function emitScenarioPhaseEvent(phaseEventSink, event) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 442,
+          "text": "function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {",
+          "message": "Function 'buildLoadProgressDetails' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 442,
+          "text": "function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 464,
+          "text": "function startLoadProgressReporter({loadRun, intervalMs, label, onProgress}) {",
+          "message": "Function 'startLoadProgressReporter' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 464,
+          "text": "function startLoadProgressReporter({loadRun, intervalMs, label, onProgress}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 470,
+          "text": "stop() {},",
+          "message": "Method 'stop' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 479,
+          "text": "const scheduleNextHeartbeat = () => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 479,
+          "text": "const scheduleNextHeartbeat = () => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 483,
+          "text": "timerId = setTimeout(() => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 483,
+          "text": "timerId = setTimeout(() => {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 510,
+          "text": "stop() {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 510,
+          "text": "stop() {",
+          "message": "Method 'stop' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 520,
+          "text": "function resolveNodeClientChannelPolicyOverrides(cluster) {",
+          "message": "Function 'resolveNodeClientChannelPolicyOverrides' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 520,
+          "text": "function resolveNodeClientChannelPolicyOverrides(cluster) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 528,
+          "text": "async function ensureSutBenchmarkTable(",
+          "message": "Async function 'ensureSutBenchmarkTable' has a complexity of 23. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 528,
+          "text": "async function ensureSutBenchmarkTable(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 29 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 676,
+          "text": "async function ensurePostgresBenchmarkTable(pool, tableName) {",
+          "message": "Async function 'ensurePostgresBenchmarkTable' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 680,
+          "text": "function isRetriableTableReadyError(error) {",
+          "message": "Function 'isRetriableTableReadyError' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 680,
+          "text": "function isRetriableTableReadyError(error) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 705,
+          "text": "function assertBenchmarkPartitionRowsCarryTableName(rows, tableName, tableId) {",
+          "message": "Function 'assertBenchmarkPartitionRowsCarryTableName' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 705,
+          "text": "function assertBenchmarkPartitionRowsCarryTableName(rows, tableName, tableId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 706,
+          "text": "if (rows.every((row) => row?.table_id === tableId && row.table_name === tableName)) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 706,
+          "text": "if (rows.every((row) => row?.table_id === tableId && row.table_name === tableName)) {",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 714,
+          "text": "async function waitForSutBenchmarkTableReady(",
+          "message": "Async function 'waitForSutBenchmarkTableReady' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 714,
+          "text": "async function waitForSutBenchmarkTableReady(",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 14 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 784,
+          "text": "function buildBaselineLoadNodes(pool, nodeCount) {",
+          "message": "Function 'buildBaselineLoadNodes' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 784,
+          "text": "function buildBaselineLoadNodes(pool, nodeCount) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 791,
+          "text": "query: (sql) => pool.query(sql),",
+          "message": "Method 'query' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 797,
+          "text": "async function runBaselineSharedLoad({",
+          "message": "Async function 'runBaselineSharedLoad' has a complexity of 10. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 797,
+          "text": "async function runBaselineSharedLoad({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 853,
+          "text": "query: (sql) => pool.query(sql),",
+          "message": "Method 'query' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 863,
+          "text": "async function runSutSharedLoad({",
+          "message": "Async function 'runSutSharedLoad' has a complexity of 19. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 863,
+          "text": "async function runSutSharedLoad({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 20 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 890,
+          "text": "const routedLoadNodes = loadNodes.map((node) => ({",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 893,
+          "text": "query: (sql) => {",
+          "message": "Method 'query' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 893,
+          "text": "query: (sql) => {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 966,
+          "text": "(sql) => routedLoadNodes[ZERO].query(sql) :",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 979,
+          "text": "monitoredNodeIds: loadNodes.map((node) => String(node?.id || '')),",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 980,
+          "text": "admittedNodeIds: loadNodes.map((node) => String(node?.id || '')),",
+          "message": "Arrow function has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 1006,
+          "text": "async function attachSemanticParityReceipt({",
+          "message": "Async function 'attachSemanticParityReceipt' has a complexity of 27. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1006,
+          "text": "async function attachSemanticParityReceipt({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1083,
+          "text": "function isNodeAdminReady(diagnostics) {",
+          "message": "Function 'isNodeAdminReady' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1083,
+          "text": "function isNodeAdminReady(diagnostics) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1093,
+          "text": "function isLoadNodeCandidate(node) {",
+          "message": "Function 'isLoadNodeCandidate' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1093,
+          "text": "function isLoadNodeCandidate(node) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1100,
+          "text": "function normalizeAdminQueryTraceTimestamp(value) {",
+          "message": "Function 'normalizeAdminQueryTraceTimestamp' has a complexity of 2. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1100,
+          "text": "function normalizeAdminQueryTraceTimestamp(value) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 1104,
+          "text": "function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {",
+          "message": "Function 'sanitizeAdminQueryTraceEntry' has a complexity of 32. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 1104,
+          "text": "function sanitizeAdminQueryTraceEntry(entry, fallbackNodeId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 13 to the 0 allowed."
+        }
+      ]
+    },
+    "test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js": {
+      "base": [
+        {
+          "rule": "complexity",
+          "line": 512,
+          "text": "function buildBenchmarkTableCreateNodeClientContext(benchmarkConfig = {}) {",
+          "message": "Function 'buildBenchmarkTableCreateNodeClientContext' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 512,
+          "text": "function buildBenchmarkTableCreateNodeClientContext(benchmarkConfig = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 528,
+          "text": "function sleep(ms) {",
+          "message": "Function 'sleep' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 529,
+          "text": "return new Promise((resolve) => setTimeout(resolve, ms));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 533,
+          "text": "now: () => Date.now(),",
+          "message": "Method 'now' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 537,
+          "text": "function resolveScenarioTiming(configuredTiming) {",
+          "message": "Function 'resolveScenarioTiming' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 537,
+          "text": "function resolveScenarioTiming(configuredTiming) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 550,
+          "text": "function parseDurationToMs(duration) {",
+          "message": "Function 'parseDurationToMs' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 550,
+          "text": "function parseDurationToMs(duration) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 576,
+          "text": "function normalizeTableId(tableId, fallback = '') {",
+          "message": "Function 'normalizeTableId' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 576,
+          "text": "function normalizeTableId(tableId, fallback = '') {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 584,
+          "text": "function buildBenchmarkTableDdl(tableName) {",
+          "message": "Function 'buildBenchmarkTableDdl' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 596,
+          "text": "function escapeSqlLiteral(value) {",
+          "message": "Function 'escapeSqlLiteral' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 600,
+          "text": "function buildBenchmarkPartitionLookupSql(tableName) {",
+          "message": "Function 'buildBenchmarkPartitionLookupSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 608,
+          "text": "function buildBenchmarkTableLookupSql(tableName) {",
+          "message": "Function 'buildBenchmarkTableLookupSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 616,
+          "text": "function buildBenchmarkPartitionLookupByTableIdSql(tableId) {",
+          "message": "Function 'buildBenchmarkPartitionLookupByTableIdSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 624,
+          "text": "function buildSutTableProbeSql(tableName) {",
+          "message": "Function 'buildSutTableProbeSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 628,
+          "text": "function firstStringField(rows, ...keys) {",
+          "message": "Function 'firstStringField' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 628,
+          "text": "function firstStringField(rows, ...keys) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 640,
+          "text": "function extractRequiredSchemaVersionFromRows(rows) {",
+          "message": "Function 'extractRequiredSchemaVersionFromRows' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 640,
+          "text": "function extractRequiredSchemaVersionFromRows(rows) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 661,
+          "text": "function selectNewestSchemaVersion(currentVersion, candidateVersion) {",
+          "message": "Function 'selectNewestSchemaVersion' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 661,
+          "text": "function selectNewestSchemaVersion(currentVersion, candidateVersion) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 675,
+          "text": "function extractNewestSchemaVersionFromRows(rows) {",
+          "message": "Function 'extractNewestSchemaVersionFromRows' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 675,
+          "text": "function extractNewestSchemaVersionFromRows(rows) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 688,
+          "text": "function extractUniqueSortedStringValues(rows, ...keys) {",
+          "message": "Function 'extractUniqueSortedStringValues' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 688,
+          "text": "function extractUniqueSortedStringValues(rows, ...keys) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 704,
+          "text": "function buildBenchmarkMetadataWhereClause(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataWhereClause' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 704,
+          "text": "function buildBenchmarkMetadataWhereClause(tableName, tableId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 727,
+          "text": "function buildBenchmarkMetadataTableRowsSql(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataTableRowsSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 735,
+          "text": "function buildBenchmarkMetadataPartitionRowsSql(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataPartitionRowsSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 743,
+          "text": "function buildBenchmarkMetadataServiceRowsSql(partitionIds) {",
+          "message": "Function 'buildBenchmarkMetadataServiceRowsSql' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 743,
+          "text": "function buildBenchmarkMetadataServiceRowsSql(partitionIds) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 750,
+          "text": ".map((partitionId) => '\\'' + escapeSqlLiteral(partitionId) + '\\'')",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 756,
+          "text": "async function queryBenchmarkMetadataRows(nodeClient, node, sql) {",
+          "message": "Async function 'queryBenchmarkMetadataRows' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 756,
+          "text": "async function queryBenchmarkMetadataRows(nodeClient, node, sql) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 782,
+          "text": "function summarizeBenchmarkMetadataTableRows(rows) {",
+          "message": "Function 'summarizeBenchmarkMetadataTableRows' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 795,
+          "text": "function summarizeBenchmarkMetadataPartitionRows(rows) {",
+          "message": "Function 'summarizeBenchmarkMetadataPartitionRows' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 813,
+          "text": "function summarizeBenchmarkMetadataServiceRows(rows, expectedPartitionIds) {",
+          "message": "Function 'summarizeBenchmarkMetadataServiceRows' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 813,
+          "text": "function summarizeBenchmarkMetadataServiceRows(rows, expectedPartitionIds) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 19 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 883,
+          "text": "(partitionId) => !activePartitionIds.has(partitionId),",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 886,
+          "text": "(partitionId) => !leaderPartitionIds.has(partitionId),",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 891,
+          "text": "function cloneDiscoveryReadinessState(source) {",
+          "message": "Function 'cloneDiscoveryReadinessState' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 891,
+          "text": "function cloneDiscoveryReadinessState(source) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 915,
+          "text": "async function collectBenchmarkMetadataSnapshot({",
+          "message": "Async function 'collectBenchmarkMetadataSnapshot' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 915,
+          "text": "async function collectBenchmarkMetadataSnapshot({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        }
+      ],
+      "current": [
+        {
+          "rule": "complexity",
+          "line": 512,
+          "text": "function buildBenchmarkTableCreateNodeClientContext(benchmarkConfig = {}) {",
+          "message": "Function 'buildBenchmarkTableCreateNodeClientContext' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 512,
+          "text": "function buildBenchmarkTableCreateNodeClientContext(benchmarkConfig = {}) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 528,
+          "text": "function sleep(ms) {",
+          "message": "Function 'sleep' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 529,
+          "text": "return new Promise((resolve) => setTimeout(resolve, ms));",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 533,
+          "text": "now: () => Date.now(),",
+          "message": "Method 'now' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 537,
+          "text": "function resolveScenarioTiming(configuredTiming) {",
+          "message": "Function 'resolveScenarioTiming' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 537,
+          "text": "function resolveScenarioTiming(configuredTiming) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 550,
+          "text": "function parseDurationToMs(duration) {",
+          "message": "Function 'parseDurationToMs' has a complexity of 8. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 550,
+          "text": "function parseDurationToMs(duration) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 6 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 576,
+          "text": "function normalizeTableId(tableId, fallback = '') {",
+          "message": "Function 'normalizeTableId' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 576,
+          "text": "function normalizeTableId(tableId, fallback = '') {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 584,
+          "text": "function buildBenchmarkTableDdl(tableName) {",
+          "message": "Function 'buildBenchmarkTableDdl' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 596,
+          "text": "function escapeSqlLiteral(value) {",
+          "message": "Function 'escapeSqlLiteral' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 600,
+          "text": "function buildBenchmarkTableLookupSql(tableName) {",
+          "message": "Function 'buildBenchmarkTableLookupSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 608,
+          "text": "function buildBenchmarkPartitionLookupByTableIdSql(tableId) {",
+          "message": "Function 'buildBenchmarkPartitionLookupByTableIdSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 616,
+          "text": "function buildSutTableProbeSql(tableName) {",
+          "message": "Function 'buildSutTableProbeSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 620,
+          "text": "function firstStringField(rows, ...keys) {",
+          "message": "Function 'firstStringField' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 620,
+          "text": "function firstStringField(rows, ...keys) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 7 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 632,
+          "text": "function extractRequiredSchemaVersionFromRows(rows) {",
+          "message": "Function 'extractRequiredSchemaVersionFromRows' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 632,
+          "text": "function extractRequiredSchemaVersionFromRows(rows) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 8 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 653,
+          "text": "function selectNewestSchemaVersion(currentVersion, candidateVersion) {",
+          "message": "Function 'selectNewestSchemaVersion' has a complexity of 4. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 653,
+          "text": "function selectNewestSchemaVersion(currentVersion, candidateVersion) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 3 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 667,
+          "text": "function extractNewestSchemaVersionFromRows(rows) {",
+          "message": "Function 'extractNewestSchemaVersionFromRows' has a complexity of 5. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 667,
+          "text": "function extractNewestSchemaVersionFromRows(rows) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 680,
+          "text": "function extractUniqueSortedStringValues(rows, ...keys) {",
+          "message": "Function 'extractUniqueSortedStringValues' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 680,
+          "text": "function extractUniqueSortedStringValues(rows, ...keys) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 9 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 696,
+          "text": "function buildBenchmarkMetadataWhereClause(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataWhereClause' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 696,
+          "text": "function buildBenchmarkMetadataWhereClause(tableName, tableId) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 719,
+          "text": "function buildBenchmarkMetadataTableRowsSql(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataTableRowsSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 727,
+          "text": "function buildBenchmarkMetadataPartitionRowsSql(tableName, tableId) {",
+          "message": "Function 'buildBenchmarkMetadataPartitionRowsSql' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 735,
+          "text": "function buildBenchmarkMetadataServiceRowsSql(partitionIds) {",
+          "message": "Function 'buildBenchmarkMetadataServiceRowsSql' has a complexity of 3. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 735,
+          "text": "function buildBenchmarkMetadataServiceRowsSql(partitionIds) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 1 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 742,
+          "text": ".map((partitionId) => '\\'' + escapeSqlLiteral(partitionId) + '\\'')",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 748,
+          "text": "async function queryBenchmarkMetadataRows(nodeClient, node, sql) {",
+          "message": "Async function 'queryBenchmarkMetadataRows' has a complexity of 6. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 748,
+          "text": "async function queryBenchmarkMetadataRows(nodeClient, node, sql) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 2 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 774,
+          "text": "function summarizeBenchmarkMetadataTableRows(rows) {",
+          "message": "Function 'summarizeBenchmarkMetadataTableRows' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 787,
+          "text": "function summarizeBenchmarkMetadataPartitionRows(rows) {",
+          "message": "Function 'summarizeBenchmarkMetadataPartitionRows' has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 805,
+          "text": "function summarizeBenchmarkMetadataServiceRows(rows, expectedPartitionIds) {",
+          "message": "Function 'summarizeBenchmarkMetadataServiceRows' has a complexity of 15. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 805,
+          "text": "function summarizeBenchmarkMetadataServiceRows(rows, expectedPartitionIds) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 19 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 875,
+          "text": "(partitionId) => !activePartitionIds.has(partitionId),",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 878,
+          "text": "(partitionId) => !leaderPartitionIds.has(partitionId),",
+          "message": "Arrow function has a complexity of 1. Maximum allowed is 0."
+        },
+        {
+          "rule": "complexity",
+          "line": 883,
+          "text": "function cloneDiscoveryReadinessState(source) {",
+          "message": "Function 'cloneDiscoveryReadinessState' has a complexity of 7. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 883,
+          "text": "function cloneDiscoveryReadinessState(source) {",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 5 to the 0 allowed."
+        },
+        {
+          "rule": "complexity",
+          "line": 907,
+          "text": "async function collectBenchmarkMetadataSnapshot({",
+          "message": "Async function 'collectBenchmarkMetadataSnapshot' has a complexity of 11. Maximum allowed is 0."
+        },
+        {
+          "rule": "sonarjs/cognitive-complexity",
+          "line": 907,
+          "text": "async function collectBenchmarkMetadataSnapshot({",
+          "message": "Refactor this function to reduce its Cognitive Complexity from 4 to the 0 allowed."
+        }
+      ]
+    }
+  }
+}

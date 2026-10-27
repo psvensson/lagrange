@@ -16,9 +16,16 @@ import {
   PARTITION_SERVICE_LOG_MSG,
 } from './partition-service-constants.js';
 import {
+  GROUP_RETIREMENT_KIND,
+  retiringSourceStatus,
+} from './group-retirement-evidence.js';
+import {MERGE_ACK_STATUS} from './merge-ack-constants.js';
+import {
   findDurableMirrorTransitionForService,
   loadDurableDeltasBehindWatermark,
 } from './partition-mirror-replay-cursor.js';
+import {startMergeReplicationHandleForService} from
+  './partition-service-source-replication-start-methods.js';
 
 class PartitionServiceMergeReplicationResumptionMethods {
   /**
@@ -46,10 +53,27 @@ class PartitionServiceMergeReplicationResumptionMethods {
       matchesSource: (metadata) =>
         Array.isArray(metadata.sourcePartitionIds) &&
         metadata.sourcePartitionIds.includes(this.partitionId),
-      normalizeMetadata: (rawMetadata) =>
-        this.normalizeMergeTransitionMetadata(rawMetadata),
+      normalizeMetadata: (rawMetadata) => {
+        const normalized = this.normalizeMergeTransitionMetadata(rawMetadata);
+        const source = retiringSourceStatus(GROUP_RETIREMENT_KIND.MERGE_SOURCE,
+          rawMetadata, this.partitionId);
+        return normalized && source.retiring ? {...normalized,
+          retiringSourceStatus: source.participantStatus} : normalized;
+      },
     });
     if (!transition) {
+      return false;
+    }
+    // A source that already finished mirroring is ending with its group
+    // (group-retirement-evidence.js): nothing of it resumes. Its leader only
+    // re-delivers mirror-removed, so the workflow owner of this node resumes
+    // an unfinished dissolution from the durable record.
+    if (transition.metadata.retiringSourceStatus) {
+      if (transition.metadata.retiringSourceStatus !==
+          MERGE_ACK_STATUS.SOURCE_DISSOLVED) {
+        await this.emitMergeSourceAck(transition.metadata,
+          MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED);
+      }
       return false;
     }
     // Seed the catch-up queue from the DURABLE Raft log behind the
@@ -76,13 +100,9 @@ class PartitionServiceMergeReplicationResumptionMethods {
         workflowId: transition.metadata.workflowId,
       },
     );
-    this.mergeReplicationRun = this.runMergeReplicationWorkflow().catch(
-      (error) => this.handleMergeReplicationRunFailure(
-        transition.metadata,
-        error,
-      ),
-    );
-    return true;
+    const response = await startMergeReplicationHandleForService(
+      this, this.mergeReplication);
+    return response.success === true;
   }
 }
 

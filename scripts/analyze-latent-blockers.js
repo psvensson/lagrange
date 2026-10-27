@@ -64,7 +64,7 @@ const CANDIDATE_SCHEMA_FIELDS = Object.freeze([
 ]);
 
 const FINDER_LENSES = Object.freeze([
-  'L1-control-plane-state-machines (publication / surplus-drain+placement / raft+liferaft / quiescence / readiness / cdc)',
+  'L1-control-plane-state-machines (publication / surplus-drain+placement / raft-rs / quiescence / readiness / cdc)',
   'L1-sql-data-plane (write+txn coordination / data-plane placement+quorum / routing-under-churn)',
   'L2-circular-dependency-class (formation vs steady-state invariants)',
   'L3-assume-fixed-forward-simulation (onion-peeler)',

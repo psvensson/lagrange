@@ -775,6 +775,10 @@ const CLASSIFIED_TIMER_SITES = Object.freeze([
   // clears every timer, and no production code constructs it (PartitionService
   // takes it as an option).
   'src/cdc/cdc-confirmation-tracker.js:awaitConfirmation:setTimeout',
+  // (c) The partition CDC obligation lane's per-invocation budget timer
+  // (P-L belongs to PartitionService, not CDCIntegrationService); cleared in
+  // closeIfSettled when the subscriber invocation settles or times out.
+  'src/cdc/cdc-delivery-invocation.js:beginCdcDeliveryInvocation:setTimeout',
   // (a) The visibility wait's budget timer, held by holdUntilShutdown: the
   // mark releases the wait and its cleanup clears the timer.
   'src/cdc/cdc-integration-service-cache-visibility-wait.js:' +
@@ -788,6 +792,9 @@ const CLASSIFIED_IMPORTED_SLEEPS = Object.freeze([
   // publication work; the callers inject their own sleep.
   'src/cdc/cdc-pipeline-readiness-gate.js:CDC_PIPELINE_READINESS_SLEEP',
 ]);
+// Imports whose name matches DELAY_NAME but carry no delayed work: the
+// spent-wait reporter only logs, synchronously, on an expiry branch.
+const NOT_DELAYED_WORK_IMPORTS = Object.freeze(['reportWaitBoundSpent']);
 const IMPORT_CLAUSE =
   /import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\}|\*\s+as\s+(\w+))?\s*from\s*['"]([^'"]+)['"]/gu;
 // A name that can carry delayed work: sleeping, delaying, waiting, timers,
@@ -829,7 +836,8 @@ test('census: every CDC delayed-work site is the primitive or classified, ' +
       }
       for (const name of [defaultName, namespace, ...names.split(',').map(
         (entry) => entry.trim().split(/\s+as\s+/u).at(-1))].filter(Boolean)) {
-        if (DELAY_NAME.test(name)) {
+        if (DELAY_NAME.test(name) &&
+            !NOT_DELAYED_WORK_IMPORTS.includes(name)) {
           importedSleeps.push(`${file}:${name}`);
         }
       }

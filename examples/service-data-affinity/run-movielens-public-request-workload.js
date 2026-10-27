@@ -21,9 +21,7 @@ import {
   createInvocationIntentDigest,
   createRequestDigest,
 } from '../../src/service/request-cell-routing-contract.js';
-import {
-  requestCellWitness,
-} from '../../src/runtime/wasm-component-driver.js';
+import {requestCellWitness} from '../../src/runtime/wasm-component-driver.js';
 import {
   MOVIELENS_PUBLIC_REQUEST,
   buildMovielensPublicRequestComponent,
@@ -36,9 +34,7 @@ import {
   prepareMovielensPublicRequestWorkload,
   runMovielensPublicRequestWorkload,
 } from './movielens-public-request-workload-adapter.js';
-import {
-  runPostgresBaseline,
-} from './run-postgres-baseline.js';
+import {runPostgresBaseline} from './run-postgres-baseline.js';
 import {
   MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE,
   MOVIELENS_PUBLIC_REQUEST_FAILURE_STAGE,
@@ -52,8 +48,7 @@ const EXAMPLE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const NODE_DATA_DIRECTORY = 'node-data';
 const OCI_LAYOUT_DIRECTORY = 'oci-layouts';
 const REQUEST_CELL_DEADLINE_MS = 90_000;
-const REQUEST_IDEMPOTENCY_KEY =
-  'movielens-public-grouped-reduce-dataset-v1';
+const REQUEST_IDEMPOTENCY_KEY = 'movielens-public-grouped-reduce-dataset-v1';
 const SHA256_PREFIX = 'sha256:';
 const REQUEST_CONTENT_TYPE = 'application/json';
 const REQUEST_CELL_OPERATION_PREFIX = 'request-cell-operation-';
@@ -78,6 +73,9 @@ const LIVE_TEXT = Object.freeze({
   FILE_NOT_FOUND_CODE: 'ENOENT',
   POSTGRES_INPUT_MISMATCH:
     'PostgreSQL did not consume the retained MovieLens input',
+  RESET_CLOSED_SESSION: 'MovieLens workload session is already closed',
+  RESET_REQUIRES_DRAIN: 'MovieLens workload reset requires drained operations',
+  RESET_STATE: 'public_request_isolated_session_reset',
   TEMPORARY_DIRECTORY_PREFIX: 'lagrange-movielens-public-request-',
 });
 
@@ -123,8 +121,7 @@ function preregisterRequestWitness(definition, invocation, route) {
     idempotencyKey: invocation.idempotencyKey,
     intentDigest,
     invocationIdentity,
-    journalCommand:
-      `invoke:${route.serviceId}:${intentDigest}`,
+    journalCommand: `invoke:${route.serviceId}:${intentDigest}`,
     journalOperationId: requestCellOperationId(
       EXAMPLE_NODE.DATABASE,
       invocationIdentity,
@@ -141,32 +138,26 @@ function preregisterRequestWitness(definition, invocation, route) {
 function buildPorts(node) {
   async function routeAndReplica(definition) {
     const route = await waitForReadyCell(node, definition);
-    const replicaHandle =
-      node.bootstrapService.runtimeServiceHandler.localReplicas
-        .get(route.replicaId)?.replicaHandle;
+    const replicaHandle = node.bootstrapService.runtimeServiceHandler
+      .localReplicas.get(route.replicaId)?.replicaHandle;
     if (!replicaHandle) {
       throw new Error(`request Cell replica is absent: ${route.replicaId}`);
     }
     return {replicaHandle, route};
   }
   return Object.freeze({
-    authenticatedPrincipal() {
-      return EXAMPLE_NODE.USER;
-    },
+    authenticatedPrincipal: () => EXAMPLE_NODE.USER,
     async cellWitness(definition) {
-      const {replicaHandle, route} =
-        await routeAndReplica(definition);
-      const driver =
-        node.bootstrapService.runtimeServiceHandler
-          .serviceRuntimeLifecycle._resolveDriver('wasm_component');
+      const {replicaHandle, route} = await routeAndReplica(definition);
+      const driver = node.bootstrapService.runtimeServiceHandler
+        .serviceRuntimeLifecycle._resolveDriver('wasm_component');
       return Object.freeze({
         route,
         runtime: requestCellWitness(driver, replicaHandle),
       });
     },
-    executeSql(statement, parameters) {
-      return executeSql(node, statement, parameters);
-    },
+    executeSql: (statement, parameters) =>
+      executeSql(node, statement, parameters),
     async invokeRequest(definition, invocation) {
       const {route} = await routeAndReplica(definition);
       const requestWitness =
@@ -175,10 +166,7 @@ function buildPorts(node) {
         node,
         definition.PATH,
         invocation.body,
-        {
-          idempotencyKey: invocation.idempotencyKey,
-          method: definition.METHOD,
-        },
+        {idempotencyKey: invocation.idempotencyKey, method: definition.METHOD},
       );
       return Object.freeze({
         body: response.body,
@@ -191,14 +179,11 @@ function buildPorts(node) {
       });
     },
     async probeUnauthenticated(definition, body) {
-      const response = await fetch(
-        `${node.baseUrl}${definition.PATH}`,
-        {
-          body: JSON.stringify(body),
-          headers: {'content-type': 'application/json'},
-          method: definition.METHOD,
-        },
-      );
+      const response = await fetch(`${node.baseUrl}${definition.PATH}`, {
+        body: JSON.stringify(body),
+        headers: {'content-type': 'application/json'},
+        method: definition.METHOD,
+      });
       return Object.freeze({
         body: await response.json(),
         status: response.status,
@@ -219,17 +204,14 @@ function buildPorts(node) {
       );
       return result.rows || [];
     },
-    waitForReadyCell(definition) {
-      return waitForReadyCell(node, definition);
-    },
+    waitForReadyCell: (definition) => waitForReadyCell(node, definition),
   });
 }
 
 function projectPostgresAlternative(baseline) {
   const postgresLogDigests = {};
   for (const [containerId, logs] of Object.entries(baseline.logs)) {
-    postgresLogDigests[containerId] =
-      sha256(Buffer.from(logs, BYTE_ENCODING));
+    postgresLogDigests[containerId] = sha256(Buffer.from(logs, BYTE_ENCODING));
   }
   return Object.freeze({
     cleanupReceipt: baseline.cleanupReceipt,
@@ -254,11 +236,9 @@ function projectPostgresAlternative(baseline) {
 
 async function stopPreparedCell(node, prepared) {
   const replicaId = prepared.deployment.readyCell.replicaId;
-  const runtimeServiceHandler =
-    node.bootstrapService.runtimeServiceHandler;
-  const replicaHandle =
-    runtimeServiceHandler.localReplicas
-      .get(replicaId)?.replicaHandle;
+  const runtimeServiceHandler = node.bootstrapService.runtimeServiceHandler;
+  const replicaHandle = runtimeServiceHandler.localReplicas
+    .get(replicaId)?.replicaHandle;
   if (!replicaHandle) {
     throw new Error(
       `prepared MovieLens request Cell replica not found: ${replicaId}`,
@@ -266,23 +246,20 @@ async function stopPreparedCell(node, prepared) {
   }
   const lifecycle = runtimeServiceHandler.serviceRuntimeLifecycle;
   const driver = lifecycle._resolveDriver('wasm_component');
-  const cellWasRunning =
-    driver._componentRuntime.cells.has(replicaId);
+  const cellWasRunning = driver._componentRuntime.cells.has(replicaId);
   await lifecycle.stop(replicaHandle);
-  return Object.freeze({
-    cellStopped:
-      cellWasRunning && !driver._componentRuntime.cells.has(replicaId),
-    replicaId,
-  });
+  if (!cellWasRunning || driver._componentRuntime.cells.has(replicaId)) {
+    throw new Error(
+      `prepared MovieLens request Cell replica did not stop: ${replicaId}`,
+    );
+  }
+  return Object.freeze({cellStopped: true, replicaId});
 }
 
 async function cleanupAttempt(alreadyCompleted, operation) {
   if (alreadyCompleted) return {kind: CLEANUP_OUTCOME.SKIPPED};
   try {
-    return {
-      kind: CLEANUP_OUTCOME.COMPLETED,
-      value: await operation(),
-    };
+    return {kind: CLEANUP_OUTCOME.COMPLETED, value: await operation()};
   } catch (error) {
     return {error, kind: CLEANUP_OUTCOME.FAILED};
   }
@@ -305,9 +282,7 @@ async function requireTemporaryDirectoryAbsent(temporaryRoot) {
     if (error.code === LIVE_TEXT.FILE_NOT_FOUND_CODE) return;
     throw error;
   }
-  throw new Error(
-    `MovieLens temporary directory remains: ${temporaryRoot}`,
-  );
+  throw new Error(`MovieLens temporary directory remains: ${temporaryRoot}`);
 }
 
 async function closeWorkloadSession({
@@ -321,7 +296,7 @@ async function closeWorkloadSession({
     () => stopPreparedCell(node, prepared),
   );
   if (cell.kind === CLEANUP_OUTCOME.COMPLETED) {
-    cleanupState.cellStopped = cell.value.cellStopped;
+    cleanupState.cellStopped = cell.value.cellStopped === true;
   }
   const runtime = await cleanupAttempt(
     cleanupState.nodeStopped,
@@ -330,26 +305,21 @@ async function closeWorkloadSession({
   if (runtime.kind === CLEANUP_OUTCOME.COMPLETED) {
     cleanupState.nodeStopped = true;
   }
-  const temporaryDirectory = await cleanupAttempt(
-    cleanupState.tempRemoved,
-    async () => {
+  const canRemoveTemporaryRoot =
+    cleanupState.cellStopped === true &&
+    cleanupState.nodeStopped === true;
+  const temporaryDirectory = canRemoveTemporaryRoot ?
+    await cleanupAttempt(cleanupState.tempRemoved, async () => {
       await rm(temporaryRoot, {force: true, recursive: true});
       await requireTemporaryDirectoryAbsent(temporaryRoot);
-    },
-  );
+    }) :
+    {kind: CLEANUP_OUTCOME.SKIPPED};
   if (temporaryDirectory.kind === CLEANUP_OUTCOME.COMPLETED) {
     cleanupState.tempRemoved = true;
   }
-  const failures = cleanupErrors([
-    cell,
-    runtime,
-    temporaryDirectory,
-  ]);
+  const failures = cleanupErrors([cell, runtime, temporaryDirectory]);
   if (failures.length > 0) {
-    throw new AggregateError(
-      failures,
-      LIVE_TEXT.CLEANUP_FAILED,
-    );
+    throw new AggregateError(failures, LIVE_TEXT.CLEANUP_FAILED);
   }
   return cell.kind === CLEANUP_OUTCOME.COMPLETED ? cell.value : null;
 }
@@ -394,8 +364,7 @@ async function closeFailedOpening({
     if (cell.kind === CLEANUP_OUTCOME.FAILED) {
       cleanupCauses.push({
         cause: cell.error,
-        role:
-          MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.CELL_CLEANUP,
+        role: MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.CELL_CLEANUP,
       });
     }
   }
@@ -406,21 +375,16 @@ async function closeFailedOpening({
     if (runtime.kind === CLEANUP_OUTCOME.FAILED) {
       cleanupCauses.push({
         cause: runtime.error,
-        role:
-          MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.NODE_CLEANUP,
+        role: MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.NODE_CLEANUP,
       });
     }
   }
-  let temporaryDirectoryAbsent =
-    temporaryRoot === null ? true : null;
-  if (temporaryRoot !== null) {
-    const temporaryDirectory = await cleanupAttempt(
-      false,
-      async () => {
-        await rm(temporaryRoot, {force: true, recursive: true});
-        await requireTemporaryDirectoryAbsent(temporaryRoot);
-      },
-    );
+  let temporaryDirectoryAbsent = temporaryRoot === null ? true : null;
+  if (temporaryRoot !== null && cellAbsent === true && nodeStopped === true) {
+    const temporaryDirectory = await cleanupAttempt(false, async () => {
+      await rm(temporaryRoot, {force: true, recursive: true});
+      await requireTemporaryDirectoryAbsent(temporaryRoot);
+    });
     temporaryDirectoryAbsent =
       temporaryDirectory.kind === CLEANUP_OUTCOME.COMPLETED ? true : null;
     if (temporaryDirectory.kind === CLEANUP_OUTCOME.FAILED) {
@@ -438,47 +402,50 @@ async function closeFailedOpening({
       cellAbsent,
       nodeStopped,
       postgres: postgresCleanup || unobservedPostgresCleanup(),
-      replicaId:
-        prepared?.deployment?.readyCell?.replicaId || null,
+      replicaId: prepared?.deployment?.readyCell?.replicaId || null,
       temporaryDirectoryAbsent,
     }),
   });
 }
 
-async function openMovielensPublicRequestWorkloadLive(options = {}) {
-  let stage = LIVE_FAILURE_STAGE.DATASET;
-  let dataset = null;
-  let postgres = null;
-  let postgresCleanup = null;
+function buildResetReceipt(nextRuntime, previousTeardown, previousStoragePath) {
+  const {binding, manifest, readyCell} = nextRuntime.prepared.deployment;
+  return Object.freeze({
+    durableResultRows: nextRuntime.initialCustody.durableResultRows,
+    freshSession: Object.freeze({
+      bindingName: binding.name,
+      bindingVersionId: readyCell.bindingVersionId,
+      executableDigest: nextRuntime.artifact.executableDigest,
+      replicaId: readyCell.replicaId,
+      routeServiceId: readyCell.serviceId,
+      runtimeKind: manifest.runtime.kind,
+      storagePath: nextRuntime.runtimeObservation.storagePath,
+    }),
+    invocationJournalRows: nextRuntime.initialCustody.invocationJournalRows,
+    previousSessionTeardown: Object.freeze({
+      cellAbsent: previousTeardown.cellAbsent,
+      nodeStopped: previousTeardown.nodeStopped,
+      replicaId: previousTeardown.replicaId,
+      storagePath: previousStoragePath,
+      temporaryDirectoryAbsent: previousTeardown.temporaryDirectoryAbsent,
+    }),
+    state: LIVE_TEXT.RESET_STATE,
+  });
+}
+
+async function openIsolatedLagrangeRuntime({
+  alternative,
+  componentSourcePath,
+  dataset,
+  postgres,
+}) {
+  let stage = LIVE_FAILURE_STAGE.TEMPORARY_DIRECTORY;
   let temporaryRoot = null;
   let node = null;
   let nodeBootAttempted = false;
   let prepared = null;
   let prepareAttempted = false;
   try {
-    dataset = options.datasetIdentity ?
-      await loadMovielensPublicRequestDatasetVariant(
-        options.ratingsPath,
-        options.datasetIdentity,
-      ) :
-      await loadMovielensPublicRequestDataset(options.ratingsPath);
-    stage = LIVE_FAILURE_STAGE.POSTGRES;
-    postgres = await runPostgresBaseline({
-      ratingsBytes: dataset.bytes,
-      ratingsDigest: dataset.digest,
-      replicationFactor: options.replicationFactor,
-    });
-    postgresCleanup = postgres.cleanupReceipt;
-    if (
-      postgres.totalRows !== dataset.cardinality ||
-      postgres.inputDigest !== dataset.digest
-    ) {
-      throw new Error(
-        LIVE_TEXT.POSTGRES_INPUT_MISMATCH,
-      );
-    }
-    const alternative = projectPostgresAlternative(postgres);
-    stage = LIVE_FAILURE_STAGE.TEMPORARY_DIRECTORY;
     temporaryRoot = await mkdtemp(
       path.join(tmpdir(), LIVE_TEXT.TEMPORARY_DIRECTORY_PREFIX),
     );
@@ -488,27 +455,22 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
         temporaryRoot,
         MOVIELENS_PUBLIC_REQUEST.COMPONENT_FILE,
       ),
-      componentSourcePath:
-        options.componentSourcePath ||
+      componentSourcePath: componentSourcePath ||
         path.join(
           EXAMPLE_DIRECTORY,
           MOVIELENS_PUBLIC_REQUEST.COMPONENT_SOURCE_FILE,
         ),
       ociOutputRoot: path.join(temporaryRoot, OCI_LAYOUT_DIRECTORY),
     };
-    const artifactReceipt =
-      await buildMovielensPublicRequestComponent(paths);
+    const artifactReceipt = await buildMovielensPublicRequestComponent(paths);
     const componentSourceBytes = await readFile(paths.componentSourcePath);
     const executableBytes = await readFile(paths.componentPath);
     const executableDigest = sha256(executableBytes);
-    const executablePayload =
-      artifactReceipt.payloadDescriptors.find(
-        (descriptor) => descriptor.digest === executableDigest,
-      );
+    const executablePayload = artifactReceipt.payloadDescriptors.find(
+      (descriptor) => descriptor.digest === executableDigest,
+    );
     if (!executablePayload) {
-      throw new Error(
-        LIVE_TEXT.EXECUTABLE_RECEIPT_MISMATCH,
-      );
+      throw new Error(LIVE_TEXT.EXECUTABLE_RECEIPT_MISMATCH);
     }
     stage = LIVE_FAILURE_STAGE.NODE;
     nodeBootAttempted = true;
@@ -524,44 +486,33 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
       dataset,
       ports: buildPorts(node),
     });
+    const initialCustody = await prepared.verifyEmptyCustody();
     const cleanupState = {
       cellStopped: false,
       nodeStopped: false,
       tempRemoved: false,
     };
-    let closedReceipt = null;
-    return Object.freeze({
-      alternative,
+    return {
       artifact: Object.freeze({
         buildInputFingerprint: artifactReceipt.buildInputFingerprint,
-        componentSource: path.relative(
-          process.cwd(),
-          paths.componentSourcePath,
-        ),
+        componentSource: path.relative(process.cwd(), paths.componentSourcePath),
         executableDigest,
-        ociManifestDigest:
-          artifactReceipt.topManifestDescriptor.digest,
+        ociManifestDigest: artifactReceipt.topManifestDescriptor.digest,
         ociPayloadDigest: executablePayload.digest,
       }),
-      dataset: Object.freeze({
-        cardinality: dataset.cardinality,
-        digest: dataset.digest,
-        sizeBytes: dataset.sizeBytes,
-        source: dataset.source,
-      }),
+      cleanupState,
+      componentSourceBytes,
+      executableBytes,
+      initialCustody,
+      node,
       prepared,
-      retained: Object.freeze({
-        componentSourceBytes,
-        datasetBytes: dataset.bytes,
-        executableBytes,
-        postgresLogs: postgres.logs,
-      }),
       runtimeObservation: Object.freeze({
         processId: process.pid,
         storagePath: temporaryRoot,
       }),
+      temporaryRoot,
       async close() {
-        if (closedReceipt) return closedReceipt;
+        const replicaId = prepared.deployment.readyCell.replicaId;
         let stopReceipt;
         try {
           stopReceipt = await closeWorkloadSession({
@@ -574,43 +525,133 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
           throw new MovielensPublicRequestLiveFailure(
             error,
             Object.freeze({
-              cellAbsent:
-                cleanupState.cellStopped ? true : null,
-              nodeStopped:
-                cleanupState.nodeStopped ? true : null,
+              cellAbsent: cleanupState.cellStopped ? true : null,
+              nodeStopped: cleanupState.nodeStopped ? true : null,
               postgres: postgres.cleanupReceipt,
-              replicaId: prepared.deployment.readyCell.replicaId,
-              temporaryDirectoryAbsent:
-                cleanupState.tempRemoved ? true : null,
+              replicaId,
+              temporaryDirectoryAbsent: cleanupState.tempRemoved ? true : null,
             }),
             LIVE_FAILURE_STAGE.CLEANUP,
           );
         }
-        closedReceipt = Object.freeze({
+        return Object.freeze({
           cellAbsent: cleanupState.cellStopped,
           nodeStopped: cleanupState.nodeStopped,
           postgres: postgres.cleanupReceipt,
-          replicaId: stopReceipt?.replicaId ||
-            prepared.deployment.readyCell.replicaId,
+          replicaId: stopReceipt?.replicaId || replicaId,
           temporaryDirectoryAbsent: cleanupState.tempRemoved,
         });
-        return closedReceipt;
       },
-    });
+    };
   } catch (error) {
-    postgresCleanup =
-      safeMovielensFailureOwnDataValue(
-        error,
-        LIVE_TEXT.CLEANUP_RECEIPT_KEY,
-      ) ||
-      postgresCleanup;
     const failedOpening = await closeFailedOpening({
       node,
       nodeBootAttempted,
-      postgresCleanup,
+      postgresCleanup: postgres.cleanupReceipt,
       prepareAttempted,
       prepared,
       temporaryRoot,
+    });
+    throw new MovielensPublicRequestLiveFailure(
+      error,
+      failedOpening.teardown,
+      stage,
+      failedOpening.cleanupCauses,
+    );
+  }
+}
+
+async function openMovielensPublicRequestWorkloadLive(options = {}) {
+  let stage = LIVE_FAILURE_STAGE.DATASET;
+  let postgresCleanup = null;
+  try {
+    const dataset = options.datasetIdentity ?
+      await loadMovielensPublicRequestDatasetVariant(
+        options.ratingsPath,
+        options.datasetIdentity,
+      ) :
+      await loadMovielensPublicRequestDataset(options.ratingsPath);
+    stage = LIVE_FAILURE_STAGE.POSTGRES;
+    const postgres = await runPostgresBaseline({
+      ratingsBytes: dataset.bytes,
+      ratingsDigest: dataset.digest,
+      replicationFactor: options.replicationFactor,
+    });
+    postgresCleanup = postgres.cleanupReceipt;
+    if (
+      postgres.totalRows !== dataset.cardinality ||
+      postgres.inputDigest !== dataset.digest
+    ) {
+      throw new Error(LIVE_TEXT.POSTGRES_INPUT_MISMATCH);
+    }
+    const alternative = projectPostgresAlternative(postgres);
+    const datasetSummary = Object.freeze({
+      cardinality: dataset.cardinality,
+      digest: dataset.digest,
+      sizeBytes: dataset.sizeBytes,
+      source: dataset.source,
+    });
+    const runtimeSpec = {
+      alternative,
+      componentSourcePath: options.componentSourcePath,
+      dataset,
+      postgres,
+    };
+    let activeRuntime = await openIsolatedLagrangeRuntime(runtimeSpec);
+    let closedReceipt = null;
+    function buildSessionSnapshot(runtime) {
+      return Object.freeze({
+        alternative,
+        artifact: runtime.artifact,
+        dataset: datasetSummary,
+        prepared: runtime.prepared,
+        retained: Object.freeze({
+          componentSourceBytes: runtime.componentSourceBytes,
+          datasetBytes: dataset.bytes,
+          executableBytes: runtime.executableBytes,
+          postgresLogs: postgres.logs,
+        }),
+        runtimeObservation: runtime.runtimeObservation,
+        async close() {
+          if (closedReceipt) return closedReceipt;
+          closedReceipt = await activeRuntime.close();
+          return closedReceipt;
+        },
+        async resetRunState() {
+          if (closedReceipt) throw new Error(LIVE_TEXT.RESET_CLOSED_SESSION);
+          const drained = await activeRuntime.prepared.drainOperations();
+          if (drained.inFlight !== 0) {
+            throw new Error(LIVE_TEXT.RESET_REQUIRES_DRAIN);
+          }
+          const previousStoragePath =
+            activeRuntime.runtimeObservation.storagePath;
+          const previousTeardown = await activeRuntime.close();
+          const nextRuntime = await openIsolatedLagrangeRuntime(runtimeSpec);
+          activeRuntime = nextRuntime;
+          return Object.freeze({
+            ownerReceipt: buildResetReceipt(
+              nextRuntime,
+              previousTeardown,
+              previousStoragePath,
+            ),
+            session: buildSessionSnapshot(nextRuntime),
+          });
+        },
+      });
+    }
+    return buildSessionSnapshot(activeRuntime);
+  } catch (error) {
+    if (isMovielensPublicRequestLiveFailure(error)) throw error;
+    postgresCleanup =
+      safeMovielensFailureOwnDataValue(error, LIVE_TEXT.CLEANUP_RECEIPT_KEY) ||
+      postgresCleanup;
+    const failedOpening = await closeFailedOpening({
+      node: null,
+      nodeBootAttempted: false,
+      postgresCleanup,
+      prepareAttempted: false,
+      prepared: null,
+      temporaryRoot: null,
     });
     throw new MovielensPublicRequestLiveFailure(
       error,
@@ -661,11 +702,7 @@ class MovielensPublicRequestLiveFailure extends Error {
   }
 }
 
-function buildMovielensPublicRequestLiveEnvelope(
-  session,
-  result,
-  teardown,
-) {
+function buildMovielensPublicRequestLiveEnvelope(session, result, teardown) {
   const observation = Object.freeze({
     alternative: session.alternative,
     artifact: session.artifact,
@@ -673,10 +710,7 @@ function buildMovielensPublicRequestLiveEnvelope(
     ...result,
     teardown,
   });
-  return Object.freeze({
-    observation,
-    retained: session.retained,
-  });
+  return Object.freeze({observation, retained: session.retained});
 }
 
 async function runMovielensPublicRequestWorkloadSession(
@@ -705,13 +739,9 @@ async function runMovielensPublicRequestWorkloadSession(
     cleanupFailure = error;
   }
   if (operationFailed && cleanupFailed) {
-    const cleanupTeardown =
-      isMovielensPublicRequestLiveFailure(cleanupFailure) ?
-        safeMovielensFailureOwnDataValue(
-          cleanupFailure,
-          'teardown',
-        ) :
-        unobservedWorkloadTeardown();
+    const cleanupTeardown = isMovielensPublicRequestLiveFailure(cleanupFailure) ?
+      safeMovielensFailureOwnDataValue(cleanupFailure, 'teardown') :
+      unobservedWorkloadTeardown();
     throw new MovielensPublicRequestLiveFailure(
       operationFailure,
       cleanupTeardown,
@@ -730,30 +760,22 @@ async function runMovielensPublicRequestWorkloadSession(
       LIVE_FAILURE_STAGE.OPERATION,
     );
   }
-  return buildMovielensPublicRequestLiveEnvelope(
-    session,
-    result,
-    teardown,
-  );
+  return buildMovielensPublicRequestLiveEnvelope(session, result, teardown);
 }
 
 async function runMovielensPublicRequestWorkloadLive(options = {}) {
   const session = await openMovielensPublicRequestWorkloadLive(options);
-  const envelope =
-    await runMovielensPublicRequestWorkloadSession(session);
+  const envelope = await runMovielensPublicRequestWorkloadSession(session);
   if (options.print !== false) {
-    process.stdout.write(
-      `${JSON.stringify(envelope.observation, null, 2)}\n`,
-    );
+    process.stdout.write(`${JSON.stringify(envelope.observation, null, 2)}\n`);
   }
   return envelope;
 }
 
-const isDirectRun =
+if (
   process.argv[1] &&
-  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
-
-if (isDirectRun) {
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
+) {
   await runMovielensPublicRequestWorkloadLive();
 }
 
@@ -764,6 +786,7 @@ export {
   buildMovielensPublicRequestLiveEnvelope,
   buildPorts,
   closeFailedOpening,
+  closeWorkloadSession,
   isMovielensPublicRequestLiveFailure,
   openMovielensPublicRequestWorkloadLive,
   preregisterRequestWitness,

@@ -1,0 +1,60 @@
+{
+  "schema": "solve-quest/2",
+  "id": "seed-participant-release-applied-position-barrier",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Fresh-seed startup must release its actual cohort within the existing shared budget by observing each exact current replica's published applied position after ENABLE, then running the existing complete fresh final census once. Preserve durable origin, canonical classification and admission authority, and reach the existing bootstrap and SQL/Raft/cache acceptance bodies. A healthy exhausted deadline remains a system defect.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/seed-participant-release-applied-position-barrier/evidence/receipt.json",
+      "requiredReceipts": [
+        "actual-rejected-census-and-owner",
+        "engaged-real-owner-regression",
+        "fresh-seed-startup-at-existing-bounds",
+        "recovery-and-interaction-preserved",
+        "independent-review-and-static-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "explicit-single-phase-supersession",
+      "statement": "This successor explicitly supersedes the predecessor's existing-authority-and-one-path constraint only to permit one bounded passive post-ENABLE applied-position observation at the existing lifecycle recipient. There is no caller-local convergence/retry algorithm, repeated final-census decision loop, new release driver, duplicated predicate, fallback, cached OPEN permission or weaker fence. Preserve serialized seed order, canonical classification/precedence, exact membership and generations, original RUNS promise/deadline, current control-owner checks, pause/resume and native application transaction."
+    },
+    {
+      "id": "passive-application-position",
+      "statement": "Use OBSERVE_APPLIED_POSITION on the existing release route with canonical origin: enabled.origin as a progress watermark, validated by the existing origin owner. Delete the unused DRAIN action/branch. Observe current published applied index only; no query/drain/topology permission is inferred. After that one batch, keep the existing fresh final census, rebuilt query proof, full classifier, control-owner release and RESUME unchanged. An older origin never hides unrelated work."
+    },
+    {
+      "id": "publication-wake-and-exact-lifetime",
+      "statement": "A payload-free APPLIED_PROGRESS wake is emitted only after the existing runtime announce owner publishes current status, on applied progress and first publication of a runtime generation. Do not alter COMMIT, membership relay, step/send queues, transport acknowledgement, read behavior or native scheduling. Subscribe before read, retain wakes during an in-flight refresh, and revalidate exact lifecycle, generation, build, term, membership, pause and deadline after awaits. One observation per current replica; matching joins retain starter promise/deadline, conflicts refuse typed, and only starter identity-checked cleanup removes listeners/timer/record."
+    },
+    {
+      "id": "owned-rpc-budget-and-cancellation",
+      "statement": "For the new action only, the existing client budget owner computes timeout and observationDeadlineAtMs from one clock sample. Receiver consumes that carried deadline and any earlier cap from the same canonical budget owner, never starting a later window. Preserve overall RUNS/seed deadlines, RPC maximum and retry policy. RPC-only expiry is UNAVAILABLE/replica_release_reply/message_timeout; overall expiry is UNAVAILABLE/release_deadline. Handler shutdown cancels observations synchronously before awaiting recovery/tasks. Service shutdown supplies one SHUTDOWN_STARTED wake after flags and shutdownSettlement installation, before awaits. Every exit discharges observer resources and leaves final OPEN authority unchanged."
+    },
+    {
+      "id": "test-first-and-meaningful-falsifier",
+      "statement": "First implement and independently review the real release-boundary witness, then measure source-only red on a locked host before production repair. Gate all commit-advancing APPEND and HEARTBEAT traffic with bounded custody, use actual settled N and committed origin K/term, and prove same-attempt engagement through natural route calls/settlement. No missing-new-symbol, setup-only, timeout or vacuous pending assertion is a valid source-only red. Reuse existing group/release fixtures and normal producers, preserving fixture policy and independent cleanup. Existing startup bodies, fresh-storage authority, configuration and budgets remain unchanged."
+    },
+    {
+      "id": "exact-independent-proof",
+      "statement": "GPT-5.6 implements; root integrates and runs canonical locked lab measurements. Retain immutable exact SHAs/hashes, same-host same-witness source controls, independent current-byte category-complete review, appropriate static and interaction checks, and fresh real startup evidence. No retries counted as green, prewarming, skipped tests, timeout/baseline increases, parallel result classifier or per-Quest producer. Test observation never becomes runtime authority."
+    },
+    {
+      "id": "bounded-scope-and-closure",
+      "statement": "Implement only the reviewed release action/client budget, runtime publication wake, observation lifetime and shutdown cancellation interaction. Preserve query/recovery/seed policy. Consolidating inherited dependency cycles is a separate sealed unit and composition needs fresh proof. This Quest cannot imply closure of TX1, C2, recovery, FreshMG, snapshot, CDC, corpus or exact-main gates. Original diagnostic/startup evidence and superseded acceptance remain immutable."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "retry-loops",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "owner-interaction",
+    "adversarial-js-intrinsics"
+  ],
+  "sealedAt": "77e091f64fb711fbc5ca40a7915ae85f01a5cf4e"
+}

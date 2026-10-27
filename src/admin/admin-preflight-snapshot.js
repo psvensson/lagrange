@@ -28,6 +28,7 @@ import {
 import {evaluateAuthoritativeRepairPolicy} from
   './admin-authoritative-repair-policy.js';
 import {AUTHORITATIVE_DISCOVERY_REPAIR} from './admin-service-discovery.js';
+import {reportPreflightRepairWaitSpent} from './admin-preflight-repair-wait-report.js';
 import {
   firstStringField,
   normalizeSchemaVersionValue,
@@ -137,6 +138,7 @@ class AdminPreflightSnapshot extends AdminCacheOwnerState {
   constructor(deps = {}) {
     super(deps.systemTableCache, deps.cacheMutationTarget);
     this.nodeId = deps.nodeId || null;
+    this.logger = deps.logger || null;
     this.messageRouter = deps.messageRouter || null;
     this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.buildLocalServiceDiscoverySnapshot =
@@ -295,12 +297,13 @@ class AdminPreflightSnapshot extends AdminCacheOwnerState {
     }
 
     let timeoutHandle = null;
+    const waitStartedAtMs = Date.now();
     try {
       const timeoutPromise = new Promise((resolve) => {
-        timeoutHandle = setTimeout(
-          () => resolve(timeoutResult),
-          waitBudgetMs,
-        );
+        timeoutHandle = setTimeout(() => {
+          reportPreflightRepairWaitSpent(this, waitBudgetMs, waitStartedAtMs);
+          resolve(timeoutResult);
+        }, waitBudgetMs);
       });
       const result = await Promise.race([
         wrappedRepairPromise,

@@ -12,6 +12,7 @@
  * System Guidelines: §1.6 — Deterministic Control-Plane Progression
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from
   '../../src/rebalancer/rebalance-coordinator.js';
@@ -90,6 +91,7 @@ function buildOperationRow(overrides = {}) {
     entity_type: overrides.entityType || 'partition',
     entity_id: overrides.entityId || TEST_PARTITION_ID,
     replica_id: overrides.replicaId || TEST_REPLICA_ID,
+    source_replica_id: overrides.sourceReplicaId || null,
     source_node_id: overrides.sourceNodeId || TEST_NODE_ID,
     target_node_id: overrides.targetNodeId || TEST_NODE_ID,
     status: overrides.status || ReplicaStatus.PENDING,
@@ -259,7 +261,7 @@ function createConvergenceCoordinator(options = {}) {
     },
     messageRouter: {
       async deliver() {
-        return {acknowledged: true, status: 'initiated'};
+        return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
       },
     },
     sqlQueryEngine: sqlEngine,
@@ -275,6 +277,8 @@ function createConvergenceCoordinator(options = {}) {
     executorOutcomeEmitter: emitter,
     enableTimeouts: false,
   });
+  coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+    async () => 0;
   coordinator.initialize();
   // The witness replica's answers (quest replace-source-removal-owner): the
   // fixture world models the committed configuration from its rows.
@@ -461,6 +465,7 @@ test('Owner-path convergence: all progression entry points ' +
         workflowStep: WORKFLOW_STEP.CREATING,
         status: ReplicaStatus.CREATING,
         replicaId: TEST_OBSERVED_PROGRESS_TARGET_REPLICA_ID,
+        sourceReplicaId: TEST_OBSERVED_PROGRESS_SOURCE_REPLICA_ID,
         sourceNodeId: TEST_NODE_ID,
         targetNodeId: TEST_OBSERVED_PROGRESS_TARGET_NODE_ID,
       });
@@ -872,7 +877,7 @@ test('Owner-path convergence: all progression entry points ' +
         },
         messageRouter: {
           async deliver() {
-            return {acknowledged: true, status: 'initiated'};
+            return buildDeliveryEnvelope({acknowledged: true}, {status: 'initiated'});
           },
         },
         sqlQueryEngine: {
@@ -947,6 +952,8 @@ test('Owner-path convergence: all progression entry points ' +
         executorOutcomeEmitter: emitter,
         enableTimeouts: false,
       });
+      coordinator.workflowOwner.recoverFailedCreateCleanupReleaseDebt =
+        async () => 0;
       coordinator.initialize();
 
       try {

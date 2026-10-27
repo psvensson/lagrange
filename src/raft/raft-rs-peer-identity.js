@@ -36,6 +36,8 @@
 import {createHash} from 'node:crypto';
 
 import {
+  RAFT_RS_LEARNER_ADMISSION_COLUMN,
+  RAFT_RS_LEARNER_ORIGIN_COVERAGE,
   RAFT_RS_PEER_IDENTITY_ERROR_MSG,
   RAFT_RS_PEER_IDENTITY_RESOLUTION,
   RAFT_RS_PEER_IDENTITY_SQL,
@@ -49,6 +51,56 @@ const IDENTITY_MASK = (1n << IDENTITY_WIDTH_BITS) - 1n;
 const LOWEST_USABLE_IDENTITY = 1n;
 const EMPTY = 0;
 const TYPE_STRING = 'string';
+const ABSENT_ORIGIN_EVIDENCE = Object.freeze({
+  coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.ABSENT, encoded: null});
+const UNVOUCHED_ORIGIN_EVIDENCE = Object.freeze({
+  coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.UNVOUCHED, encoded: null});
+
+function validatedRaftRsPeerIdentityReservations(reservations) {
+  if (!Array.isArray(reservations)) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.RESERVATIONS_NOT_ARRAY);
+  }
+  const identities = new Set();
+  const peerIds = new Set();
+  return Object.freeze(reservations.map((reservation) =>
+    validatedReservation(reservation, identities, peerIds)));
+}
+
+function validatedLearnerAdmission(reservation) {
+  const learnerAdmission = reservation.learnerAdmission ?? null;
+  if (learnerAdmission !== null && typeof learnerAdmission !== TYPE_STRING) {
+    throw new TypeError(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
+  }
+  return learnerAdmission;
+}
+
+function validatedReservation(reservation, identities, peerIds) {
+  const replicaIdentity = reservation?.replicaIdentity;
+  const peerId = reservation?.peerId;
+  const expectedPeerId = deriveRaftRsPeerId(replicaIdentity);
+  if (typeof peerId !== TYPE_STRING || peerId !== expectedPeerId) {
+    throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+      replicaIdentity, peerId, expectedPeerId));
+  }
+  if (identities.has(replicaIdentity) || peerIds.has(peerId)) {
+    throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.duplicateReservation(
+      replicaIdentity, peerId));
+  }
+  identities.add(replicaIdentity);
+  peerIds.add(peerId);
+  const learnerAdmission = validatedLearnerAdmission(reservation);
+  return Object.freeze({replicaIdentity, peerId,
+    ...(learnerAdmission === null ? {} : {learnerAdmission})});
+}
+
+function readRaftRsPeerIdentityReservations(db) {
+  return validatedRaftRsPeerIdentityReservations(
+    db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_ALL).all().map((row) => ({
+      replicaIdentity: row.replica_identity,
+      peerId: row.raft_peer_id,
+      learnerAdmission: row.learner_admission,
+    })));
+}
 
 /**
  * The raft-rs peer identity a logical Lagrange replica has, by derivation.
@@ -78,6 +130,11 @@ class RaftRsPeerIdentityRegistry {
   constructor(db) {
     this.db = db;
     this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.CREATE_TABLE);
+    const columns = this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.SELECT_COLUMNS).all();
+    if (!columns.some(({name}) => name === RAFT_RS_LEARNER_ADMISSION_COLUMN)) {
+      // No evidence is fabricated for an older reservation. Null stays unknown.
+      this.db.exec(RAFT_RS_PEER_IDENTITY_SQL.ADD_LEARNER_ADMISSION);
+    }
   }
 
   /**
@@ -109,19 +166,41 @@ class RaftRsPeerIdentityRegistry {
    * @return {string} Its identity, as an exact decimal string.
    */
   registerReplica(replicaIdentity) {
+    return this.reserveCommittedReplica(
+      replicaIdentity, deriveRaftRsPeerId(replicaIdentity));
+  }
+
+  /**
+   * Reserve the exact logical identity carried by a committed configuration
+   * entry. The peer id is still checked against this registry's deterministic
+   * derivation, so committed context cannot authorize placement-derived identity or
+   * remap one logical replica to another peer id.
+   * @param {string} replicaIdentity - The logical replica.
+   * @param {string} raftPeerId - The committed raft peer id.
+   * @return {string} Its identity, as an exact decimal string.
+   */
+  reserveCommittedReplica(replicaIdentity, raftPeerId) {
     const derived = deriveRaftRsPeerId(replicaIdentity);
+    if (raftPeerId !== derived) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+        replicaIdentity, raftPeerId, derived));
+    }
     const existing = this.reservationFor(replicaIdentity);
     if (existing !== undefined) {
+      if (existing.raft_peer_id !== raftPeerId) {
+        throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.bindingMismatch(
+          replicaIdentity, raftPeerId, existing.raft_peer_id));
+      }
       return existing.raft_peer_id;
     }
-    const holder = this.reservationOfPeerId(derived);
+    const holder = this.reservationOfPeerId(raftPeerId);
     if (holder !== undefined) {
       throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.collision(
-        replicaIdentity, holder.replica_identity, derived));
+        replicaIdentity, holder.replica_identity, raftPeerId));
     }
     this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.INSERT_RESERVATION)
-      .run(replicaIdentity, derived);
-    return derived;
+      .run(replicaIdentity, raftPeerId);
+    return raftPeerId;
   }
 
   /**
@@ -141,6 +220,53 @@ class RaftRsPeerIdentityRegistry {
   replicaIdentityOf(raftPeerId) {
     const reservation = this.reservationOfPeerId(raftPeerId);
     return reservation === undefined ? null : reservation.replica_identity;
+  }
+
+  /** Persist native-validated origin inside the SAME committed-apply transaction.
+   * The caller owns its canonical shape. This store never derives an outcome
+   * from a reservation or accepts replacement of an already recorded origin.
+   */
+  recordCommittedLearnerAdmission(replicaIdentity, encoded) {
+    if (!this.db.inTransaction) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_TRANSACTION);
+    }
+    const row = this.reservationFor(replicaIdentity);
+    if (!row || typeof encoded !== TYPE_STRING || encoded.length === EMPTY ||
+        (row.learner_admission !== null && row.learner_admission !== encoded)) {
+      throw new Error(RAFT_RS_PEER_IDENTITY_ERROR_MSG.LEARNER_ADMISSION_CONFLICT);
+    }
+    if (row.learner_admission === null) {
+      this.db.prepare(RAFT_RS_PEER_IDENTITY_SQL.RECORD_LEARNER_ADMISSION)
+        .run(encoded, replicaIdentity);
+    }
+  }
+
+  /** Raw stored evidence, decoded only by the native committed-context owner. */
+  committedLearnerAdmission(replicaIdentity) {
+    return this.reservationFor(replicaIdentity)?.learner_admission ?? null;
+  }
+
+  /**
+   * What this registry vouches about one replica's committed learner origin
+   * (RAFT_RS_LEARNER_ORIGIN_COVERAGE), with the raw stored origin when there
+   * is one. Applying a managed ADD_LEARNER reserves the identity and records
+   * its origin in one transaction, a stamp or image that folds it names the
+   * identity while it is configured, and reservations are never removed, so
+   * ABSENT vouches that no such ADD_LEARNER is in this replica's history. A
+   * reservation without an origin (UNVOUCHED) vouches for nothing.
+   * @param {string} replicaIdentity - The replica.
+   * @return {Object} Frozen {coverage, encoded}; encoded is null unless RECORDED.
+   */
+  learnerOriginEvidence(replicaIdentity) {
+    const row = this.reservationFor(replicaIdentity);
+    if (row === undefined) return ABSENT_ORIGIN_EVIDENCE;
+    return row.learner_admission === null ? UNVOUCHED_ORIGIN_EVIDENCE : Object.freeze({
+      coverage: RAFT_RS_LEARNER_ORIGIN_COVERAGE.RECORDED, encoded: row.learner_admission});
+  }
+
+  /** All permanent reservations, in deterministic logical-identity order. */
+  reservations() {
+    return readRaftRsPeerIdentityReservations(this.db);
   }
 
   /**
@@ -163,4 +289,9 @@ class RaftRsPeerIdentityRegistry {
   }
 }
 
-export {RaftRsPeerIdentityRegistry, deriveRaftRsPeerId};
+export {
+  RaftRsPeerIdentityRegistry,
+  deriveRaftRsPeerId,
+  readRaftRsPeerIdentityReservations,
+  validatedRaftRsPeerIdentityReservations,
+};

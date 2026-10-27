@@ -16,12 +16,18 @@ const REPLICA_HANDLER_SUBSYSTEM = 'replica-handler';
 const REPLICA_HANDLER_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
   DATA_DIR: STORAGE_DEFAULT.DATA_DIR,
+  // ends-on: the local replica becomes voter-ready, or its partition metadata resolves
   SYNC_TIMEOUT_MS: TIME_MS.MINUTE,
+  // ends-on: the replica status write is accepted
   STATUS_WRITE_RETRY_TIMEOUT_MS: TIME_MS.SECOND * NUM.THIRTY,
   // The bound on a retiring replica's wait for its own removal to apply
   // (owner ruling F2): inside the replica state machine's one-minute REMOVING
-  // timeout, so the removal still completes as REMOVED.
+  // timeout, so the removal still completes as REMOVED. An alarm, never a
+  // normal exit (owner decision 2026-10-04): its firing is a spent wait
+  // (wait_bound_spent ERROR).
+  // ends-on: the applied configuration no longer names the retiring replica, or its group is unavailable
   REMOVAL_CONSENSUS_EXIT_BACKSTOP_MS: TIME_MS.SECOND * NUM.THIRTY,
+  CREATE_ADMISSION_RECOVERY_RETRY_MS: TIME_MS.SECOND,
 });
 
 const REPLICA_HANDLER_ADDRESS = Object.freeze({
@@ -48,7 +54,6 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Failed to hydrate replica metadata from authoritative system-table query',
   WAITING_VOTER_READY: 'Waiting for replica voter-ready activation',
   VOTER_READY_ACTIVATED: 'Replica reached voter-ready activation state',
-  VOTER_READY_TIMEOUT: 'Replica did not reach voter-ready activation before timeout',
   OPERATION_IN_PROGRESS: 'Operation already in progress',
   OPERATION_NOT_FOUND: 'Replica operation not found in system table cache',
   ASYNC_CREATE_FAILED: 'Async replica creation failed',
@@ -58,6 +63,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_MISSING_FIELDS: 'REMOVE_REPLICA missing required fields',
   REMOVE_NOT_FOUND: 'Replica not found for removal',
   REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup precondition was refused',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
@@ -76,12 +83,32 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'Replica removal deferred: its REMOVING row could not be made durable',
   REMOVE_CONSENSUS_EXIT:
     'Retiring replica left consensus; retiring its port',
+  OPENED_INTO_RETIRED_GROUP:
+    'Replica opened into a group its durable workflow record retired; ' +
+    'retiring it as a unit',
+  OPEN_RETIREMENT_RECORD_UNAVAILABLE:
+    'Replica opened without reading its group\'s retirement record; it ' +
+    'stays un-retired until the record is readable or its workflow owner ' +
+    're-drives it',
+  REMOVE_GROUP_RETIREMENT_REFUSED:
+    'Replica removal refused: its group-retirement evidence does not match ' +
+    'the durable workflow record',
+  REMOVE_GROUP_RETIRED_CLEANUP_DEFERRED:
+    'Group-retirement REMOVE of a replica this node already removed: ' +
+    'answered completed; its cleanup reconcile stays deferred',
   REMOVE_FAILED: 'Replica removal failed',
   REMOVE_STATUS_WRITE_DEFERRED:
     'Replica removal status write deferred after retryable control-plane failure',
   REMOVE_FAILED_STATUS_WRITE_DEFERRED:
     'Replica failed-status write deferred after retryable control-plane failure',
   UPDATE_STATUS: 'Updating replica status',
+  // The wait for the CREATE target's prior-existence fact (its durable
+  // SYNCING row) ended without it: the port never participated and the
+  // create fails (verifier N3).
+  IDENTITY_RECORD_WAIT_SPENT:
+    'Replica identity record never became durable; the replica never participated',
+  CREATE_SYNCING_DEFERRAL_SPENT:
+    'Replica SYNCING write outcome stayed unresolved: the authoritative row was unreadable through the retry bound',
   UPDATE_STATUS_RETRY:
     'Retrying replica status persistence after retryable control-plane failure',
   CDC_UNAVAILABLE: 'CDC integration service not available',
@@ -106,6 +133,8 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
     'partitions directory unreadable',
   REMOVED_CLEANUP_SWEEP_RESULT:
     'Startup removed-replica cleanup-debt sweep result',
+  CREATE_ADMISSION_RECOVERY_FAILED:
+    'Startup replica create-admission recovery deferred',
 });
 
 const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
@@ -113,6 +142,8 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CREATE_PARTITION_SERVICE_REQUIRED: 'ReplicaHandler requires createPartitionService',
   CREATE_REQUIRED_FIELDS:
     'CREATE_REPLICA requires operationId, partitionId, and replicaId',
+  CREATE_OPERATION_TYPE_REQUIRED:
+    'CREATE_REPLICA requires ADD or REPLACE operationType',
   CDC_REQUIRED: 'ReplicaHandler requires cdcIntegrationService',
   REMOVE_REQUIRED_FIELDS:
     'REMOVE_REPLICA requires operationId, partitionId, and replicaId',
@@ -126,9 +157,14 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>
     `Partition metadata not found for ${partitionId}`,
+  removeGroupRetirementRefused: (replicaId, refusal) =>
+    `Replica ${replicaId} group retirement refused: ${refusal}`,
   REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
     `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
     `not requested partition ${requestPartitionId}`,
+  REMOVE_CLEANUP_PRECONDITION_REFUSED:
+    'Failed-create target cleanup no longer matches the authoritative ' +
+    'replica lifecycle generation',
   TABLE_METADATA_MISSING: (tableId) =>
     `Table metadata not found for ${tableId}`,
   SCHEMA_PARSE_FAILED: (message) =>
@@ -158,6 +194,17 @@ const REPLICA_HANDLER_SERVICE = Object.freeze({
   TYPE: SERVICE_TYPE.PARTITION,
 });
 
+const REPLICA_HANDLER_CREATE_DECISION = Object.freeze({
+  REPORT_IN_PROGRESS: 'report_in_progress',
+  RESTART_CREATE: 'restart_create',
+});
+
+const REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND = Object.freeze({
+  MALFORMED: 'malformed',
+  ORDINARY: 'ordinary',
+  RELEASE: 'release',
+});
+
 const REPLICA_HANDLER_ERRNO = Object.freeze({
   ENOENT: ERRNO.ENOENT,
 });
@@ -174,12 +221,14 @@ const REPLICA_HANDLER_NUM = Object.freeze({
 
 export {
   REPLICA_HANDLER_ADDRESS,
+  REPLICA_HANDLER_CREATE_DECISION,
   REPLICA_HANDLER_DEFAULT,
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_ERRNO,
   REPLICA_HANDLER_EVENT,
   REPLICA_HANDLER_LOG_MSG,
   REPLICA_HANDLER_NUM,
+  REPLICA_HANDLER_PARTICIPANT_RELEASE_DISPATCH_KIND,
   REPLICA_HANDLER_PROGRESS,
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_SUBSYSTEM,

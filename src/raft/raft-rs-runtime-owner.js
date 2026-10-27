@@ -1,31 +1,31 @@
-import {createHash} from 'node:crypto';
-import fs from 'node:fs';
-import {createRequire} from 'node:module';
-import path from 'node:path';
-
-import {resolveModuleDirectory, resolvePackagedRuntimeFile} from
-  '../sea/runtime-file-resolution.js';
-import {
-  RAFT_RS_BINDING_LAYOUT,
-  RAFT_RS_BINDING_STATE,
-  RAFT_RS_CORE_ERROR_MSG,
-  RAFT_RS_CORE_PRIMITIVES,
-  RAFT_RS_DIGEST_ALGORITHM,
-  RAFT_RS_DIGEST_ENCODING,
-  RAFT_RS_DIGEST_KEY,
-  RAFT_RS_FORBIDDEN_CONVENIENCE,
-  RAFT_RS_WASM_FILE,
-} from './raft-rs-core-constants.js';
+import {COMMITTED_MEMBERSHIP_READ_PURPOSE} from './raft-committed-membership-constants.js';
+import {instantiateRaftRsCore, verifyRaftRsBinding} from './raft-rs-binding-owner.js';
 import {RaftRsDurableStore} from './raft-rs-durable-store.js';
+import {armOwnedInboundDrainTimer, cancelOwnedInboundDrainTimer} from
+  './raft-rs-inbound-timer-custody.js';
 import {
   RAFT_RS_RECORD_COMPATIBILITY,
+  RAFT_RS_COMMIT_DURABILITY,
 } from './raft-rs-durable-store-constants.js';
 import {admitRaftRsMessage} from './raft-rs-ingress.js';
+import {RAFT_RS_OPENING_HISTORY} from './raft-rs-opening-history-constants.js';
 import {RAFT_RS_MESSAGE_TYPE} from './raft-rs-ingress-constants.js';
 import {
   recordInboundStepRefusal,
   sendMessages,
 } from './raft-rs-peer-delivery.js';
+import {
+  openedLastIndex,
+  persistedLastIndexAfter,
+} from './raft-rs-local-log-guard.js';
+import {
+  enterReseedHold,
+  recordReseedHold,
+  refuseInboundStep,
+  reportCoreTrap,
+  reportRuntimeReplaced,
+  reportWaitBoundExceeded,
+} from './raft-rs-runtime-faults.js';
 import {
   decideLeadershipTransfer,
   droppedByLeadershipTransfer,
@@ -51,15 +51,19 @@ import {
   FOLLOWER_RAFT_STATE,
   HEALTHY,
   INBOUND_DRAIN_DELAY_MS,
+  INBOUND_WAKE_DEBT,
   NO_LEADER,
   PERSISTENCE_ADMISSION_WAIT,
   RECOVERY_REQUIRED,
+  REPLACING,
   ROLE,
   ROLE_LEADER,
   RUNTIME_COMMAND,
+  RUNTIME_FAULT_REPORT,
   RUNTIME_EVENT,
   RUNTIME_PHASE,
   RUNTIME_REASON,
+  RUNTIME_RESUME_DELAY_MS,
   UNHEALTHY,
   USABLE,
 } from './raft-rs-runtime-owner-constants.js';
@@ -72,21 +76,26 @@ import {
   confChangeProposalRefusal,
   confChangeSettlement,
 } from './raft-rs-conf-change-admission.js';
+import {raftRsConfStateKey} from './raft-rs-conf-state-key.js';
 import {
   admitsReplica,
   createdParticipationGate,
   recordAppliedEntry,
   durableRecordIncompatible,
-  durableRecordMissing,
+  identityUnrecorded,
   participationGateClosed,
   participationGateColumns,
   participationObservation,
-  requiresDurableRecord,
+  openingWithoutRecordRefusal,
   restoredParticipationGate,
+  recordIdentity,
   settleParticipationGate,
+  withIdentityRecord,
 } from './raft-rs-participation-gate.js';
-import {answerCommittedMembership} from
+import {answerCommittedMembership, answerCommittedLearnerAction} from
   './raft-rs-committed-membership-read.js';
+import {committedMembershipContext} from
+  './raft-rs-committed-membership-context.js';
 import {applyCommittedEntryTransaction} from
   './raft-rs-application-transaction-owner.js';
 import {
@@ -95,87 +104,50 @@ import {
 } from './raft-rs-persistence-admission.js';
 import {deepFreeze} from './raft-operation-port.js';
 import {RAFT_OPERATION_OUTCOME} from './raft-operation-port-constants.js';
+import {PARTICIPATION_GATE} from './raft-committed-membership-constants.js';
+import {proposeMembershipTransition} from
+  './raft-rs-membership-transition-runtime.js';
 
 const {CORE_OK, CORE_REFUSED, CORE_FATAL, HOST_FAILURE} = RAFT_OPERATION_OUTCOME;
+const ENTRY_APPLY_DURABLE_OK = Object.freeze({ok: true});
+// A group holds no cached usable status answer (a discarded core's answers
+// are never reused).
+const NO_STATUS_OBSERVATION = null;
+// The shared replacement attempt has recorded no failure yet.
+const NO_REPLACEMENT_FAILURE = null;
 
-// Resolved when the core is first needed, never at module load: the resolver
-// owns where source, the dist bundle and the SEA executable keep the binding.
-function bindingFiles() {
-  const {DIGEST_FROM_ROOT, SOURCE_ROOT_FROM_OWNER} = RAFT_RS_BINDING_LAYOUT;
-  const digest = resolvePackagedRuntimeFile({
-    moduleDir: resolveModuleDirectory(resolveModuleDirectory),
-    sourceFileName: path.join(...SOURCE_ROOT_FROM_OWNER, ...DIGEST_FROM_ROOT),
-    bundledFileName: path.join(...DIGEST_FROM_ROOT),
-  });
-  const pkg = path.join(path.dirname(digest), RAFT_RS_WASM_FILE.PACKAGE_DIRECTORY);
-  return {digest, glue: path.join(pkg, RAFT_RS_WASM_FILE.GLUE),
-    wasm: path.join(pkg, RAFT_RS_WASM_FILE.WASM)};
-}
-
-function fileDigest(file) {
-  return createHash(RAFT_RS_DIGEST_ALGORITHM)
-    .update(fs.readFileSync(file))
-    .digest(RAFT_RS_DIGEST_ENCODING);
-}
-
-function assertArtifactIntegrity(binding) {
-  const digest = JSON.parse(fs.readFileSync(binding.digest, 'utf8'));
-  const files = [
-    [RAFT_RS_WASM_FILE.WASM, binding.wasm, digest[RAFT_RS_DIGEST_KEY.WASM]],
-    [RAFT_RS_WASM_FILE.GLUE, binding.glue, digest[RAFT_RS_DIGEST_KEY.GLUE]],
-  ];
-  for (const [name, file, recorded] of files) {
-    const actual = fileDigest(file);
-    if (actual !== recorded) {
-      throw new Error(
-        RAFT_RS_CORE_ERROR_MSG.digestMismatch(name, recorded, actual));
-    }
-  }
-}
-
-function facadeOf(binding) {
-  for (const name of RAFT_RS_FORBIDDEN_CONVENIENCE) {
-    if (name in binding) {
-      throw new Error(RAFT_RS_CORE_ERROR_MSG.forbiddenConvenience(name));
-    }
-  }
-  const facade = {};
-  for (const name of RAFT_RS_CORE_PRIMITIVES) {
-    if (typeof binding[name] !== 'function') {
-      throw new Error(RAFT_RS_CORE_ERROR_MSG.missingPrimitive(name));
-    }
-    facade[name] = (...args) => binding[name](...args);
-  }
-  return Object.freeze(facade);
-}
-
-function instantiateRaftRsCore(binding = bindingFiles()) {
-  assertArtifactIntegrity(binding);
-  const requireBinding = createRequire(binding.glue);
-  delete requireBinding.cache[requireBinding.resolve(binding.glue)];
-  return facadeOf(requireBinding(binding.glue));
-}
-
-// The core's own integrity check and load, answered as a state for the dry
-// run; the loaded facade is discarded and never entered.
-function verifyRaftRsBinding() {
-  const binding = bindingFiles();
-  const found = {digestFile: binding.digest};
-  try {
-    instantiateRaftRsCore(binding);
-    return deepFreeze({state: RAFT_RS_BINDING_STATE.VERIFIED, ...found});
-  } catch (error) {
-    return deepFreeze({state: RAFT_RS_BINDING_STATE.UNAVAILABLE, ...found,
-      reason: String(error?.message || error)});
-  }
-}
 
 let core = null;
 let runtimeHealth = HEALTHY;
 let runtimeGeneration = 0;
+// One failed replacement owns one clock and retry window, regardless of the
+// next caller's group, timing or lifetime. Cleared on success or final close.
+let runtimeRecovery = null;
 let nextGroupKey = 1;
 let actualCoreEntries = 0;
 let actualCoreEntryObserver = null;
+// Passive test-only native drain stage witness, never a progress driver.
+let nativeInboundStageObserver = null;
+const NATIVE_INBOUND_STAGE = Object.freeze({
+  ACCEPTED: 'accepted', COALESCED: 'coalesced',
+  REQUEST: 'request', RETRY_REQUEST: 'retry-request', CALLBACK: 'callback',
+  RUNTIME_HELD: 'runtime-held',
+  CLOSED_OR_EMPTY: 'closed-or-empty', PERSISTENCE_WAIT: 'persistence-wait',
+  TURN_REQUEST: 'turn-request', WAIT_BOUND: 'wait-bound',
+});
+function reportNativeInboundStage(group, stage) {
+  if (nativeInboundStageObserver === null) return;
+  nativeInboundStageObserver(Object.freeze({groupId: group.groupId,
+    replicaIdentity: group.replicaIdentity, stage, queued: group.inbound.length,
+    scheduled: group.inboundDrainScheduled}));
+}
+// A test's fault at the core boundary: called inside the core call's
+// containment with the group, the operation and its arguments, it may throw
+// as the core itself would (a WebAssembly.RuntimeError is a trap). No peer
+// input can trap the core once the ingress refuses every shape raft-rs
+// traps on, so the trap witnesses inject theirs here. Never set in
+// production.
+let coreFaultInjector = null;
 const groups = new Map();
 // A recorded observation is shaped once, when a busy-queue read asks for it.
 const SHAPED_STATUS = new WeakMap();
@@ -317,7 +289,7 @@ function readOpeningRecord(group) {
       return {ok: false, result: durableRecordIncompatible()};
     }
     const restore = group.store.hasDurableRecord(group.groupId);
-    return {ok: true, restore,
+    return {ok: true, restore, history: group.readOpeningHistory(),
       record: restore ? group.store.readDurableRecord(group.groupId) : null};
   } catch (error) {
     return {ok: false, result: groupHostFailure(group,
@@ -349,8 +321,15 @@ function admissionWaitOutcomes(group) {
       reason: RUNTIME_REASON.CLOSED, phase: RUNTIME_PHASE.READY_PERSISTENCE,
       retryable: false, recoveryRequired: false,
     }),
-    exceeded: () => groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
-      RUNTIME_REASON.USER_TRANSACTION_OPEN),
+    exceeded: () => {
+      reportWaitBoundExceeded(group,
+        RUNTIME_FAULT_REPORT.PERSISTENCE_ADMISSION_BOUND_EXCEEDED, {
+          phase: RUNTIME_PHASE.READY_PERSISTENCE,
+          reason: RUNTIME_REASON.USER_TRANSACTION_OPEN,
+        });
+      return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
+        RUNTIME_REASON.USER_TRANSACTION_OPEN);
+    },
   };
 }
 
@@ -381,46 +360,65 @@ function invokeCore(group, operation, ...args) {
   try {
     const parameters = CORE_CALL_WITHOUT_HANDLE.has(operation) ?
       args : [group.handle, ...args];
+    coreFaultInjector?.(group.groupId, operation, args);
     return {ok: true, value: core[operation](...parameters)};
   } catch (error) {
-    if (isCoreRefusal(error)) {
-      return {
-        ok: false,
-        result: outcome(CORE_REFUSED, {
-          reason: String(error.message || RUNTIME_REASON.CORE_REFUSED),
-          phase: operation,
-          retryable: false,
-          recoveryRequired: false,
-        }),
-      };
-    }
-    runtimeHealth = UNHEALTHY;
+    return coreCallFailure(group, operation, args, error);
+  }
+}
+
+// A core refusal is the operation's typed answer; anything else is a trap
+// that fails the whole core.
+function coreCallFailure(group, operation, args, error) {
+  if (isCoreRefusal(error)) {
     return {
       ok: false,
-      result: outcome(CORE_FATAL, {
-        reason: String(error?.message || error),
+      result: outcome(CORE_REFUSED, {
+        reason: String(error.message || RUNTIME_REASON.CORE_REFUSED),
         phase: operation,
-        retryable: true,
-        recoveryRequired: true,
+        retryable: false,
+        recoveryRequired: false,
       }),
     };
   }
+  // A trap inside replacement cannot release its synchronous barrier.
+  if (runtimeHealth === REPLACING) {
+    runtimeRecovery.failure = {phase: operation,
+      reason: String(error?.message || error)};
+  } else runtimeHealth = UNHEALTHY;
+  reportCoreTrap(group, operation, args, String(error?.message || error),
+    runtimeGeneration);
+  return {
+    ok: false,
+    result: outcome(CORE_FATAL, {
+      reason: String(error?.message || error),
+      phase: operation,
+      retryable: true,
+      recoveryRequired: true,
+    }),
+  };
 }
 
 // A continuation from before a core replacement, or of a group that failed
 // earlier in the same operation, enters no core. A replacement restored every
 // group from its durable record, so a stale continuation marks nothing.
+function refusedExecution(group, expectedGeneration) {
+  if (expectedGeneration !== runtimeGeneration || group.closed ||
+      group.handle === null || runtimeHealth !== HEALTHY ||
+      group.health === RECOVERY_REQUIRED) {
+    return hostFailure(
+      RUNTIME_PHASE.GENERATION_CHANGED,
+      new Error(RUNTIME_REASON.GENERATION_CHANGED),
+      true,
+    );
+  }
+  return null;
+}
+
 function invokeCoreAt(group, expectedGeneration, operation, ...args) {
-  if (expectedGeneration !== runtimeGeneration ||
-      runtimeHealth !== HEALTHY || group.health === RECOVERY_REQUIRED) {
-    return {
-      ok: false,
-      result: hostFailure(
-        RUNTIME_PHASE.GENERATION_CHANGED,
-        new Error(RUNTIME_REASON.GENERATION_CHANGED),
-        true,
-      ),
-    };
+  const refused = refusedExecution(group, expectedGeneration);
+  if (refused !== null) {
+    return {ok: false, result: refused};
   }
   return invokeCore(group, operation, ...args);
 }
@@ -437,61 +435,129 @@ function createNodeArguments(group, {restore, record}) {
   if (!restore) {
     return base;
   }
+  const snapshot = record.snapshot === null ? null : {
+    ...record.snapshot,
+    metadata: {
+      ...record.snapshot.metadata,
+      confState: BigInt(record.appliedIndex) >
+          BigInt(record.snapshot.metadata.index) ?
+        record.confState : record.snapshot.metadata.confState,
+    },
+  };
   return {
     ...base,
     bootstrap: {
       confState: record.confState,
       entries: record.entries,
       ...(record.hardState === null ? {} : {hardState: record.hardState}),
-      ...(record.snapshot === null ? {} : {snapshot: record.snapshot}),
+      ...(snapshot === null ? {} : {snapshot}),
     },
   };
 }
 
 // The participation gate an opening establishes (O1 gate): restored from the
 // durable record, or created from the bootstrap; a replica that must restore
-// and holds no record is refused before the core is entered (O4).
+// and holds no record is refused before the core is entered (O4), and one
+// whose identity provably existed before is held for a reseed by its
+// lifecycle owner, durably (the open-time rule): it never opens empty.
 function openingParticipationRefusal(group, opening) {
   if (opening.restore) {
-    group.gate = restoredParticipationGate(opening.record);
+    group.gate = withIdentityRecord(
+      restoredParticipationGate(opening.record), group.identityRecorded);
     group.appliedIndex = BigInt(opening.record.appliedIndex);
+    const membershipGeneration = restoredMembershipGeneration(opening.record);
+    group.membershipGenerationKnown = membershipGeneration.known;
+    group.membershipGenerationIndex = membershipGeneration.index;
     return null;
   }
-  if (requiresDurableRecord(group.bootstrap)) {
-    return durableRecordMissing();
+  const refused = openingWithoutRecordRefusal(group.bootstrap, opening.history);
+  if (refused !== null) {
+    if (refused.reason === RUNTIME_REASON.RESEED_REQUIRED) {
+      group.holdForReseed();
+    }
+    return refused;
   }
-  group.gate = createdParticipationGate(group.bootstrap, group.peerId);
+  group.gate = withIdentityRecord(
+    createdParticipationGate(group.bootstrap, group.peerId),
+    group.identityRecorded);
   group.appliedIndex = BigInt(RAFT_RS_INITIAL_APPLIED);
+  group.membershipGenerationIndex = BigInt(
+    group.bootstrap.membershipGenerationIndex ?? RAFT_RS_INITIAL_APPLIED);
+  group.membershipGenerationKnown = true;
   return null;
+}
+
+function restoredMembershipGeneration(record) {
+  const applied = BigInt(record.membershipGenerationIndex);
+  const snapshot = record.snapshot?.metadata;
+  if (snapshot === undefined || applied > BigInt(snapshot.index)) {
+    return {known: true, index: applied};
+  }
+  const descriptor = snapshot.membershipGenerationIndex;
+  const contradictory = descriptor !== null &&
+    (BigInt(descriptor) < applied ||
+      (BigInt(descriptor) === applied &&
+       raftRsConfStateKey(snapshot.confState) !==
+         raftRsConfStateKey(record.confState)));
+  return descriptor === null || contradictory ?
+    {known: false, index: applied} :
+    {known: true, index: BigInt(descriptor)};
+}
+
+function anchorOpenedSnapshotState(group, opening) {
+  group.persistedLastIndex = openedLastIndex(opening.restore ? opening.record : null);
+  const snapIdx = opening.restore && opening.record?.snapshot?.metadata?.index;
+  group.compactedSnapshotIndex = BigInt(snapIdx || RAFT_RS_INITIAL_APPLIED);
+  group.pendingSnapshotPeers.clear();
+  if (group.compactedSnapshotIndex <= 0n) return {ok: true};
+  return invokeCore(
+    group, CORE_OPERATION.PERSIST_COMMIT_INDEX, String(group.compactedSnapshotIndex));
+}
+
+function persistInitialBootstrapState(group) {
+  const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
+  if (!confState.ok) return confState;
+  try {
+    group.store.transaction(() => {
+      group.store.putBootstrapAppliedState(group.groupId, confState.value,
+        {...participationGateColumns(group.gate),
+          membershipGenerationIndex: String(group.membershipGenerationIndex)});
+      group.recordOpeningHistory();
+    }, RAFT_RS_COMMIT_DURABILITY.SYNCED);
+    return {ok: true};
+  } catch (error) {
+    return {
+      ok: false,
+      result: groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE, error),
+    };
+  }
 }
 
 function openGroupInCurrentRuntime(group, opening) {
   group.handle = null;
   const refused = openingParticipationRefusal(group, opening);
-  if (refused !== null) {
-    return refused;
+  if (refused !== null) return refused;
+  if (opening.restore && opening.history !== RAFT_RS_OPENING_HISTORY.ESTABLISHED) {
+    try {
+      group.store.transaction(() => group.recordOpeningHistory(),
+        RAFT_RS_COMMIT_DURABILITY.SYNCED);
+    } catch (error) {
+      return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE, error);
+    }
   }
-  const created = invokeCore(group, 'create_node',
-    createNodeArguments(group, opening));
-  if (!created.ok) {
-    return created.result;
-  }
+  const created = invokeCore(group, 'create_node', createNodeArguments(group, opening));
+  if (!created.ok) return created.result;
   group.handle = created.value;
+  const snapAnchored = anchorOpenedSnapshotState(group, opening);
+  if (!snapAnchored.ok) return snapAnchored.result;
   // Every (re)construction and restore announces its first observed
   // configuration again: a listener's baseline must be level-correct.
   group.announcedConfStateKey = CONF_STATE_NOT_ANNOUNCED;
+  group.announcedAppliedRuntimeGeneration = null;
+  group.announcedAppliedIndex = null;
   if (!opening.restore) {
-    const confState = invokeCore(group, CORE_OPERATION.CONF_STATE);
-    if (!confState.ok) {
-      return confState.result;
-    }
-    try {
-      group.store.putBootstrapAppliedState(group.groupId, confState.value,
-        participationGateColumns(group.gate));
-    } catch (error) {
-      return groupHostFailure(group, RUNTIME_PHASE.BOOTSTRAP_PERSISTENCE,
-        error);
-    }
+    const bootstrapped = persistInitialBootstrapState(group);
+    if (!bootstrapped.ok) return bootstrapped.result;
   }
   group.health = USABLE;
   settleParticipationGate(group);
@@ -530,59 +596,272 @@ function resumeAfterReconstruction(group, expectedGeneration) {
   return outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
 }
 
-// What a replaced runtime restores a group from: nothing for a closed group
-// or one without a record; a group whose record cannot be read is held by
-// that failure alone, and the replaced core's handle names nothing in the
-// new one.
+// The shared attempt's typed answer is also the reentrant admission fence.
+// It never asks a group clock to interpret another group's retry deadline.
+function runtimeRecoveryOutcome(group) {
+  const recovery = runtimeRecovery;
+  return outcome(HOST_FAILURE, {
+    reason: recovery?.failure?.reason ??
+      RUNTIME_REASON.REPLACEMENT_IN_PROGRESS,
+    phase: recovery?.failure?.phase ?? RUNTIME_PHASE.RUNTIME_REPLACEMENT,
+    failure: recovery?.failure ?? null,
+    retryAfterMs: recovery === null ? 0 :
+      Math.max(0, recovery.retryNotBefore - recovery.clock.now()),
+    attempts: recovery?.attempts ?? 0,
+    retryable: true, recoveryRequired: true, role: null,
+    groupId: group.groupId, replicaIdentity: group.replicaIdentity,
+    peerId: group.peerId, runtimeGeneration, runtimeHealth,
+  });
+}
+
+// Discarding a core invalidates ALL its handles and cached usable answers
+// before a loader, store, reporter or announcement can call back into a port.
+function invalidateRuntimeGroups() {
+  for (const group of groups.values()) {
+    group.handle = null;
+    group.statusObservation = NO_STATUS_OBSERVATION;
+    group.pendingRuntimeResume = null;
+    cancelRuntimeResumption(group);
+    group.health = RECOVERY_REQUIRED;
+  }
+}
+
+function failedRuntimeReplacement(trigger, failure) {
+  invalidateRuntimeGroups();
+  runtimeRecovery.failure = {
+    phase: failure.phase, reason: failure.reason,
+  };
+  runtimeRecovery.retryNotBefore = runtimeRecovery.clock.now() +
+    runtimeRecovery.windowMs;
+  return runtimeRecoveryOutcome(trigger);
+}
+
+// A record proven absent or incompatible is not a fresh bootstrap. Use the
+// existing durable reseed owner; unreadable/busy storage stays a group hold.
 function openingForReplacement(group) {
-  if (group.closed) {
+  if (group.closed || group.reseedHold !== null) return null;
+  if (!persistenceAdmitted(group)) {
+    groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE,
+      RUNTIME_REASON.USER_TRANSACTION_OPEN);
     return null;
   }
   const opening = readOpeningRecord(group);
-  if (!opening.ok) {
-    group.handle = null;
+  if (!opening.ok && opening.result.outcome === HOST_FAILURE) return null;
+  if (!opening.ok || !opening.restore) {
+    enterReseedHold(group, opening.ok ? outcome(CORE_REFUSED, {
+      reason: RUNTIME_REASON.DURABLE_RECORD_MISSING,
+      phase: RUNTIME_PHASE.DURABLE_RECORD_READ,
+      retryable: false, recoveryRequired: true,
+    }) : opening.result);
+    announceNoRole(group);
+    return null;
   }
-  return opening.ok && opening.restore ? opening : null;
+  return opening;
 }
 
-// Reconstruct the shared runtime from every group's durable record, then let
-// each restored group resume. Only a core failure (the instance trapped)
-// replaces the runtime. The outcome is the reconstruction's and, for the group
-// whose operation asked for it, that group's resumption: a group that cannot
-// resume is left RECOVERY_REQUIRED for its own next operation. A group whose
-// record cannot be read is held by that failure alone; every other group is
-// restored.
-function replaceRuntime(trigger) {
-  core = null;
-  runtimeHealth = HEALTHY;
-  ensureCore();
-  const restoredGroups = [];
+// This is the existing group's continuation, not a second reconstruction.
+// Consume it once in that group's own turn; old Ready work drains first and
+// is fenced by its old runtime generation. Never wait for another group's
+// queue while holding the shared replacement barrier.
+function resumeRuntimeGroup(group) {
+  cancelRuntimeResumption(group);
+  const expectedGeneration = group.pendingRuntimeResume;
+  if (expectedGeneration !== runtimeGeneration || group.closed) {
+    return hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
+      RUNTIME_REASON.GENERATION_CHANGED, true);
+  }
+  group.pendingRuntimeResume = null;
+  group.health = USABLE;
+  const finish = (result) => {
+    if (result.outcome !== CORE_OK && runtimeHealth === HEALTHY &&
+        group.health !== RECOVERY_REQUIRED) {
+      groupFailed(group, hostFailure(result.phase, result.reason, true));
+    }
+    // The shared runtime's successful resumption is the existing owner
+    // transition that can discharge an accepted wake consumed by its barrier.
+    // This re-enters the ONE inbound scheduler, never a recovery-side driver.
+    if (result.outcome === CORE_OK && runtimeHealth === HEALTHY &&
+        expectedGeneration === runtimeGeneration && !group.closed &&
+        group.inboundWakeDebt === INBOUND_WAKE_DEBT.SHARED_RUNTIME) {
+      if (group.inbound.length > 0) {
+        scheduleInboundDrain(group);
+      }
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
+    }
+    return result;
+  };
+  try {
+    const resumed = thenMaybe(drainReady(group, expectedGeneration), (drained) =>
+      drained.outcome === CORE_OK ?
+        resumeAfterReconstruction(group, expectedGeneration) : drained);
+    return thenMaybe(resumed, finish);
+  } catch (error) {
+    return containUnexpectedThrow(group, error);
+  }
+}
+
+// Closing during a replacement records an obligation without entering the
+// new core from a callback. The driver frees any newly created handle before
+// publishing HEALTHY and removes only that exact registered generation.
+function releaseClosedReplacementGroups() {
   for (const group of groups.values()) {
-    const opening = openingForReplacement(group);
-    if (opening === null) {
-      continue;
+    if (!group.closed) continue;
+    if (group.handle !== null) {
+      const freed = invokeCore(group, 'free');
+      if (!freed.ok) return freed.result;
     }
-    const restored = openGroupInCurrentRuntime(group, opening);
-    if (restored.outcome !== CORE_OK) {
-      return restored;
-    }
-    group.recovery = null;
-    restoredGroups.push(group);
+    group.handle = null;
+    groups.delete(group.key);
   }
-  const expectedGeneration = runtimeGeneration;
-  let triggerResumed = outcome(CORE_OK, {
-    reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
+  return outcome(CORE_OK);
+}
+
+function cancelRuntimeResumption(group) {
+  if (group.runtimeResumeTimer !== null) {
+    group.timers.clearTimeout(group.runtimeResumeTimer);
+    group.runtimeResumeTimer = null;
+  }
+}
+
+// An old Ready's completion must itself make no new-generation core entry.
+// When its queue is occupied, schedule the owed resumption on the next owned
+// clock turn after that queue settles, not inside the old completion's
+// microtask chain. A genuine intervening operation can consume the same
+// pending generation; close/replacement/resumption cancel the timer.
+function scheduleRuntimeResumption(group, generation) {
+  const current = () => !group.closed &&
+    generation === runtimeGeneration &&
+    group.pendingRuntimeResume === generation;
+  const run = () => {
+    cancelRuntimeResumption(group);
+    if (!current()) return;
+    const resumed = group.admitScheduledEntry(() =>
+      enqueue(group, () => ensureExecution(group)));
+    if (resumed && typeof resumed.catch === 'function') {
+      resumed.catch((error) => containUnexpectedThrow(group, error));
+    }
+  };
+  if (group.tail === null) return run();
+  const schedule = () => {
+    if (!current() || group.runtimeResumeTimer !== null) return;
+    group.runtimeResumeTimer = group.timers.setTimeout(run,
+      RUNTIME_RESUME_DELAY_MS);
+  };
+  group.tail.then(schedule, schedule).catch((error) =>
+    containUnexpectedThrow(group, error));
+}
+
+// Reopen every registered group in the replacement core, collecting each
+// restored group. Answers the shared attempt's failure (a trap, or a failure
+// a callback recorded), or null once every group is accounted for.
+function restoreGroupsIntoNewCore(trigger, restoredGroups) {
+  for (const group of [...groups.values()]) {
+    try {
+      const opening = openingForReplacement(group);
+      if (opening === null || group.closed) continue;
+      const restored = openGroupInCurrentRuntime(group, opening);
+      if (restored.outcome === CORE_FATAL) {
+        return failedRuntimeReplacement(trigger, restored);
+      }
+      if (restored.outcome !== CORE_OK) {
+        groupHostFailure(group, restored.phase, restored.reason);
+        continue;
+      }
+      group.health = RECOVERY_REQUIRED;
+      group.recovery = null;
+      group.pendingRuntimeResume = runtimeGeneration;
+      restoredGroups.push(group);
+    } catch (error) {
+      containUnexpectedThrow(group, error);
+    }
+    if (runtimeRecovery.failure !== NO_REPLACEMENT_FAILURE) {
+      return failedRuntimeReplacement(trigger, runtimeRecovery.failure);
+    }
+  }
+  return null;
+}
+
+// An attempt that never published HEALTHY leaves the runtime UNHEALTHY and
+// drops closed groups; with no group left there is nothing to recover.
+function settleAbandonedReplacement() {
+  if (runtimeHealth !== REPLACING) return;
+  runtimeHealth = UNHEALTHY;
+  for (const group of groups.values()) {
+    if (group.closed) groups.delete(group.key);
+  }
+  if (groups.size === 0) {
+    core = null; runtimeRecovery = null; runtimeHealth = HEALTHY;
+  }
+}
+
+// Every restored group other than the trigger still owed this generation's
+// resumption gets it on its own clock.
+function scheduleRestoredResumptions(trigger, restoredGroups, generation) {
   for (const group of restoredGroups) {
-    const resumed = resumeAfterReconstruction(group, expectedGeneration);
-    if (resumed && typeof resumed.then === 'function') {
-      // Only a Ready waiting for the store's admission resolves later; its
-      // group's own queue observes the result.
-      resumed.catch(() => undefined);
-    } else if (group === trigger && resumed.outcome !== CORE_OK) {
-      triggerResumed = resumed;
-    }
+    if (group === trigger || group.closed ||
+        group.pendingRuntimeResume !== generation) continue;
+    scheduleRuntimeResumption(group, generation);
   }
-  return triggerResumed;
+}
+
+// Account for every registered group while the barrier is closed. A host or
+// native refusal holds only its group; a trap aborts the shared attempt and
+// invalidates even handles already rebuilt in that attempt.
+function replaceRuntime(trigger) {
+  if (runtimeHealth === REPLACING || (runtimeRecovery !== null &&
+      runtimeRecovery.clock.now() < runtimeRecovery.retryNotBefore)) {
+    return runtimeRecoveryOutcome(trigger);
+  }
+  runtimeRecovery ??= {clock: trigger.timers,
+    windowMs: recoveryRetryWindowMsOf(trigger.timing),
+    retryNotBefore: 0, failure: NO_REPLACEMENT_FAILURE, attempts: 0};
+  runtimeRecovery.attempts += 1;
+  runtimeRecovery.failure = NO_REPLACEMENT_FAILURE;
+  runtimeHealth = REPLACING;
+  invalidateRuntimeGroups();
+  core = null;
+  const restoredGroups = [];
+  try {
+    ensureCore();
+    const restoreFailure = restoreGroupsIntoNewCore(trigger, restoredGroups);
+    if (restoreFailure !== null) return restoreFailure;
+    const released = releaseClosedReplacementGroups();
+    if (released.outcome !== CORE_OK) {
+      return failedRuntimeReplacement(trigger, released);
+    }
+    reportRuntimeReplaced(trigger, {runtimeGeneration,
+      groupsRestored: restoredGroups.filter((group) => !group.closed).length,
+      failure: null});
+    // Reporters are callbacks too: account for their closes before reopening.
+    const finalRelease = releaseClosedReplacementGroups();
+    if (finalRelease.outcome !== CORE_OK) {
+      return failedRuntimeReplacement(trigger, finalRelease);
+    }
+    runtimeHealth = HEALTHY;
+    runtimeRecovery = null;
+  } catch (error) {
+    return failedRuntimeReplacement(trigger,
+      hostFailure(RUNTIME_PHASE.RUNTIME_REPLACEMENT, error, true));
+  } finally {
+    settleAbandonedReplacement();
+  }
+  const generation = runtimeGeneration;
+  scheduleRestoredResumptions(trigger, restoredGroups, generation);
+  return triggerAnswerAfterReplacement(trigger, generation);
+}
+
+// The trigger's own answer once the replacement published `generation`.
+// A callback may already have resumed the trigger or trapped the new core.
+function triggerAnswerAfterReplacement(trigger, generation) {
+  if (runtimeHealth !== HEALTHY || generation !== runtimeGeneration) {
+    return hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
+      RUNTIME_REASON.GENERATION_CHANGED, true);
+  }
+  if (trigger.pendingRuntimeResume !== null) return resumeRuntimeGroup(trigger);
+  return trigger.health === RECOVERY_REQUIRED ?
+    recoveryOutcome(trigger, trigger.recovery?.failure?.reason ??
+      RUNTIME_REASON.RECOVERY_DEFERRED) :
+    outcome(CORE_OK, {reason: RUNTIME_REASON.RUNTIME_RECONSTRUCTED});
 }
 
 function retryAfterMsOf(group) {
@@ -682,7 +961,10 @@ function reconstructGroup(group) {
       drained.outcome === CORE_OK ?
         resumeAfterReconstruction(group, expectedGeneration) : drained);
   return thenMaybe(resumed, (result) =>
-    settleReconstruction(group, attemptedAt, result));
+    expectedGeneration !== runtimeGeneration || group.closed ?
+      hostFailure(RUNTIME_PHASE.GENERATION_CHANGED,
+        RUNTIME_REASON.GENERATION_CHANGED, true) :
+      settleReconstruction(group, attemptedAt, result));
 }
 
 // A usable group whose record no failure renewed for a whole window forgets
@@ -694,12 +976,51 @@ function forgetExpiredRecovery(group) {
   }
 }
 
+function syncCompactedStorage(group) {
+  const snapshotIndex = group.store.readSnapshotIndex(group.groupId);
+  if (snapshotIndex <= group.compactedSnapshotIndex) {
+    return null;
+  }
+  let record;
+  try {
+    record = group.store.readDurableRecord(group.groupId);
+  } catch (error) {
+    return groupHostFailure(group, RUNTIME_PHASE.DURABLE_RECORD_READ,
+      durableRecordReadFailure(error));
+  }
+  const seeded = invokeCore(group, CORE_OPERATION.SEED_STORAGE, {
+    snapshot: record.snapshot,
+    entries: record.entries,
+    ...(record.hardState === null ? {} : {
+      hardState: {
+        ...record.hardState,
+        commit: String(snapshotIndex),
+      },
+    }),
+  });
+  if (!seeded.ok) {
+    return seeded.result;
+  }
+  const confUpdated = invokeCore(
+    group, CORE_OPERATION.SET_CONF_STATE, record.confState);
+  if (!confUpdated.ok) {
+    return confUpdated.result;
+  }
+  group.compactedSnapshotIndex = snapshotIndex;
+  group.persistedLastIndex = openedLastIndex(record);
+  return null;
+}
+
 // Failure scope follows the failure class: a core failure replaces the shared
 // runtime; a host failure reconstructs its own group.
 function ensureExecution(group) {
+  if (group.reseedHold !== null) {
+    return recordReseedHold(group);
+  }
   if (runtimeHealth !== HEALTHY) {
     return replaceRuntime(group);
   }
+  if (group.pendingRuntimeResume !== null) return resumeRuntimeGroup(group);
   if (group.health === RECOVERY_REQUIRED) {
     if (group.recovery === null) {
       group.recovery = freshRecovery(group, null, group.timers.now());
@@ -707,6 +1028,10 @@ function ensureExecution(group) {
     return reconstructGroup(group);
   }
   forgetExpiredRecovery(group);
+  const synced = syncCompactedStorage(group);
+  if (synced !== null) {
+    return synced;
+  }
   return outcome(CORE_OK, {reason: RUNTIME_REASON.EXECUTION_USABLE});
 }
 
@@ -766,28 +1091,97 @@ function thenMaybe(value, continuation) {
     value.then(continuation) : continuation(value);
 }
 
+// The configuration a committed entry leaves the core holding, in the core
+// call's own shape on every path: {ok: true, value, decoded?} once a
+// conf-change entry is applied (or the configuration of any other entry is
+// read), {ok: false, result} naming the core call that failed.
+// A joiner opens from the committed configuration at its bootstrap index j
+// (C_j, itself a learner in it); the configuration entries at or below j are
+// history C_j already contains, so they are not applied to the core again:
+// replayed onto C_j they would walk it through configurations the group
+// never held (a transient sole voter, or no voter at all - which raft-rs
+// refuses) instead of leaving it at C_j. A founder's bootstrap index is 0.
+function foldedIntoBootstrap(group, entry) {
+  return group.gate !== null && group.gate.bootstrapIndex > 0n &&
+    BigInt(entry.index) <= group.gate.bootstrapIndex;
+}
+
 function resolveCommittedEntryConfState(group, expectedGeneration, entry) {
   if (RAFT_RS_CONF_CHANGE_ENTRY_TYPES.includes(entry.entryType)) {
     const decoded = invokeCoreAt(
       group, expectedGeneration,
       'decode_conf_change_entry', entry.entryType, entry.data);
     if (!decoded.ok) {
-      return decoded.result;
+      return decoded;
+    }
+    const membershipContext = committedMembershipContext(decoded.value);
+    if (foldedIntoBootstrap(group, entry)) {
+      // Replay origin provenance without replaying historical ConfState over C_j.
+      return {...invokeCoreAt(group, expectedGeneration, CORE_OPERATION.CONF_STATE),
+        membershipContext};
     }
     const applied = invokeCoreAt(
       group, expectedGeneration, 'apply_conf_change', decoded.value);
     if (!applied.ok) {
-      return applied.result;
+      return applied;
     }
     const set = invokeCoreAt(
       group, expectedGeneration, 'set_conf_state', applied.value);
     if (!set.ok) {
-      return set.result;
+      return set;
     }
-    return {...applied, decoded: decoded.value};
+    return {...applied, decoded: decoded.value, membershipContext};
   }
   return invokeCoreAt(
     group, expectedGeneration, CORE_OPERATION.CONF_STATE);
+}
+
+// A committed entry the core refused to resolve (raft-rs refusing to apply a
+// committed configuration change: "removed all voters") cannot be applied,
+// and the Ready that carried it was taken: the group's own application
+// failure, held and reconstructed from its durable record like a failed
+// application callback. A core failure (the runtime is replaced) or a stale
+// continuation is answered as it is.
+function unresolvedCommittedEntry(group, failed) {
+  return failed.outcome === CORE_REFUSED ?
+    groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
+      {message: failed.reason, detail: {coreOperation: failed.phase}}) :
+    failed;
+}
+
+
+function resolveEntryConfStateOrFailure(group, expectedGeneration, entry) {
+  try {
+    return resolveCommittedEntryConfState(group, expectedGeneration, entry);
+  } catch (error) {
+    return {ok: false, result: groupHostFailure(group,
+      RUNTIME_PHASE.APPLICATION, applicationFailureOf(error))};
+  }
+}
+
+
+function applyEntryDurablyOrFailure({group, entry, resolvedConfState,
+  nextMembershipGeneration, admitted}) {
+  try {
+    applyCommittedEntryTransaction({
+      store: group.store,
+      groupId: group.groupId,
+      entry,
+      confState: resolvedConfState.value,
+      membershipGenerationIndex: String(nextMembershipGeneration),
+      applyCommittedEntry: group.applyCommittedEntry,
+      admitted,
+      committedMembershipContext: resolvedConfState.membershipContext || null,
+      applyCommittedMembershipContext:
+        group.applyCommittedMembershipContext,
+      runApplySlice: group.runApplySlice,
+    });
+    return ENTRY_APPLY_DURABLE_OK;
+  } catch (error) {
+    group.applyTransactionRolledBack?.();
+    return {ok: false, result: groupHostFailure(group,
+      RUNTIME_PHASE.APPLICATION, applicationFailureOf(error))};
+  }
 }
 
 function applyEntries(group, expectedGeneration, entries, index = 0) {
@@ -795,34 +1189,47 @@ function applyEntries(group, expectedGeneration, entries, index = 0) {
     return outcome(CORE_OK, {reason: RUNTIME_REASON.ENTRIES_APPLIED});
   }
   const entry = entries[index];
-  const resolvedConfState = resolveCommittedEntryConfState(
+  const resolvedConfState = resolveEntryConfStateOrFailure(
     group, expectedGeneration, entry);
   if (!resolvedConfState.ok) {
-    return resolvedConfState.result;
+    return unresolvedCommittedEntry(group, resolvedConfState.result);
   }
   const admitted = admitsReplica(group.gate, resolvedConfState.decoded,
     group.peerId, BigInt(entry.index));
   if (resolvedConfState.decoded !== undefined) {
     group.confChangeEntriesApplied = (group.confChangeEntriesApplied ?? 0) + 1;
   }
-  try {
-    applyCommittedEntryTransaction({
-      store: group.store,
-      groupId: group.groupId,
-      entry,
-      confState: resolvedConfState.value,
-      applyCommittedEntry: group.applyCommittedEntry,
-      admitted,
-    });
-  } catch (error) {
-    group.applyTransactionRolledBack?.();
-    return groupHostFailure(group, RUNTIME_PHASE.APPLICATION,
-      applicationFailureOf(error));
+  const priorMembershipGeneration = group.membershipGenerationIndex;
+  const nextMembershipGeneration = resolvedConfState.decoded !== undefined &&
+      !foldedIntoBootstrap(group, entry) &&
+      BigInt(entry.index) > priorMembershipGeneration ?
+    BigInt(entry.index) : priorMembershipGeneration;
+  const applyFailure = applyEntryDurablyOrFailure({
+    group, entry, resolvedConfState, nextMembershipGeneration, admitted,
+  });
+  if (!applyFailure.ok) {
+    return applyFailure.result;
+  }
+  group.membershipGenerationIndex = nextMembershipGeneration;
+  if (resolvedConfState.decoded !== undefined) {
+    group.membershipGenerationKnown = true;
   }
   // The runtime's own applied index (the entry whose configuration the core
   // now holds, durable with it) and the participation gate it moves.
   recordAppliedEntry(group, BigInt(entry.index), admitted);
   return applyEntries(group, expectedGeneration, entries, index + 1);
+}
+
+function persistMemCommitIndex(group, expectedGeneration, ready, lightValue) {
+  const hasSnapshot = group.compactedSnapshotIndex > 0n;
+  if (lightValue.commitIndex === undefined &&
+      (!hasSnapshot || ready.hardState === undefined)) {
+    return {ok: true};
+  }
+  const memCommit = hasSnapshot ?
+    String(group.compactedSnapshotIndex) : lightValue.commitIndex;
+  return invokeCoreAt(
+    group, expectedGeneration, CORE_OPERATION.PERSIST_COMMIT_INDEX, memCommit);
 }
 
 function finishReady(group, expectedGeneration, ready) {
@@ -853,11 +1260,10 @@ function finishReady(group, expectedGeneration, ready) {
     } catch (error) {
       return groupHostFailure(group, 'light-ready-persistence', error);
     }
-    const persistedCommit = light.value.commitIndex === undefined ? null :
-      invokeCoreAt(group, expectedGeneration,
-        'persist_commit_index', light.value.commitIndex);
-    if (persistedCommit && !persistedCommit.ok) {
-      return persistedCommit.result;
+    const memCommitted = persistMemCommitIndex(
+      group, expectedGeneration, ready, light.value);
+    if (!memCommitted.ok) {
+      return memCommitted.result;
     }
     const lightSent = sendMessages(group, light.value.messages || []);
     return thenMaybe(lightSent, () => whenPersistenceAdmitted(group, () => {
@@ -882,6 +1288,9 @@ function finishReady(group, expectedGeneration, ready) {
 
 function drainReady(group, expectedGeneration, cycles = 0) {
   if (cycles >= RAFT_RS_READY_DRAIN_MAX_CYCLES) {
+    reportWaitBoundExceeded(group,
+      RUNTIME_FAULT_REPORT.READY_DRAIN_BOUND_EXCEEDED,
+      {cycles, maxCycles: RAFT_RS_READY_DRAIN_MAX_CYCLES});
     return hostFailure(
       RUNTIME_PHASE.READY_DRAIN,
       new Error(RUNTIME_REASON.READY_DRAIN_BOUND_EXCEEDED),
@@ -904,7 +1313,22 @@ function drainReady(group, expectedGeneration, cycles = 0) {
     return taken.result;
   }
   try {
+    // Native SnapshotMetadata does not carry the sender's configuration-only
+    // generation. Persist it as unknown until the group-neutral checkpoint
+    // owner supplies an exact descriptor; never substitute this receiver's
+    // current generation or the snapshot's ordinary applied index.
     group.store.persistReady(group.groupId, taken.value);
+    const snapshot = taken.value.snapshot?.metadata;
+    if (snapshot !== undefined) {
+      const generation = snapshot.membershipGenerationIndex;
+      group.membershipGenerationKnown = generation !== undefined &&
+        generation !== null;
+      if (group.membershipGenerationKnown) {
+        group.membershipGenerationIndex = BigInt(generation);
+      }
+    }
+    group.persistedLastIndex = persistedLastIndexAfter(
+      group.persistedLastIndex, taken.value);
   } catch (error) {
     return groupHostFailure(group, RUNTIME_PHASE.READY_PERSISTENCE, error);
   }
@@ -939,6 +1363,7 @@ function announce(group, expectedGeneration) {
   const before = group.lastStatus;
   group.lastStatus = now;
   const observed = recordStatusObservation(group, expectedGeneration, now);
+  announceAppliedProgress(group, expectedGeneration, observed);
   if (before && now.raftState !== before.raftState) {
     group.emit(ROLE[now.raftState] || ROLE[0]);
   }
@@ -963,6 +1388,15 @@ function announce(group, expectedGeneration) {
   }
 }
 
+function announceAppliedProgress(group, expectedGeneration, observed) {
+  if (!observed.ok ||
+      (group.announcedAppliedRuntimeGeneration === expectedGeneration &&
+        observed.value.appliedIndex <= group.announcedAppliedIndex)) return;
+  group.announcedAppliedRuntimeGeneration = expectedGeneration;
+  group.announcedAppliedIndex = observed.value.appliedIndex;
+  group.emit(RUNTIME_EVENT.APPLIED_PROGRESS);
+}
+
 // A conf-change proposal is taken only at the leader's port; one the core
 // would drop is deferred typed - read from the core's status and
 // configuration in this turn (verification V2, round 2 F-1).
@@ -982,22 +1416,11 @@ function refusedConfChange(group, expectedGeneration, change) {
 }
 
 // The configuration's voter-bearing and learner parts as one comparable key.
-function confStateKeyOf(confState) {
-  const sorted = (ids) => [...(ids || [])].map(String).sort();
-  return JSON.stringify([
-    sorted(confState.voters),
-    sorted(confState.votersOutgoing),
-    sorted(confState.learners),
-    sorted(confState.learnersNext),
-    confState.autoLeave === true,
-  ]);
-}
-
 // The applied ConfState is announced when it differs from the one last
 // announced, and first after every (re)construction: the transition the core
 // itself applied, never a prediction or a row.
 function announceMembership(group, {confState, appliedIndex}, status) {
-  const key = confStateKeyOf(confState);
+  const key = raftRsConfStateKey(confState);
   if (key === group.announcedConfStateKey) {
     return;
   }
@@ -1027,7 +1450,16 @@ function readGroupObservation(group, expectedGeneration, rawStatus = null) {
   // configuration: the index whose apply left the core holding it (commit
   // may run ahead of it), never the core's status.applied.
   return {ok: true, value: {status: status.value, confState: conf.value,
-    ...observedParticipation(group), runtimeHealth, runtimeGeneration}};
+    ...observedParticipation(group),
+    // The persisted last index of this same observation (the last entry or
+    // snapshot the store wrote), so a reader can tell an applied log from
+    // one with entries still to apply.
+    lastIndex: group.persistedLastIndex,
+    configurationKey: raftRsConfStateKey(conf.value),
+    membershipGenerationIndex: group.membershipGenerationKnown ?
+      Number(group.membershipGenerationIndex) : null,
+    lifecycleIncarnation: group.lifecycleIncarnation,
+    runtimeHealth, runtimeGeneration}};
 }
 
 // One applied index per observation: the participation gate's, recorded with
@@ -1086,6 +1518,10 @@ function readStatusInRecovery(group) {
 }
 
 function readStatusNow(group) {
+  if (runtimeHealth === REPLACING) return runtimeRecoveryOutcome(group);
+  if (runtimeHealth !== HEALTHY) {
+    return withinGroup(group, () => readStatusUndrained(group));
+  }
   if (runtimeHealth === HEALTHY && group.health === RECOVERY_REQUIRED) {
     return readStatusInRecovery(group);
   }
@@ -1094,7 +1530,7 @@ function readStatusNow(group) {
 
 function readStatusObserved(group) {
   if ((group.tail === null && group.inbound.length === 0) ||
-      group.statusObservation === null) {
+      group.statusObservation === NO_STATUS_OBSERVATION) {
     return readStatusUndrained(group);
   }
   if (group.inbound.length > 0) {
@@ -1257,6 +1693,8 @@ function answerRefusedProposal(group, expectedGeneration, refused) {
 }
 
 const COMMAND_OPERATION = Object.freeze({
+  [RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP]: (group, command, generation) =>
+    answerCommittedLearnerAction(group, readGroupStatus(group, generation), command.query),
   [RUNTIME_COMMAND.READ_STATUS]: (group, command, generation) =>
     readGroupStatus(group, generation),
   [RUNTIME_COMMAND.CAMPAIGN]: (group, command, generation) =>
@@ -1267,11 +1705,51 @@ const COMMAND_OPERATION = Object.freeze({
     probePeerProgress(group, generation, command.peerAddress),
   [RUNTIME_COMMAND.TRANSFER_LEADERSHIP]: (group, command, generation) =>
     transferLeadership(group, generation, command.transfer),
+  [RUNTIME_COMMAND.PROPOSE_MEMBERSHIP_TRANSITION]:
+    (group, command, generation) =>
+      proposeMembershipTransition({
+        group, expectedGeneration: generation, command: command.transition,
+        runtimeGeneration, invokeCoreAt,
+        leaderReplicaIdOf: semanticLeaderIdentity, answerRefusedProposal,
+        drainReady, thenMaybe,
+      }),
 });
 const PROPOSE_CONF_CHANGE = 'propose-conf-change';
+const TICK_COMMAND = 'tick';
 const PROPOSAL_COMMANDS = new Set(['propose', PROPOSE_CONF_CHANGE]);
 
+// What the closed participation gate refuses (O1: a replica not yet
+// admitted may not campaign or serve): every proposal, and a tick that could
+// campaign. A tick of a core that is not promotable - a gated joiner is a
+// learner of its own configuration until the AddNode that opens its gate is
+// applied - enters the core: raft-rs advances its election timer and never
+// campaigns it (tick_election returns before MsgHup), so its view of time,
+// and the check-quorum lease built on it, never freezes. A gated core that
+// is promotable (a record written before joiners opened as learners) keeps
+// the refusal: ticked, it would campaign.
+function gatedCommandRefusal(group, command, expectedGeneration) {
+  if (command.type !== TICK_COMMAND) {
+    return participationGateClosed();
+  }
+  const status = invokeCoreAt(group, expectedGeneration, 'status');
+  if (!status.ok) {
+    return status.result;
+  }
+  return status.value.promotable === false ? null :
+    participationGateClosed();
+}
+
+// While the opening's prior-existence fact is not durable (verifier N3) the
+// core is entered for a status read only: no tick (a founder would campaign
+// and vote for itself), no proposal, campaign, transfer or probe.
+const COMMANDS_BEFORE_IDENTITY_RECORD = new Set([
+  RUNTIME_COMMAND.READ_STATUS, RUNTIME_COMMAND.DRAIN_INBOUND]);
+
 function performCommand(group, command, expectedGeneration) {
+  if (!group.identityRecorded &&
+      !COMMANDS_BEFORE_IDENTITY_RECORD.has(command.type)) {
+    return identityUnrecorded();
+  }
   if (Object.hasOwn(COMMAND_OPERATION, command.type)) {
     return COMMAND_OPERATION[command.type](group, command, expectedGeneration);
   }
@@ -1281,7 +1759,10 @@ function performCommand(group, command, expectedGeneration) {
     [PROPOSE_CONF_CHANGE]: ['propose_conf_change_v2', [command.change]],
   }[command.type];
   if (primitive && !group.gateOpen) {
-    return participationGateClosed();
+    const refused = gatedCommandRefusal(group, command, expectedGeneration);
+    if (refused !== null) {
+      return refused;
+    }
   }
   if (!primitive) {
     return outcome(CORE_REFUSED, {
@@ -1305,27 +1786,48 @@ function performCommand(group, command, expectedGeneration) {
     invoked.result;
 }
 
-function drainInbound(group, expectedGeneration, continuation) {
-  if (group.inbound.length === 0) {
-    return continuation();
+function acknowledgePendingSnapshot(group, expectedGeneration, message) {
+  const from = String(message?.from);
+  const pending = group.pendingSnapshotPeers.get(from);
+  if (pending === undefined ||
+      message?.msgType !== RAFT_RS_MESSAGE_TYPE.HEARTBEAT_RESPONSE ||
+      BigInt(message.commit || RAFT_RS_INITIAL_APPLIED) < BigInt(pending)) {
+    return null;
   }
+  group.pendingSnapshotPeers.delete(from);
+  const ack = invokeCoreAt(group, expectedGeneration, 'step', {
+    msgType: RAFT_RS_MESSAGE_TYPE.APPEND_RESPONSE,
+    from: message.from, to: group.peerId, term: message.term,
+    index: message.commit, reject: false,
+  });
+  return !ack.ok && ack.result.outcome !== CORE_REFUSED ? ack.result : null;
+}
+
+function drainInbound(group, expectedGeneration, remaining, continuation) {
+  const refused = refusedExecution(group, expectedGeneration);
+  if (refused !== null) return refused;
+  if (!group.identityRecorded) group.inbound.length = 0;
+  if (remaining === 0 || group.inbound.length === 0) return continuation();
   const envelope = group.inbound.shift();
-  const stepped = invokeCoreAt(
-    group, expectedGeneration, 'step', envelope.message);
-  // The core refusing a delivered envelope is that envelope's outcome, not
-  // the turn's: it is recorded against its sender and dropped (raft re-sends
-  // what a peer still needs), and the drain goes on to the rest of the
-  // delivered envelopes and then the command, on the state they leave. A
-  // failure of the core or of the group is the turn's.
+  // The local-log guard decides before the core is entered: a refused
+  // envelope is recorded against its sender and never stepped; one that
+  // proves this replica's history lost holds the group and ends the turn.
+  const guarded = refuseInboundStep(group, envelope, expectedGeneration);
+  if (guarded !== null) {
+    return group.reseedHold ??
+      drainInbound(group, expectedGeneration, remaining - 1, continuation);
+  }
+  const snapFailure = acknowledgePendingSnapshot(
+    group, expectedGeneration, envelope.message);
+  if (snapFailure !== null) return snapFailure;
+  const stepped = invokeCoreAt(group, expectedGeneration, 'step', envelope.message);
   if (!stepped.ok) {
-    if (stepped.result.outcome !== CORE_REFUSED) {
-      return stepped.result;
-    }
+    if (stepped.result.outcome !== CORE_REFUSED) return stepped.result;
     recordInboundStepRefusal(group, envelope, stepped.result);
   }
   return thenMaybe(drainReady(group, expectedGeneration), (result) =>
     result.outcome === CORE_OK ?
-      drainInbound(group, expectedGeneration, continuation) : result);
+      drainInbound(group, expectedGeneration, remaining - 1, continuation) : result);
 }
 
 function perform(group, command) {
@@ -1342,7 +1844,10 @@ function perform(group, command) {
       return ready;
     }
     const expectedGeneration = runtimeGeneration;
-    return drainInbound(group, expectedGeneration,
+    // Capture only after reconstruction admits execution. Later arrivals keep
+    // their place in the group queue and their existing owned inbound wake.
+    const inboundExtent = group.inbound.length;
+    return drainInbound(group, expectedGeneration, inboundExtent,
       () => performCommand(group, command, expectedGeneration));
   });
 }
@@ -1358,13 +1863,23 @@ function perform(group, command) {
 // envelopes stay queued and the drain retries on the group's own timers,
 // outside the queue, until the store admits persistence again or the
 // admission bound passes (then the next operation drains them).
+function armInboundWake(group, delayMs) {
+  group.inboundDrainScheduled = true;
+  try {
+    armOwnedInboundDrainTimer(group, delayMs, () => runScheduledInboundDrain(group));
+  } catch (error) {
+    group.inboundDrainScheduled = false;
+    throw error;
+  }
+}
+
 function scheduleInboundDrain(group) {
   if (group.inboundDrainScheduled) {
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.COALESCED);
     return;
   }
-  group.inboundDrainScheduled = true;
-  group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    INBOUND_DRAIN_DELAY_MS)?.unref?.();
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.REQUEST);
+  armInboundWake(group, INBOUND_DRAIN_DELAY_MS);
 }
 
 function retryInboundDrainWhenAdmitted(group) {
@@ -1373,25 +1888,44 @@ function retryInboundDrainWhenAdmitted(group) {
       group.timers.now() + PERSISTENCE_ADMISSION_WAIT.BOUND_MS;
   }
   if (group.timers.now() >= group.inboundDrainDeadline) {
+    reportWaitBoundExceeded(group,
+      RUNTIME_FAULT_REPORT.INBOUND_DRAIN_ADMISSION_BOUND_EXCEEDED, {
+        elapsedMs: group.timers.now() -
+          (group.inboundDrainDeadline - PERSISTENCE_ADMISSION_WAIT.BOUND_MS),
+        queuedInbound: group.inbound.length,
+      });
     group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.WAIT_BOUND);
     return;
   }
-  group.inboundDrainScheduled = true;
-  group.timers.setTimeout(() => runScheduledInboundDrain(group),
-    PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS)?.unref?.();
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RETRY_REQUEST);
+  armInboundWake(group, PERSISTENCE_ADMISSION_WAIT.POLL_INTERVAL_MS);
 }
 
 function runScheduledInboundDrain(group) {
   group.inboundDrainScheduled = false;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CALLBACK);
   if (group.closed || group.inbound.length === 0) {
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
     group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.CLOSED_OR_EMPTY);
+    return;
+  }
+  if (runtimeHealth !== HEALTHY) {
+    // A shared core rebuild temporarily excludes this exact accepted group.
+    // The resumption owner reoffers its wake after publishing healthy.
+    group.inboundWakeDebt = INBOUND_WAKE_DEBT.SHARED_RUNTIME;
+    group.inboundDrainDeadline = null;
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.RUNTIME_HELD);
     return;
   }
   if (!persistenceAdmitted(group)) {
+    reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.PERSISTENCE_WAIT);
     retryInboundDrainWhenAdmitted(group);
     return;
   }
   group.inboundDrainDeadline = null;
+  reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.TURN_REQUEST);
   const drained = group.admitScheduledEntry(() => enqueue(group, () =>
     perform(group, {type: RUNTIME_COMMAND.DRAIN_INBOUND})));
   if (drained && typeof drained.catch === 'function') {
@@ -1402,10 +1936,12 @@ function runScheduledInboundDrain(group) {
 // A status read and the committed-membership read answer from the recorded
 // observation without queueing; every other command takes the group's turn.
 function executeCommand(group, command) {
+  if (runtimeHealth === REPLACING) return runtimeRecoveryOutcome(group);
   if (command?.type === RUNTIME_COMMAND.READ_STATUS) {
     return readStatusNow(group);
   }
-  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP) {
+  if (command?.type === RUNTIME_COMMAND.READ_COMMITTED_MEMBERSHIP &&
+      command.purpose !== COMMITTED_MEMBERSHIP_READ_PURPOSE.LEARNER_ACTION) {
     return thenMaybe(readStatusNow(group), (status) =>
       answerCommittedMembership(group, status, command.purpose));
   }
@@ -1421,15 +1957,31 @@ function snapshotEnvelope(envelope) {
 }
 
 function createRuntimeDispatcher(request) {
+  // This is a refused opening, not admitted work or a second recovery driver.
+  // Existing groups retain the continuation; a final close clears a failed
+  // attempt so a later legitimate fresh opening is not permanently stranded.
+  if (runtimeHealth !== HEALTHY) {
+    const refused = runtimeRecoveryOutcome(request);
+    throw Object.assign(new Error(refused.reason), {consensus: refused});
+  }
   const store = new RaftRsDurableStore(request.database);
   const group = {
     key: nextGroupKey++,
     groupId: request.groupId,
     replicaIdentity: request.replicaIdentity,
     peerId: request.peerId,
+    lifecycleIncarnation: request.lifecycleIncarnation,
+    readOpeningHistory: request.readOpeningHistory,
+    recordOpeningHistory: request.recordOpeningHistory,
     bootstrap: request.bootstrap,
+    // Whether the opening's prior-existence fact is durable: false only for
+    // an opening whose host writes that fact after the port opened (a
+    // CREATE_REPLICA target), until recordIdentity is asked.
+    identityRecorded: request.identityRecordPending !== true,
     gate: null,
     appliedIndex: null,
+    membershipGenerationIndex: 0n,
+    membershipGenerationKnown: true,
     gateOpen: false,
     timing: request.timing,
     timers: request.timers,
@@ -1438,22 +1990,45 @@ function createRuntimeDispatcher(request) {
     resolvePeerAddress: request.resolvePeerAddress,
     resolvePeerIdentity: request.resolvePeerIdentity,
     applyCommittedEntry: request.applyCommittedEntry,
+    applyCommittedMembershipContext: request.applyCommittedMembershipContext,
+    readLearnerOriginEvidence: request.readLearnerOriginEvidence,
     applyTransactionRolledBack: request.applyTransactionRolledBack,
+    snapshotCatchupNeeded: request.snapshotCatchupNeeded,
+    runApplySlice: request.runApplySlice,
     admitScheduledEntry: request.admitScheduledEntry,
+    holdForReseed: request.holdForReseed,
+    reportFault: request.reportFault,
     emit: request.emit,
     handle: null,
+    persistedLastIndex: 0n,
+    compactedSnapshotIndex: 0n,
+    pendingSnapshotPeers: new Map(),
+    reseedHold: null,
+    reseedHoldRecorded: false,
+    reseedHoldWriteFailures: 0,
     lastStatus: null,
-    statusObservation: null,
+    statusObservation: NO_STATUS_OBSERVATION,
     announcedConfStateKey: CONF_STATE_NOT_ANNOUNCED,
+    announcedAppliedRuntimeGeneration: null,
+    announcedAppliedIndex: null,
     health: USABLE,
+    pendingRuntimeResume: null,
+    runtimeResumeTimer: null,
     recovery: null,
     entered: 0,
     tail: null,
     inbound: [],
     inboundDrainScheduled: false,
+    inboundDrainTimer: null,
+    inboundWakeDebt: INBOUND_WAKE_DEBT.NONE,
     inboundDrainDeadline: null,
     peerDelivery: new Map(),
+    // One group-wide membership lane means one transient stage fence is
+    // sufficient. A committed ConfChange advances membershipGenerationIndex,
+    // making the retained fence stale without accumulating terminal keys.
+    membershipTransitionFence: null,
     inboundStepRefusals: new Map(),
+    inboundRefusalReports: new Map(),
     closed: false,
   };
   groups.set(group.key, group);
@@ -1465,8 +2040,12 @@ function createRuntimeDispatcher(request) {
     opening.result;
   if (opened.outcome === CORE_REFUSED ||
       (opening.ok && opened.outcome !== CORE_OK)) {
+    const released = group.handle !== null && runtimeHealth === HEALTHY ?
+      invokeCore(group, 'free') : {ok: true};
+    group.handle = null;
     groups.delete(group.key);
-    throw Object.assign(new Error(opened.reason), {consensus: opened});
+    throw Object.assign(new Error(opened.reason), {consensus: opened,
+      ...(released.ok ? {} : {cleanupFailure: released.result})});
   }
   const first = opening.ok ? invokeCore(group, 'status') : {ok: false};
   if (first.ok) {
@@ -1475,6 +2054,10 @@ function createRuntimeDispatcher(request) {
   }
   return Object.freeze({
     enqueueStep: Object.freeze((envelope) => {
+      if (runtimeHealth === REPLACING || (runtimeRecovery !== null &&
+          runtimeRecovery.clock.now() < runtimeRecovery.retryNotBefore)) {
+        return runtimeRecoveryOutcome(group);
+      }
       const admission = admitRaftRsMessage({
         envelope,
         localGroupId: group.groupId,
@@ -1494,12 +2077,28 @@ function createRuntimeDispatcher(request) {
       if (group.health === RECOVERY_REQUIRED && insideRetryWindow(group)) {
         return recoveryOutcome(group, RUNTIME_REASON.RECOVERY_DEFERRED);
       }
+      if (group.reseedHold !== null) {
+        return recordReseedHold(group);
+      }
+      // Before the prior-existence fact is durable a delivery is a lost
+      // message: dropped unstepped, answered as no refusal (its sender sees
+      // an unreachable peer, never a hostile or held one).
+      if (!group.identityRecorded) {
+        return outcome(CORE_OK, {
+          reason: PARTICIPATION_GATE.INBOUND_DROPPED_IDENTITY_UNRECORDED});
+      }
       group.inbound.push(snapshotEnvelope(envelope));
+      reportNativeInboundStage(group, NATIVE_INBOUND_STAGE.ACCEPTED);
       scheduleInboundDrain(group);
       return outcome(CORE_OK, {reason: RUNTIME_REASON.INBOUND_ENQUEUED});
     }),
     execute: Object.freeze((command) => executeCommand(group, command)),
-    participationGateOpen: Object.freeze(() => group.gateOpen === true),
+    // The acknowledgement that the opening's prior-existence fact is
+    // durable: taken in the group's turn, so no turn sees it change.
+    recordIdentity: Object.freeze(() =>
+      enqueue(group, () => recordIdentity(group))),
+    participationGateOpen: Object.freeze(() => runtimeHealth === HEALTHY &&
+      group.health === USABLE && group.gateOpen === true),
     configureTiming: Object.freeze((timing) => {
       group.timing = deepFreeze({...group.timing, ...timing});
       return true;
@@ -1508,16 +2107,39 @@ function createRuntimeDispatcher(request) {
       containUnexpectedThrow(group, error)),
     close: Object.freeze(({enterCore}) => {
       group.closed = true;
+      group.inboundWakeDebt = INBOUND_WAKE_DEBT.NONE;
+      const timerCleanupError = cancelOwnedInboundDrainTimer(group);
+      // Even a timer-clear failure must not skip release of the native group.
+      const complete = (result) => {
+        if (timerCleanupError === null) return result;
+        return result.outcome === CORE_OK ?
+          outcome(HOST_FAILURE, {
+            phase: RUNTIME_PHASE.INBOUND_TIMER_CLEANUP,
+            reason: String(timerCleanupError?.message ?? timerCleanupError),
+            timerCleanupError}) :
+          outcome(result.outcome, {...result, timerCleanupError});
+      };
+      cancelRuntimeResumption(group);
+      if (runtimeHealth === REPLACING) {
+        return complete(outcome(CORE_OK, {
+          reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY}));
+      }
       groups.delete(group.key);
+      if (groups.size === 0 && runtimeHealth !== HEALTHY) {
+        core = null;
+        runtimeRecovery = null;
+        runtimeHealth = HEALTHY;
+        group.handle = null;
+      }
       // A failed group's node lives in the current core until it is freed.
       if (!enterCore || group.handle === null || runtimeHealth !== HEALTHY) {
-        return outcome(CORE_OK, {
+        return complete(outcome(CORE_OK, {
           reason: RUNTIME_REASON.CLOSED_WITHOUT_CORE_ENTRY,
-        });
+        }));
       }
       const freed = invokeCore(group, 'free');
-      return freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) :
-        freed.result;
+      return complete(freed.ok ? outcome(CORE_OK, {reason: RUNTIME_REASON.CLOSED}) :
+        freed.result);
     }),
   });
 }
@@ -1526,10 +2148,26 @@ function setActualCoreEntryObserver(observer) {
   actualCoreEntryObserver = typeof observer === 'function' ? observer : null;
 }
 
+function setNativeInboundStageObserver(observer) {
+  nativeInboundStageObserver = typeof observer === 'function' ? observer : null;
+}
+
+/**
+ * Test seam: a fault injected at the core boundary (see coreFaultInjector).
+ * @param {Function|null} injector - (groupId, operation, args) => void, or
+ *   null to remove it.
+ */
+function setCoreFaultInjector(injector) {
+  coreFaultInjector = typeof injector === 'function' ? injector : null;
+}
+
 export {
   CORE_OK,
   CORE_REFUSED,
+  NATIVE_INBOUND_STAGE,
   createRuntimeDispatcher,
   setActualCoreEntryObserver,
+  setNativeInboundStageObserver,
+  setCoreFaultInjector,
   verifyRaftRsBinding,
 };

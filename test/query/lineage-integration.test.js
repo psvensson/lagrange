@@ -1,10 +1,8 @@
 /**
- * Tests for lineage ID attachment to stage artifacts and
- * primitive requests.
+ * Tests for lineage ID attachment to primitive requests.
  *
  * Verifies that LineageTracker integrates correctly with
- * CallbackStageExecutor, ShuffleBuffer (emit), executeLookup,
- * and BroadcastStore.
+ * ShuffleBuffer (emit), executeLookup, and BroadcastStore.
  *
  * Requirements: 9.2
  */
@@ -13,9 +11,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   LineageTracker,
 } from '../../src/query/lineage-tracker.js';
-import {
-  CallbackStageExecutor,
-} from '../../src/query/callback/callback-stage-executor.js';
 import {
   ShuffleBuffer,
 } from '../../src/query/emit-primitive.js';
@@ -33,103 +28,6 @@ import {
   LOOKUP_ACCESS_PATH,
   PRIMITIVE_TYPE,
 } from '../../src/query/distributed/distributed-context-constants.js';
-import {
-  STAGE_ARTIFACT_TYPE,
-  STAGE_BATCH_ARTIFACT_TYPE,
-} from '../../src/query/callback/callback-stage-constants.js';
-
-// --- CallbackStageExecutor lineage ---
-
-test('stage executor attaches lineage to stage result',
-  async (t) => {
-    const tracker = new LineageTracker('q-stage-1');
-    const cb = async (_ctx, batch) => batch.rows;
-    const executor = new CallbackStageExecutor({
-      callback: cb,
-      lineageTracker: tracker,
-      stageIndex: 2,
-    });
-
-    const result = await executor.execute([
-      {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-    ]);
-
-    const expected = ['q-stage-1', '2', STAGE_ARTIFACT_TYPE, '0']
-      .join(SEP);
-    t.equal(result[GF.LINEAGE_ID], expected);
-    t.end();
-  });
-
-test('stage executor attaches lineage to partition results',
-  async (t) => {
-    const tracker = new LineageTracker('q-stage-2');
-    const cb = async (_ctx, batch) => batch.rows;
-    const executor = new CallbackStageExecutor({
-      callback: cb,
-      lineageTracker: tracker,
-      stageIndex: 0,
-    });
-
-    const result = await executor.execute([
-      {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-      {partitionId: 'p2', rows: [{v: 2}], rowCount: 1},
-    ]);
-
-    const pr0 = result.partitionResults[0];
-    const pr1 = result.partitionResults[1];
-    t.equal(
-      pr0[GF.LINEAGE_ID],
-      ['q-stage-2', '0', STAGE_BATCH_ARTIFACT_TYPE, '0'].join(SEP),
-    );
-    t.equal(
-      pr1[GF.LINEAGE_ID],
-      ['q-stage-2', '0', STAGE_BATCH_ARTIFACT_TYPE, '1'].join(SEP),
-    );
-    t.end();
-  });
-
-test('stage executor attaches lineage to failed partitions',
-  async (t) => {
-    const tracker = new LineageTracker('q-stage-3');
-    const cb = async () => {
-      throw new Error('fail');
-    };
-    const executor = new CallbackStageExecutor({
-      callback: cb,
-      lineageTracker: tracker,
-      stageIndex: 1,
-    });
-
-    const result = await executor.execute([
-      {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-    ]);
-
-    const pr = result.partitionResults[0];
-    t.equal(
-      pr[GF.LINEAGE_ID],
-      ['q-stage-3', '1', STAGE_BATCH_ARTIFACT_TYPE, '0'].join(SEP),
-    );
-    t.end();
-  });
-
-test('stage executor omits lineage when no tracker',
-  async (t) => {
-    const cb = async (_ctx, batch) => batch.rows;
-    const executor = new CallbackStageExecutor({
-      callback: cb,
-    });
-
-    const result = await executor.execute([
-      {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
-    ]);
-
-    t.equal(result[GF.LINEAGE_ID], undefined);
-    t.equal(
-      result.partitionResults[0][GF.LINEAGE_ID],
-      undefined,
-    );
-    t.end();
-  });
 
 // --- ShuffleBuffer (emit) lineage ---
 

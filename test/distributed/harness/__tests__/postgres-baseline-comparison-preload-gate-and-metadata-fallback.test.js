@@ -24,6 +24,8 @@ import {
 } from '../__fixtures__/postgres-baseline-node-admission-replay-fixtures.js';
 import {QUERY_DEFAULTS} from '../../../../src/query/query-constants.js';
 
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
 
 describe('postgres-baseline-comparison scenario', () => {
   it('rechecks transient leadership-unknown invariant before failing strict preload gate',
@@ -218,11 +220,8 @@ describe('postgres-baseline-comparison scenario', () => {
                 }],
               };
             }
-            if (statement.startsWith('UPDATE partitions SET table_name')) {
-              return {rows: [], changes: 1};
-            }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             if (statement.includes('FROM services')) {
               return {
@@ -486,11 +485,8 @@ describe('postgres-baseline-comparison scenario', () => {
                 }],
               };
             }
-            if (statement.startsWith('UPDATE partitions SET table_name')) {
-              return {rows: [], changes: 1};
-            }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             if (statement.includes('FROM services')) {
               return {
@@ -601,9 +597,6 @@ describe('postgres-baseline-comparison scenario', () => {
             statement.includes('FROM partitions')) {
             throw new Error('local system table partition is not available');
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           return {rows: []};
         },
       };
@@ -625,11 +618,8 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
-            return {rows: [], changes: 1};
-          }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -740,8 +730,7 @@ describe('postgres-baseline-comparison scenario', () => {
     const joinerMutationStatements = [];
     const benchmarkTableProbeSql = 'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
     const benchmarkTableDdlPrefix = 'CREATE TABLE IF NOT EXISTS benchmark_events';
-    const benchmarkTablePolicyPrefix = 'UPDATE tables SET table_policies';
-    const benchmarkPartitionRepairPrefix = 'UPDATE partitions SET table_name';
+    const benchmarkTablePolicyWrite = 'updateTablePolicy';
     const provider = {
       createContainer: async (_options) => ({
         containerId: 'benchmark-postgres-1',
@@ -765,6 +754,10 @@ describe('postgres-baseline-comparison scenario', () => {
     const seedNode = {
       id: 'seed-1',
       role: 'seed',
+      updateTablePolicy: async () => {
+        seedMutationStatements.push(benchmarkTablePolicyWrite);
+        return {success: true, outcome: 'applied'};
+      },
       query: async (sql) => {
         const statement = String(sql);
         if (statement === 'SELECT 1') {
@@ -781,16 +774,11 @@ describe('postgres-baseline-comparison scenario', () => {
           seedMutationStatements.push(statement);
           throw new Error('query timed out');
         }
-        if (statement.startsWith(benchmarkTablePolicyPrefix) ||
-          statement.startsWith(benchmarkPartitionRepairPrefix)) {
-          seedMutationStatements.push(statement);
-          return {rows: [], changes: 1};
-        }
         if (statement.includes('FROM tables')) {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -798,6 +786,10 @@ describe('postgres-baseline-comparison scenario', () => {
     const joinerNode = {
       id: 'joiner-1',
       role: 'joiner',
+      updateTablePolicy: async () => {
+        joinerMutationStatements.push(benchmarkTablePolicyWrite);
+        return {success: true, outcome: 'applied'};
+      },
       query: async (sql) => {
         const statement = String(sql);
         if (statement === 'SELECT 1') {
@@ -810,9 +802,7 @@ describe('postgres-baseline-comparison scenario', () => {
           statement.includes('status NOT IN')) {
           return {rows: []};
         }
-        if (statement.startsWith(benchmarkTableDdlPrefix) ||
-          statement.startsWith(benchmarkTablePolicyPrefix) ||
-          statement.startsWith(benchmarkPartitionRepairPrefix)) {
+        if (statement.startsWith(benchmarkTableDdlPrefix)) {
           joinerMutationStatements.push(statement);
           return {rows: [], changes: 1};
         }
@@ -820,7 +810,7 @@ describe('postgres-baseline-comparison scenario', () => {
           return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
         }
         if (statement.includes('FROM partitions')) {
-          return {rows: [{partition_id: 'p1'}]};
+          return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
         }
         return {rows: []};
       },
@@ -903,6 +893,10 @@ describe('postgres-baseline-comparison scenario', () => {
         statement.startsWith(benchmarkTableDdlPrefix)),
       'canonical node should receive benchmark table create mutation',
     );
+    assert.ok(
+      arrayIncludes(seedMutationStatements, benchmarkTablePolicyWrite),
+      'canonical node should receive the table-policy owner write',
+    );
     assert.equal(
       joinerMutationStatements.length,
       0,
@@ -921,8 +915,6 @@ describe('postgres-baseline-comparison scenario', () => {
         'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
       const benchmarkTableDdlPrefix =
         'CREATE TABLE IF NOT EXISTS benchmark_events';
-      const benchmarkTablePolicyPrefix = 'UPDATE tables SET table_policies';
-      const benchmarkPartitionRepairPrefix = 'UPDATE partitions SET table_name';
       const provider = {
         createContainer: async (_options) => ({
           containerId: 'benchmark-postgres-1',
@@ -958,16 +950,14 @@ describe('postgres-baseline-comparison scenario', () => {
             statement.includes('status NOT IN')) {
             return {rows: []};
           }
-          if (statement.startsWith(benchmarkTableDdlPrefix) ||
-            statement.startsWith(benchmarkTablePolicyPrefix) ||
-            statement.startsWith(benchmarkPartitionRepairPrefix)) {
+          if (statement.startsWith(benchmarkTableDdlPrefix)) {
             return {rows: [], changes: 1};
           }
           if (statement.includes('FROM tables')) {
             return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
           }
           if (statement.includes('FROM partitions')) {
-            return {rows: [{partition_id: 'p1'}]};
+            return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
           }
           return {rows: []};
         },
@@ -1225,11 +1215,8 @@ describe('postgres-baseline-comparison scenario', () => {
             if (statement.includes('FROM tables')) {
               return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
             }
-            if (statement.startsWith('UPDATE partitions SET table_name')) {
-              return {rows: [], changes: 1};
-            }
             if (statement.includes('FROM partitions')) {
-              return {rows: [{partition_id: 'p1'}]};
+              return {rows: [{partition_id: 'p1', table_id: 'tbl-benchmark', table_name: 'benchmark_events'}]};
             }
             return {rows: []};
           },

@@ -1,5 +1,11 @@
 import {COLUMN, ENTITY_TYPE, STATE} from
   '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {RAFT_OPERATION_OUTCOME} from '../raft/raft-operation-port-constants.js';
+import {HEALTHY, PEER_ADDRESS_STATUS, USABLE} from '../raft/raft-rs-runtime-owner-constants.js';
+import {CDC_COMPLETION, hasDurableCdcEvents} from '../cdc/cdc-delivery-outcome.js';
+import {cdcDeliveryBudgetError} from '../cdc/cdc-delivery-budget.js';
+import {CDC_FORWARD_MAX_RELAY_DEPTH} from './message-group-service-runtime-support.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -12,6 +18,9 @@ import {
 } from './message-group-target-resolver.js';
 import {
   MESSAGE_GROUP_CDC_LOG_CONTEXT_FIELD,
+  MESSAGE_GROUP_CDC_FORWARD_MODE,
+  MESSAGE_GROUP_CDC_INGRESS_ACTION,
+  MESSAGE_GROUP_CDC_INGRESS_STATE,
   MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE,
   MESSAGE_GROUP_CDC_RELAY_CONVERGENCE_MIN_DEPTH,
   MESSAGE_GROUP_FORWARDING_OWNER_LITERAL,
@@ -21,38 +30,136 @@ import {
 const MESSAGE_GROUP_FORWARDING_OWNER_ROUTING_LITERAL = Object.freeze({
   CONSTRUCTOR: 'constructor',
 });
+const MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE = Object.freeze({
+  CACHE_SELECTION_REQUIRED: 'cache_selection_required',
+});
+
+// Binding custody stays private to this owner. Public targets expose no port,
+// native object, command authority or reusable opening grant.
+const nativeForwardBindings = new WeakMap();
+const NATIVE_FORWARD_BINDING_FIELDS = Object.freeze([
+  'groupId', 'replicaIdentity', 'peerId', 'term', 'role', 'leaderId', 'leaderAddress',
+  'configurationKey', 'membershipGenerationIndex', 'lifecycleIncarnation',
+  'runtimeGeneration', 'bootstrapIndex', 'admissionIndex',
+]);
+
+function usableNativeCdcStatus(service, status) {
+  return status?.outcome === RAFT_OPERATION_OUTCOME.CORE_OK &&
+    status.groupId === service.groupId && status.replicaIdentity === service.replicaId &&
+    status.runtimeHealth === HEALTHY && status.groupHealth === USABLE &&
+    status.gateOpen === true && status.identityRecorded === true;
+}
+
+function nativeCdcObservation(service) {
+  if (service.isShutdown || !service.initialized || !service.raft) return null;
+  const port = service.raft;
+  try {
+    const status = port.readStatus();
+    return usableNativeCdcStatus(service, status) ? {port, status} : null;
+  } catch {
+    return null;
+  }
+}
+
+function observedNativeLeaderTarget(service, observation) {
+  if (observation === null) return null;
+  const {status} = observation;
+  if (!status.leaderId || status.leaderId === service.replicaId ||
+      status.leaderAddressStatus !== PEER_ADDRESS_STATUS.RESOLVED) return null;
+  const peer = status.peers.find((candidate) =>
+    candidate.replicaIdentity === status.leaderId);
+  if (!peer || peer.learner || peer.addressStatus !== PEER_ADDRESS_STATUS.RESOLVED ||
+      peer.address !== status.leaderAddress) return null;
+  const target = Object.freeze({serviceId: status.leaderId, address: status.leaderAddress});
+  nativeForwardBindings.set(target, observation);
+  return target;
+}
+
+function durableCacheTargetConstraint(service, logContext) {
+  if (!hasDurableCdcEvents(logContext.events ?? [logContext])) return null;
+  const observation = nativeCdcObservation(service);
+  return (replicaId) => nativeCacheTargetEligible(observation, replicaId);
+}
+
+function nativeCacheTargetEligible(observation, replicaId) {
+  if (observation === null) return false;
+  const {status} = observation;
+  return (!status.leaderId || status.leaderId === replicaId) &&
+    status.peers.some((peer) => peer.replicaIdentity === replicaId && peer.learner !== true);
+}
 
 class MessageGroupForwardingOwnerRoutingMethods {
   resolveLiveLeaderForwardTarget() {
+    return observedNativeLeaderTarget(this.service, nativeCdcObservation(this.service));
+  }
+
+  isNativeCdcForwardTarget(target) {
+    return nativeForwardBindings.has(target);
+  }
+
+  assertNativeForwardTarget(target) {
+    const bound = nativeForwardBindings.get(target);
+    const current = nativeCdcObservation(this.service);
+    if (!bound || !current || bound.port !== current.port ||
+        !NATIVE_FORWARD_BINDING_FIELDS.every((field) =>
+          bound.status[field] === current.status[field])) throw cdcDeliveryBudgetError();
+    const resolved = observedNativeLeaderTarget(this.service, current);
+    if (resolved?.serviceId !== target.serviceId || resolved?.address !== target.address) {
+      throw cdcDeliveryBudgetError();
+    }
+  }
+
+  assertCachedCdcForwardTarget(target, address) {
+    const current = nativeCdcObservation(this.service);
+    if (!nativeCacheTargetEligible(current, target.serviceId) ||
+        observedNativeLeaderTarget(this.service, current) !== null) {
+      // Missing leader location cannot conceal a contrary leader, removed
+      // voter or closed participation. A resolved leader gets a fresh decision.
+      throw cdcDeliveryBudgetError();
+    }
+    const peer = current.status.peers.find((candidate) =>
+      candidate.replicaIdentity === target.serviceId);
+    if (peer.addressStatus === PEER_ADDRESS_STATUS.RESOLVED && peer.address !== address) {
+      throw cdcDeliveryBudgetError();
+    }
+  }
+
+  resolveNativeCdcIngressDecision(logContext) {
     const service = this.service;
-    const leaderServiceId = service.normalizeLeaderReplicaId(service.leaderId);
-    if (leaderServiceId === service.replicaId) {
-      return null;
+    const observation = nativeCdcObservation(service);
+    const common = {strictForwarding: service.shouldUseStrictCDCForwarding(logContext),
+      strictForwardRetryAfterMs: service.resolveStrictCdcForwardRetryAfterMs()};
+    if (logContext.targetGroupId !== undefined && logContext.targetGroupId !== service.groupId) {
+      return this.nativeCdcIngressUnavailable(common);
     }
-    if (!leaderServiceId) {
-      return null;
+    if (observation?.status.role === RAFT_ROLE.LEADER && service.isCurrentRaftLeader()) {
+      return this.buildCdcIngressDecision({...common, ready: true,
+        action: MESSAGE_GROUP_CDC_INGRESS_ACTION.APPLY_LOCAL,
+        state: MESSAGE_GROUP_CDC_INGRESS_STATE.LOCAL_RAFT_LEADER});
     }
+    if (logContext.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT) {
+      return this.nativeCdcIngressUnavailable(common);
+    }
+    const target = observedNativeLeaderTarget(service, observation);
+    if (target === null) {
+      return {state: MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE.CACHE_SELECTION_REQUIRED};
+    }
+    if (service.isForwardTargetSuppressed(target)) {
+      return this.nativeCdcIngressUnavailable({...common, suppressedCount: 1});
+    }
+    if (logContext.relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
+      return this.nativeCdcIngressUnavailable(common);
+    }
+    return this.buildCdcIngressDecision({...common, ready: true,
+      action: MESSAGE_GROUP_CDC_INGRESS_ACTION.FORWARD,
+      state: MESSAGE_GROUP_CDC_INGRESS_STATE.FORWARD_NATIVE_LEADER, targets: [target]});
+  }
 
-    let address =
-      service.resolveLivePeerAddressFromRaftNodes(leaderServiceId) ||
-      service.resolvePeerAddressFromCache(leaderServiceId);
-    if ((typeof address !== 'string' || address.length === 0) &&
-        service.shouldAllowJoinConvergenceStrictTargeting()) {
-      address = service.resolvePeerAddressFromHints(leaderServiceId);
-      if (typeof address === 'string' &&
-          address.length > 0 &&
-          typeof service.logBootstrapHintFallback === 'function') {
-        service.logBootstrapHintFallback(leaderServiceId, address);
-      }
-    }
-    if (typeof address !== 'string' || address.length === 0) {
-      return null;
-    }
-
-    return {
-      serviceId: leaderServiceId,
-      address,
-    };
+  nativeCdcIngressUnavailable(common) {
+    return this.buildCdcIngressDecision({...common, ready: false,
+      action: MESSAGE_GROUP_CDC_INGRESS_ACTION.DEFER,
+      state: MESSAGE_GROUP_CDC_INGRESS_STATE.DEFER_NATIVE_TARGET_UNAVAILABLE,
+      reason: CDC_COMPLETION.UNKNOWN});
   }
 
   normalizeLeaderReplicaId(candidate) {
@@ -76,32 +183,25 @@ class MessageGroupForwardingOwnerRoutingMethods {
     return candidate;
   }
 
-  resolveLivePeerAddressFromRaftNodes(peerId) {
+  // The address this replica's own consensus configuration places a peer
+  // at: the runtime's resolution of a configured voter or learner.
+  resolveLivePeerAddressFromConsensus(peerId) {
     const service = this.service;
-    if (typeof peerId !== 'string' ||
-        peerId.length === 0 ||
-        !service.raft ||
-        !Array.isArray(service.raft.nodes)) {
+    if (typeof peerId !== 'string' || peerId.length === 0 || !service.raft) {
       return null;
     }
-
-    for (const node of service.raft.nodes) {
-      const address = node?.address;
-      if (typeof address !== 'string' || address.length === 0) {
-        continue;
-      }
-      try {
-        const parsed = service.addressManager.parse(address);
-        if (parsed.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
-            parsed.serviceId === peerId) {
-          return address;
-        }
-      } catch (_error) {
-        // Ignore non-unified or stale addresses; callers can fall back to cache.
-      }
+    const status = service.raft.readStatus();
+    if (status?.outcome !== RAFT_OPERATION_OUTCOME.CORE_OK ||
+        status.groupId !== service.groupId || status.replicaIdentity !== service.replicaId) {
+      return null;
     }
-
-    return null;
+    const peers = status.peers;
+    const peer = Array.isArray(peers) ?
+      peers.find((candidate) => candidate?.replicaIdentity === peerId) :
+      undefined;
+    return typeof peer?.address === 'string' && peer.address.length > 0 ?
+      peer.address :
+      null;
   }
 
   resolveCDCForwardSelection(logContext = {}) {
@@ -160,6 +260,7 @@ class MessageGroupForwardingOwnerRoutingMethods {
       {
         strictForwarding,
         strictRecoveryRoutingContract,
+        acceptsNativeTarget: durableCacheTargetConstraint(service, logContext),
       },
     );
 
@@ -311,8 +412,9 @@ class MessageGroupForwardingOwnerRoutingMethods {
     let suppressedCount = 0;
     let recoveryCandidateWidened = false;
     const targetsByServiceId = new Map();
+    const acceptsNativeTarget = options.acceptsNativeTarget ?? (() => true);
     const addTarget = (serviceId, address = null) => {
-      if (typeof serviceId !== 'string' ||
+      if (!acceptsNativeTarget(serviceId) || typeof serviceId !== 'string' ||
         serviceId.length === 0 ||
         service.isLocalForwardTarget(serviceId, address)) {
         return;
@@ -435,6 +537,9 @@ class MessageGroupForwardingOwnerRoutingMethods {
     if (selection?.strictForwarding !== true) {
       return false;
     }
+    if (hasDurableCdcEvents(logContext.events ?? [logContext]) &&
+        this.resolveLiveLeaderForwardTarget() !== null) return false;
+    if (logContext.cdcForwardMode === MESSAGE_GROUP_CDC_FORWARD_MODE.NATIVE_COMMIT) return false;
 
     if (selection?.strictRecoveryRoutingContract?.state ===
           MESSAGE_GROUP_CDC_RECOVERY_ROUTING_STATE.LOCAL_ONLY &&
@@ -507,4 +612,4 @@ function defineMessageGroupForwardingOwnerRoutingMethods(prototype) {
   Object.defineProperties(prototype, descriptors);
 }
 
-export {defineMessageGroupForwardingOwnerRoutingMethods};
+export {MESSAGE_GROUP_NATIVE_CDC_INGRESS_STATE, defineMessageGroupForwardingOwnerRoutingMethods};

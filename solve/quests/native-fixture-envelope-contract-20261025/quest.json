@@ -1,0 +1,31 @@
+{
+  "schema": "solve-quest/2",
+  "id": "native-fixture-envelope-contract-20261025",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "Finish the affected native transport construction-path repair without changing runtime semantics: all native fixture senders use the single transport envelope owner, application receivers distinguish branded delivery from application answer, handler assertions bind the measured replica incarnation, and WASM native strong-write witnesses submit the current INIT/ENROLL/identity-bound WRITE through the supported lifecycle. Preserve before-commit non-success, exact proposal and receipt, healing of the same caller, and immutable failed-lab attribution. No legacy, fallback or test-only product entry path is admitted.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/native-fixture-envelope-contract-20261025/evidence/receipt.json",
+      "requiredReceipts": [
+        "canonical-native-transport-owner",
+        "delivery-answer-and-incarnation-owner",
+        "admitted-wasm-native-completion",
+        "exact-source-lab-affected-cone",
+        "independent-review-and-applicable-gates"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "scope",
+      "statement": "Only the affected native fixture contract and its bounded test caller migration, local proof, ordinary hooks and exact lab evidence; preserve Q6 and CDC production owners, every other Quest and dirty tree, and the reviewed a781064f source checkpoint. Full W7/W9, fresh-seed, distributed CDC, final static/corpus and main release remain separate."
+    },
+    {
+      "id": "evidence",
+      "statement": "Retain Lab #2053 failure against a781064f and its exact worker/NDJSON digests; local execution does not replace source-pinned lab proof. Do not rewrite the frozen 2026-10-16 historical predecessor results when migrating the current test."
+    }
+  ],
+  "sealedAt": "0094ec4ee142949577db1599bddfc266bcaadde1"
+}

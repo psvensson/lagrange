@@ -1,0 +1,68 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "retained-seed-original-handoff",
+  "status": "pass",
+  "testFileDigests": {
+    "test/bootstrap/retained-seed-original-handoff.integration.test.js": "bb422aa742991678387827f4c7b4e5988351bd86a8eee1659758f629df05fed2",
+    "test/bootstrap/seed-original-attempt-lifetime.test.js": "dcb9242fd6f5d796430048b4ea81859900f66741717cee3dee10b3e8cf603b38"
+  },
+  "generatedAt": "2026-10-27T05:17:45.278Z",
+  "receipts": [
+    {
+      "id": "cold-public-entry-committed-origin-and-original-deadline",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R6 .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Cold public entry reaches the first non-control ENABLE origin commit at the issued 30000ms deadline and completes bounded handoff on cold restart with HANDOFF_COMPLETE_SERVING_DEFERRED.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "prospective-complete-allocation-before-native-effects",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R1 .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Prospective original allocation persists the complete 141-member cohort and owner-minted incarnations before the first native effect.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "nonserving-original-recovery-and-pre-origin-release",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R3 .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Completed cold cohort preserves the committed ENABLE origin, completes remaining pre-origin and existing-origin release across all 46 partition cohorts, and refuses continuation before all 141 open.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "exact-services-and-cluster-identity-handoff",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R4 .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Release-completed cold cohort publishes the exact 141 SERVICES rows and reserved cluster_id and transitions all 142 rights to TRANSFERRED.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "public-admission-and-exact-cleanup-custody",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^R5 .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Public serving admission stays closed across every retained continuation boundary and all native databases and directory custody release cleanly on exit.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "cold-mid-handoff-and-invalid-evidence-holds",
+      "passed": true,
+      "command": "/home/peter/.nvm/versions/node/v22.23.2/bin/node --test-reporter=tap --test-name-pattern=\"^(R2|R7|R8) .*$\" test/bootstrap/retained-seed-original-handoff.integration.test.js",
+      "detail": "Cold retained cohort validates all founders and UNUSED rights before opening, refuses transferred publication rights with SPENT, and fails closed on contrary or partial retained state.",
+      "testFile": "test/bootstrap/retained-seed-original-handoff.integration.test.js"
+    },
+    {
+      "id": "engaged-semantic-negatives-and-owner-regressions",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-original-attempt-lifetime.test.js test/raft/raft-rs-original-allocation-cold-inspection.test.js test/raft/raft-rs-original-allocation-custody.test.js test/raft/raft-rs-original-allocation-preparation.test.js test/raft/raft-rs-original-allocation-lifecycle-operation.test.js test/raft/raft-rs-original-opening-authority.test.js test/raft/raft-rs-original-opening-effect-cut.test.js test/raft/raft-rs-original-opening.test.js test/bootstrap/seed-retained-effects.test.js test/bootstrap/seed-retained-effects-preparation.test.js test/bootstrap/seed-retained-effects.integration.test.js",
+      "detail": "Owner witnesses for original allocation preparation, cold inspection, custody, opening authority, effect cut, and retained effects remain green.",
+      "testFile": "test/bootstrap/seed-original-attempt-lifetime.test.js"
+    },
+    {
+      "id": "independent-correspondence-and-applicable-gates",
+      "passed": true,
+      "command": "node scripts/quest-evidence/retained-seed-original-handoff.js --check-verification && npm run -s test:duplication && npm run -s audit:shards",
+      "detail": "An approving subagent verification newer than the last attempt, read through the solve store owner, and the ratchets outside land.",
+      "testFile": null
+    }
+  ]
+}

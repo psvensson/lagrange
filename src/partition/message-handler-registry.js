@@ -70,7 +70,7 @@ class MessageHandlerRegistry {
         this.logger.warn(LOCAL_STR_UNKNOWN_MESSAGE_TYPE_RECEIVED, {messageType});
       }
       return {
-        acknowledged: false,
+        success: false,
         error: MESSAGE_HANDLER_ERROR_MSG.unknownMessageType(messageType),
       };
     }

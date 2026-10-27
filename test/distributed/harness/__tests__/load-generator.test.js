@@ -235,6 +235,10 @@ function createNodeInFlightTokens(startTokenId, tokenCount, startedAtMs) {
 
 test('waitComplete resolves after duration with metrics', async () => {
   const nodes = [createMockNode('n1'), createMockNode('n2')];
+  assert.throws(
+    () => new LoadGenerator(nodes, {tableName: 'logs'}),
+    /LoadGenerator cannot target protected system table logs/,
+  );
   const gen = new LoadGenerator(nodes, {
     opsPerSec: 200,
     duration: 100,
@@ -506,7 +510,7 @@ test('default workload uses a unique log-id prefix for each run', async () => {
     },
   };
   const extractLogIds = (statements) => statements
-    .filter((sql) => sql.startsWith('INSERT INTO logs '))
+    .filter((sql) => sql.startsWith('INSERT INTO user_load_logs '))
     .map((sql) => {
       const match = sql.match(/VALUES \('([^']+)'/);
       return match ? match[1] : null;

@@ -18,6 +18,14 @@ import {
   countVisibleSatisfiedPriorityRecoveryOperations,
 } from '../harness/post-rebalance-closure-contract.js';
 import {ASSERTIONS_CONVERGENCE_WAIT} from '../harness/assertions-convergence-wait.js';
+import {
+  classifyVoterTargets,
+  readPartitionVoterTargets,
+} from '../harness/convergence-voter-targets.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+} from './user-load-table-and-marker-helpers.js';
 const {queryReachableClusterSnapshot} = ASSERTIONS_CONVERGENCE_WAIT;
 
 const LOAD_OPS_PER_SEC = 50;
@@ -28,12 +36,21 @@ const CONSISTENCY_CONVERGENCE_TIMEOUT_MS = 60000;
 const CONSISTENCY_SNAPSHOT_TIMEOUT_MS = 30000;
 const ZERO_FAILURES = 0;
 const SURVIVING_VOTER_COUNT = 2;
+// One of three nodes is killed and stays dead: two survivors cannot hold a
+// policy replica count of 3, so the post-kill convergence claim is
+// "every partition led and at most two voters", explicitly tolerating
+// under-replication (the verdict names it; it is never silent) down to the
+// floor the situation implies: the two survivors hold two voters, so a
+// partition at one (or zero) voters is still under_target_voters.
+const SURVIVOR_UNDER_REPLICATION_TOLERANCE = Object.freeze({
+  minVoters: SURVIVING_VOTER_COUNT,
+  reason: 'one of three nodes is killed and never restarted: two ' +
+    'survivors cannot hold a policy replica count of three',
+});
 const IGNORE_STALE_IN_FLIGHT_REPLICA_OPERATIONS = true;
-const SQL_LOG_ID_COLUMN = 'log_id';
 const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
 const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
 const ACKNOWLEDGED_WRITE_MISSING_PREVIEW_LIMIT = 10;
-const DEFAULT_ACKNOWLEDGED_WRITE_TABLE = 'logs';
 const CLIENT_ERROR_CLASSIFICATION = Object.freeze({
   CLEAN: 'clean',
   TOLERATED_CLIENT_DISRUPTION: 'tolerated_client_disruption',
@@ -60,12 +77,6 @@ function normalizeRows(result) {
   return [];
 }
 
-function normalizeNonEmptyString(value, fallback) {
-  return typeof value === 'string' && value.length > ZERO_FAILURES ?
-    value :
-    fallback;
-}
-
 function normalizeNodeIdList(values) {
   const candidates = Array.isArray(values) ?
     values :
@@ -88,6 +99,24 @@ function buildAcknowledgedWriteVisibilityQuery(tableName, idColumn, ids) {
     ids.map((id) => '\'' + escapeSql(id) + '\'').join(', ') + ')';
 }
 
+function resolveAcknowledgedWriteTableIdentity(acknowledgedWrites) {
+  const tableName = typeof acknowledgedWrites?.tableName === 'string' ?
+    acknowledgedWrites.tableName.trim() :
+    '';
+  assert.ok(
+    tableName.length > ZERO_FAILURES && tableName !== 'logs',
+    'Acknowledged write durability requires an explicit non-logs user load tableName',
+  );
+  const idColumn = typeof acknowledgedWrites?.idColumn === 'string' ?
+    acknowledgedWrites.idColumn.trim() :
+    '';
+  assert.ok(
+    idColumn.length > ZERO_FAILURES,
+    'Acknowledged write durability requires an explicit idColumn',
+  );
+  return {tableName, idColumn};
+}
+
 async function assertAcknowledgedWritesVisibleOnSurvivors(
   acknowledgedWrites,
   survivingNodes,
@@ -103,13 +132,8 @@ async function assertAcknowledgedWritesVisibleOnSurvivors(
     };
   }
 
-  const tableName = normalizeNonEmptyString(
-    acknowledgedWrites?.tableName,
-    DEFAULT_ACKNOWLEDGED_WRITE_TABLE,
-  );
-  const idColumn = normalizeNonEmptyString(
-    acknowledgedWrites?.idColumn,
-    SQL_LOG_ID_COLUMN,
+  const {tableName, idColumn} = resolveAcknowledgedWriteTableIdentity(
+    acknowledgedWrites,
   );
 
   for (const node of survivingNodes) {
@@ -238,21 +262,73 @@ function emitClientErrorClassification(classification) {
   }
 }
 
+async function verifyPreKillMarkerOnSurvivors(survivingNodes, preKillMarker) {
+  for (const node of survivingNodes) {
+    const preKillRows = normalizeRows(await node.query(
+      'SELECT log_id FROM logs WHERE log_id = \'' +
+      escapeSql(preKillMarker.logId) + '\' LIMIT 1',
+    ));
+    assert.ok(
+      preKillRows.length > ZERO_FAILURES,
+      'Pre-kill diagnostic marker missing after rebalance on node ' +
+      String(node?.id || 'unknown'),
+    );
+  }
+}
+
+function assertSurvivorOwnerDiagnostics(
+  victimId,
+  survivingNodes,
+  publishedActiveNodeIds,
+  projectedActiveNodeIds,
+) {
+  assert.ok(
+    !publishedActiveNodeIds.includes(victimId),
+    `Killed node ${victimId} must not be in publishedActiveNodeIds`,
+  );
+  assert.ok(
+    !projectedActiveNodeIds.includes(victimId),
+    `Killed node ${victimId} must not be in projectedActiveNodeIds`,
+  );
+  for (const node of survivingNodes) {
+    assert.ok(
+      publishedActiveNodeIds.includes(node.id),
+      `Surviving node ${node.id} must be in publishedActiveNodeIds`,
+    );
+    assert.ok(
+      projectedActiveNodeIds.includes(node.id),
+      `Surviving node ${node.id} must be in projectedActiveNodeIds`,
+    );
+  }
+  return {
+    victimNodeId: victimId,
+    survivingNodeIds: survivingNodes.map((node) => node.id).sort(),
+    publishedActiveNodeIds,
+    projectedActiveNodeIds,
+  };
+}
+
 /**
  * Run the node-failure-rebalance scenario.
  *
  * @param {Object} cluster - Cluster handle from the harness.
  */
-async function run(cluster) {
-  // 1. Start sustained write load.
+async function run(cluster, options = {}) {
+  const provisionedTable = await provisionUserLoadTable(cluster, options);
+
+  // 1. Start sustained write load on the provisioned user load table.
   const loadRun = cluster.startLoad({
     opsPerSec: LOAD_OPS_PER_SEC,
     duration: LOAD_DURATION,
+    tableName: provisionedTable.tableName,
     trackAcknowledgedWrites: true,
   });
 
-  // 2. Let load stabilize.
+  // 2. Let load stabilize and record pre-kill system-log marker.
   await new Promise((r) => setTimeout(r, PRE_KILL_SETTLE_MS));
+  const preKillMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'node-failure-rebalance-pre-kill',
+  });
 
   // 3. Kill a random non-seed node via SIGKILL.
   const victimId = cluster.randomNonSeed();
@@ -264,6 +340,7 @@ async function run(cluster) {
     settleTimeoutMs: POST_KILL_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: SURVIVING_VOTER_COUNT,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
   });
 
   assert.ok(
@@ -286,9 +363,14 @@ async function run(cluster) {
     snapshotTimeoutMs: CONSISTENCY_SNAPSHOT_TIMEOUT_MS,
   });
 
-  // 7. Verify the acknowledged-write ledger across all surviving nodes.
+  // 7. Verify the acknowledged-write ledger and diagnostic markers across all surviving nodes.
   const acked = loadRun.getAcknowledgedWrites();
   const survivingNodes = cluster.getNodes().filter((n) => n.id !== victimId);
+  const postRebalanceMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'node-failure-rebalance-post-rebalance',
+    nodes: survivingNodes,
+  });
+  await verifyPreKillMarkerOnSurvivors(survivingNodes, preKillMarker);
   const acknowledgedWriteVisibility =
     await assertAcknowledgedWritesVisibleOnSurvivors(acked, survivingNodes);
   assert.ok(
@@ -306,6 +388,7 @@ async function run(cluster) {
   // 8. Assert post-rebalance closure contract holds
   const snapshot = await queryReachableClusterSnapshot(survivingNodes, {
     targetVoterCount: SURVIVING_VOTER_COUNT,
+    tolerateUnderReplication: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
   });
   const publishedActiveNodeIds = normalizeNodeIdList(
     snapshot.publishedActiveNodeIds,
@@ -344,6 +427,19 @@ async function run(cluster) {
       ) :
       snapshot.inFlightReplicaOperationCount;
 
+  const voterTargetRead = await readPartitionVoterTargets(survivingNodes, {
+    preferNodeId: snapshot.nodeId,
+  });
+  const voterTargetVerdict = classifyVoterTargets({
+    expectedPartitionIds: snapshot.expectedPartitionIds,
+    membershipFreezeActive: latestControlPlaneDiagnostics?.activeNodeViews
+      ?.membershipFreeze?.active === true,
+    policyPartitionIds: voterTargetRead.partitionIds,
+    tolerance: SURVIVOR_UNDER_REPLICATION_TOLERANCE,
+    voterCeiling: SURVIVING_VOTER_COUNT,
+    voterCounts: snapshot.voterCounts,
+    voterTargets: voterTargetRead.targets,
+  });
   const isSatisfied = isPostRebalanceCdcProjectionVisibleSatisfied({
     expectedPartitionIds: Array.from(snapshot.expectedPartitionIds),
     leaders: snapshot.leaders,
@@ -358,39 +454,23 @@ async function run(cluster) {
     publishedActiveNodeIds,
     projectedActiveNodeIds,
     controlPlaneDiagnostics: latestControlPlaneDiagnostics,
+    voterTargetVerdict,
   });
 
   assert.ok(
     isSatisfied,
-    'Post-rebalance CDC projection visibility contract must be satisfied',
+    'Post-rebalance CDC projection visibility contract must be satisfied ' +
+    `(voters: ${voterTargetVerdict.state})`,
   );
   console.log('[CLOSURE-VERIFICATION] Post-rebalance closure proven successfully.');
 
   // 9. Assert owner diagnostics match the expected failure/recovery path (victim ejected, survivors active)
-  assert.ok(
-    !publishedActiveNodeIds.includes(victimId),
-    `Killed node ${victimId} must not be in publishedActiveNodeIds`,
-  );
-  assert.ok(
-    !projectedActiveNodeIds.includes(victimId),
-    `Killed node ${victimId} must not be in projectedActiveNodeIds`,
-  );
-  for (const node of survivingNodes) {
-    assert.ok(
-      publishedActiveNodeIds.includes(node.id),
-      `Surviving node ${node.id} must be in publishedActiveNodeIds`,
-    );
-    assert.ok(
-      projectedActiveNodeIds.includes(node.id),
-      `Surviving node ${node.id} must be in projectedActiveNodeIds`,
-    );
-  }
-  const ownerDiagnostics = {
-    victimNodeId: victimId,
-    survivingNodeIds: survivingNodes.map((node) => node.id).sort(),
+  const ownerDiagnostics = assertSurvivorOwnerDiagnostics(
+    victimId,
+    survivingNodes,
     publishedActiveNodeIds,
     projectedActiveNodeIds,
-  };
+  );
   console.log(
     `[OWNER-DIAGNOSTICS] Victim node ${victimId} ejected ` +
     'and surviving nodes active in control plane.',
@@ -409,6 +489,11 @@ async function run(cluster) {
     loadMetrics: metrics,
     convergenceTiming: convergence,
     killedNodeId: victimId,
+    tableName: provisionedTable.tableName,
+    diagnosticMarkers: {
+      preKill: preKillMarker,
+      postRebalance: postRebalanceMarker,
+    },
     acknowledgedWriteVisibility,
     postRebalanceClosure: {
       satisfied: isSatisfied,
@@ -422,4 +507,4 @@ async function run(cluster) {
   };
 }
 
-export {run};
+export {assertAcknowledgedWritesVisibleOnSurvivors, run};

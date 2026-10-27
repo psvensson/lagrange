@@ -6,6 +6,7 @@ import {
   ServiceTypeAdapterNotImplementedError,
   assertKnownServiceType,
 } from './service-lifecycle-errors.js';
+import {WASM_CREATION_CURRENT} from '../wasm-service/wasm-service-constants.js';
 
 const LOCAL_STR_SERVICETYPEADAPTER_IS_ABSTRACT_AND_CANNO = 'ServiceTypeAdapter is abstract and cannot be instantiated directly';
 const LOCAL_STR_SERVICETYPE = 'serviceType';
@@ -14,6 +15,9 @@ const LOCAL_STR_CREATEREPLICA = 'createReplica';
 const LOCAL_STR_STARTREPLICA = 'startReplica';
 const LOCAL_STR_STOPREPLICA = 'stopReplica';
 const LOCAL_STR_HEALTH = 'health';
+// The typed answer of an adapter without retained bound creations (design
+// RECOVERY-DESIGN-20261017 R2-F N11): partition and message-group adapters.
+const SERVICE_TYPE_ADAPTER_INSPECTION = Object.freeze({UNSUPPORTED: 'UNSUPPORTED'});
 
 class ServiceTypeAdapter {
   /**
@@ -90,6 +94,21 @@ class ServiceTypeAdapter {
       LOCAL_STR_HEALTH,
     );
   }
+
+  /**
+   * The local half of one inventoried bound creation (design
+   * RECOVERY-DESIGN-20261017 R1-A, R2-F N11); typed UNSUPPORTED by default.
+   * @param {Object} _owned - {consensusCreation: {intent, token, opening}}.
+   * @return {Promise<{outcome: string}>}
+   */
+  async inspectRetainedCreation(_owned) {
+    return {outcome: SERVICE_TYPE_ADAPTER_INSPECTION.UNSUPPORTED};
+  }
+
+  /** Synchronous exact current-creation observation, unavailable by default. */
+  observeCurrentCreation(_owned) {
+    return {outcome: WASM_CREATION_CURRENT.UNAVAILABLE};
+  }
 }
 
-export {ServiceTypeAdapter};
+export {ServiceTypeAdapter, SERVICE_TYPE_ADAPTER_INSPECTION};

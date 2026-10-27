@@ -18,9 +18,12 @@ import {
   CDC_AUTHORITY_CLASS,
   CDC_BOOTSTRAP_HYDRATION_MODE,
   CDC_POLICY_CLASS,
+  CDC_TABLE_POLICY_REFUSAL,
+  SYSTEM_TABLE_CDC_POLICIES,
+  assertTablePolicyCdcRequestSupported,
   getSystemTableCdcPolicy,
   getTableCdcPolicy,
-  isExternalCdcAllowedForTable,
+  isTableCdcObligationRecorded,
   isTableCdcReadinessRelevant,
   isTableInternalCachePropagationEnabled,
 } from '../../src/cache/cdc-table-policy.js';
@@ -161,7 +164,7 @@ test('system-table CDC policy registry classifies control-plane tables explicitl
       'services should only hydrate through bootstrap snapshot flow',
     );
     t.equal(
-      isExternalCdcAllowedForTable(TABLES.SERVICES),
+      getTableCdcPolicy(TABLES.SERVICES).externalCdcAllowed,
       false,
       'system services metadata should not be treated as client CDC by default',
     );
@@ -233,23 +236,23 @@ test('sql_write_operations stays out of internal propagation and readiness',
     );
   });
 
-test('user tables default to user CDC policy without control-plane readiness',
+test('user tables default to no CDC: no external CDC, no propagation, no readiness',
   async (t) => {
     const benchmarkPolicy = getTableCdcPolicy('benchmark_events');
     t.equal(
-      benchmarkPolicy?.policyClass,
-      CDC_POLICY_CLASS.USER_EXTERNAL_CDC,
-      'benchmark_events should default to user CDC policy',
+      benchmarkPolicy.policyClass,
+      CDC_POLICY_CLASS.USER_NO_CDC,
+      'benchmark_events should default to the no-CDC user policy (owner decision D2)',
     );
     t.equal(
-      benchmarkPolicy?.authorityClass,
+      benchmarkPolicy.authorityClass,
       CDC_AUTHORITY_CLASS.USER,
       'benchmark_events should be classified as user data',
     );
     t.equal(
-      benchmarkPolicy?.internalCachePropagation,
+      benchmarkPolicy.externalCdcAllowed,
       false,
-      'user tables should not enter internal cache propagation by default',
+      'external user-table CDC is off until a consumer path exists',
     );
     t.equal(
       isTableCdcReadinessRelevant('benchmark_events'),
@@ -261,9 +264,39 @@ test('user tables default to user CDC policy without control-plane readiness',
       false,
       'user tables should not hydrate into the system cache by default',
     );
-    t.equal(
-      isExternalCdcAllowedForTable('benchmark_events'),
-      true,
-      'user tables should remain eligible for shared CDC delivery',
-    );
   });
+
+// --- the recording rule (owner decision D2) ---
+
+test('a CDC obligation is recorded exactly for the 23 internally propagated system ' +
+  'tables: never for a user table or a non-propagated system table', async (t) => {
+  const recorded = Object.keys(SYSTEM_TABLE_CDC_POLICIES)
+    .filter((tableName) => isTableCdcObligationRecorded(tableName)).sort();
+  t.same(recorded, [...CDC_PROPAGATED_TABLES].sort(),
+    'recorded system tables equal CDC_PROPAGATED_TABLES');
+  t.equal(recorded.length, 23, 'the 23 propagated tables keep their internal obligation');
+  for (const tableName of CDC_NON_PROPAGATED_TABLES) {
+    t.equal(isTableCdcObligationRecorded(tableName), false,
+      `${tableName} owes no CDC obligation`);
+  }
+  for (const tableName of ['benchmark_events', 'test_table', '', null, undefined]) {
+    t.equal(isTableCdcObligationRecorded(tableName), false,
+      `user table ${String(tableName)} owes no CDC obligation`);
+  }
+});
+
+test('a table policy that requests external CDC is refused typed at admission; an ' +
+  'explicit false or an absent request is admitted', async (t) => {
+  for (const policy of [{externalCdcAllowed: true},
+    {changeDataCapture: {externalCdcAllowed: true}},
+    {splitStorageThreshold: 1, externalCdcAllowed: true}]) {
+    t.throws(() => assertTablePolicyCdcRequestSupported(policy),
+      {code: CDC_TABLE_POLICY_REFUSAL.EXTERNAL_CDC_UNSUPPORTED},
+      `${JSON.stringify(policy)} is refused external_cdc_unsupported`);
+  }
+  for (const policy of [{}, null, undefined, {externalCdcAllowed: false},
+    {changeDataCapture: {externalCdcAllowed: false}}, {splitStorageThreshold: 1}]) {
+    t.doesNotThrow(() => assertTablePolicyCdcRequestSupported(policy),
+      `${JSON.stringify(policy)} is admitted`);
+  }
+});

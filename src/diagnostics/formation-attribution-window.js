@@ -3,6 +3,7 @@ import {Session} from 'node:inspector';
 import {join} from 'node:path';
 
 import {FormationTurnAttribution} from './formation-turn-attribution.js';
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 
 /**
  * The seed's formation attribution window (formation-calibration-run).
@@ -25,7 +26,7 @@ const ATTRIBUTION_ENV = 'LAGRANGE_FORMATION_ATTRIBUTION';
 const DEADLINE_ENV = 'LAGRANGE_FORMATION_ATTRIBUTION_DEADLINE_MS';
 const PROFILE_DIR_ENV = 'LAGRANGE_FORMATION_PROFILE_DIR';
 const ENABLED_VALUE = '1';
-const DEFAULT_DEADLINE_MS = 300000;
+const DEFAULT_DEADLINE_MS = 300000; // ends-on: the formed signal (SIGUSR2) arrives
 const SNAPSHOT_INTERVAL_MS = 10000;
 const PROFILE_FLUSH_INTERVAL_MS = 60000;
 const FORMED_SIGNAL = 'SIGUSR2';
@@ -34,6 +35,10 @@ const PROFILE_FILE_SUFFIX = '.cpuprofile';
 const PROFILER_ENABLE = 'Profiler.enable';
 const PROFILER_START = 'Profiler.start';
 const PROFILER_STOP = 'Profiler.stop';
+const FORMED_SIGNAL_WAIT = Object.freeze({
+  wait: 'LAGRANGE_FORMATION_ATTRIBUTION_DEADLINE_MS',
+  awaited: 'the seed formed signal ending the attribution window',
+});
 const SNAPSHOT_STEP = 'snapshot';
 const END_STEP = 'end';
 const END_REASON = Object.freeze({
@@ -199,6 +204,15 @@ class FormationAttributionWindow {
       }, PROFILE_FLUSH_INTERVAL_MS));
     }
     this.deadlineHandle = unref(this.setTimeoutFn(() => {
+      reportWaitBoundSpent(this.logger, {
+        ...FORMED_SIGNAL_WAIT,
+        boundMs: this.deadlineMs,
+        lastObserved: {
+          formedSignal: FORMED_SIGNAL,
+          ended: this.ended,
+          measurementFailed: this.measurementFailed,
+        },
+      });
       this.end(END_REASON.DEADLINE);
     }, this.deadlineMs));
     this.signals.on(FORMED_SIGNAL, this.onFormedSignal);

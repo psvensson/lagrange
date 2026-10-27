@@ -10,6 +10,11 @@ import {
   CONVERGENCE_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
 } from '../harness/constants.js';
+import {
+  provisionUserLoadTable,
+  recordAndVerifyDiagnosticMarker,
+  resolveUserLoadTableName,
+} from './user-load-table-and-marker-helpers.js';
 
 const ZERO = 0;
 const DEFAULT_ACTION_COUNT = 3;
@@ -113,6 +118,7 @@ function resolveInClusterChaosInjectionScenarioConfig(options = {}) {
       options.loadDuration.length > ZERO ?
       options.loadDuration :
       '60s',
+    tableName: resolveUserLoadTableName(options.tableName),
     preChaosDelayMs: Number.isFinite(options.preChaosDelayMs) ?
       Number(options.preChaosDelayMs) :
       SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
@@ -240,9 +246,14 @@ async function run(cluster, options = {}) {
     'Scenario requires at least one valid chaos action',
   );
 
+  const provisionedTable = await provisionUserLoadTable(cluster, {
+    tableName: config.tableName,
+  });
+
   const loadRun = cluster.startLoad({
     opsPerSec: config.loadOpsPerSec,
     duration: config.loadDuration,
+    tableName: provisionedTable.tableName,
   });
 
   await sleep(config.preChaosDelayMs);
@@ -310,10 +321,16 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + config.minSuccessRate + ')',
   );
 
+  const diagnosticMarker = await recordAndVerifyDiagnosticMarker(cluster, {
+    markerId: 'in-cluster-chaos-injection-post-recovery',
+  });
+
   return {
     seed: config.seed,
     actionCount: config.actionCount,
     actionTimeline,
+    tableName: provisionedTable.tableName,
+    diagnosticMarker,
     loadMetrics: metrics,
     successRate,
   };

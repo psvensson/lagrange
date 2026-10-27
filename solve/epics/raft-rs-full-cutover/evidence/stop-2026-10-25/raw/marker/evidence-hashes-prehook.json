@@ -1,0 +1,13 @@
+{
+  "red.log": "8b255914d2524161b514cd90986f4f7c00bf0b1ed8ba58c2d7941f2e53754cfe",
+  "green-owner-callers-final.log": "ee693d1fdcb1aadb0c987b6e750b8bce827c0a7dd799e8260d01b10cc5f56168",
+  "green-scenario-diagnostics-final.log": "1890b9a58f6ac064928fa8577d35623d0dc875d0671d601c49cebb855d4479e0",
+  "native-r1.log": "2ed7672a4d367fb0dcec9020559c35f477431e977464a751109738e4d2c309c5",
+  "native-r2-diagnostic.log": "f208a9a383c1ab281593637db190b6ecfdbc2132304638a5957b9d88ad6a4f4b",
+  "native-r3-exact-append.log": "e919df7e816e57c77df65416540081d62c7e477b307c50b5a1a0680521bfb15b",
+  "native-r3-exact-append.tap": "85eed80e5733397db71be43118c507b4438cc1ef78097d31fc3ca00cf15c4a90",
+  "native-r3-exact-append.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "function-metric-delta.json": "5349acb4c9e40ca2c9182dd482bc3438c36202be585ca9e32e29f0d533c1b964",
+  "function-metric-changes.json": "f259a38cf6560e2515ecd286341cb2507a308c53469d588b90fef86de6e02af6",
+  "complexity-contract-final.log": "12b2416e9c307ef4feca1136591d345328e8b8a2f70a98946514e6768a8f583f"
+}

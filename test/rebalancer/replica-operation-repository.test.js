@@ -50,7 +50,8 @@ import {
   SQL_RECONCILIATION_REASON,
 } from '../../src/control-plane/read-model-contract.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../../src/rebalancer/rebalancer-constants.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../../src/partition/partition-service-constants.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {createTestCoordinator} from './test-helpers.js';
 import {registerReplicaOperationRepositoryDeferredVisibilityTests} from './replica-operation-repository-deferred-visibility-test-cases.js';
 import {registerReplicaOperationRepositoryIncompleteVisibilityTests} from './replica-operation-repository-incomplete-visibility-test-cases.js';
@@ -159,7 +160,6 @@ function createTestRepository(overrides = {}) {
     controlPlaneReadinessService: overrides.controlPlaneReadinessService || null,
     logger: mockLogger,
     emitter: overrides.emitter || null,
-    random: overrides.random,
   });
 }
 
@@ -907,6 +907,46 @@ test('CL-017(b): zero-row update with missing authoritative row re-inserts the o
   );
 });
 
+test('missing authoritative row never resurrects a stale create admission tuple',
+  async (t) => {
+    const executedSql = [];
+    const repo = createTestRepository({
+      authoritativeVisibilityTimeoutMs: 0,
+      controlPlaneSystemTableGateway: {
+        executeQuery: async (sql) => {
+          executedSql.push(sql);
+          return {success: true, changes: 0};
+        },
+        readRows: async () => ({success: true, rows: []}),
+      },
+    });
+    const operation = repo.rowToOperation(makeRow({
+      status: 'failed',
+      workflow_step: WORKFLOW_STEP.FAILED,
+      completed_at: 300,
+      updated_at: 300,
+      create_admission_state: 'CLOSED',
+      create_admission_token: 'admission-token',
+      create_admission_replica_created_at: 100,
+      create_admission_attempt_token: 'attempt-token',
+      create_admission_previous_attempt_token: null,
+      create_admission_attempt_seq: 1,
+      create_admission_workflow_updated_at: 200,
+      create_admission_owner_incarnation: 101,
+    }));
+
+    const persisted = await repo.persistOperationUpdate(operation, {
+      expectedWorkflowStep: WORKFLOW_STEP.SENDING,
+    });
+
+    t.equal(persisted, false,
+      'row loss defers rather than recreating stale admission authority');
+    t.notOk(
+      executedSql.some((sql) => sql.trim().toUpperCase().startsWith('INSERT')),
+      'stale CLOSED admission tuple is never reinserted',
+    );
+  });
+
 test('CL-017(b): zero-row update with VISIBLE authoritative row does not re-insert', async (t) => {
   const executedSql = [];
   const repo = createTestRepository({
@@ -989,6 +1029,6 @@ registerReplicaOperationRepositoryTailTests({
   READ_MODEL_DIVERGENCE_TYPE,
   SQL_RECONCILIATION_REASON,
   REBALANCE_COORDINATOR_EVENT,
-  PARTITION_SERVICE_ERROR_MSG,
+  PARTITION_WRITE_LEADERSHIP_REFUSAL,
   createTestCoordinator,
 });

@@ -8,6 +8,7 @@ import {
 } from '../src/bootstrap/rejoin-hints.js';
 import {
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
+  MEMBERSHIP_OWNER_REASON,
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../src/bootstrap/rejoin-hints-constants.js';
@@ -115,6 +116,29 @@ function createDecisionOptions(dataDir, env = {}, overrides = {}) {
     ...overrides,
   };
 }
+
+test('resolveStartupJoinDecision preserves the membership owner\'s typed isolated seed hold',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'entrypoint-seed-hold-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+    await persistBootstrapRejoinHints({bootIncarnation: TEST_BOOT_INCARNATION,
+      dataDir, nodeId: TEST_NODE_ID, nodeAddress: TEST_NODE_ADDRESS,
+      nodeRole: 'seed', peerAddresses: [], clusterNodeCount: 1,
+      now: () => TEST_UPDATED_AT});
+    await t.rejects(resolveStartupJoinDecision(createDecisionOptions(dataDir, {}, {
+      probePeerAddress: TEST_PROBE_MISS,
+    })), {
+      code: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+      reason: MEMBERSHIP_OWNER_REASON.SEED_RECOVERY_PROOF_MISSING,
+      membershipOwnerOutcome: {
+        semanticOwner: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.SEMANTIC_OWNER,
+        boundary: TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT.BOUNDARY,
+        outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+        reasonCode: MEMBERSHIP_OWNER_REASON.SEED_RECOVERY_PROOF_MISSING,
+        durableStateDetected: true,
+      },
+    }, 'the public boundary retains the exact blocked owner result; it grants no recovery');
+  });
 
 test(
   'resolveStartupJoinDecision keeps explicit seed when durable peer is recovered but unprobed',

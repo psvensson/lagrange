@@ -2,6 +2,7 @@
 
 import {spawnSync} from 'node:child_process';
 
+import {spawnGit} from './checks/git-invocation.js';
 import {OUTCOME, PROOF, resolveProof} from './proof-authority.js';
 
 const GIT_FAILED_FALLBACK = 'git failed';
@@ -27,7 +28,7 @@ const STEPS = Object.freeze([
 ]);
 
 function gitOutput(args) {
-  const result = spawnSync('git', args, {
+  const result = spawnGit(args, {
     cwd: process.cwd(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],

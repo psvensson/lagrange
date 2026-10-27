@@ -1,13 +1,12 @@
+import {RESUME_TRIGGER} from './group-retirement-resume.js';
 import {randomUUID} from 'node:crypto';
 
-import {TABLES} from '../constants/index.js';
-
-const LOCAL_STR_FUNCTION = 'function';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
-  PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
+import {registrationInputsRefusalOf} from
+  './managed-workflow-registration-inputs.js';
 import {
   WORKFLOW_DEFAULT_NODE_ID,
 } from '../workflow/workflow-constants.js';
@@ -33,6 +32,24 @@ function buildSplitWorkflowOwnerId(options, nodeId) {
   return options.workflowOwnerId ||
     String(nodeId || WORKFLOW_DEFAULT_NODE_ID) +
       `-split-${randomUUID()}`;
+}
+
+/**
+ * Hand the table's current record to the owner's durable group-retirement
+ * resume after a refused start (it arms the foreign lease's expiry wait when
+ * the record is retiring; anything else re-runs on the caller's own retry).
+ * @param {Object} owner - The workflow owner.
+ * @param {Object|null} tableInfo - The record as read at the start.
+ * @return {void}
+ */
+function resumeAfterRefusedStart(owner, tableInfo) {
+  if (typeof owner.resumeGroupRetirement !== 'function' || !tableInfo) {
+    return;
+  }
+  const tableId = String(tableInfo.table_id ?? tableInfo.tableId ?? '');
+  const current = (owner.listTableInfos?.() || []).find((row) =>
+    String(row?.table_id ?? '') === tableId) || tableInfo;
+  owner.resumeGroupRetirement(current, RESUME_TRIGGER.START_REFUSED).catch(() => {});
 }
 
 /**
@@ -94,6 +111,26 @@ class ManagedSplitWorkflowOwnershipMethods {
   }
 
   /**
+   * The registration's partitions-row inputs re-validated at its change's
+   * turn against the compared record (managed-workflow-registration-inputs).
+   * @param {Object} registration
+   * @param {Object|null} storedRow - The compared `tables` row.
+   * @return {string|null} The input that moved, or null.
+   * @private
+   */
+  registrationInputsRefusal(registration, storedRow) {
+    const metadata = registration.metadata || {};
+    const sourcePartitionId = String(metadata[
+      PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID] || '');
+    return registrationInputsRefusalOf(this, {registration, storedRow,
+      sourceIds: [sourcePartitionId],
+      deriveSiblings: (tableInfo) => this.resolveSplitSiblingPartitionIds({
+        tableId: registration.tableId, tableInfo, sourcePartitionId,
+        targetPartitionIds: metadata[
+          PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS] || []})});
+  }
+
+  /**
    * Explicit participant transition graph validator, wired into the
    * coordinator as isParticipantTransitionAllowed: only the split
    * source participant has a declared graph (owner-recorded child
@@ -145,191 +182,34 @@ class ManagedSplitWorkflowOwnershipMethods {
   }
 
   /**
-   * Claim durable ownership at workflow start (new fence epoch) and
-   * return the refusal outcome when another owner holds the live lease.
-   * Exactly one node holds the lease; a refused claim is a typed
-   * outcome — this node must not drive the workflow.
+   * The typed outcome of a split whose start-time claim was refused (claim
+   * before register: nothing was written, nothing is registered): a live
+   * foreign lease, or a registration compare-and-swap another owner's write
+   * beat. This node must not drive the workflow; a retiring record is handed
+   * to the durable resume (it waits for that lease's expiry).
    * @param {string} workflowId
    * @param {string} partitionId - Source partition (log context).
-   * @return {Promise<Object|null>} Refusal result, or null when claimed.
+   * @param {Object} registration - registerWorkflowWithClaim's refusal.
+   * @param {Object|null} tableInfo - The record as read.
+   * @return {Object} Refusal result.
    * @private
    */
-  async claimSplitWorkflowAtStart(workflowId, partitionId) {
-    const ownershipClaim = await this.claimSplitWorkflowOwnership(
-      workflowId,
-    );
-    if (ownershipClaim.accepted !== true) {
-      this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
-        workflowId,
-        partitionId,
-        result: ownershipClaim.result,
-      });
-      return {
-        success: false,
-        partitionId,
-        workflowId,
-        ownership: ownershipClaim.result,
-      };
-    }
-    this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIMED, {
+  refuseSplitOwnershipAtStart(workflowId, partitionId, registration,
+    tableInfo) {
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
       workflowId,
       partitionId,
-      fenceToken: ownershipClaim.workflow.fenceToken,
-      ownerId: this.workflowOwnerId,
+      result: registration.refusal,
+      recordOwnerId: registration.recordOwnerId ?? null,
+      recordLeaseExpiresAt: registration.recordLeaseExpiresAt ?? null,
     });
-    return null;
-  }
-  /**
-   * Durable claim persistence for the ownership machinery: the claim
-   * lands through the same tables transition row write, compare-and-
-   * swapped on the previously persisted transition metadata so two
-   * nodes claiming concurrently can never both succeed (the loser's
-   * conditional update matches zero rows because the winner already
-   * rewrote the metadata payload). This mirrors the schema-provisioning
-   * repository's row_version CAS, with the full previous metadata
-   * payload as the version witness (the fence triple is embedded in
-   * that payload, so a metadata match proves the fence epoch we read).
-   * @param {Object} workflow - Claim candidate (carries fenceToken,
-   *   workflowOwnerId, leaseExpiresAt).
-   * @param {Object} [context] - Claim context ({previousWorkflow}).
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistSplitWorkflowClaim(workflow, context = {}) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (!gateway ||
-        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
-      return {accepted: false, workflow};
-    }
-    const previousWorkflow = context.previousWorkflow || {};
-    const expectedSerializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(previousWorkflow),
-    );
-    const serializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(workflow),
-    );
-    const mutationResult = await gateway.updateSystemTableRow(
-      TABLES.TABLES,
-      {
-        table_id: workflow.tableId,
-        partition_transition_metadata: expectedSerializedMetadata,
-      },
-      {
-        partition_transition_metadata: serializedMetadata,
-        updated_at: workflow.updatedAt,
-      },
-      // Claim/renew writes are not epoch transitions: they tolerate
-      // pending cache visibility like every other routine transition
-      // write (the CAS witness, not the cache wait, carries the race
-      // guarantee).
-      this.buildManagedSplitMutationOptions({
-        allowPendingVisibility: true,
-      }),
-    );
-    if (mutationResult?.success === false) {
-      return {accepted: false, workflow};
-    }
-    const affectedRows = Number(
-      mutationResult?.partitionResult?.affectedRows ??
-        mutationResult?.affectedRows,
-    );
-    // Exactly one row must match the previous-metadata witness; zero
-    // means a concurrent claim (or transition) already moved the row.
-    return {accepted: affectedRows === 1, workflow};
-  }
-
-  /**
-   * Durable transition persistence for the ownership machinery: a
-   * fenced workflow transition lands with the FULL transition payload
-   * (epoch fields included) compare-and-swapped on the previously
-   * persisted transition metadata — the same witness the claim CAS
-   * uses. The in-memory assertTransitionFence has already enforced
-   * exact fence/owner/lease; this write adds the durable race guard so
-   * two processes can never both persist a transition at the same
-   * fence epoch. Returns the storage-hook shape ({accepted}); the
-   * machinery throws STALE_FENCE_TOKEN on rejection.
-   * @param {Object} workflow - Transition candidate.
-   * @param {Object} [context] - ({previousWorkflow}).
-   * @return {Promise<Object>} {accepted: boolean, workflow}.
-   * @private
-   */
-  async persistSplitWorkflowTransitionFence(workflow, context = {}) {
-    const gateway = this.getControlPlaneSystemTableGateway();
-    if (!gateway ||
-        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
-      return {accepted: false, workflow};
-    }
-    const previousWorkflow = context.previousWorkflow || {};
-    const expectedSerializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(previousWorkflow),
-    );
-    // Reuse the canonical transition payload builder, then add the CAS
-    // witness to the where-clause.
-    const pendingPartitionVersion = Number(
-      workflow.metadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
-      ],
-    );
-    const serializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(workflow),
-    );
-    const updatePayload = {
-      pending_partition_version: Number.isInteger(pendingPartitionVersion) ?
-        pendingPartitionVersion :
-        null,
-      partition_transition_state: workflow.status,
-      partition_transition_metadata: serializedMetadata,
-      updated_at: workflow.updatedAt,
+    resumeAfterRefusedStart(this, tableInfo);
+    return {
+      success: false,
+      partitionId,
+      workflowId,
+      ownership: registration.refusal, reason: registration.reason ?? null,
     };
-    if (workflow.status ===
-        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
-      const targetIds = workflow.metadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
-      ];
-      const siblingIds = workflow.metadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS
-      ];
-      if (Number.isInteger(pendingPartitionVersion)) {
-        updatePayload.active_partition_version = pendingPartitionVersion;
-        updatePayload.pending_partition_version = null;
-      }
-      if (Array.isArray(targetIds) && targetIds.length > 0) {
-        updatePayload.partition_count = targetIds.length +
-          (Array.isArray(siblingIds) ? siblingIds.length : 0);
-      }
-    }
-    if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
-      updatePayload.pending_partition_version = null;
-    }
-    // Same visibility contract as the canonical persist: routine
-    // transitions tolerate pending cache visibility; the epoch
-    // transitions (cutover promotion, FAILED withdrawal) do not.
-    const isEpochTransition =
-      workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
-      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
-    const mutationResult = await gateway.updateSystemTableRow(
-      TABLES.TABLES,
-      {
-        table_id: workflow.tableId,
-        partition_transition_metadata: expectedSerializedMetadata,
-      },
-      updatePayload,
-      this.buildManagedSplitMutationOptions({
-        allowPendingVisibility: !isEpochTransition,
-        expectedCacheFields: {
-          partition_transition_state: workflow.status,
-          partition_transition_metadata: serializedMetadata,
-        },
-      }),
-    );
-    if (mutationResult?.success === false) {
-      return {accepted: false, workflow};
-    }
-    const affectedRows = Number(
-      mutationResult?.partitionResult?.affectedRows ??
-        mutationResult?.affectedRows,
-    );
-    return {accepted: affectedRows === 1, workflow};
   }
 }
 

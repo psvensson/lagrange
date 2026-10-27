@@ -21,6 +21,7 @@
 //   - The staleness clock reads the current step's step-history timestamp, so an
 //     op wedged in-step past its timeout is retired even when updatedAt is fresh.
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -86,7 +87,7 @@ function buildCoordinatorWithConcurrentOp(concurrentOp, {pingNode}) {
     nodeId: 'seed-node',
     enableTimeouts: false,
     messageRouter: {
-      deliver: async () => ({acknowledged: true, status: 'completed'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {status: 'completed'})),
       getConnectionState: (nodeId) =>
         nodeId === 'down-node' ? 'reconnecting' : 'connected',
       pingNode,

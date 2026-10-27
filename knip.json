@@ -8,6 +8,7 @@
     "src/test-helpers/worker/entry-runner.js",
     "src/test-helpers/worker/admin-cli-direct-runner.js",
     "test/**/*.test.js",
+    "test/**/*-child.js",
     "test/**/*.test-part-*.js",
     "test/**/*test-cases.js",
     "test/distributed/validate-node-join-under-load.js",
@@ -37,6 +38,7 @@
     "@pulumi/pulumi",
     "@pulumi/gcp",
     "jscpd",
+    "madge",
     "node-fetch"
   ]
 }

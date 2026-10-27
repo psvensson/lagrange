@@ -1,0 +1,22 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "snapshot-lifecycle-staging-boundary",
+  "status": "pass",
+  "receipts": [
+    {
+      "id": "symbol-limited-staging-boundary-and-class-refusal",
+      "passed": true,
+      "detail": "Verified via scripts/checks/raft-rs-operation-boundary-audit.js and test/raft/snapshot-lifecycle-staging.test.js: snapshot-install.js and snapshot-receiver-admission.js import only prepareReplicaLifecycleForSnapshot / inspectReplicaLifecycleForSnapshot."
+    },
+    {
+      "id": "staging-identity-idempotence-and-refusal",
+      "passed": true,
+      "detail": "Verified via test/raft/snapshot-lifecycle-staging.test.js (19/19 passing): active incarnation preserved on retry; conflicting, retired, and lifecycle-less surviving native history refused."
+    },
+    {
+      "id": "native-snapshot-install-regression",
+      "passed": true,
+      "detail": "Verified via test/raft/raft-rs-backend/replica-image-checkpoint-transfer.test.js (65/65 passing), test/integration/message-group-learner-runtime-authorization.integration.test.js (72/72 passing), and test/raft/raft-rs-backend/partition-snapshot-compaction-catchup.test.js (46/46 passing)."
+    }
+  ]
+}

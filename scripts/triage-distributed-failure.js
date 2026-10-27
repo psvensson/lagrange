@@ -77,6 +77,12 @@ const SIGNATURE_ROUTES = [
 ];
 
 const CLASS_GUIDANCE = {
+  REFUSED: [
+    'REFUSED (not run): the config\'s declared host topology cannot carry',
+    'this scenario\'s claim (the report entry\'s refusal names required vs',
+    'available hosts). Not a cluster verdict and not a pass: run it on a',
+    'config that declares enough machines (lab/GCP).',
+  ],
   CORRUPT: [
     'HARD INVARIANT BREACH — correctness first, do not triage as latency.',
     'Read the breach evidence, then reproduce deterministically:',

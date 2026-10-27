@@ -11,8 +11,11 @@ import {
 import {
 } from '../../src/query/query-constants.js';
 import {
+  ERRORS,
   TABLES,
 } from '../../src/constants/index.js';
+import {PARTITION_WRITE_LEADERSHIP_REFUSAL} from
+  '../../src/partition/partition-write-kernel.js';
 import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
@@ -154,7 +157,10 @@ async (t) => {
       if (operation.emitOperationCreated !== false) {
         return {
           success: false,
-          error: 'Transaction already active on this partition',
+          error: ERRORS.WRITE_CUTOVER_PAUSED,
+          failureCode: PARTITION_WRITE_LEADERSHIP_REFUSAL.CUTOVER_PAUSED,
+          deferRetry: true,
+          retryAfterMs: 1,
         };
       }
       services.push({

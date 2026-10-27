@@ -4,7 +4,11 @@
  * Requirements: 3.2, 3.3, 10.1, 10.3, 10.4, 11.1, 11.2, 11.3, 11.4
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -32,6 +36,7 @@ function createPartition(id) {
     tableName: 'test_table',
     replicaId: `${id}-r1`,
     replicaIds: [`${id}-r1`],
+    systemTableCache: new SystemTableCache(),
     schema: {
       columns: [
         {name: 'id', type: 'TEXT', primaryKey: true},
@@ -56,6 +61,7 @@ test('proposeWrite emits metrics.partition.raft_propose as leader',
   async (t) => {
     const partition = createPartition('raft-propose-1');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     const infoCalls = collectInfoCalls(partition);
@@ -93,6 +99,7 @@ test('proposeWrite raft_propose metric uses info level, not debug',
   async (t) => {
     const partition = createPartition('raft-propose-2');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     const debugCalls = [];
@@ -116,6 +123,7 @@ test('proposeWrite raft_propose metric does not break write on logger failure',
   async (t) => {
     const partition = createPartition('raft-propose-3');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     const originalInfo = partition.logger.info.bind(partition.logger);
@@ -139,6 +147,7 @@ test('proposeWrite raft_propose metric has structured fields',
   async (t) => {
     const partition = createPartition('raft-propose-4');
     await partition.initialize();
+    await resumeFixtureParticipantAdmission(partition);
     await Promise.resolve();
 
     const infoCalls = collectInfoCalls(partition);
@@ -175,7 +184,7 @@ test('proposeWrite includes forward phase timing when forwarded',
     partition.leaderId = 'leader-r1';
     partition.resolveLeaderAddress = () => 'leader-node/partition/test_table';
     partition.transport = {
-      deliver: async () => ({acknowledged: true, request_id: 'req-1'}),
+      deliver: async () => (buildDeliveryEnvelope({acknowledged: true}, {request_id: 'req-1'})),
       unregister: () => {},
     };
 

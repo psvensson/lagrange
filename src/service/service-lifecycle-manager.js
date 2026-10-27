@@ -7,12 +7,12 @@ import {
   SERVICE_DESCRIPTOR_FIELD,
   SERVICE_LIFECYCLE_STATE,
   SERVICE_LIFECYCLE_TRANSITIONS,
-  SERVICE_OPERATION_STATE,
   SUBSYSTEM,
+  UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {
   buildIdempotencyCheckSQL,
-  buildListOperationsSQL,
+  buildRecoverableOperationsSQL,
   createOperation,
   transitionOperation,
 } from '../wasm-service/operation-lifecycle.js';
@@ -41,13 +41,37 @@ import {
 } from './service-lifecycle-operations.js';
 import {recoverPendingOperations as recoverLifecyclePendingOperations} from './service-lifecycle-recovery.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {claimConsensusCreationOpening, prepareConsensusCreation, readRetainedCreation,
+  recoverConsensusCreation, resolveRetainedReservation} from './service-consensus-creation-intent.js';
+
+import {bootstrapConsensusCreation, resumeConsensusCreation} from
+  './service-consensus-bootstrap.js';
+import {recordGenericReplicaState} from './service-lifecycle-state-record.js';
+import {captureInstanceJson, instanceDigest, requireInstance, instanceFailure} from
+  '../control-plane/owners/service-instance-contract.js';
+import {SERVICE_INSTANCE_OUTCOME as INSTANCE_OUTCOME, SERVICE_INSTANCE_LIMIT as INSTANCE_LIMIT} from
+  '../constants/service-instance.js';
+
+import {WASM_CREATION_CURRENT} from '../wasm-service/wasm-service-constants.js';
 
 const DEFAULT_DIAGNOSTICS_LIMIT = 100;
 const MAX_DIAGNOSTICS_LIMIT = 500;
 /**
  * ServiceLifecycleManager is the single lifecycle owner for all service types.
  */ class ServiceLifecycleManager {
+  /** Continue the original retained CREATE only as far as held native bootstrap. */
+  claimConsensusCreationOpening(value) {
+    return claimConsensusCreationOpening(this, value);
+  }
+
+  bootstrapConsensusCreation(value, context = {}) {
+    return bootstrapConsensusCreation(this, value, context);
+  }
+
   constructor(options = {}) {
+    // The existing instance owner decides admission; this manager retains the
+    // caller intent in its existing operation journal before asking that owner.
+    this._serviceDefinitionsOwner = options.serviceDefinitionsOwner ?? null;
     // One clock for this node's lifecycle owner: every duration and stamp
     // below describes work on one node, so they read one source. Unsupplied,
     // that is the host clock exactly as each site read it before.
@@ -57,7 +81,7 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     /** @type {Function|null} */ this._idempotencyReader = null;
     /** @type {Function|null} */ this._recoveryReader = null;
     /** @type {Function} */ this._runtimePolicyCheck = allowRuntimeLifecyclePolicy;
-    /** @type {Map<string, string>} */ this._replicaStateById = new Map();
+    /** @type {Map<string, Object>} */ this._replicaStateById = new Map();
     /** @type {Map<string, number>} */ this._adapterSelectionCountByType = new Map();
     /** @type {Object[]} */ this._recentOperations = [];
     /** @type {Object} */ this._metrics = {
@@ -172,7 +196,11 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @return {string}
    */ getReplicaState(serviceContext) {
     const {replicaId} = resolveServiceFields(serviceContext);
-    return this._replicaStateById.get(replicaId) || SERVICE_LIFECYCLE_STATE.CREATED;
+    return this._replicaStateById.get(replicaId)?.state || SERVICE_LIFECYCLE_STATE.CREATED;
+  }
+  /** Generic paths write the same record shape as creation projections. */
+  _setGenericReplicaState(replicaId, state) {
+    recordGenericReplicaState(this, replicaId, state);
   }
   /**
    * List registered service types.
@@ -505,13 +533,41 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
     if (!this._recoveryReader) {
       throw new TypeError(LIFECYCLE_MGR_MSG.RECOVERY_READER_REQUIRED);
     }
-    const pendingQuery = buildListOperationsSQL(undefined, SERVICE_OPERATION_STATE.PENDING);
-    const inProgressQuery = buildListOperationsSQL(undefined, SERVICE_OPERATION_STATE.IN_PROGRESS);
-    const [pendingRows, inProgressRows] = await Promise.all([
-      this._recoveryReader(pendingQuery.sql, pendingQuery.params),
-      this._recoveryReader(inProgressQuery.sql, inProgressQuery.params),
-    ]);
-    const rows = [...(pendingRows || []), ...(inProgressRows || [])];
+    const query = buildRecoverableOperationsSQL();
+    const observed = await this._recoveryReader(query.sql, query.params);
+    requireInstance(Array.isArray(observed), INSTANCE_OUTCOME.CORRUPT_STATE);
+    // An invalid journal row is a failed row, not a failed restart scan.
+    // Conflicting rows for one operation ID cannot authorize either effect.
+    const unique = new Map();
+    const unkeyed = [];
+    const corrupt = (operationId, createdAt = 0) => ({
+      operation_id: operationId,
+      created_at: createdAt,
+      __recoveryCorrupt: true,
+    });
+    for (const row of observed) {
+      let captured;
+      try {
+        captured = captureInstanceJson(row, INSTANCE_LIMIT.STATE_BYTES);
+      } catch {
+        captured = null;
+      }
+      const operationId = captured?.operation_id ?? captured?.operationId ??
+        row?.operation_id ?? row?.operationId;
+      if (typeof operationId !== 'string' || operationId.length === 0) {
+        unkeyed.push(corrupt(null));
+        continue;
+      }
+      const prior = unique.get(operationId);
+      // A repeated ID with divergent content is a storage-integrity error,
+      // not an independent row failure. Never choose one contender.
+      requireInstance(prior === undefined ||
+        (captured !== null && prior.__recoveryCorrupt !== true &&
+          instanceDigest(prior) === instanceDigest(captured)),
+      INSTANCE_OUTCOME.CORRUPT_STATE);
+      unique.set(operationId, captured ?? corrupt(operationId, row?.created_at ?? 0));
+    }
+    const rows = [...unkeyed, ...unique.values()];
     rows.sort((left, right) => {
       const leftCreatedAt = Number(left.created_at ?? left.createdAt ?? 0);
       const rightCreatedAt = Number(right.created_at ?? right.createdAt ?? 0);
@@ -533,6 +589,46 @@ const MAX_DIAGNOSTICS_LIMIT = 500;
    * @return {Promise<Object[]>}
    */ async recoverPendingOperations(options = {}) {
     return recoverLifecyclePendingOperations(this, options);
+  }
+  /** Retain direct-consensus creation intent/admission; no physical effects. */
+  async prepareConsensusCreation(intent, context = {}) {
+    return prepareConsensusCreation(this, intent, context);
+  }
+  /** Resume only the original journaled intent, never a current-definition reconstruction. */
+  async recoverConsensusCreation(operationId, context = {}) {
+    return recoverConsensusCreation(this, operationId, context);
+  }
+  /** Journal-only read of one retained creation: no policy, reservation or metadata read. */
+  async readRetainedCreation(operationId) {
+    return readRetainedCreation(this, operationId);
+  }
+  /** REMOVE-time resolution of a PENDING creation's reservation; no runtime policy (R3-E). */
+  async resolveRetainedReservation(operationId) {
+    return resolveRetainedReservation(this, operationId);
+  }
+  /**
+   * The local half of one inventoried creation, answered by its adapter
+   * (design RECOVERY-DESIGN-20261017 R1-A): no physical effect; the manager
+   * reads no local file itself.
+   * @param {Object} owned - {consensusCreation: {intent, token, opening}}.
+   * @return {Promise<{outcome: string}>}
+   */
+  async inspectRetainedCreation(owned) {
+    const adapter = this._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
+    return adapter.inspectRetainedCreation(owned);
+  }
+  /** Ask the same physical owner synchronously; a projection is never authority. */
+  observeCurrentCreation(owned) {
+    try {
+      const adapter = this._resolveAdapter(UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE);
+      return adapter.observeCurrentCreation(owned);
+    } catch (error) {
+      return {outcome: WASM_CREATION_CURRENT.UNAVAILABLE, reason: instanceFailure(error).outcome};
+    }
+  }
+  /** Recover one retained creation by operation id and continue it, in one pass. */
+  async resumeConsensusCreation(operationId, context = {}) {
+    return resumeConsensusCreation(this, operationId, context);
   }
   /**
    * Create a service replica via the matching adapter.

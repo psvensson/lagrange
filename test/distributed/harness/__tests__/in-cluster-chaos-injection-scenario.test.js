@@ -5,25 +5,31 @@ import {
   resolveInClusterChaosInjectionScenarioConfig,
   run,
 } from '../../scenarios/in-cluster-chaos-injection.js';
+import {
+  createThreeNodeScenarioFixture,
+} from '../../scenarios/user-load-table-and-marker-helpers.js';
+
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
 describe('in-cluster-chaos-injection scenario', () => {
-  it('executes deterministic chaos sequence with explicit recoveries',
+  it('executes deterministic chaos sequence with explicit recoveries and marker readback',
     async () => {
       const calls = [];
+      let startLoadOptions = null;
+      const {nodes} = createThreeNodeScenarioFixture();
 
       const cluster = {
-        getNodes: () => [
-          {id: 'seed-1', role: 'seed'},
-          {id: 'joiner-1', role: 'joiner'},
-          {id: 'joiner-2', role: 'joiner'},
-        ],
-        startLoad: () => ({
-          waitComplete: async () => ({
-            total: 30,
-            success: 24,
-            failed: 6,
-          }),
-        }),
+        getNodes: () => nodes,
+        startLoad: (options) => {
+          startLoadOptions = options;
+          return {
+            waitComplete: async () => ({
+              total: 30,
+              success: 24,
+              failed: 6,
+            }),
+          };
+        },
         killNode: async (nodeId) => {
           calls.push(['killNode', nodeId]);
         },
@@ -72,6 +78,12 @@ describe('in-cluster-chaos-injection scenario', () => {
         minSuccessRate: 0.5,
       });
 
+      assert.equal(startLoadOptions.tableName, 'user_load_logs');
+      assert.equal(result.tableName, 'user_load_logs');
+      assert.equal(
+        result.diagnosticMarker.markerId,
+        'in-cluster-chaos-injection-post-recovery',
+      );
       assert.equal(result.actionCount, 2);
       assert.equal(result.seed, 42);
       assert.ok(result.successRate >= 0.5);
@@ -103,13 +115,10 @@ describe('in-cluster-chaos-injection scenario', () => {
   it('retries consistency checks after transient disagreement', async () => {
     let assertConsistencyCalls = 0;
     const calls = [];
+    const {nodes} = createThreeNodeScenarioFixture();
 
     const cluster = {
-      getNodes: () => [
-        {id: 'seed-1', role: 'seed'},
-        {id: 'joiner-1', role: 'joiner'},
-        {id: 'joiner-2', role: 'joiner'},
-      ],
+      getNodes: () => nodes,
       startLoad: () => ({
         waitComplete: async () => ({
           total: 10,
@@ -168,18 +177,23 @@ describe('in-cluster-chaos-injection scenario', () => {
     assert.equal(result.actionCount, 1);
     assert.ok(assertConsistencyCalls >= 1,
       'waitForConsistencyConvergence should be called at least once');
-    assert.ok(calls.includes('waitForConvergence'));
+    assert.ok(arrayIncludes(calls, 'waitForConvergence'));
   });
 
   it('resolves deterministic default config values', () => {
     const resolved = resolveInClusterChaosInjectionScenarioConfig({});
     assert.equal(resolved.seed, 1337);
     assert.equal(resolved.actionCount, 3);
+    assert.equal(resolved.tableName, 'user_load_logs');
     assert.ok(Array.isArray(resolved.actionSet));
     assert.ok(resolved.actionSet.length > 0);
     assert.equal(resolved.preChaosDelayMs, 1000);
     assert.equal(resolved.consistencyPollIntervalMs, 250);
     assert.equal(resolved.minSuccessRate, 0.7);
+    assert.throws(
+      () => resolveInClusterChaosInjectionScenarioConfig({tableName: 'logs'}),
+      /User load table must not target system table logs/,
+    );
   });
 
   it('rejects execution when no non-seed node is available', async () => {

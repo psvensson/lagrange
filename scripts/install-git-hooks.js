@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import {spawnSync} from 'node:child_process';
+import {spawnGit} from './checks/git-invocation.js';
 
-const LOCAL_STR_GIT = 'git';
 const LOCAL_STR_UTF8 = 'utf8';
 const LOCAL_STR_IGNORE = 'ignore';
 const LOCAL_STR_PIPE = 'pipe';
@@ -25,7 +24,7 @@ const HOOKS_PATH_KEY = 'core.hooksPath';
 const HOOKS_PATH = '.githooks';
 
 function runGit(args) {
-  return spawnSync(LOCAL_STR_GIT, args, {
+  return spawnGit(args, {
     encoding: LOCAL_STR_UTF8,
     stdio: [LOCAL_STR_IGNORE, LOCAL_STR_PIPE, LOCAL_STR_PIPE],
   });

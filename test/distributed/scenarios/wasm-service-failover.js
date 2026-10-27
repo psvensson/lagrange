@@ -8,37 +8,41 @@
  */
 
 import assert from 'node:assert/strict';
-import {join, resolve} from 'node:path';
 import {
   CONVERGENCE_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
 } from '../harness/constants.js';
-import {runExamplesCatalog} from '../../../scripts/examples/build-upload-run.js';
+import {
+  createServicePipeline,
+  deployThroughPipeline,
+  prepareServiceProject,
+} from './service-pipeline-deployment-helpers.js';
+import {provisionPublicListener} from './public-seam-durability-client.js';
 
 const PRE_KILL_SETTLE_MS = SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs;
 const POST_KILL_CONVERGENCE_TIMEOUT_MS = 60000;
+// The scenario runs on three nodes and kills one: replica-target-3 partitions
+// cannot regain three voters on two survivors, so the post-kill convergence
+// wait names the under-replication it tolerates, down to the floor the two
+// survivors imply (two voters; one or zero is still under_target_voters).
+const WASM_FAILOVER_SURVIVOR_COUNT = 2;
+const WASM_FAILOVER_UNDER_REPLICATION_TOLERANCE = Object.freeze({
+  minVoters: WASM_FAILOVER_SURVIVOR_COUNT,
+  reason: 'three-node cluster with one node killed: two survivors cannot ' +
+    'host a third voter for replica-target-3 partitions',
+});
 const WASM_SERVICES_QUERY =
-  'SELECT * FROM services WHERE service_type = \'wasm_service\'';
+  'SELECT * FROM services WHERE status = \'active\' AND (' +
+  'service_type = \'wasm_service\' OR ' +
+  'group_id LIKE \'wasm-instance-%\' OR ' +
+  'replica_id LIKE \'reqsvc:%\' OR ' +
+  'replica_id LIKE \'calls:%\')';
 const MIN_WASM_REPLICAS = 1;
-const WASM_BOOTSTRAP_EXAMPLE_ID = '06-wasm-remote-replica';
-const EXAMPLES_OUTPUT_SUBDIR = 'examples';
+const WASM_BOOTSTRAP_SUBDIR = 'wasm-service-failover';
 
 /**
- * Build a lightweight cluster client for examples bootstrap.
- *
- * @param {Object} seedNode
- * @return {{query: Function, partitionCallback: Function}}
- */
-function createClusterClient(seedNode) {
-  return {
-    query: (sql, params) => seedNode.query(sql, params),
-    partitionCallback: (payload) => seedNode.partitionCallback(payload),
-  };
-}
-
-/**
- * Ensure at least one wasm_service replica exists by running the
- * wasm callback example when needed.
+ * Ensure at least one WASM service replica exists by deploying the
+ * canonical WASI service pipeline when needed.
  *
  * @param {Object} cluster
  * @param {Object} seedNode
@@ -51,20 +55,29 @@ async function ensureWasmServiceReplica(cluster, seedNode, initialRows) {
     return initialRows;
   }
 
-  const outputRoot = cluster?._config?.outputDir || 'test-output';
-  const outputPath = resolve(
-    join(
-      outputRoot,
-      EXAMPLES_OUTPUT_SUBDIR,
-      `wasm-service-bootstrap-${Date.now()}.json`,
-    ),
-  );
-  await runExamplesCatalog({
-    client: createClusterClient(seedNode),
-    include: [WASM_BOOTSTRAP_EXAMPLE_ID],
-    outputPath,
-    failOnRequired: false,
+  const nodes = cluster.getNodes();
+  const noopOutput = async () => {};
+  const pipeline = createServicePipeline();
+  await provisionPublicListener(seedNode, nodes.length);
+  const paths = await prepareServiceProject(WASM_BOOTSTRAP_SUBDIR);
+  await pipeline.runGenerate({
+    projectDirectory: paths.projectDirectory,
+    writeOutput: noopOutput,
   });
+  const buildResult = await pipeline.runBuild({
+    projectDirectory: paths.projectDirectory,
+    writeOutput: noopOutput,
+  });
+  await deployThroughPipeline(
+    {adminNode: seedNode, nodes, options: {}},
+    {
+      pipeline,
+      runId: `${WASM_BOOTSTRAP_SUBDIR}-${Date.now()}`,
+      writeOutput: noopOutput,
+    },
+    paths,
+    buildResult.layoutPath,
+  );
 
   const postBootstrap = await seedNode.query(WASM_SERVICES_QUERY);
   return Array.isArray(postBootstrap) ?
@@ -100,7 +113,7 @@ async function run(cluster) {
     return {
       skipped: true,
       skipReason: 'no_wasm_service_replicas_available',
-      bootstrapExampleId: WASM_BOOTSTRAP_EXAMPLE_ID,
+      bootstrapSubdir: WASM_BOOTSTRAP_SUBDIR,
       observedWasmReplicas: initialRows.length,
     };
   }
@@ -123,6 +136,7 @@ async function run(cluster) {
     settleTimeoutMs: POST_KILL_CONVERGENCE_TIMEOUT_MS,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+    tolerateUnderReplication: WASM_FAILOVER_UNDER_REPLICATION_TOLERANCE,
   });
 
   assert.ok(

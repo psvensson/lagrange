@@ -14,9 +14,11 @@
 import * as esbuild from 'esbuild';
 import {fileURLToPath} from 'url';
 import {dirname, join} from 'path';
-import {cpSync, existsSync, mkdirSync, rmSync} from 'fs';
+import {cpSync, existsSync, mkdirSync, rmSync, writeFileSync} from 'fs';
 
 import {RAFT_RS_BINDING_LAYOUT} from '../src/raft/raft-rs-core-constants.js';
+import {RUNTIME_BUILD_MANIFEST, measureRuntimeContent} from
+  '../src/diagnostics/runtime-content-fingerprint.js';
 
 const LOCAL_STR_NODE = 'node';
 const LOCAL_STR_NODE22 = 'node22';
@@ -31,6 +33,7 @@ const LOCAL_STR_BUILD_COMPLETE = '\n=== Build Complete ===';
 const LOCAL_STR_BUNDLES_CREATED_IN_DIST = 'Bundles created in dist/';
 const LOCAL_STR_NODE_MODULES_RUNTIME_DEPENDENCIES = '  - node_modules/ (runtime dependencies)';
 const LOCAL_STR_BUILD_FAILED = '\nBuild failed:';
+const LOCAL_STR_NEWLINE = '\n';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -76,12 +79,6 @@ const BUNDLES = [
     entryPoint: join(projectRoot, 'src/threading/service-worker.js'),
     outputFile: 'service-worker.bundle.cjs',
     name: 'Service Worker',
-    external: MAIN_RUNTIME_EXTERNALS,
-  },
-  {
-    entryPoint: join(projectRoot, 'src/worker/replica-worker.js'),
-    outputFile: 'replica-worker.bundle.cjs',
-    name: 'Replica Worker',
     external: MAIN_RUNTIME_EXTERNALS,
   },
   {
@@ -218,6 +215,8 @@ async function main() {
 
     console.log(LOCAL_STR_STAGING_RUNTIME_DEPENDENCIES);
     stageRuntimePackages();
+    writeFileSync(join(distDir, RUNTIME_BUILD_MANIFEST),
+      JSON.stringify(await measureRuntimeContent(projectRoot)) + LOCAL_STR_NEWLINE);
 
     console.log(LOCAL_STR_BUILD_COMPLETE);
     console.log(LOCAL_STR_BUNDLES_CREATED_IN_DIST);

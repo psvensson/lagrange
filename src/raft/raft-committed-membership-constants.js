@@ -45,9 +45,14 @@ const COMMITTED_MEMBERSHIP_ANSWER_KIND = Object.freeze({
 // leader never reserved; a witness read (the REPLACE owner asking its target
 // replica for its own applied configuration) is answered by whichever
 // replica is asked.
+// A retirement read (a workflow owner freezing a retiring group's member
+// set) is a bootstrap read that also refuses while a configuration change is
+// pending: what it answers must be the configuration no change will alter.
 const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
   WITNESS: 'witness',
+  LEARNER_ACTION: 'learner-action',
+  RETIREMENT: 'retirement',
 });
 
 // Every typed refusal of the boundary, one enumeration:
@@ -69,8 +74,13 @@ const COMMITTED_MEMBERSHIP_READ_PURPOSE = Object.freeze({
 //                         holds a record is restored from it instead);
 //   DURABLE_RECORD_MISSING
 //                         a replica that must restore (a rejoin, or a
-//                         COMMITTED stamp that already names it a voter)
-//                         holds no durable record.
+//                         COMMITTED stamp that already names it a voter, or
+//                         a GENESIS stamp on a replica joining an existing
+//                         group) holds no durable record;
+//   RESEED_REQUIRED       a replica's own history is proven lost while it
+//                         runs (a peer holds it to a commit beyond its
+//                         persisted log): held durably, never reopened,
+//                         replaced under a fresh identity.
 const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   NOT_LEADER: 'membership-read-not-leader',
   JOINT: 'membership-in-joint-transition',
@@ -81,6 +91,10 @@ const COMMITTED_MEMBERSHIP_REFUSAL = Object.freeze({
   STAMP_INVALID: 'membership-stamp-invalid',
   GENESIS_REFUSED_GROUP_EXISTS: 'membership-genesis-refused-group-exists',
   DURABLE_RECORD_MISSING: 'durable-record-missing',
+  RESEED_REQUIRED: 'reseed-required',
+  CONF_CHANGE_PENDING: 'membership-conf-change-pending',
+  CONFIGURATION_GENERATION_UNAVAILABLE:
+    'membership-configuration-generation-unavailable',
 });
 
 // Why a dispatched stamp is STAMP_INVALID (the refusal's detail).
@@ -115,7 +129,10 @@ const COMMITTED_MEMBERSHIP_ANSWER_FIELD = Object.freeze({
   VOTERS: 'voters',
   VOTERS_OUTGOING: 'votersOutgoing',
   LEARNERS: 'learners',
+  LEARNERS_NEXT: 'learnersNext',
   APPLIED_INDEX: 'appliedIndex',
+  CONFIGURATION_KEY: 'configurationKey',
+  MEMBERSHIP_GENERATION_INDEX: 'membershipGenerationIndex',
   COMMIT_INDEX: 'commitIndex',
   TERM: 'term',
   LEADER_ID: 'leaderId',
@@ -131,12 +148,32 @@ const COMMITTED_MEMBERSHIP_ANSWER_FIELD = Object.freeze({
 const PARTICIPATION_GATE = Object.freeze({
   GATE_CLOSED: 'participation-gate-closed',
   GATE_OPENED: 'participation gate opened',
+  // The opening's prior-existence fact is not durable yet (verifier N3):
+  // every command but a status read is refused, every delivery dropped.
+  IDENTITY_UNRECORDED: 'participation-gate-identity-unrecorded',
+  // The acknowledgement of that fact's durable write released it.
+  IDENTITY_RECORDED: 'participation-gate-identity-recorded',
+  // A delivery dropped while the fact is not durable: a lost message to its
+  // sender, never a refusal.
+  INBOUND_DROPPED_IDENTITY_UNRECORDED: 'inbound-dropped-identity-unrecorded',
 });
 
 // Where a refusal of the gate was decided (its phase).
 const PARTICIPATION_GATE_PHASE = 'participation-gate';
 
+const COMMITTED_LEARNER_ACTION_KIND = Object.freeze({
+  COMMITTED: 'committed-action', UNRESOLVED: 'unresolved-action', REFUSED: 'refused-action',
+});
+const COMMITTED_LEARNER_ACTION_REASON = Object.freeze({
+  APPLIED: 'learner-action-applied', NOT_RECORDED: 'learner-action-not-recorded',
+  INVALID: 'learner-action-invalid', MISMATCH: 'learner-action-mismatch',
+  UNAVAILABLE: 'learner-action-unavailable', CORRUPT: 'learner-action-corrupt-origin',
+  BEYOND_APPLIED: 'learner-action-beyond-applied-boundary',
+});
+
 export {
+  COMMITTED_LEARNER_ACTION_KIND,
+  COMMITTED_LEARNER_ACTION_REASON,
   BOOTSTRAP_MEMBERSHIP_SOURCE,
   COMMITTED_MEMBERSHIP_ANSWER_FIELD,
   COMMITTED_MEMBERSHIP_ANSWER_KIND,

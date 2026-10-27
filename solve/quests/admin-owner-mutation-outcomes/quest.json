@@ -1,0 +1,37 @@
+{
+  "schema": "solve-quest/2",
+  "id": "admin-owner-mutation-outcomes",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "DynamicConfigService.set and TablePolicyService.updateTablePolicy consume the canonical gateway mutation effect before publishing success, write statistics, policy invalidation or POLICY_UPDATED. Only confirmed one-row application may report applied success. Zero, deferred, rejected, malformed or uncertain effects retain truthful typed owner outcomes through the existing admin adapter; unknown never proves noncommit.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/admin-owner-mutation-outcomes/evidence/receipt.json",
+      "requiredReceipts": [
+        "owner-outcome-negative-and-positive-proof",
+        "existing-client-and-owner-paths",
+        "independent-review-and-applicable-checks"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "cause",
+      "statement": "Repair independent reviewer F-ADMIN-1 at the two authoritative owners, using classifyControlPlaneMutationResult. Preserve original a97, scale6a228 and nodee701 checkpoints. No adapter-local reads, cache-derived write truth or generic SQL exemption."
+    },
+    {
+      "id": "scope",
+      "statement": "Preserve validation, persisted value/policy meaning, existing owner read/write routes, CDC guard policy, lifecycle and retry semantics. Gate completion side effects on confirmed effect; preserve canonical error identity/outcome. No additional scheduler, generic capability or recovery algorithm. F-ADMIN-2 full-cohort readback is a separate unit."
+    },
+    {
+      "id": "proof",
+      "statement": "Seal against the exact predecessor red. Prove real HTTP through real owners and gateway with controlled CDC effects, including deferred/rejected/zero/unknown and successful insert/update. Assert no false owner side effects and retain existing positive validation paths. Canonical retries0, thermal/controller coordination, exact predecessor function metric deltas, normal hook and independent review before composition. No baseline/timeout increase, hook bypass, main merge or publish."
+    }
+  ],
+  "verificationTemplates": [
+    "owner-interaction",
+    "retry-loops"
+  ],
+  "sealedAt": "a97f79c35b7e1f6428032493918e16e623339688"
+}

@@ -13,9 +13,11 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
-  ControllablePartitionRaftProvider,
+  ControllableConsensusPort,
   createControllablePartitionService,
 } from './partition-service-test-support.js';
+import {resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
 import {
   INITIAL_PARTITION_IDS,
   SERVICES_SCHEMA,
@@ -142,8 +144,9 @@ function createServicesPartition() {
       (replicaId) => `test-node/partition/${replicaId}`,
     ),
     schema: SERVICES_SCHEMA,
+    systemTableCache: new SystemTableCache(),
     dbPath: ':memory:',
-  }, new ControllablePartitionRaftProvider());
+  }, new ControllableConsensusPort());
 }
 
 test('MovieLens schema admission rejects a stale priority lifecycle overlay',
@@ -174,7 +177,8 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
     const cache = buildPriorityPlacementCache();
     const partition = createServicesPartition();
     await partition.initialize();
-    partition.controllableProvider.setRole(RAFT_ROLE.LEADER);
+    partition.controllablePort.setRole(RAFT_ROLE.LEADER);
+    await resumeFixtureParticipantAdmission(partition);
     await partition.subscribeToCDCWithHandshake((event) => {
       cache.applySystemTableChange(
         event.tableName,
@@ -182,8 +186,8 @@ test('zero-change Raft apply cannot overwrite completed priority placement',
         event.data,
       );
     });
-    partition.controllableProvider.setProposeHandler(async (entry) => {
-      partition.controllableProvider.commit(entry);
+    partition.controllablePort.setProposeHandler(async (entry) => {
+      partition.controllablePort.commit(entry);
     });
 
     const targetReplicaId =

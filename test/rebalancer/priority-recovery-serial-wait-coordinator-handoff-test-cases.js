@@ -1,3 +1,4 @@
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
   registerCase,
   dependencies,
@@ -160,7 +161,9 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       tablePolicyService: {
@@ -312,7 +315,9 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       },
       messageRouter: {
         async deliver() {
-          return {acknowledged: true, status: TEST_DELIVERY_STATUS_INITIATED};
+          return buildDeliveryEnvelope({acknowledged: true}, {
+            status: TEST_DELIVERY_STATUS_INITIATED,
+          });
         },
       },
       setTimeoutFn(fn, delayMs) {
@@ -451,12 +456,13 @@ export function registerPriorityRecoverySerialWaitCoordinatorHandoffTestCases({
       messageRouter: {
         async deliver(target, payload, options) {
           deliveries.push({target, payload, options});
-          return {
-            acknowledged: false,
-            error: TEST_RETRYABLE_HANDOFF_ERROR,
-            deferRetry: true,
-            retryAfterMs: TEST_RETRY_AFTER_MS,
-          };
+          return buildDeliveryEnvelope(
+            {
+              acknowledged: false,
+              error: TEST_RETRYABLE_HANDOFF_ERROR,
+              deferRetry: true,
+              retryAfterMs: TEST_RETRY_AFTER_MS,
+            });
         },
       },
       tablePolicyService: {

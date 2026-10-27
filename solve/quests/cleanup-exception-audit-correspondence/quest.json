@@ -1,0 +1,38 @@
+{
+  "schema": "solve-quest/2",
+  "id": "cleanup-exception-audit-correspondence",
+  "class": "fix",
+  "epic": "raft-rs-full-cutover",
+  "statement": "The existing raw-empty-state audit distinguishes a local caught-exception accumulator from an unnamed semantic outcome. The message-group initialization cleanup accumulator and equivalent renamed construction are recognized only when their complete uses prove that role; state publication, escape and unsupported mutations remain findings. Name the three existing cleanup message/code/settlement-field literals without changing their values or cleanup behavior.",
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/quests/cleanup-exception-audit-correspondence/evidence/receipt.json",
+      "requiredReceipts": [
+        "original-findings-and-engaged-witness-red",
+        "accumulator-and-escape-controls",
+        "unchanged-cleanup-contract-and-owner-gates",
+        "reviewed-census-and-independent-source"
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "id": "role-not-spelling",
+      "statement": "Repair the existing classifier. No path/name whitelist, baseline increase, variable renaming, array constructor substitution, new runtime status or moved vector to evade the finding. Recognize only a local immutable binding used to collect caught exceptions, check nonemptiness and aggregate a thrown error. Unknown uses remain conservative findings."
+    },
+    {
+      "id": "unchanged-product-behavior",
+      "statement": "Keep message/code values and the exact WASM settlement presence test, including thrown undefined. No change to handler identity, shutdown sequencing, native resource lifetime, primary/cleanup exception ordering or owner authority. Only private named literal owners change in product source."
+    },
+    {
+      "id": "bounded-evidence",
+      "statement": "Keep this source/checker repair separate from the sealed test-only exact-handler fixture Quest. Freeze actual-source and renamed positives plus escape/state/mutation negatives before classifier repair; compare full raw finding census without changing a baseline; run identical tests on old and repaired code through the locked runner and independently review source plus measured outcomes."
+    }
+  ],
+  "verificationTemplates": [
+    "harness-fidelity",
+    "owner-interaction"
+  ],
+  "sealedAt": "a0dc88427b61a51d3cea7fc2ff8cdaa7fbdf7ec5"
+}

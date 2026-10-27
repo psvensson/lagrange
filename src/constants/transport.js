@@ -33,16 +33,6 @@ const ROUTER_MESSAGE_TYPE = Object.freeze({
   JOIN_COMPLETE_ACK: 'join_complete_ack',
 });
 
-const WS_MESSAGE_TYPE = Object.freeze({
-  RAFT_MESSAGE: 'raft_message',
-  SERVICE_MESSAGE: 'service_message',
-  SERVICE_RESPONSE: 'service_response',
-  PING: 'ping',
-  PONG: 'pong',
-  ACK: 'ack',
-  IDENTIFY: 'identify',
-});
-
 const TRANSPORT_CONFIG_KEY = Object.freeze({
   WS_HOST: 'transport.wsHost',
   MESSAGE_TIMEOUT_MS: 'transport.messageTimeoutMs',
@@ -71,6 +61,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   WS_HOST: HOST.LOCALHOST,
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
+  // ends-on: the peer acknowledges or answers the message
   MESSAGE_TIMEOUT_MS: 5000,
   ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
   // Quarantine requires evidence the peer is DEAD, not merely slow: when any
@@ -79,7 +70,9 @@ const TRANSPORT_DEFAULT = Object.freeze({
   // sever the connection ("never break, only slow"). During formation all
   // joiners quarantined the alive-but-saturated seed — their only
   // control-plane path — within 1s of each other (closure record CL-007).
+  // ends-on: n/a lookback
   ACK_TIMEOUT_QUARANTINE_LIVENESS_WINDOW_MS: 30000,
+  // ends-on: the pinged peer returns a PONG
   PING_TIMEOUT_MS: 1000,
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,
@@ -113,6 +106,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE: NUM.EIGHT,
   PRODUCTION_OUTBOUND_QUEUE_READINESS_INFLIGHT_RESERVE: 2,
   SHUTDOWN_WAIT_MS: 100,
+  // ends-on: the RPC response arrives (unreachable: nothing in src/ calls rpcClient.call)
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
   CONNECTION_POOL_TTL_MS: 300000, // 5 minutes
@@ -127,10 +121,6 @@ const OUTBOUND_DELIVERY_PRIORITY = Object.freeze({
   CRITICAL: 'critical',
   READINESS: 'readiness',
   BACKGROUND: 'background',
-});
-
-const TRANSPORT_STRING = Object.freeze({
-  NEWLINE: '\n',
 });
 
 const TRANSPORT_FORMAT = Object.freeze({
@@ -180,7 +170,6 @@ const TRANSPORT_EVENT = Object.freeze({
 
 const TRANSPORT_SUBSYSTEM = Object.freeze({
   ROUTER: 'message-router',
-  WEBSOCKET: 'websocket-transport',
   RPC: 'rpc-client',
 });
 
@@ -190,6 +179,7 @@ const ROUTER_VALID_ENTITY_TYPES = Object.freeze([
   ENTITY_TYPE.LIFECYCLE,
   ENTITY_TYPE.SERVICE,
   ENTITY_TYPE.BOOTSTRAP,
+  ENTITY_TYPE.WASM_SERVICE,
 ]);
 
 const ROUTER_EXPECTED_ENTITY_TYPES = Object.freeze([
@@ -198,6 +188,7 @@ const ROUTER_EXPECTED_ENTITY_TYPES = Object.freeze([
   ENTITY_TYPE.LIFECYCLE,
   ENTITY_TYPE.SERVICE,
   ENTITY_TYPE.BOOTSTRAP,
+  ENTITY_TYPE.WASM_SERVICE,
 ]);
 
 const ROUTER_ADDRESS = Object.freeze({
@@ -285,18 +276,12 @@ const ROUTER_LOG_MSG = Object.freeze({
   MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
   SCHEDULING_RECONNECT: 'Scheduling reconnection',
   RECONNECT_FAILED: 'Reconnection failed',
+  RECONNECT_BEFORE_DELIVERY_FAILED:
+    'Failed to reconnect target node before delivery',
   HANDLER_REGISTERED: 'Registered handler',
   HANDLER_UNREGISTERED: 'Unregistered handler',
   NO_TARGET_CONNECTION: 'No connection to target node for message delivery',
   SHUTTING_DOWN: 'Shutting down MessageRouter',
-  TRANSPORT_REGISTRY_SET: 'TransportRegistry configured for MessageRouter',
-  TRANSPORT_DELIVERY_START: 'Starting transport-based delivery',
-  TRANSPORT_ENDPOINT_SELECTED: 'Selected endpoint for delivery',
-  TRANSPORT_DELIVERY_SUCCESS: 'Transport delivery succeeded',
-  TRANSPORT_DELIVERY_FAILED: 'Transport delivery failed, trying fallback',
-  TRANSPORT_ALL_FAILED: 'All transport endpoints failed',
-  TRANSPORT_NO_ENDPOINTS: 'No endpoints available for node',
-  TRANSPORT_FALLBACK_WS: 'Falling back to WebSocket delivery',
   JOIN_REQUEST_RECEIVED: 'Join request received',
   JOIN_RESPONSE_SENT: 'Join response sent',
   JOIN_REQUEST_FAILED: 'Failed to process join request',
@@ -323,47 +308,9 @@ const ROUTER_ERROR_MSG = Object.freeze({
     'Query/data-plane message-group transport is not configured',
   PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
   SHUTDOWN: 'Router shutdown',
-  ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',
-  NO_ENDPOINTS_FOR_NODE: 'No endpoints available for node',
-  noEndpointsForNode: (nodeId) => `No endpoints available for node ${nodeId}`,
   outboundQueueBackpressured: (nodeId, maxPending) =>
     `Outbound queue for node ${nodeId} is saturated ` +
     `(maxPending=${maxPending})`,
-});
-
-const WS_LOG_MSG = Object.freeze({
-  INITIALIZING: 'Initializing WebSocketTransport',
-  SERVER_LISTENING: 'WebSocket server listening',
-  SERVER_ERROR: 'WebSocket server error',
-  INCOMING_CONNECTION: 'Incoming WebSocket connection',
-  CONNECTION_ERROR: 'WebSocket connection error',
-  ALREADY_CONNECTED: 'Already connected to peer',
-  CONNECTING: 'Connecting to peer',
-  CONNECTED: 'Connected to peer',
-  WS_ERROR: 'WebSocket error',
-  MESSAGE_RECEIVED: 'Received message',
-  MESSAGE_UNKNOWN: 'Unknown message type',
-  MESSAGE_PARSE_FAILED: 'Failed to parse message',
-  IDENTIFICATION_RECEIVED: 'Received identification',
-  MESSAGE_NOT_ACKED: 'Message not acknowledged',
-  CONNECTION_CLOSED: 'Connection closed',
-  CONNECTION_PING_TIMEOUT:
-    'Severing stale-but-open connection: keepalive pings unanswered',
-  CONNECTION_PING_TIMEOUT_SKIPPED_ALIVE:
-    'Skipping keepalive teardown: peer demonstrably alive (slow, not dead)',
-  PING_TIMEOUT_SATISFIED_BY_INBOUND:
-    'Treating timed-out ping as alive: peer has fresh inbound traffic',
-  MAX_RECONNECTS_REACHED: 'Max reconnection attempts reached',
-  SCHEDULING_RECONNECT: 'Scheduling reconnection',
-  RECONNECT_FAILED: 'Reconnection failed',
-  HANDLER_REGISTERED: 'Registered message handler',
-  NO_TARGET_CONNECTION: 'No connection to target node',
-  SHUTTING_DOWN: 'Shutting down WebSocketTransport',
-});
-
-const WS_ERROR_MSG = Object.freeze({
-  NO_CONNECTION: 'No connection to target node',
-  SHUTDOWN: 'Transport shutdown',
 });
 
 const RPC_LOG_MSG = Object.freeze({
@@ -441,12 +388,8 @@ export {
   TRANSPORT_METRIC_TRIGGER,
   TRANSPORT_ERROR_MSG,
   TRANSPORT_NUM,
-  TRANSPORT_STRING,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
-  WS_LOG_MSG,
-  WS_ERROR_MSG,
-  WS_MESSAGE_TYPE,
   RPC_DEFAULT,
   RPC_LOG_MSG,
   RPC_ERROR_MSG,

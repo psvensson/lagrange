@@ -26,6 +26,7 @@ import {
   buildStrandedTeardownRunEvents,
   buildTeardownTruncatedRunEvents,
 } from './formation-release-handoff-gcp-run-fixture.js';
+import {execGit} from '../../scripts/checks/git-invocation.js';
 
 const FIXED_VARIANT = 'fixed';
 const REVERTED_VARIANT = 'reverted';
@@ -210,10 +211,8 @@ test('isolated-worktree revert deploys DIFFERENT source than the main tree ' +
     t.equal(prepared.createdWorktree, true);
     t.ok(prepared.revertPatchFingerprint.length > 0);
   } finally {
-    const {execFileSync} = await import('node:child_process');
     try {
-      execFileSync(
-        'git',
+      execGit(
         ['worktree', 'remove', '--force', prepared.worktreePath],
         {cwd: ROOT},
       );

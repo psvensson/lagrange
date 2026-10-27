@@ -11,6 +11,20 @@
  */
 
 import {PG_TRANSACTION_STATE} from './pgwire-protocol-constants.js';
+import {AST_TYPE} from '../query/parser-constants.js';
+import {classifyTransactionControlStatement} from
+  '../query/sql-transaction-control-grammar.js';
+
+// PostgreSQL ends a failed transaction block on COMMIT by rolling it back
+// (the CommandComplete tag is ROLLBACK).
+const FAILED_BLOCK_END_STATEMENT = 'ROLLBACK';
+
+// Whether the session runs a statement it was sent.
+const PGWIRE_STATEMENT_ADMISSION = Object.freeze({
+  ADMITTED: 'admitted',
+  // Inside a failed transaction block (25P02).
+  REFUSED_IN_FAILED_BLOCK: 'refused_in_failed_block',
+});
 
 // --- Session state constants ---
 
@@ -55,6 +69,13 @@ class PgWireSession {
     this.database = options.database || null;
     this.state = PGWIRE_SESSION_STATE.CREATED;
     this.txState = PG_TRANSACTION_STATE.IDLE;
+    // The engine transaction this session's block is in (from the engine's
+    // BEGIN answer); every statement of the block is sent for it, so the
+    // engine refuses one for a transaction it no longer holds.
+    this.transactionId = null;
+    // The block's COMMIT was answered outcome-unknown (08007) and the engine
+    // still held the transaction: the ROLLBACK that ends the block warns.
+    this.transactionOutcomeUnknown = false;
     this.createdAt = Date.now();
 
     /**
@@ -187,6 +208,38 @@ class PgWireSession {
    */
   setTransactionState(state) {
     this.txState = state;
+    if (state === PG_TRANSACTION_STATE.IDLE) {
+      this.transactionId = null;
+      this.transactionOutcomeUnknown = false;
+    }
+  }
+
+  /**
+   * Note that the block's COMMIT was answered outcome-unknown.
+   */
+  markTransactionOutcomeUnknown() {
+    this.transactionOutcomeUnknown = true;
+  }
+
+  /**
+   * Whether the block's COMMIT was answered outcome-unknown; clears it.
+   * @return {boolean}
+   */
+  takeTransactionOutcomeUnknown() {
+    const unknown = this.transactionOutcomeUnknown;
+    this.transactionOutcomeUnknown = false;
+    return unknown;
+  }
+
+  /**
+   * Enter a transaction block the engine began.
+   *
+   * @param {?string} transactionId - The engine's transaction id.
+   */
+  enterTransaction(transactionId) {
+    this.txState = PG_TRANSACTION_STATE.IN_TRANSACTION;
+    this.transactionId = typeof transactionId === 'string' &&
+      transactionId.length > 0 ? transactionId : null;
   }
 
   /**
@@ -196,6 +249,37 @@ class PgWireSession {
    */
   isInFailedTransaction() {
     return this.txState === PG_TRANSACTION_STATE.FAILED;
+  }
+
+  /**
+   * Admit a statement the client sent. Outside a failed transaction block
+   * it runs as sent. A failed block admits only its end, classified by the
+   * engine parser's own transaction-control rule: ROLLBACK runs as sent;
+   * COMMIT ends the failed block the way PostgreSQL does, by rolling it
+   * back; every other statement is refused.
+   *
+   * @param {string} query - Statement text the client sent.
+   * @return {{state: string, statement: string}} The admission state
+   *   (PGWIRE_STATEMENT_ADMISSION) and the statement to execute.
+   */
+  admitStatement(query) {
+    if (!this.isInFailedTransaction()) {
+      return {state: PGWIRE_STATEMENT_ADMISSION.ADMITTED, statement: query};
+    }
+    switch (classifyTransactionControlStatement(query)) {
+    case AST_TYPE.ROLLBACK:
+      return {state: PGWIRE_STATEMENT_ADMISSION.ADMITTED, statement: query};
+    case AST_TYPE.COMMIT:
+      return {
+        state: PGWIRE_STATEMENT_ADMISSION.ADMITTED,
+        statement: FAILED_BLOCK_END_STATEMENT,
+      };
+    default:
+      return {
+        state: PGWIRE_STATEMENT_ADMISSION.REFUSED_IN_FAILED_BLOCK,
+        statement: query,
+      };
+    }
   }
 
   /**
@@ -209,6 +293,7 @@ class PgWireSession {
 }
 
 export {
+  PGWIRE_STATEMENT_ADMISSION,
   PgWireSession,
   PGWIRE_SESSION_STATE,
   PGWIRE_SESSION_ERROR,

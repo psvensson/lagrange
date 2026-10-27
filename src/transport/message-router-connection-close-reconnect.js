@@ -1,3 +1,4 @@
+import {reportWaitBoundSpent} from '../logging/wait-bound-spent.js';
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
 import {
   buildRecentPeerLivenessEvidence,
@@ -8,6 +9,7 @@ const {
   ConnectionState,
   MESSAGE_ROUTER_LITERAL,
   RECONNECT_DISPOSITION,
+  ROUTER_CONNECTION_CLOSED_ERROR_CODE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   RouterMessageType,
@@ -17,6 +19,72 @@ const {
   WebSocket,
   uuidv4,
 } = MESSAGE_ROUTER_SHARED;
+
+const RECONNECT_ATTEMPTS_WAIT = Object.freeze({
+  wait: 'RECONNECT_MAX_ATTEMPTS',
+  awaited: 'outbound connection to the node re-established',
+});
+const KEEPALIVE_PONG_WAIT = Object.freeze({
+  wait: 'PING_TIMEOUT_MS x pingMaxMissed (keepalive)',
+  awaited: 'keepalive PONG from the connected node',
+});
+
+/**
+ * The reconnect loop spent its attempt budget: one wait_bound_spent ERROR
+ * with the attempts and the connection's last state and address.
+ * @param {Object} router - The message router.
+ * @param {Object} connectionInfo - The connection record.
+ * @return {void}
+ */
+function reportReconnectAttemptsSpent(router, connectionInfo) {
+  reportWaitBoundSpent(router.logger, {
+    ...RECONNECT_ATTEMPTS_WAIT,
+    boundMs: null,
+    elapsedMs: null,
+    lastObserved: {
+      attempts: connectionInfo.reconnectAttempts,
+      maxAttempts: router.reconnectMaxAttempts,
+      state: connectionInfo.state ?? null,
+      address: connectionInfo.address || connectionInfo.configuredAddress ||
+        null,
+    },
+    scope: {
+      nodeId: router.nodeId ?? null,
+      targetNodeId: connectionInfo.nodeId,
+      connectionId: connectionInfo.connectionId ?? null,
+    },
+    subject: connectionInfo.nodeId,
+  });
+}
+
+/**
+ * The keepalive spent pingMaxMissed pong bounds in a row and no recent
+ * inbound traffic answered for the node, so the socket is severed: one
+ * wait_bound_spent ERROR per node. A keepalive answered alive by recent
+ * inbound traffic is not a spent wait (it logs at INFO and keeps the
+ * connection), so it never reaches here.
+ * @param {Object} router - The message router.
+ * @param {Object} connectionInfo - The connection record.
+ * @return {void}
+ */
+function reportKeepalivePongSpent(router, connectionInfo) {
+  reportWaitBoundSpent(router.logger, {
+    ...KEEPALIVE_PONG_WAIT,
+    boundMs: router.pingTimeoutMs * router.pingMaxMissed,
+    elapsedMs: null,
+    lastObserved: {
+      missedPings: connectionInfo.missedPings,
+      answeredAliveByRecentInbound: false,
+      severed: true,
+    },
+    scope: {
+      nodeId: router.nodeId ?? null,
+      targetNodeId: connectionInfo.nodeId,
+      connectionId: connectionInfo.connectionId ?? null,
+    },
+    subject: connectionInfo.nodeId,
+  });
+}
 
 /**
  * Connection-close handling and reconnect scheduling for the message router:
@@ -59,8 +127,9 @@ class MessageRouterConnectionCloseReconnect {
       connection.ws = null;
       connection.bootIncarnation = TRANSPORT_NUM.ZERO;
       this.clearPingInterval(connection);
-      const disconnectError = new Error(
-        ROUTER_ERROR_MSG.connectionClosed(nodeId),
+      const disconnectError = Object.assign(
+        new Error(ROUTER_ERROR_MSG.connectionClosed(nodeId)),
+        {code: ROUTER_CONNECTION_CLOSED_ERROR_CODE},
       );
       this.failOutboundQueue(nodeId, disconnectError);
       this.failPendingMessagesForNode(nodeId, disconnectError);
@@ -149,10 +218,7 @@ class MessageRouterConnectionCloseReconnect {
     if (
       reconnectDisposition.kind === RECONNECT_DISPOSITION.MAX_ATTEMPTS_REACHED
     ) {
-      this.logger.error(ROUTER_LOG_MSG.MAX_RECONNECTS_REACHED, {
-        nodeId: connectionInfo.nodeId,
-        attempts: connectionInfo.reconnectAttempts,
-      });
+      reportReconnectAttemptsSpent(this, connectionInfo);
       return;
     }
     connectionInfo.reconnectAttempts += TRANSPORT_NUM.ONE;
@@ -332,11 +398,7 @@ class MessageRouterConnectionCloseReconnect {
       connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
       return;
     }
-    this.logger.info(ROUTER_LOG_MSG.CONNECTION_PING_TIMEOUT, {
-      nodeId: connectionInfo.nodeId,
-      connectionId: connectionInfo.connectionId,
-      missedPings: connectionInfo.missedPings,
-    });
+    reportKeepalivePongSpent(this, connectionInfo);
     connectionInfo.missedPings = TRANSPORT_NUM.ZERO;
     const staleWs = connectionInfo.ws;
     if (

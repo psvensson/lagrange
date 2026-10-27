@@ -187,6 +187,7 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.ACTIVE,
+        lifecyclePrecondition: {},
       },
       'voter-ready syncing rows should advance operation lifecycle reconciliation',
     );
@@ -227,6 +228,7 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.SYNCING,
+        lifecyclePrecondition: {},
       },
       'syncing rows without routable address should not be promoted in observation',
     );
@@ -291,6 +293,7 @@ test(
         state: TEST_OBSERVED_STATE,
         source: TEST_AUTHORITATIVE_SOURCE,
         lifecycleStatus: ReplicaStatus.ACTIVE,
+        lifecyclePrecondition: {},
       },
       'default partition-node fallback should still surface sibling visibility',
     );

@@ -1,3 +1,4 @@
+import {deliveryTransportOf, isDeliveredTransportDeliveryOutcome} from '../../src/transport/transport-semantic-outcome.js';
 // Capstone end-to-end harness for the SWIM runtime (increment 3c-ii): a node's
 // MembershipSwimRuntime probes real peers over real in-process MessageRouters, a peer
 // partitions, and the detector drives it alive -> suspect -> dead, after which the
@@ -185,8 +186,8 @@ test('runtime.start registers the relay handler and toggles running state', asyn
       {type: 'swim_indirect_probe', targetNodeId: C},
       {timeoutMs: 200},
     );
-    t.equal(relayed.acknowledged, true, 'A relay handler acknowledged');
-    t.equal(relayed.reachable, true, 'A relay reports C reachable');
+    t.equal(isDeliveredTransportDeliveryOutcome(deliveryTransportOf(relayed)), true, 'A relay handler acknowledged');
+    t.equal(relayed.answer.reachable, true, 'A relay reports C reachable');
 
     runtime.stop();
     t.equal(runtime.isRunning(), false, 'not running after stop');

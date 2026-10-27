@@ -1,5 +1,12 @@
 import {CDC_SQL} from './cdc-constants.js';
-import {CDC_OPERATION} from '../constants/index.js';
+import {CDC_OPERATION, SQL} from '../constants/index.js';
+
+export function buildSystemTableUpsert(tableName, data) {
+  const {columns, placeholders, values} =
+    buildSystemTableMutationSqlParts(CDC_OPERATION.INSERT, data);
+  return {sql: `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
+    `${SQL.VALUES} (${placeholders})`, params: values};
+}
 
 function serializeMutationValue(value) {
   if (value !== null && typeof value === 'object') {

@@ -13,7 +13,6 @@
  * - replica status observation (cache + authoritative)
  * - entity service row lookups
  */
-
 import {v4 as uuidv4} from 'uuid';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
@@ -55,10 +54,8 @@ import {
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {ROUTER_ERROR_MSG, TRANSPORT_ERROR_MSG} from '../constants/transport.js';
-import {
-  buildControlPlaneQueryOptions,
-  getRemainingBudgetMs,
-} from '../control-plane/timeout-budget.js';
+import {buildControlPlaneQueryOptions, createTimeoutBudget,
+  getRemainingBudgetMs} from '../control-plane/timeout-budget.js';
 import {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -71,8 +68,7 @@ import {
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   REPLICA_OPERATION_SEMANTIC_PHASE,
-  OperationType,
-  ReplicaStatus,
+  OperationType, ReplicaStatus,
   buildReplicaOperationSemanticWitnesses,
   getOperationMetadataObject,
   getOperationMetadataString,
@@ -82,7 +78,14 @@ import {
   isCoordinatorOwnedOperationType,
   resolveReplicaOperationSemanticPhase,
 } from './replica-status.js';
+import {
+  assignReplicaOperationRepositoryMessageGroupMembershipMethods,
+} from './replica-operation-repository-message-group-membership-methods.js';
+import {buildControlPlaneFailurePayload, cloneControlPlaneFailureParticipants} from
+  './replica-operation-repository-control-plane-failure.js';
 import {ReplicaOperationField} from './replica-operation-constants.js';
+import {REPLICA_OPERATION_INSERT_SQL} from
+  './replica-operation-repository-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -94,7 +97,6 @@ import {
   buildDivergenceEvent,
 } from '../control-plane/read-model-contract.js';
 import {QUERY_ERROR_MSG} from '../query/query-constants.js';
-import {PARTITION_SERVICE_ERROR_MSG} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   getControlPlaneErrorCode,
@@ -119,7 +121,6 @@ import {
 import {
   assignReplicaOperationRepositoryRowMethods,
 } from './replica-operation-repository-row-methods.js';
-
 /**
  * SQL queries for replica_operations table access.
  * All system information access must go through SQL engine.
@@ -158,6 +159,14 @@ const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_OPERATION_BY_TARGET_CLAIM:
     'SELECT * FROM replica_operations WHERE target_claim_key = ?',
+  SELECT_OPERATION_BY_MESSAGE_GROUP_MEMBERSHIP_LANE:
+    'SELECT * FROM replica_operations WHERE ' +
+      'message_group_membership_lane_key = ?',
+  // Every operation whose serialized membership obligation is unresolved,
+  // whatever its ordinary status: debt outlives ordinary settlement.
+  SELECT_MESSAGE_GROUP_MEMBERSHIP_DEBT_OPERATIONS:
+    'SELECT * FROM replica_operations WHERE entity_type = ? ' +
+      'AND message_group_membership_obligation_state = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE (source_node_id = ? OR target_node_id = ?)
     AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
@@ -183,12 +192,7 @@ const SQL = Object.freeze({
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
     WHERE type = ?`,
   SELECT_ALL_OPERATIONS: 'SELECT * FROM replica_operations ORDER BY created_at DESC',
-  INSERT_OPERATION: `INSERT INTO replica_operations (
-    operation_id, type, partition_id, replica_id, target_claim_key, source_node_id,
-    target_node_id, status, workflow_step, created_at, updated_at,
-    completed_at, error_message, steps_history,
-    entity_type, entity_id, membership_publication_epoch
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  INSERT_OPERATION: REPLICA_OPERATION_INSERT_SQL,
   UPDATE_OPERATION: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
@@ -212,19 +216,21 @@ const SQL = Object.freeze({
   UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
     lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
-  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, partition_id, node_id,
-      service_type, status, raft_role, address
+  SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, group_id, partition_id,
+      node_id, service_type, status, raft_role, address, cleanup_token,
+      create_attempt_token, created_at, state_entered_at
     FROM services WHERE service_id = ?`,
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT service_id, replica_id,
-      partition_id, node_id, service_type, status, raft_role, address
+      group_id, partition_id, node_id, service_type, status, raft_role, address,
+      cleanup_token, create_attempt_token, created_at, state_entered_at
     FROM services 
     WHERE partition_id = ? AND node_id = ?`,
 });
 const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
-const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * (NUM.TEN + NUM.FIVE);
-const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS =
+const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * (NUM.TEN + NUM.FIVE); // ends-on: a successful or non-retryable mutation result
+const REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS = // ends-on: the gateway query answers
   TIME_MS.SECOND * (NUM.TEN + NUM.FIVE);
-const REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS =
+const REPLICA_OPERATION_MUTATION_QUERY_TIMEOUT_MS = // ends-on: the gateway mutation query answers
   REPLICA_OPERATION_CRITICAL_RECOVERY_QUERY_TIMEOUT_MS;
 const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
 const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS = TIME_MS.SECOND * NUM.TEN;
@@ -243,10 +249,10 @@ const INCOMPLETE_OPERATION_OBSERVATION_STATE = Object.freeze({
   DEFERRED: 'deferred',
 });
 const COORDINATOR_OWNER_COMPONENT = 'RebalanceCoordinator';
-const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE; // ends-on: the persisted row reads back authoritatively and matches
 const REPLICA_OPERATION_AUTHORITATIVE_VISIBILITY_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FIVE;
 const REPLICA_OPERATION_OWNER_PERSISTED_TRANSITION_VISIBILITY_GRACE_MS = TIME_MS.SECOND * NUM.FIVE;
-const REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS = TIME_MS.SECOND;
+const REPLICA_OPERATION_READ_RETRY_TIMEOUT_MS = TIME_MS.SECOND; // ends-on: a successful or non-retryable authoritative read
 const REPLICA_OPERATION_READ_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.TEN;
 const INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE = Object.freeze({
   PRIORITY_RECOVERY_AUTHORITATIVE_OPERATION_READ: 'priority_recovery_authoritative_operation_read',
@@ -292,55 +298,6 @@ function shouldDeferReplicaOperationOwnerRead(participation) {
   return (
     participation?.reasonCode === CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY
   );
-}
-function buildControlPlaneFailurePayload(nodeId, resultOrError) {
-  const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
-    resultOrError.participantFailures
-      .filter((entry) => entry && typeof entry === 'object')
-      .slice(0, NUM.THREE) :
-    [];
-  const firstFailedParticipant =
-    resultOrError?.firstFailedParticipant &&
-    typeof resultOrError.firstFailedParticipant === 'object' ?
-      resultOrError.firstFailedParticipant :
-      participantFailures.length > 0 ?
-        participantFailures[0] :
-        null;
-  return {
-    error: resultOrError?.error || resultOrError?.message || null,
-    nodeId,
-    code: getControlPlaneErrorCode(resultOrError) || null,
-    retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
-    reasonCode:
-      typeof resultOrError?.reasonCode === 'string' ? resultOrError.reasonCode : null,
-    participationKind:
-      typeof resultOrError?.participationKind === 'string' ?
-        resultOrError.participationKind :
-        null,
-    tableName:
-      typeof resultOrError?.tableName === 'string' ?
-        resultOrError.tableName :
-        typeof firstFailedParticipant?.failedTable === 'string' ?
-          firstFailedParticipant.failedTable :
-          null,
-    participantFailures,
-    firstFailedParticipant,
-  };
-}
-function cloneControlPlaneFailureParticipants(resultOrError) {
-  const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
-    resultOrError.participantFailures
-      .filter((entry) => entry && typeof entry === 'object')
-      .map((entry) => ({...entry})) :
-    [];
-  const firstFailedParticipant =
-    resultOrError?.firstFailedParticipant &&
-    typeof resultOrError.firstFailedParticipant === 'object' ?
-      {...resultOrError.firstFailedParticipant} :
-      participantFailures.length > 0 ?
-        participantFailures[0] :
-        null;
-  return {participantFailures, firstFailedParticipant};
 }
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
@@ -390,9 +347,6 @@ const REPLICA_STATUS_READ_QUERY_OPTIONS = Object.freeze({
 });
 const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
   QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
-]);
-const RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES = Object.freeze([
-  PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
 ]);
 const RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS = Object.freeze([ERRORS.NO_HANDLER_FOR_ADDRESS]);
 const REPLICA_OPERATION_TRANSITION_LANE = Object.freeze({
@@ -537,13 +491,14 @@ class ReplicaOperationRepository {
    */
   constructor(options) {
     this.nodeId = options.nodeId;
+    // Bound by the node composition owner, never read from an operation command.
+    this.membershipOwnerBootIncarnation = options.membershipOwnerBootIncarnation ?? null;
     this.systemTableCache = options.systemTableCache;
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     this.controlPlaneReadinessService = options.controlPlaneReadinessService || null;
     this.logger = options.logger;
     this.emitter = options.emitter || null;
-    this.random = typeof options.random === 'function' ? options.random : Math.random;
     // The repository owns its own deadlines - incomplete-read backoff, query
     // duration and staleness, warning throttles, visibility grace - and reads
     // them from the clock its parent hands it, never from the ambient one. A
@@ -615,6 +570,12 @@ class ReplicaOperationRepository {
   }
 }
 
+assignReplicaOperationRepositoryMessageGroupMembershipMethods(ReplicaOperationRepository, {
+  REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+  SERVICE_TYPE,
+  SQL,
+  isCoordinatorOwnedOperationType,
+});
 assignReplicaOperationRepositoryVisibilityMethods(ReplicaOperationRepository, {
   CONTROL_PLANE_PUBLICATION_STATUS,
   ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,
@@ -681,6 +642,8 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   INCOMPLETE_OPERATION_READ_OUTCOME_SOURCE,
   NUM,
   OperationType,
+  ReplicaStatus,
+  ReplicaOperationField,
   REPLICA_OPERATION_LOCAL_VISIBILITY_READ_QUERY_OPTIONS,
   REBALANCE_COORDINATOR_LOG_MSG,
   REPLICA_OPERATION_LOCAL_OWNER_READ_QUERY_OPTIONS,
@@ -700,6 +663,7 @@ assignReplicaOperationRepositoryReadMethods(ReplicaOperationRepository, {
   buildReplicaOperationVisibilityReadOptions,
   classifySystemPartition,
   getControlPlaneRetryAfterMs,
+  getRemainingBudgetMs,
   isCoordinatorOwnedOperationType,
   isRetryableControlPlaneError,
   readAuthoritativeControlPlaneRows,
@@ -720,7 +684,6 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   OPERATION_PERSIST_RETRY_DELAY_MS,
   OPERATION_PERSIST_RETRY_TIMEOUT_MS,
   OPERATION_MUTATION_SESSION_RETRY_DECISION,
-  PARTITION_SERVICE_ERROR_MSG,
   PRESSURE_WORK_CLASS,
   QUERY_ERROR_MSG,
   READ_MODEL_DIVERGENCE_TYPE,
@@ -734,7 +697,6 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   REPLICA_OPERATION_TRANSITION_LANE,
   REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
   RETRYABLE_OPERATION_PERSIST_ERROR_FRAGMENTS,
-  RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES,
   RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES,
   SQL,
   SQL_RECONCILIATION_REASON,
@@ -744,6 +706,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   buildDivergenceEvent,
   classifySystemPartition,
   cloneControlPlaneFailureParticipants,
+  createTimeoutBudget,
   getControlPlaneErrorCode,
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,

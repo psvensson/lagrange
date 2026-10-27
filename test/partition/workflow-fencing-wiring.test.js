@@ -1,3 +1,4 @@
+import {registerFromRecordAsRead} from './workflow-record-test-support.js';
 import {test} from '../../src/test-helpers/tap.js';
 import {TABLES} from '../../src/constants/index.js';
 import {
@@ -42,7 +43,7 @@ test('split coordinator claims durable ownership through the claim ' +
   'machinery (coordinator-claim-wiring)', async (t) => {
   const {workflow, durableRow} = buildWorkflow({});
   const record = buildFencedRecord('split-claim-wiring');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
 
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
@@ -87,13 +88,9 @@ test('split source ack carries the workflow fence token ' +
   '(fenced-source-ack)', async (t) => {
   const {workflow} = buildWorkflow({});
   const record = buildFencedRecord('split-fenced-ack');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
   const fenceToken = claim.workflow.fenceToken;
 
@@ -126,13 +123,9 @@ test('split stale-fenced source ack is rejected with a typed outcome ' +
   'and never drives a cutover (stale-fence-ack-rejected)', async (t) => {
   const {workflow, updateCalls} = buildWorkflow({});
   const record = buildFencedRecord('split-stale-fence');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
   const fenceToken = claim.workflow.fenceToken;
 
@@ -188,13 +181,9 @@ test('split out-of-graph source ack transition is rejected typed ' +
   '(participant-transition-graph)', async (t) => {
   const {workflow} = buildWorkflow({});
   const record = buildFencedRecord('split-graph');
-  await workflow.workflowCoordinator.registerWorkflow(record);
+  await registerFromRecordAsRead(workflow, record);
   const claim = await workflow.claimSplitWorkflowOwnership(
     record.workflowId,
-  );
-  workflow.ensureCanonicalSplitParticipants(
-    record.workflowId,
-    record.metadata,
   );
 
   // cleanup_completed from the initial (null) state is not a declared

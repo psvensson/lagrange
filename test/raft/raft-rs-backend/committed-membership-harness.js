@@ -12,6 +12,7 @@
 // are planted to disagree with the committed configuration where a witness
 // needs them to.
 
+import {buildDeliveryEnvelope} from '../../../src/transport/transport-semantic-outcome.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -165,14 +166,11 @@ function createCuttableTransport() {
     register(address, handler) {
       handlers.set(address, handler);
     },
-    unregister(address) {
-      handlers.delete(address);
-    },
     ...handlerIdentityApi(handlers),
     async deliver(address, payload) {
       if (cutAddresses.has(address) ||
           cutPeerIds.has(String(payload?.from))) {
-        return {acknowledged: false, error: 'cut'};
+        return buildDeliveryEnvelope({acknowledged: false, error: 'cut'});
       }
       const handler = handlers.get(address);
       if (!handler) {
@@ -180,11 +178,13 @@ function createCuttableTransport() {
       }
       const rewrite = rewrites.get(address);
       if (rewrite === undefined) {
-        return handler({payload});
+        return buildDeliveryEnvelope({acknowledged: true}, await handler({payload}));
       }
       const message = rewrite(payload.message);
-      return message === null ? {acknowledged: false, error: 'rewritten'} :
-        handler({payload: {...payload, message}});
+      return message === null ? buildDeliveryEnvelope(
+        {acknowledged: false, error: 'rewritten'}) :
+        buildDeliveryEnvelope({acknowledged: true},
+          await handler({payload: {...payload, message}}));
     },
     rewriteTo(address, rewrite) {
       if (rewrite === null) {
@@ -241,9 +241,10 @@ function createCommittedMembershipHarness(partitionId) {
       if (!handlers.has(nodeId)) {
         throw new Error(`no node ${nodeId}`);
       }
-      return {acknowledged: true,
+      return buildDeliveryEnvelope({acknowledged: true}, {
         ...await handlers.get(nodeId).handleMessage({payload: request,
-          correlationId: `read-${this.delivered.length}`})};
+          correlationId: `read-${this.delivered.length}`}),
+      });
     },
   };
   const dbPathOf = ([replicaId]) => path.join(directory, 'partitions',

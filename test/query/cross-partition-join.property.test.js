@@ -7,6 +7,7 @@
  * All queries route through message router using service addresses from system cache.
  */
 
+import {buildDeliveryEnvelope} from '../../src/transport/transport-semantic-outcome.js';
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {QueryExecutor} from '../../src/query/query-executor.js';
@@ -29,14 +30,13 @@ function createMockMessageRouter() {
 
       if (message.type === 'QUERY') {
         const data = mockPartitionData.get(partitionId) || [];
-        return {
-          acknowledged: true,
+        return buildDeliveryEnvelope({acknowledged: true}, {
           success: true,
           rows: data,
           changes: data.length || 1,
-        };
+        });
       }
-      return {acknowledged: true, success: true, changes: 1};
+      return buildDeliveryEnvelope({acknowledged: true}, {success: true, changes: 1});
     },
   };
 }

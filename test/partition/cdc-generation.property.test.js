@@ -12,7 +12,12 @@ import fc from 'fast-check';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {withFoundingStamp} from './partition-founding-stamp.js';
+import {CDC_TABLE, resumeFixtureParticipantAdmission} from
+  '../test-helpers/participant-transaction-fixture.js';
+import {acknowledgingCdcSubscriber, settlePendingCdcDeliveries} from
+  '../test-helpers/acknowledging-cdc-subscriber.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -29,21 +34,41 @@ afterEach(() => {
 });
 
 /**
- * Wait for CDC event fan-out to reach all subscribers.
- * @param {Array<Array<Object>>} subscriberEvents - Per-subscriber event buffers.
- * @param {number} expectedCount - Expected events per subscriber.
- * @return {Promise<boolean>} True when all subscribers have the expected events.
+ * One single-replica partition for a property run.
+ * @param {string} partitionId - Partition ID.
+ * @param {string} tableName - Table name.
+ * @return {PartitionService} The partition, not yet initialized.
  */
-async function waitForSubscriberDelivery(subscriberEvents, expectedCount) {
-  for (let i = 0; i < 20; i++) {
-    const delivered = subscriberEvents
-      .every((events) => events.length >= expectedCount);
-    if (delivered) {
-      return true;
-    }
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  return subscriberEvents.every((events) => events.length >= expectedCount);
+function createPropertyPartition(partitionId, tableName) {
+  return new PartitionService(withFoundingStamp({
+    partitionId,
+    tableId: tableName,
+    tableName,
+    replicaId: `${partitionId}-r1`,
+    replicaIds: [`${partitionId}-r1`],
+    systemTableCache: new SystemTableCache(),
+    dbPath: ':memory:',
+    schema: {
+      columns: [
+        {name: 'id', type: 'INTEGER', primaryKey: true},
+        {name: 'name', type: 'TEXT'},
+        {name: 'value', type: 'INTEGER'},
+      ],
+    },
+  }));
+}
+
+/**
+ * Initialize, resume participant admission through the release owners, and
+ * force the leader role for testing.
+ * @param {PartitionService} partition - The partition.
+ * @return {Promise<void>}
+ */
+async function startPropertyPartition(partition) {
+  await partition.initialize();
+  await resumeFixtureParticipantAdmission(partition);
+  partition.role = 'leader';
+  partition.isLeader = true;
 }
 
 /**
@@ -54,25 +79,12 @@ const partitionIdArbitrary = fc.string({minLength: 1, maxLength: 20})
   .map((s) => `partition-${s}`);
 
 /**
- * SQL reserved keywords to avoid in table names.
+ * The table: one whose committed writes owe CDC. The CDC policy owner records
+ * an obligation only for the internally propagated system tables (owner
+ * decision D2; a user table owes none, see partition-cdc-obligation O20), so
+ * the generator properties run on the fixture's CDC-carrying table.
  */
-const SQL_RESERVED_KEYWORDS = new Set([
-  'add', 'all', 'alter', 'and', 'as', 'asc', 'between', 'by', 'case', 'check',
-  'column', 'constraint', 'create', 'cross', 'current', 'default', 'delete',
-  'desc', 'distinct', 'drop', 'else', 'end', 'escape', 'except', 'exists',
-  'for', 'foreign', 'from', 'full', 'group', 'having', 'if', 'in', 'index',
-  'inner', 'insert', 'intersect', 'into', 'is', 'join', 'key', 'left', 'like',
-  'limit', 'not', 'null', 'on', 'or', 'order', 'outer', 'primary', 'references',
-  'right', 'select', 'set', 'table', 'then', 'to', 'union', 'unique', 'update',
-  'using', 'values', 'when', 'where', 'with',
-]);
-
-/**
- * Generate a random table name.
- */
-const tableNameArbitrary = fc.string({minLength: 1, maxLength: 15})
-  .filter((s) => /^[a-z_][a-z0-9_]*$/i.test(s))
-  .filter((s) => !SQL_RESERVED_KEYWORDS.has(s.toLowerCase()));
+const tableNameArbitrary = fc.constant(CDC_TABLE);
 
 /**
  * Generate random data for insert/update operations.
@@ -97,38 +109,22 @@ test('Property 6: CDC event generated for INSERT operations', async (t) => {
       tableNameArbitrary,
       dataArbitrary,
       async (partitionId, tableName, data) => {
-        const cdcEvents = [];
+        // A durable CDC event is delivered only on the owner's committed receipt.
+        const subscriber = acknowledgingCdcSubscriber();
+        const cdcEvents = subscriber.events;
 
-        const partition = new PartitionService(withFoundingStamp({
-          partitionId,
-          tableId: tableName,
-          tableName,
-          replicaId: `${partitionId}-r1`,
-          replicaIds: [`${partitionId}-r1`],
-          dbPath: ':memory:',
-          schema: {
-            columns: [
-              {name: 'id', type: 'INTEGER', primaryKey: true},
-              {name: 'name', type: 'TEXT'},
-              {name: 'value', type: 'INTEGER'},
-            ],
-          },
-        }));
+        const partition = createPropertyPartition(partitionId, tableName);
 
         try {
-          await partition.initialize();
+          await startPropertyPartition(partition);
 
           // Subscribe to CDC events
-          partition.subscribeToCDC((event) => {
-            cdcEvents.push(event);
-          });
-
-          // Force leader role for testing
-          partition.role = 'leader';
-          partition.isLeader = true;
+          partition.subscribeToCDC(subscriber);
+          await settlePendingCdcDeliveries(partition);
 
           // Perform INSERT
           await partition.insertData(tableName, data);
+          await settlePendingCdcDeliveries(partition);
 
           // Verify CDC event was generated
           if (cdcEvents.length !== 1) {
@@ -174,47 +170,29 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
       dataArbitrary,
       fc.integer({min: 1, max: 1000000}),
       async (partitionId, tableName, data, newValue) => {
-        const cdcEvents = [];
+        // A durable CDC event is delivered only on the owner's committed receipt.
+        const subscriber = acknowledgingCdcSubscriber();
+        const cdcEvents = subscriber.events;
 
-        const partition = new PartitionService(withFoundingStamp({
-          partitionId,
-          tableId: tableName,
-          tableName,
-          replicaId: `${partitionId}-r1`,
-          replicaIds: [`${partitionId}-r1`],
-          dbPath: ':memory:',
-          schema: {
-            columns: [
-              {name: 'id', type: 'INTEGER', primaryKey: true},
-              {name: 'name', type: 'TEXT'},
-              {name: 'value', type: 'INTEGER'},
-            ],
-          },
-        }));
+        const partition = createPropertyPartition(partitionId, tableName);
 
         try {
-          await partition.initialize();
-
-          // Force leader role for testing
-          partition.role = 'leader';
-          partition.isLeader = true;
+          await startPropertyPartition(partition);
 
           // Insert initial data
           await partition.insertData(tableName, data);
 
           // Subscribe to CDC events after insert
-          partition.subscribeToCDC((event) => {
-            cdcEvents.push(event);
-          });
-          // Wait for buffered INSERT replay to drain before validating UPDATE fan-out.
-          await waitForSubscriberDelivery([cdcEvents], 1);
+          partition.subscribeToCDC(subscriber);
+          // The owed INSERT reaches the new subscriber first; settle it.
+          await settlePendingCdcDeliveries(partition);
           cdcEvents.length = 0;
 
           // Perform UPDATE
           await partition.updateData(tableName, {id: data.id}, {value: newValue});
 
           // Verify CDC event was generated
-          await waitForSubscriberDelivery([cdcEvents], 1);
+          await settlePendingCdcDeliveries(partition);
           if (cdcEvents.length < 1) {
             return false;
           }
@@ -254,47 +232,29 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
       tableNameArbitrary,
       dataArbitrary,
       async (partitionId, tableName, data) => {
-        const cdcEvents = [];
+        // A durable CDC event is delivered only on the owner's committed receipt.
+        const subscriber = acknowledgingCdcSubscriber();
+        const cdcEvents = subscriber.events;
 
-        const partition = new PartitionService(withFoundingStamp({
-          partitionId,
-          tableId: tableName,
-          tableName,
-          replicaId: `${partitionId}-r1`,
-          replicaIds: [`${partitionId}-r1`],
-          dbPath: ':memory:',
-          schema: {
-            columns: [
-              {name: 'id', type: 'INTEGER', primaryKey: true},
-              {name: 'name', type: 'TEXT'},
-              {name: 'value', type: 'INTEGER'},
-            ],
-          },
-        }));
+        const partition = createPropertyPartition(partitionId, tableName);
 
         try {
-          await partition.initialize();
-
-          // Force leader role for testing
-          partition.role = 'leader';
-          partition.isLeader = true;
+          await startPropertyPartition(partition);
 
           // Insert initial data
           await partition.insertData(tableName, data);
 
           // Subscribe to CDC events after insert
-          partition.subscribeToCDC((event) => {
-            cdcEvents.push(event);
-          });
-          // Wait for buffered INSERT replay to drain before validating DELETE fan-out.
-          await waitForSubscriberDelivery([cdcEvents], 1);
+          partition.subscribeToCDC(subscriber);
+          // The owed INSERT reaches the new subscriber first; settle it.
+          await settlePendingCdcDeliveries(partition);
           cdcEvents.length = 0;
 
           // Perform DELETE
           await partition.deleteData(tableName, {id: data.id});
 
           // Verify CDC event was generated
-          await waitForSubscriberDelivery([cdcEvents], 1);
+          await settlePendingCdcDeliveries(partition);
           if (cdcEvents.length < 1) {
             return false;
           }
@@ -335,47 +295,29 @@ test('Property 6: CDC events delivered to multiple subscribers', async (t) => {
       dataArbitrary,
       fc.integer({min: 2, max: 5}),
       async (partitionId, tableName, data, subscriberCount) => {
-        const subscriberEvents = [];
+        // Each subscriber answers the owner's committed receipt.
+        const subscribers = [];
         for (let i = 0; i < subscriberCount; i++) {
-          subscriberEvents.push([]);
+          subscribers.push(acknowledgingCdcSubscriber());
         }
+        const subscriberEvents = subscribers.map((subscriber) => subscriber.events);
 
-        const partition = new PartitionService(withFoundingStamp({
-          partitionId,
-          tableId: tableName,
-          tableName,
-          replicaId: `${partitionId}-r1`,
-          replicaIds: [`${partitionId}-r1`],
-          dbPath: ':memory:',
-          schema: {
-            columns: [
-              {name: 'id', type: 'INTEGER', primaryKey: true},
-              {name: 'name', type: 'TEXT'},
-              {name: 'value', type: 'INTEGER'},
-            ],
-          },
-        }));
+        const partition = createPropertyPartition(partitionId, tableName);
 
         try {
-          await partition.initialize();
+          await startPropertyPartition(partition);
 
           // Subscribe multiple subscribers
-          for (let i = 0; i < subscriberCount; i++) {
-            const idx = i;
-            partition.subscribeToCDC((event) => {
-              subscriberEvents[idx].push(event);
-            });
+          for (const subscriber of subscribers) {
+            partition.subscribeToCDC(subscriber);
           }
-
-          // Force leader role for testing
-          partition.role = 'leader';
-          partition.isLeader = true;
+          await settlePendingCdcDeliveries(partition);
 
           // Perform INSERT
           await partition.insertData(tableName, data);
 
-          const delivered = await waitForSubscriberDelivery(subscriberEvents, 1);
-          if (!delivered) {
+          await settlePendingCdcDeliveries(partition);
+          if (!subscriberEvents.every((events) => events.length >= 1)) {
             return false;
           }
 

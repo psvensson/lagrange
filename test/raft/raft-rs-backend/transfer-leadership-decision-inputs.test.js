@@ -25,6 +25,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
 import {RAFT_ROLE} from '../../../src/raft/constants.js';
+import {ROLE} from '../../../src/raft/raft-rs-runtime-owner-constants.js';
 import {
   RAFT_MEMBERSHIP_OPERATION,
   RAFT_OPERATION_OUTCOME,
@@ -49,6 +50,8 @@ const REPLICAS = Object.freeze([A, B, C]);
 const STEP_OPERATION = 'step';
 // Entries only the learner receives while the voters are cut off.
 const LEARNER_ONLY_WRITES = 3;
+// The role a pre-campaigning replica reports (raft-rs StateRole 3).
+const PRE_CANDIDATE_ROLE = ROLE[3];
 
 function formedGroup(partitionId) {
   const driver = new TransferLeadershipDriver({
@@ -188,7 +191,9 @@ test('a candidate answers its dropped proposal as the core\'s refusal, ' +
     driver.isolate(B);
     driver.port(B).campaign();
     driver.deliver();
-    assert.equal(driver.status(B).role, RAFT_ROLE.CANDIDATE,
+    // With pre_vote on, a campaign stands as a pre-candidate; raft-rs drops
+    // a proposal there exactly as it does at a candidate (step_candidate).
+    assert.equal(driver.status(B).role, PRE_CANDIDATE_ROLE,
       'precondition: B stands for election and cannot win cut off');
     assertNotTransferDrop(driver.propose(B, {on: 'candidate'}));
   } finally {

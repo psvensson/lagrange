@@ -102,6 +102,22 @@ function sameIdentitySet(left, right) {
     [...left].every((identity) => right.has(identity));
 }
 
+function isSubsetIdentitySet(subset, superset) {
+  return subset.size > 0 &&
+    subset.size <= superset.size &&
+    [...subset].every((identity) => superset.has(identity));
+}
+
+function identitiesMatchPlacement(
+  sourceIdentities,
+  placedReplicaIds,
+  parallelReduceConfig,
+) {
+  return parallelReduceConfig?.allowReplicaSubset === true ?
+    isSubsetIdentitySet(sourceIdentities, placedReplicaIds) :
+    sameIdentitySet(sourceIdentities, placedReplicaIds);
+}
+
 function isCompleteAssessment(checks) {
   return Object.values(checks).every(Boolean);
 }
@@ -154,7 +170,11 @@ function resultSnapshotIsFresh(options) {
   return Number.isFinite(resultComputedAt) &&
     resultComputedAt >= phaseStartedAt &&
     sourceCandidateCount <= expectedMergeCandidateCount &&
-    sameIdentitySet(sourceReplicaIds, placedReplicaIds) &&
+    identitiesMatchPlacement(
+      sourceReplicaIds,
+      placedReplicaIds,
+      parallelReduceConfig,
+    ) &&
     serviceTopN.every((row) =>
       Number(row.computed_at) === resultComputedAt &&
       row[snapshotColumn] === sourceSnapshotJson) &&
@@ -200,8 +220,8 @@ function assessAffinityDemoCompletion(options) {
   });
   const partialsBounded = partialSnapshot.complete &&
     mergeCandidateCount <= expectedMergeCandidateCount;
-  const identitiesCurrent = sameIdentitySet(
-    slotReplicaIds, placedReplicaIds,
+  const identitiesCurrent = identitiesMatchPlacement(
+    slotReplicaIds, placedReplicaIds, parallelReduceConfig,
   );
   const distinctPlacementNodes = new Set(
     placements.map((placement) => placement.nodeId),
@@ -212,11 +232,14 @@ function assessAffinityDemoCompletion(options) {
       COMPLETE_LOCALITY_RATIO - LOCALITY_EPSILON &&
     weightedLocality.localityRatio <=
       COMPLETE_LOCALITY_RATIO + LOCALITY_EPSILON;
+  const expectedPartialReplicaCount =
+    Object.keys(parallelReduceConfig?.shardSqlBySlot || {}).length ||
+    expectedReplicaCount;
   const complete = isCompleteAssessment({
     replicaCount: placements.length === expectedReplicaCount,
     distinctPlacementNodes:
       distinctPlacementNodes === expectedReplicaCount,
-    partialReplicaCount: partialReplicaCount === expectedReplicaCount,
+    partialReplicaCount: partialReplicaCount === expectedPartialReplicaCount,
     identitiesCurrent,
     partialsFresh,
     partialsBounded,

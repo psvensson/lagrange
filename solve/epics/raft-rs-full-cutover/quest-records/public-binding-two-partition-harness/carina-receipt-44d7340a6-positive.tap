@@ -1,0 +1,2435 @@
+TAP version 14
+# Subtest: public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input
+    # runtime start event-loop delay ms: max=3869 p99=159
+LogsTableService initialized
+metrics.logging.logs_table_connect.start {
+  bufferedEntries: 0,
+  flushMode: 'background',
+  chunkSize: 20,
+  yieldMs: 5
+}
+Connected to LoggingService, flushed 0 buffered entries
+    ok 1 - harness: the canonical merge-disabled policy is visible before split
+    ok 2 - harness: the production manager consumes the same table policy
+    ok 3 - harness: the production manager consumes both live leader sizes
+    ok 4 - harness: the live child pair contains more than one byte
+    ok 5 - harness: the production manager keeps the live children merge-ineligible
+    ok 6 - harness: both exact split children are current after shaping
+    ok 7 - harness: the literal key range lies inside exactly one partition
+PG wire startup message received { user: 'images_seam_app', database: 'images_seam' }
+{"level":50,"time":"2026-10-06T16:37:26.777Z","nodeId":"public-binding-seam-node","pid":935397,"subsystem":"sql-query-engine","workflowId":"split-tbl-422c2f07b585250cc157e557759e04f7-tbl-422c2f07b585250cc157e557759e04f7-p1-v2","sourcePartitionId":"tbl-422c2f07b585250cc157e557759e04f7-p1","error":"Group retirement incomplete: unacknowledged replicas schema-job-422c2f07b585250cc157e557759e04f7:replica:public-binding-seam-node","nodeId":"public-binding-seam-node","msg":"Managed split source dissolution failed"}
+pgwire.auth {
+  timestamp: 1791304646791,
+  message: 'PG wire authentication failed',
+  decision: 'denied',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: undefined
+  },
+  action: 'pgwire.connect',
+  error: 'Authentication failed'
+}
+    # Subtest: password mode: wrong credentials are refused
+        ok 1 - the listener refuses a wrong password before any SQL
+        # pg receives on bad password: {"code":"28000","message":"Authentication failed","severity":"FATAL"}
+        1..1
+    ok 8 - password mode: wrong credentials are refused # time=321.653ms
+    
+PG wire startup message received { user: 'images_seam_app', database: 'images_seam' }
+PG wire connection closed
+pgwire.auth {
+  timestamp: 1791304647335,
+  message: 'PG wire authentication succeeded',
+  decision: 'authenticated',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.connect'
+}
+Protocol session mapped to tenant/policy {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam'
+}
+PG wire authentication successful { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304647498,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+    # Subtest: Artifact identity is immutable
+        ok 1 - should be equal
+        ok 2 - INSTALL returns a package id
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304651740,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 3 - the identical INSTALL is an idempotent replay
+        ok 4 - should be equal
+        ok 5 - should be equal
+        ok 6 - a modified manifest has a different canonical digest
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304651794,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.service.install'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 7 - a modified manifest is a different immutable package
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304651949,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 8 - a Binding cannot pin the original package to the modified digest
+        # pg receives on cross-pinned Binding: {"code":"XX000","detail":"{\"ownerCode\":\"corrupt_catalog_record\",\"path\":\"/package/manifestDigest\",\"stage\":\"catalog_submission\"}","message":"durable package state is outside the catalog contract","severity":"ERROR"}
+        1..8
+    ok 9 - Artifact identity is immutable # time=4576.95ms
+    
+    ok 10 - both exact split children remain current after Artifact installation
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652005,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+    # Subtest: Binding is the durable, create-only execution intent
+        ok 1 - should be equal
+        ok 2 - should be equal
+        ok 3 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652086,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 4 - images-seam-owned-range: byte-identical replay is accepted
+        ok 5 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652190,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.access.configure'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652249,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 6 - should be equal
+        ok 7 - should be equal
+        ok 8 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652341,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 9 - images-seam-all-ratings: byte-identical replay is accepted
+        ok 10 - should be equal
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652439,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.access.configure'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652486,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.create'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 11 - a changed declaration under the same name is refused
+        # pg receives on changed Binding: {"code":"XX000","detail":"{\"ownerCode\":\"binding_conflict\",\"path\":\"/name\",\"stage\":\"binding_submission\"}","message":"binding name is already bound to another declaration","severity":"ERROR"}
+        1..11
+    ok 11 - Binding is the durable, create-only execution intent # time=532.027ms
+    
+    ok 12 - both exact split children remain current after Binding deployment
+    # Subtest: key-anchored call runs only the owning partition
+        ok 1 - the literal call starts on the exact two-child topology
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652534,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304652844,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304653103,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304653360,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304653623,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304653897,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304654174,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304654440,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304654700,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304654959,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304655218,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304655474,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304655733,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304655988,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304656248,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304656535,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304656797,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304657062,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304657500,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304657928,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304658192,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304658462,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304658726,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304658982,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304659240,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304659494,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304659758,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304660013,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304660266,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304660528,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304660797,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304661053,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304661311,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304661566,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304661822,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304662077,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304662336,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304662617,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304662888,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304663155,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 2 - should be equal
+        # consumer attempts until served: 40; retried (all retry-safe on the wire): ["{\"ownerCode\":\"call_cell_route_unavailable\",\"stage\":\"call_invocation\",\"outcomeClass\":\"temporarily_unavailable\",\"retrySafe\":true}"]
+        ok 3 - the reduced result is exactly the literal key range's rows
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304663991,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 4 - should be equivalent
+        # witnessed shard slots of the new result: 1
+        ok 5 - the published result snapshot witnesses exactly one shard
+        ok 6 - harness evidence: the canonical planner plans the owning shard only
+        ok 7 - the literal call retains both exact split children
+        1..7
+    ok 13 - key-anchored call runs only the owning partition # time=11984.352ms
+    
+    # Subtest: the unbounded Binding fans out to every partition
+        ok 1 - the unbounded call starts on the exact two-child topology
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304664537,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304664834,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304665102,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304665368,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304665624,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304665886,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304666140,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304666396,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304666672,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304666942,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304667198,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304667458,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304667804,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304668068,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304668331,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304668588,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304668904,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304669166,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304669420,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 2 - should be equal
+        ok 3 - should be equivalent
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304670036,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        ok 4 - should be equivalent
+        ok 5 - the published result snapshot witnesses every shard
+        ok 6 - the canonical planner fans out to both exact split children
+        ok 7 - the unbounded call retains both exact split children
+        1..7
+    ok 14 - the unbounded Binding fans out to every partition # time=5848.495ms
+    
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304670372,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+    # Subtest: pre-dispatch failures are public, typed and topology-free
+        # pg receives for an unknown Binding: {"code":"XX000","detail":"{\"ownerCode\":\"call_cell_route_not_found\",\"stage\":\"call_invocation\",\"outcomeClass\":\"definitely_not_executed\",\"retrySafe\":false}","message":"Call Binding not found","severity":"ERROR"}
+        ok 1 - should be equivalent
+        ok 2 - should be equivalent
+        1..2
+    ok 15 - pre-dispatch failures are public, typed and topology-free # time=49.587ms
+    
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304670425,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+    # Subtest: the consumer cannot name an execution target (F2/F5)
+        ok 1 - a CALL payload carrying 'node' is rejected
+        ok 2 - a payload-contract refusal is never retry-safe
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304670476,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        # pg receives for 'node': {"code":"XX000","detail":"{\"path\":\"/payload/node\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: node","severity":"ERROR"}
+        ok 3 - a CALL payload carrying 'partition' is rejected
+        ok 4 - a payload-contract refusal is never retry-safe
+PG wire parse message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  name: '(unnamed)'
+}
+PG wire bind message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)',
+  statement: '(unnamed)'
+}
+PG wire execute message received {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  portal: '(unnamed)'
+}
+pgwire.auth {
+  timestamp: 1791304670525,
+  message: 'PG wire authorization granted',
+  decision: 'authorized',
+  securityContext: {
+    tenantId: 'images_seam',
+    principal: 'images_seam_app',
+    roles: [ 'application' ]
+  },
+  action: 'pgwire.binding.call'
+}
+Executing SqlRequest via SqlCore {
+  sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f',
+  tenantId: 'images_seam',
+  executionMode: 'sql_statement'
+}
+PG wire sync message received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+        # pg receives for 'partition': {"code":"XX000","detail":"{\"path\":\"/payload/partition\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: partition","severity":"ERROR"}
+        ok 5 - a CALL payload carrying 'replica' is rejected
+        ok 6 - a payload-contract refusal is never retry-safe
+        # pg receives for 'replica': {"code":"XX000","detail":"{\"path\":\"/payload/replica\",\"stage\":\"sql_normalization\"}","message":"unsupported service lifecycle payload field: replica","severity":"ERROR"}
+        1..6
+    ok 16 - the consumer cannot name an execution target (F2/F5) # time=151.117ms
+    
+    # Subtest: consumer import census and no legacy axis (F5/F6)
+        ok 1 - the consumer imports only pg
+        ok 2 - the consumer loads no module through /\\bimport\\s*\\(/u
+        ok 3 - the consumer loads no module through /\\bcreateRequire\\b/u
+        ok 4 - the consumer loads no module through /\\brequire\\s*\\(/u
+        ok 5 - the consumer loads no module through /\\bimport\\.meta\\.resolve\\b/u
+        ok 6 - no reference to partition_callback
+        ok 7 - no reference to DB.call
+        ok 8 - no reference to WasmCallAdapter
+        ok 9 - no reference to debug-runtime
+        1..9
+    ok 17 - consumer import census and no legacy axis (F5/F6) # time=10.078ms
+    
+    ok 18 - both exact split children remain current through the full exercise
+    # seam wall-clock ms: {"artifactBuilt":31942,"runtimeStarted":48672,"pgwireListening":53557,"tableCreated":55021,"rowsInserted":55059,"tableSplit":57512,"installed":62695,"deployed":63490,"callStart":63491,"firstCallServed":74936,"callsServed":81328}
+    1..18
+PG wire terminate received { sessionId: 'pgwire-ab94e0dc-fd79-4583-aaae-fda02949ae8f' }
+LogsTableService shutdown
+# teardown: harness-stopped pgwire replicas=["sys-postgres-wire-r1"]; stop ms=287; rest accepting after stop=false; pgwire accepting after stop=false
+ok 1 - public Binding invocation through the authenticated PostgreSQL-wire seam: Artifact, Binding, key-anchored call, no topology in consumer input # time=81852.985ms
+
+1..1
+# { total: 61, pass: 61 }
+# time=81861.053ms

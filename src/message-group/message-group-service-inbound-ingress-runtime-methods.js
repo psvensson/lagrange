@@ -1,10 +1,8 @@
+import {isRaftRsTransportEnvelope} from '../raft/raft-packet-utils.js';
 import {
   handleLatencyCdcPropagationBatchMessage as runHandleLatencyBatchMessage,
   handleLatencyCdcPropagationMessage as runHandleLatencyMessage,
 } from './message-group-service-cdc-propagation-runtime-methods.js';
-
-const LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY = 'Deferred Raft response delivery';
-const LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE = 'Failed to send Raft response';
 
 const MESSAGE_GROUP_SERVICE_INBOUND_INGRESS_RUNTIME_LITERAL = {
   CONSTRUCTOR: 'constructor',
@@ -20,12 +18,14 @@ async function completeApplicationMessage(
     service.applicationMessageCompletionHandlers.get(
       applicationEvent.payload?.type,
     );
+  // The answer is MG's own: the message was received; its application
+  // acknowledgement is MG's later acknowledgeMessage, never a field of this
+  // answer (decision D2, findings F-B and F-V2).
   if (typeof completionHandler === 'function') {
     const completion = await completionHandler(applicationEvent);
     return {
       messageId: applicationEvent.messageId,
       status: applicationStatus.RECEIVED,
-      acknowledged: false,
       ...(completion && typeof completion === 'object' ? completion : {}),
     };
   }
@@ -33,7 +33,6 @@ async function completeApplicationMessage(
   return {
     messageId: applicationEvent.messageId,
     status: applicationStatus.RECEIVED,
-    acknowledged: false,
   };
 }
 
@@ -49,12 +48,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_SERVICE_LITERAL,
     MessageStatus,
     NUM,
-    RAFT_PACKET_TYPE,
-    buildLatencyCdcPropagationResult,
-    isRaftPacket,
     normalizeCauseId,
-    resolveRaftTransportDeliveryOptions,
-    shouldDeferImmediateDeliveryRetry,
   } = deps;
   const cdcPropagationRuntimeDeps = {
     CDC_FORWARD_MAX_RELAY_DEPTH,
@@ -64,7 +58,6 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
     MESSAGE_GROUP_CDC_INGRESS_ACTION,
     MESSAGE_GROUP_SERVICE_LITERAL,
     NUM,
-    buildLatencyCdcPropagationResult,
     normalizeCauseId,
   };
 
@@ -111,87 +104,28 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
 
     /**
      * Receive a message from another service or replica.
-     * Detects Raft packets and routes them directly to liferaft.
-     * Handles non-Raft messages as application messages.
+     * A raft-rs transport envelope is stepped into this replica's
+     * consensus port; every other message is an application message.
      * Requirements: 2.2, 2.3, 5.2, 5.3
      * @param {Object} message - Incoming message.
      * @return {Promise<Object>} Processing result.
      */
-    async receiveMessage(message) {
+    async receiveMessage(message, connectionDelivery, localDelivery) {
       if (!this.initialized) {
         throw new Error(
           MESSAGE_GROUP_SERVICE_LITERAL.MESSAGEGROUPSERVICE_NOT_INITIALIZED,
         );
       }
-      // Extract payload - handle both envelope and direct packet formats
       const payload = message.payload || message;
-      // Detect and handle Raft packets directly using isRaftPacket()
-      // No type conversion needed - packets flow through unchanged
-      // Requirements: 2.2, 2.3
-      if (isRaftPacket(payload)) {
+      if (isRaftRsTransportEnvelope(payload)) {
         if (this.raft) {
-          this.logger.trace(
-            MESSAGE_GROUP_SERVICE_LITERAL.RECEIVED_RAFT_PACKET,
-            {
-              type: payload.type,
-              term: payload.term,
-              address: payload.address,
-              replicaId: this.replicaId,
-              groupId: this.groupId,
-            },
-          );
-          if (
-            this.isJoiningExistingGroup === true &&
-            payload.type === RAFT_PACKET_TYPE.VOTE
-          ) {
-            this.clearJoinExistingGroupTimers();
-            const deniedVote = await this.raft.packet(RAFT_PACKET_TYPE.VOTED, {
-              granted: false,
-            });
-            if (deniedVote) {
-              const senderAddress = payload.address;
-              const deliveryOptions = resolveRaftTransportDeliveryOptions({
-                ...deniedVote,
-                targetAddress: senderAddress,
-              });
-              try {
-                const result = await this.transport.deliver(
-                  senderAddress,
-                  deniedVote,
-                  deliveryOptions,
-                );
-                if (
-                  !result?.acknowledged &&
-                  shouldDeferImmediateDeliveryRetry(result)
-                ) {
-                  this.logger.debug(LOCAL_STR_DEFERRED_RAFT_RESPONSE_DELIVERY, {
-                    destination: senderAddress,
-                    retryAfterMs: result.retryAfterMs,
-                    errorCode: result?.errorCode || null,
-                  });
-                }
-              } catch (err) {
-                this.logger.error(LOCAL_STR_FAILED_TO_SEND_RAFT_RESPONSE, {
-                  error: err.message,
-                  destination: senderAddress,
-                });
-              }
-            }
-            return {acknowledged: true};
-          }
-          if (this.raftRuntime) {
-            return (
-              this.raftRuntime.handleRaftPacket(message) || {
-                acknowledged: true,
-              }
-            );
-          }
+          await Promise.resolve(this.raft.step(payload));
         }
-        return {acknowledged: true};
+        return null;
       }
-      // Handle application messages (non-Raft)
+      // Handle application messages
       // Requirements: 2.3, 5.3
-      return this.handleApplicationMessage(message);
+      return this.handleApplicationMessage(message, connectionDelivery, localDelivery);
     }
     /**
      * Handle application messages (non-Raft messages).
@@ -199,7 +133,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @param {Object} message - Application message
      * @return {Promise<Object>} Processing result
      */
-    async handleApplicationMessage(message) {
+    async handleApplicationMessage(message, _connectionDelivery, localDelivery) {
       const {messageId, payload, sourceGroup, sourceReplica} = message;
       this.logger.debug(
         MESSAGE_GROUP_SERVICE_LITERAL.RECEIVED_APPLICATION_MESSAGE,
@@ -219,7 +153,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
         return {
           messageId,
           status: MESSAGE_GROUP_APPLICATION_STATUS.DUPLICATE,
-          acknowledged: true,
+
         };
       }
       // Update HLC from remote timestamp if present and is a valid HLC string
@@ -246,7 +180,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           payload.type ===
             MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION
         ) {
-          return this.handleLatencyCdcPropagationMessage(messageId, payload);
+          return this.handleLatencyCdcPropagationMessage(messageId, payload, localDelivery);
         }
         if (
           payload &&
@@ -256,6 +190,7 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
           return this.handleLatencyCdcPropagationBatchMessage(
             messageId,
             payload,
+            localDelivery,
           );
         }
         const applicationEvent = {
@@ -288,12 +223,13 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @return {Promise<Object>}
      * @private
      */
-    async handleLatencyCdcPropagationMessage(messageId, payload) {
+    async handleLatencyCdcPropagationMessage(messageId, payload, localDelivery) {
       return runHandleLatencyMessage(
         this,
         cdcPropagationRuntimeDeps,
         messageId,
         payload,
+        localDelivery,
       );
     }
     /**
@@ -303,12 +239,13 @@ function createMessageGroupServiceInboundIngressRuntimeMethods(deps = {}) {
      * @return {Promise<Object>}
      * @private
      */
-    async handleLatencyCdcPropagationBatchMessage(messageId, payload) {
+    async handleLatencyCdcPropagationBatchMessage(messageId, payload, localDelivery) {
       return runHandleLatencyBatchMessage(
         this,
         cdcPropagationRuntimeDeps,
         messageId,
         payload,
+        localDelivery,
       );
     }
     /**

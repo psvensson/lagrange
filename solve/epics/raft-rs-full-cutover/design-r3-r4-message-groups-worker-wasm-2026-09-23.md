@@ -436,13 +436,20 @@ O1 Log growth without compaction. A message group's `_raft_rs_log` grows one row
 O2 Seeded randomness (q10): the DT5 seam cannot reach rs-raft election timing without a binding
    change (a seed on `create_node` or a `seed_rng` primitive in the fork,
    `vendor/raft-rs-wasm/src/lib.rs`, rebuilt with a new `artifact-digest.json`). Carry inert, or fund
-   the fork change.
+   the fork change. CLOSED 2026-10-04 (owner): not seeded. A verified implementation that vendored a
+   patched raft 0.7.0 (branch `quest/raft-rs-seedable-election`, d62c2701f) was rejected; repeatability
+   witnesses are narrowed to semantic outcomes (zero-liferaft-active-runtime log, decision note).
 O3 WASM composition root: which owner supplies `replicaIds`/placement for a wasm_component group and
    where the lifecycle factory is constructed (2(b)); this touches the placement authority R2 is
    about to redefine.
 O4 Durability pragmas for consensus hard state: WAL + `synchronous` as the partition sets them
    (`partition-service-raft-init-base.js:381-382`) survive a process crash but not necessarily power
    loss before checkpoint; the same choice now covers three group kinds. Confirm or raise (R5).
+   CLOSED 2026-10-05 (owner, "raft full sync option 2"): the Raft persist transaction commits with
+   full synchronous durability when raft-rs's `Ready::must_sync` holds (term/vote change, appended
+   entries, snapshot), before the Ready's messages are sent; the replica lifecycle row likewise.
+   Application writes keep WAL + NORMAL. Branch `quest/raft-persist-full-sync`
+   (`raft-rs-durable-store.js` `commitDurably`); measurements on the zero-liferaft-active-runtime log.
 O5 Process-level provider control (q8): `RAFT_PROVIDER` env, `ensureLiferaftProviderForRuntime`
    (`lagrange-runtime-startup.js:713-717`), `src/raft/spike/*`, `scripts/run-raft-logic-investigation-spike.js`,
    `scripts/run-raft-migration-rollback-drill.js`: delete in R4 (recommended; epic :293-295) or move

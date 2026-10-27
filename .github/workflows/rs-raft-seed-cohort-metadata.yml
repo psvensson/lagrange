@@ -1,0 +1,56 @@
+# Canonical producer-only seed Quest WIP classification; no baseline edit.
+name: rs-raft-seed-cohort-metadata
+on:
+  push:
+    branches: [continue/rs-raft-seed-cohort-once-20261014]
+    paths: [.github/workflows/rs-raft-seed-cohort-metadata.yml]
+permissions:
+  contents: write
+concurrency:
+  group: rs-raft-seed-cohort-metadata
+  cancel-in-progress: false
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Refresh canonical impact metadata and preserve WIP only
+        shell: bash
+        run: |
+          set -euo pipefail
+          HEAD_IN="$GITHUB_SHA"
+          npm ci
+          test "$(git rev-parse HEAD)" = "$HEAD_IN"
+          npm run -s test:metadata:refresh
+          git diff --check
+          git diff --name-status
+          while IFS= read -r f; do
+            test -n "$f" || continue
+            case "$f" in
+              test/shards/impact-graph-seal.json|test/shards/primary-classes.json|test/shards/resource-classes.json|test/shards/subsystem-classes.json) ;;
+              *) echo "Unexpected generated file $f"; exit 1 ;;
+            esac
+          done < <(git diff --name-only)
+          npm run -s audit:shards
+          git add -- test/shards/impact-graph-seal.json test/shards/primary-classes.json test/shards/resource-classes.json test/shards/subsystem-classes.json
+          if git diff --cached --quiet; then
+            echo "No producer drift"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          LAGRANGE_SKIP_PRECOMMIT=1 git commit -m 'WIP rs-raft: regenerate canonical seed cohort test metadata'
+          git fetch --no-tags origin refs/heads/continue/rs-raft-seed-cohort-once-20261014
+          test "$(git rev-parse FETCH_HEAD)" = "$HEAD_IN" || {
+            echo "Ref moved during WIP metadata generation"; exit 1
+          }
+          git push origin HEAD:refs/heads/continue/rs-raft-seed-cohort-once-20261014
